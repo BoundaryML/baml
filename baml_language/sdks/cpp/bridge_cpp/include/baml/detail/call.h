@@ -20,27 +20,42 @@
 namespace baml {
 namespace detail {
 
+struct call_allocation {
+  uint64_t id = api().new_function_call();
+  call_allocation() {
+    if (id == 0) throw baml::error("runtime call allocation failed");
+  }
+  ~call_allocation() {
+    if (id != 0) api().release_function_call(id);
+  }
+  void submitted() { id = 0; }
+};
+
 // ThrownU is the function's declared `throws` set as a baml::variant (void
 // when the function declares none): the error arm then surfaces as
 // thrown<ThrownU> instead of an untyped error.
 template <typename Ret, typename ThrownU = void>
 future<Ret, ThrownU> start_call(const std::string& fqn, args_encoder&& args) {
-  call_registry::started started = call_registry::instance().begin();
-  const uint64_t engine_call_id = api().new_function_call();
+  call_allocation allocation;
+  const uint64_t engine_call_id = allocation.id;
   const std::string encoded = args.finish(engine_call_id, fqn);
+  call_registry::started started = call_registry::instance().begin();
   api().call_function(reinterpret_cast<const uint8_t*>(encoded.data()),
                       encoded.size(), started.correlation_id);
+  allocation.submitted();
   return future<Ret, ThrownU>(std::move(started.state), engine_call_id);
 }
 
 template <typename Ret, typename ThrownU = void>
 future<Ret, ThrownU> start_handle_call(uint64_t handle_key,
                                        args_encoder&& args) {
-  call_registry::started started = call_registry::instance().begin();
-  const uint64_t engine_call_id = api().new_function_call();
+  call_allocation allocation;
+  const uint64_t engine_call_id = allocation.id;
   const std::string encoded = args.finish(engine_call_id, handle_key);
+  call_registry::started started = call_registry::instance().begin();
   api().call_function(reinterpret_cast<const uint8_t*>(encoded.data()),
                       encoded.size(), started.correlation_id);
+  allocation.submitted();
   return future<Ret, ThrownU>(std::move(started.state), engine_call_id);
 }
 

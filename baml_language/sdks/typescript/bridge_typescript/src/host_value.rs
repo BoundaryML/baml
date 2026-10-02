@@ -51,7 +51,7 @@ use bridge_ctypes::baml_bridge::cffi::{
 };
 use napi::{
     Status,
-    bindgen_prelude::{Buffer, FnArgs, Function},
+    bindgen_prelude::{Buffer, External, FnArgs, Function},
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
 use napi_derive::napi;
@@ -83,6 +83,81 @@ impl Drop for SyncCallGuard {
 #[napi(js_name = "_getHostCallOrigin")]
 pub fn get_host_call_origin(call_id: u32) -> Option<String> {
     sys_native::host_dispatch::origin_call_id(call_id).map(|origin| origin.0.to_string())
+}
+
+/// The JS queue/Promise owns this lease, rather than the BAML waiter. Explicit
+/// exit releases it promptly; a discarded JS queue item can also release it.
+#[derive(Clone)]
+pub struct HostExecutionLease(Arc<Mutex<HostExecutionState>>);
+
+struct HostExecutionState {
+    call_id: u32,
+    args: Option<Vec<u8>>,
+    frame: Option<bridge_ctypes::OwnedHostInvocation>,
+    execution: Option<sys_native::host_dispatch::HostExecutionGuard>,
+}
+
+impl HostExecutionLease {
+    fn finish(&self) {
+        let (args, frame, execution) = {
+            let mut state = self.0.lock().unwrap();
+            (
+                state.args.take(),
+                state.frame.take(),
+                state.execution.take(),
+            )
+        };
+        if let Some(args) = args {
+            discard_host_call_args(&args);
+        }
+        drop((frame, execution));
+    }
+}
+
+impl Drop for HostExecutionState {
+    fn drop(&mut self) {
+        if let Some(args) = self.args.take() {
+            discard_host_call_args(&args);
+        }
+        // The execution guard drops after argument disposal.
+    }
+}
+
+/// Claim actual JS execution atomically against waiter retirement.
+#[napi(
+    js_name = "_startHostCallExecution",
+    ts_args_type = "execution: object"
+)]
+pub fn start_host_call_execution(execution: &External<HostExecutionLease>) -> Option<String> {
+    let mut state = execution.0.lock().unwrap();
+    let origin = sys_native::host_dispatch::start_execution(state.call_id)?;
+    state.args = None; // Transfer argument ownership to JS decoding.
+    Some(origin.0.to_string())
+}
+
+#[napi(js_name = "_hostInvocationFrame", ts_args_type = "execution: object")]
+pub fn host_invocation_frame(
+    execution: &External<HostExecutionLease>,
+) -> napi::Result<crate::handle::BamlHandle> {
+    let state = execution.0.lock().unwrap();
+    let frame = state
+        .frame
+        .as_ref()
+        .ok_or_else(|| napi::Error::from_reason("callback already exited"))?;
+    let key = crate::handle::handle_clone(frame.0.effective_state, "callback invocation capture")?;
+    Ok(crate::handle::BamlHandle::from_parts(
+        key,
+        BamlHandleType::InvocationState as i32,
+    ))
+}
+
+/// Close execution ownership only when the callback/Promise actually exits.
+#[napi(
+    js_name = "_finishHostCallExecution",
+    ts_args_type = "execution: object"
+)]
+pub fn finish_host_call_execution(execution: &External<HostExecutionLease>) {
+    execution.finish();
 }
 
 /// Release wire owners of a queued callback cancelled before JS execution.
@@ -143,7 +218,7 @@ pub fn discard_host_call_args_from_js(args: Buffer) {
 ///
 /// Wrapped in `FnArgs` because napi-rs's `JsValuesTupleIntoVec` is impl'd
 /// on `FnArgs<(...)>`, not raw tuples.
-type DispatchArgs = FnArgs<(u32, Buffer)>;
+type DispatchArgs = FnArgs<(u32, Buffer, External<HostExecutionLease>)>;
 
 /// Type of the per-callable dispatch wrapper held in the registry.
 ///
@@ -185,7 +260,7 @@ static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Arc<DispatchTsfn>>> =
 /// The `Function` is converted into a `ThreadsafeFunction` so it can outlive
 /// the napi call scope and be invoked from any thread (the engine's tokio
 /// runtime calls into this entry point from a worker thread).
-#[napi(ts_args_type = "callable: (callId: number, argsBytes: Buffer) => void")]
+#[napi(ts_args_type = "callable: (callId: number, argsBytes: Buffer, execution: object) => void")]
 pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi::Result<HandleKey> {
     let tsfn: DispatchTsfn = callable
         .build_threadsafe_function()
@@ -400,11 +475,34 @@ pub fn release_host_callable(key: HandleKey) {
     reason = "C ABI entry point: pointer validity is the caller's contract, documented \
               alongside the registered HostDispatchFn signature in bridge_cffi"
 )]
-pub extern "C" fn host_dispatch_callback(
+pub extern "C" fn host_dispatch_callback(request: *const u8, length: usize) {
+    if request.is_null() || length > isize::MAX as usize {
+        return;
+    }
+    // SAFETY: V2 borrows runtime-owned envelope bytes for the callback.
+    let bytes = unsafe { std::slice::from_raw_parts(request, length) };
+    let frame = match bridge_cffi::invocation_protocol::decode_host_invocation(bytes) {
+        Ok(frame) => bridge_ctypes::OwnedHostInvocation(frame),
+        Err(_) => return,
+    };
+    let host_value_key = frame.0.host_value_key;
+    let call_id = frame.0.callback_id;
+    let application_args = frame.0.application_args.clone();
+    dispatch_host_callable(
+        host_value_key,
+        call_id,
+        application_args.as_ptr(),
+        application_args.len(),
+        frame,
+    );
+}
+
+fn dispatch_host_callable(
     host_value_key: u64,
     call_id: u32,
     args: *const u8,
     length: usize,
+    frame: bridge_ctypes::OwnedHostInvocation,
 ) {
     let Some(origin) = sys_native::host_dispatch::origin_call_id(call_id) else {
         // args owns wire handle references even after the waiter disappears.
@@ -412,6 +510,7 @@ pub extern "C" fn host_dispatch_callback(
             // SAFETY: the same engine-owned slice contract as the copy below.
             discard_host_call_args(unsafe { std::slice::from_raw_parts(args, length) });
         }
+        sys_native::host_dispatch::finish_abi_execution(call_id);
         return;
     };
     let is_sync = SYNC_CALLS.lock().unwrap().contains(&origin.0);
@@ -434,6 +533,15 @@ pub extern "C" fn host_dispatch_callback(
         );
         return;
     }
+    let Some(execution) = sys_native::host_dispatch::retain_execution(call_id) else {
+        if !args.is_null() {
+            // SAFETY: args remains valid for the duration of dispatch.
+            discard_host_call_args(unsafe { std::slice::from_raw_parts(args, length) });
+        }
+        sys_native::host_dispatch::finish_abi_execution(call_id);
+        return;
+    };
+
     // Copy the wire bytes into a Vec — the dispatch task may outlive the
     // caller's stack frame (the tsfn schedules onto libuv asynchronously),
     // and we need a `'static` slice anyway.
@@ -471,16 +579,24 @@ pub extern "C" fn host_dispatch_callback(
     // Schedule the JS dispatch wrapper. `NonBlocking` matches the Python
     // bridge's `Handle::spawn` semantics — control returns to the engine
     // promptly and the JS-side work happens on the libuv loop.
+    let execution = HostExecutionLease(Arc::new(Mutex::new(HostExecutionState {
+        call_id,
+        args: Some(bytes.clone()),
+        frame: Some(frame),
+        execution: Some(execution),
+    })));
     let status = tsfn.call(
-        FnArgs::from((call_id, Buffer::from(bytes))),
+        FnArgs::from((
+            call_id,
+            Buffer::from(bytes),
+            External::new(execution.clone()),
+        )),
         ThreadsafeFunctionCallMode::NonBlocking,
     );
     if status != Status::Ok {
-        if !args.is_null() {
-            // SAFETY: the engine-owned slice is valid until this callback returns.
-            discard_host_call_args(unsafe { std::slice::from_raw_parts(args, length) });
-        }
         send_dispatch_error_tsfn_status(call_id, status);
+        // napi may retain rejected queue data. Release shared owners explicitly.
+        execution.finish();
     }
 }
 

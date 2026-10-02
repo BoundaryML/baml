@@ -34,3 +34,6 @@ func nativeMediaConstruct(mediaConstructor, cffi.MediaTypeEnum, string, *string)
 func nativeMediaAccess(mediaAccessor, uint64, cffi.BamlHandleType) (*string, error) {
 	return nil, unsupportedNativeOperation()
 }
+
+func nativeReleaseFunctionCall(uint64)               {}
+func nativeInvocationClockNs(uint64) (uint64, error) { return 0, unsupportedNativeOperation() }

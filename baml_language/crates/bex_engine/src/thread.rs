@@ -11,6 +11,7 @@ use std::{collections::HashMap, sync::Arc};
 use ::bex_heap::{Tlab, TlabHolder};
 use ::bex_vm_types::{HeapPtr, RootHaver, types::FutureId};
 use bex_vm::BexVm;
+use bex_vm_types::cancellation::{CancellationObserver, CancellationSource};
 use tokio_util::sync::CancellationToken;
 
 /// What cancels a task: its own token, and every token linked into it.
@@ -25,33 +26,37 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone)]
 pub struct TaskCancel {
     own: CancellationToken,
-    linked: Arc<[CancellationToken]>,
+    linked: Arc<[CancellationSource]>,
+    deadline: Option<crate::invocation::InvocationDeadline>,
 }
 
 impl TaskCancel {
-    /// A root call's: cancelled through the host's token alone.
+    /// A root VM's private cancellation authority, before inputs are attached.
     pub fn root(own: CancellationToken) -> Self {
         Self {
             own,
             linked: Arc::from([]),
+            deadline: None,
         }
     }
 
     /// A task with no cancellation parent (a rooted spawn, or one started by
     /// cleanup code): a fresh token, and `linked`.
-    pub fn detached(linked: impl IntoIterator<Item = CancellationToken>) -> Self {
+    pub fn detached(linked: impl IntoIterator<Item = CancellationSource>) -> Self {
         Self {
             own: CancellationToken::new(),
             linked: linked.into_iter().collect(),
+            deadline: None,
         }
     }
 
     /// A child task's: cancelled with this task, and by `linked` too.
     #[must_use]
-    pub fn child(&self, linked: impl IntoIterator<Item = CancellationToken>) -> Self {
+    pub fn child(&self, linked: impl IntoIterator<Item = CancellationSource>) -> Self {
         Self {
             own: self.own.child_token(),
             linked: self.linked.iter().cloned().chain(linked).collect(),
+            deadline: self.deadline,
         }
     }
 
@@ -61,25 +66,62 @@ impl TaskCancel {
     }
 
     /// Every token whose firing cancels the task.
-    pub fn tokens(&self) -> impl Iterator<Item = &CancellationToken> {
-        std::iter::once(&self.own).chain(self.linked.iter())
+    pub fn sources(&self) -> impl Iterator<Item = CancellationSource> + '_ {
+        std::iter::once(self.own.clone().into()).chain(self.linked.iter().cloned())
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.tokens().any(CancellationToken::is_cancelled)
+        self.sources().any(|source| source.is_cancelled())
+            || self
+                .deadline
+                .is_some_and(crate::invocation::InvocationDeadline::is_expired)
+    }
+
+    pub(crate) fn with_deadline(
+        mut self,
+        deadline: Option<crate::invocation::InvocationDeadline>,
+    ) -> Self {
+        self.deadline = deadline;
+        self
+    }
+
+    pub(crate) fn deadline(&self) -> Option<crate::invocation::InvocationDeadline> {
+        self.deadline
     }
 
     /// Completes once any token that cancels the task has fired.
     pub async fn cancelled(&self) {
-        if self.linked.is_empty() {
-            return self.own.cancelled().await;
+        let sources = async {
+            if self.linked.is_empty() {
+                self.own.cancelled().await;
+            } else {
+                futures::future::select_all(
+                    self.sources()
+                        .map(|source| Box::pin(async move { source.cancelled().await })),
+                )
+                .await;
+            }
+        };
+        match self.deadline {
+            Some(deadline) => {
+                tokio::select! { () = sources => {}, () = deadline.elapsed() => {} }
+            }
+            None => sources.await,
         }
-        futures::future::select_all(self.tokens().map(|token| Box::pin(token.cancelled()))).await;
     }
 
     /// Cancel the task and, through its own token, its descendants.
     pub fn cancel(&self) {
         self.own.cancel();
+    }
+}
+
+impl CancellationObserver for TaskCancel {
+    fn is_cancelled(&self) -> bool {
+        TaskCancel::is_cancelled(self)
+    }
+    fn cancelled(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
+        Box::pin(TaskCancel::cancelled(self))
     }
 }
 
@@ -89,6 +131,8 @@ pub struct BexThread {
     pub vm: BexVm,
     pub name: Option<String>,
     pub cancel: TaskCancel,
+    pub(crate) host_environment: u64,
+    pub(crate) entry_reservation: Option<Arc<bex_vm_types::trace::ReservedSpanData>>,
     /// The token the thread's in-flight sys-op observes — never `cancel`
     /// itself: whether the thread is shielded is read only once `cancel`
     /// fires, and a shielded thread's cleanup runs its sys-ops to
@@ -110,6 +154,8 @@ impl BexThread {
             vm,
             name: None,
             cancel,
+            host_environment: 0,
+            entry_reservation: None,
             sysop_cancel: CancellationToken::new(),
             settles_future: None,
             escaped_outcome: None,
@@ -128,6 +174,8 @@ impl BexThread {
             vm,
             name,
             cancel,
+            host_environment: 0,
+            entry_reservation: None,
             sysop_cancel: CancellationToken::new(),
             settles_future: Some(settles_future),
             escaped_outcome: None,

@@ -12,6 +12,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, LimitInner, LimitSet, Object, ObjectType, RealizedTy,
+    cancellation::CancellationSource,
     types::{CancellationToken, Value},
 };
 
@@ -37,7 +38,7 @@ use crate::{
 struct CancelTokenState {
     own: CancellationToken,
     /// Flattened: an input that is itself a composite contributes its tokens.
-    inputs: Box<[CancellationToken]>,
+    inputs: Box<[CancellationSource]>,
 }
 
 impl CancelTokenState {
@@ -49,25 +50,44 @@ impl CancelTokenState {
     }
 
     /// Every token whose firing fires this one.
-    fn tokens(&self) -> impl Iterator<Item = &CancellationToken> {
-        std::iter::once(&self.own).chain(self.inputs.iter())
+    fn sources(&self) -> impl Iterator<Item = CancellationSource> + '_ {
+        std::iter::once(self.own.clone().into()).chain(self.inputs.iter().cloned())
     }
 
     fn is_cancelled(&self) -> bool {
-        self.tokens().any(CancellationToken::is_cancelled)
+        self.sources().any(|source| source.is_cancelled())
     }
 }
 
 /// The tokens a `baml.spawn.CancelToken` value fires on (see
-/// [`CancelTokenState`]). Field 0 (`_handle`) is the `Object::RustData`
+/// `CancelTokenState`). Field 0 (`_handle`) is the `Object::RustData`
 /// holding the state. Returns `None` if the value is not a well-formed
 /// `CancelToken` instance (including the `OmittedArg` sentinel for an omitted
 /// optional argument).
-fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationToken>> {
+pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationSource>> {
     let instance = vm.as_instance(&value).ok()?;
+    if instance.class != vm.resolve_class("baml.spawn.CancelToken") {
+        return None;
+    }
     let handle = instance.load_field(0);
     let state = vm.as_rust_data::<CancelTokenState>(&handle).ok()?;
-    Some(state.tokens().cloned().collect())
+    Some(state.sources().collect())
+}
+
+/// A concrete generated token observing the effective task, including its
+/// deadline. Its own authority cancels that task, never its input sources.
+pub fn alloc_projected_cancel_token(
+    vm: &mut BexVm,
+    own: CancellationToken,
+    inputs: Vec<CancellationSource>,
+) -> Value {
+    alloc_cancel_token(
+        vm,
+        CancelTokenState {
+            own,
+            inputs: inputs.into_boxed_slice(),
+        },
+    )
 }
 
 /// Allocate a `baml.spawn.CancelToken` instance holding `state`.
@@ -139,7 +159,7 @@ pub struct SpawnLaunch {
     /// Every limit of the plan, taken together before the task starts.
     pub limits: LimitSet,
     /// Tokens linked into the task's own: any of them firing cancels it.
-    pub cancel: Vec<CancellationToken>,
+    pub cancel: Vec<CancellationSource>,
     /// The task's cancellation parent is the runtime, not the spawner.
     pub root: bool,
 }

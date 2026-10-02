@@ -19,29 +19,12 @@ pub(crate) struct Dispatch {
     pub callable: Py<PyAny>,
     pub call_id: u32,
     pub args: Vec<u8>,
+    pub execution: host_value::HostExecutionLease,
 }
 
 pub(crate) enum SyncMessage {
-    Dispatch(QueuedDispatch),
+    Dispatch(Dispatch),
     Finished(Vec<u8>),
-}
-
-/// Own arguments until the synchronous caller takes responsibility for decoding
-/// them. Interruptions can discard both a received message and the whole queue.
-pub(crate) struct QueuedDispatch(Option<Dispatch>);
-
-impl QueuedDispatch {
-    pub(crate) fn into_inner(mut self) -> Dispatch {
-        self.0.take().expect("queued dispatch already consumed")
-    }
-}
-
-impl Drop for QueuedDispatch {
-    fn drop(&mut self) {
-        if let Some(dispatch) = self.0.take() {
-            host_value::discard_host_call_args(&dispatch.args);
-        }
-    }
 }
 
 enum Environment {
@@ -120,7 +103,6 @@ impl Drop for DispatchScope {
 pub(crate) fn route(dispatch: Dispatch) {
     let Some(origin) = sys_native::host_dispatch::origin_call_id(dispatch.call_id) else {
         // Cancellation already evicted this dispatch. Do not execute stale work.
-        host_value::discard_host_call_args(&dispatch.args);
         return;
     };
     let environment = ENVIRONMENTS
@@ -129,7 +111,6 @@ pub(crate) fn route(dispatch: Dispatch) {
         .get(&origin.0)
         .cloned();
     let Some(environment) = environment else {
-        host_value::discard_host_call_args(&dispatch.args);
         host_value::send_dispatch_bridge_failure(
             dispatch.call_id,
             "originating Python SDK call has no active callback environment".to_owned(),
@@ -140,14 +121,14 @@ pub(crate) fn route(dispatch: Dispatch) {
     match &*environment {
         Environment::Sync(sender) => {
             let call_id = dispatch.call_id;
-            if sender
-                .send(SyncMessage::Dispatch(QueuedDispatch(Some(dispatch))))
-                .is_err()
+            if let Err(mpsc::SendError(SyncMessage::Dispatch(dispatch))) =
+                sender.send(SyncMessage::Dispatch(dispatch))
             {
                 host_value::send_dispatch_bridge_failure(
                     call_id,
                     "originating Python caller stopped servicing callbacks".to_owned(),
                 );
+                drop(dispatch);
             }
         }
         Environment::Async {
@@ -168,13 +149,13 @@ pub(crate) fn route(dispatch: Dispatch) {
                         dispatch.callable.bind(py),
                         dispatch.call_id,
                         PyBytes::new(py, &dispatch.args),
+                        Py::new(py, dispatch.execution)?,
                     ),
                     Some(&kwargs),
                 )?;
                 Ok(())
             });
             if let Err(error) = result {
-                host_value::discard_host_call_args(&dispatch.args);
                 host_value::send_dispatch_bridge_failure(
                     dispatch.call_id,
                     format!("could not schedule Python callback on its originating loop: {error}"),

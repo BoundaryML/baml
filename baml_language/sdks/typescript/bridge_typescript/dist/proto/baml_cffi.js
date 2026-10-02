@@ -2488,6 +2488,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {Array.<baml_bridge.cffi.v1.IBamlTyArg>|null} [typeArgs] CallFunctionArgs typeArgs
                  * @property {string|null} [functionName] CallFunctionArgs functionName
                  * @property {number|Long|null} [functionHandle] CallFunctionArgs functionHandle
+                 * @property {baml_bridge.cffi.v1.IInvocationOptions|null} [invocation] CallFunctionArgs invocation
                  */
 
                 /**
@@ -2547,6 +2548,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  */
                 CallFunctionArgs.prototype.functionHandle = null;
 
+                /**
+                 * CallFunctionArgs invocation.
+                 * @member {baml_bridge.cffi.v1.IInvocationOptions|null|undefined} invocation
+                 * @memberof baml_bridge.cffi.v1.CallFunctionArgs
+                 * @instance
+                 */
+                CallFunctionArgs.prototype.invocation = null;
+
                 // OneOf field names bound to virtual getters and setters
                 let $oneOfFields;
 
@@ -2601,6 +2610,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 4, wireType 2 =*/34).string(message.functionName);
                     if (message.functionHandle != null && Object.hasOwnProperty.call(message, "functionHandle"))
                         writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.functionHandle);
+                    if (message.invocation != null && Object.hasOwnProperty.call(message, "invocation"))
+                        $root.baml_bridge.cffi.v1.InvocationOptions.encode(message.invocation, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -2663,6 +2674,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 5: {
                                 message.functionHandle = reader.uint64();
+                                break;
+                            }
+                        case 6: {
+                                message.invocation = $root.baml_bridge.cffi.v1.InvocationOptions.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -2738,6 +2753,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (!$util.isInteger(message.functionHandle) && !(message.functionHandle && $util.isInteger(message.functionHandle.low) && $util.isInteger(message.functionHandle.high)))
                             return "functionHandle: integer|Long expected";
                     }
+                    if (message.invocation != null && message.hasOwnProperty("invocation")) {
+                        let error = $root.baml_bridge.cffi.v1.InvocationOptions.verify(message.invocation, long + 1);
+                        if (error)
+                            return "invocation." + error;
+                    }
                     return null;
                 };
 
@@ -2799,6 +2819,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             message.functionHandle = object.functionHandle;
                         else if (typeof object.functionHandle === "object")
                             message.functionHandle = new $util.LongBits(object.functionHandle.low >>> 0, object.functionHandle.high >>> 0).toNumber(true);
+                    if (object.invocation != null) {
+                        if (!$util.isObject(object.invocation))
+                            throw TypeError(".baml_bridge.cffi.v1.CallFunctionArgs.invocation: object expected");
+                        message.invocation = $root.baml_bridge.cffi.v1.InvocationOptions.fromObject(object.invocation, long + 1);
+                    }
                     return message;
                 };
 
@@ -2823,12 +2848,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.kwargs = [];
                         object.typeArgs = [];
                     }
-                    if (options.defaults)
+                    if (options.defaults) {
                         if ($util.Long) {
                             let long = new $util.Long(0, 0, true);
                             object.callId = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
                         } else
                             object.callId = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
+                        object.invocation = null;
+                    }
                     if (message.kwargs && message.kwargs.length) {
                         object.kwargs = [];
                         for (let j = 0; j < message.kwargs.length; ++j)
@@ -2861,6 +2888,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (options.oneofs)
                             object.callTarget = "functionHandle";
                     }
+                    if (message.invocation != null && message.hasOwnProperty("invocation"))
+                        object.invocation = $root.baml_bridge.cffi.v1.InvocationOptions.toObject(message.invocation, options, q + 1);
                     return object;
                 };
 
@@ -2891,6 +2920,1551 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 };
 
                 return CallFunctionArgs;
+            })();
+
+            v1.InvocationOptions = (function() {
+
+                /**
+                 * Properties of an InvocationOptions.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IInvocationOptions
+                 * @property {baml_bridge.cffi.v1.ITraceSelection|null} [trace] InvocationOptions trace
+                 * @property {baml_bridge.cffi.v1.IInboundValue|null} [cancel] InvocationOptions cancel
+                 * @property {number|Long|null} [deadlineNs] InvocationOptions deadlineNs
+                 * @property {number|Long|null} [inheritedState] InvocationOptions inheritedState
+                 * @property {number|Long|null} [hostEnvironment] InvocationOptions hostEnvironment
+                 */
+
+                /**
+                 * Constructs a new InvocationOptions.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents an InvocationOptions.
+                 * @implements IInvocationOptions
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IInvocationOptions=} [properties] Properties to set
+                 */
+                function InvocationOptions(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * InvocationOptions trace.
+                 * @member {baml_bridge.cffi.v1.ITraceSelection|null|undefined} trace
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @instance
+                 */
+                InvocationOptions.prototype.trace = null;
+
+                /**
+                 * InvocationOptions cancel.
+                 * @member {baml_bridge.cffi.v1.IInboundValue|null|undefined} cancel
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @instance
+                 */
+                InvocationOptions.prototype.cancel = null;
+
+                /**
+                 * InvocationOptions deadlineNs.
+                 * @member {number|Long|null|undefined} deadlineNs
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @instance
+                 */
+                InvocationOptions.prototype.deadlineNs = null;
+
+                /**
+                 * InvocationOptions inheritedState.
+                 * @member {number|Long} inheritedState
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @instance
+                 */
+                InvocationOptions.prototype.inheritedState = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                /**
+                 * InvocationOptions hostEnvironment.
+                 * @member {number|Long} hostEnvironment
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @instance
+                 */
+                InvocationOptions.prototype.hostEnvironment = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(InvocationOptions.prototype, "_deadlineNs", {
+                    get: $util.oneOfGetter($oneOfFields = ["deadlineNs"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new InvocationOptions instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IInvocationOptions=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.InvocationOptions} InvocationOptions instance
+                 */
+                InvocationOptions.create = function create(properties) {
+                    return new InvocationOptions(properties);
+                };
+
+                /**
+                 * Encodes the specified InvocationOptions message. Does not implicitly {@link baml_bridge.cffi.v1.InvocationOptions.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IInvocationOptions} message InvocationOptions message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                InvocationOptions.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.trace != null && Object.hasOwnProperty.call(message, "trace"))
+                        $root.baml_bridge.cffi.v1.TraceSelection.encode(message.trace, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.cancel != null && Object.hasOwnProperty.call(message, "cancel"))
+                        $root.baml_bridge.cffi.v1.InboundValue.encode(message.cancel, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.deadlineNs != null && Object.hasOwnProperty.call(message, "deadlineNs"))
+                        writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.deadlineNs);
+                    if (message.inheritedState != null && Object.hasOwnProperty.call(message, "inheritedState"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).uint64(message.inheritedState);
+                    if (message.hostEnvironment != null && Object.hasOwnProperty.call(message, "hostEnvironment"))
+                        writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.hostEnvironment);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified InvocationOptions message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.InvocationOptions.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IInvocationOptions} message InvocationOptions message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                InvocationOptions.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes an InvocationOptions message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.InvocationOptions} InvocationOptions
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                InvocationOptions.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.InvocationOptions();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.trace = $root.baml_bridge.cffi.v1.TraceSelection.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 2: {
+                                message.cancel = $root.baml_bridge.cffi.v1.InboundValue.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 3: {
+                                message.deadlineNs = reader.uint64();
+                                break;
+                            }
+                        case 4: {
+                                message.inheritedState = reader.uint64();
+                                break;
+                            }
+                        case 5: {
+                                message.hostEnvironment = reader.uint64();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes an InvocationOptions message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.InvocationOptions} InvocationOptions
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                InvocationOptions.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies an InvocationOptions message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                InvocationOptions.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.trace != null && message.hasOwnProperty("trace")) {
+                        let error = $root.baml_bridge.cffi.v1.TraceSelection.verify(message.trace, long + 1);
+                        if (error)
+                            return "trace." + error;
+                    }
+                    if (message.cancel != null && message.hasOwnProperty("cancel")) {
+                        let error = $root.baml_bridge.cffi.v1.InboundValue.verify(message.cancel, long + 1);
+                        if (error)
+                            return "cancel." + error;
+                    }
+                    if (message.deadlineNs != null && message.hasOwnProperty("deadlineNs")) {
+                        properties._deadlineNs = 1;
+                        if (!$util.isInteger(message.deadlineNs) && !(message.deadlineNs && $util.isInteger(message.deadlineNs.low) && $util.isInteger(message.deadlineNs.high)))
+                            return "deadlineNs: integer|Long expected";
+                    }
+                    if (message.inheritedState != null && message.hasOwnProperty("inheritedState"))
+                        if (!$util.isInteger(message.inheritedState) && !(message.inheritedState && $util.isInteger(message.inheritedState.low) && $util.isInteger(message.inheritedState.high)))
+                            return "inheritedState: integer|Long expected";
+                    if (message.hostEnvironment != null && message.hasOwnProperty("hostEnvironment"))
+                        if (!$util.isInteger(message.hostEnvironment) && !(message.hostEnvironment && $util.isInteger(message.hostEnvironment.low) && $util.isInteger(message.hostEnvironment.high)))
+                            return "hostEnvironment: integer|Long expected";
+                    return null;
+                };
+
+                /**
+                 * Creates an InvocationOptions message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.InvocationOptions} InvocationOptions
+                 */
+                InvocationOptions.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.InvocationOptions)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.InvocationOptions: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.InvocationOptions();
+                    if (object.trace != null) {
+                        if (!$util.isObject(object.trace))
+                            throw TypeError(".baml_bridge.cffi.v1.InvocationOptions.trace: object expected");
+                        message.trace = $root.baml_bridge.cffi.v1.TraceSelection.fromObject(object.trace, long + 1);
+                    }
+                    if (object.cancel != null) {
+                        if (!$util.isObject(object.cancel))
+                            throw TypeError(".baml_bridge.cffi.v1.InvocationOptions.cancel: object expected");
+                        message.cancel = $root.baml_bridge.cffi.v1.InboundValue.fromObject(object.cancel, long + 1);
+                    }
+                    if (object.deadlineNs != null)
+                        if ($util.Long)
+                            message.deadlineNs = $util.Long.fromValue(object.deadlineNs, true);
+                        else if (typeof object.deadlineNs === "string")
+                            message.deadlineNs = parseInt(object.deadlineNs, 10);
+                        else if (typeof object.deadlineNs === "number")
+                            message.deadlineNs = object.deadlineNs;
+                        else if (typeof object.deadlineNs === "object")
+                            message.deadlineNs = new $util.LongBits(object.deadlineNs.low >>> 0, object.deadlineNs.high >>> 0).toNumber(true);
+                    if (object.inheritedState != null)
+                        if ($util.Long)
+                            message.inheritedState = $util.Long.fromValue(object.inheritedState, true);
+                        else if (typeof object.inheritedState === "string")
+                            message.inheritedState = parseInt(object.inheritedState, 10);
+                        else if (typeof object.inheritedState === "number")
+                            message.inheritedState = object.inheritedState;
+                        else if (typeof object.inheritedState === "object")
+                            message.inheritedState = new $util.LongBits(object.inheritedState.low >>> 0, object.inheritedState.high >>> 0).toNumber(true);
+                    if (object.hostEnvironment != null)
+                        if ($util.Long)
+                            message.hostEnvironment = $util.Long.fromValue(object.hostEnvironment, true);
+                        else if (typeof object.hostEnvironment === "string")
+                            message.hostEnvironment = parseInt(object.hostEnvironment, 10);
+                        else if (typeof object.hostEnvironment === "number")
+                            message.hostEnvironment = object.hostEnvironment;
+                        else if (typeof object.hostEnvironment === "object")
+                            message.hostEnvironment = new $util.LongBits(object.hostEnvironment.low >>> 0, object.hostEnvironment.high >>> 0).toNumber(true);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from an InvocationOptions message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.InvocationOptions} message InvocationOptions
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                InvocationOptions.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        object.trace = null;
+                        object.cancel = null;
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.inheritedState = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.inheritedState = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.hostEnvironment = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.hostEnvironment = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
+                    }
+                    if (message.trace != null && message.hasOwnProperty("trace"))
+                        object.trace = $root.baml_bridge.cffi.v1.TraceSelection.toObject(message.trace, options, q + 1);
+                    if (message.cancel != null && message.hasOwnProperty("cancel"))
+                        object.cancel = $root.baml_bridge.cffi.v1.InboundValue.toObject(message.cancel, options, q + 1);
+                    if (message.deadlineNs != null && message.hasOwnProperty("deadlineNs")) {
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.deadlineNs = typeof message.deadlineNs === "number" ? BigInt(message.deadlineNs) : $util.Long.fromBits(message.deadlineNs.low >>> 0, message.deadlineNs.high >>> 0, true).toBigInt();
+                        else if (typeof message.deadlineNs === "number")
+                            object.deadlineNs = options.longs === String ? String(message.deadlineNs) : message.deadlineNs;
+                        else
+                            object.deadlineNs = options.longs === String ? $util.Long.prototype.toString.call(message.deadlineNs) : options.longs === Number ? new $util.LongBits(message.deadlineNs.low >>> 0, message.deadlineNs.high >>> 0).toNumber(true) : message.deadlineNs;
+                        if (options.oneofs)
+                            object._deadlineNs = "deadlineNs";
+                    }
+                    if (message.inheritedState != null && message.hasOwnProperty("inheritedState"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.inheritedState = typeof message.inheritedState === "number" ? BigInt(message.inheritedState) : $util.Long.fromBits(message.inheritedState.low >>> 0, message.inheritedState.high >>> 0, true).toBigInt();
+                        else if (typeof message.inheritedState === "number")
+                            object.inheritedState = options.longs === String ? String(message.inheritedState) : message.inheritedState;
+                        else
+                            object.inheritedState = options.longs === String ? $util.Long.prototype.toString.call(message.inheritedState) : options.longs === Number ? new $util.LongBits(message.inheritedState.low >>> 0, message.inheritedState.high >>> 0).toNumber(true) : message.inheritedState;
+                    if (message.hostEnvironment != null && message.hasOwnProperty("hostEnvironment"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.hostEnvironment = typeof message.hostEnvironment === "number" ? BigInt(message.hostEnvironment) : $util.Long.fromBits(message.hostEnvironment.low >>> 0, message.hostEnvironment.high >>> 0, true).toBigInt();
+                        else if (typeof message.hostEnvironment === "number")
+                            object.hostEnvironment = options.longs === String ? String(message.hostEnvironment) : message.hostEnvironment;
+                        else
+                            object.hostEnvironment = options.longs === String ? $util.Long.prototype.toString.call(message.hostEnvironment) : options.longs === Number ? new $util.LongBits(message.hostEnvironment.low >>> 0, message.hostEnvironment.high >>> 0).toNumber(true) : message.hostEnvironment;
+                    return object;
+                };
+
+                /**
+                 * Converts this InvocationOptions to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                InvocationOptions.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for InvocationOptions
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.InvocationOptions
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                InvocationOptions.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.InvocationOptions";
+                };
+
+                return InvocationOptions;
+            })();
+
+            v1.TraceSelection = (function() {
+
+                /**
+                 * Properties of a TraceSelection.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface ITraceSelection
+                 * @property {baml_bridge.cffi.v1.ITraceOptions|null} [options] TraceSelection options
+                 * @property {number|Long|null} [reservation] TraceSelection reservation
+                 */
+
+                /**
+                 * Constructs a new TraceSelection.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a TraceSelection.
+                 * @implements ITraceSelection
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.ITraceSelection=} [properties] Properties to set
+                 */
+                function TraceSelection(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * TraceSelection options.
+                 * @member {baml_bridge.cffi.v1.ITraceOptions|null|undefined} options
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @instance
+                 */
+                TraceSelection.prototype.options = null;
+
+                /**
+                 * TraceSelection reservation.
+                 * @member {number|Long|null|undefined} reservation
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @instance
+                 */
+                TraceSelection.prototype.reservation = null;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                /**
+                 * TraceSelection selection.
+                 * @member {"options"|"reservation"|undefined} selection
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @instance
+                 */
+                Object.defineProperty(TraceSelection.prototype, "selection", {
+                    get: $util.oneOfGetter($oneOfFields = ["options", "reservation"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new TraceSelection instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceSelection=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.TraceSelection} TraceSelection instance
+                 */
+                TraceSelection.create = function create(properties) {
+                    return new TraceSelection(properties);
+                };
+
+                /**
+                 * Encodes the specified TraceSelection message. Does not implicitly {@link baml_bridge.cffi.v1.TraceSelection.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceSelection} message TraceSelection message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                TraceSelection.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.options != null && Object.hasOwnProperty.call(message, "options"))
+                        $root.baml_bridge.cffi.v1.TraceOptions.encode(message.options, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.reservation != null && Object.hasOwnProperty.call(message, "reservation"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.reservation);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified TraceSelection message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.TraceSelection.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceSelection} message TraceSelection message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                TraceSelection.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes a TraceSelection message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.TraceSelection} TraceSelection
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                TraceSelection.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.TraceSelection();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.options = $root.baml_bridge.cffi.v1.TraceOptions.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 2: {
+                                message.reservation = reader.uint64();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a TraceSelection message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.TraceSelection} TraceSelection
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                TraceSelection.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a TraceSelection message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                TraceSelection.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.options != null && message.hasOwnProperty("options")) {
+                        properties.selection = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.TraceOptions.verify(message.options, long + 1);
+                            if (error)
+                                return "options." + error;
+                        }
+                    }
+                    if (message.reservation != null && message.hasOwnProperty("reservation")) {
+                        if (properties.selection === 1)
+                            return "selection: multiple values";
+                        properties.selection = 1;
+                        if (!$util.isInteger(message.reservation) && !(message.reservation && $util.isInteger(message.reservation.low) && $util.isInteger(message.reservation.high)))
+                            return "reservation: integer|Long expected";
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a TraceSelection message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.TraceSelection} TraceSelection
+                 */
+                TraceSelection.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.TraceSelection)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.TraceSelection: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.TraceSelection();
+                    if (object.options != null) {
+                        if (!$util.isObject(object.options))
+                            throw TypeError(".baml_bridge.cffi.v1.TraceSelection.options: object expected");
+                        message.options = $root.baml_bridge.cffi.v1.TraceOptions.fromObject(object.options, long + 1);
+                    }
+                    if (object.reservation != null)
+                        if ($util.Long)
+                            message.reservation = $util.Long.fromValue(object.reservation, true);
+                        else if (typeof object.reservation === "string")
+                            message.reservation = parseInt(object.reservation, 10);
+                        else if (typeof object.reservation === "number")
+                            message.reservation = object.reservation;
+                        else if (typeof object.reservation === "object")
+                            message.reservation = new $util.LongBits(object.reservation.low >>> 0, object.reservation.high >>> 0).toNumber(true);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a TraceSelection message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {baml_bridge.cffi.v1.TraceSelection} message TraceSelection
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                TraceSelection.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (message.options != null && message.hasOwnProperty("options")) {
+                        object.options = $root.baml_bridge.cffi.v1.TraceOptions.toObject(message.options, options, q + 1);
+                        if (options.oneofs)
+                            object.selection = "options";
+                    }
+                    if (message.reservation != null && message.hasOwnProperty("reservation")) {
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.reservation = typeof message.reservation === "number" ? BigInt(message.reservation) : $util.Long.fromBits(message.reservation.low >>> 0, message.reservation.high >>> 0, true).toBigInt();
+                        else if (typeof message.reservation === "number")
+                            object.reservation = options.longs === String ? String(message.reservation) : message.reservation;
+                        else
+                            object.reservation = options.longs === String ? $util.Long.prototype.toString.call(message.reservation) : options.longs === Number ? new $util.LongBits(message.reservation.low >>> 0, message.reservation.high >>> 0).toNumber(true) : message.reservation;
+                        if (options.oneofs)
+                            object.selection = "reservation";
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this TraceSelection to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                TraceSelection.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for TraceSelection
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.TraceSelection
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                TraceSelection.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.TraceSelection";
+                };
+
+                return TraceSelection;
+            })();
+
+            v1.TraceOptions = (function() {
+
+                /**
+                 * Properties of a TraceOptions.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface ITraceOptions
+                 * @property {baml_bridge.cffi.v1.TraceMode|null} [mode] TraceOptions mode
+                 * @property {boolean|null} [inputs] TraceOptions inputs
+                 * @property {boolean|null} [output] TraceOptions output
+                 * @property {boolean|null} [error] TraceOptions error
+                 * @property {string|null} [distinctId] TraceOptions distinctId
+                 * @property {Object.<string,baml_bridge.cffi.v1.ITraceMetadataValue>|null} [metadata] TraceOptions metadata
+                 */
+
+                /**
+                 * Constructs a new TraceOptions.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a TraceOptions.
+                 * @implements ITraceOptions
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.ITraceOptions=} [properties] Properties to set
+                 */
+                function TraceOptions(properties) {
+                    this.metadata = {};
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * TraceOptions mode.
+                 * @member {baml_bridge.cffi.v1.TraceMode|null|undefined} mode
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @instance
+                 */
+                TraceOptions.prototype.mode = null;
+
+                /**
+                 * TraceOptions inputs.
+                 * @member {boolean|null|undefined} inputs
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @instance
+                 */
+                TraceOptions.prototype.inputs = null;
+
+                /**
+                 * TraceOptions output.
+                 * @member {boolean|null|undefined} output
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @instance
+                 */
+                TraceOptions.prototype.output = null;
+
+                /**
+                 * TraceOptions error.
+                 * @member {boolean|null|undefined} error
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @instance
+                 */
+                TraceOptions.prototype.error = null;
+
+                /**
+                 * TraceOptions distinctId.
+                 * @member {string|null|undefined} distinctId
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @instance
+                 */
+                TraceOptions.prototype.distinctId = null;
+
+                /**
+                 * TraceOptions metadata.
+                 * @member {Object.<string,baml_bridge.cffi.v1.ITraceMetadataValue>} metadata
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @instance
+                 */
+                TraceOptions.prototype.metadata = $util.emptyObject;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(TraceOptions.prototype, "_mode", {
+                    get: $util.oneOfGetter($oneOfFields = ["mode"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(TraceOptions.prototype, "_inputs", {
+                    get: $util.oneOfGetter($oneOfFields = ["inputs"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(TraceOptions.prototype, "_output", {
+                    get: $util.oneOfGetter($oneOfFields = ["output"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(TraceOptions.prototype, "_error", {
+                    get: $util.oneOfGetter($oneOfFields = ["error"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(TraceOptions.prototype, "_distinctId", {
+                    get: $util.oneOfGetter($oneOfFields = ["distinctId"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new TraceOptions instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceOptions=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.TraceOptions} TraceOptions instance
+                 */
+                TraceOptions.create = function create(properties) {
+                    return new TraceOptions(properties);
+                };
+
+                /**
+                 * Encodes the specified TraceOptions message. Does not implicitly {@link baml_bridge.cffi.v1.TraceOptions.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceOptions} message TraceOptions message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                TraceOptions.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.mode != null && Object.hasOwnProperty.call(message, "mode"))
+                        writer.uint32(/* id 1, wireType 0 =*/8).int32(message.mode);
+                    if (message.inputs != null && Object.hasOwnProperty.call(message, "inputs"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).bool(message.inputs);
+                    if (message.output != null && Object.hasOwnProperty.call(message, "output"))
+                        writer.uint32(/* id 3, wireType 0 =*/24).bool(message.output);
+                    if (message.error != null && Object.hasOwnProperty.call(message, "error"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).bool(message.error);
+                    if (message.distinctId != null && Object.hasOwnProperty.call(message, "distinctId"))
+                        writer.uint32(/* id 5, wireType 2 =*/42).string(message.distinctId);
+                    if (message.metadata != null && Object.hasOwnProperty.call(message, "metadata"))
+                        for (let keys = Object.keys(message.metadata), i = 0; i < keys.length; ++i) {
+                            writer.uint32(/* id 6, wireType 2 =*/50).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                            $root.baml_bridge.cffi.v1.TraceMetadataValue.encode(message.metadata[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim().ldelim();
+                        }
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified TraceOptions message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.TraceOptions.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceOptions} message TraceOptions message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                TraceOptions.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes a TraceOptions message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.TraceOptions} TraceOptions
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                TraceOptions.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.TraceOptions(), key, value;
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.mode = reader.int32();
+                                break;
+                            }
+                        case 2: {
+                                message.inputs = reader.bool();
+                                break;
+                            }
+                        case 3: {
+                                message.output = reader.bool();
+                                break;
+                            }
+                        case 4: {
+                                message.error = reader.bool();
+                                break;
+                            }
+                        case 5: {
+                                message.distinctId = reader.string();
+                                break;
+                            }
+                        case 6: {
+                                if (message.metadata === $util.emptyObject)
+                                    message.metadata = {};
+                                let end2 = reader.uint32() + reader.pos;
+                                key = "";
+                                value = null;
+                                while (reader.pos < end2) {
+                                    let tag2 = reader.uint32();
+                                    switch (tag2 >>> 3) {
+                                    case 1:
+                                        key = reader.string();
+                                        break;
+                                    case 2:
+                                        value = $root.baml_bridge.cffi.v1.TraceMetadataValue.decode(reader, reader.uint32(), undefined, long + 1);
+                                        break;
+                                    default:
+                                        reader.skipType(tag2 & 7, long);
+                                        break;
+                                    }
+                                }
+                                if (key === "__proto__")
+                                    $util.makeProp(message.metadata, key);
+                                message.metadata[key] = value;
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a TraceOptions message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.TraceOptions} TraceOptions
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                TraceOptions.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a TraceOptions message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                TraceOptions.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.mode != null && message.hasOwnProperty("mode")) {
+                        properties._mode = 1;
+                        switch (message.mode) {
+                        default:
+                            return "mode: enum value expected";
+                        case 0:
+                        case 1:
+                        case 2:
+                        case 3:
+                            break;
+                        }
+                    }
+                    if (message.inputs != null && message.hasOwnProperty("inputs")) {
+                        properties._inputs = 1;
+                        if (typeof message.inputs !== "boolean")
+                            return "inputs: boolean expected";
+                    }
+                    if (message.output != null && message.hasOwnProperty("output")) {
+                        properties._output = 1;
+                        if (typeof message.output !== "boolean")
+                            return "output: boolean expected";
+                    }
+                    if (message.error != null && message.hasOwnProperty("error")) {
+                        properties._error = 1;
+                        if (typeof message.error !== "boolean")
+                            return "error: boolean expected";
+                    }
+                    if (message.distinctId != null && message.hasOwnProperty("distinctId")) {
+                        properties._distinctId = 1;
+                        if (!$util.isString(message.distinctId))
+                            return "distinctId: string expected";
+                    }
+                    if (message.metadata != null && message.hasOwnProperty("metadata")) {
+                        if (!$util.isObject(message.metadata))
+                            return "metadata: object expected";
+                        let key = Object.keys(message.metadata);
+                        for (let i = 0; i < key.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.TraceMetadataValue.verify(message.metadata[key[i]], long + 1);
+                            if (error)
+                                return "metadata." + error;
+                        }
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a TraceOptions message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.TraceOptions} TraceOptions
+                 */
+                TraceOptions.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.TraceOptions)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.TraceOptions: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.TraceOptions();
+                    switch (object.mode) {
+                    default:
+                        if (typeof object.mode === "number") {
+                            message.mode = object.mode;
+                            break;
+                        }
+                        break;
+                    case "TRACE_MODE_UNSPECIFIED":
+                    case 0:
+                        message.mode = 0;
+                        break;
+                    case "TRACE_MODE_HIDDEN":
+                    case 1:
+                        message.mode = 1;
+                        break;
+                    case "TRACE_MODE_TIMING":
+                    case 2:
+                        message.mode = 2;
+                        break;
+                    case "TRACE_MODE_SPAN":
+                    case 3:
+                        message.mode = 3;
+                        break;
+                    }
+                    if (object.inputs != null)
+                        message.inputs = Boolean(object.inputs);
+                    if (object.output != null)
+                        message.output = Boolean(object.output);
+                    if (object.error != null)
+                        message.error = Boolean(object.error);
+                    if (object.distinctId != null)
+                        message.distinctId = String(object.distinctId);
+                    if (object.metadata) {
+                        if (!$util.isObject(object.metadata))
+                            throw TypeError(".baml_bridge.cffi.v1.TraceOptions.metadata: object expected");
+                        message.metadata = {};
+                        for (let keys = Object.keys(object.metadata), i = 0; i < keys.length; ++i) {
+                            if (keys[i] === "__proto__")
+                                $util.makeProp(message.metadata, keys[i]);
+                            if (!$util.isObject(object.metadata[keys[i]]))
+                                throw TypeError(".baml_bridge.cffi.v1.TraceOptions.metadata: object expected");
+                            message.metadata[keys[i]] = $root.baml_bridge.cffi.v1.TraceMetadataValue.fromObject(object.metadata[keys[i]], long + 1);
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a TraceOptions message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {baml_bridge.cffi.v1.TraceOptions} message TraceOptions
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                TraceOptions.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.objects || options.defaults)
+                        object.metadata = {};
+                    if (message.mode != null && message.hasOwnProperty("mode")) {
+                        object.mode = options.enums === String ? $root.baml_bridge.cffi.v1.TraceMode[message.mode] === undefined ? message.mode : $root.baml_bridge.cffi.v1.TraceMode[message.mode] : message.mode;
+                        if (options.oneofs)
+                            object._mode = "mode";
+                    }
+                    if (message.inputs != null && message.hasOwnProperty("inputs")) {
+                        object.inputs = message.inputs;
+                        if (options.oneofs)
+                            object._inputs = "inputs";
+                    }
+                    if (message.output != null && message.hasOwnProperty("output")) {
+                        object.output = message.output;
+                        if (options.oneofs)
+                            object._output = "output";
+                    }
+                    if (message.error != null && message.hasOwnProperty("error")) {
+                        object.error = message.error;
+                        if (options.oneofs)
+                            object._error = "error";
+                    }
+                    if (message.distinctId != null && message.hasOwnProperty("distinctId")) {
+                        object.distinctId = message.distinctId;
+                        if (options.oneofs)
+                            object._distinctId = "distinctId";
+                    }
+                    let keys2;
+                    if (message.metadata && (keys2 = Object.keys(message.metadata)).length) {
+                        object.metadata = {};
+                        for (let j = 0; j < keys2.length; ++j) {
+                            if (keys2[j] === "__proto__")
+                                $util.makeProp(object.metadata, keys2[j]);
+                            object.metadata[keys2[j]] = $root.baml_bridge.cffi.v1.TraceMetadataValue.toObject(message.metadata[keys2[j]], options, q + 1);
+                        }
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this TraceOptions to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                TraceOptions.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for TraceOptions
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.TraceOptions
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                TraceOptions.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.TraceOptions";
+                };
+
+                return TraceOptions;
+            })();
+
+            /**
+             * TraceMode enum.
+             * @name baml_bridge.cffi.v1.TraceMode
+             * @enum {number}
+             * @property {number} TRACE_MODE_UNSPECIFIED=0 TRACE_MODE_UNSPECIFIED value
+             * @property {number} TRACE_MODE_HIDDEN=1 TRACE_MODE_HIDDEN value
+             * @property {number} TRACE_MODE_TIMING=2 TRACE_MODE_TIMING value
+             * @property {number} TRACE_MODE_SPAN=3 TRACE_MODE_SPAN value
+             */
+            v1.TraceMode = (function() {
+                const valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "TRACE_MODE_UNSPECIFIED"] = 0;
+                values[valuesById[1] = "TRACE_MODE_HIDDEN"] = 1;
+                values[valuesById[2] = "TRACE_MODE_TIMING"] = 2;
+                values[valuesById[3] = "TRACE_MODE_SPAN"] = 3;
+                return values;
+            })();
+
+            v1.TraceMetadataValue = (function() {
+
+                /**
+                 * Properties of a TraceMetadataValue.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface ITraceMetadataValue
+                 * @property {string|null} [stringValue] TraceMetadataValue stringValue
+                 * @property {number|Long|null} [intValue] TraceMetadataValue intValue
+                 * @property {number|null} [floatValue] TraceMetadataValue floatValue
+                 * @property {boolean|null} [boolValue] TraceMetadataValue boolValue
+                 * @property {boolean|null} [remove] TraceMetadataValue remove
+                 */
+
+                /**
+                 * Constructs a new TraceMetadataValue.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a TraceMetadataValue.
+                 * @implements ITraceMetadataValue
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.ITraceMetadataValue=} [properties] Properties to set
+                 */
+                function TraceMetadataValue(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * TraceMetadataValue stringValue.
+                 * @member {string|null|undefined} stringValue
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @instance
+                 */
+                TraceMetadataValue.prototype.stringValue = null;
+
+                /**
+                 * TraceMetadataValue intValue.
+                 * @member {number|Long|null|undefined} intValue
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @instance
+                 */
+                TraceMetadataValue.prototype.intValue = null;
+
+                /**
+                 * TraceMetadataValue floatValue.
+                 * @member {number|null|undefined} floatValue
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @instance
+                 */
+                TraceMetadataValue.prototype.floatValue = null;
+
+                /**
+                 * TraceMetadataValue boolValue.
+                 * @member {boolean|null|undefined} boolValue
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @instance
+                 */
+                TraceMetadataValue.prototype.boolValue = null;
+
+                /**
+                 * TraceMetadataValue remove.
+                 * @member {boolean|null|undefined} remove
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @instance
+                 */
+                TraceMetadataValue.prototype.remove = null;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                /**
+                 * TraceMetadataValue value.
+                 * @member {"stringValue"|"intValue"|"floatValue"|"boolValue"|"remove"|undefined} value
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @instance
+                 */
+                Object.defineProperty(TraceMetadataValue.prototype, "value", {
+                    get: $util.oneOfGetter($oneOfFields = ["stringValue", "intValue", "floatValue", "boolValue", "remove"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new TraceMetadataValue instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceMetadataValue=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.TraceMetadataValue} TraceMetadataValue instance
+                 */
+                TraceMetadataValue.create = function create(properties) {
+                    return new TraceMetadataValue(properties);
+                };
+
+                /**
+                 * Encodes the specified TraceMetadataValue message. Does not implicitly {@link baml_bridge.cffi.v1.TraceMetadataValue.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceMetadataValue} message TraceMetadataValue message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                TraceMetadataValue.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.stringValue != null && Object.hasOwnProperty.call(message, "stringValue"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.stringValue);
+                    if (message.intValue != null && Object.hasOwnProperty.call(message, "intValue"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).sint64(message.intValue);
+                    if (message.floatValue != null && Object.hasOwnProperty.call(message, "floatValue"))
+                        writer.uint32(/* id 3, wireType 1 =*/25).double(message.floatValue);
+                    if (message.boolValue != null && Object.hasOwnProperty.call(message, "boolValue"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).bool(message.boolValue);
+                    if (message.remove != null && Object.hasOwnProperty.call(message, "remove"))
+                        writer.uint32(/* id 5, wireType 0 =*/40).bool(message.remove);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified TraceMetadataValue message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.TraceMetadataValue.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {baml_bridge.cffi.v1.ITraceMetadataValue} message TraceMetadataValue message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                TraceMetadataValue.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes a TraceMetadataValue message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.TraceMetadataValue} TraceMetadataValue
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                TraceMetadataValue.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.TraceMetadataValue();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.stringValue = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.intValue = reader.sint64();
+                                break;
+                            }
+                        case 3: {
+                                message.floatValue = reader.double();
+                                break;
+                            }
+                        case 4: {
+                                message.boolValue = reader.bool();
+                                break;
+                            }
+                        case 5: {
+                                message.remove = reader.bool();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a TraceMetadataValue message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.TraceMetadataValue} TraceMetadataValue
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                TraceMetadataValue.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a TraceMetadataValue message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                TraceMetadataValue.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.stringValue != null && message.hasOwnProperty("stringValue")) {
+                        properties.value = 1;
+                        if (!$util.isString(message.stringValue))
+                            return "stringValue: string expected";
+                    }
+                    if (message.intValue != null && message.hasOwnProperty("intValue")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        if (!$util.isInteger(message.intValue) && !(message.intValue && $util.isInteger(message.intValue.low) && $util.isInteger(message.intValue.high)))
+                            return "intValue: integer|Long expected";
+                    }
+                    if (message.floatValue != null && message.hasOwnProperty("floatValue")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        if (typeof message.floatValue !== "number")
+                            return "floatValue: number expected";
+                    }
+                    if (message.boolValue != null && message.hasOwnProperty("boolValue")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        if (typeof message.boolValue !== "boolean")
+                            return "boolValue: boolean expected";
+                    }
+                    if (message.remove != null && message.hasOwnProperty("remove")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        if (typeof message.remove !== "boolean")
+                            return "remove: boolean expected";
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a TraceMetadataValue message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.TraceMetadataValue} TraceMetadataValue
+                 */
+                TraceMetadataValue.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.TraceMetadataValue)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.TraceMetadataValue: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.TraceMetadataValue();
+                    if (object.stringValue != null)
+                        message.stringValue = String(object.stringValue);
+                    if (object.intValue != null)
+                        if ($util.Long)
+                            message.intValue = $util.Long.fromValue(object.intValue, false);
+                        else if (typeof object.intValue === "string")
+                            message.intValue = parseInt(object.intValue, 10);
+                        else if (typeof object.intValue === "number")
+                            message.intValue = object.intValue;
+                        else if (typeof object.intValue === "object")
+                            message.intValue = new $util.LongBits(object.intValue.low >>> 0, object.intValue.high >>> 0).toNumber();
+                    if (object.floatValue != null)
+                        message.floatValue = Number(object.floatValue);
+                    if (object.boolValue != null)
+                        message.boolValue = Boolean(object.boolValue);
+                    if (object.remove != null)
+                        message.remove = Boolean(object.remove);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a TraceMetadataValue message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {baml_bridge.cffi.v1.TraceMetadataValue} message TraceMetadataValue
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                TraceMetadataValue.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (message.stringValue != null && message.hasOwnProperty("stringValue")) {
+                        object.stringValue = message.stringValue;
+                        if (options.oneofs)
+                            object.value = "stringValue";
+                    }
+                    if (message.intValue != null && message.hasOwnProperty("intValue")) {
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.intValue = typeof message.intValue === "number" ? BigInt(message.intValue) : $util.Long.fromBits(message.intValue.low >>> 0, message.intValue.high >>> 0, false).toBigInt();
+                        else if (typeof message.intValue === "number")
+                            object.intValue = options.longs === String ? String(message.intValue) : message.intValue;
+                        else
+                            object.intValue = options.longs === String ? $util.Long.prototype.toString.call(message.intValue) : options.longs === Number ? new $util.LongBits(message.intValue.low >>> 0, message.intValue.high >>> 0).toNumber() : message.intValue;
+                        if (options.oneofs)
+                            object.value = "intValue";
+                    }
+                    if (message.floatValue != null && message.hasOwnProperty("floatValue")) {
+                        object.floatValue = options.json && !isFinite(message.floatValue) ? String(message.floatValue) : message.floatValue;
+                        if (options.oneofs)
+                            object.value = "floatValue";
+                    }
+                    if (message.boolValue != null && message.hasOwnProperty("boolValue")) {
+                        object.boolValue = message.boolValue;
+                        if (options.oneofs)
+                            object.value = "boolValue";
+                    }
+                    if (message.remove != null && message.hasOwnProperty("remove")) {
+                        object.remove = message.remove;
+                        if (options.oneofs)
+                            object.value = "remove";
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this TraceMetadataValue to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                TraceMetadataValue.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for TraceMetadataValue
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.TraceMetadataValue
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                TraceMetadataValue.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.TraceMetadataValue";
+                };
+
+                return TraceMetadataValue;
             })();
 
             v1.CallAck = (function() {
@@ -3158,6 +4732,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @property {number} HOST_VALUE_OPAQUE=16 HOST_VALUE_OPAQUE value
              * @property {number} ADT_FUNCTION_SPEC=17 ADT_FUNCTION_SPEC value
              * @property {number} ADT_RUNTIME_VALUE=18 ADT_RUNTIME_VALUE value
+             * @property {number} INVOCATION_STATE=19 INVOCATION_STATE value
+             * @property {number} TRACE_RESERVATION=20 TRACE_RESERVATION value
              */
             v1.BamlHandleType = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -3177,6 +4753,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 values[valuesById[16] = "HOST_VALUE_OPAQUE"] = 16;
                 values[valuesById[17] = "ADT_FUNCTION_SPEC"] = 17;
                 values[valuesById[18] = "ADT_RUNTIME_VALUE"] = 18;
+                values[valuesById[19] = "INVOCATION_STATE"] = 19;
+                values[valuesById[20] = "TRACE_RESERVATION"] = 20;
                 return values;
             })();
 
@@ -3363,6 +4941,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 16:
                         case 17:
                         case 18:
+                        case 19:
+                        case 20:
                             break;
                         }
                     return null;
@@ -3465,6 +5045,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "ADT_RUNTIME_VALUE":
                     case 18:
                         message.handleType = 18;
+                        break;
+                    case "INVOCATION_STATE":
+                    case 19:
+                        message.handleType = 19;
+                        break;
+                    case "TRACE_RESERVATION":
+                    case 20:
+                        message.handleType = 20;
                         break;
                     }
                     return message;
@@ -15441,6 +17029,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 16:
                         case 17:
                         case 18:
+                        case 19:
+                        case 20:
                             break;
                         }
                     if (message.ty != null && message.hasOwnProperty("ty")) {
@@ -15548,6 +17138,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "ADT_RUNTIME_VALUE":
                     case 18:
                         message.handleType = 18;
+                        break;
+                    case "INVOCATION_STATE":
+                    case 19:
+                        message.handleType = 19;
+                        break;
+                    case "TRACE_RESERVATION":
+                    case 20:
+                        message.handleType = 20;
                         break;
                     }
                     if (object.ty != null) {
@@ -19720,6 +21318,460 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 };
 
                 return BamlToHostCall;
+            })();
+
+            v1.HostInvocation = (function() {
+
+                /**
+                 * Properties of a HostInvocation.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IHostInvocation
+                 * @property {number|Long|null} [hostValueKey] HostInvocation hostValueKey
+                 * @property {number|null} [callbackId] HostInvocation callbackId
+                 * @property {Uint8Array|null} [applicationArgs] HostInvocation applicationArgs
+                 * @property {number|Long|null} [effectiveState] HostInvocation effectiveState
+                 * @property {number|Long|null} [hostEnvironment] HostInvocation hostEnvironment
+                 * @property {baml_bridge.cffi.v1.IBamlOutboundValue|null} [cancel] HostInvocation cancel
+                 * @property {number|Long|null} [deadlineNs] HostInvocation deadlineNs
+                 */
+
+                /**
+                 * Constructs a new HostInvocation.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a HostInvocation.
+                 * @implements IHostInvocation
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IHostInvocation=} [properties] Properties to set
+                 */
+                function HostInvocation(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * HostInvocation hostValueKey.
+                 * @member {number|Long} hostValueKey
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 */
+                HostInvocation.prototype.hostValueKey = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                /**
+                 * HostInvocation callbackId.
+                 * @member {number} callbackId
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 */
+                HostInvocation.prototype.callbackId = 0;
+
+                /**
+                 * HostInvocation applicationArgs.
+                 * @member {Uint8Array} applicationArgs
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 */
+                HostInvocation.prototype.applicationArgs = $util.newBuffer([]);
+
+                /**
+                 * HostInvocation effectiveState.
+                 * @member {number|Long} effectiveState
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 */
+                HostInvocation.prototype.effectiveState = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                /**
+                 * HostInvocation hostEnvironment.
+                 * @member {number|Long} hostEnvironment
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 */
+                HostInvocation.prototype.hostEnvironment = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                /**
+                 * HostInvocation cancel.
+                 * @member {baml_bridge.cffi.v1.IBamlOutboundValue|null|undefined} cancel
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 */
+                HostInvocation.prototype.cancel = null;
+
+                /**
+                 * HostInvocation deadlineNs.
+                 * @member {number|Long|null|undefined} deadlineNs
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 */
+                HostInvocation.prototype.deadlineNs = null;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(HostInvocation.prototype, "_deadlineNs", {
+                    get: $util.oneOfGetter($oneOfFields = ["deadlineNs"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new HostInvocation instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostInvocation=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.HostInvocation} HostInvocation instance
+                 */
+                HostInvocation.create = function create(properties) {
+                    return new HostInvocation(properties);
+                };
+
+                /**
+                 * Encodes the specified HostInvocation message. Does not implicitly {@link baml_bridge.cffi.v1.HostInvocation.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostInvocation} message HostInvocation message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostInvocation.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.hostValueKey != null && Object.hasOwnProperty.call(message, "hostValueKey"))
+                        writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.hostValueKey);
+                    if (message.callbackId != null && Object.hasOwnProperty.call(message, "callbackId"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.callbackId);
+                    if (message.applicationArgs != null && Object.hasOwnProperty.call(message, "applicationArgs"))
+                        writer.uint32(/* id 3, wireType 2 =*/26).bytes(message.applicationArgs);
+                    if (message.effectiveState != null && Object.hasOwnProperty.call(message, "effectiveState"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).uint64(message.effectiveState);
+                    if (message.hostEnvironment != null && Object.hasOwnProperty.call(message, "hostEnvironment"))
+                        writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.hostEnvironment);
+                    if (message.cancel != null && Object.hasOwnProperty.call(message, "cancel"))
+                        $root.baml_bridge.cffi.v1.BamlOutboundValue.encode(message.cancel, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
+                    if (message.deadlineNs != null && Object.hasOwnProperty.call(message, "deadlineNs"))
+                        writer.uint32(/* id 7, wireType 0 =*/56).uint64(message.deadlineNs);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified HostInvocation message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostInvocation.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostInvocation} message HostInvocation message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostInvocation.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes a HostInvocation message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.HostInvocation} HostInvocation
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostInvocation.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.HostInvocation();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.hostValueKey = reader.uint64();
+                                break;
+                            }
+                        case 2: {
+                                message.callbackId = reader.uint32();
+                                break;
+                            }
+                        case 3: {
+                                message.applicationArgs = reader.bytes();
+                                break;
+                            }
+                        case 4: {
+                                message.effectiveState = reader.uint64();
+                                break;
+                            }
+                        case 5: {
+                                message.hostEnvironment = reader.uint64();
+                                break;
+                            }
+                        case 6: {
+                                message.cancel = $root.baml_bridge.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 7: {
+                                message.deadlineNs = reader.uint64();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a HostInvocation message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.HostInvocation} HostInvocation
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostInvocation.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a HostInvocation message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                HostInvocation.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.hostValueKey != null && message.hasOwnProperty("hostValueKey"))
+                        if (!$util.isInteger(message.hostValueKey) && !(message.hostValueKey && $util.isInteger(message.hostValueKey.low) && $util.isInteger(message.hostValueKey.high)))
+                            return "hostValueKey: integer|Long expected";
+                    if (message.callbackId != null && message.hasOwnProperty("callbackId"))
+                        if (!$util.isInteger(message.callbackId))
+                            return "callbackId: integer expected";
+                    if (message.applicationArgs != null && message.hasOwnProperty("applicationArgs"))
+                        if (!(message.applicationArgs && typeof message.applicationArgs.length === "number" || $util.isString(message.applicationArgs)))
+                            return "applicationArgs: buffer expected";
+                    if (message.effectiveState != null && message.hasOwnProperty("effectiveState"))
+                        if (!$util.isInteger(message.effectiveState) && !(message.effectiveState && $util.isInteger(message.effectiveState.low) && $util.isInteger(message.effectiveState.high)))
+                            return "effectiveState: integer|Long expected";
+                    if (message.hostEnvironment != null && message.hasOwnProperty("hostEnvironment"))
+                        if (!$util.isInteger(message.hostEnvironment) && !(message.hostEnvironment && $util.isInteger(message.hostEnvironment.low) && $util.isInteger(message.hostEnvironment.high)))
+                            return "hostEnvironment: integer|Long expected";
+                    if (message.cancel != null && message.hasOwnProperty("cancel")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlOutboundValue.verify(message.cancel, long + 1);
+                        if (error)
+                            return "cancel." + error;
+                    }
+                    if (message.deadlineNs != null && message.hasOwnProperty("deadlineNs")) {
+                        properties._deadlineNs = 1;
+                        if (!$util.isInteger(message.deadlineNs) && !(message.deadlineNs && $util.isInteger(message.deadlineNs.low) && $util.isInteger(message.deadlineNs.high)))
+                            return "deadlineNs: integer|Long expected";
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a HostInvocation message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.HostInvocation} HostInvocation
+                 */
+                HostInvocation.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.HostInvocation)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.HostInvocation: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.HostInvocation();
+                    if (object.hostValueKey != null)
+                        if ($util.Long)
+                            message.hostValueKey = $util.Long.fromValue(object.hostValueKey, true);
+                        else if (typeof object.hostValueKey === "string")
+                            message.hostValueKey = parseInt(object.hostValueKey, 10);
+                        else if (typeof object.hostValueKey === "number")
+                            message.hostValueKey = object.hostValueKey;
+                        else if (typeof object.hostValueKey === "object")
+                            message.hostValueKey = new $util.LongBits(object.hostValueKey.low >>> 0, object.hostValueKey.high >>> 0).toNumber(true);
+                    if (object.callbackId != null)
+                        message.callbackId = object.callbackId >>> 0;
+                    if (object.applicationArgs != null)
+                        if (typeof object.applicationArgs === "string")
+                            $util.base64.decode(object.applicationArgs, message.applicationArgs = $util.newBuffer($util.base64.length(object.applicationArgs)), 0);
+                        else if (object.applicationArgs.length >= 0)
+                            message.applicationArgs = object.applicationArgs;
+                    if (object.effectiveState != null)
+                        if ($util.Long)
+                            message.effectiveState = $util.Long.fromValue(object.effectiveState, true);
+                        else if (typeof object.effectiveState === "string")
+                            message.effectiveState = parseInt(object.effectiveState, 10);
+                        else if (typeof object.effectiveState === "number")
+                            message.effectiveState = object.effectiveState;
+                        else if (typeof object.effectiveState === "object")
+                            message.effectiveState = new $util.LongBits(object.effectiveState.low >>> 0, object.effectiveState.high >>> 0).toNumber(true);
+                    if (object.hostEnvironment != null)
+                        if ($util.Long)
+                            message.hostEnvironment = $util.Long.fromValue(object.hostEnvironment, true);
+                        else if (typeof object.hostEnvironment === "string")
+                            message.hostEnvironment = parseInt(object.hostEnvironment, 10);
+                        else if (typeof object.hostEnvironment === "number")
+                            message.hostEnvironment = object.hostEnvironment;
+                        else if (typeof object.hostEnvironment === "object")
+                            message.hostEnvironment = new $util.LongBits(object.hostEnvironment.low >>> 0, object.hostEnvironment.high >>> 0).toNumber(true);
+                    if (object.cancel != null) {
+                        if (!$util.isObject(object.cancel))
+                            throw TypeError(".baml_bridge.cffi.v1.HostInvocation.cancel: object expected");
+                        message.cancel = $root.baml_bridge.cffi.v1.BamlOutboundValue.fromObject(object.cancel, long + 1);
+                    }
+                    if (object.deadlineNs != null)
+                        if ($util.Long)
+                            message.deadlineNs = $util.Long.fromValue(object.deadlineNs, true);
+                        else if (typeof object.deadlineNs === "string")
+                            message.deadlineNs = parseInt(object.deadlineNs, 10);
+                        else if (typeof object.deadlineNs === "number")
+                            message.deadlineNs = object.deadlineNs;
+                        else if (typeof object.deadlineNs === "object")
+                            message.deadlineNs = new $util.LongBits(object.deadlineNs.low >>> 0, object.deadlineNs.high >>> 0).toNumber(true);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a HostInvocation message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {baml_bridge.cffi.v1.HostInvocation} message HostInvocation
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                HostInvocation.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.hostValueKey = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.hostValueKey = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
+                        object.callbackId = 0;
+                        if (options.bytes === String)
+                            object.applicationArgs = "";
+                        else {
+                            object.applicationArgs = [];
+                            if (options.bytes !== Array)
+                                object.applicationArgs = $util.newBuffer(object.applicationArgs);
+                        }
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.effectiveState = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.effectiveState = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.hostEnvironment = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.hostEnvironment = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
+                        object.cancel = null;
+                    }
+                    if (message.hostValueKey != null && message.hasOwnProperty("hostValueKey"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.hostValueKey = typeof message.hostValueKey === "number" ? BigInt(message.hostValueKey) : $util.Long.fromBits(message.hostValueKey.low >>> 0, message.hostValueKey.high >>> 0, true).toBigInt();
+                        else if (typeof message.hostValueKey === "number")
+                            object.hostValueKey = options.longs === String ? String(message.hostValueKey) : message.hostValueKey;
+                        else
+                            object.hostValueKey = options.longs === String ? $util.Long.prototype.toString.call(message.hostValueKey) : options.longs === Number ? new $util.LongBits(message.hostValueKey.low >>> 0, message.hostValueKey.high >>> 0).toNumber(true) : message.hostValueKey;
+                    if (message.callbackId != null && message.hasOwnProperty("callbackId"))
+                        object.callbackId = message.callbackId;
+                    if (message.applicationArgs != null && message.hasOwnProperty("applicationArgs"))
+                        object.applicationArgs = options.bytes === String ? $util.base64.encode(message.applicationArgs, 0, message.applicationArgs.length) : options.bytes === Array ? Array.prototype.slice.call(message.applicationArgs) : message.applicationArgs;
+                    if (message.effectiveState != null && message.hasOwnProperty("effectiveState"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.effectiveState = typeof message.effectiveState === "number" ? BigInt(message.effectiveState) : $util.Long.fromBits(message.effectiveState.low >>> 0, message.effectiveState.high >>> 0, true).toBigInt();
+                        else if (typeof message.effectiveState === "number")
+                            object.effectiveState = options.longs === String ? String(message.effectiveState) : message.effectiveState;
+                        else
+                            object.effectiveState = options.longs === String ? $util.Long.prototype.toString.call(message.effectiveState) : options.longs === Number ? new $util.LongBits(message.effectiveState.low >>> 0, message.effectiveState.high >>> 0).toNumber(true) : message.effectiveState;
+                    if (message.hostEnvironment != null && message.hasOwnProperty("hostEnvironment"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.hostEnvironment = typeof message.hostEnvironment === "number" ? BigInt(message.hostEnvironment) : $util.Long.fromBits(message.hostEnvironment.low >>> 0, message.hostEnvironment.high >>> 0, true).toBigInt();
+                        else if (typeof message.hostEnvironment === "number")
+                            object.hostEnvironment = options.longs === String ? String(message.hostEnvironment) : message.hostEnvironment;
+                        else
+                            object.hostEnvironment = options.longs === String ? $util.Long.prototype.toString.call(message.hostEnvironment) : options.longs === Number ? new $util.LongBits(message.hostEnvironment.low >>> 0, message.hostEnvironment.high >>> 0).toNumber(true) : message.hostEnvironment;
+                    if (message.cancel != null && message.hasOwnProperty("cancel"))
+                        object.cancel = $root.baml_bridge.cffi.v1.BamlOutboundValue.toObject(message.cancel, options, q + 1);
+                    if (message.deadlineNs != null && message.hasOwnProperty("deadlineNs")) {
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.deadlineNs = typeof message.deadlineNs === "number" ? BigInt(message.deadlineNs) : $util.Long.fromBits(message.deadlineNs.low >>> 0, message.deadlineNs.high >>> 0, true).toBigInt();
+                        else if (typeof message.deadlineNs === "number")
+                            object.deadlineNs = options.longs === String ? String(message.deadlineNs) : message.deadlineNs;
+                        else
+                            object.deadlineNs = options.longs === String ? $util.Long.prototype.toString.call(message.deadlineNs) : options.longs === Number ? new $util.LongBits(message.deadlineNs.low >>> 0, message.deadlineNs.high >>> 0).toNumber(true) : message.deadlineNs;
+                        if (options.oneofs)
+                            object._deadlineNs = "deadlineNs";
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this HostInvocation to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                HostInvocation.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for HostInvocation
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.HostInvocation
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                HostInvocation.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.HostInvocation";
+                };
+
+                return HostInvocation;
             })();
 
             v1.BamlToHostArg = (function() {

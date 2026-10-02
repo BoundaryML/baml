@@ -151,7 +151,8 @@ public final class BamlRuntime: @unchecked Sendable {
         }
 
         BamlApi.registerCallback(bamlGlobalCompletion)
-        BamlApi.registerHostDispatchCallback(bamlHostDispatch)
+        BamlApi.registerHostDispatchV2(bamlHostDispatch)
+        BamlApi.registerHostCancelCallback(bamlHostCancel)
         BamlApi.registerHostReleaseCallback(bamlHostRelease)
         if !shutdownHookRegistered {
             guard atexit(bamlShutdownAtExit) == 0 else {

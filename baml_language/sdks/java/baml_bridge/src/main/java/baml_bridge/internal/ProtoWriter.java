@@ -151,6 +151,10 @@ public final class ProtoWriter {
             }
         }
         w.writeInt64(CALL_ARGS_CALL_ID, callId);
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, InvocationFrames.currentState());
+        invocation.writeInt64(5, callId);
+        w.writeMessage(6, invocation.toByteArray());
         if (typeArgs != null && !typeArgs.isEmpty()) {
             for (Map.Entry<String, BamlType> binding : typeArgs.bindings()) {
                 w.writeMessage(CALL_ARGS_TYPE_ARGS, encodeTypeArg(binding.getKey(), binding.getValue()));

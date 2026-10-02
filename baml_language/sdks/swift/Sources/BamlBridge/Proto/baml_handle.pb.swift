@@ -85,6 +85,11 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   /// display name through a generated typemap; only the originating engine can
   /// interpret the rooted declaration identity.
   case adtRuntimeValue // = 18
+
+  /// Internal BEP-81 capabilities. They belong to their issuing runtime and
+  /// cannot be supplied as ordinary application values.
+  case invocationState // = 19
+  case traceReservation // = 20
   case UNRECOGNIZED(Int)
 
   init() {
@@ -109,6 +114,8 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case 16: self = .hostValueOpaque
     case 17: self = .adtFunctionSpec
     case 18: self = .adtRuntimeValue
+    case 19: self = .invocationState
+    case 20: self = .traceReservation
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -131,6 +138,8 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case .hostValueOpaque: return 16
     case .adtFunctionSpec: return 17
     case .adtRuntimeValue: return 18
+    case .invocationState: return 19
+    case .traceReservation: return 20
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -153,6 +162,8 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     .hostValueOpaque,
     .adtFunctionSpec,
     .adtRuntimeValue,
+    .invocationState,
+    .traceReservation,
   ]
 
 }
@@ -176,7 +187,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlHandle: Sendable {
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{1}UNTAGGED_RUST_DATA\0\u{1}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{2}\u{2}ADT_TYPE\0\u{1}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{1}UNTAGGED_RUST_DATA\0\u{1}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{2}\u{2}ADT_TYPE\0\u{1}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0\u{1}INVOCATION_STATE\0\u{1}TRACE_RESERVATION\0")
 }
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

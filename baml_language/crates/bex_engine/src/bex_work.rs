@@ -322,7 +322,8 @@ impl BexEngine {
             return;
         }
         let _checking = GcCheckGuard(&self.checking_gc);
-        // No active heap permit yet. Incoming external values/handles own roots.
+        // The admitted entry is parked with its VM inputs rooted in the
+        // entry frame. No active heap permit is held across collection.
         if idle_due || self.heap.should_gc() {
             self.collect_garbage_with_reason(
                 CollectionLevel::Major,

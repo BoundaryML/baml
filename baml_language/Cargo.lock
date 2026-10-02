@@ -1345,6 +1345,7 @@ dependencies = [
  "btel_types",
  "clap",
  "futures",
+ "gloo-timers",
  "indexmap",
  "libc",
  "num-bigint",
@@ -1678,6 +1679,7 @@ dependencies = [
  "bex_events",
  "bex_project",
  "bridge_ctypes",
+ "btel_types",
  "cbindgen",
  "cc",
  "futures",
@@ -3854,6 +3856,18 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax 0.8.10",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]

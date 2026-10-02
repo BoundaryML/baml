@@ -6,7 +6,7 @@ require "thread"
 module Baml
   module Bridge
     module Native
-      ABI_VERSION = 2
+      ABI_VERSION = 3
       RUBY_BRIDGE_LANGUAGE = 10
       BRIDGE_RUNTIME_NAME = "Baml::Bridge"
       MAX_OWNED_BUFFER_BYTES = 16 * 1024 * 1024
@@ -52,6 +52,11 @@ module Baml
           register_unhandled_spawn_error_callback
           shutdown_runtime
           initialize_runtime_from_blob_with_metadata
+          invocation_protocol_version
+          invocation_clock_ns
+          release_function_call
+          register_host_dispatch_v2
+          register_host_cancel_callback
         ].freeze
 
         layout :abi_version, :uint32,

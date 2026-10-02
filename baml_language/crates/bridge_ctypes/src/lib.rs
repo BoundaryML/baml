@@ -7,7 +7,11 @@
 mod error;
 mod handle_table;
 mod host_value_registry;
+mod invocation;
 pub use host_value_registry::HostValueRegistry;
+pub use invocation::{
+    OwnedHostArguments, OwnedHostInvocation, build_host_invocation, release_outbound_references,
+};
 mod traceback;
 mod ty_decode;
 mod ty_encode;
@@ -26,6 +30,7 @@ pub mod baml_bridge {
 pub use error::CtypesError;
 pub use handle_table::{
     CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
+    InvocationStateHandle, TraceReservationHandle,
 };
 pub use traceback::format_traceback_lines;
 pub use ty_decode::{

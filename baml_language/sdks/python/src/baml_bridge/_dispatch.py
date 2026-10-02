@@ -6,45 +6,71 @@ when the BAML caller stops waiting. Registration stores no loop or Context.
 """
 
 import asyncio
+from contextvars import ContextVar
 
 from .baml_py import (
     _complete_host_call_error,
     _complete_host_call_success,
     _invoke_host_callable,
-    _discard_host_call_args,
     _register_host_call_execution,
 )
 
 
 _active_dispatches = {}
+_current_invocation = ContextVar("baml_invocation", default=None)
 
 
-def _start_dispatch(callback, call_id, args):
+def _invoke_with_frame(callback, args, frame):
+    token = _current_invocation.set(frame)
+    try:
+        result = _invoke_host_callable(callback, args)
+    finally:
+        _current_invocation.reset(token)
+    if asyncio.iscoroutine(result):
+
+        async def run():
+            token = _current_invocation.set(frame)
+            try:
+                return await result
+            finally:
+                _current_invocation.reset(token)
+
+        return run()
+    return result
+
+
+def _start_dispatch(callback, call_id, args, execution):
     loop = asyncio.get_running_loop()
     if not _register_host_call_execution(call_id, loop):
-        _discard_host_call_args(args)
+        execution.finish()
         return  # Cancelled before the scheduled callback could start.
-    coroutine = _dispatch(callback, call_id, args)
+    coroutine = _dispatch(callback, call_id, args, execution)
     try:
         task = loop.create_task(coroutine)
     except BaseException as error:
         coroutine.close()
-        _discard_host_call_args(args)
-        _complete_host_call_error(call_id, error)
+        try:
+            _complete_host_call_error(call_id, error)
+        finally:
+            execution.finish()
         return
     # asyncio keeps only weak references to tasks. Hold pending callbacks until
     # they finish, including callbacks whose BAML caller has stopped waiting.
     _active_dispatches[call_id] = task
-    task.add_done_callback(lambda done: _dispatch_finished(call_id, done, args))
+    task.add_done_callback(lambda done: _dispatch_finished(call_id, done, execution))
 
 
-def _dispatch_finished(call_id, task, args):
+def _dispatch_finished(call_id, task, execution):
     if _active_dispatches.get(call_id) is task:
         del _active_dispatches[call_id]
-    if task.cancelled():
-        # Cancellation before first execution never enters _dispatch's try.
-        _discard_host_call_args(args)
-        _complete_host_call_error(call_id, asyncio.CancelledError())
+    try:
+        if task.cancelled():
+            # Cancellation before first execution never enters _dispatch's try.
+            _complete_host_call_error(call_id, asyncio.CancelledError())
+    finally:
+        # A cancellation request is not exit. This callback runs only after the
+        # task has actually finished unwinding, including its finally blocks.
+        execution.finish()
 
 
 def _cancel_dispatch(call_id):
@@ -53,9 +79,11 @@ def _cancel_dispatch(call_id):
         task.cancel()
 
 
-async def _dispatch(callback, call_id, args):
+async def _dispatch(callback, call_id, args, execution):
+    if not execution.start():
+        return
     try:
-        result = _invoke_host_callable(callback, args)
+        result = _invoke_with_frame(callback, args, execution.frame())
         if asyncio.iscoroutine(result):
             result = await result
     except BaseException as error:

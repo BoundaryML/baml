@@ -12,6 +12,34 @@ use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
 
 use crate::baml_bridge::cffi::BamlHandleType;
 
+/// A typed, runtime-owned immutable callback/re-entry capability.
+#[derive(Clone)]
+pub struct InvocationStateHandle {
+    pub owner: Arc<dyn bex_project::Bex>,
+    pub state: bex_project::InheritedInvocationState,
+}
+
+impl std::fmt::Debug for InvocationStateHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InvocationStateHandle")
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
+pub struct TraceReservationHandle {
+    pub owner: Arc<dyn bex_project::Bex>,
+    pub reservation: Arc<bex_project::ReservedSpanData>,
+}
+
+impl std::fmt::Debug for TraceReservationHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TraceReservationHandle")
+            .field("reservation", &self.reservation)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Newtype wrapper around opaque `$rust_type` objects
 /// (`Arc<dyn Any + Send + Sync>`) stored as a handle.
 #[derive(Clone)]
@@ -37,6 +65,8 @@ pub enum CffiHandleTableEntry {
     FunctionRef { global_index: usize },
     Adt(BexExternalAdt),
     RustData(BexRustData),
+    InvocationState(InvocationStateHandle),
+    TraceReservation(TraceReservationHandle),
 }
 
 pub struct CffiHandleTableOptions<'a> {
@@ -70,6 +100,8 @@ impl CffiHandleTableEntry {
             Self::BexHeapHandle(_) => BamlHandleType::UntaggedBexHeap,
             Self::FunctionRef { .. } => BamlHandleType::FunctionRef,
             Self::RustData(_) => BamlHandleType::UntaggedRustData,
+            Self::InvocationState(_) => BamlHandleType::InvocationState,
+            Self::TraceReservation(_) => BamlHandleType::TraceReservation,
             Self::Adt(adt) => match adt {
                 BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => BamlHandleType::AdtType,
                 BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
@@ -138,6 +170,12 @@ impl From<CffiHandleTableEntry> for BexExternalValue {
             }
             CffiHandleTableEntry::Adt(a) => BexExternalValue::Adt(a),
             CffiHandleTableEntry::RustData(BexRustData(arc)) => BexExternalValue::RustData(arc),
+            CffiHandleTableEntry::InvocationState(state) => {
+                BexExternalValue::RustData(Arc::new(state))
+            }
+            CffiHandleTableEntry::TraceReservation(reservation) => {
+                BexExternalValue::RustData(Arc::new(reservation))
+            }
         }
     }
 }

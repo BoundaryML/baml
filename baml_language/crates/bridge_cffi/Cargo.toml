@@ -25,6 +25,7 @@ baml_artifact = { workspace = true }
 baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
+btel_types = { workspace = true }
 sys_ops = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }

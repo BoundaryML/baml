@@ -78,7 +78,7 @@ public final class BamlFfi {
      * ({@code sys_types::CallId::next}); a nonzero id is mandatory (the engine
      * rejects call_id 0).
      */
-    private static final AtomicLong FALLBACK_CALL_ID = new AtomicLong(1);
+
 
     /**
      * Java-side host-value registry: callables handed to BAML as function
@@ -166,6 +166,8 @@ public final class BamlFfi {
 
     /** Mint a process-unique, nonzero function-call id from the engine counter. */
     static native long nativeNewCallId();
+    static native boolean nativeReleaseCallId(long callId);
+    static native long nativeInvocationClockNs(long callId);
 
     /**
      * Cancel an in-flight function call by its {@code call_id}
@@ -282,9 +284,10 @@ public final class BamlFfi {
             throw new IllegalArgumentException("function handle argument names and values differ in length");
         }
         long callId = newCallId();
-        byte[] request =
-                ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
-        return decodeResult(nativeCallSync(request), returnDesc);
+        try {
+            byte[] request = ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
+            return decodeResult(nativeCallSync(request), returnDesc);
+        } finally { nativeReleaseCallId(callId); }
     }
 
     public static <T> T returnedClosure(
@@ -410,6 +413,7 @@ public final class BamlFfi {
             byte[] response = nativeCallSync(request);
             return decodeResult(response, returnDesc);
         } finally {
+            nativeReleaseCallId(callId);
             if (ctx != null) {
                 ctx.detach(callId);
             }
@@ -492,6 +496,7 @@ public final class BamlFfi {
                             fqn, names, args, callId, typeArgs);
             nativeCallAsync(callId, request);
         } catch (Throwable t) {
+            nativeReleaseCallId(callId);
             // Arg-encode / JNI-glue failure before the engine took ownership of
             // the call: it will never call completeCall for this id, so
             // unregister and fail the future here rather than leak it. (A pre-call
@@ -704,13 +709,29 @@ public final class BamlFfi {
      * executor and returns promptly (api.rs: the callback must return promptly;
      * dispatches may be concurrent). Never throws across the JNI boundary.
      */
-    static void hostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall) {
+    private static final class HostFrame {
+        final BamlHandle state;
+        final java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        HostFrame(long key) { state = new BamlHandle(key, 19); }
+    }
+    private static final ConcurrentHashMap<Long, HostFrame> HOST_FRAMES = new ConcurrentHashMap<>();
+
+    static void hostCancel(long callId) {
+        HostFrame frame = HOST_FRAMES.get(callId);
+        if (frame != null) frame.cancelled.set(true);
+    }
+
+    static void hostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall, long effectiveState) {
+        HostFrame frame = new HostFrame(effectiveState);
+        HOST_FRAMES.put(callId, frame);
         try {
-            HOST_DISPATCH_EXECUTOR.execute(
-                    () -> runHostDispatch(hostValueKey, callId, bamlToHostCall));
+            HOST_DISPATCH_EXECUTOR.execute(() -> {
+                if (frame.cancelled.get()) { safeComplete(callId, true, EMPTY_PAYLOAD); return; }
+                baml_bridge.internal.InvocationFrames.CURRENT.set(frame.state);
+                try { runHostDispatch(hostValueKey, callId, bamlToHostCall); }
+                finally { baml_bridge.internal.InvocationFrames.CURRENT.remove(); }
+            });
         } catch (Throwable t) {
-            // Could not even schedule (executor shut down / resource exhaustion):
-            // complete with a bridge failure so the engine never awaits forever.
             safeComplete(callId, true, EMPTY_PAYLOAD);
         }
     }
@@ -908,6 +929,9 @@ public final class BamlFfi {
         } catch (Throwable ignored) {
             // The native completion is written never to throw; if it somehow does,
             // the executor task must not propagate it.
+        } finally {
+            HostFrame frame = HOST_FRAMES.remove(callId);
+            if (frame != null) frame.state.close();
         }
     }
 
@@ -927,8 +951,7 @@ public final class BamlFfi {
 
     private static long newCallId() {
         long id = nativeNewCallId();
-        // Defensive: the engine rejects call_id 0, and the native counter starts
-        // at 1, so this fallback should never trigger.
-        return id != 0 ? id : FALLBACK_CALL_ID.getAndIncrement();
+        if (id == 0) throw new IllegalStateException("Could not allocate a BAML invocation");
+        return id;
     }
 }

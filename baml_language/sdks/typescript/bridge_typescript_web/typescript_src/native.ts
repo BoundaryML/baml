@@ -17,6 +17,9 @@ import initWasm, {
   mediaUrl as mediaWasmUrl,
   mintWebHostValueKey,
   newFunctionCall as newWasmFunctionCall,
+  releaseFunctionCall as releaseWasmFunctionCall,
+  invocationClockNs as invocationWasmClockNs,
+  registerWebHostCancelCallback,
   registerWebHostCallable,
   registerWebHostValueReleaseCallback,
   releaseHandle as releaseWasmHandle,
@@ -26,6 +29,7 @@ import initWasm, {
   stageRuntimeBytecode,
   stageRuntimeSources,
 } from "./wasm/bridge_web_core.js";
+import { baml_bridge } from "./shared/proto/baml_cffi.js";
 import { BamlClientError, wrapNativeError } from "./shared/errors.js";
 await initWasm();
 
@@ -191,6 +195,11 @@ const ordinaryHandleFinalizer = new FinalizationRegistry<bigint>((key) => {
     // Finalizers may run during isolate teardown. Eventual cleanup is best-effort.
   }
 });
+
+/** Release one owned wire reference that never reached a host wrapper. */
+export function _releaseWireHandle(key: HandleKey): void {
+  releaseWasmHandle(keyToBigint(key));
+}
 
 export class BamlHandle {
   private readonly rawKey: bigint;
@@ -420,6 +429,24 @@ export function getRuntime(): BamlRuntime {
   return runtime;
 }
 export function newFunctionCall(): bigint { return newWasmFunctionCall(); }
+export function releaseFunctionCall(callId: string): boolean { return releaseWasmFunctionCall(parseCallId(callId)); }
+export function invocationClockNs(callId: string): string { return invocationWasmClockNs(parseCallId(callId)).toString(); }
+export interface WebHostExecution { state: BamlHandle; cancelled: boolean; }
+const hostExecutions = new Map<number, WebHostExecution>();
+registerWebHostCancelCallback((id: number) => { const execution = hostExecutions.get(id); if (execution) execution.cancelled = true; });
+export function _hostInvocationFrame(execution: object): BamlHandle { return (execution as WebHostExecution).state; }
+export function _startHostCallExecution(execution: object): string | null { return (execution as WebHostExecution).cancelled ? null : ""; }
+export function _finishHostCallExecution(_execution: object): void { }
+function releaseControlValue(value: baml_bridge.cffi.v1.IBamlOutboundValue): void {
+    if (value.handleValue && !isHostValueHandleType(value.handleValue.handleType ?? 0)) releaseWasmHandle(BigInt(value.handleValue.key!.toString()));
+    for (const item of value.listValue?.items ?? []) releaseControlValue(item);
+    for (const item of value.mapValue?.entries ?? value.classValue?.fields ?? []) if (item.value) releaseControlValue(item.value);
+    if (value.unionVariantValue?.value) releaseControlValue(value.unionVariantValue.value);
+}
+export function _discardHostCallArgs(bytes: Uint8Array): void {
+  const call = baml_bridge.cffi.v1.BamlToHostCall.decode(bytes);
+  for (const arg of call.args) if (arg.value) releaseControlValue(arg.value);
+}
 export function cancelFunctionCall(callId: bigint | string): boolean {
   const parsed = typeof callId === "bigint" ? callId : parseCallId(callId);
   if (parsed < 0n || parsed > MAX_UINT64) {
@@ -435,13 +462,31 @@ export function registerHostValueReleaseCallback(callback: (key: HandleKey) => v
   hostRelease = callback;
   registerWebHostValueReleaseCallback((key: bigint) => hostRelease?.(keyFromBigint(key)));
 }
-export function registerHostCallable(callback: (callId: number, args: Uint8Array) => void): HandleKey { return keyFromBigint(registerWebHostCallable(callback)); }
+export function registerHostCallable(callback: (callId: number, args: Uint8Array, execution?: object) => void): HandleKey {
+    return keyFromBigint(registerWebHostCallable((bytes: Uint8Array) => {
+        const wire = baml_bridge.cffi.v1.HostInvocation.decode(bytes);
+        const execution = { state: new BamlHandle(keyFromBigint(BigInt(wire.effectiveState.toString())), 19), cancelled: false };
+        hostExecutions.set(wire.callbackId, execution);
+        // Controls stay owned until completeHostCall reports actual exit.
+        hostControls.set(wire.callbackId, wire.cancel ?? undefined);
+        callback(wire.callbackId, wire.applicationArgs, execution);
+    }));
+}
+const hostControls = new Map<number, baml_bridge.cffi.v1.IBamlOutboundValue | undefined>();
 export function releaseHostCallable(key: HandleKey): void {
   const value = BigInt.asUintN(64, BigInt(key.high) << 32n | BigInt.asUintN(32, BigInt(key.low)));
   releaseWebHostCallable(value);
   hostRelease?.(key);
 }
-export function completeHostCall(callId: number, isError: number, content: Uint8Array): void { completeWebHostCall(callId, isError, content); }
+export function completeHostCall(callId: number, isError: number, content: Uint8Array): void {
+    try { completeWebHostCall(callId, isError, content); }
+    finally {
+        const controls = hostControls.get(callId);
+        hostControls.delete(callId);
+        if (controls) releaseControlValue(controls);
+        hostExecutions.delete(callId);
+    }
+}
 export function _seedFunctionRefHandle(globalIndex: number): [HandleKey, number] {
   return [keyFromBigint(seedWasmFunctionRefHandle(globalIndex)), HANDLE_FUNCTION_REF];
 }

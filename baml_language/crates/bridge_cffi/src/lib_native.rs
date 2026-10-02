@@ -35,8 +35,8 @@ pub use ffi::{
         baml_media_url,
     },
     host_value::{
-        HostDispatchFn, complete_host_call, register_host_dispatch_callback,
-        register_host_release_callback,
+        HostDispatchFn, complete_host_call, register_host_cancel_callback,
+        register_host_dispatch_callback, register_host_dispatch_v2, register_host_release_callback,
     },
     runtime::{
         BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
@@ -134,7 +134,6 @@ pub extern "C" fn call_function(encoded_args: *const u8, length: usize, id: u32)
 }
 
 fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Result<(), BridgeError> {
-    let runtime = get_runtime()?;
     let bytes: &[u8] = if encoded_args.is_null() || length == 0 {
         &[]
     } else {
@@ -143,10 +142,10 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     };
     // Pin the target before yielding to the executor: the SDK may release the
     // callable's key as soon as this returns.
-    let prepared = crate::prepare_call(bytes)?;
+    let request = crate::decode_invocation_request(bytes)?;
 
     get_tokio_runtime()?.spawn(async move {
-        let encoded = AssertUnwindSafe(crate::invoke_prepared(runtime, prepared))
+        let encoded = AssertUnwindSafe(crate::execute_invocation(request))
             .catch_unwind()
             .await;
 
@@ -158,4 +157,29 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     });
 
     Ok(())
+}
+
+/// Reports the fixed native invocation contract. Wire messages are unversioned.
+#[unsafe(no_mangle)]
+pub extern "C" fn invocation_protocol_version() -> u32 {
+    1
+}
+
+/// Read the original runtime clock. The output is untouched on failure.
+/// # Safety
+/// `out_now` must point to writable u64 storage unless null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn invocation_clock_ns(call_id: u64, out_now: *mut u64) -> BamlCffiStatus {
+    if out_now.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match crate::invocation_clock_by_id(call_id) {
+        Ok(now) => {
+            unsafe {
+                out_now.write(now);
+            }
+            BamlCffiStatus::Ok
+        }
+        Err(_) => BamlCffiStatus::InvalidHandle,
+    }
 }

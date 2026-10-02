@@ -185,23 +185,100 @@ pub fn release_host_callable(host_value_key: u64) {
     drop_registry_entry(host_value_key);
 }
 
+/// Travels with queued/running work, independently of its BAML waiter. Python
+/// explicitly finishes it after task exit; dropping an abandoned queue item
+/// also releases its undecoded wire arguments and native execution lease.
+#[pyo3::pyclass]
+pub(crate) struct HostExecutionLease {
+    call_id: u32,
+    args: Option<Vec<u8>>,
+    frame: Option<Box<bridge_ctypes::OwnedHostInvocation>>,
+    execution: Option<sys_native::host_dispatch::HostExecutionGuard>,
+}
+
+impl HostExecutionLease {
+    fn new(
+        call_id: u32,
+        args: Vec<u8>,
+        frame: bridge_ctypes::OwnedHostInvocation,
+        execution: sys_native::host_dispatch::HostExecutionGuard,
+    ) -> Self {
+        Self {
+            call_id,
+            args: Some(args),
+            frame: Some(Box::new(frame)),
+            execution: Some(execution),
+        }
+    }
+}
+
+#[pyo3::pymethods]
+impl HostExecutionLease {
+    fn start(&mut self) -> bool {
+        if sys_native::host_dispatch::start_execution(self.call_id).is_none() {
+            return false;
+        }
+        self.args = None; // The decoder owns untransferred wire references.
+        true
+    }
+
+    fn frame(&self) -> PyResult<crate::py_handle::BamlPyHandle> {
+        let frame = self
+            .frame
+            .as_ref()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("callback already exited"))?;
+        let key =
+            crate::py_handle::handle_clone(frame.0.effective_state, "callback invocation capture")?;
+        Ok(crate::py_handle::BamlPyHandle::new(
+            key,
+            BamlHandleType::InvocationState as u64,
+        ))
+    }
+
+    fn finish(&mut self) {
+        if let Some(args) = self.args.take() {
+            discard_host_call_args(&args);
+        }
+        drop(self.frame.take());
+        drop(self.execution.take());
+    }
+}
+
+impl Drop for HostExecutionLease {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
 /// Dispatch a BAML→host call into Python.
 ///
-/// `args` is a protobuf-encoded `BamlOutboundValue` whose variant is a
-/// `BamlValueList` (see `sys_native::host_impls::call_host_value` —
-/// args are wrapped as `BexExternalValue::Array` before encoding).
-pub extern "C" fn host_dispatch_callback(
+/// The borrowed V2 `HostInvocation` carries application arguments, effective
+/// invocation state, cancellation, the absolute deadline, and host context.
+pub(crate) extern "C" fn host_dispatch_callback(request: *const u8, length: usize) {
+    if request.is_null() || length > isize::MAX as usize {
+        return;
+    }
+    // SAFETY: V2 dispatch borrows runtime-owned bytes for this call.
+    let bytes = unsafe { std::slice::from_raw_parts(request, length) };
+    let frame = match bridge_cffi::invocation_protocol::decode_host_invocation(bytes) {
+        Ok(frame) => bridge_ctypes::OwnedHostInvocation(frame),
+        Err(_) => return,
+    };
+    let call_id = frame.0.callback_id;
+    let key = frame.0.host_value_key;
+    let args = frame.0.application_args.clone();
+    catch_dispatch_panic(call_id, || {
+        dispatch_host_callable(key, call_id, args.as_ptr(), args.len(), frame)
+    });
+}
+
+fn dispatch_host_callable(
     host_value_key: u64,
     call_id: u32,
     args: *const u8,
     length: usize,
+    frame: bridge_ctypes::OwnedHostInvocation,
 ) {
-    catch_dispatch_panic(call_id, || {
-        dispatch_host_callable(host_value_key, call_id, args, length);
-    });
-}
-
-fn dispatch_host_callable(host_value_key: u64, call_id: u32, args: *const u8, length: usize) {
     // Copy the wire bytes into a Vec — the dispatch task may outlive the
     // caller's stack frame, and we need a `'static` slice anyway.
     let bytes: Vec<u8> = if length == 0 || args.is_null() {
@@ -210,6 +287,12 @@ fn dispatch_host_callable(host_value_key: u64, call_id: u32, args: *const u8, le
         // SAFETY: the engine guarantees `args` is valid for `length` bytes
         // for the duration of this call (see `host_dispatch::fire_dispatch`).
         unsafe { std::slice::from_raw_parts(args, length) }.to_vec()
+    };
+
+    let Some(execution) = sys_native::host_dispatch::retain_execution(call_id) else {
+        discard_host_call_args(&bytes);
+        sys_native::host_dispatch::finish_abi_execution(call_id);
+        return;
     };
 
     // Resolve registration before handing execution to the SDK entry's queue
@@ -238,6 +321,7 @@ fn dispatch_host_callable(host_value_key: u64, call_id: u32, args: *const u8, le
     crate::callback_dispatch::route(crate::callback_dispatch::Dispatch {
         callable,
         call_id,
+        execution: HostExecutionLease::new(call_id, bytes.clone(), frame, execution),
         args: bytes,
     });
 }
@@ -260,13 +344,17 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 /// explicitly; the caller may already be blocking an application loop.
 pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
     let call_id = dispatch.call_id;
-    if sys_native::host_dispatch::origin_call_id(call_id).is_none() {
-        discard_host_call_args(&dispatch.args);
+    let mut execution = Some(dispatch.execution);
+    if !execution.as_mut().unwrap().start() {
         return;
     }
     catch_dispatch_panic(call_id, || {
         let result = Python::attach(|py| -> PyResult<Option<Vec<u8>>> {
-            let value = _invoke_host_callable(py, dispatch.callable, dispatch.args)?;
+            let frame = execution.as_ref().unwrap().frame()?;
+            let value = PyModule::import(py, "baml_bridge._dispatch")?
+                .getattr("_invoke_with_frame")?
+                .call1((dispatch.callable, dispatch.args, frame))?
+                .unbind();
             let is_coroutine: bool = PyModule::import(py, "asyncio")?
                 .getattr("iscoroutine")?
                 .call1((value.bind(py),))?
@@ -280,7 +368,9 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
                 .unbind();
             let rt = bridge_cffi::get_tokio_runtime()
                 .map_err(crate::errors::bridge_error_to_sdk_panic)?;
+            let execution = execution.take();
             rt.spawn_blocking(move || {
+                let _execution = execution;
                 catch_dispatch_panic(call_id, || {
                     let result = Python::attach(|py| -> PyResult<Vec<u8>> {
                         let runner = PyModule::import(py, "baml_bridge._dispatch")?
@@ -450,29 +540,12 @@ fn decode_args<'py>(
     py: Python<'py>,
     bytes: &[u8],
 ) -> PyResult<(Bound<'py, PyTuple>, Bound<'py, PyDict>)> {
-    let outbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_outbound_pb2")?;
-    let proto = PyModule::import(py, "baml_bridge.proto")?;
-    let type_map = proto.getattr("get_type_map")?.call0()?;
-    let decode_value = proto.getattr("decode_value")?;
-
-    let to_host_call = outbound_pb2.getattr("BamlToHostCall")?.call0()?;
-    to_host_call.call_method1("ParseFromString", (bytes,))?;
-
-    let mut positional_items: Vec<Bound<'py, PyAny>> = Vec::new();
-    let kwargs = PyDict::new(py);
-    for arg in to_host_call.getattr("args")?.try_iter()? {
-        let arg = arg?;
-        let value = decode_value.call1((arg.getattr("value")?, &type_map))?;
-        if arg.getattr("is_optional_arg")?.extract::<bool>()? {
-            let name: String = arg.getattr("arg_name")?.extract()?;
-            kwargs.set_item(name, value)?;
-        } else {
-            positional_items.push(value);
-        }
-    }
-    let positional = PyTuple::new(py, positional_items)?;
-
-    Ok((positional, kwargs))
+    let decoder = PyModule::import(py, "baml_bridge.proto")
+        .and_then(|proto| proto.getattr("_decode_host_call_args"))
+        .inspect_err(|_| discard_host_call_args(bytes))?;
+    // The decoder releases any individual references that did not reach a
+    // host wrapper, including failures partway through a nested argument.
+    decoder.call1((bytes,))?.extract()
 }
 
 /// Encode `value` as an `InboundValue` protobuf using

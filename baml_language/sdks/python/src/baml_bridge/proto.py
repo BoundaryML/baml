@@ -18,6 +18,7 @@ import enum
 import os
 import types as python_types
 import typing
+from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 from .cffi.v1 import baml_handle_pb2, baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
@@ -30,6 +31,7 @@ from .baml_py import (
     cancel_function_call,
     get_runtime as _get_runtime,
     new_function_call,
+    release_function_call,
     register_host_callable,
     _release_wire_handle,
     release_host_callable,
@@ -783,13 +785,21 @@ def encode_call_args(
     """
     if call_id == 0:
         raise ValueError("call_id must be a nonzero uint64")
-    if function_name is not None and function_handle is not None:
-        raise ValueError("exactly one BAML call target may be set")
     registered: List[int] = []
     cloned_handles: List[int] = []
     try:
+        if function_name is not None and function_handle is not None:
+            raise ValueError("exactly one BAML call target may be set")
         args = baml_inbound_pb2.CallFunctionArgs()
         args.call_id = call_id
+        args.invocation.SetInParent()
+        args.invocation.host_environment = call_id
+        from ._dispatch import _current_invocation
+
+        inherited = _current_invocation.get()
+        if inherited is not None:
+            # Retain through preparation; controls borrow, never drain this key.
+            args.invocation.inherited_state = inherited._key_for_invocation()
         if function_name is not None:
             args.function_name = function_name
         elif function_handle is not None:
@@ -813,6 +823,7 @@ def encode_call_args(
                     entry.type_value.CopyFrom(wire_ty)
         return args.SerializeToString()
     except BaseException:
+        release_function_call(call_id)
         # Roll back any host callables registered before the failure.
         for key in registered:
             try:
@@ -994,7 +1005,9 @@ def _decode_prompt_ast(prompt_ast, type_map: BamlTypeMap) -> Any:
     return instance
 
 
-def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
+def _decode_class(
+    class_value, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
     Children are decoded first, so `model_validate` receives an
@@ -1004,7 +1017,8 @@ def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
     `13b` §3.4.
     """
     field_dict = {
-        entry.key: decode_value(entry.value, type_map) for entry in class_value.fields
+        entry.key: decode_value(entry.value, type_map, ownership)
+        for entry in class_value.fields
     }
     # Emit always fully qualifies, so the engine FQN already matches
     # what the typemap consumes (`12a-namespace-rules.md §5`).
@@ -1074,7 +1088,9 @@ def _decode_enum(enum_value, type_map: BamlTypeMap) -> Any:
         ) from exc
 
 
-def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
+def _decode_handle(
+    handle, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+) -> Any:
     """Wrap `HANDLE_TABLE[handle.key]` in a `BamlPyHandle` and dispatch
     on the wire `handle.handle_type` field. The `BamlPyHandle` itself
     holds the `handle_type` tag (set at construction from the wire) so
@@ -1091,6 +1107,13 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     HT = baml_handle_pb2.BamlHandleType
     ht = handle.handle_type
     pyhandle = BamlPyHandle(handle.key, int(ht))
+    # Creating the base wrapper transfers one reference, even if constructing
+    # a typed wrapper or validating its enclosing model subsequently fails.
+    if ownership is not None and ht not in (
+        HT.HOST_VALUE_CALLABLE,
+        HT.HOST_VALUE_OPAQUE,
+    ):
+        ownership[handle.key] -= 1
 
     if ht == HT.ADT_MEDIA_IMAGE:
         return BamlImage._from_pyhandle(pyhandle)
@@ -1231,7 +1254,60 @@ def _decode_literal(literal) -> Any:
     return None
 
 
-def decode_value(holder, type_map: BamlTypeMap) -> Any:
+def _host_call_handle_keys(holder) -> typing.Iterator[int]:
+    """Yield each owned wire reference; borrowed host registry keys are excluded."""
+    which = holder.WhichOneof("value")
+    if which == "handle_value":
+        handle = holder.handle_value
+        if handle.handle_type not in (
+            baml_handle_pb2.HOST_VALUE_CALLABLE,
+            baml_handle_pb2.HOST_VALUE_OPAQUE,
+        ):
+            yield handle.key
+    elif which == "list_value":
+        for item in holder.list_value.items:
+            yield from _host_call_handle_keys(item)
+    elif which == "map_value":
+        for entry in holder.map_value.entries:
+            yield from _host_call_handle_keys(entry.value)
+    elif which == "class_value":
+        for field in holder.class_value.fields:
+            yield from _host_call_handle_keys(field.value)
+    elif which == "union_variant_value":
+        yield from _host_call_handle_keys(holder.union_variant_value.value)
+
+
+def _decode_host_call_args(data: bytes) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    """Own every wire reference until a host wrapper takes that reference."""
+    call = baml_outbound_pb2.BamlToHostCall()
+    call.ParseFromString(data)
+    ownership = Counter(
+        key for arg in call.args for key in _host_call_handle_keys(arg.value)
+    )
+    try:
+        type_map = get_type_map()
+        positional = []
+        optional = {}
+        for arg in call.args:
+            value = decode_value(arg.value, type_map, ownership)
+            if arg.is_optional_arg:
+                optional[arg.arg_name] = value
+            else:
+                positional.append(value)
+        return tuple(positional), optional
+    finally:
+        for key, count in ownership.items():
+            for _ in range(count):
+                try:
+                    _release_wire_handle(key)
+                except RuntimeError:
+                    # Cleanup must preserve the original decode failure.
+                    pass
+
+
+def decode_value(
+    holder, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+) -> Any:
     """Convert a `BamlOutboundValue` message to a typed Python value.
 
     Every recursive call threads the same `BamlTypeMap` — the only seam
@@ -1259,22 +1335,24 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
     if which == "literal_value":
         return _decode_literal(holder.literal_value)
     if which == "list_value":
-        return [decode_value(item, type_map) for item in holder.list_value.items]
+        return [
+            decode_value(item, type_map, ownership) for item in holder.list_value.items
+        ]
     if which == "map_value":
         return {
-            entry.key: decode_value(entry.value, type_map)
+            entry.key: decode_value(entry.value, type_map, ownership)
             for entry in holder.map_value.entries
         }
     if which == "class_value":
-        return _decode_class(holder.class_value, type_map)
+        return _decode_class(holder.class_value, type_map, ownership)
     if which == "enum_value":
         return _decode_enum(holder.enum_value, type_map)
     if which == "union_variant_value":
         # Union metadata is discarded — Python is duck-typed. The inner
         # value self-describes (09e §3).
-        return decode_value(holder.union_variant_value.value, type_map)
+        return decode_value(holder.union_variant_value.value, type_map, ownership)
     if which == "handle_value":
-        return _decode_handle(holder.handle_value, type_map)
+        return _decode_handle(holder.handle_value, type_map, ownership)
     if which == "ty_value":
         definition = baml_type_pb2.BamlTyDef()
         definition.root.CopyFrom(holder.ty_value)

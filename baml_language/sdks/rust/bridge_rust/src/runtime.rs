@@ -135,6 +135,45 @@ pub async fn invoke_handle<R: BamlValue, E: BamlValue>(
 /// Encode the call and fire it through the C ABI. The registered
 /// completion is returned to be waited on; pre-call failures inside the
 /// engine also arrive through it as error envelopes (one result channel).
+struct CallAllocation<'a> {
+    api: &'a capi::Api,
+    id: u64,
+}
+
+impl<'a> CallAllocation<'a> {
+    fn new(api: &'a capi::Api) -> Result<Self, SdkError> {
+        // SAFETY: the validated revision-3 table allocates and checks its own ID.
+        #[expect(unsafe_code)]
+        let id = unsafe { (api.new_function_call)() };
+        if id == 0 {
+            return Err(SdkError::new("runtime call allocation failed"));
+        }
+        let allocation = Self { api, id };
+        let mut now = 0;
+        #[expect(unsafe_code)]
+        let status = unsafe { (api.invocation_clock_ns)(id, &raw mut now) };
+        if status != 0 {
+            return Err(SdkError::new("runtime invocation clock is unavailable"));
+        }
+        Ok(allocation)
+    }
+    fn submitted(&mut self) {
+        self.id = 0;
+    }
+}
+
+impl Drop for CallAllocation<'_> {
+    fn drop(&mut self) {
+        if self.id != 0 {
+            // SAFETY: only this guard owns the unsubmitted allocation.
+            #[expect(unsafe_code)]
+            unsafe {
+                (self.api.release_function_call)(self.id);
+            }
+        }
+    }
+}
+
 fn dispatch(
     fqn: &str,
     kwargs: Vec<wire::InboundMapEntry>,
@@ -146,13 +185,17 @@ fn dispatch(
     // a callable handle; every handle rides a call that passes through
     // here first.
     crate::host_value::ensure_callbacks_registered(api);
-    // SAFETY: takes no arguments; allocates an id inside the engine.
-    #[expect(unsafe_code)]
-    let call_id = unsafe { (api.new_function_call)() };
+    let mut allocation = CallAllocation::new(api)?;
+    let call_id = allocation.id;
     let args = wire::CallFunctionArgs {
         kwargs,
         call_id,
         type_args,
+        invocation: Some(wire::InvocationOptions {
+            inherited_state: crate::host_value::current_invocation_state(),
+            host_environment: call_id,
+            ..Default::default()
+        }),
         call_target: Some(wire::call_function_args::CallTarget::FunctionName(
             fqn.to_string(),
         )),
@@ -163,6 +206,7 @@ fn dispatch(
     unsafe {
         (api.call_function)(args.as_ptr(), args.len(), receiver.dispatch_id());
     }
+    allocation.submitted();
     Ok(receiver)
 }
 
@@ -176,14 +220,17 @@ fn dispatch_handle(
     let api = capi::api()?;
     let receiver = completion::register(api);
     crate::host_value::ensure_callbacks_registered(api);
-    // SAFETY: this ABI function takes no arguments and returns a fresh engine
-    // call id; the loaded API table was layout-checked during initialization.
-    #[expect(unsafe_code)]
-    let call_id = unsafe { (api.new_function_call)() };
+    let mut allocation = CallAllocation::new(api)?;
+    let call_id = allocation.id;
     let args = wire::CallFunctionArgs {
         kwargs,
         call_id,
         type_args: Vec::new(),
+        invocation: Some(wire::InvocationOptions {
+            inherited_state: crate::host_value::current_invocation_state(),
+            host_environment: call_id,
+            ..Default::default()
+        }),
         call_target: Some(wire::call_function_args::CallTarget::FunctionHandle(
             handle_key,
         )),
@@ -195,6 +242,7 @@ fn dispatch_handle(
     unsafe {
         (api.call_function)(args.as_ptr(), args.len(), receiver.dispatch_id());
     }
+    allocation.submitted();
     Ok(receiver)
 }
 

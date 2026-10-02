@@ -345,10 +345,15 @@ func encodeCallArgs(
     callId: UInt64,
     callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget
 ) throws -> Data {
-    precondition(callId != 0, "call_id must be nonzero")
+    guard callId != 0 else { throw BamlDecodeError.unsupported("could not allocate invocation") }
+    do {
     var msg = BamlBridge_Cffi_V1_CallFunctionArgs()
     msg.callID = callId
     msg.callTarget = callTarget
+    var invocation = BamlBridge_Cffi_V1_InvocationOptions()
+    invocation.hostEnvironment = callId
+    invocation.inheritedState = HostInvocationScope.state?.key ?? 0
+    msg.invocation = invocation
     msg.kwargs = args.map { name, value in
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = name
@@ -356,4 +361,8 @@ func encodeCallArgs(
         return entry
     }
     return try msg.serializedData()
+    } catch {
+        _ = BamlApi.releaseFunctionCall(callId)
+        throw error
+    }
 }

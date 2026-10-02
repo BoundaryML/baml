@@ -14,8 +14,9 @@ use crate::Buffer;
 /// Revision 2 changes the `call_function` slot from the legacy four-argument
 /// name-plus-payload signature to the unified three-argument payload signature.
 /// Hosts and runtimes built against different revisions must reject one another
-/// before reading that slot.
-pub const BAML_API_V1_ABI_VERSION: u32 = 2;
+/// before reading that slot. Revision 3 requires runtime-bound allocations,
+/// an invocation clock, allocation release and V2 host dispatch/cancellation.
+pub const BAML_API_V1_ABI_VERSION: u32 = 3;
 
 /// Valid `media_kind` values for media constructors.
 ///
@@ -55,6 +56,8 @@ pub enum BamlCffiHandleType {
     HostValueOpaque = 16,
     FunctionSpec = 17,
     RuntimeValue = 18,
+    InvocationState = 19,
+    TraceReservation = 20,
 }
 
 /// Receives the completed result of `call_function`.
@@ -127,6 +130,15 @@ pub type BamlMediaAccessorFn =
     unsafe extern "C" fn(key: u64, handle_type: i32, out: *mut Buffer) -> BamlCffiStatus;
 pub type BamlRegisterBridgeFn = unsafe extern "C" fn(info: *const BamlBridgeInfoV1) -> Buffer;
 pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
+
+pub type BamlHostDispatchV2 = extern "C" fn(request: *const u8, length: usize);
+pub type BamlHostCancel = extern "C" fn(callback_id: u32);
+pub type BamlInvocationProtocolVersionFn = extern "C" fn() -> u32;
+pub type BamlInvocationClockNsFn =
+    unsafe extern "C" fn(call_id: u64, out_now: *mut u64) -> BamlCffiStatus;
+pub type BamlReleaseFunctionCallFn = extern "C" fn(call_id: u64) -> i32;
+pub type BamlRegisterHostDispatchV2Fn = extern "C" fn(callback: BamlHostDispatchV2);
+pub type BamlRegisterHostCancelCallbackFn = extern "C" fn(callback: BamlHostCancel);
 
 /// First version of the shared BAML C API.
 ///
@@ -259,6 +271,16 @@ pub struct BamlApiV1 {
     pub shutdown_runtime: BamlShutdownRuntimeFn,
     /// Replace the runtime from bytecode after validating embedded generation metadata.
     pub initialize_runtime_from_blob_with_metadata: BamlInitializeRuntimeFromBlobWithMetadataFn,
+    /// Native invocation contract; protobuf carries no version negotiation.
+    pub invocation_protocol_version: BamlInvocationProtocolVersionFn,
+    /// Read the allocated call's original runtime clock, in nanoseconds.
+    pub invocation_clock_ns: BamlInvocationClockNsFn,
+    /// Release an unsubmitted allocation; zero means success.
+    pub release_function_call: BamlReleaseFunctionCallFn,
+    /// Install the envelope dispatcher. Revision 3 never dispatches through V1.
+    pub register_host_dispatch_v2: BamlRegisterHostDispatchV2Fn,
+    /// Request cooperative cancellation; completion still reports actual exit.
+    pub register_host_cancel_callback: BamlRegisterHostCancelCallbackFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -287,6 +309,11 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     register_unhandled_spawn_error_callback: crate::register_unhandled_spawn_error_callback,
     shutdown_runtime: crate::shutdown_runtime_ffi,
     initialize_runtime_from_blob_with_metadata: crate::initialize_runtime_from_blob_with_metadata,
+    invocation_protocol_version: crate::invocation_protocol_version,
+    invocation_clock_ns: crate::invocation_clock_ns,
+    release_function_call: crate::release_function_call,
+    register_host_dispatch_v2: crate::register_host_dispatch_v2,
+    register_host_cancel_callback: crate::register_host_cancel_callback,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -312,7 +339,7 @@ mod tests {
 
     #[test]
     fn unified_call_target_uses_a_new_abi_revision() {
-        assert_eq!(BAML_API_V1_ABI_VERSION, 2);
+        assert_eq!(BAML_API_V1_ABI_VERSION, 3);
     }
 
     #[test]

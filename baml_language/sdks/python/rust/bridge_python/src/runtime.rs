@@ -100,16 +100,12 @@ impl BamlRuntime {
         // raise — they become a structured BamlOutboundResult envelope so the
         // future yields bytes that decode_call_result raises uniformly (same
         // BamlError(baml.errors.*) as an engine failure).
-        // `prepare_call` pins a handle target before we yield to the event
+        // `decode_invocation_request` pins a handle target before we yield to the event
         // loop, so a Python-side release of that handle cannot race the call.
-        let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let prepared = bridge_cffi::prepare_call(&args_proto)?;
-            Ok((runtime, prepared))
-        })();
+        let request = bridge_cffi::decode_invocation_request(&args_proto);
 
-        let environment = match &prepared {
-            Ok((_, call)) => Some(DispatchScope::asynchronous(py, call.host_call_id())?),
+        let environment = match &request {
+            Ok(call) => Some(DispatchScope::asynchronous(py, call.host_call_id())?),
             Err(_) => None,
         };
 
@@ -118,8 +114,8 @@ impl BamlRuntime {
         // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let _environment = environment;
-            let bytes = match prepared {
-                Ok((runtime, prepared)) => bridge_cffi::invoke_prepared(runtime, prepared).await,
+            let bytes = match request {
+                Ok(request) => bridge_cffi::execute_invocation(request).await,
                 Err(e) => bridge_cffi::error_to_outbound(e),
             };
             Ok(bytes)
@@ -137,24 +133,23 @@ impl BamlRuntime {
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // returned bytes decode + raise uniformly via decode_call_result.
-        let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let prepared = bridge_cffi::prepare_call(&args_proto)?;
+        let request = (|| -> Result<_, bridge_cffi::BridgeError> {
+            let request = bridge_cffi::decode_invocation_request(&args_proto)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
-            Ok((runtime, prepared, rt))
+            Ok((request, rt))
         })();
 
-        let (runtime, prepared, rt) = match prepared {
+        let (request, rt) = match request {
             Ok(v) => v,
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
         };
 
-        // Same shared invoke_prepared as the async + C-ABI paths — returns the
+        // Same shared execute_invocation as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
-        let call_id = prepared.host_call_id();
+        let call_id = request.host_call_id();
         let (sender, mut receiver) = std::sync::mpsc::channel();
         let _environment = DispatchScope::synchronous(call_id, sender.clone())?;
-        let task = rt.spawn(bridge_cffi::invoke_prepared(runtime, prepared));
+        let task = rt.spawn(bridge_cffi::execute_invocation(request));
         // Observe panics/cancellation of the engine task as well as normal
         // results; a producer disappearing must never strand the caller queue.
         rt.spawn(async move {
@@ -176,9 +171,7 @@ impl BamlRuntime {
                 return Err(error);
             }
             match message {
-                Ok(SyncMessage::Dispatch(dispatch)) => {
-                    crate::host_value::dispatch_sync(dispatch.into_inner());
-                }
+                Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
                 Ok(SyncMessage::Finished(bytes)) => return Ok(bytes),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {

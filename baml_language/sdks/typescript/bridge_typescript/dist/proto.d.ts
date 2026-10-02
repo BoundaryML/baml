@@ -91,6 +91,17 @@ export declare function encodeCallArgs(kwargs: Record<string, unknown>, options:
  */
 export declare function decodeOutboundValue(data: Buffer | Uint8Array): unknown;
 /**
+ * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
+ * call against the callee's declared params and dropped omitted optionals, so
+ * `args` is a flat, declared-order list of the supplied args. Partition it back
+ * into the required positional run and the supplied optionals (keyed by
+ * `argName`) using each arg's `isOptionalArg` flag.
+ */
+export declare function decodeHostCall(data: Buffer | Uint8Array): {
+    positional: unknown[];
+    optional: Record<string, unknown>;
+};
+/**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
  * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
  * arms **throw** a `BamlError`/`BamlPanic` carrying the fully decoded thrown
@@ -100,5 +111,5 @@ export declare function decodeOutboundValue(data: Buffer | Uint8Array): unknown;
  * rather than throwing.
  */
 export declare function decodeCallResult(data: Buffer | Uint8Array): unknown;
-export declare function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown): (callId: number, argsBytes: Buffer) => void;
+export declare function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown): (callId: number, argsBytes: Buffer, execution?: object) => void;
 //# sourceMappingURL=proto.d.ts.map

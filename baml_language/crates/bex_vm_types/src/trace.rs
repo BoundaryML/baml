@@ -61,6 +61,17 @@ impl ReservedSpanData {
             .map(|_| self.id.local)
             .map_err(|_| ReservationError::AlreadyAttached)
     }
+
+    /// Preparation verifies ownership/liveness without claiming the span.
+    pub fn validate(&self, scope: RecordingId) -> Result<(), ReservationError> {
+        if self.id.scope != scope {
+            return Err(ReservationError::WrongScope);
+        }
+        if self.attached.load(Ordering::Acquire) {
+            return Err(ReservationError::AlreadyAttached);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

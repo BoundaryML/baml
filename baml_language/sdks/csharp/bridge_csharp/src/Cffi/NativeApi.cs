@@ -4,7 +4,7 @@ namespace Baml.Cffi;
 
 internal sealed unsafe partial class NativeApi
 {
-    private const uint AbiVersion = 2;
+    private const uint AbiVersion = 3;
     private const uint CSharpBridgeLanguage = 5;
 
     private static readonly Lazy<NativeApi> Current = new(
@@ -40,6 +40,14 @@ internal sealed unsafe partial class NativeApi
     internal ulong NewFunctionCall()
     {
         return RequireFunctionCallIdentifier(table->NewFunctionCall());
+    }
+
+    internal ulong InvocationClockNs(ulong callId)
+    {
+        ulong now = 0;
+        if (table->InvocationClockNs(callId, &now) != BamlCffiStatus.Ok)
+            throw new BamlProtocolException("Invalid invocation clock allocation.", $"Unknown call {callId}.");
+        return now;
     }
 
     internal static ulong RequireFunctionCallIdentifier(ulong identifier)
@@ -157,6 +165,10 @@ internal sealed unsafe partial class NativeApi
                     {
                         arguments.Commit();
                     }
+                    else
+                    {
+                        _ = table->ReleaseFunctionCall(callId);
+                    }
                 }
             }
             catch
@@ -172,6 +184,7 @@ internal sealed unsafe partial class NativeApi
         }
         catch
         {
+            _ = table->ReleaseFunctionCall(callId);
             HostValueRegistry.Shared.CompleteFunctionCall(callId);
             throw;
         }
@@ -223,6 +236,10 @@ internal sealed unsafe partial class NativeApi
                     {
                         arguments.Commit();
                     }
+                    else
+                    {
+                        _ = table->ReleaseFunctionCall(callId);
+                    }
                 }
             }
             catch
@@ -238,6 +255,7 @@ internal sealed unsafe partial class NativeApi
         }
         catch
         {
+            _ = table->ReleaseFunctionCall(callId);
             HostValueRegistry.Shared.CompleteFunctionCall(callId);
             throw;
         }
@@ -285,6 +303,11 @@ internal sealed unsafe partial class NativeApi
         Require(api->RegisterBridge is not null, "register_bridge");
         Require(api->RegisterUnhandledSpawnErrorCallback is not null, "register_unhandled_spawn_error_callback");
         Require(api->ShutdownRuntime is not null, "shutdown_runtime");
+        Require(api->InvocationProtocolVersion is not null, "invocation_protocol_version");
+        Require(api->InvocationClockNs is not null, "invocation_clock_ns");
+        Require(api->ReleaseFunctionCall is not null, "release_function_call");
+        Require(api->RegisterHostDispatchV2 is not null, "register_host_dispatch_v2");
+        Require(api->RegisterHostCancelCallback is not null, "register_host_cancel_callback");
     }
 
     private static NativeApi Load()

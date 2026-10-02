@@ -11,12 +11,12 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 import { baml_bridge } from './proto/baml_cffi.js';
-import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, getRuntime, newFunctionCall, } from './native.js';
+import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, _releaseWireHandle, getRuntime, newFunctionCall, releaseFunctionCall, } from './native.js';
 import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic } from './errors.js';
-import { handleExitPanic, runHostCallback } from './platform.js';
+import { handleExitPanic, runHostCallback, currentInvocationState } from './platform.js';
 import { registerHostOpaque, releaseHostOpaque, tryRehydrateHostValueByKey, } from './host_value_registry.js';
 import { getTypeMap } from './typemap.js';
 import { BamlType, BamlTypeMetadataRow, lowerTypeToWireTy, outboundTyToBamlTypeToken, } from './wire_ty.js';
@@ -376,11 +376,11 @@ export function encodeCallArgs(kwargs, options) {
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
-    if (options.functionName !== undefined && options.functionHandle !== undefined) {
-        throw new TypeError('exactly one BAML call target may be set');
-    }
     const ctx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
+        if (options.functionName !== undefined && options.functionHandle !== undefined) {
+            throw new TypeError('exactly one BAML call target may be set');
+        }
         const entries = [];
         for (const [key, value] of Object.entries(kwargs)) {
             const entry = { stringKey: key };
@@ -398,6 +398,7 @@ export function encodeCallArgs(kwargs, options) {
             typeArgs,
             functionName: options.functionName,
             functionHandle: options.functionHandle,
+            invocation: { inheritedState: currentInvocationState(), hostEnvironment: callId.toString() },
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }
@@ -407,6 +408,7 @@ export function encodeCallArgs(kwargs, options) {
         // life of the process — the call never reaches the engine, so the
         // engine would never release them.
         rollbackHostCallables(ctx.registered);
+        releaseFunctionCall(callId.toString());
         throw err;
     }
 }
@@ -434,7 +436,7 @@ function parseHexBigint(s) {
         ? -BigInt(`0x${magnitude}`)
         : BigInt(`0x${magnitude}`);
 }
-function decodeValueHolder(holder, typeMap) {
+function decodeValueHolder(holder, typeMap, ownership) {
     if (holder.nullValue != null)
         return null;
     if (holder.stringValue != null)
@@ -455,7 +457,7 @@ function decodeValueHolder(holder, typeMap) {
     if (holder.tyValue)
         return BamlType._fromWire({ root: holder.tyValue });
     if (holder.classValue) {
-        return decodeClass(holder.classValue, typeMap);
+        return decodeClass(holder.classValue, typeMap, ownership);
     }
     if (holder.enumValue) {
         return decodeEnum(holder.enumValue, typeMap);
@@ -482,19 +484,19 @@ function decodeValueHolder(holder, typeMap) {
         }
     }
     if (holder.listValue) {
-        return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap));
+        return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
     }
     if (holder.mapValue) {
         const obj = Object.create(null);
         for (const entry of holder.mapValue.entries || []) {
             if (entry.key != null && entry.value) {
-                obj[entry.key] = decodeValueHolder(entry.value, typeMap);
+                obj[entry.key] = decodeValueHolder(entry.value, typeMap, ownership);
             }
         }
         return obj;
     }
     if (holder.unionVariantValue && holder.unionVariantValue.value) {
-        return decodeValueHolder(holder.unionVariantValue.value, typeMap);
+        return decodeValueHolder(holder.unionVariantValue.value, typeMap, ownership);
     }
     // handle_value: pass the protobufjs Long directly as the key — BamlHandle's
     // constructor accepts { low, high } which is layout-compatible with Long.
@@ -506,6 +508,9 @@ function decodeValueHolder(holder, typeMap) {
             throw new BamlError('decoded handle has HANDLE_UNSPECIFIED handle_type');
         }
         const handle = new BamlHandle(holder.handleValue.key, ht);
+        // The base wrapper owns this occurrence, even if its typed wrapper or
+        // an enclosing class constructor subsequently throws.
+        ownership?.delete(holder.handleValue);
         if (ht === BamlHandleType.FUNCTION_REF) {
             return decodeBamlClosure(handle, holder.handleValue.ty?.function);
         }
@@ -611,11 +616,11 @@ function decodeBamlClosure(handle, functionTy) {
  * When the FQN is absent (the bare bridge has no typemap, or an unmapped
  * class), fall back to a plain object — preserving the pre-typemap behavior.
  */
-function decodeClass(classValue, typeMap) {
+function decodeClass(classValue, typeMap, ownership) {
     const fieldDict = {};
     for (const entry of classValue.fields || []) {
         if (entry.key != null && entry.value) {
-            fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap);
+            fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap, ownership);
         }
     }
     const fqn = classValue.name ?? '';
@@ -696,6 +701,28 @@ export function decodeOutboundValue(data) {
     const msg = BamlOutboundValue.decode(data instanceof Buffer ? data : Buffer.from(data));
     return decodeValueHolder(msg, getTypeMap());
 }
+function collectHostCallHandles(holder, ownership) {
+    if (holder.handleValue) {
+        const ht = holder.handleValue.handleType;
+        if (ht !== BamlHandleType.HOST_VALUE_CALLABLE && ht !== BamlHandleType.HOST_VALUE_OPAQUE) {
+            ownership.add(holder.handleValue);
+        }
+    }
+    else if (holder.listValue) {
+        for (const item of holder.listValue.items ?? [])
+            collectHostCallHandles(item, ownership);
+    }
+    else if (holder.mapValue || holder.classValue) {
+        const entries = holder.mapValue?.entries ?? holder.classValue?.fields ?? [];
+        for (const entry of entries) {
+            if (entry.value)
+                collectHostCallHandles(entry.value, ownership);
+        }
+    }
+    else if (holder.unionVariantValue?.value) {
+        collectHostCallHandles(holder.unionVariantValue.value, ownership);
+    }
+}
 /**
  * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
  * call against the callee's declared params and dropped omitted optionals, so
@@ -703,21 +730,40 @@ export function decodeOutboundValue(data) {
  * into the required positional run and the supplied optionals (keyed by
  * `argName`) using each arg's `isOptionalArg` flag.
  */
-function decodeHostCall(data) {
+export function decodeHostCall(data) {
     const msg = BamlToHostCall.decode(data instanceof Buffer ? data : Buffer.from(data));
-    const typeMap = getTypeMap();
-    const positional = [];
-    const optional = {};
+    // Track wire objects rather than numeric keys: repeated keys carry one
+    // separately owned reference per decoded protobuf occurrence.
+    const ownership = new Set();
     for (const arg of msg.args ?? []) {
-        const value = arg.value ? decodeValueHolder(arg.value, typeMap) : undefined;
-        if (arg.isOptionalArg) {
-            optional[arg.argName ?? ''] = value;
+        if (arg.value)
+            collectHostCallHandles(arg.value, ownership);
+    }
+    try {
+        const typeMap = getTypeMap();
+        const positional = [];
+        const optional = {};
+        for (const arg of msg.args ?? []) {
+            const value = arg.value ? decodeValueHolder(arg.value, typeMap, ownership) : undefined;
+            if (arg.isOptionalArg) {
+                optional[arg.argName ?? ''] = value;
+            }
+            else {
+                positional.push(value);
+            }
         }
-        else {
-            positional.push(value);
+        return { positional, optional };
+    }
+    finally {
+        for (const handle of ownership) {
+            try {
+                _releaseWireHandle(handle.key);
+            }
+            catch {
+                // Cleanup must preserve the original decode failure.
+            }
         }
     }
-    return { positional, optional };
 }
 /**
  * Reshape the split args into the TypeScript calling convention the callback's
@@ -877,9 +923,12 @@ export function decodeCallResult(data) {
 // inside the Rust dispatch callback (under the GIL) rather than going
 // through a JS-side wrapper. Node's tsfn model makes the wrapper natural.
 export function makeHostCallableDispatch(userFn) {
-    return (callId, argsBytes) => {
+    return (callId, argsBytes, execution) => {
         try {
-            runHostCallback(callId, argsBytes, () => dispatchHostCallable(userFn, callId, argsBytes));
+            const completion = runHostCallback(callId, argsBytes, () => dispatchHostCallable(userFn, callId, argsBytes), execution);
+            if (completion) {
+                void completion.catch((error) => completeHostCallLastResort(callId, error));
+            }
         }
         catch (err) {
             completeHostCallLastResort(callId, err);
@@ -927,7 +976,7 @@ function dispatchHostCallable(userFn, callId, argsBytes) {
             // collapses to a single settlement, so the call completes
             // exactly once. The handlers only call the defended send*
             // helpers (they can't throw synchronously).
-            Promise.resolve(result).then((resolved) => sendHostCallableResult(callId, resolved), (err) => sendHostCallableError(callId, err));
+            return Promise.resolve(result).then((resolved) => sendHostCallableResult(callId, resolved), (err) => sendHostCallableError(callId, err));
         }
         else {
             sendHostCallableResult(callId, result);

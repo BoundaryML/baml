@@ -27,6 +27,7 @@ for (const file of files) {
 writeFileSync(
   resolve(shared, "platform.ts"),
   readFileSync(resolve(packageRoot, "typescript_src/platform.ts"), "utf8")
+    .replaceAll("from './native.js'", "from '../native.js'")
     .replaceAll("from './shared/errors.js'", "from './errors.js'"),
 );
 for (const file of [...files, "platform.ts"]) {

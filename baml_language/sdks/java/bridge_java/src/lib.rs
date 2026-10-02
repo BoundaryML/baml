@@ -16,7 +16,10 @@
 //! `baml_bridge.BamlFfi`. JNI mangles the package `baml_bridge` as
 //! `baml_1bridge` (an underscore in a Java name is escaped `_1`).
 
-use std::sync::{Arc, Once, OnceLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, Once, OnceLock},
+};
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
 use bridge_cffi::handle_cffi::media_kind_from_proto;
@@ -33,23 +36,22 @@ use jni::{
 /// `BamlOutboundResult` envelope rather than thrown, so the returned bytes
 /// decode + raise uniformly on the Java side. Argument decoding, target
 /// pinning and the `catch_unwind` + engine error handling all live in
-/// `bridge_cffi::prepare_call` / `bridge_cffi::invoke_prepared`.
+/// `bridge_cffi::decode_invocation_request` / `bridge_cffi::execute_invocation`.
 fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
-    let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
-        let prepared = bridge_cffi::prepare_call(args_proto)?;
+    let request = (|| -> Result<_, bridge_cffi::BridgeError> {
+        let request = bridge_cffi::decode_invocation_request(args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
-        Ok((runtime, prepared, rt))
+        Ok((request, rt))
     })();
 
-    let (runtime, prepared, rt) = match prepared {
+    let (request, rt) = match request {
         Ok(v) => v,
         Err(e) => return bridge_cffi::error_to_outbound(e),
     };
 
     // Block on the shared multi-thread tokio runtime, like the pyo3 sync path
     // (`rt.block_on(...)`). Returns the encoded `BamlOutboundResult` bytes.
-    rt.block_on(bridge_cffi::invoke_prepared(runtime, prepared))
+    rt.block_on(bridge_cffi::execute_invocation(request))
 }
 
 /// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
@@ -88,7 +90,8 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     // dispatch and GC-driven release land on the static `BamlFfi.hostDispatch` /
     // `BamlFfi.hostRelease` methods.
     REGISTER_HOST_CALLBACKS.call_once(|| {
-        bridge_cffi::register_host_dispatch_callback(host_dispatch_trampoline);
+        bridge_cffi::register_host_dispatch_v2(host_dispatch_trampoline);
+        bridge_cffi::register_host_cancel_callback(host_cancel_trampoline);
         bridge_cffi::register_host_release_callback(host_release_trampoline);
         bridge_cffi::register_unhandled_spawn_error_callback(unhandled_spawn_error_trampoline);
     });
@@ -223,7 +226,7 @@ const COMPLETE_CALL_SIG: &str = "(J[B)V";
 
 /// The Java host-dispatch route: `static void hostDispatch(long, long, byte[])`.
 const HOST_DISPATCH_METHOD: &str = "hostDispatch";
-const HOST_DISPATCH_SIG: &str = "(JJ[B)V";
+const HOST_DISPATCH_SIG: &str = "(JJ[BJ)V";
 /// The Java host-release route: `static void hostRelease(long)`.
 const HOST_RELEASE_METHOD: &str = "hostRelease";
 const HOST_RELEASE_SIG: &str = "(J)V";
@@ -298,14 +301,13 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
 /// encoded into the same envelope and delivered immediately, so they decode +
 /// raise identically to a sync pre-call failure.
 fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
-    let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
-        let prepared = bridge_cffi::prepare_call(&args_proto)?;
+    let request = (|| -> Result<_, bridge_cffi::BridgeError> {
+        let request = bridge_cffi::decode_invocation_request(&args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
-        Ok((runtime, prepared, rt))
+        Ok((request, rt))
     })();
 
-    let (runtime, prepared, rt) = match prepared {
+    let (request, rt) = match request {
         Ok(v) => v,
         Err(e) => {
             // Same envelope bytes the sync path returns, delivered on this
@@ -318,10 +320,10 @@ fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
     rt.spawn(async move {
         // Inner task so a panic during result *encoding* is caught (via the
         // JoinError) and still delivered as an SdkPanic envelope, rather than
-        // silently dropping the task and hanging the future. `invoke_prepared`
+        // silently dropping the task and hanging the future. `execute_invocation`
         // already turns an engine-call panic into that envelope itself; this
         // guards the rarer encode-time panic, exactly as the C-ABI path does.
-        let inner = tokio::spawn(bridge_cffi::invoke_prepared(runtime, prepared));
+        let inner = tokio::spawn(bridge_cffi::execute_invocation(request));
         let bytes = match inner.await {
             Ok(bytes) => bytes,
             Err(join_err) => encode_task_failure(join_err),
@@ -425,17 +427,14 @@ fn deliver_unhandled_spawn_error(bytes: &[u8], cancelled: bool) -> Result<(), St
 
 /// `baml_bridge.BamlFfi.nativeNewCallId() -> long`.
 ///
-/// Mint a process-unique function-call id via the same
-/// `bridge_cffi::new_function_call_id()` counter `bridge_python`'s
-/// `new_function_call()` exposes, so a nonzero `call_id` can be stamped onto
-/// `CallFunctionArgs` (a zero `call_id` is rejected engine-side).
+/// Allocate a call against the installed runtime. Zero reports failure; the
+/// allocation owns its cancellation state before Java submits the request.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeNewCallId(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
 ) -> jlong {
-    // Call ids fit u64; JNI `long` is i64. The counter starts at 1 and the
-    // low 63 bits are what the engine keys on, so the bit cast is faithful.
+    // JNI long preserves the u64 identifier's bits; only zero is reserved.
     bridge_cffi::new_function_call_id() as jlong
 }
 
@@ -465,8 +464,8 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCancelFunctionCall(
 //
 // When BAML invokes a host callable, the engine's `call_host_value` sysop fires
 // the registered dispatch callback on a runtime thread; the trampoline attaches
-// that thread to the JVM and hands (host_value_key, call_id, BamlToHostCall
-// bytes) to the static `BamlFfi.hostDispatch`, which submits the decode / invoke
+// that thread to the JVM and hands the V2 frame's key, callback ID,
+// application bytes, and owned effective-state handle to `BamlFfi.hostDispatch`, which submits the decode / invoke
 // / complete work to a Java executor and returns promptly (the api.rs
 // "return promptly; dispatches may be concurrent" contract — the Java executor
 // is the async boundary, so the Rust hop is a bounded inline JNI call rather
@@ -482,42 +481,65 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCancelFunctionCall(
 
 /// Dispatch a BAML→host callable invocation into Java. Copies the wire bytes,
 /// attaches the (engine) thread to the JVM, and calls the static
-/// `BamlFfi.hostDispatch(hostValueKey, callId, bamlToHostCall)`. On any failure
+/// `BamlFfi.hostDispatch(hostValueKey, callId, applicationArgs, effectiveState)`. On any failure
 /// to reach Java, completes the in-flight call with an empty-payload error so
 /// the engine surfaces a `BridgeFailure` (→ `SdkPanic`) instead of awaiting
 /// forever.
 ///
-/// The registered `BamlHostDispatchCallback` derefs `args` inside an `unsafe`
+/// The registered `BamlHostDispatchV2` dereferences the borrowed request in an `unsafe`
 /// block; pointer validity is the engine's contract (documented on the callback
 /// type in `bridge_cffi::api`). This fn is private, so the public-only
 /// `not_unsafe_ptr_arg_deref` lint does not apply.
-extern "C" fn host_dispatch_trampoline(
-    host_value_key: u64,
-    call_id: u32,
-    args: *const u8,
-    length: usize,
-) {
-    // Copy the wire bytes: the dispatch task outlives this stack frame (the Java
-    // executor runs the callable asynchronously), and `complete_host_call`
-    // reads from a Java-owned array anyway.
-    let bytes: Vec<u8> = if length == 0 || args.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: the engine guarantees `args` is valid for `length` bytes for
-        // the duration of this call (see `sys_native::host_dispatch`).
-        unsafe { std::slice::from_raw_parts(args, length) }.to_vec()
-    };
+static HOST_FRAMES: std::sync::LazyLock<Mutex<HashMap<u32, bridge_ctypes::OwnedHostInvocation>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
-    if let Err(e) = dispatch_into_java(host_value_key, call_id, &bytes) {
-        eprintln!("bridge_java: host dispatch for key {host_value_key} call {call_id} failed: {e}");
-        // Never leave the engine awaiting: an empty-payload error decodes to a
-        // BridgeFailure engine-side (ffi/host_value.rs), the correct routing for
-        // a bridge-layer fault (we could not even reach the callable).
-        complete_host_call_bridge_failure(call_id);
+extern "C" fn host_dispatch_trampoline(request: *const u8, length: usize) {
+    if request.is_null() || length > isize::MAX as usize {
+        return;
+    }
+    // SAFETY: the runtime lends this envelope for the callback duration.
+    let bytes = unsafe { std::slice::from_raw_parts(request, length) };
+    let Ok(wire) = bridge_cffi::invocation_protocol::decode_host_invocation(bytes) else {
+        return;
+    };
+    let id = wire.callback_id;
+    let key = wire.host_value_key;
+    let args = wire.application_args.clone();
+    let Some(state) = HANDLE_TABLE.clone_handle(wire.effective_state) else {
+        drop(bridge_ctypes::OwnedHostInvocation(wire));
+        complete_host_call_bridge_failure(id);
+        return;
+    };
+    HOST_FRAMES
+        .lock()
+        .unwrap()
+        .insert(id, bridge_ctypes::OwnedHostInvocation(wire));
+    if let Err(error) = dispatch_into_java(key, id, &args, state) {
+        eprintln!("bridge_java: host dispatch failed: {error}");
+        HANDLE_TABLE.release(state);
+        complete_host_call_bridge_failure(id);
     }
 }
 
-fn dispatch_into_java(host_value_key: u64, call_id: u32, bytes: &[u8]) -> Result<(), String> {
+extern "C" fn host_cancel_trampoline(callback_id: u32) {
+    let _ = with_java_callback("host cancellation", |env, class| {
+        env.call_static_method(
+            class,
+            "hostCancel",
+            "(J)V",
+            &[JValue::Long(i64::from(callback_id))],
+        )
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+    });
+}
+
+fn dispatch_into_java(
+    host_value_key: u64,
+    call_id: u32,
+    bytes: &[u8],
+    state: u64,
+) -> Result<(), String> {
     with_java_callback("host dispatch", |env, class| {
         let payload = env
             .byte_array_from_slice(bytes)
@@ -530,6 +552,7 @@ fn dispatch_into_java(host_value_key: u64, call_id: u32, bytes: &[u8]) -> Result
                 JValue::Long(host_value_key as jlong),
                 JValue::Long(u64::from(call_id) as jlong),
                 JValue::from(&payload),
+                JValue::Long(state as jlong),
             ],
         )
         .map(|_| ())
@@ -565,6 +588,7 @@ fn release_into_java(host_value_key: u64) -> Result<(), String> {
 /// a bridge-layer fault (missing callable, unreachable JVM).
 fn complete_host_call_bridge_failure(call_id: u32) {
     bridge_cffi::complete_host_call(call_id, 1, std::ptr::null(), 0);
+    HOST_FRAMES.lock().unwrap().remove(&call_id);
 }
 
 /// `baml_bridge.BamlFfi.nativeCompleteHostCall(long callId, boolean isError, byte[] content)`.
@@ -598,6 +622,31 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCompleteHostCall<'local>(
         bytes.as_ptr() as *const i8,
         bytes.len(),
     );
+    HOST_FRAMES.lock().unwrap().remove(&(call_id as u32));
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeReleaseCallId(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    call_id: jlong,
+) -> jboolean {
+    jboolean::from(bridge_cffi::release_function_call_by_id(call_id as u64))
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInvocationClockNs(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    call_id: jlong,
+) -> jlong {
+    match bridge_cffi::invocation_clock_by_id(call_id as u64) {
+        Ok(now) => now as jlong,
+        Err(error) => {
+            throw_runtime_exception(&mut env, &error.to_string());
+            0
+        }
+    }
 }
 
 // ===========================================================================

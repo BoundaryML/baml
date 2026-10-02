@@ -136,6 +136,9 @@ export declare class BamlVideo {
 
 export declare function _discardHostCallArgs(args: Buffer): void
 
+/** Close execution ownership only when the callback/Promise actually exits. */
+export declare function _finishHostCallExecution(execution: object): void
+
 /** Private adapter lookup; the C ABI and dispatch payload stay unchanged. */
 export declare function _getHostCallOrigin(callId: number): string | null
 
@@ -146,11 +149,16 @@ export declare function _getHostCallOrigin(callId: number): string | null
  */
 export declare function _handleRefcount(key: HandleKey): number | null
 
+export declare function _hostInvocationFrame(execution: object): BamlHandle
+
 /**
  * Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap
  * row counts once however many owners it has).
  */
 export declare function _liveHandleCount(): number
+
+/** Release one owned wire reference that never reached a host wrapper. */
+export declare function _releaseWireHandle(key: HandleKey): void
 
 /**
  * Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
@@ -167,6 +175,9 @@ export declare function _seedGenericMediaHandle(): [HandleKey, number]
  * Two seeds of one `slabKey` share a key.
  */
 export declare function _seedHeapHandle(slabKey: number): [HandleKey, number]
+
+/** Claim actual JS execution atomically against waiter retirement. */
+export declare function _startHostCallExecution(execution: object): string | null
 
 export declare function cancelFunctionCall(callId: string): boolean
 
@@ -215,6 +226,8 @@ export interface HandleKey {
   high: number
 }
 
+export declare function invocationClockNs(callId: string): string
+
 /**
  * Mint a fresh host-value key, drawing from the shared callable+opaque
  * counter so the engine sees one globally-unique keyspace. Returned to
@@ -241,7 +254,7 @@ export declare function newFunctionCall(): string
  * the napi call scope and be invoked from any thread (the engine's tokio
  * runtime calls into this entry point from a worker thread).
  */
-export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer) => void): HandleKey
+export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer, execution: object) => void): HandleKey
 
 /**
  * Install the TS-side release callback. First-call-wins; subsequent
@@ -272,6 +285,8 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
 export declare function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void
 
 export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
+
+export declare function releaseFunctionCall(callId: string): boolean
 
 /**
  * Release a host callable the inbound encoder registered but never handed to

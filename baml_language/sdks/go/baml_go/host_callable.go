@@ -1,6 +1,7 @@
 package baml_go
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -19,6 +20,16 @@ import (
 type HostCallArguments struct {
 	required []Value
 	optional map[string]Value
+	frame    *hostInvocationFrame
+}
+
+// Context carries the callback's inherited invocation state and cancellation.
+// Pass it to BAML re-entry or derive a child context to preserve those controls.
+func (arguments HostCallArguments) Context() context.Context {
+	if arguments.frame != nil {
+		return arguments.frame.ctx
+	}
+	return context.Background()
 }
 
 // RequiredCount returns the number of required positional arguments.
@@ -147,7 +158,17 @@ func hostValueInput(key uint64, kind cffi.BamlHandleType) *cffi.InboundValue {
 	}}}
 }
 
-func dispatchHostCall(key uint64, callID uint32, payload []byte) {
+func dispatchHostCall(key uint64, callID uint32, payload []byte, frames ...*hostInvocationFrame) {
+	var frame *hostInvocationFrame
+	if len(frames) != 0 {
+		frame = frames[0]
+	}
+	handedToAdapter := false
+	defer func() {
+		if !handedToAdapter && frame != nil {
+			frame.finish()
+		}
+	}()
 	var call cffi.BamlToHostCall
 	if err := proto.Unmarshal(payload, &call); err != nil {
 		releaseResultOwner(ownHostCallOutboundHandles(&call))
@@ -158,7 +179,6 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte) {
 	// callable or validating argument metadata. Rejected unknown/malformed
 	// dispatches must release their handles just as successful adapters do.
 	owner := ownHostCallOutboundHandles(&call)
-	handedToAdapter := false
 	defer func() {
 		if !handedToAdapter {
 			releaseResultOwner(owner)
@@ -205,7 +225,7 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte) {
 	}
 
 	handedToAdapter = true
-	go runHostCall(callID, callable, HostCallArguments{required: required, optional: optional}, owner)
+	go runHostCall(callID, callable, HostCallArguments{required: required, optional: optional, frame: frame}, owner)
 }
 
 func ownHostCallOutboundHandles(call *cffi.BamlToHostCall) *resultOwner {
@@ -222,6 +242,9 @@ func ownHostCallOutboundHandles(call *cffi.BamlToHostCall) *resultOwner {
 
 func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArguments, owner *resultOwner) {
 	finished := false
+	if arguments.frame != nil {
+		defer arguments.frame.finish()
+	}
 	defer releaseResultOwner(owner)
 	defer func() {
 		if finished {
@@ -239,6 +262,11 @@ func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArg
 		// remain suspended forever.
 		completeHostCallFailure(callID, errors.New("Go host callable exited without returning"), string(debug.Stack()))
 	}()
+	if err := arguments.Context().Err(); err != nil {
+		completeHostCallFailure(callID, err, "")
+		finished = true
+		return
+	}
 	result, err := callable(arguments)
 	// Generated adapters have finished decoding every argument, cloning any
 	// media handle that escapes into a typed Go value. Release the original
@@ -327,4 +355,49 @@ func completeHostCallInput(callID uint32, isError bool, input Input) {
 	completeNativeHostCall(callID, isError, payload)
 	transaction.commitHostValues()
 	transaction.rollback()
+}
+
+type invocationStateContextKey struct{}
+type invocationStateCarrier struct {
+	state uint64
+	owner *resultOwner
+}
+type hostInvocationFrame struct {
+	ctx    context.Context
+	finish func()
+}
+
+var hostInvocationCancellations sync.Map
+
+func dispatchHostInvocation(payload []byte) {
+	var envelope cffi.HostInvocation
+	if err := proto.Unmarshal(payload, &envelope); err != nil {
+		releaseResultOwner(ownOutboundHandles(envelope.Cancel))
+		if envelope.EffectiveState != 0 {
+			releaseOutboundHandle(envelope.EffectiveState)
+		}
+		if envelope.CallbackId != 0 {
+			completeNativeHostCall(envelope.CallbackId, true, nil)
+		}
+		return
+	}
+	carrier := &invocationStateCarrier{state: envelope.EffectiveState,
+		owner: ownOutboundHandleKeys(map[uint64]struct{}{envelope.EffectiveState: {}})}
+	cancelOwner := ownOutboundHandles(envelope.Cancel)
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), invocationStateContextKey{}, carrier))
+	hostInvocationCancellations.Store(envelope.CallbackId, cancel)
+	var once sync.Once
+	frame := &hostInvocationFrame{ctx: ctx, finish: func() {
+		once.Do(func() {
+			hostInvocationCancellations.Delete(envelope.CallbackId)
+			releaseResultOwner(cancelOwner)
+		})
+	}}
+	dispatchHostCall(envelope.HostValueKey, envelope.CallbackId, envelope.ApplicationArgs, frame)
+}
+
+func cancelHostInvocation(id uint32) {
+	if cancel, ok := hostInvocationCancellations.Load(id); ok {
+		cancel.(context.CancelFunc)()
+	}
 }

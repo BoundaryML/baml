@@ -8,7 +8,10 @@
 // for the codec layer. Copies are deliberate and visible (contract:
 // coarse-grained boundary, measurable copies).
 
+#include <baml/detail/loader.h>
+
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include "baml_bridge/cffi/v1/baml_inbound.pb.h"
@@ -19,6 +22,41 @@ namespace baml {
 namespace detail {
 
 namespace pb = ::baml_bridge::cffi::v1;
+
+// Explicitly owned callback state can be carried to another thread by SDK
+// bindings.
+struct invocation_state {
+  uint64_t key;
+  explicit invocation_state(uint64_t key) : key(key) {}
+  ~invocation_state() { api().handle_release(key); }
+};
+inline thread_local std::shared_ptr<invocation_state> current_invocation_state;
+
+inline void release_control_value(const pb::BamlOutboundValue& value) {
+  switch (value.value_case()) {
+    case pb::BamlOutboundValue::kHandleValue:
+      if (value.handle_value().handle_type() != pb::HOST_VALUE_CALLABLE &&
+          value.handle_value().handle_type() != pb::HOST_VALUE_OPAQUE)
+        api().handle_release(value.handle_value().key());
+      break;
+    case pb::BamlOutboundValue::kListValue:
+      for (const auto& v : value.list_value().items()) release_control_value(v);
+      break;
+    case pb::BamlOutboundValue::kMapValue:
+      for (const auto& v : value.map_value().entries())
+        release_control_value(v.value());
+      break;
+    case pb::BamlOutboundValue::kClassValue:
+      for (const auto& v : value.class_value().fields())
+        release_control_value(v.value());
+      break;
+    case pb::BamlOutboundValue::kUnionVariantValue:
+      release_control_value(value.union_variant_value().value());
+      break;
+    default:
+      break;
+  }
+}
 
 // Human-readable arm name for decode diagnostics.
 inline const char* arm_name(pb::BamlOutboundValue::ValueCase c) {
@@ -91,12 +129,18 @@ class args_encoder {
 
   std::string finish(uint64_t call_id, const std::string& function_name) {
     args_.set_call_id(call_id);
+    args_.mutable_invocation()->set_inherited_state(
+        current_invocation_state ? current_invocation_state->key : 0);
+    args_.mutable_invocation()->set_host_environment(call_id);
     args_.set_function_name(function_name);
     return args_.SerializeAsString();
   }
 
   std::string finish(uint64_t call_id, uint64_t function_handle) {
     args_.set_call_id(call_id);
+    args_.mutable_invocation()->set_inherited_state(
+        current_invocation_state ? current_invocation_state->key : 0);
+    args_.mutable_invocation()->set_host_environment(call_id);
     args_.set_function_handle(function_handle);
     return args_.SerializeAsString();
   }

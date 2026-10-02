@@ -2,11 +2,12 @@
 #define BRIDGE_GO_H
 
 #include <dlfcn.h>
+#include "../../../../crates/bridge_cffi/include/baml_cffi.h"
 #include <stdint.h>
 #include <stdlib.h>
 
 // Function pointer types
-typedef struct { const int8_t *ptr; size_t len; } Buffer;
+typedef BamlBuffer Buffer;
 typedef Buffer (*VersionFn)(void);
 typedef void* (*CreateBamlRuntimeFn)(const char *root_path, const char *src_files_json);
 typedef void (*DestroyBamlRuntimeFn)(const void *runtime);
@@ -14,11 +15,11 @@ typedef void (*FreeBufferFn)(Buffer buf);
 typedef void (*CallFunctionFn)(const uint8_t *encoded_args, size_t length, uint32_t id);
 typedef void (*CallbackFn)(uint32_t call_id, const int8_t *content, size_t length);
 typedef void (*RegisterCallbackFn)(CallbackFn cb);
-typedef uint32_t BamlCffiStatus;
+
 typedef BamlCffiStatus (*BamlHandleCloneFn)(uint64_t key, uint64_t *out_key);
 typedef BamlCffiStatus (*BamlHandleReleaseFn)(uint64_t key);
 typedef BamlCffiStatus (*TestonlySeedFunctionRefFn)(uint64_t global_index, uint64_t *out_key, int32_t *out_handle_type);
-typedef int32_t (*CancelFunctionCallFn)(uint32_t id);
+typedef int32_t (*CancelFunctionCallFn)(uint64_t id);
 // Host-value callable support
 typedef void (*HostDispatchFn)(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length);
 typedef void (*HostReleaseFn)(uint64_t host_value_key);
@@ -94,7 +95,7 @@ static BamlCffiStatus wrapTestonlySeedFunctionRef(uint64_t global_index, uint64_
     if (testonlySeedFunctionRefFnPtr) return ((TestonlySeedFunctionRefFn)testonlySeedFunctionRefFnPtr)(global_index, out_key, out_handle_type);
     return 4;
 }
-static int32_t wrapCancelFunctionCall(uint32_t id) {
+static int32_t wrapCancelFunctionCall(uint64_t id) {
     if (cancelFunctionCallFnPtr) return ((CancelFunctionCallFn)cancelFunctionCallFnPtr)(id);
     return 1;
 }
@@ -112,4 +113,21 @@ static void wrapCompleteHostCall(uint32_t call_id, int32_t is_error, const int8_
         ((CompleteHostCallFn)completeHostCallFnPtr)(call_id, is_error, content, length);
 }
 
+
+typedef uint64_t (*NewFunctionCallFn)(void);
+typedef int32_t (*ReleaseFunctionCallFn)(uint64_t);
+typedef BamlCffiStatus (*InvocationClockNsFn)(uint64_t, uint64_t*);
+static void *newFunctionCallFnPtr, *releaseFunctionCallFnPtr, *invocationClockNsFnPtr;
+static void *registerHostDispatchV2FnPtr, *registerHostCancelCallbackFnPtr;
+static void setNewFunctionCallFn(void *fn) { newFunctionCallFnPtr = fn; }
+static void setReleaseFunctionCallFn(void *fn) { releaseFunctionCallFnPtr = fn; }
+static void setInvocationClockNsFn(void *fn) { invocationClockNsFnPtr = fn; }
+static void setRegisterHostDispatchV2Fn(void *fn) { registerHostDispatchV2FnPtr = fn; }
+static void setRegisterHostCancelCallbackFn(void *fn) { registerHostCancelCallbackFnPtr = fn; }
+static uint64_t wrapNewFunctionCall(void) { return ((NewFunctionCallFn)newFunctionCallFnPtr)(); }
+static int32_t wrapReleaseFunctionCall(uint64_t id) { return ((ReleaseFunctionCallFn)releaseFunctionCallFnPtr)(id); }
+static BamlCffiStatus wrapInvocationClockNs(uint64_t id, uint64_t *out) { return ((InvocationClockNsFn)invocationClockNsFnPtr)(id, out); }
+static void wrapRegisterHostDispatchV2(BamlHostDispatchV2 cb) { ((BamlRegisterHostDispatchV2Fn)registerHostDispatchV2FnPtr)(cb); }
+static void wrapRegisterHostCancelCallback(BamlHostCancel cb) { ((BamlRegisterHostCancelCallbackFn)registerHostCancelCallbackFnPtr)(cb); }
+static int validateInvocationApi(void *get) { return baml_api_v1_is_compatible(((BamlGetApiV1Fn)get)()); }
 #endif // BRIDGE_GO_H
