@@ -3,13 +3,27 @@
 //! This crate provides the same API surface as `bridge_python`
 //! but powered by napi-rs instead of PyO3.
 
-mod baml_call_context;
 mod errors;
 pub mod handle;
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "napi-rs registration wrappers are disabled in Rust unit-test builds"
+    )
+)]
+mod host_instrumentation;
 pub mod host_value;
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "napi-rs registration wrappers are disabled in Rust unit-test builds"
+    )
+)]
+mod invocation;
 pub mod media;
 pub mod runtime;
-mod types;
 pub mod unhandled_spawn;
 mod version;
 
@@ -30,7 +44,7 @@ fn init() {
     // Node host-value registry. First-call-wins inside bridge_cffi, so
     // repeated module loads (rare under napi-rs, which loads each addon
     // once per Node process) are harmless.
-    bridge_cffi::register_host_dispatch_callback(host_value::host_dispatch_callback);
+    bridge_cffi::register_host_dispatch_v2(host_value::host_dispatch_callback);
     bridge_cffi::register_host_release_callback(host_value::host_release_callback);
 }
 
@@ -48,10 +62,6 @@ pub fn get_toolchain_version() -> &'static str {
 pub fn get_bridge_runtime_version() -> &'static str {
     version::BRIDGE_RUNTIME_VERSION
 }
-
-/// No-op: tracing has been removed. Kept as a live symbol for ABI stability.
-#[napi]
-pub fn flush_events() {}
 
 #[napi(js_name = "shutdownRuntime")]
 pub async fn shutdown_runtime() -> napi::Result<()> {
@@ -74,4 +84,22 @@ pub fn cancel_function_call(call_id: String) -> napi::Result<bool> {
         )
     })?;
     Ok(bridge_cffi::cancel_function_call_by_id(id))
+}
+
+#[napi(js_name = "releaseFunctionCall")]
+pub fn release_function_call(call_id: String) -> napi::Result<bool> {
+    let id = call_id
+        .parse::<u64>()
+        .map_err(|_| napi::Error::from_reason("invalid call ID"))?;
+    Ok(bridge_cffi::release_function_call_by_id(id))
+}
+
+#[napi(js_name = "invocationClockNs")]
+pub fn invocation_clock_ns(call_id: String) -> napi::Result<String> {
+    let id = call_id
+        .parse::<u64>()
+        .map_err(|_| napi::Error::from_reason("invalid call ID"))?;
+    bridge_cffi::invocation_clock_by_id(id)
+        .map(|value| value.to_string())
+        .map_err(errors::bridge_error_to_napi)
 }

@@ -30,6 +30,8 @@ bex_events = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true }
 bridge_ctypes = { workspace = true }
+btel_snapshot = { workspace = true }
+btel_types = { workspace = true }
 sys_native = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }

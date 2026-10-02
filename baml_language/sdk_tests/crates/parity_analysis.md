@@ -2,26 +2,25 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 700. IDs with complete required parity: 72. Required gaps: 4343.
+Distinct exact test IDs: 887. IDs with complete required parity: 167. Required gaps: 4949.
 
-Baseline ratchet: WORSE. Required gaps: 4343 (baseline: 4457). Present declarations: 2058 (baseline: 2069). Newly missing required pairs: 29. Resolved baseline gaps: 143. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 312 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 430 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 312 / 312 | 100.0% |
-| typescript_node | 120 / 312 | 38.5% |
-| typescript_web_chromium | 113 / 312 | 36.2% |
-| typescript_web_cloudflare_workers | 113 / 312 | 36.2% |
-| cpp | 128 / 312 | 41.0% |
-| csharp | 0 / 312 | 0.0% |
-| rust | 216 / 312 | 69.2% |
-| go | 13 / 312 | 4.2% |
-| java | 288 / 312 | 92.3% |
-| swift | 181 / 312 | 58.0% |
+| python_pydantic2 | 430 / 430 | 100.0% |
+| typescript_node | 184 / 430 | 42.8% |
+| typescript_web_chromium | 160 / 430 | 37.2% |
+| typescript_web_cloudflare_workers | 160 / 430 | 37.2% |
+| cpp | 130 / 430 | 30.2% |
+| csharp | 0 / 430 | 0.0% |
+| rust | 229 / 430 | 53.3% |
+| go | 13 / 430 | 3.0% |
+| java | 299 / 430 | 69.5% |
+| swift | 184 / 430 | 42.8% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -42,6 +41,16 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | docstrings_etc/main_undocumented_field_listed_as_bare_name_under_attributes | y | - | - | - | y | - | y | - | y | - | all |  |
 | docstrings_etc/no_inline_field_or_variant_doc_artifacts | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/undocumented_field_has_no_doc_artifact | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/ambient_context_survives_await_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
+| function_calls/async_callback_can_use_originating_loop_resources_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/async_callback_can_use_originating_loop_resources_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/async_callback_inherits_application_context_across_suspension_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/async_callback_preserves_ambient_frame_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
+| function_calls/async_callback_reenters_async_baml_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python loop/ContextVar and Node AsyncLocalStorage assertions |
+| function_calls/async_callback_reenters_sync_baml_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | sync callback re-entry differs between Python and Node |
+| function_calls/async_entry_sync_callback_inherits_application_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/async_host_runs_in_calling_task_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python asyncio task and event-loop identity |
+| function_calls/async_reentry_preserves_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/baml_closure_decodes_multiple_args_and_structured_return_values | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
 | function_calls/baml_closure_is_a_native_callable_with_host_language_arguments | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
 | function_calls/baml_closure_is_reusable_and_retains_mutable_captures | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
@@ -54,10 +63,30 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/baml_time_nullable_and_defaulted_positions | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/baml_time_raw_class_transport_does_not_enforce_semantic_invariants | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/baml_trace_is_embedded_in_go_error_string | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/boolean_timeout_rejected_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
+| function_calls/callable_entry_invokes_callback | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callable_entry_waits_for_callback_completion | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callback_bound_method_adoption_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python bound method identity via its exact SDK function |
+| function_calls/callback_captures_internal_baml_context | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callback_frame_and_reentry | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callback_frame_is_installed_and_restored | - | - | - | - | - | - | y | - | - | - | all |  |
+| function_calls/callback_marker_adopts_once_during_recursion | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_adopts_sync_body | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_concurrent_reuse_and_later_direct_call | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_context_precedence | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_defaults_override_inherited_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_only_outer_wrapper_adopts | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_sync_entry_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python synchronous BAML entry and inline callback dispatch |
+| function_calls/callback_reenters_baml | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callback_reuse_across_event_loop_turns_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/callback_reuse_after_previous_application_loop_is_closed_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/callback_suppresses_task_cancellation_and_returns_late_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback suppression of cancellation and late results |
+| function_calls/callback_task_cancelled_before_first_execution_completes_call_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python task factory cancellation before callback execution |
+| function_calls/callback_third_party_wrapper_is_not_adopted | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/callback_throws_caught_and_replaced_makes_the_function_infallible | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific inferred callback error unions |
 | function_calls/callback_throws_caught_then_rethrown_value_is_the_replacement_union | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific inferred callback error unions |
 | function_calls/callback_throws_rethrown_carries_the_effect_param_into_the_error_union | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific inferred callback error unions |
-| function_calls/cancellation_accepts_the_native_decimal_uint64_boundary_spellings | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/cancel_controls_with_cancelled_context_go_only | - | - | - | - | - | - | - | y | - | - | go | Go cancellation controls remain usable with a canceled context |
 | function_calls/cancellation_async_call_returns_none | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/cancellation_async_cancel_skips_later_step | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | drives Python asyncio cancellation (task.cancel / wait_for) |
 | function_calls/cancellation_async_cancel_via_asyncio_timeout | y | - | - | - | - | - | y | - | y | - | all |  |
@@ -76,28 +105,62 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/cancellation_future_wait_then_get | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/cancellation_immediately_cancels_every_call_attached_after_abort | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_pre_aborts_a_generated_synchronous_call | - | y | y | y | - | - | - | - | - | - | all |  |
-| function_calls/cancellation_rejects_malformed_and_overflowing_ids | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_surfaces_a_reused_call_context_as_abort_error_with_baml_reason | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_surfaces_async_cancellation_as_abort_error_with_baml_reason | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_surfaces_cancellation_through_promise_all | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_surfaces_sync_pre_aborted_cancellation_as_abort_error | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_sync_call_returns_none | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/cancellation_sync_cancel_via_call_context | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/cancelled_waiter_does_not_end_host_execution | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/cancelled_waiter_keeps_host_context_through_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python task unwinding and ContextVar semantics |
+| function_calls/cancelled_waiter_keeps_host_resource_until_promise_exit_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node AsyncResource destruction and AsyncLocalStorage |
+| function_calls/cancelled_waiter_preserves_callback_context | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/cancelled_waiter_stays_cancelled_when_callback_returns_late | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/cancelling_call_delivers_cancellation_and_allows_callback_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
 | function_calls/canonical_json_class_union_uses_declared_field_codecs | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/canonical_json_composes_through_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/canonical_json_defaults_and_callbacks | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/canonical_json_dynamic_union | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/canonical_json_rejects_extensions_before_dispatch | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/canonical_json_round_trips_at_top_level_and_through_alias | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/child_cancellation_does_not_cancel_input | y | y | y | y | - | - | y | - | - | - | all |  |
 | function_calls/clean_exit_helper_process | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/clean_exit_terminates_process_with_code | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/closure_call_async_can_be_reused_after_creation_loop_closes_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python returned closure reuse across application loops |
+| function_calls/closure_call_async_cancels_its_retained_callback_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python closure async entry cancellation delivery |
+| function_calls/closure_call_async_preserves_binding_and_exception_identity_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python closure async entry argument and error semantics |
+| function_calls/closure_call_async_uses_invoking_loop_and_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python explicit async closure entry and context capture |
 | function_calls/coawait_co_await_cancelled_call_throws_cancelled | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/coawait_co_await_completed_future_fast_path | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/coawait_co_await_pending_future_resumes | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/coawait_co_await_throws_typed_into_the_coroutine | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/coawait_co_await_yields_the_decoded_value | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/coawait_uncaught_coroutine_exception_reaches_join | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/completed_call_can_reuse_callback | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/completed_call_does_not_pin_reused_callback_to_old_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/composite_token_observes_every_source | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/concurrent_calls_isolate_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/concurrent_calls_keep_callback_results_independent | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/concurrent_calls_share_callback_without_sharing_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/concurrent_host_invocations_isolate_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/concurrent_invocations_isolate_context | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/concurrent_reservation_attaches_once | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/configuration_snapshot_is_not_live | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/cooperative_abort_allows_callback_cleanup_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/cooperative_abort_cleans_up_retained_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/coroutine_entry_uses_execution_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python coroutine creation versus first execution |
+| function_calls/current_context_returns_detached_snapshot | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/deadline_reentry_does_not_reset_budget | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/dropping_started_future_cancels_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
+| function_calls/dynamic_application_map_preserves_control_like_keys | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/dynamic_call_accepts_controls | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/dynamic_call_async_accepts_controls | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/dynamic_name_and_handle_accept_controls | - | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/dynamic_name_and_handle_accept_controls_async | - | - | - | - | - | - | y | - | - | - | all |  |
+| function_calls/dynamic_type_bindings_async_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python dynamic type bindings accept Python classes and reflected BamlType handles |
 | function_calls/empty_class_self_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/empty_controls | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/encoding_time_counts_against_deadline_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
 | function_calls/error_call_cancellation_preserves_context_identity | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/error_string_is_non_empty | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/errors_async_sibling_throws_typed | - | - | - | - | y | - | - | - | - | - | all |  |
@@ -115,6 +178,11 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/errors_union_throws_preserves_class_name | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/errors_user_panic_surfaces_as_baml_panic | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/errors_user_throw_surfaces_declared_instance | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/explicit_controls_are_applied | - | - | - | - | - | - | - | - | - | y | all |  |
+| function_calls/explicit_controls_are_applied_async | - | - | - | - | - | - | - | - | - | y | all |  |
+| function_calls/failed_admission_does_not_consume_reservation | - | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/four_call_forms | y | y | y | y | - | - | y | - | y | y | all |  |
+| function_calls/four_call_forms_async | y | y | y | y | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_choose_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_consume_int_wrapper_baseline | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_extract_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
@@ -220,6 +288,8 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/go_codegen_optional_arg_last_value_wins | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_person_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/hello_world_returns_literal | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/hidden_mode_does_not_inherit | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/host_baml_cancellation_remains_live_after_exit | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_callable_cancellation_while_dispatched | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_class_argument | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_closed_union_containers_and_nominal_arms | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -267,9 +337,12 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_preserves_a_rejected_promise_reason_by_identity | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_preserves_an_error_whose_stack_is_not_a_string | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_preserves_arbitrary_thrown_js_values_without_hanging | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/host_callables_preserves_number_kind_for_float_bigint_union | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises JavaScript's distinct number and bigint host representations |
 | function_calls/host_callables_preserves_same_realm_thrown_object_identity | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_rejects_callable_args_on_the_generated_sync_path_instead_of_hanging | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_release_fires_on_drop_of_callable | y | y | y | y | - | - | y | - | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, rust, java | callable release coverage depends on host weak-reference support and remains nondeterministic |
+| function_calls/host_callables_resolves_integral_number_for_float_class_field | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises the Node bridge's JavaScript number encoding in generated classes |
+| function_calls/host_callables_resolves_integral_number_for_float_return | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises the Node bridge's JavaScript number encoding for float host returns |
 | function_calls/host_callables_returns_and_invokes_a_host_callable_nested_in_a_list | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_returns_and_invokes_a_nested_host_callable | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_round_trips_a_typed_baml_error_through_typed_catch_and_propagation | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -290,15 +363,52 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_throwing_callable_round_trips_original_host_exception | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | all |  |
+| function_calls/host_callback_cleanup_retains_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_callback_reentry_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_cancellation_waits_for_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python task cancellation and asynchronous finally cleanup |
+| function_calls/host_capture_avoids_getters_and_proxies_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS getters, Proxy traps, and custom thenables |
+| function_calls/host_capture_preserves_application_values | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_child_outlives_parent | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_context_inherits_and_restores | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_current_exposes_generated_cancel_token | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_errors_preserve_identity_and_restore_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_preserves_call_shape_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS receivers, variadic arguments, and native Promise results |
+| function_calls/host_rejects_unsupported_configuration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers unsupported Python generator/decorator shapes |
+| function_calls/host_rejects_unsupported_configuration_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS generator and marker configuration rejection |
 | function_calls/host_supplied_json_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
+| function_calls/host_thread_context_handoff_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python ContextVar handoff to a thread pool |
 | function_calls/instance_method_cancellation_returns_exact_context_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_media_receiver_default_and_ownership_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_optional_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_throw_preserves_current_go_error_contract | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_methods_on_classes_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_never_method_has_error_only_signature_and_returns_panic | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/instrument_decorator_forms_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python decorator forms |
+| function_calls/instrument_preserves_sync_execution_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python signatures and positional argument binding |
+| function_calls/invalid_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/invalid_function_arguments_surface_baml_error | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/invalid_timeout_rejected | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/invocation_inheritance | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/invocation_inheritance_multi_layer_context_patch_inherits_and_restores | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_lifecycle | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/invocation_lifecycle_failed_admission_does_not_consume_reservation | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_lifecycle_pre_cancelled_call_does_not_enter_callback | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_lifecycle_reservation_is_single_use | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_lifecycle_retained_effective_token_observes_late_parent_cancellation | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_lifecycle_zero_timeout_does_not_enter_callback | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_options | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/invocation_options_four_call_forms | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_options_four_call_forms_async | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_options_invalid_timeout_rejected | - | - | - | - | y | - | - | - | - | - | all |  |
+| function_calls/invocation_surfaces | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/invocation_surfaces_returned_callable_accepts_controls | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/json_returned_from_host_callback_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
+| function_calls/late_callback_keeps_async_local_storage_after_abort_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node callback Promises can outlive an aborted SDK waiter |
+| function_calls/layered_callback_context_inheritance_and_restoration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python sync/async re-entry and ContextVar propagation |
+| function_calls/layered_callback_context_inheritance_and_restoration_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
+| function_calls/layered_callback_context_restores_after_returned_callable | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/legacy_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/live_token_cancels_after_admission | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_hello_world_returns_literal | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/main_returns_the_literal_async | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_returns_the_literal_sync | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -307,6 +417,8 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/main_single_required_arg_round_trips | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/method_generated_name_collisions_stay_callable | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/method_self_all_supported_positions_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/methods_accept_controls | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/methods_accept_controls_async | y | y | y | y | - | - | y | - | - | - | all |  |
 | function_calls/methods_on_classes_create_constructs_a_greeter_async_plus_sync | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/methods_on_classes_exposes_sync_plus_async_bindings_for_both_flavors | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/methods_on_classes_greet_arg_echoes_a_non_self_argument_async_plus_sync | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -318,7 +430,12 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/methods_on_classes_static_create_async_round_trips | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/methods_on_classes_static_create_round_trips | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/methods_on_classes_who_returns_a_field_off_self_async_plus_sync | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/multi_layer_context_patch_inherits_and_restores | - | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/native_closure_can_cross_sync_and_async_entries_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node sync calls support native closures whose captures need no host dispatch |
+| function_calls/native_signal_cancels_without_cancelling_input_token_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
 | function_calls/nil_host_callable_fails_before_dispatch | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/null_controls_preserve_inherited_context | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/omitted_argument_is_not_null | y | y | y | y | - | - | y | - | y | y | all |  |
 | function_calls/optional_args_async_samples | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/optional_args_covers_static_and_instance_optional_args | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/optional_args_covers_the_runtime_matrix | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -329,7 +446,15 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/optional_args_runtime_matrix | y | - | - | - | y | - | y | y | y | y | all |  |
 | function_calls/optional_args_treats_undefined_as_omitted_and_keeps_null_distinct | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/optional_args_unset_and_null_differ_in_one_call | - | - | - | - | y | - | - | - | - | y | all |  |
+| function_calls/options_snapshot_at_async_entry_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
+| function_calls/options_snapshot_when_coroutine_starts_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
 | function_calls/parse_json_successful_value_uses_generated_json_projection | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/pre_aborted_call_does_not_dispatch_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/pre_aborted_native_signal_does_not_enter_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
+| function_calls/pre_cancelled_call_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/promise_all_failure_with_explicit_sibling_abort_preserves_error_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/promise_callback_preserves_async_local_storage_across_suspension_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/promise_callback_sync_reentry_rejects_host_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/raises_async_sibling_also_has_raises | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_imports | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/raises_imports_symbols_reachable | y | - | - | - | y | - | - | - | y | - | all |  |
@@ -344,11 +469,33 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/reflected_type_composes_through_optional_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_primitive_literal_and_nominal_descriptors | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_top_level_and_runtime_produced_values | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/rejected_admission_does_not_consume_reservation | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/repeated_abort_does_not_interrupt_async_callback_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback cancellation under an explicit controller |
+| function_calls/repeated_cooperative_abort_does_not_interrupt_callback_cleanup_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/repeated_dispatches_each_start_with_entry_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/repeated_dispatches_each_start_with_entry_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python ContextVar isolation between dispatch tasks |
+| function_calls/repeated_dispatches_invoke_callback_in_order | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/reservation_does_not_inherit | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/reservation_is_single_use | - | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/retained_callback_uses_invocation_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/retained_context_survives_parent_completion | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/retained_effective_token_observes_late_parent_cancellation | - | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/retained_effective_token_stays_live_after_callback | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/retained_host_callback_uses_later_invocations_application_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
+| function_calls/retained_invocation_resolves_token_after_callback | y | - | - | - | - | - | - | - | - | - | all |  |
+| function_calls/returned_callable_accepts_controls | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/returned_callable_accepts_controls_async | - | - | - | - | - | - | y | - | - | - | all |  |
+| function_calls/returned_closure_preserves_callback_error_and_remains_reusable | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/returned_closure_retains_host_callback | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/reused_callback_uses_current_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/runtime_executes_the_generated_sdk_in_a_browser | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
 | function_calls/runtime_executes_the_generated_sdk_in_node | - | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/runtime_executes_the_generated_sdk_in_workerd | - | - | - | y | - | - | - | - | - | - | python_pydantic2, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/runtime_imports_the_generated_sdk_in_the_configured_runtime | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/same_callback_recurses_through_baml | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/same_callback_recurses_through_baml_without_reusing_an_entry_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | sync callback re-entry differs between Python and Node |
 | function_calls/single_required_arg_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/specialized_callable_rejects_type_bindings | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/static_method_errors_never_cancellation_and_collision_names | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/static_method_media_json_type_and_rust_type_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/static_method_required_default_and_structured_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -357,10 +504,46 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/stdlib_entrypoints_native_baml_sys_argv_is_callable_as_an_entry_point | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point | y | y | - | - | y | - | y | - | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/stdlib_error_surfaces_as_go_error | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/suspended_callback_survives_gc_until_cancellation_cleanup_finishes_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | asyncio tasks retain callback bodies until actual completion |
 | function_calls/sync_call_returns_null | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/sync_callback_can_run_async_baml_with_its_own_application_loop_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Node cannot synchronously drive an application loop |
+| function_calls/sync_callback_inherits_call_time_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_callback_inherits_call_time_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/sync_callback_of_async_entry_reenters_sync_baml_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | sync callback re-entry differs between Python and Node |
+| function_calls/sync_callback_of_async_entry_runs_on_originating_loop_thread_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/sync_callback_of_async_entry_runs_on_originating_loop_thread_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_callback_reenters_sync_baml_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | sync callback re-entry differs between Python and Node |
+| function_calls/sync_callback_runs_on_sync_callers_thread_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/sync_callback_sync_reentry_rejects_host_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/sync_cancel_via_context | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/sync_entry_async_callback_copies_context_across_suspension_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python ContextVar semantics with a bridge-owned loop |
+| function_calls/sync_entry_async_callback_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/sync_entry_cancellation_reaches_async_callback_on_worker_loop_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python cancellation on a bridge-owned callback loop |
+| function_calls/sync_entry_in_running_loop_with_self_contained_async_callback_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/sync_entry_in_running_loop_with_sync_callback_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/sync_entry_rejection_does_not_start_promise_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejection_preserves_application_context_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_before_dispatch_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_callback_before_async_reentry_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_callback_before_recursive_reentry_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_callback_before_sync_reentry_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_promise_callback_between_event_loop_turns_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_promise_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_retained_callback_and_allows_async_reuse_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node sync entries must reject callbacks hidden in native closure captures |
+| function_calls/sync_entry_rejects_sync_callback_between_event_loop_turns_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_rejects_sync_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/sync_entry_sync_callback_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/sync_retained_closure_rejects_before_dispatch_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node cannot run JS callbacks while a sync native call blocks its event loop |
+| function_calls/task_factory_failure_completes_dispatch_and_preserves_exception_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python asyncio task factory failures during dispatch |
+| function_calls/taskgroup_failure_cancels_sibling_baml_call_and_preserves_error_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
+| function_calls/timeout_upper_bound_accepted | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/to_thread_sync_entry_inherits_copied_application_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/two_application_loops_on_two_threads_share_callback_without_rerouting_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
 | function_calls/unhandled_spawn_error_uses_host_default | - | - | - | - | y | - | - | y | y | y | cpp, go, java, swift | requires subprocess-level SDK harness support |
 | function_calls/union_throws_preserves_concrete_class_identity | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/unknown_control_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/unmarked_callback_explicit_context_and_reentry | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/unpolled_future_starts_nothing_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
 | function_calls/unset_and_none_differ_in_one_call | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/user_panic_surfaces_as_go_error_without_panicking | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/user_throw_surfaces_declared_class_identity | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -372,6 +555,7 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | function_calls/web_sysops_supports_sync_and_async_baml_fs_read_through_node_fs_read_file_sync | - | - | - | y | - | - | - | - | - | - | python_pydantic2, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/web_sysops_trampolines_baml_http_fetch_to_global_fetch_and_buffers_the_response | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/web_sysops_trampolines_baml_http_send_with_method_headers_and_body | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
+| function_calls/zero_timeout_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | all |  |
 | host_reflect/compiled_package_returns_class_graph | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/generated_class_subclasses_resolve_to_declared_type | y | y | y | y | - | - | - | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | Python and TypeScript have generated-class subclass tokens; Go has no subclass construct |
 | host_reflect/host_handles_expose_composition_only | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
@@ -403,6 +587,8 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | llm_functions/dynamic_runtime_stream_is_an_elegant_async_iterable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's generated async-iterable stream surface |
 | llm_functions/flat_stream_calls_exact_companion_fqn | - | - | - | - | y | - | - | - | - | - | cpp | C++-only exact flat-stream companion dispatch check. |
 | llm_functions/flat_stream_controls_are_typed_options | - | - | - | - | - | - | - | y | - | - | go | pins the Go generator's typed option surface for flat stream controls. |
+| llm_functions/function_spec_helpers_accept_invocation_controls | y | - | - | - | - | - | - | - | - | - | all |  |
+| llm_functions/function_spec_helpers_accept_invocation_controls_async | y | - | - | - | - | - | - | - | - | - | all |  |
 | llm_functions/function_spec_parse_replaces_the_parse_companion | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's generated FunctionSpec parse surface |
 | llm_functions/function_spec_parse_returns_closed_enum | - | - | - | - | - | - | - | y | - | - | go | pins Go's closed-enum FunctionSpec decoder surface. |
 | llm_functions/function_spec_parse_returns_runtime_error_for_invalid_output | - | - | - | - | - | - | - | y | - | - | go | pins Go's FunctionSpec parse-error translation. |
@@ -592,13 +778,13 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | type_shapes/pick_sentiment | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/primitive_class_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/primitive_literal_union_constructors_round_trip_with_exact_kind_and_value | - | - | - | - | - | - | - | y | - | - | all |  |
-| type_shapes/primitives_return_bigint | y | - | - | - | - | - | - | - | y | - | all |  |
+| type_shapes/primitives_return_bigint | y | - | - | - | y | - | - | - | y | - | all |  |
 | type_shapes/primitives_return_bool | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_return_float | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_return_int | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_return_null | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_return_string | y | y | y | y | y | - | y | - | y | y | all |  |
-| type_shapes/primitives_round_trip_bigint | y | - | - | - | - | - | - | - | y | - | all |  |
+| type_shapes/primitives_round_trip_bigint | y | - | - | - | y | - | - | - | y | - | all |  |
 | type_shapes/primitives_round_trip_bool | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_float | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_float_accepts_int | y | - | - | - | y | - | y | - | y | - | all |  |
@@ -725,184 +911,3 @@ Parity is the share of the 312 test IDs declared in `python_pydantic2` that are 
 | type_shapes/unions_union_is_a_plain_std_variant | - | - | - | - | y | - | - | - | - | - | all |  |
 | type_shapes/void_no_op | y | y | y | y | y | - | y | - | y | y | all |  |
 | unsupported_only/compile_unsupported_only_package_compiles | - | - | - | - | - | - | - | y | - | - | all |  |
-
-## Baseline comparison
-
-### Newly missing required pairs
-
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `cpp`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `csharp`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `go`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `python_pydantic2`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `rust`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `swift`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `typescript_node`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `typescript_web_chromium`
-- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `typescript_web_cloudflare_workers`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `cpp`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `csharp`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `go`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `python_pydantic2`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `rust`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `swift`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `typescript_node`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `typescript_web_chromium`
-- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `typescript_web_cloudflare_workers`
-- `type_shapes/routing_round_trip_resume_or_http_response` in `cpp`
-- `type_shapes/routing_round_trip_resume_or_http_response` in `csharp`
-- `type_shapes/routing_round_trip_resume_or_http_response` in `go`
-- `type_shapes/routing_round_trip_resume_or_http_response` in `rust`
-- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `cpp`
-- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `csharp`
-- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `go`
-- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `java`
-- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `python_pydantic2`
-- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `rust`
-- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `swift`
-
-### Resolved baseline gaps
-
-- `llm_functions/main_extract_resume_companion_bindings` in `cpp`
-- `llm_functions/main_extract_resume_companion_bindings` in `csharp`
-- `llm_functions/main_extract_resume_companion_bindings` in `go`
-- `llm_functions/main_extract_resume_companion_bindings` in `swift`
-- `llm_functions/main_extract_resume_companion_bindings` in `typescript_node`
-- `llm_functions/main_extract_resume_companion_bindings` in `typescript_web_chromium`
-- `llm_functions/main_extract_resume_companion_bindings` in `typescript_web_cloudflare_workers`
-- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `cpp`
-- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `csharp`
-- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `go`
-- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `java`
-- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `python_pydantic2`
-- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `rust`
-- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `swift`
-- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `cpp`
-- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `csharp`
-- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `go`
-- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `java`
-- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `python_pydantic2`
-- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `rust`
-- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `swift`
-- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `cpp`
-- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `csharp`
-- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `go`
-- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `java`
-- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `python_pydantic2`
-- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `rust`
-- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `swift`
-- `llm_functions/main_stream_types_lorem_leaf_present` in `cpp`
-- `llm_functions/main_stream_types_lorem_leaf_present` in `csharp`
-- `llm_functions/main_stream_types_lorem_leaf_present` in `go`
-- `llm_functions/main_stream_types_lorem_leaf_present` in `swift`
-- `llm_functions/main_stream_types_lorem_leaf_present` in `typescript_node`
-- `llm_functions/main_stream_types_lorem_leaf_present` in `typescript_web_chromium`
-- `llm_functions/main_stream_types_lorem_leaf_present` in `typescript_web_cloudflare_workers`
-- `llm_functions/main_streaming_extract_companion_bindings` in `cpp`
-- `llm_functions/main_streaming_extract_companion_bindings` in `csharp`
-- `llm_functions/main_streaming_extract_companion_bindings` in `go`
-- `llm_functions/main_streaming_extract_companion_bindings` in `swift`
-- `llm_functions/main_streaming_extract_companion_bindings` in `typescript_node`
-- `llm_functions/main_streaming_extract_companion_bindings` in `typescript_web_chromium`
-- `llm_functions/main_streaming_extract_companion_bindings` in `typescript_web_cloudflare_workers`
-- `llm_functions/parse_companion_honors_cancellation` in `cpp`
-- `llm_functions/parse_companion_honors_cancellation` in `csharp`
-- `llm_functions/parse_companion_honors_cancellation` in `java`
-- `llm_functions/parse_companion_honors_cancellation` in `python_pydantic2`
-- `llm_functions/parse_companion_honors_cancellation` in `rust`
-- `llm_functions/parse_companion_honors_cancellation` in `swift`
-- `llm_functions/parse_companion_honors_cancellation` in `typescript_node`
-- `llm_functions/parse_companion_honors_cancellation` in `typescript_web_chromium`
-- `llm_functions/parse_companion_honors_cancellation` in `typescript_web_cloudflare_workers`
-- `llm_functions/parse_companion_returns_closed_enum` in `cpp`
-- `llm_functions/parse_companion_returns_closed_enum` in `csharp`
-- `llm_functions/parse_companion_returns_closed_enum` in `java`
-- `llm_functions/parse_companion_returns_closed_enum` in `python_pydantic2`
-- `llm_functions/parse_companion_returns_closed_enum` in `rust`
-- `llm_functions/parse_companion_returns_closed_enum` in `swift`
-- `llm_functions/parse_companion_returns_closed_enum` in `typescript_node`
-- `llm_functions/parse_companion_returns_closed_enum` in `typescript_web_chromium`
-- `llm_functions/parse_companion_returns_closed_enum` in `typescript_web_cloudflare_workers`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `cpp`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `csharp`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `java`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `python_pydantic2`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `rust`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `swift`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `typescript_node`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `typescript_web_chromium`
-- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `typescript_web_cloudflare_workers`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `cpp`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `csharp`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `java`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `python_pydantic2`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `rust`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `swift`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `typescript_node`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `typescript_web_chromium`
-- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `typescript_web_cloudflare_workers`
-- `type_shapes/round_trip_box_of_resume_stream` in `cpp`
-- `type_shapes/round_trip_box_of_resume_stream` in `csharp`
-- `type_shapes/round_trip_box_of_resume_stream` in `java`
-- `type_shapes/round_trip_box_of_resume_stream` in `python_pydantic2`
-- `type_shapes/round_trip_box_of_resume_stream` in `rust`
-- `type_shapes/round_trip_box_of_resume_stream` in `swift`
-- `type_shapes/round_trip_box_of_resume_stream` in `typescript_node`
-- `type_shapes/round_trip_box_of_resume_stream` in `typescript_web_chromium`
-- `type_shapes/round_trip_box_of_resume_stream` in `typescript_web_cloudflare_workers`
-- `type_shapes/round_trip_resume_or_resume_stream` in `cpp`
-- `type_shapes/round_trip_resume_or_resume_stream` in `csharp`
-- `type_shapes/round_trip_resume_or_resume_stream` in `java`
-- `type_shapes/round_trip_resume_or_resume_stream` in `python_pydantic2`
-- `type_shapes/round_trip_resume_or_resume_stream` in `rust`
-- `type_shapes/round_trip_resume_or_resume_stream` in `swift`
-- `type_shapes/round_trip_resume_or_resume_stream` in `typescript_node`
-- `type_shapes/round_trip_resume_or_resume_stream` in `typescript_web_chromium`
-- `type_shapes/round_trip_resume_or_resume_stream` in `typescript_web_cloudflare_workers`
-- `type_shapes/round_trip_resume_stream` in `cpp`
-- `type_shapes/round_trip_resume_stream` in `csharp`
-- `type_shapes/round_trip_resume_stream` in `java`
-- `type_shapes/round_trip_resume_stream` in `python_pydantic2`
-- `type_shapes/round_trip_resume_stream` in `rust`
-- `type_shapes/round_trip_resume_stream` in `swift`
-- `type_shapes/round_trip_resume_stream` in `typescript_node`
-- `type_shapes/round_trip_resume_stream` in `typescript_web_chromium`
-- `type_shapes/round_trip_resume_stream` in `typescript_web_cloudflare_workers`
-- `type_shapes/round_trip_root_foo_stream` in `cpp`
-- `type_shapes/round_trip_root_foo_stream` in `csharp`
-- `type_shapes/round_trip_root_foo_stream` in `java`
-- `type_shapes/round_trip_root_foo_stream` in `python_pydantic2`
-- `type_shapes/round_trip_root_foo_stream` in `rust`
-- `type_shapes/round_trip_root_foo_stream` in `swift`
-- `type_shapes/round_trip_root_foo_stream` in `typescript_node`
-- `type_shapes/round_trip_root_foo_stream` in `typescript_web_chromium`
-- `type_shapes/round_trip_root_foo_stream` in `typescript_web_cloudflare_workers`
-- `type_shapes/streams_round_trip_box_of_resume_stream` in `cpp`
-- `type_shapes/streams_round_trip_box_of_resume_stream` in `csharp`
-- `type_shapes/streams_round_trip_box_of_resume_stream` in `go`
-- `type_shapes/streams_round_trip_resume_or_http_response` in `cpp`
-- `type_shapes/streams_round_trip_resume_or_http_response` in `csharp`
-- `type_shapes/streams_round_trip_resume_or_http_response` in `go`
-- `type_shapes/streams_round_trip_resume_or_resume_stream` in `cpp`
-- `type_shapes/streams_round_trip_resume_or_resume_stream` in `csharp`
-- `type_shapes/streams_round_trip_resume_or_resume_stream` in `go`
-- `type_shapes/streams_round_trip_resume_stream` in `cpp`
-- `type_shapes/streams_round_trip_resume_stream` in `csharp`
-- `type_shapes/streams_round_trip_resume_stream` in `go`
-- `type_shapes/streams_round_trip_root_foo_stream` in `cpp`
-- `type_shapes/streams_round_trip_root_foo_stream` in `csharp`
-- `type_shapes/streams_round_trip_root_foo_stream` in `go`
-- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `cpp`
-- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `csharp`
-- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `go`
-- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `java`
-- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `python_pydantic2`
-- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `rust`
-- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `swift`
-- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `cpp`
-- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `csharp`
-- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `go`
-- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `java`
-- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `python_pydantic2`
-- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `rust`
-- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `swift`
-

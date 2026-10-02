@@ -211,6 +211,16 @@ static BamlBuffer probe_initialize_with_metadata(
   return probe_initialize(bytecode, length);
 }
 
+static BamlCffiStatus probe_clock(uint64_t id, uint64_t *out) {
+  (void)id;
+  *out = 0;
+  return BAML_CFFI_STATUS_OK;
+}
+static int32_t probe_release_call(uint64_t id) { (void)id; return 0; }
+static void probe_dispatch_v2(BamlHostDispatchV2 callback) { (void)callback; }
+static void probe_cancel_callback(BamlHostCancel callback) { (void)callback; }
+static uint32_t probe_protocol(void) { return 1; }
+
 static const BamlApiV1 default_api = {
     .abi_version = BAML_API_V1_ABI_VERSION,
     .struct_size = sizeof(BamlApiV1),
@@ -237,6 +247,11 @@ static const BamlApiV1 default_api = {
     .register_unhandled_spawn_error_callback = probe_register_unhandled_spawn_error,
     .shutdown_runtime = probe_shutdown_runtime,
     .initialize_runtime_from_blob_with_metadata = probe_initialize_with_metadata,
+    .invocation_clock_ns = probe_clock,
+    .release_function_call = probe_release_call,
+    .register_host_dispatch_v2 = probe_dispatch_v2,
+    .register_host_cancel_callback = probe_cancel_callback,
+    .invocation_protocol_version = probe_protocol,
 };
 
 static BamlApiV1 probe_api;
@@ -274,6 +289,11 @@ static void null_requested_field(const char *field) {
   NULL_FIELD(register_unhandled_spawn_error_callback)
   NULL_FIELD(shutdown_runtime)
   NULL_FIELD(initialize_runtime_from_blob_with_metadata)
+  NULL_FIELD(invocation_clock_ns)
+  NULL_FIELD(release_function_call)
+  NULL_FIELD(register_host_dispatch_v2)
+  NULL_FIELD(register_host_cancel_callback)
+  NULL_FIELD(invocation_protocol_version)
 }
 
 BAML_CFFI_API const BamlApiV1 *baml_get_api_v1(void) {

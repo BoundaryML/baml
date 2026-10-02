@@ -1,0 +1,417 @@
+//! Building a capture. A [`Builder`] fills one storage; finishing it shapes
+//! the capture into blobs and yields the immutable [`Snapshot`].
+//!
+//! An object's identity comes before its content, so that what it holds can
+//! name it: [`Leaves::reserve`] gives the identity and [`Leaves::fill`] the
+//! content. A container's items are written in one run, by an operation that
+//! takes the items' source and converts each: [`Builder::list`],
+//! [`Builder::map`], [`Builder::instance`], [`Builder::arguments`]. The
+//! conversion is handed [`Leaves`], which holds strings, names, bigints,
+//! types and identities but cannot start another container.
+//!
+//! Limits are applied here, not by the caller, and what they cut shows in the
+//! capture: a container records how long its source was, and a value that
+//! could not be held is a truncation marker.
+use std::sync::Arc;
+
+use baml_type::{DeclarationName, typetag::TypeTag};
+use bex_str::BexStr;
+use num_bigint::BigInt;
+
+use crate::{
+    Shaper, Snapshot, SnapshotPool,
+    arena::{Arena, Meter},
+    graph::{
+        Bigint, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId, ObjectId, OwnedType, Range,
+        SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type, TypeId, Uint8ArrayData,
+    },
+    hash::{self, Absorb as _},
+    pool::{Lease, Limits, Storage},
+    tags,
+    walk::bigint_limb_bytes,
+};
+
+/// The most items an arena indexed by `u32` holds.
+const ARENA_ITEMS: usize = u32::MAX as usize - 1;
+
+/// A capture being built.
+pub struct Builder(Lease);
+
+/// What converting one value needs: the capture's strings, names, bigints,
+/// types and object identities.
+pub struct Leaves<'b> {
+    objects: &'b mut Arena<SnapshotObject>,
+    strings: &'b mut Arena<BexStr>,
+    labels: &'b mut Arena<BexStr>,
+    bigints: &'b mut Arena<Bigint>,
+    types: &'b mut Arena<Type>,
+    meter: &'b Meter,
+    limits: Limits,
+}
+
+/// An object's identity, before its content. It is filled once, by
+/// [`Leaves::fill`]; one that is dropped instead reads as truncated.
+#[derive(Debug)]
+pub struct Reserved(ObjectId);
+impl Reserved {
+    pub fn id(&self) -> ObjectId {
+        self.0
+    }
+}
+
+impl Leaves<'_> {
+    pub fn limits(&self) -> Limits {
+        self.limits
+    }
+    /// Hold a name by handle: an enum variant, a function, a MIME type, a URL
+    /// or a path. It is written wherever it is used. `None` when it is over
+    /// the leaf limit, or no more names can be numbered.
+    pub fn label(&mut self, text: &BexStr) -> Option<LabelId> {
+        if !self.limits.holds_leaf(text.len()) || self.labels.len() >= ARENA_ITEMS {
+            return None;
+        }
+        let id = LabelId(u32::try_from(self.labels.len()).expect("bounded labels"));
+        self.labels.push(text.clone(), self.meter);
+        Some(id)
+    }
+    /// Hold content by handle: a string value, or a media value's text. `None`
+    /// when it is over the leaf limit, or no more strings can be numbered.
+    pub fn string(&mut self, text: &BexStr) -> Option<StringId> {
+        if !self.limits.holds_leaf(text.len()) || self.strings.len() >= ARENA_ITEMS {
+            return None;
+        }
+        // A slice caches its hash in its own handle, not in what it views.
+        // Hash the caller's, so that its next capture finds the hash there
+        // and this clone starts with it.
+        if matches!(text, BexStr::Slice { .. }) {
+            text.content_hash();
+        }
+        let id = StringId(u32::try_from(self.strings.len()).expect("bounded strings"));
+        self.strings.push(text.clone(), self.meter);
+        Some(id)
+    }
+    /// A string as a value: truncated when it cannot be held.
+    pub fn string_value(&mut self, text: &BexStr) -> SnapshotValue {
+        self.string(text).map_or(
+            SnapshotValue::Truncated(Limit::Bytes),
+            SnapshotValue::String,
+        )
+    }
+    /// A bigint as a value, held by handle: truncated when it is over the
+    /// leaf limit, before any of it is hashed, or cannot be numbered.
+    pub fn bigint(&mut self, value: &Arc<BigInt>) -> SnapshotValue {
+        if !self.limits.holds_leaf(bigint_limb_bytes(value)) || self.bigints.len() >= ARENA_ITEMS {
+            return SnapshotValue::Truncated(Limit::Bytes);
+        }
+        let id = crate::BigintId(u32::try_from(self.bigints.len()).expect("bounded bigints"));
+        self.bigints.push(
+            Bigint {
+                digest: hash::bigint(value),
+                value: Arc::clone(value),
+            },
+            self.meter,
+        );
+        SnapshotValue::Bigint(id)
+    }
+    pub fn ty(&mut self, ty: OwnedType) -> TypeId {
+        let id = TypeId(u32::try_from(self.types.len()).expect("type arena exhausted"));
+        self.types.push(
+            Type {
+                leaf: hash::ty(&ty),
+                ty,
+            },
+            self.meter,
+        );
+        id
+    }
+    /// An object's identity, for what will hold it to name before its
+    /// content is known. `None` once the object limit is reached.
+    pub fn reserve(&mut self) -> Option<Reserved> {
+        self.object(SnapshotObject::Truncated(Limit::Objects))
+            .map(Reserved)
+    }
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "taking the identity by value is what makes filling it twice a compile error"
+    )]
+    pub fn fill(&mut self, slot: Reserved, object: SnapshotObject) {
+        self.objects[slot.0.0 as usize] = object;
+    }
+    /// An object whose content is known already. `None` once the object
+    /// limit is reached.
+    pub fn object(&mut self, object: SnapshotObject) -> Option<ObjectId> {
+        if self.objects.len() >= self.limits.max_objects.unwrap_or(ARENA_ITEMS) {
+            return None;
+        }
+        let id = ObjectId(u32::try_from(self.objects.len()).expect("bounded objects"));
+        self.objects.push(object, self.meter);
+        Some(id)
+    }
+}
+
+/// A storage's arenas, split by who writes them: a container operation
+/// writes its run of values or entries while its conversion writes leaves.
+struct Parts<'b> {
+    leaves: Leaves<'b>,
+    values: &'b mut Arena<SnapshotValue>,
+    entries: &'b mut Arena<MapEntry>,
+    meter: &'b Meter,
+}
+
+impl Builder {
+    pub(crate) fn new(lease: Lease) -> Self {
+        Self(lease)
+    }
+    pub fn limits(&self) -> Limits {
+        self.0.limits
+    }
+    fn parts(&mut self) -> Parts<'_> {
+        let Storage {
+            graph,
+            meter,
+            limits,
+            ..
+        } = &mut *self.0;
+        let Graph {
+            objects,
+            values,
+            entries,
+            bytes: _,
+            strings,
+            labels,
+            bigints,
+            types,
+            names: _,
+        } = graph;
+        Parts {
+            leaves: Leaves {
+                objects,
+                strings,
+                labels,
+                bigints,
+                types,
+                meter,
+                limits: *limits,
+            },
+            values,
+            entries,
+            meter,
+        }
+    }
+    /// The capture's leaves and identities, outside any container.
+    pub fn leaves(&mut self) -> Leaves<'_> {
+        self.parts().leaves
+    }
+    pub fn fill(&mut self, slot: Reserved, object: SnapshotObject) {
+        self.leaves().fill(slot, object);
+    }
+    /// One run of values: as many of `source` as the value limit allows.
+    fn values<T>(
+        &mut self,
+        source: impl ExactSizeIterator<Item = T>,
+        mut convert: impl FnMut(&mut Leaves<'_>, T) -> SnapshotValue,
+    ) -> Range<SnapshotValue> {
+        let Parts {
+            mut leaves,
+            values,
+            entries: _,
+            meter,
+        } = self.parts();
+        let start = values.len();
+        let room = leaves.limits.max_values.unwrap_or(ARENA_ITEMS);
+        let count = source.len().min(room.saturating_sub(start));
+        values.reserve(count, meter);
+        for item in source.take(count) {
+            let value = convert(&mut leaves, item);
+            values.push(value, meter);
+        }
+        Range::new(start, values.len() - start)
+    }
+    /// One run of entries: as many of `source` as the value limit allows. A
+    /// key is written where its entry is, so an entry whose key is over the
+    /// leaf limit is left out, and the count says the container is cut.
+    fn entries<T>(
+        &mut self,
+        source: impl ExactSizeIterator<Item = T>,
+        mut convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
+    ) -> Range<MapEntry> {
+        let Parts {
+            mut leaves,
+            values: _,
+            entries,
+            meter,
+        } = self.parts();
+        let start = entries.len();
+        let room = leaves.limits.max_values.unwrap_or(ARENA_ITEMS);
+        let count = source.len().min(room.saturating_sub(start));
+        entries.reserve(count, meter);
+        for item in source.take(count) {
+            let (key, value) = convert(&mut leaves, item);
+            if leaves.limits.holds_leaf(key.len()) {
+                entries.push(MapEntry { key, value }, meter);
+            }
+        }
+        Range::new(start, entries.len() - start)
+    }
+    /// A list of what `convert` makes of each item of `source`.
+    pub fn list<T>(
+        &mut self,
+        element_type: TypeId,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> SnapshotValue,
+    ) -> SnapshotObject {
+        let original_len = source.len();
+        SnapshotObject::List {
+            element_type,
+            items: self.values(source, convert),
+            original_len,
+        }
+    }
+    /// A map of the keys and values `convert` makes of each item of `source`.
+    /// An entry whose key is over the leaf limit is left out.
+    pub fn map<T>(
+        &mut self,
+        key_type: TypeId,
+        value_type: TypeId,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
+    ) -> SnapshotObject {
+        let original_len = source.len();
+        SnapshotObject::Map {
+            key_type,
+            value_type,
+            entries: self.entries(source, convert),
+            original_len,
+        }
+    }
+    /// An instance of `declaration`, with the fields `convert` makes of each
+    /// item of `source`.
+    pub fn instance<T>(
+        &mut self,
+        declaration: ObjectId,
+        type_arguments: impl IntoIterator<Item = OwnedType>,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
+    ) -> SnapshotObject {
+        let mut leaves = self.leaves();
+        let start = leaves.types.len();
+        for ty in type_arguments {
+            leaves.ty(ty);
+        }
+        let type_arguments = Range::new(start, leaves.types.len() - start);
+        let original_len = source.len();
+        SnapshotObject::Instance {
+            type_arguments,
+            declaration,
+            fields: self.entries(source, convert),
+            original_len,
+        }
+    }
+    /// A `uint8array`: its bytes, copied and hashed on the way, or only its
+    /// length when it is over the leaf limit or the arena cannot index them
+    /// all.
+    pub fn bytes(&mut self, bytes: &[u8]) -> SnapshotObject {
+        let Storage {
+            graph,
+            meter,
+            limits,
+            ..
+        } = &mut *self.0;
+        if !limits.holds_leaf(bytes.len())
+            || bytes.len() > ARENA_ITEMS.saturating_sub(graph.bytes.len())
+        {
+            return SnapshotObject::Uint8ArrayTruncated {
+                original_len: bytes.len(),
+            };
+        }
+        let start = graph.bytes.len();
+        graph.bytes.reserve(bytes.len(), meter);
+        let mut digest = hash::Hasher::new(tags::HashDomain::Uint8Array);
+        for chunk in bytes.chunks(btel_settings::snapshot::COPY_HASH_BATCH_BYTES) {
+            digest.absorb(chunk);
+            graph.bytes.extend_from_slice(chunk, meter);
+        }
+        SnapshotObject::Uint8Array {
+            data: Uint8ArrayData {
+                range: Range::new(start, bytes.len()),
+                digest: digest.finish(),
+            },
+        }
+    }
+    /// A class or enum declaration. Its name is held beside the objects.
+    pub fn declaration(
+        &mut self,
+        name: &DeclarationName,
+        tag: TypeTag,
+        is_enum: bool,
+    ) -> SnapshotObject {
+        let Storage { graph, meter, .. } = &mut *self.0;
+        let id = NameId(u32::try_from(graph.names.len()).expect("a name per object"));
+        graph.names.push(name.clone(), meter);
+        SnapshotObject::Declaration {
+            name: id,
+            tag,
+            is_enum,
+        }
+    }
+    /// The arguments of a call as a capture's root: what `convert` makes of
+    /// each item of `source`, in callee parameter order.
+    pub fn arguments<T>(
+        &mut self,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> SnapshotValue,
+    ) -> SnapshotRoot {
+        SnapshotRoot::FunctionArgs(FunctionArgs {
+            parameter_count: source.len(),
+            slots: self.values(source, convert),
+        })
+    }
+    /// Shape the capture into blobs; the snapshot is immutable afterwards.
+    pub fn finish(mut self, root: impl Into<SnapshotRoot>, shaper: &mut Shaper) -> Snapshot {
+        shaper.shape(&mut self.0, root.into());
+        Snapshot::new(self.0)
+    }
+}
+
+/// A `map<string, string>` snapshot built outside any VM, such as a
+/// project's sources keyed by path. Entries are taken in order while their
+/// keys and values total at most `max_bytes`; the rest are dropped, and the
+/// map's recorded length says so. `None` when the pool has no slot.
+pub fn string_map(
+    pool: &SnapshotPool,
+    entries: &[(String, String)],
+    max_bytes: usize,
+) -> Option<Snapshot> {
+    let mut b = pool.try_acquire()?;
+    let mut shaper = Shaper::default();
+    let mut room = max_bytes;
+    let fit = entries
+        .iter()
+        .take_while(|(key, value)| {
+            room.checked_sub(key.len().saturating_add(value.len()))
+                .map(|left| room = left)
+                .is_some()
+        })
+        .count();
+    let key_type = b.leaves().ty(OwnedType::string());
+    let value_type = b.leaves().ty(OwnedType::string());
+    let mut map = b.map(
+        key_type,
+        value_type,
+        entries[..fit].iter(),
+        |leaves, (key, value)| {
+            (
+                BexStr::from(key.as_str()),
+                leaves.string_value(&BexStr::from(value.as_str())),
+            )
+        },
+    );
+    if let SnapshotObject::Map { original_len, .. } = &mut map {
+        *original_len = entries.len();
+    }
+    let root = b.leaves().object(map).map_or(
+        SnapshotValue::Truncated(Limit::Objects),
+        SnapshotValue::Object,
+    );
+    Some(b.finish(root, &mut shaper))
+}

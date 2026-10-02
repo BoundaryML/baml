@@ -1,9 +1,29 @@
 use baml_type::{DeclarationName, TypeName, typetag::TypeTag};
-use btel_snapshot::{DecodedName, DecodedRoot, SnapshotId, TypeDescription};
+use btel_snapshot::{CasId, DecodedName, DecodedRoot, TypeDescription};
 use serde_json::json;
 
 use super::*;
-use crate::evidence::SlotName;
+use crate::{cas::CasUnavailable, evidence::SlotName};
+
+/// Blobs by ID, as a CAS directory would hold them.
+#[derive(Default)]
+struct Blobs(HashMap<CasId, Result<Arc<DecodedSnapshot>, CasUnavailable>>);
+impl BlobSource for Blobs {
+    fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+        self.0
+            .get(&id)
+            .cloned()
+            .unwrap_or(Err(CasUnavailable::Missing))
+    }
+}
+
+/// What navigation found, when it found a value.
+fn found(nav: &Nav) -> Option<DecodedValue> {
+    match nav {
+        Nav::Value(found) => Some(found.value().into()),
+        Nav::Arguments(_) | Nav::Missing | Nav::Unavailable(_) => None,
+    }
+}
 
 fn ty() -> TypeDescription {
     TypeDescription {
@@ -17,7 +37,7 @@ fn s(text: &str) -> DecodedValue {
 }
 
 /// args: (customer: Customer{name, age, items: [ {name}, shared ], tags}, note: omitted)
-fn snapshot() -> DecodedSnapshot {
+fn snapshot() -> Arc<DecodedSnapshot> {
     use DecodedObject as O;
     use DecodedValue as V;
     let objects = vec![
@@ -32,14 +52,14 @@ fn snapshot() -> DecodedSnapshot {
         // 1: customer instance
         O::Instance {
             type_arguments: vec![],
-            declaration: 0,
+            declaration: NodeId(0),
             fields: vec![
                 ("name".into(), s("Ann")),
                 ("age".into(), V::Int(30)),
-                ("items".into(), V::Object(2)),
-                ("meta".into(), V::Object(4)),
+                ("items".into(), V::Object(NodeId(2))),
+                ("meta".into(), V::Object(NodeId(4))),
                 ("nothing".into(), V::Null),
-                ("cell".into(), V::Object(5)),
+                ("cell".into(), V::Object(NodeId(5))),
                 ("cut".into(), V::Truncated(Limit::Bytes)),
             ],
             original_len: 7,
@@ -47,7 +67,7 @@ fn snapshot() -> DecodedSnapshot {
         // 2: items list, second element shared with meta.first
         O::List {
             element_type: ty(),
-            items: vec![V::Object(3), V::Object(3)],
+            items: vec![V::Object(NodeId(3)), V::Object(NodeId(3))],
             original_len: 3,
         },
         // 3: item map
@@ -65,23 +85,24 @@ fn snapshot() -> DecodedSnapshot {
             key_type: ty(),
             value_type: ty(),
             entries: vec![
-                ("self".into(), V::Object(4)),
-                ("big".into(), V::Bigint(Box::new(BigInt::from(1) << 80))),
+                ("self".into(), V::Object(NodeId(4))),
+                ("big".into(), V::Bigint(Arc::new(BigInt::from(1) << 80))),
             ],
             original_len: 2,
         },
         // 5: cell around a scalar
         O::Cell(V::Int(99)),
     ];
-    DecodedSnapshot {
-        id: SnapshotId::from_bytes([0; 16]),
-        limited: true,
+    Arc::new(DecodedSnapshot {
+        id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
+        children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
             parameter_count: 2,
-            slots: vec![V::Object(1), V::OmittedArg],
+            slots: vec![V::Object(NodeId(1)), V::OmittedArg],
         },
         objects,
-    }
+    })
 }
 
 fn names() -> ArgumentNames {
@@ -109,8 +130,15 @@ fn path(segments: &[&str]) -> Vec<Segment> {
         .collect()
 }
 
-fn nav<'a>(snapshot: &'a DecodedSnapshot, names: Option<&ArgumentNames>, p: &[&str]) -> Nav<'a> {
-    navigate(snapshot, Root::Arguments, names, &path(p))
+fn nav(snapshot: &Arc<DecodedSnapshot>, names: Option<&ArgumentNames>, p: &[&str]) -> Nav {
+    navigate(
+        &Blobs::default(),
+        snapshot,
+        Root::Arguments,
+        names,
+        &path(p),
+        0,
+    )
 }
 
 #[test]
@@ -118,16 +146,16 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
     let snap = snapshot();
     let n = names();
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "age"]),
-        Nav::Value(&DecodedValue::Int(30))
+        found(&nav(&snap, Some(&n), &["customer", "age"])),
+        Some(DecodedValue::Int(30))
     );
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "items", "0", "name"]),
-        Nav::Value(&s("widget"))
+        found(&nav(&snap, Some(&n), &["customer", "items", "0", "name"])),
+        Some(s("widget"))
     );
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "nothing"]),
-        Nav::Value(&DecodedValue::Null)
+        found(&nav(&snap, Some(&n), &["customer", "nothing"])),
+        Some(DecodedValue::Null)
     );
     assert_eq!(nav(&snap, Some(&n), &["customer", "absent"]), Nav::Missing);
     assert_eq!(
@@ -152,8 +180,8 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
         Nav::Unavailable(Unavailable::Truncated(Limit::Bytes))
     );
     assert_eq!(
-        nav(&snap, Some(&n), &["customer", "cell"]),
-        Nav::Value(&DecodedValue::Int(99))
+        found(&nav(&snap, Some(&n), &["customer", "cell"])),
+        Some(DecodedValue::Int(99))
     );
     // Omitted argument: absent, not null.
     assert_eq!(nav(&snap, Some(&n), &["note"]), Nav::Missing);
@@ -164,8 +192,8 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
         Nav::Unavailable(Unavailable::ArgumentNamesUnknown)
     );
     assert_eq!(
-        nav(&snap, None, &["0", "age"]),
-        Nav::Value(&DecodedValue::Int(30))
+        found(&nav(&snap, None, &["0", "age"])),
+        Some(DecodedValue::Int(30))
     );
     let mut mismatch = names();
     mismatch.slots.pop();
@@ -173,9 +201,9 @@ fn named_arguments_and_nested_paths_distinguish_null_missing_and_unavailable() {
         nav(&snap, Some(&mismatch), &["customer"]),
         Nav::Unavailable(Unavailable::ArgumentLayoutMismatch)
     );
-    assert_eq!(nav(&snap, Some(&n), &[]), Nav::Arguments);
+    assert_eq!(nav(&snap, Some(&n), &[]), Nav::Arguments(Arc::clone(&snap)));
     assert_eq!(
-        navigate(&snap, Root::Value, None, &[]),
+        navigate(&Blobs::default(), &snap, Root::Value, None, &[], 0),
         Nav::Unavailable(Unavailable::WrongRoot)
     );
 }
@@ -236,9 +264,9 @@ fn comparisons_follow_baml_semantics_not_sqlite_coercion() {
         leaf_of_operand(Operand::Null).is_none(),
         "SQL NULL is unknown"
     );
-    assert_eq!(is_null(Nav::Missing), Some(true));
+    assert_eq!(is_null(&Nav::Missing), Some(true));
     assert_eq!(
-        is_null(Nav::Unavailable(Unavailable::ArgumentNamesUnknown)),
+        is_null(&Nav::Unavailable(Unavailable::ArgumentNamesUnknown)),
         None
     );
 }
@@ -247,7 +275,10 @@ fn comparisons_follow_baml_semantics_not_sqlite_coercion() {
 fn rendering_preserves_sharing_cycles_truncation_and_names() {
     let snap = snapshot();
     let limits = RenderLimits::default();
-    let args = render_arguments(&snap, Some(&names()), &limits);
+    let blobs = Blobs::default();
+    let rendered = render_arguments(&blobs, &snap, Some(&names()), &limits);
+    assert_eq!(rendered.incomplete, None);
+    let args = rendered.json;
     let customer = &args["customer"];
     assert_eq!(customer["$class"], json!("Customer"));
     assert_eq!(customer["age"], json!(30));
@@ -274,17 +305,19 @@ fn rendering_preserves_sharing_cycles_truncation_and_names() {
     let big = (BigInt::from(1) << 80_u32).to_string();
     assert_eq!(meta["$map"]["big"], json!({ "$bigint": big }));
     // Without names: positional envelope.
-    let positional = render_arguments(&snap, None, &limits);
+    let positional = render_arguments(&blobs, &snap, None, &limits).json;
     assert_eq!(positional["$args"][1], json!({"$omitted": true}));
     // Depth and size bounds.
     let shallow = render_arguments(
+        &blobs,
         &snap,
         Some(&names()),
         &RenderLimits {
             max_depth: 2,
             ..limits
         },
-    );
+    )
+    .json;
     assert_eq!(
         shallow["customer"]["items"],
         json!({"$truncated": "render_depth"})
@@ -308,20 +341,25 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
     };
     // Argument `deep` reaches map 0 two lists down; `a` and `b` reach it and
     // map 1 directly.
-    let snap = DecodedSnapshot {
-        id: SnapshotId::from_bytes([0; 16]),
-        limited: false,
+    let snap = Arc::new(DecodedSnapshot {
+        id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
+        children: Vec::new(),
         root: DecodedRoot::FunctionArgs {
             parameter_count: 3,
-            slots: vec![V::Object(2), V::Object(1), V::Object(0)],
+            slots: vec![
+                V::Object(NodeId(2)),
+                V::Object(NodeId(1)),
+                V::Object(NodeId(0)),
+            ],
         },
         objects: vec![
             map(0),
             map(1),
-            list(vec![V::Object(3), V::Object(1)]),
-            list(vec![V::Object(0)]),
+            list(vec![V::Object(NodeId(3)), V::Object(NodeId(1))]),
+            list(vec![V::Object(NodeId(0))]),
         ],
-    };
+    });
     let names = ArgumentNames {
         slots: ["deep", "a", "b"]
             .into_iter()
@@ -335,7 +373,7 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
         max_depth: 3,
         ..RenderLimits::default()
     };
-    let args = render_arguments(&snap, Some(&names), &limits);
+    let args = render_arguments(&Blobs::default(), &snap, Some(&names), &limits).json;
     // Map 0 is first reached at the depth limit: no label is spent there, so
     // its later full rendering carries the `$id`.
     assert_eq!(args["deep"][0][0], json!({"$truncated": "render_depth"}));
@@ -346,11 +384,100 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
 }
 
 #[test]
+fn a_number_too_long_to_show_is_cut() {
+    // 4001 bits print as 1205 digits.
+    let number = BigInt::from(1) << 4000_u32;
+    let digits = number.to_string();
+    assert_eq!(digits.len(), 1205);
+    let snap = Arc::new(DecodedSnapshot {
+        id: CasId::from_bytes([0; 16]),
+        encoded_len: 0,
+        children: Vec::new(),
+        root: DecodedRoot::FunctionArgs {
+            parameter_count: 1,
+            slots: vec![DecodedValue::Bigint(Arc::new(number))],
+        },
+        objects: Vec::new(),
+    });
+    let render = |max_text_bytes| {
+        let limits = RenderLimits {
+            max_text_bytes,
+            ..RenderLimits::default()
+        };
+        render_arguments(&Blobs::default(), &snap, None, &limits)
+    };
+    let whole = render(1205);
+    assert_eq!(whole.json, json!({"$args": [{"$bigint": digits}]}));
+    assert!(!whole.cut);
+    let cut = render(1204);
+    assert_eq!(
+        cut.json,
+        json!({"$args": [{"$bigint": {"$truncated": "render_size"}}]})
+    );
+    assert!(cut.cut);
+
+    // Printing takes time quadratic in a number's length, so one past the
+    // limit is not printed at all, alone or inside a value.
+    let present = |max_bigint_bits| {
+        let limits = RenderLimits {
+            max_bigint_bits,
+            ..RenderLimits::default()
+        };
+        let found = nav(&snap, None, &["0"]);
+        (
+            to_scalar(&Blobs::default(), &found, None, &limits),
+            render_arguments(&Blobs::default(), &snap, None, &limits),
+        )
+    };
+    let (alone, inside) = present(4001);
+    assert_eq!(
+        (alone.scalar, alone.kind, alone.cut),
+        (Scalar::Text(digits.clone()), Kind::Bigint, false)
+    );
+    assert_eq!(inside.json, json!({"$args": [{"$bigint": digits}]}));
+    let (alone, inside) = present(4000);
+    let cut = json!({"$bigint": {"$truncated": "render_size"}});
+    assert_eq!(
+        (alone.scalar, alone.kind, alone.cut),
+        (Scalar::Text(cut.to_string()), Kind::Json, true)
+    );
+    assert_eq!(inside.json, json!({"$args": [cut]}));
+    assert!(inside.cut);
+}
+
+#[test]
+fn arguments_end_where_the_node_limit_is_reached() {
+    let snap = snapshot();
+    let limits = RenderLimits {
+        max_nodes: 0,
+        ..RenderLimits::default()
+    };
+    let named = render_arguments(&Blobs::default(), &snap, Some(&names()), &limits);
+    assert_eq!(named.json, json!({"$truncated": "render_size"}));
+    assert!(named.cut);
+    let positional = render_arguments(&Blobs::default(), &snap, None, &limits);
+    assert_eq!(
+        positional.json,
+        json!({"$args": [], "$truncated": "render_size"})
+    );
+    assert!(positional.cut);
+}
+
+#[test]
 fn scalar_projection_keeps_leaf_kinds() {
     let snap = snapshot();
     let n = names();
     let limits = RenderLimits::default();
-    let scalar = |p: &[&str]| to_scalar(&snap, nav(&snap, Some(&n), p), Some(&n), &limits);
+    let scalar = |p: &[&str]| {
+        let presented = to_scalar(
+            &Blobs::default(),
+            &nav(&snap, Some(&n), p),
+            Some(&n),
+            &limits,
+        );
+        assert_eq!(presented.incomplete, None);
+        (presented.scalar, presented.kind)
+    };
     assert_eq!(
         scalar(&["customer", "age"]),
         (Scalar::Integer(30), Kind::Int)

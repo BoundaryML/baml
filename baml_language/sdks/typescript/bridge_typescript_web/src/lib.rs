@@ -13,6 +13,8 @@ pub mod handle;
 #[cfg(target_arch = "wasm32")]
 pub mod host_value;
 #[cfg(target_arch = "wasm32")]
+pub mod invocation;
+#[cfg(target_arch = "wasm32")]
 pub mod media;
 #[cfg(target_arch = "wasm32")]
 pub mod runtime;
@@ -41,8 +43,8 @@ pub fn configure_workerd_runtime() {
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = newFunctionCall)]
-pub fn new_function_call() -> u64 {
-    bridge_cffi::new_function_call_id()
+pub fn new_function_call() -> Result<u64, JsValue> {
+    bridge_cffi::allocate_function_call().map_err(|error| crate::errors::bridge_error(&error))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -70,5 +72,20 @@ pub fn get_bridge_runtime_version() -> String {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(js_name = flushEvents)]
-pub fn flush_events() {}
+#[wasm_bindgen(js_name = releaseFunctionCall)]
+pub fn release_function_call(call_id: u64) -> bool {
+    bridge_cffi::release_function_call_by_id(call_id)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = invocationClockNs)]
+pub fn invocation_clock_ns(call_id: u64) -> Result<u64, JsValue> {
+    bridge_cffi::invocation_clock_by_id(call_id)
+        .map_err(|error| crate::errors::bridge_error(&error))
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = invocationProtocolVersion)]
+pub fn invocation_protocol_version() -> u32 {
+    1
+}

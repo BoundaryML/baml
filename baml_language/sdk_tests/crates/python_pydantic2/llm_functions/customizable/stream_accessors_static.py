@@ -18,10 +18,12 @@ from baml_sdk.stream_typing import (
     wrap_text_stream,
 )
 
-
 stream = StreamingExtract_stream("extract")
 assert_type(stream.next(), StreamingDoc | Done)
 assert_type(stream.final(), StreamingDoc)
+assert_type(stream.next(_baml={"timeout_ms": 1000}), StreamingDoc | Done)
+assert_type(stream.final(_baml={}), StreamingDoc)
+stream.next(_baml={"unknown": True})  # type: ignore[typeddict-unknown-key]
 
 
 async def check_async_accessors() -> None:
@@ -32,6 +34,8 @@ async def check_async_accessors() -> None:
         assert_type(partial, StreamingDoc)
 
     spec = await StreamingExtract_spec_async("extract")
+    assert_type(await spec.name_async(_baml={}), str)
+    spec.name(_baml={"unknown": True})  # type: ignore[typeddict-unknown-key]
     assert_type(
         await spec.parse_async('{"title":"x","body":"y","word_count":1}'), StreamingDoc
     )
@@ -63,4 +67,3 @@ assert_type(
     call_text_stream_callback(lambda value: value, text_stream).next(),
     str | Done,
 )
-

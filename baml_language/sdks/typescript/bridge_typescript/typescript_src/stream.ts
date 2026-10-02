@@ -14,13 +14,10 @@
 // send the authored FQN with the Stream boundary operation; the engine resolves
 // PPIR's private `Fn@stream`. The wrapper exposes both sync and async pulls.
 
-import { BamlHandle, getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
+import { BamlHandle } from './native.js';
 import { supportsSyncStreamPulls } from './platform.js';
-import { encodeCallArgs, decodeCallResult } from './proto.js';
-
-function newFunctionCall(): bigint {
-    return BigInt(nativeNewFunctionCall());
-}
+import { invokeTarget } from './proto.js';
+import type { InvocationOptions } from './invocation.js';
 
 /**
  * A live `ai.stream.Stream<T>`. A partial and the settled value share the one
@@ -48,32 +45,26 @@ export class BamlStream<T> {
         return this._handle;
     }
 
-    next(): T {
-        return this._callSync(`${this._classFqn}.next`) as T;
+    next(options?: { $baml?: InvocationOptions | null }): T {
+        return this._callSync(`${this._classFqn}.next`, options) as T;
     }
-    async nextAsync(): Promise<T> {
-        return (await this._callAsync(`${this._classFqn}.next`)) as T;
+    async nextAsync(options?: { $baml?: InvocationOptions | null }): Promise<T> {
+        return (await this._callAsync(`${this._classFqn}.next`, options)) as T;
     }
-    final(): T {
-        return this._callSync(`${this._classFqn}.final`) as T;
+    final(options?: { $baml?: InvocationOptions | null }): T {
+        return this._callSync(`${this._classFqn}.final`, options) as T;
     }
-    async finalAsync(): Promise<T> {
-        return (await this._callAsync(`${this._classFqn}.final`)) as T;
+    async finalAsync(options?: { $baml?: InvocationOptions | null }): Promise<T> {
+        return (await this._callAsync(`${this._classFqn}.final`, options)) as T;
     }
 
-    private _callSync(fqn: string): unknown {
+    private _callSync(fqn: string, options?: { $baml?: InvocationOptions | null }): unknown {
         if (!supportsSyncStreamPulls) {
             throw new Error('synchronous stream pulls are unavailable in Web runtimes; use nextAsync() or finalAsync() instead');
         }
-        const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
-        const resultBytes = rt.callFunctionSync(argsProto, null);
-        return decodeCallResult(resultBytes);
+        return invokeTarget(fqn, { self: this }, options, false);
     }
-    private async _callAsync(fqn: string): Promise<unknown> {
-        const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall(), functionName: fqn });
-        const resultBytes = await rt.callFunction(argsProto, null);
-        return decodeCallResult(resultBytes);
+    private async _callAsync(fqn: string, options?: { $baml?: InvocationOptions | null }): Promise<unknown> {
+        return await invokeTarget(fqn, { self: this }, options, true);
     }
 }

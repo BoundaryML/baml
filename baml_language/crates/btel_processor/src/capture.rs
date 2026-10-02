@@ -1,25 +1,27 @@
-//! Whole-snapshot combining on the processor worker. Hashes are already frozen
-//! by VM capture; this stage never traverses payloads or claims persistence.
-use btel_snapshot::{Snapshot, SnapshotId};
+//! Whole-capture combining on the processor worker, keyed by root blob. Blob
+//! IDs are already frozen by VM capture; this stage never traverses payloads
+//! or claims persistence.
+use btel_snapshot::{CasId, Snapshot};
 use rustc_hash::FxHashSet;
 
 /// Bounded recent-ID cache. Clearing at capacity permits duplicate publication,
 /// not lost data; downstream CAS may deduplicate those repeats again.
 #[derive(Default)]
 pub struct CaptureProcessor {
-    seen: FxHashSet<SnapshotId>,
+    seen: FxHashSet<CasId>,
 }
 impl CaptureProcessor {
     /// Move a first-seen owner downstream; recycle a recent duplicate immediately.
     /// An ID here means offered to the receiver, never durably delivered.
     pub fn retain(&mut self, snapshot: Snapshot) -> Option<Snapshot> {
-        if self.seen.contains(&snapshot.id()) {
+        let id = snapshot.root_id();
+        if self.seen.contains(&id) {
             return None;
         }
         if self.seen.len() == btel_settings::snapshot::RECENT_CAPTURE_IDS {
             self.seen.clear();
         }
-        self.seen.insert(snapshot.id());
+        self.seen.insert(id);
         Some(snapshot)
     }
 }
@@ -36,7 +38,7 @@ mod tests {
         let snapshot = |n| {
             pool.try_acquire()
                 .unwrap()
-                .finish_value(SnapshotValue::Int(n))
+                .finish(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default())
         };
         let mut processor = CaptureProcessor::default();
         for n in 0..btel_settings::snapshot::RECENT_CAPTURE_IDS {

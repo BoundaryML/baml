@@ -72,7 +72,7 @@ pub async fn dispatch_target(
     json_args: Option<serde_json::Value>,
     output_format: OutputFormat,
 ) -> Result<DispatchResult> {
-    dispatch_target_with_context(
+    Box::pin(dispatch_target_with_context(
         engine,
         target_name,
         cli_values,
@@ -80,7 +80,7 @@ pub async fn dispatch_target(
         output_format,
         FunctionCallContextBuilder::new(CallId::next()).build(),
         || {},
-    )
+    ))
     .await
 }
 

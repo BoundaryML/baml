@@ -1,6 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
 
+export class CancellationWatch {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+}
+
 export function _testHandleTableEntryCount(): number;
 
 export function _testWebFireHostRelease(key: bigint): void;
@@ -22,6 +28,8 @@ export function callFunctionSync(encoded_args: Uint8Array): Uint8Array;
 export function cancelFunctionCall(call_id: bigint): boolean;
 
 export function cloneHandle(key: bigint): bigint;
+
+export function cloneOutboundValue(wire: Uint8Array): Uint8Array;
 
 /**
  * Complete an in-flight host call from JS.
@@ -58,8 +66,6 @@ export function configureWebSysops(fetch_key: bigint, read_file_sync_key: bigint
  */
 export function configureWorkerdRuntime(): void;
 
-export function flushEvents(): void;
-
 export function getBridgeRuntimeVersion(): string;
 
 export function getToolchainVersion(): string;
@@ -67,6 +73,14 @@ export function getToolchainVersion(): string;
 export function getVersion(): string;
 
 export function init(): void;
+
+export function invocationClockNs(call_id: bigint): bigint;
+
+export function invocationContext(key: bigint): Uint8Array;
+
+export function invocationProtocolVersion(): number;
+
+export function isInvocationCancelled(key: bigint): boolean;
 
 export function mediaBase64(key: bigint, handle_type: number): string;
 
@@ -102,6 +116,8 @@ export function newFunctionCall(): bigint;
  */
 export function registerHostCallable(callable: Function): bigint;
 
+export function registerHostCancelCallback(callback: Function): boolean;
+
 /**
  * Register the JS callback that releases opaque values from the SDK's local
  * registry when the engine drops its last corresponding `HostValueArc`.
@@ -110,7 +126,11 @@ export function registerHostValueReleaseCallback(callback: Function): boolean;
 
 export function registerWebHostCallable(callable: Function): bigint;
 
+export function registerWebHostCancelCallback(callback: Function): boolean;
+
 export function registerWebHostValueReleaseCallback(callback: Function): boolean;
+
+export function releaseFunctionCall(call_id: bigint): boolean;
 
 export function releaseHandle(key: bigint): boolean;
 
@@ -134,6 +154,10 @@ export function stageRuntimeBytecode(bytecode: any, embedded_baml_toml?: string 
 
 export function stageRuntimeSources(root_path: string, files: any): void;
 
+export function traceSelection(call_id: bigint, key: bigint): Array<any>;
+
+export function watchInvocationCancellation(key: bigint, callback: Function): CancellationWatch;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -143,25 +167,20 @@ export interface InitOutput {
     readonly releaseHandle: (a: bigint) => number;
     readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
     readonly seedGenericMediaHandle: () => [bigint, number, number];
-    readonly cancelFunctionCall: (a: bigint) => number;
-    readonly configureWorkerdRuntime: () => void;
-    readonly flushEvents: () => void;
-    readonly getBridgeRuntimeVersion: () => [number, number];
-    readonly getToolchainVersion: () => [number, number];
-    readonly getVersion: () => [number, number];
-    readonly init: () => void;
-    readonly newFunctionCall: () => bigint;
     readonly callFunction: (a: number, b: number) => any;
     readonly callFunctionSync: (a: number, b: number) => [number, number];
     readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
     readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
-    readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];
-    readonly mediaFile: (a: bigint, b: number) => [number, number, number, number];
-    readonly mediaFromBase64: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
-    readonly mediaFromFile: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
-    readonly mediaFromUrl: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
-    readonly mediaMimeType: (a: bigint, b: number) => [number, number, number, number];
-    readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
+    readonly cancelFunctionCall: (a: bigint) => number;
+    readonly configureWorkerdRuntime: () => void;
+    readonly getBridgeRuntimeVersion: () => [number, number];
+    readonly getToolchainVersion: () => [number, number];
+    readonly getVersion: () => [number, number];
+    readonly init: () => void;
+    readonly invocationClockNs: (a: bigint) => [bigint, number, number];
+    readonly invocationProtocolVersion: () => number;
+    readonly newFunctionCall: () => [bigint, number, number];
+    readonly releaseFunctionCall: (a: bigint) => number;
     readonly _testWebFireHostRelease: (a: bigint) => void;
     readonly _testWebHostCallableCount: () => number;
     readonly _testWebHostReleaseCallbackInstalled: () => number;
@@ -172,19 +191,36 @@ export interface InitOutput {
     readonly configureWebSysops: (a: bigint, b: bigint) => [number, number];
     readonly mintWebHostValueKey: () => bigint;
     readonly registerWebHostCallable: (a: any) => bigint;
+    readonly registerWebHostCancelCallback: (a: any) => number;
     readonly registerWebHostValueReleaseCallback: (a: any) => number;
     readonly releaseWebHostCallable: (a: bigint) => void;
+    readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
+    readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
+    readonly invocationContext: (a: bigint) => [number, number, number, number];
+    readonly isInvocationCancelled: (a: bigint) => [number, number, number];
+    readonly traceSelection: (a: bigint, b: bigint) => [number, number, number];
+    readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
+    readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];
+    readonly mediaFile: (a: bigint, b: number) => [number, number, number, number];
+    readonly mediaFromBase64: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
+    readonly mediaFromFile: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
+    readonly mediaFromUrl: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
+    readonly mediaMimeType: (a: bigint, b: number) => [number, number, number, number];
+    readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
     readonly completeHostCall: (a: number, b: number, c: number, d: number) => number;
     readonly mintHostValueKey: () => bigint;
     readonly registerHostCallable: (a: any) => bigint;
+    readonly registerHostCancelCallback: (a: any) => number;
     readonly registerHostValueReleaseCallback: (a: any) => number;
     readonly releaseHostCallable: (a: bigint) => void;
     readonly free_buffer: (a: number) => void;
     readonly cancel_function_call: (a: bigint) => number;
     readonly new_function_call: () => bigint;
+    readonly release_function_call: (a: bigint) => number;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___wasm_bindgen_d111f01290b9b4d6___JsValue__core_f0fd674eaa06beef___result__Result_____wasm_bindgen_d111f01290b9b4d6___JsError___true_: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___js_sys_85d0d9c83754a800___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined___js_sys_85d0d9c83754a800___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___js_sys_738bc4453a2434d1___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined___js_sys_738bc4453a2434d1___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___bool__true_: (a: number, b: number) => number;
+    readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke_______true_: (a: number, b: number) => void;
     readonly __wbindgen_malloc_command_export: (a: number, b: number) => number;
     readonly __wbindgen_realloc_command_export: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store_command_export: (a: number) => void;

@@ -31,6 +31,8 @@ pub(crate) fn bridge_error(error: &bridge_cffi::BridgeError) -> JsValue {
         | BridgeError::MissingCallTarget
         | BridgeError::FunctionHandleTypeArgs
         | BridgeError::MissingArgument { .. }
+        | BridgeError::UnknownCallAllocation(_)
+        | BridgeError::InvocationProtocol(_)
         | BridgeError::InvalidCallId => INVALID_ARGUMENT,
         BridgeError::Runtime(RuntimeError::InvalidArgument { .. }) => INVALID_ARGUMENT,
         BridgeError::Runtime(RuntimeError::Compilation { .. }) => COMPILATION,

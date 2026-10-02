@@ -34,19 +34,25 @@ function main() -> int {
 }
 "#;
 
-/// `FunctionArgs` root parameter count from a current-format blob header.
-fn captured_slots(root: &std::path::Path, id: proto::SnapshotId) -> u64 {
+/// `FunctionArgs` root parameter count of a captured blob.
+fn captured_slots(root: &std::path::Path, id: proto::CasId) -> u64 {
     let mut bytes = [0; 16];
     bytes[..8].copy_from_slice(&id.low.to_le_bytes());
     bytes[8..].copy_from_slice(&id.high.to_le_bytes());
     let path = btel_file::cas_path(
         &root.join(".baml/btel/cas"),
-        btel_snapshot::SnapshotId::from_bytes(bytes),
+        btel_snapshot::CasId::from_bytes(bytes),
     );
     let blob = std::fs::read(path).unwrap();
-    // magic(8) version(4) id(16) limited(1) objects(4) root tag(1) count(8)
-    assert_eq!(blob[33], 1, "inputs use a FunctionArgs root");
-    u64::from_le_bytes(blob[34..42].try_into().unwrap())
+    let decoded =
+        btel_snapshot::decode_blob(&blob, &btel_snapshot::DecodeLimits::default()).unwrap();
+    let btel_snapshot::DecodedRoot::FunctionArgs {
+        parameter_count, ..
+    } = decoded.root
+    else {
+        panic!("inputs use a FunctionArgs root");
+    };
+    parameter_count
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

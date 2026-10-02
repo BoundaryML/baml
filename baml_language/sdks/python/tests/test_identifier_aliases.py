@@ -111,11 +111,11 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     encoded_calls = []
 
     class FakeRuntime:
-        def call_function_sync(self, args, _ctx):
+        def call_function_sync(self, args):
             assert args == b"encoded"
             return b"stream"
 
-        async def call_function(self, args, _ctx):
+        async def call_function(self, args):
             assert args == b"encoded"
             return b"stream"
 

@@ -358,8 +358,8 @@ mod crafted {
         }
     }
 
-    fn snapshot(n: u64) -> proto::SnapshotId {
-        proto::SnapshotId { low: n, high: 0 }
+    fn snapshot(n: u64) -> proto::CasId {
+        proto::CasId { low: n, high: 0 }
     }
 
     fn announce(id: u64, path: u32, method: &str, started: u64) -> Event {
@@ -479,7 +479,7 @@ mod crafted {
                                 call_path_id: 2,
                                 entered_at_ticks: 21,
                                 inputs_cas_id: None,
-                                type_args_cas_id: Some(proto::SnapshotId { low: 3, high: 4 }),
+                                type_args_cas_id: Some(proto::CasId { low: 3, high: 4 }),
                             }),
                         ],
                     ),

@@ -119,6 +119,50 @@ message CallFunctionArgs {
     string function_name = 4;
     uint64 function_handle = 5;
   }
+  // The sole invocation-control channel. This is a breaking internal schema;
+  // the native ABI revision protects function-table compatibility.
+  InvocationOptions invocation = 6;
+}
+
+message InvocationOptions {
+  TraceSelection trace = 1;
+  InboundValue cancel = 2;
+  optional uint64 deadline_ns = 3;
+  uint64 inherited_state = 4;
+  uint64 host_environment = 5;
+}
+
+message TraceSelection {
+  oneof selection {
+    TraceOptions options = 1;
+    uint64 reservation = 2;
+  }
+}
+
+message TraceOptions {
+  optional TraceMode mode = 1;
+  optional bool inputs = 2;
+  optional bool output = 3;
+  optional bool error = 4;
+  optional string distinct_id = 5;
+  map<string, TraceMetadataValue> metadata = 6;
+}
+
+enum TraceMode {
+  TRACE_MODE_UNSPECIFIED = 0;
+  TRACE_MODE_HIDDEN = 1;
+  TRACE_MODE_TIMING = 2;
+  TRACE_MODE_SPAN = 3;
+}
+
+message TraceMetadataValue {
+  oneof value {
+    string string_value = 1;
+    sint64 int_value = 2;
+    double float_value = 3;
+    bool bool_value = 4;
+    bool remove = 5;
+  }
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

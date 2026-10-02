@@ -2,6 +2,7 @@ package sdk_test
 
 import (
 	"context"
+	baml_go "github.com/boundaryml/baml-go"
 	"math"
 	"math/big"
 	"reflect"
@@ -9,7 +10,6 @@ import (
 	"testing"
 
 	"baml.local/sdk/baml_sdk"
-	baml_go "github.com/boundaryml/baml-go"
 )
 
 func testBigInt(t *testing.T, decimal string) *big.Int {
@@ -46,7 +46,7 @@ func (nestedJSONMarshaler) BAMLInput() baml_go.Input {
 func Test_canonical_json_round_trips_at_top_level_and_through_alias(t *testing.T) {
 	ctx := context.Background()
 	want := canonicalJSONFixture(t)
-	for name, call := range map[string]func(context.Context, any) (any, error){
+	for name, call := range map[string]func(context.Context, any, ...baml_go.CallOption) (any, error){
 		"canonical": baml_sdk.GoJsonTestsRoundTripJson,
 		"alias":     baml_sdk.GoJsonTestsRoundTripJsonAlias,
 	} {
@@ -98,7 +98,7 @@ func Test_canonical_json_defaults_and_callbacks(t *testing.T) {
 		t.Fatalf("explicit JSON option = %#v, %v; want %#v", got, err, want)
 	}
 
-	got, err = baml_sdk.GoJsonTestsCallJsonCallback(ctx, func(value any) any {
+	got, err = baml_sdk.GoJsonTestsCallJsonCallback(ctx, func(_ context.Context, value any) any {
 		object := value.(map[string]any)
 		object["callback"] = true
 		return object
@@ -244,7 +244,7 @@ func Test_json_returned_from_host_callback_supports_typed_narrowing(t *testing.T
 	// json returned from a host callback converts on the host-return path
 	// (no argument coercion pass); it must narrow identically.
 	ctx := context.Background()
-	got, err := baml_sdk.GoJsonTestsJsonCallbackKind(ctx, func(value any) any {
+	got, err := baml_sdk.GoJsonTestsJsonCallbackKind(ctx, func(_ context.Context, value any) any {
 		return map[string]any{"wrapped": value}
 	}, "payload")
 	if err != nil || got != "object" {

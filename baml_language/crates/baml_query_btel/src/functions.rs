@@ -3,10 +3,12 @@
 //! Identity and timing functions are pure. Value functions resolve CAS
 //! blobs lazily through the current query's context: a query that never
 //! evaluates `type_args`, `input_args`, `output_value`, `error_value` or
-//! `network_event_values` reads no blob. Within one query,
-//! hydration outcomes (including missing and corrupt blobs) are memoized
-//! under entry and byte limits; the next query starts empty and can find a
-//! blob that arrived in between.
+//! `network_event_values` reads no blob. A path reads only the blobs it
+//! crosses; rendering or comparing a whole value reads every blob it reaches,
+//! within the render and comparison limits. Within one query, hydration
+//! outcomes (including missing and corrupt blobs) and presented results are
+//! memoized under entry and byte limits; the next query starts empty and can
+//! find a blob that arrived in between.
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -15,15 +17,17 @@ use std::{
 };
 
 use btel_reader::{
-    cas::{CasOutcome, CasStore},
+    cas::{CasStore, CasUnavailable},
     evidence::ArgumentNames,
     timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
     value::{
-        self, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment, Unavailable, equality,
+        self, BlobSource, CmpOp, Found, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment,
+        Unavailable, equality,
     },
 };
 use btel_snapshot::{
-    DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Limit, SnapshotId, TypeDescription,
+    CasId, ChildIndex, DecodedMedia, DecodedMediaSource, DecodedObject, DecodedRoot,
+    DecodedSnapshot, DecodedValue, Limit, MediaPayload, NodeId, TypeDescription,
 };
 use rusqlite::{
     Connection, Error as SqlError,
@@ -43,7 +47,10 @@ pub struct ValueLimits {
     /// Approximate encoded bytes of cached snapshots.
     pub max_cached_bytes: u64,
     /// Navigation results kept for render/kind pairs and repeated paths.
+    /// All are forgotten when another would pass this or the byte limit.
     pub max_cached_results: usize,
+    /// Bytes of those results' handles and text.
+    pub max_cached_result_bytes: usize,
     pub render: RenderLimits,
     pub comparison: equality::Limits,
 }
@@ -53,6 +60,7 @@ impl Default for ValueLimits {
             max_cached_blobs: 4096,
             max_cached_bytes: 256 << 20,
             max_cached_results: 16_384,
+            max_cached_result_bytes: 64 << 20,
             render: RenderLimits::default(),
             comparison: equality::Limits::default(),
         }
@@ -72,9 +80,10 @@ pub struct ValueMetrics {
 }
 
 struct CacheState {
-    blobs: HashMap<[u8; 16], CasOutcome>,
+    blobs: HashMap<[u8; 16], Result<Arc<DecodedSnapshot>, CasUnavailable>>,
     blob_bytes: u64,
     results: HashMap<Vec<u8>, (Scalar, Kind)>,
+    result_bytes: usize,
     unavailable_seen: HashSet<Vec<u8>>,
     metrics: ValueMetrics,
 }
@@ -97,6 +106,7 @@ impl QueryContext {
                 blobs: HashMap::new(),
                 blob_bytes: 0,
                 results: HashMap::new(),
+                result_bytes: 0,
                 unavailable_seen: HashSet::new(),
                 metrics: ValueMetrics::default(),
             }),
@@ -117,39 +127,31 @@ impl QueryContext {
         Ok(())
     }
 
-    fn load(&self, state: &mut CacheState, id: [u8; 16]) -> CasOutcome {
-        if let Some(outcome) = state.blobs.get(&id) {
-            state.metrics.cas_cache_hits += 1;
-            return outcome.clone();
+    /// The snapshot a handle reads and the path to follow in it, or the
+    /// code of why it is unavailable: its CAS blob or the inline one at its
+    /// own path, or for a network span's events, the list `events` builds.
+    fn load_handle<'h>(&self, handle: &'h Handle) -> Loaded<'h> {
+        if handle.kind == EVENTS {
+            return self.events(handle);
         }
-        let load = self.cas.load(SnapshotId::from_bytes(id));
-        state.metrics.cas_loads += 1;
-        state.metrics.cas_bytes_read += load.bytes_read;
-        if state.blobs.len() < self.limits.max_cached_blobs
-            && state.blob_bytes + load.bytes_read <= self.limits.max_cached_bytes
-        {
-            state.blob_bytes += load.bytes_read;
-            state.blobs.insert(id, load.outcome.clone());
+        let snapshot = match &handle.inline {
+            Some(blob) => btel_snapshot::decode_blob(blob, &self.cas.limits().decode)
+                .map(Arc::new)
+                .map_err(CasUnavailable::Corrupt),
+            None => BlobSource::load(self, CasId::from_bytes(handle.cas)),
+        };
+        match snapshot {
+            Ok(snapshot) => Ok((snapshot, Cow::Borrowed(&handle.path[..]))),
+            Err(unavailable) => Err(unavailable.code()),
         }
-        load.outcome
     }
 
-    /// The snapshot a handle reads and the path to follow in it, or why it
-    /// is unavailable: its CAS blob or the inline one at its own path, or
-    /// for a network span's events, what `events` finds.
-    fn load_handle<'h>(&self, state: &mut CacheState, handle: &'h Handle) -> Loaded<'h> {
-        let outcome = match &handle.inline {
-            _ if handle.kind == EVENTS => return self.events(state, handle),
-            Some(blob) => match btel_snapshot::decode_blob(blob, &self.cas.limits().decode) {
-                Ok(snapshot) => CasOutcome::Available(Arc::new(snapshot)),
-                Err(error) => CasOutcome::Corrupt(error),
-            },
-            None => self.load(state, handle.cas),
-        };
-        match outcome {
-            CasOutcome::Available(snapshot) => Ok((snapshot, Cow::Borrowed(&handle.path))),
-            outcome => Err(outcome.code()),
-        }
+    fn evaluation(&self) {
+        self.state
+            .lock()
+            .expect("value state")
+            .metrics
+            .value_evaluations += 1;
     }
 
     /// A network span's events as `[{event_name, payload, timestamp}]`. A
@@ -157,12 +159,23 @@ impl QueryContext {
     /// other path reads a list built here, with the payloads the path ends
     /// on (every one for the whole list, its own for one event) and null
     /// for the rest, which the path never reaches.
-    fn events<'h>(&self, state: &mut CacheState, handle: &'h Handle) -> Loaded<'h> {
+    fn events<'h>(&self, handle: &'h Handle) -> Loaded<'h> {
         let events = handle
             .inline
             .as_deref()
             .and_then(decode_events)
             .expect("Handle::decode validated the events");
+        let load = |cas| {
+            BlobSource::load(self, CasId::from_bytes(cas)).map_err(|unavailable| unavailable.code())
+        };
+        // A reader knows a blob by its ID, so what is built here needs one
+        // of its own: what the handle says is what is built from it.
+        let id = {
+            let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+            hasher.update(b"baml.query.events\0");
+            hasher.update(&handle.encode());
+            CasId::from_bytes(hasher.digest128().to_le_bytes())
+        };
         let mut path = handle.path.clone();
         // A negative index counts from the end.
         if let Some(Segment::Index(index)) = path.first_mut()
@@ -174,33 +187,25 @@ impl QueryContext {
             Some(Segment::Index(index)) => {
                 usize::try_from(*index).ok().filter(|at| *at < events.len())
             }
-            _ => None,
+            Some(Segment::Key(_)) | None => None,
         };
         if let (Some(at), Some(Segment::Key(key))) = (at, path.get(1))
             && key == "payload"
         {
             let rest = path.split_off(2);
-            return match events[at].payload {
-                Some(cas) => match self.load(state, cas) {
-                    CasOutcome::Available(snapshot) => Ok((snapshot, Cow::Owned(rest))),
-                    outcome => Err(outcome.code()),
-                },
-                None => Ok((
-                    Arc::new(Composer::default().finish(DecodedValue::Null)),
-                    Cow::Owned(rest),
-                )),
+            let snapshot = match events[at].payload {
+                Some(cas) => load(cas)?,
+                None => Arc::new(Composer::default().finish(id, DecodedValue::Null)),
             };
+            return Ok((snapshot, Cow::Owned(rest)));
         }
         let shown = |event: usize| path.is_empty() || (path.len() == 1 && at == Some(event));
         let mut composer = Composer::default();
         let mut items = Vec::with_capacity(events.len());
         for (position, event) in events.iter().enumerate() {
             let payload = match event.payload {
-                Some(cas) if shown(position) => match self.load(state, cas) {
-                    CasOutcome::Available(snapshot) => composer.embed(&snapshot)?,
-                    outcome => return Err(outcome.code()),
-                },
-                _ => DecodedValue::Null,
+                Some(cas) if shown(position) => composer.embed(&*load(cas)?)?,
+                Some(_) | None => DecodedValue::Null,
             };
             let timestamp = event
                 .timestamp
@@ -216,18 +221,14 @@ impl QueryContext {
             ])?);
         }
         let list = composer.list(items)?;
-        Ok((Arc::new(composer.finish(list)), Cow::Owned(path)))
+        Ok((Arc::new(composer.finish(id, list)), Cow::Owned(path)))
     }
 
     /// Report `code` once per distinct `key` (a handle, or a handle plus an
     /// operation marker).
     fn note(&self, key: &[u8], code: &str) {
         let mut state = self.state.lock().expect("value state");
-        Self::unavailable(&mut state, key, code);
-    }
-
-    fn unavailable(state: &mut CacheState, handle: &[u8], code: &str) {
-        if state.unavailable_seen.insert(handle.to_vec()) {
+        if state.unavailable_seen.insert(key.to_vec()) {
             *state
                 .metrics
                 .unavailable
@@ -236,47 +237,88 @@ impl QueryContext {
         }
     }
 
-    /// Navigate a handle and present the result as a SQL scalar.
-    fn resolve(&self, handle: &[u8]) -> rusqlite::Result<(Scalar, Kind)> {
-        self.check_deadline()?;
-        let mut state = self.state.lock().expect("value state");
-        state.metrics.value_evaluations += 1;
-        if let Some(result) = state.results.get(handle) {
-            let result = result.clone();
-            state.metrics.result_cache_hits += 1;
-            return Ok(result);
-        }
+    /// What a handle names, or `None` with the reason reported.
+    fn find(&self, handle: &[u8]) -> rusqlite::Result<Option<(Handle, Nav)>> {
         let parsed =
             Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
         if parsed.pending {
-            Self::unavailable(&mut state, handle, parsed.pending_code());
-            return Ok((Scalar::Null, Kind::Unavailable));
+            self.note(handle, parsed.pending_code());
+            return Ok(None);
         }
-        let result = match self.load_handle(&mut state, &parsed) {
-            Ok((snapshot, path)) => {
-                let nav = value::navigate(&snapshot, parsed.root(), parsed.names.as_ref(), &path);
-                if let Nav::Unavailable(reason) = nav {
-                    Self::unavailable(&mut state, handle, reason.code());
-                }
-                value::to_scalar(&snapshot, nav, parsed.names.as_ref(), &self.limits.render)
-            }
+        let nav = match self.load_handle(&parsed) {
+            Ok((snapshot, path)) => value::navigate(
+                self,
+                &snapshot,
+                parsed.root(),
+                parsed.names.as_ref(),
+                &path,
+                self.limits.render.max_blobs,
+            ),
             Err(code) => {
-                Self::unavailable(&mut state, handle, code);
-                (Scalar::Null, Kind::Unavailable)
+                self.note(handle, code);
+                return Ok(None);
             }
         };
-        if state.results.len() < self.limits.max_cached_results {
-            state.results.insert(handle.to_vec(), result.clone());
+        if let Nav::Unavailable(reason) = &nav {
+            self.note(handle, reason.code());
+            return Ok(None);
+        }
+        Ok(Some((parsed, nav)))
+    }
+
+    /// Navigate a handle and present the result as a SQL scalar.
+    fn resolve(&self, handle: &[u8]) -> rusqlite::Result<(Scalar, Kind)> {
+        self.check_deadline()?;
+        {
+            let mut state = self.state.lock().expect("value state");
+            state.metrics.value_evaluations += 1;
+            if let Some(result) = state.results.get(handle) {
+                let result = result.clone();
+                state.metrics.result_cache_hits += 1;
+                return Ok(result);
+            }
+        }
+        let result = match self.find(handle)? {
+            Some((parsed, nav)) => {
+                let presented =
+                    value::to_scalar(self, &nav, parsed.names.as_ref(), &self.limits.render);
+                if let Some(reason) = presented.incomplete {
+                    self.note(handle, reason.code());
+                }
+                if presented.cut {
+                    let mut key = handle.to_vec();
+                    key.extend_from_slice(b"\xffrender");
+                    self.note(&key, RENDER_LIMIT);
+                }
+                (presented.scalar, presented.kind)
+            }
+            None => (Scalar::Null, Kind::Unavailable),
+        };
+        let bytes = handle.len()
+            + match &result.0 {
+                Scalar::Text(text) => text.len(),
+                Scalar::Null | Scalar::Integer(_) | Scalar::Real(_) => 0,
+            };
+        let mut state = self.state.lock().expect("value state");
+        // The newest result stays, so the kind asked next finds its rendering.
+        if state.results.len() >= self.limits.max_cached_results
+            || state.result_bytes.saturating_add(bytes) > self.limits.max_cached_result_bytes
+        {
+            state.results.clear();
+            state.result_bytes = 0;
+        }
+        if state
+            .results
+            .insert(handle.to_vec(), result.clone())
+            .is_none()
+        {
+            state.result_bytes += bytes;
         }
         Ok(result)
     }
 
     /// Navigate and hand the result to `f` (comparisons need the leaf).
-    fn with_nav<T>(
-        &self,
-        handle: &[u8],
-        f: impl FnOnce(Nav<'_>) -> T,
-    ) -> rusqlite::Result<Option<T>> {
+    fn with_nav<T>(&self, handle: &[u8], f: impl FnOnce(&Nav) -> T) -> rusqlite::Result<Option<T>> {
         self.with_value(handle, |value| f(value.nav))
     }
 
@@ -286,33 +328,13 @@ impl QueryContext {
         f: impl FnOnce(equality::Captured<'_>) -> T,
     ) -> rusqlite::Result<Option<T>> {
         self.check_deadline()?;
-        let mut state = self.state.lock().expect("value state");
-        state.metrics.value_evaluations += 1;
-        let parsed =
-            Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
-        if parsed.pending {
-            Self::unavailable(&mut state, handle, parsed.pending_code());
-            return Ok(None);
-        }
-        match self.load_handle(&mut state, &parsed) {
-            Ok((snapshot, path)) => {
-                let nav = value::navigate(&snapshot, parsed.root(), parsed.names.as_ref(), &path);
-                if let Nav::Unavailable(reason) = nav {
-                    Self::unavailable(&mut state, handle, reason.code());
-                    return Ok(None);
-                }
-                drop(state);
-                Ok(Some(f(equality::Captured {
-                    snapshot: &snapshot,
-                    nav,
-                    names: parsed.names.as_ref(),
-                })))
-            }
-            Err(code) => {
-                Self::unavailable(&mut state, handle, code);
-                Ok(None)
-            }
-        }
+        self.evaluation();
+        Ok(self.find(handle)?.map(|(parsed, nav)| {
+            f(equality::Captured {
+                nav: &nav,
+                names: parsed.names.as_ref(),
+            })
+        }))
     }
 
     /// `__btel_body_text`: the text of a recorded body, which is a whole
@@ -321,23 +343,49 @@ impl QueryContext {
     /// cut body. A blob that cannot be read is reported.
     fn body_text(&self, cas: [u8; 16]) -> rusqlite::Result<Option<String>> {
         self.check_deadline()?;
-        let mut state = self.state.lock().expect("value state");
-        state.metrics.value_evaluations += 1;
-        let snapshot = match self.load(&mut state, cas) {
-            CasOutcome::Available(snapshot) => snapshot,
-            outcome => {
-                let mut key = cas.to_vec();
-                key.extend_from_slice(b"\xffbody");
-                Self::unavailable(&mut state, &key, outcome.code());
+        self.evaluation();
+        let report = |code: &str| {
+            let mut key = cas.to_vec();
+            key.extend_from_slice(b"\xffbody");
+            self.note(&key, code);
+        };
+        let snapshot = match BlobSource::load(self, CasId::from_bytes(cas)) {
+            Ok(snapshot) => snapshot,
+            Err(unavailable) => {
+                report(unavailable.code());
                 return Ok(None);
             }
         };
         let key = |key: &str| Segment::Key(key.to_owned());
         for path in [vec![], vec![key("data")], vec![key("request"), key("body")]] {
-            if let Nav::Value(DecodedValue::String(text)) =
-                value::navigate(&snapshot, Root::Value, None, &path)
-            {
-                return Ok(Some(text.to_string()));
+            let nav = value::navigate(
+                self,
+                &snapshot,
+                Root::Value,
+                None,
+                &path,
+                self.limits.render.max_blobs,
+            );
+            match nav {
+                Nav::Value(found) => {
+                    if let Found::String(text) = found.value() {
+                        return Ok(Some(text.to_string()));
+                    }
+                }
+                // A long body is a blob of its own.
+                Nav::Unavailable(reason @ (Unavailable::Blob(_) | Unavailable::BlobBudget)) => {
+                    report(reason.code());
+                    return Ok(None);
+                }
+                Nav::Unavailable(
+                    Unavailable::Truncated(_)
+                    | Unavailable::ArgumentNamesUnknown
+                    | Unavailable::ArgumentLayoutMismatch
+                    | Unavailable::WrongRoot
+                    | Unavailable::CellCycle,
+                )
+                | Nav::Arguments(_)
+                | Nav::Missing => {}
             }
         }
         Ok(None)
@@ -347,19 +395,52 @@ impl QueryContext {
     /// unavailable evidence (the caller asked for exactly this answer).
     fn state(&self, handle: &[u8]) -> rusqlite::Result<String> {
         self.check_deadline()?;
-        let mut state = self.state.lock().expect("value state");
-        state.metrics.value_evaluations += 1;
+        self.evaluation();
         let parsed =
             Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
         if parsed.pending {
             return Ok(parsed.pending_code().to_owned());
         }
-        Ok(match self.load_handle(&mut state, &parsed) {
-            Ok((snapshot, path)) => {
-                value::state(&snapshot, parsed.root(), parsed.names.as_ref(), &path).to_owned()
-            }
+        Ok(match self.load_handle(&parsed) {
+            Ok((snapshot, path)) => value::state(
+                self,
+                &snapshot,
+                parsed.root(),
+                parsed.names.as_ref(),
+                &path,
+                self.limits.render.max_blobs,
+            )
+            .to_owned(),
             Err(code) => code.to_owned(),
         })
+    }
+}
+
+/// Blobs a value continues in come from the query's cache, then the CAS.
+/// The state lock is held for bookkeeping only, never while reading a blob
+/// or walking a value.
+impl BlobSource for QueryContext {
+    fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+        let key = *id.as_bytes();
+        {
+            let mut state = self.state.lock().expect("value state");
+            if let Some(snapshot) = state.blobs.get(&key) {
+                let snapshot = snapshot.clone();
+                state.metrics.cas_cache_hits += 1;
+                return snapshot;
+            }
+        }
+        let load = self.cas.load(id);
+        let mut state = self.state.lock().expect("value state");
+        state.metrics.cas_loads += 1;
+        state.metrics.cas_bytes_read += load.bytes_read;
+        if state.blobs.len() < self.limits.max_cached_blobs
+            && state.blob_bytes + load.bytes_read <= self.limits.max_cached_bytes
+        {
+            state.blob_bytes += load.bytes_read;
+            state.blobs.insert(key, load.snapshot.clone());
+        }
+        load.snapshot
     }
 }
 
@@ -368,6 +449,8 @@ const PENDING: &str = "capture_pending";
 
 /// Structured ordering and opaque-value equality are unsupported.
 const COMPARISON_UNSUPPORTED: &str = "comparison_unsupported";
+/// Code of a rendering cut by its depth, node or text limit.
+const RENDER_LIMIT: &str = "render_limit";
 
 /// Compare two leaves; an unanswerable comparison involving a structured
 /// value is reported rather than left as an unexplained NULL.
@@ -413,11 +496,11 @@ fn comparison_result(
 type Loaded<'h> = Result<(Arc<DecodedSnapshot>, Cow<'h, [Segment]>), &'static str>;
 
 /// A snapshot assembled in memory: values the index builds, around
-/// payload graphs copied in from their own snapshots.
+/// payload graphs copied in from their own blobs.
 #[derive(Default)]
 struct Composer {
     objects: Vec<DecodedObject>,
-    limited: bool,
+    children: Vec<CasId>,
 }
 
 impl Composer {
@@ -433,7 +516,7 @@ impl Composer {
         let id = u32::try_from(self.objects.len())
             .map_err(|_| Unavailable::Truncated(Limit::Objects).code())?;
         self.objects.push(object);
-        Ok(DecodedValue::Object(id))
+        Ok(DecodedValue::Object(NodeId(id)))
     }
 
     fn map(&mut self, entries: Vec<(&str, DecodedValue)>) -> Result<DecodedValue, &'static str> {
@@ -458,27 +541,49 @@ impl Composer {
         })
     }
 
-    /// Copy a value snapshot's graph in, renumbering its objects after the
-    /// ones already here; returns its root.
+    /// Copy a value blob's graph in, numbering its objects after the ones
+    /// already here and the blobs it continues in after the ones already
+    /// named; returns its root. Each copy is a value of its own: two events
+    /// with one payload both show it.
     fn embed(&mut self, snapshot: &DecodedSnapshot) -> Result<DecodedValue, &'static str> {
         let DecodedRoot::Value(root) = &snapshot.root else {
             return Err(Unavailable::WrongRoot.code());
         };
         let too_many = Unavailable::Truncated(Limit::Objects).code();
-        let offset = u32::try_from(self.objects.len()).map_err(|_| too_many)?;
-        u32::try_from(self.objects.len() + snapshot.objects.len()).map_err(|_| too_many)?;
+        let offset = |here: usize, added: usize| {
+            u32::try_from(here + added).map_err(|_| too_many)?;
+            u32::try_from(here).map_err(|_| too_many)
+        };
+        let objects = offset(self.objects.len(), snapshot.objects.len())?;
+        let children = offset(self.children.len(), snapshot.children.len())?;
+        let node = |id: &NodeId| NodeId(id.0 + objects);
+        let child = |index: &ChildIndex| ChildIndex(index.0 + children);
         let shift = |value: &DecodedValue| match value {
-            DecodedValue::Object(id) => DecodedValue::Object(id + offset),
+            DecodedValue::Object(id) => DecodedValue::Object(node(id)),
             DecodedValue::Enum {
                 declaration,
                 variant,
                 name,
             } => DecodedValue::Enum {
-                declaration: declaration + offset,
+                declaration: node(declaration),
                 variant: *variant,
                 name: name.clone(),
             },
-            other => other.clone(),
+            DecodedValue::External(index) => DecodedValue::External(child(index)),
+            // The object named is in the other blob, which is not copied.
+            DecodedValue::ExternalNode { child: index, node } => DecodedValue::ExternalNode {
+                child: child(index),
+                node: *node,
+            },
+            DecodedValue::Null
+            | DecodedValue::OmittedArg
+            | DecodedValue::Bool(_)
+            | DecodedValue::Int(_)
+            | DecodedValue::Float(_)
+            | DecodedValue::String(_)
+            | DecodedValue::Bigint(_)
+            | DecodedValue::Type(_)
+            | DecodedValue::Truncated(_) => value.clone(),
         };
         let entries = |entries: &btel_snapshot::Entries| -> btel_snapshot::Entries {
             entries
@@ -486,6 +591,17 @@ impl Composer {
                 .map(|(key, value)| (key.clone(), shift(value)))
                 .collect()
         };
+        let content = |payload: &MediaPayload| match payload {
+            MediaPayload::Inline(_) => payload.clone(),
+            MediaPayload::External {
+                child: index,
+                text_len,
+            } => MediaPayload::External {
+                child: child(index),
+                text_len: *text_len,
+            },
+        };
+        self.children.extend_from_slice(&snapshot.children);
         for object in &snapshot.objects {
             self.objects.push(match object {
                 DecodedObject::List {
@@ -515,22 +631,46 @@ impl Composer {
                     original_len,
                 } => DecodedObject::Instance {
                     type_arguments: type_arguments.clone(),
-                    declaration: declaration + offset,
+                    declaration: node(declaration),
                     fields: entries(fields),
                     original_len: *original_len,
                 },
                 DecodedObject::Cell(value) => DecodedObject::Cell(shift(value)),
-                other => other.clone(),
+                DecodedObject::Media(media) => DecodedObject::Media(DecodedMedia {
+                    kind: media.kind,
+                    mime_type: media.mime_type.clone(),
+                    source: match &media.source {
+                        DecodedMediaSource::Url { url, data } => DecodedMediaSource::Url {
+                            url: url.clone(),
+                            data: data.as_ref().map(content),
+                        },
+                        DecodedMediaSource::File { path, data } => DecodedMediaSource::File {
+                            path: path.clone(),
+                            data: data.as_ref().map(content),
+                        },
+                        DecodedMediaSource::Base64 { data } => DecodedMediaSource::Base64 {
+                            data: content(data),
+                        },
+                    },
+                }),
+                DecodedObject::Uint8Array { .. }
+                | DecodedObject::Declaration { .. }
+                | DecodedObject::NonSnapshotable
+                | DecodedObject::Descriptive { .. }
+                | DecodedObject::Truncated(_) => object.clone(),
             });
         }
-        self.limited |= snapshot.limited;
         Ok(shift(root))
     }
 
-    fn finish(self, root: DecodedValue) -> DecodedSnapshot {
+    /// `id` names what was built: a reader that walks several values at
+    /// once tells their blobs apart by ID, so two different compositions
+    /// must not share one.
+    fn finish(self, id: CasId, root: DecodedValue) -> DecodedSnapshot {
         DecodedSnapshot {
-            id: SnapshotId::from_bytes([0; 16]),
-            limited: self.limited,
+            id,
+            encoded_len: 0,
+            children: self.children,
             root: DecodedRoot::Value(root),
             objects: self.objects,
         }
@@ -1083,7 +1223,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         let context = current(&s)?;
         let result = context.with_value(left, |a| {
             context.with_value(right, |b| {
-                equality::captured(a, op, b, &context.limits.comparison)
+                equality::captured(&*context, a, op, b, &context.limits.comparison)
             })
         })?;
         let result = match result {
@@ -1108,7 +1248,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         })?;
         let context = current(&s)?;
         let result = context.with_value(handle, |left| {
-            equality::json(left, op, &json, &context.limits.comparison)
+            equality::json(&*context, left, op, &json, &context.limits.comparison)
         })?;
         context.check_deadline()?;
         Ok(comparison_result(&context, handle, result))
@@ -1163,14 +1303,19 @@ pub(crate) enum Inline {
     List(Vec<Inline>),
 }
 
-/// An inline value's handle: its snapshot travels inside the handle.
+/// An inline value's handle: its snapshot travels inside the handle, which
+/// carries one blob, so the value is kept whole.
 pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let mut builder = pool.try_acquire().expect("a fresh pool has a slot");
     let root = build_inline(&mut builder, value);
-    let snapshot = builder.finish_value(root);
+    let mut whole = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Whole);
+    let snapshot = builder.finish(root, &mut whole);
     let mut blob = Vec::new();
-    snapshot.write_blob(&mut blob).expect("writing to memory");
+    snapshot
+        .root_blob()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut blob)
+        .expect("writing to memory");
     Handle {
         kind: INLINE,
         pending: false,
@@ -1182,74 +1327,36 @@ pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
     .encode()
 }
 
-/// Children first: each container's values form one contiguous range.
+/// Children first: a container's items are written in one run.
 fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot::SnapshotValue {
-    use btel_snapshot::{Limit, OwnedType, SnapshotObject, SnapshotValue};
-    let text = |b: &mut btel_snapshot::Builder, text: &str| {
-        b.string(&btel_snapshot::BexStr::from(text)).map_or(
-            SnapshotValue::Truncated(Limit::Bytes),
-            SnapshotValue::String,
-        )
-    };
-    match value {
-        Inline::Null => SnapshotValue::Null,
-        Inline::Int(n) => SnapshotValue::Int(*n),
-        Inline::Float(f) => SnapshotValue::Float(*f),
-        Inline::Text(t) => text(b, t),
+    use btel_snapshot::{BexStr, Limit, OwnedType, SnapshotValue};
+    let object = match value {
+        Inline::Null => return SnapshotValue::Null,
+        Inline::Int(n) => return SnapshotValue::Int(*n),
+        Inline::Float(f) => return SnapshotValue::Float(*f),
+        Inline::Text(text) => return b.leaves().string_value(&BexStr::from(text.as_str())),
         Inline::Map(entries) => {
             let values: Vec<SnapshotValue> =
                 entries.iter().map(|(_, v)| build_inline(b, v)).collect();
-            let Some(id) = b.reserve_object() else {
-                return SnapshotValue::Truncated(Limit::Objects);
-            };
-            let key_type = b.push_type(OwnedType::string());
-            let value_type = b.push_type(OwnedType::unknown());
-            let start = b.entry_start();
-            b.reserve_entries(entries.len().min(b.remaining_entries()));
-            for ((key, _), value) in entries.iter().zip(values) {
-                if b.remaining_entries() == 0 || !b.content(key.len(), false) {
-                    break;
-                }
-                b.entry(&btel_snapshot::BexStr::from(key.as_str()), value);
-            }
-            let range = b.entry_range(start);
-            b.set_object(
-                id,
-                SnapshotObject::Map {
-                    key_type,
-                    value_type,
-                    entries: range,
-                    original_len: entries.len(),
-                },
-            );
-            SnapshotValue::Object(id)
+            let key_type = b.leaves().ty(OwnedType::string());
+            let value_type = b.leaves().ty(OwnedType::unknown());
+            b.map(
+                key_type,
+                value_type,
+                entries.iter().zip(values),
+                |_, ((key, _), value)| (BexStr::from(key.as_str()), value),
+            )
         }
         Inline::List(items) => {
             let values: Vec<SnapshotValue> = items.iter().map(|v| build_inline(b, v)).collect();
-            let Some(id) = b.reserve_object() else {
-                return SnapshotValue::Truncated(Limit::Objects);
-            };
-            let element_type = b.push_type(OwnedType::unknown());
-            let start = b.value_start();
-            b.reserve_values(values.len().min(b.remaining_values()));
-            for value in values {
-                if b.remaining_values() == 0 {
-                    break;
-                }
-                b.push_value(value);
-            }
-            let range = b.value_range(start);
-            b.set_object(
-                id,
-                SnapshotObject::List {
-                    element_type,
-                    items: range,
-                    original_len: items.len(),
-                },
-            );
-            SnapshotValue::Object(id)
+            let element_type = b.leaves().ty(OwnedType::unknown());
+            b.list(element_type, values.into_iter(), |_, value| value)
         }
-    }
+    };
+    b.leaves().object(object).map_or(
+        SnapshotValue::Truncated(Limit::Objects),
+        SnapshotValue::Object,
+    )
 }
 
 /// Model usage summed per span: `(model, input, output, cache_read,

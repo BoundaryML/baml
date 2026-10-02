@@ -401,8 +401,3 @@ mod reserved_edge_name_tests {
         );
     }
 }
-
-mod adt;
-mod media;
-pub use adt::*;
-pub use media::{MediaContent, MediaValue};

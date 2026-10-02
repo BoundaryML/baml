@@ -150,6 +150,7 @@ final class HostCallableRegistry: @unchecked Sendable {
         }
         do {
             let call = try BamlBridge_Cffi_V1_BamlToHostCall(serializedBytes: argsData)
+            try Task.checkCancellation()
             let result = try await body(BamlHostArgs(call))
             completeHostCall(callId: callId, isError: 0, payload: try result.raw.serializedData())
         } catch let thrown as BamlThrownValue {
@@ -212,16 +213,70 @@ private func completeHostCall(callId: UInt32, isError: Int32, payload: Data) {
 /// fire-and-return (the engine thread must not be blocked; the
 /// no-synchronous-re-entrancy rule is honored because the body runs
 /// on a detached Task).
-let bamlHostDispatch: BamlHostDispatchCallback = { key, callId, args, length in
-    let data: Data
-    if let args, length > 0 {
-        data = Data(bytes: args, count: Int(length))
-    } else {
-        data = Data()
+enum HostInvocationScope {
+    @TaskLocal static var current: BamlInvocationCapture?
+}
+
+func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+    switch value.value {
+    case .handleValue(let handle):
+        if handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque {
+            _ = BamlApi.handleRelease(handle.key)
+        }
+    case .listValue(let list): for item in list.items { releaseControlValue(item) }
+    case .mapValue(let map): for item in map.entries { releaseControlValue(item.value) }
+    case .classValue(let cls): for item in cls.fields { releaseControlValue(item.value) }
+    case .unionVariantValue(let variant): releaseControlValue(variant.value)
+    default: break
     }
-    Task.detached {
-        await HostCallableRegistry.shared.dispatch(key: key, callId: callId, argsData: data)
+}
+
+private final class HostInvocationFrame: @unchecked Sendable {
+    let wire: BamlBridge_Cffi_V1_HostInvocation
+    let capture: BamlInvocationCapture
+    init(_ wire: BamlBridge_Cffi_V1_HostInvocation) {
+        self.wire = wire
+        capture = BamlInvocationCapture(state: BamlHandle(key: wire.effectiveState, handleType: .invocationState), cancel: wire.cancel)
     }
+
+}
+
+private final class HostInvocationTasks: @unchecked Sendable {
+    static let shared = HostInvocationTasks()
+    private let lock = NSLock()
+    private var tasks: [UInt32: Task<Void, Never>] = [:]
+    func launch(_ frame: HostInvocationFrame) {
+        lock.lock()
+        let task = Task.detached {
+            await HostInvocationScope.$current.withValue(frame.capture) {
+                await HostCallableRegistry.shared.dispatch(key: frame.wire.hostValueKey, callId: frame.wire.callbackID, argsData: frame.wire.applicationArgs)
+            }
+            self.remove(frame.wire.callbackID)
+        }
+        tasks[frame.wire.callbackID] = task
+        lock.unlock()
+    }
+    func cancel(_ id: UInt32) {
+        lock.lock()
+        let task = tasks[id]
+        lock.unlock()
+        task?.cancel()
+    }
+    private func remove(_ id: UInt32) {
+        lock.lock()
+        tasks.removeValue(forKey: id)
+        lock.unlock()
+    }
+}
+
+let bamlHostDispatch: BamlHostDispatchV2 = { request, length in
+    guard let request, length <= Int.max,
+        let wire = try? BamlBridge_Cffi_V1_HostInvocation(serializedBytes: Data(bytes: request, count: Int(length))) else { return }
+    HostInvocationTasks.shared.launch(HostInvocationFrame(wire))
+}
+
+let bamlHostCancel: BamlHostCancel = { callbackID in
+    HostInvocationTasks.shared.cancel(callbackID)
 }
 
 let bamlHostRelease: BamlHostReleaseCallback = { key in

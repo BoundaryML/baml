@@ -7,6 +7,7 @@
 //! the underlying user object. The Rust runtime never looks up the key.
 
 use std::{
+    any::Any,
     collections::HashMap,
     sync::{Arc, Mutex, PoisonError, Weak},
 };
@@ -41,11 +42,31 @@ pub type HostReleaseFn = extern "C" fn(host_value_key: u64);
 /// `PartialEq` compares by `(key, kind)`: the process-global interner
 /// guarantees one live `Arc<HostValueArc>` per key (see [`Self::intern`]),
 /// so two `Arc`s with the same key always refer to the same host object.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct HostValueArc {
     pub key: u64,
     pub kind: HostValueKind,
+    annotation: Option<HostAnnotation>,
 }
+
+#[derive(Clone)]
+struct HostAnnotation(Arc<dyn Any + Send + Sync>);
+impl std::fmt::Debug for HostAnnotation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("HostAnnotation(..)")
+    }
+}
+impl PartialEq for HostValueArc {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.kind == other.kind
+    }
+}
+impl Eq for HostValueArc {}
+
+// Registration precedes inbound decoding. The interner transfers this owned,
+// immutable declaration into the value; it contains no invocation or executor.
+static PENDING_ANNOTATIONS: Lazy<Mutex<HashMap<u64, HostAnnotation>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// Process-global interner mapping each host-value `key` to a `Weak` handle
 /// to the single live `Arc<HostValueArc>` for that key.
@@ -61,6 +82,26 @@ static INTERNER: Lazy<Mutex<HashMap<u64, Weak<HostValueArc>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
 impl HostValueArc {
+    pub fn register_annotation(key: u64, annotation: Arc<dyn Any + Send + Sync>) {
+        let replaced = PENDING_ANNOTATIONS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(key, HostAnnotation(annotation));
+        drop(replaced);
+    }
+
+    pub fn discard_annotation(key: u64) {
+        let removed = PENDING_ANNOTATIONS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&key);
+        drop(removed);
+    }
+
+    pub fn annotation<T: Any>(&self) -> Option<&T> {
+        self.annotation.as_ref()?.0.downcast_ref()
+    }
+
     /// Construct a fresh, *un-interned* `Arc<HostValueArc>`.
     ///
     /// This bypasses the process-global interner, so the returned `Arc` has
@@ -69,7 +110,11 @@ impl HostValueArc {
     /// unit tests. Inbound FFI decode must use [`HostValueArc::intern`] so
     /// that re-decoding the same wire key reuses one `Arc`.
     pub fn new(key: u64, kind: HostValueKind) -> Arc<Self> {
-        Arc::new(Self { key, kind })
+        Arc::new(Self {
+            key,
+            kind,
+            annotation: None,
+        })
     }
 
     /// Return the single live `Arc<HostValueArc>` for `key`, creating it if
@@ -97,7 +142,15 @@ impl HostValueArc {
         }
         // No live entry (absent, or a dangling `Weak` whose `Arc` already
         // dropped). Create a fresh identity and record a `Weak` to it.
-        let arc = Arc::new(Self { key, kind });
+        let annotation = PENDING_ANNOTATIONS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&key);
+        let arc = Arc::new(Self {
+            key,
+            kind,
+            annotation,
+        });
         map.insert(key, Arc::downgrade(&arc));
         arc
     }
@@ -529,6 +582,31 @@ mod tests {
             FIRED.lock().unwrap().as_slice(),
             &[key],
             "once the resurrected Arc drops, drain releases the key exactly once"
+        );
+    }
+
+    #[test]
+    fn declaration_transfers_to_interned_identity_and_rollback_releases_it() {
+        let _guard = lock_and_reset();
+        let marker = Arc::new(String::from("declaration"));
+        HostValueArc::register_annotation(203, marker.clone());
+        assert_eq!(Arc::strong_count(&marker), 2);
+        let value = HostValueArc::intern(203, HostValueKind::Callable);
+        assert_eq!(value.annotation::<String>().unwrap(), "declaration");
+        let alias = HostValueArc::intern(203, HostValueKind::Callable);
+        assert!(Arc::ptr_eq(&value, &alias));
+        HostValueArc::discard_annotation(203);
+        drop(value);
+        assert_eq!(Arc::strong_count(&marker), 2);
+        drop(alias);
+        assert_eq!(Arc::strong_count(&marker), 1);
+        HostValueArc::register_annotation(204, marker.clone());
+        HostValueArc::discard_annotation(204);
+        assert_eq!(Arc::strong_count(&marker), 1);
+        assert!(
+            HostValueArc::intern(204, HostValueKind::Callable)
+                .annotation::<String>()
+                .is_none()
         );
     }
 

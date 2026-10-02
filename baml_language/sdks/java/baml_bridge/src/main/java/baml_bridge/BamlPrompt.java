@@ -40,7 +40,7 @@ public final class BamlPrompt {
         return (String) BamlFfi.callSync("ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING);
     }
 
-    public String text(BamlCallContext ctx) {
+    public String text(InvocationOptions ctx) {
         return (String)
                 BamlFfi.callSync(
                         "ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING, ctx);
@@ -54,7 +54,7 @@ public final class BamlPrompt {
     }
 
     @SuppressWarnings("unchecked")
-    public CompletableFuture<String> text_async(BamlCallContext ctx) {
+    public CompletableFuture<String> text_async(InvocationOptions ctx) {
         return (CompletableFuture<String>) (CompletableFuture<?>)
                 BamlFfi.callAsync(
                         "ai.Prompt.text", SELF_NAMES, new Object[] {this}, BamlType.STRING, ctx);
@@ -72,7 +72,7 @@ public final class BamlPrompt {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> List<T> messages(BamlCallContext ctx) {
+    public <T> List<T> messages(InvocationOptions ctx) {
         return (List<T>)
                 BamlFfi.callSync(
                         "ai.Prompt.messages", SELF_NAMES, new Object[] {this}, MESSAGE_LIST, ctx);
@@ -86,7 +86,7 @@ public final class BamlPrompt {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> CompletableFuture<List<T>> messages_async(BamlCallContext ctx) {
+    public <T> CompletableFuture<List<T>> messages_async(InvocationOptions ctx) {
         return (CompletableFuture<List<T>>) (CompletableFuture<?>)
                 BamlFfi.callAsync(
                         "ai.Prompt.messages", SELF_NAMES, new Object[] {this}, MESSAGE_LIST, ctx);

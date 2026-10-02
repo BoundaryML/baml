@@ -69,7 +69,7 @@ pub const PROCESSES: Relation = Relation {
         col(
             "baml_source_code_content_id",
             "text",
-            "CAS id of the BAML sources it ran, a map<path, content>; NULL when not recorded",
+            "CAS id of the BAML sources it ran: the root blob of a map<path, content> whose large files are blobs of their own; NULL when not recorded",
         ),
         col("baml_version", "text", ""),
         col(

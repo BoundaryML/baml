@@ -9,156 +9,165 @@ namespace Baml;
 public static class BamlCallback
 {
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<CancellationToken, Task<TResult>> FromSync<TResult>(
+    public static Func<Task<TResult>> FromSync<TResult>(
         Func<TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (_) => Task.FromResult(callback());
+        return () => Task.FromResult(callback());
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, CancellationToken, Task<TResult>> FromSync<T1, TResult>(
+    public static Func<T1, Task<TResult>> FromSync<T1, TResult>(
         Func<T1, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, _) => Task.FromResult(callback(value1));
+        return (value1) => Task.FromResult(callback(value1));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, CancellationToken, Task<TResult>> FromSync<T1, T2, TResult>(
+    public static Func<T1, T2, Task<TResult>> FromSync<T1, T2, TResult>(
         Func<T1, T2, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, _) => Task.FromResult(callback(value1, value2));
+        return (value1, value2) => Task.FromResult(callback(value1, value2));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, TResult>(
+    public static Func<T1, T2, T3, Task<TResult>> FromSync<T1, T2, T3, TResult>(
         Func<T1, T2, T3, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, _) => Task.FromResult(callback(value1, value2, value3));
+        return (value1, value2, value3) => Task.FromResult(callback(value1, value2, value3));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, TResult>(
+    public static Func<T1, T2, T3, T4, Task<TResult>> FromSync<T1, T2, T3, T4, TResult>(
         Func<T1, T2, T3, T4, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, _) => Task.FromResult(callback(value1, value2, value3, value4));
+        return (value1, value2, value3, value4) => Task.FromResult(callback(value1, value2, value3, value4));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, TResult>(
+    public static Func<T1, T2, T3, T4, T5, Task<TResult>> FromSync<T1, T2, T3, T4, T5, TResult>(
         Func<T1, T2, T3, T4, T5, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, _) => Task.FromResult(callback(value1, value2, value3, value4, value5));
+        return (value1, value2, value3, value4, value5) => Task.FromResult(callback(value1, value2, value3, value4, value5));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, TResult>(
         Func<T1, T2, T3, T4, T5, T6, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6));
+        return (value1, value2, value3, value4, value5, value6) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7));
+        return (value1, value2, value3, value4, value5, value6, value7) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8));
+        return (value1, value2, value3, value4, value5, value6, value7, value8) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9));
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10));
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11));
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12));
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13));
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14));
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14));
     }
 
     /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, CancellationToken, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, TResult>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, TResult>(
         Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, TResult> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, _) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15));
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15));
+    }
+
+    /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, TResult>(
+        Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, TResult> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16));
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<CancellationToken, Task> FromSync(
+    public static Func<Task> FromSync(
         Action callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (_) =>
+        return () =>
         {
             callback();
             return Task.CompletedTask;
@@ -166,12 +175,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, CancellationToken, Task> FromSync<T1>(
+    public static Func<T1, Task> FromSync<T1>(
         Action<T1> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, _) =>
+        return (value1) =>
         {
             callback(value1);
             return Task.CompletedTask;
@@ -179,12 +188,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, CancellationToken, Task> FromSync<T1, T2>(
+    public static Func<T1, T2, Task> FromSync<T1, T2>(
         Action<T1, T2> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, _) =>
+        return (value1, value2) =>
         {
             callback(value1, value2);
             return Task.CompletedTask;
@@ -192,12 +201,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, CancellationToken, Task> FromSync<T1, T2, T3>(
+    public static Func<T1, T2, T3, Task> FromSync<T1, T2, T3>(
         Action<T1, T2, T3> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, _) =>
+        return (value1, value2, value3) =>
         {
             callback(value1, value2, value3);
             return Task.CompletedTask;
@@ -205,12 +214,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, CancellationToken, Task> FromSync<T1, T2, T3, T4>(
+    public static Func<T1, T2, T3, T4, Task> FromSync<T1, T2, T3, T4>(
         Action<T1, T2, T3, T4> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, _) =>
+        return (value1, value2, value3, value4) =>
         {
             callback(value1, value2, value3, value4);
             return Task.CompletedTask;
@@ -218,12 +227,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5>(
+    public static Func<T1, T2, T3, T4, T5, Task> FromSync<T1, T2, T3, T4, T5>(
         Action<T1, T2, T3, T4, T5> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, _) =>
+        return (value1, value2, value3, value4, value5) =>
         {
             callback(value1, value2, value3, value4, value5);
             return Task.CompletedTask;
@@ -231,12 +240,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6>(
+    public static Func<T1, T2, T3, T4, T5, T6, Task> FromSync<T1, T2, T3, T4, T5, T6>(
         Action<T1, T2, T3, T4, T5, T6> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, _) =>
+        return (value1, value2, value3, value4, value5, value6) =>
         {
             callback(value1, value2, value3, value4, value5, value6);
             return Task.CompletedTask;
@@ -244,12 +253,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, Task> FromSync<T1, T2, T3, T4, T5, T6, T7>(
         Action<T1, T2, T3, T4, T5, T6, T7> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7);
             return Task.CompletedTask;
@@ -257,12 +266,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8);
             return Task.CompletedTask;
@@ -270,12 +279,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8, T9> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9);
             return Task.CompletedTask;
@@ -283,12 +292,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10);
             return Task.CompletedTask;
@@ -296,12 +305,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11);
             return Task.CompletedTask;
@@ -309,12 +318,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12);
             return Task.CompletedTask;
@@ -322,12 +331,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13);
             return Task.CompletedTask;
@@ -335,12 +344,12 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14);
             return Task.CompletedTask;
@@ -348,14 +357,26 @@ public static class BamlCallback
     }
 
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
-    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, CancellationToken, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(
         Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
 
-        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, _) =>
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15);
+            return Task.CompletedTask;
+        };
+    }
+    /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(
+        Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16) =>
+        {
+            callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16);
             return Task.CompletedTask;
         };
     }

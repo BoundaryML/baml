@@ -18,4 +18,4 @@ pub mod timing;
 pub mod value;
 
 pub use btel_recorder::{RecordingId, proto};
-pub use btel_snapshot::SnapshotId;
+pub use btel_snapshot::CasId;

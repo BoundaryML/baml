@@ -67,6 +67,10 @@ pub enum BamlHandleType {
     /// display name through a generated typemap; only the originating engine can
     /// interpret the rooted declaration identity.
     AdtRuntimeValue = 18,
+    /// Internal BEP-81 capabilities. They belong to their issuing runtime and
+    /// cannot be supplied as ordinary application values.
+    InvocationState = 19,
+    TraceReservation = 20,
 }
 impl BamlHandleType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -91,6 +95,8 @@ impl BamlHandleType {
             Self::HostValueOpaque => "HOST_VALUE_OPAQUE",
             Self::AdtFunctionSpec => "ADT_FUNCTION_SPEC",
             Self::AdtRuntimeValue => "ADT_RUNTIME_VALUE",
+            Self::InvocationState => "INVOCATION_STATE",
+            Self::TraceReservation => "TRACE_RESERVATION",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -112,6 +118,8 @@ impl BamlHandleType {
             "HOST_VALUE_OPAQUE" => Some(Self::HostValueOpaque),
             "ADT_FUNCTION_SPEC" => Some(Self::AdtFunctionSpec),
             "ADT_RUNTIME_VALUE" => Some(Self::AdtRuntimeValue),
+            "INVOCATION_STATE" => Some(Self::InvocationState),
+            "TRACE_RESERVATION" => Some(Self::TraceReservation),
             _ => None,
         }
     }
@@ -877,6 +885,26 @@ pub struct BamlToHostCall {
     #[prost(message, repeated, tag = "1")]
     pub args: ::prost::alloc::vec::Vec<BamlToHostArg>,
 }
+/// V2 host dispatch envelope. The adapter owns the effective-state reference
+/// and ordinary references in application_args/cancel until transferred or
+/// released. application_args remains an encoded BamlToHostCall.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct HostInvocation {
+    #[prost(uint64, tag = "1")]
+    pub host_value_key: u64,
+    #[prost(uint32, tag = "2")]
+    pub callback_id: u32,
+    #[prost(bytes = "vec", tag = "3")]
+    pub application_args: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "4")]
+    pub effective_state: u64,
+    #[prost(uint64, tag = "5")]
+    pub host_environment: u64,
+    #[prost(message, optional, tag = "6")]
+    pub cancel: ::core::option::Option<BamlOutboundValue>,
+    #[prost(uint64, optional, tag = "7")]
+    pub deadline_ns: ::core::option::Option<u64>,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlToHostArg {
     #[prost(message, optional, tag = "1")]
@@ -1107,6 +1135,10 @@ pub struct CallFunctionArgs {
     /// non-generic calls.
     #[prost(message, repeated, tag = "3")]
     pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+    /// The sole invocation-control channel. This is a breaking internal schema;
+    /// the native ABI revision protects function-table compatibility.
+    #[prost(message, optional, tag = "6")]
+    pub invocation: ::core::option::Option<InvocationOptions>,
     #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
     pub call_target: ::core::option::Option<call_function_args::CallTarget>,
 }
@@ -1118,6 +1150,70 @@ pub mod call_function_args {
         FunctionName(::prost::alloc::string::String),
         #[prost(uint64, tag = "5")]
         FunctionHandle(u64),
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InvocationOptions {
+    #[prost(message, optional, tag = "1")]
+    pub trace: ::core::option::Option<TraceSelection>,
+    #[prost(message, optional, tag = "2")]
+    pub cancel: ::core::option::Option<InboundValue>,
+    #[prost(uint64, optional, tag = "3")]
+    pub deadline_ns: ::core::option::Option<u64>,
+    #[prost(uint64, tag = "4")]
+    pub inherited_state: u64,
+    #[prost(uint64, tag = "5")]
+    pub host_environment: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TraceSelection {
+    #[prost(oneof = "trace_selection::Selection", tags = "1, 2")]
+    pub selection: ::core::option::Option<trace_selection::Selection>,
+}
+/// Nested message and enum types in `TraceSelection`.
+pub mod trace_selection {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Selection {
+        #[prost(message, tag = "1")]
+        Options(super::TraceOptions),
+        #[prost(uint64, tag = "2")]
+        Reservation(u64),
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TraceOptions {
+    #[prost(enumeration = "TraceMode", optional, tag = "1")]
+    pub mode: ::core::option::Option<i32>,
+    #[prost(bool, optional, tag = "2")]
+    pub inputs: ::core::option::Option<bool>,
+    #[prost(bool, optional, tag = "3")]
+    pub output: ::core::option::Option<bool>,
+    #[prost(bool, optional, tag = "4")]
+    pub error: ::core::option::Option<bool>,
+    #[prost(string, optional, tag = "5")]
+    pub distinct_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(map = "string, message", tag = "6")]
+    pub metadata: ::std::collections::HashMap<::prost::alloc::string::String, TraceMetadataValue>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TraceMetadataValue {
+    #[prost(oneof = "trace_metadata_value::Value", tags = "1, 2, 3, 4, 5")]
+    pub value: ::core::option::Option<trace_metadata_value::Value>,
+}
+/// Nested message and enum types in `TraceMetadataValue`.
+pub mod trace_metadata_value {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Value {
+        #[prost(string, tag = "1")]
+        StringValue(::prost::alloc::string::String),
+        #[prost(sint64, tag = "2")]
+        IntValue(i64),
+        #[prost(double, tag = "3")]
+        FloatValue(f64),
+        #[prost(bool, tag = "4")]
+        BoolValue(bool),
+        #[prost(bool, tag = "5")]
+        Remove(bool),
     }
 }
 /// CallAck is the engine's acknowledgment of an inbound call. It flows
@@ -1134,5 +1230,37 @@ pub mod call_ack {
     pub enum Response {
         #[prost(string, tag = "1")]
         Error(::prost::alloc::string::String),
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum TraceMode {
+    Unspecified = 0,
+    Hidden = 1,
+    Timing = 2,
+    Span = 3,
+}
+impl TraceMode {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "TRACE_MODE_UNSPECIFIED",
+            Self::Hidden => "TRACE_MODE_HIDDEN",
+            Self::Timing => "TRACE_MODE_TIMING",
+            Self::Span => "TRACE_MODE_SPAN",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "TRACE_MODE_UNSPECIFIED" => Some(Self::Unspecified),
+            "TRACE_MODE_HIDDEN" => Some(Self::Hidden),
+            "TRACE_MODE_TIMING" => Some(Self::Timing),
+            "TRACE_MODE_SPAN" => Some(Self::Span),
+            _ => None,
+        }
     }
 }

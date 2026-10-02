@@ -42,7 +42,7 @@ export declare class BamlAbortError extends Error {
  * Raised for SDK-setup failures and BAML-runtime panics — the Node analog of
  * `bridge_python`'s `BamlPanic`. The in-call panic path (`decodeCallResult`'s
  * `panic` arm) and the `getRuntime` not-initialized path both surface this,
- * except clean process-exit panics, which exit after flushing telemetry.
+ * except clean process-exit panics, which terminate the process.
  */
 export declare class BamlPanic extends BamlError {
     constructor(message: string, detail?: BamlErrorDetail);

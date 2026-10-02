@@ -61,7 +61,7 @@ test "ast-grep rules find framework tests and ignore ordinary helpers" {
     assert.equal(declaration_count(typescript), 8);
     assert.equal(declaration_count(cpp), 1);
     assert.equal(declaration_count(csharp), 2);
-    assert.equal(declaration_count(rust), 3);
+    assert.equal(declaration_count(rust), 4);
     assert.equal(declaration_count(go), 1);
     assert.equal(declaration_count(java), 2);
     assert.equal(declaration_count(swift), 1)

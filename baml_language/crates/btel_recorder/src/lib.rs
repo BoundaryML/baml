@@ -31,8 +31,8 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/baml.btel.recording.v2.rs"));
 }
 
-impl From<proto::SnapshotId> for btel_snapshot::SnapshotId {
-    fn from(id: proto::SnapshotId) -> Self {
+impl From<proto::CasId> for btel_snapshot::CasId {
+    fn from(id: proto::CasId) -> Self {
         let mut bytes = [0; 16];
         bytes[..8].copy_from_slice(&id.low.to_le_bytes());
         bytes[8..].copy_from_slice(&id.high.to_le_bytes());
@@ -194,6 +194,9 @@ impl ConversionBuffer {
             self.link_unwound(thread, record);
         }
         match record {
+            SpanRecord::HostFunctionDefined(metadata) => {
+                self.functions.register_host(metadata);
+            }
             SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
             SpanRecord::Log {
                 parent_id,
@@ -220,7 +223,7 @@ impl ConversionBuffer {
                         at_ticks: at.get(),
                         level: level as i32,
                         event_name: event_name.as_deref().map(str::to_owned),
-                        data_cas_id: captured_data.as_ref().map(snapshot_id),
+                        data_cas_id: captured_data.as_ref().map(cas_id),
                     }),
                 );
             }
@@ -228,7 +231,7 @@ impl ConversionBuffer {
                 self.spans.select_context(
                     thread,
                     captured_context.as_ref().map(|snapshot| {
-                        proto::thread_section::Context::ContextCasId(snapshot_id(snapshot))
+                        proto::thread_section::Context::ContextCasId(cas_id(snapshot))
                     }),
                 );
             }
@@ -241,9 +244,9 @@ impl ConversionBuffer {
             SpanRecord::ContextReferenced { id } => {
                 self.spans.select_context(
                     thread,
-                    Some(proto::thread_section::Context::ContextCasId(
-                        snapshot_reference(*id),
-                    )),
+                    Some(proto::thread_section::Context::ContextCasId(cas_reference(
+                        *id,
+                    ))),
                 );
             }
             SpanRecord::ThreadSpanAnnouncement {
@@ -311,7 +314,7 @@ impl ConversionBuffer {
                     started_at_ticks: span.started_at.get(),
                     method: span.method.to_string(),
                     url: span.url.to_string(),
-                    request_cas_id: span.request.as_ref().map(snapshot_id),
+                    request_cas_id: span.request.as_ref().map(cas_id),
                 }),
             ),
             SpanRecord::NetworkEvent(event) => self.event(
@@ -320,7 +323,7 @@ impl ConversionBuffer {
                     span_id: event.span.get(),
                     name: event.name.as_str().to_owned(),
                     at_ticks: event.at.get(),
-                    payload_cas_id: event.payload.as_ref().map(snapshot_id),
+                    payload_cas_id: event.payload.as_ref().map(cas_id),
                 }),
             ),
             SpanRecord::NetworkSpanCompletion(done) => self.event(
@@ -330,7 +333,7 @@ impl ConversionBuffer {
                     completed_at_ticks: done.completed_at.get(),
                     outcome: flags::outcome(done.outcome) as i32,
                     panicked: done.outcome == btel_types::InvocationOutcome::Panicked,
-                    error_cas_id: done.error.as_ref().map(snapshot_id),
+                    error_cas_id: done.error.as_ref().map(cas_id),
                 }),
             ),
             SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
@@ -388,8 +391,8 @@ impl ConversionBuffer {
                         parent_id: parent_id.get(),
                         call_path_id: call_path.get(),
                         entered_at_ticks: entered_at.get(),
-                        inputs_cas_id: captured_inputs.as_ref().map(snapshot_id),
-                        type_args_cas_id: captured_type_args.as_ref().map(snapshot_id),
+                        inputs_cas_id: captured_inputs.as_ref().map(cas_id),
+                        type_args_cas_id: captured_type_args.as_ref().map(cas_id),
                     }),
                 );
             }
@@ -446,7 +449,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -470,7 +473,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(9).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -494,7 +497,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -518,7 +521,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(9).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -542,7 +545,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -566,7 +569,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(10).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -590,7 +593,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -614,7 +617,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(10).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -638,7 +641,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -663,7 +666,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
                     }),
                 );
@@ -687,7 +690,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(11).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -711,7 +714,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(10).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
                     }),
                 );
@@ -735,7 +738,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -760,7 +763,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
                     }),
                 );
@@ -784,7 +787,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(11).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -808,7 +811,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(10).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
                     }),
                 );
@@ -832,7 +835,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -856,7 +859,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(1).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -880,7 +883,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -904,7 +907,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -928,7 +931,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -953,7 +956,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
                     }),
                 );
@@ -977,7 +980,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(3).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
                     }),
                 );
@@ -1001,7 +1004,7 @@ impl ConversionBuffer {
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
                         completion_flags: CompletionFlags::from_variant(2).bits(),
-                        value_cas_id: captured_value.as_ref().map(snapshot_id),
+                        value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
                     }),
                 );
@@ -1022,12 +1025,12 @@ impl ConversionBuffer {
 #[cfg(test)]
 mod tests;
 
-pub(crate) fn snapshot_id(snapshot: &Snapshot) -> proto::SnapshotId {
-    snapshot_reference(snapshot.id())
+pub(crate) fn cas_id(snapshot: &Snapshot) -> proto::CasId {
+    cas_reference(snapshot.root_id())
 }
 
-fn snapshot_reference(bytes: btel_snapshot::SnapshotId) -> proto::SnapshotId {
-    proto::SnapshotId {
+fn cas_reference(bytes: btel_snapshot::CasId) -> proto::CasId {
+    proto::CasId {
         low: u64::from_le_bytes(bytes.as_bytes()[..8].try_into().unwrap()),
         high: u64::from_le_bytes(bytes.as_bytes()[8..].try_into().unwrap()),
     }

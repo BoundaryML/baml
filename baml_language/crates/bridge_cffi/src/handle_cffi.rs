@@ -179,7 +179,7 @@ pub fn media_from_base64(
 ) -> Result<HandleParts, HandleError> {
     validate_media_input(base64, mime_type)?;
     Ok(insert_entry(CffiHandleTableEntry::Adt(
-        BexExternalAdt::Media(MediaValue::from_base64(kind, base64, mime_type)),
+        BexExternalAdt::Media(MediaValue::from_base64(kind, base64.into(), mime_type)),
     )))
 }
 
@@ -192,7 +192,10 @@ pub fn media_file(key: u64, handle_type: i32) -> Result<Option<String>, HandleEr
 }
 
 pub fn media_base64(key: u64, handle_type: i32) -> Result<String, HandleError> {
-    Ok(resolve_media(key, handle_type)?.base64())
+    Ok(resolve_media(key, handle_type)?
+        .base64()
+        .as_str()
+        .to_owned())
 }
 
 pub fn media_mime_type(key: u64, handle_type: i32) -> Result<Option<String>, HandleError> {

@@ -48,7 +48,7 @@ const BAML_BRIDGE_DEP: &str = r#"{ path = "../../../../../sdks/rust/bridge_rust"
 /// (`RustGenOptions::manifest_extra`): dependencies of the ported test
 /// suite, not of the generated SDK itself.
 const MANIFEST_EXTRA: &str = r#"[dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros", "time", "sync", "rt-multi-thread"] }
 "#;
 
 /// Whether a ported test file is compiled into the fixture's test suite.
@@ -71,11 +71,8 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Later("compile-fail probes need a trybuild-style harness"),
     ),
     ("function_calls", "test_main.rs", Gate::Now),
-    (
-        "function_calls",
-        "test_cancellation.rs",
-        Gate::Later("needs cancellation"),
-    ),
+    ("function_calls", "test_invocation.rs", Gate::Now),
+    ("function_calls", "test_cancellation.rs", Gate::Now),
     (
         "function_calls",
         "test_errors.rs",

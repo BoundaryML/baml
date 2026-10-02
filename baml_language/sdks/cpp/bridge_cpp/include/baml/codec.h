@@ -35,7 +35,18 @@ namespace baml {
 template <typename T>
 struct codec;  // primary template intentionally undefined
 
+template <typename T, typename ThrownU>
+class future;
+template <typename Signature>
+class function;
+class rust_type;
+class target;
+
 namespace detail {
+
+template <typename Ret, typename ThrownU>
+future<Ret, ThrownU> start_handle_call(uint64_t handle_key,
+                                       args_encoder&& args);
 
 template <typename Ret, typename ThrownU = void>
 Ret call_handle_sync(uint64_t handle_key, args_encoder&& args);
@@ -414,6 +425,72 @@ struct function_handle_state {
 
 }  // namespace detail
 
+class rust_type {
+ public:
+  rust_type() = default;
+  explicit rust_type(uint64_t key)
+      : state_(std::make_shared<detail::function_handle_state>(key)) {}
+  uint64_t key() const {
+    if (!state_ || !state_->key) throw error("invalid Rust data handle");
+    return state_->key;
+  }
+  friend bool operator==(const rust_type& lhs, const rust_type& rhs) {
+    return lhs.state_ == rhs.state_;
+  }
+
+ private:
+  std::shared_ptr<detail::function_handle_state> state_;
+};
+template <>
+struct codec<rust_type> {
+  static void encode(detail::pb::InboundValue& out, const rust_type& value) {
+    uint64_t key = 0;
+    if (detail::api().handle_clone(value.key(), &key) != 0)
+      throw error("Rust data handle clone failed");
+    out.mutable_handle()->set_key(key);
+    out.mutable_handle()->set_handle_type(detail::pb::UNTAGGED_RUST_DATA);
+  }
+  static rust_type decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& value = detail::unwrap(raw);
+    if (!value.has_handle_value() ||
+        value.handle_value().handle_type() != detail::pb::UNTAGGED_RUST_DATA ||
+        !value.handle_value().key())
+      detail::kind_mismatch("Rust data handle", value);
+    return rust_type(value.handle_value().key());
+  }
+};
+
+template <typename R, typename... Args>
+class function<R(Args...)> {
+ public:
+  function(std::shared_ptr<detail::function_handle_state> state,
+           std::shared_ptr<std::vector<std::string>> names)
+      : state_(std::move(state)), names_(std::move(names)) {}
+  future<R, void> call_async(Args... arguments,
+                             const invocation_options& controls = {}) const {
+    detail::args_encoder encoded(controls);
+    std::size_t index = 0;
+    (encoded.add_arg((*names_)[index++],
+                     [&arguments](detail::pb::InboundValue& target) {
+                       codec<std::decay_t<Args>>::encode(target, arguments);
+                     }),
+     ...);
+    return detail::start_handle_call<R, void>(state_->key, std::move(encoded));
+  }
+  R call(Args... arguments, const invocation_options& controls = {}) const {
+    return call_async(std::forward<Args>(arguments)..., controls).get();
+  }
+  R operator()(Args... arguments) const {
+    return call(std::forward<Args>(arguments)...);
+  }
+  uint64_t handle_key() const { return state_->key; }
+
+ private:
+  std::shared_ptr<detail::function_handle_state> state_;
+  std::shared_ptr<std::vector<std::string>> names_;
+  friend class target;
+};
+
 template <typename R, typename... Args>
 struct codec<std::function<R(Args...)>> {
   static std::function<R(Args...)> decode(
@@ -457,6 +534,37 @@ struct codec<std::function<R(Args...)>> {
         return detail::call_handle_sync<R>(state->key, std::move(encoded));
       }
     };
+  }
+};
+template <typename R, typename... Args>
+struct codec<function<R(Args...)>> {
+  static function<R(Args...)> decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& value = detail::unwrap(raw);
+    if (value.value_case() != detail::pb::BamlOutboundValue::kHandleValue ||
+        value.handle_value().handle_type() != detail::pb::FUNCTION_REF ||
+        value.handle_value().key() == 0) {
+      detail::kind_mismatch("function", value);
+    }
+    auto state = std::make_shared<detail::function_handle_state>(
+        value.handle_value().key());
+    if (!value.handle_value().has_ty() ||
+        value.handle_value().ty().ty_case() != detail::pb::BamlTy::kFunction) {
+      throw error("BAML decode error: returned function has no function type");
+    }
+    const auto& function_ty = value.handle_value().ty().function();
+    if (function_ty.params_size() != sizeof...(Args)) {
+      throw error("BAML decode error: returned function arity mismatch");
+    }
+    auto names = std::make_shared<std::vector<std::string>>();
+    names->reserve(function_ty.params_size());
+    for (const auto& param : function_ty.params()) {
+      if (!param.has_name() || param.name().empty()) {
+        throw error(
+            "BAML decode error: returned function parameter has no name");
+      }
+      names->push_back(param.name());
+    }
+    return function<R(Args...)>(std::move(state), std::move(names));
   }
 };
 

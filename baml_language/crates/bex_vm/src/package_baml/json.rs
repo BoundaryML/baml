@@ -1033,7 +1033,7 @@ fn serialize_media(
     } else if let Some(file) = media.file() {
         ("file", file)
     } else {
-        ("base64", media.base64())
+        ("base64", media.base64().as_str().to_owned())
     };
 
     let mut obj = serde_json::Map::new();
@@ -1053,10 +1053,7 @@ fn serialize_media(
     Ok(serde_json::Value::Object(obj))
 }
 
-pub(crate) fn read_media_value(
-    vm: &BexVm,
-    value: Value,
-) -> Option<Arc<baml_builtins2::MediaValue>> {
+pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_types::MediaValue>> {
     let ptr = value.as_object_ptr()?;
     let (class, data_value) = match vm.get_object(ptr) {
         Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
@@ -1070,7 +1067,7 @@ pub(crate) fn read_media_value(
 
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
-        Object::RustData(arc) => arc.clone().downcast::<baml_builtins2::MediaValue>().ok(),
+        Object::RustData(arc) => arc.clone().downcast::<bex_vm_types::MediaValue>().ok(),
         _ => None,
     }
 }
@@ -1526,10 +1523,10 @@ fn deserialize_media(
         .ok_or_else(|| raise_decode(vm, "media object missing `value`", path))?;
     let mime = map.get("mime").and_then(serde_json::Value::as_str);
 
-    let media_arc: Arc<baml_builtins2::MediaValue> = match source {
-        "url" => baml_builtins2::MediaValue::from_url(kind, value_str, mime),
-        "file" => baml_builtins2::MediaValue::from_file(kind, value_str, mime),
-        "base64" | "inline" => baml_builtins2::MediaValue::from_base64(kind, value_str, mime),
+    let media_arc: Arc<bex_vm_types::MediaValue> = match source {
+        "url" => bex_vm_types::MediaValue::from_url(kind, value_str, mime),
+        "file" => bex_vm_types::MediaValue::from_file(kind, value_str, mime),
+        "base64" | "inline" => bex_vm_types::MediaValue::from_base64(kind, value_str.into(), mime),
         other => {
             return Err(raise_decode(
                 vm,

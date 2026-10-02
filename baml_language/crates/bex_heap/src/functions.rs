@@ -9,6 +9,11 @@ use btel_types::{FunctionId, FunctionMetadata, FunctionMetadataTable};
 use crate::{BexHeap, CollectionLevel, Generation};
 
 impl BexHeap {
+    /// Reserve a definition identity without constructing a VM heap object.
+    pub fn allocate_host_function_id(&self) -> Result<FunctionId, btel_types::FunctionIdExhausted> {
+        self.functions.allocate_id()
+    }
+
     /// Register a function before publishing its first telemetry reference.
     /// Return its stable ID after registration; unsupported functions return None.
     ///

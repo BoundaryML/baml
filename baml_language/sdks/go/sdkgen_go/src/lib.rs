@@ -315,6 +315,93 @@ fn render_source_code_with_bytecode_and_options(
             );
         }
     }
+    if let (Some((cancel_name, _)), Some((trace_name, _)), Some((reserved_name, _))) = (
+        pool.iter()
+            .find(|(name, _)| name.to_string() == "baml.spawn.CancelToken"),
+        pool.iter()
+            .find(|(name, _)| name.to_string() == "trace.Options"),
+        pool.iter()
+            .find(|(name, _)| name.to_string() == "trace.ReservedSpan"),
+    ) {
+        let cancel_package = packages.get(cancel_name.package());
+        let trace_package = packages.get(trace_name.package());
+        let cancel = names
+            .project(
+                &BamlFqn::symbol(cancel_name),
+                GoNameKind::Class,
+                GoVisibility::Exported,
+            )
+            .identifier(cancel_package.go_name())
+            .to_string();
+        let trace = names
+            .project(
+                &BamlFqn::symbol(trace_name),
+                GoNameKind::Class,
+                GoVisibility::Exported,
+            )
+            .identifier(trace_package.go_name())
+            .to_string();
+        let reserved = names
+            .project(
+                &BamlFqn::symbol(reserved_name),
+                GoNameKind::Class,
+                GoVisibility::Exported,
+            )
+            .identifier(trace_package.go_name())
+            .to_string();
+        files.insert(PathBuf::from("invocation.go"), format!(r#"{BANNER}package baml_sdk
+import (
+    "context"
+    "time"
+    baml_go "{BAML_GO_MODULE}"
+    cancel_package {:?}
+    trace {:?}
+    bootstrap "{}/internal/bootstrap"
+)
+type BamlOptions struct {{ Trace trace.Selection; Cancel *cancel_package.{cancel}; Timeout time.Duration }}
+type CallOption = baml_go.CallOption
+func WithOptions(value BamlOptions) CallOption {{
+    controls := baml_go.InvocationControls{{Timeout: value.Timeout}}
+    if value.Trace != nil {{ controls.Trace = value.Trace.BAMLTraceSelection() }}
+    if value.Cancel != nil {{ controls.Cancel = baml_go.GeneratedClassInput(*value.Cancel) }}
+    return baml_go.WithInvocationOptions(controls)
+}}
+type Target = baml_go.Target
+type Arguments = baml_go.Arguments
+type TypeBindings = baml_go.TypeBindings
+type Value = baml_go.Value
+func NamedTarget(name string) Target {{ return baml_go.NamedTarget(name) }}
+func FunctionTarget(value interface {{ BAMLFunction() baml_go.Function }}) Target {{ return baml_go.FunctionTarget(value) }}
+func Invoke(ctx context.Context, target Target, args Arguments, types TypeBindings, options ...CallOption) (Value, error) {{ if err := bootstrap.Ensure(); err != nil {{ return Value{{}}, err }}; return baml_go.Invoke(ctx, target, args, types, options...) }}
+"#, cancel_package.import_path(options.sdk_import_path), trace_package.import_path(options.sdk_import_path), options.sdk_import_path));
+        files.insert(PathBuf::from("invocation/invocation.go"), format!(r#"{BANNER}package invocation
+import (
+    "context"
+    baml_go "{BAML_GO_MODULE}"
+    cancel_package {:?}
+)
+type Invocation struct {{ Cancel *cancel_package.{cancel}; active *baml_go.Invocation }}
+func Current(ctx context.Context) *Invocation {{
+    active := baml_go.CurrentInvocation(ctx); if active == nil {{ return nil }}
+    cancel, err := baml_go.DecodeAs[cancel_package.{cancel}](active.CancelValue()); if err != nil {{ panic(err) }}
+    return &Invocation{{Cancel: &cancel, active: active}}
+}}
+"#, cancel_package.import_path(options.sdk_import_path)));
+        files.insert(
+            trace_package.file("invocation_selection.go"),
+            format!(
+                r#"{BANNER}package {}
+import baml_go "{BAML_GO_MODULE}"
+type Selection interface {{ bamlTraceSelection(); BAMLTraceSelection() baml_go.Input }}
+func ({trace}) bamlTraceSelection() {{}}
+func ({reserved}) bamlTraceSelection() {{}}
+func (value {trace}) BAMLTraceSelection() baml_go.Input {{ return baml_go.GeneratedClassInput(value) }}
+func (value {reserved}) BAMLTraceSelection() baml_go.Input {{ return baml_go.GeneratedClassInput(value) }}
+"#,
+                trace_package.go_name().as_str()
+            ),
+        );
+    }
     files
 }
 
@@ -614,9 +701,9 @@ fn generated_functions<'a>(
         .filter_map(|(name, symbol)| match symbol {
             Symbol::Class(class)
                 if name.package() == package.baml_name()
-                    // Stdlib classes use native/handle codecs rather than the
-                    // ordinary field codecs used by user-authored classes.
-                    && name.package().as_str() == RESERVED_USER_PACKAGE =>
+                    && (name.package().as_str() == RESERVED_USER_PACKAGE
+                        || name.package().as_str() == "trace"
+                        || name.to_string() == "baml.spawn.CancelToken") =>
             {
                 Some((name, class))
             }
@@ -1940,12 +2027,12 @@ fn render_functions(
             params.push(format!("{receiver_parameter} {receiver_type}"));
         }
         params.extend(args);
-        if let Some(option_type) = &routed.option_type {
-            params.push(format!(
-                "{options_parameter} ...{}",
-                option_type.identifier(current_package)
-            ));
-        }
+        let option_type = routed
+            .option_type
+            .as_ref()
+            .map(|name| name.identifier(current_package).to_string())
+            .unwrap_or_else(|| format!("{runtime_package}.CallOption"));
+        params.push(format!("{options_parameter} ...{option_type}"));
 
         out.push('\n');
         let mut dynamic_notes = Vec::new();
@@ -2044,6 +2131,29 @@ fn render_functions(
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
         }
 
+        if routed.go_name.wire().to_string() == "trace.current_context" {
+            let context_type = function_return_go_type(
+                &function.return_type,
+                current_baml_package,
+                current_package,
+                names,
+                projection,
+                type_var_scope,
+            );
+            let _ = writeln!(
+                out,
+                "\t{result_local}, {error_local} := {runtime_package}.CurrentTraceContext({context_parameter})"
+            );
+            let _ = writeln!(
+                out,
+                "\tif {error_local} != nil {{ var {zero_local} {context_type}; return {zero_local}, {error_local} }}"
+            );
+            let _ = writeln!(
+                out,
+                "\treturn {runtime_package}.DecodeAs[{context_type}]({result_local})\n}}\n"
+            );
+            continue;
+        }
         let required_arguments = routed
             .arguments
             .iter()
@@ -2054,162 +2164,85 @@ fn render_functions(
         let type_arguments = receiver_type_arguments
             .chain(callable_type_arguments)
             .collect::<Vec<_>>();
-        if routed.option_type.is_some() {
-            let _ = write!(
-                out,
-                "\t{arguments_local} := map[{string_type}]{runtime_package}.Input{{"
-            );
-            if routed.receiver.is_some() || !required_arguments.is_empty() {
-                out.push('\n');
-            }
-            if let Some(receiver) = &routed.receiver {
-                let receiver_ty = Ty::Class(
-                    (*receiver.owner_name).clone(),
-                    receiver
-                        .class
-                        .generic_params
-                        .iter()
-                        .cloned()
-                        .enumerate()
-                        .map(|(index, name)| {
-                            Ty::TypeVar(ParamTy::new(
-                                u32::try_from(index).expect("generic parameter index fits in u32"),
-                                name,
-                            ))
-                        })
-                        .collect(),
-                );
-                let _ = writeln!(
-                    out,
-                    "\t\t\"self\": {},",
-                    input_expression(
-                        &receiver_ty,
-                        &receiver_parameter.to_string(),
-                        &codec_context,
-                    )
-                );
-            }
-            for argument in &required_arguments {
-                let argument_identifier = argument.go_name.identifier(current_package).to_string();
-                let _ = writeln!(
-                    out,
-                    "\t\t{:?}: {},",
-                    argument.go_name.wire().to_string(),
-                    input_expression(&argument.argument.ty, &argument_identifier, &codec_context,)
-                );
-            }
-            if routed.receiver.is_some() || !required_arguments.is_empty() {
-                out.push('\t');
-            }
-            out.push_str("}\n");
-            let _ = write!(
-                out,
-                "\t{type_arguments_local} := {runtime_package}.ApplyCallOptions({arguments_local}, []{runtime_package}.TypeArgument{{"
-            );
-            for (index, parameter) in type_arguments.iter().enumerate() {
-                if index > 0 {
-                    out.push_str(", ");
-                }
-                let identifier = type_var_scope.identifier(parameter, names, current_package);
-                let _ = write!(
-                    out,
-                    "{{Name: {:?}, Type: {runtime_package}.TypeOf[{identifier}]()}}",
-                    parameter.as_str()
-                );
-            }
-            let _ = writeln!(out, "}}, {options_parameter}...)");
+        let _ = write!(
+            out,
+            "\t{arguments_local} := map[{string_type}]{runtime_package}.Input{{"
+        );
+        if routed.receiver.is_some() || !required_arguments.is_empty() {
+            out.push('\n');
         }
-
-        let call_name = if routed.option_type.is_some()
-            || !function.generic_params.is_empty()
-            || !routed.owner_type_parameters.is_empty()
-        {
-            "CallWithTypeArgs"
-        } else {
-            "Call"
-        };
+        if let Some(receiver) = &routed.receiver {
+            let receiver_ty = Ty::Class(
+                (*receiver.owner_name).clone(),
+                receiver
+                    .class
+                    .generic_params
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .map(|(index, name)| {
+                        Ty::TypeVar(ParamTy::new(
+                            u32::try_from(index).expect("generic parameter index fits in u32"),
+                            name,
+                        ))
+                    })
+                    .collect(),
+            );
+            let _ = writeln!(
+                out,
+                "\t\t\"self\": {},",
+                input_expression(
+                    &receiver_ty,
+                    &receiver_parameter.to_string(),
+                    &codec_context,
+                )
+            );
+        }
+        for argument in &required_arguments {
+            let argument_identifier = argument.go_name.identifier(current_package).to_string();
+            let _ = writeln!(
+                out,
+                "\t\t{:?}: {},",
+                argument.go_name.wire().to_string(),
+                input_expression(&argument.argument.ty, &argument_identifier, &codec_context,)
+            );
+        }
+        if routed.receiver.is_some() || !required_arguments.is_empty() {
+            out.push('\t');
+        }
+        out.push_str("}\n");
+        let _ = write!(
+            out,
+            "\t{type_arguments_local} := {runtime_package}.ApplyInvocationOptions({arguments_local}, []{runtime_package}.TypeArgument{{"
+        );
+        for (index, parameter) in type_arguments.iter().enumerate() {
+            if index > 0 {
+                out.push_str(", ");
+            }
+            let identifier = type_var_scope.identifier(parameter, names, current_package);
+            let _ = write!(
+                out,
+                "{{Name: {:?}, Type: {runtime_package}.TypeOf[{identifier}]()}}",
+                parameter.as_str()
+            );
+        }
+        let _ = writeln!(out, "}}, {options_parameter}...)");
         if function_returns_only_error(&function.return_type) {
             let _ = write!(
                 out,
-                "\t_, {error_local} := {runtime_package}.{call_name}({context_parameter}, "
+                "\t_, {error_local} := {runtime_package}.CallWithPreparedOptions({context_parameter}, "
             );
         } else {
             let _ = write!(
                 out,
-                "\t{result_local}, {error_local} := {runtime_package}.{call_name}({context_parameter}, "
+                "\t{result_local}, {error_local} := {runtime_package}.CallWithPreparedOptions({context_parameter}, "
             );
         }
-        let _ = write!(out, "{:?}, ", routed.go_name.wire().to_string());
-        if routed.option_type.is_some() {
-            let _ = write!(out, "{arguments_local}");
-        } else {
-            let _ = write!(out, "map[{string_type}]{runtime_package}.Input{{");
-            if routed.receiver.is_some() || !required_arguments.is_empty() {
-                out.push('\n');
-                if let Some(receiver) = &routed.receiver {
-                    let receiver_ty = Ty::Class(
-                        (*receiver.owner_name).clone(),
-                        receiver
-                            .class
-                            .generic_params
-                            .iter()
-                            .cloned()
-                            .enumerate()
-                            .map(|(index, name)| {
-                                Ty::TypeVar(ParamTy::new(
-                                    u32::try_from(index)
-                                        .expect("generic parameter index fits in u32"),
-                                    name,
-                                ))
-                            })
-                            .collect(),
-                    );
-                    let _ = writeln!(
-                        out,
-                        "\t\t\"self\": {},",
-                        input_expression(
-                            &receiver_ty,
-                            &receiver_parameter.to_string(),
-                            &codec_context,
-                        )
-                    );
-                }
-                for argument in &required_arguments {
-                    let argument_identifier =
-                        argument.go_name.identifier(current_package).to_string();
-                    let _ = writeln!(
-                        out,
-                        "\t\t{:?}: {},",
-                        argument.go_name.wire().to_string(),
-                        input_expression(
-                            &argument.argument.ty,
-                            &argument_identifier,
-                            &codec_context,
-                        )
-                    );
-                }
-                out.push('\t');
-            }
-            out.push('}');
-        }
-        if routed.option_type.is_some() {
-            let _ = write!(out, ", {type_arguments_local}");
-        } else if !type_arguments.is_empty() {
-            out.push_str(", []");
-            let _ = write!(out, "{runtime_package}.TypeArgument{{");
-            for (index, parameter) in type_arguments.iter().enumerate() {
-                if index > 0 {
-                    out.push_str(", ");
-                }
-                let identifier = type_var_scope.identifier(parameter, names, current_package);
-                let _ = write!(
-                    out,
-                    "{{Name: {:?}, Type: {runtime_package}.TypeOf[{identifier}]()}}",
-                    parameter.as_str()
-                );
-            }
-            out.push('}');
-        }
+        let _ = write!(
+            out,
+            "{:?}, {arguments_local}, {type_arguments_local}",
+            routed.go_name.wire().to_string()
+        );
         out.push_str(")\n");
         if matches!(function.return_type, Ty::Void) {
             let _ = writeln!(out, "\treturn {error_local}");
@@ -2401,6 +2434,8 @@ fn add_function_surface_imports(
             }
         }
         GoTy::Function(key) => {
+            imports.add_generator(GeneratorIdent::ContextPackage, "context");
+            imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
             for param in key.params() {
                 add_function_surface_imports(param.ty(), surface_owner_package, context, imports);
             }
@@ -2852,18 +2887,20 @@ fn render_callback_go_type(
     current_package: &GoPackageName,
     names: &GoNames,
 ) -> String {
-    let mut params = key
-        .required_params()
-        .map(|param| {
-            render_projected_go_type(
-                param.ty(),
-                current_baml_package,
-                current_package,
-                names,
-                TypeVarScope::default(),
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut params = vec![format!("{}.Context", GeneratorIdent::ContextPackage)];
+    params.extend(
+        key.required_params()
+            .map(|param| {
+                render_projected_go_type(
+                    param.ty(),
+                    current_baml_package,
+                    current_package,
+                    names,
+                    TypeVarScope::default(),
+                )
+            })
+            .collect::<Vec<_>>(),
+    );
     if key.has_optional_params() {
         params.push(
             names
@@ -2908,13 +2945,33 @@ fn render_returned_callback_go_type(
     names: &GoNames,
 ) -> String {
     let rendered = render_callback_go_type(key, current_baml_package, current_package, names);
-    rendered
-        .replacen(
-            "func(",
-            &format!("func({}.Context, ", GeneratorIdent::ContextPackage),
-            1,
-        )
-        .replace("Context, )", "Context)")
+    let mut depth = 0;
+    let close = rendered
+        .char_indices()
+        .find_map(|(index, token)| {
+            if token == '(' {
+                depth += 1;
+            }
+            if token == ')' {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            None
+        })
+        .expect("callback signature has balanced parameters");
+    let mut controlled = rendered[..close].to_string();
+    let _ = write!(
+        controlled,
+        ", ...{}.CallOption",
+        GeneratorIdent::RuntimePackage
+    );
+    controlled.push_str(&rendered[close..]);
+    format!(
+        "{}.ReturnedFunction[{controlled}]",
+        GeneratorIdent::RuntimePackage
+    )
 }
 
 fn media_go_type(kind: MediaKind) -> &'static str {
@@ -3919,8 +3976,7 @@ fn render_callback_codecs(
             "\t\t\treturn {runtime}.InvalidInput(\"invalid BAML host-call arity\"), {runtime}.HostCallableArityError({required_count}, {arguments}.RequiredCount())"
         );
         out.push_str("\t\t}\n");
-        let mut decoded =
-            Vec::with_capacity(required_count + usize::from(key.has_optional_params()));
+        let mut decoded = vec![format!("{arguments}.Context()")];
         for (index, param) in key.required_params().enumerate() {
             let local = CallbackArgumentIdent::new(index);
             decoded.push(local.to_string());
@@ -4090,10 +4146,14 @@ fn render_callback_codecs(
             "func {decoder}({value} {runtime}.Value) ({returned_go_type}, error) {{"
         );
         let _ = writeln!(out, "\tfunction, {error} := {value}.Function()");
-        let _ = writeln!(out, "\tif {error} != nil {{ return nil, {error} }}");
         let _ = writeln!(
             out,
-            "\treturn func({}){} {{",
+            "\tif {error} != nil {{ var zero {returned_go_type}; return zero, {error} }}"
+        );
+        closure_parameters.push(format!("invocationOptions_ ...{runtime}.CallOption"));
+        let _ = writeln!(
+            out,
+            "\treturn {runtime}.NewReturnedFunction(function, func({}){} {{",
             closure_parameters.join(", "),
             match (key.ret(), key.throws()) {
                 (Some(ret), false) => format!(
@@ -4167,7 +4227,7 @@ fn render_callback_codecs(
         };
         let _ = writeln!(
             out,
-            "\t\t{result_binding}, {error} := function.CallPositional({}, requiredArgs_, optionalArgs_)",
+            "\t\t{result_binding}, {error} := function.CallPositional({}, requiredArgs_, optionalArgs_, invocationOptions_...)",
             GeneratorIdent::ContextParameter
         );
         if key.throws() {
@@ -4217,7 +4277,7 @@ fn render_callback_codecs(
                 let _ = writeln!(out, "\t\treturn {decoded_local}");
             }
         }
-        out.push_str("\t}, nil\n}\n\n");
+        out.push_str("\t}), nil\n}\n\n");
     }
 }
 
@@ -4320,8 +4380,23 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
             "{runtime}.OptionalBAMLType({})",
             baml_type_descriptor(inner, names)
         ),
-        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => format!(
+        GoTy::TypedUnion(key)
+        | GoTy::DynamicUnion {
+            key,
+            nullable: false,
+        } => format!(
             "{runtime}.UnionBAMLType({})",
+            key.members()
+                .iter()
+                .map(|member| baml_type_descriptor(member, names))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        GoTy::DynamicUnion {
+            key,
+            nullable: true,
+        } => format!(
+            "{runtime}.OptionalBAMLType({runtime}.UnionBAMLType({}))",
             key.members()
                 .iter()
                 .map(|member| baml_type_descriptor(member, names))
@@ -5317,7 +5392,7 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(
-            functions.contains("func EchoText(ctx_ context.Context, value string) (string, error)")
+            functions.contains("func EchoText(ctx_ context.Context, value string, options_ ...baml_go.CallOption) (string, error)")
         );
         assert!(functions.contains("\"user.echo_text\""));
         assert!(functions.contains("baml_go.String(value)"));
@@ -5369,7 +5444,7 @@ mod tests {
         let functions = &files[&PathBuf::from("functions.go")];
 
         assert!(
-            functions.contains("func Extract(ctx_ context.Context, input string) (string, error)"),
+            functions.contains("func Extract(ctx_ context.Context, input string, options_ ...baml_go.CallOption) (string, error)"),
             "{functions}"
         );
         assert!(!functions.contains("on_event"), "{functions}");
@@ -5608,7 +5683,7 @@ mod tests {
             "func StaticEdgesBoxMake(ctx_ context.Context, value string, options_ ...StaticEdgesBoxMakeOption) (string, error)"
         ));
         assert!(
-            functions.contains("baml_go.CallWithTypeArgs(ctx_, \"user.static_edges.box.make\", arguments_, typeArguments_)")
+            functions.contains("baml_go.CallWithPreparedOptions(ctx_, \"user.static_edges.box.make\", arguments_, typeArguments_)")
         );
         assert!(!functions.contains("func (receiver_"));
         assert!(!functions.contains("StaticEdgesBoxMake[T any]"));
@@ -5619,7 +5694,7 @@ mod tests {
             functions.contains("[]baml_go.TypeArgument{{Name: \"T\", Type: baml_go.TypeOf[T]()}}")
         );
         assert!(functions.contains(
-            "func StaticEdgesHiddenPing(ctx_ context.Context, value string) (string, error)"
+            "func StaticEdgesHiddenPing(ctx_ context.Context, value string, options_ ...baml_go.CallOption) (string, error)"
         ));
         assert!(!files[&PathBuf::from("types.go")].contains("type StaticEdgesHidden struct"));
         assert!(!functions.contains("DefaultedOwnerType"));
@@ -6003,7 +6078,7 @@ mod tests {
         ));
         assert!(functions.contains("arguments_ := map[string]baml_go.Input{\n\t\t\"options\": baml_go.String(options),\n\t}"));
         assert!(functions.contains(
-            "baml_go.ApplyCallOptions(arguments_, []baml_go.TypeArgument{}, options_...)"
+            "baml_go.ApplyInvocationOptions(arguments_, []baml_go.TypeArgument{}, options_...)"
         ));
         assert!(!functions.contains("\t\t\"opt1\":"));
         assert!(!functions.contains("\t\t\"opt2\":"));
@@ -6196,11 +6271,11 @@ mod tests {
 
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func AliasesRoundTripText(ctx_ context.Context, value string) (string, error)"
+            "func AliasesRoundTripText(ctx_ context.Context, value string, options_ ...baml_go.CallOption) (string, error)"
         ));
         assert!(functions.contains("baml_go.String(value)"));
         assert!(functions.contains(
-            "func AliasesRoundTripOptionalBigNumber(ctx_ context.Context, value *big.Int) (*big.Int, error)"
+            "func AliasesRoundTripOptionalBigNumber(ctx_ context.Context, value *big.Int, options_ ...baml_go.CallOption) (*big.Int, error)"
         ));
         assert!(!functions.contains("**big.Int"));
         assert!(!functions.contains("AliasesRoundTripRecursive"));
@@ -6250,7 +6325,7 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func PeopleRoundTripPerson(ctx_ context.Context, ctx PeoplePersonRecord) (PeoplePersonRecord, error)"
+            "func PeopleRoundTripPerson(ctx_ context.Context, ctx PeoplePersonRecord, options_ ...baml_go.CallOption) (PeoplePersonRecord, error)"
         ));
         assert!(functions.contains("baml_go.Class(\"user.people.person_record\""));
         assert!(functions.contains("\"class_value\": baml_go.String(value_.ClassValue)"));
@@ -6330,20 +6405,22 @@ mod tests {
         assert_eq!(models.matches("func _bamlEncodeCallback0(").count(), 1);
         assert!(root.contains("_decode(value_ baml_go.Value)"));
         assert!(root.contains(
-            "_decode(value_ baml_go.Value) (func(context.Context, int64) string, error)"
+            "_decode(value_ baml_go.Value) (baml_go.ReturnedFunction[func(context.Context, int64, ...baml_go.CallOption) string], error)"
         ));
         assert!(
-            root.contains("return func(ctx_ context.Context, _bamlCallbackArg0_ int64) string")
+            root.contains("NewReturnedFunction(function, func(ctx_ context.Context, _bamlCallbackArg0_ int64, invocationOptions_ ...baml_go.CallOption) string")
         );
-        assert!(root.contains("function.CallPositional(ctx_, requiredArgs_, optionalArgs_)"));
+        assert!(root.contains(
+            "function.CallPositional(ctx_, requiredArgs_, optionalArgs_, invocationOptions_...)"
+        ));
         assert!(!root.contains("function.CallPositional(context.Background()"));
         assert!(root.contains("if value_ == nil"));
         assert!(root.contains("InvalidInput(\"BAML host callable is nil\")"));
         assert!(
-            root.contains("func UseCallback(ctx_ context.Context, callback func(int64) string)")
+            root.contains("func UseCallback(ctx_ context.Context, callback func(context.Context, int64) string, options_ ...baml_go.CallOption)")
         );
         assert!(
-            models.contains("func UseCallback(ctx_ context.Context, callback func(int64) string)")
+            models.contains("func UseCallback(ctx_ context.Context, callback func(context.Context, int64) string, options_ ...baml_go.CallOption)")
         );
     }
 
@@ -6393,7 +6470,9 @@ mod tests {
         assert!(functions.contains("typeCallbackIntWithYIntWithZIntOptionsstruct{"));
         assert!(functions.contains("Ybaml_go.OptionalArg[int64]`baml:\"y\"`"));
         assert!(functions.contains("Zbaml_go.OptionalArg[int64]`baml:\"z\"`"));
-        assert!(functions.contains("callbackfunc(int64,CallbackIntWithYIntWithZIntOptions)int64"));
+        assert!(functions.contains(
+            "callbackfunc(context.Context,int64,CallbackIntWithYIntWithZIntOptions)int64"
+        ));
         assert!(functions.contains("arguments_.Optional(\"y\")"));
         assert!(functions.contains("arguments_.Optional(\"z\")"));
         assert!(functions.contains("baml_go.NewOptionalArg(decoded_)"));
@@ -6514,7 +6593,7 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func RoundTripOptionalItems(ctx_ context.Context, items *[]*string) (*[]*string, error)"
+            "func RoundTripOptionalItems(ctx_ context.Context, items *[]*string, options_ ...baml_go.CallOption) (*[]*string, error)"
         ));
         assert!(functions.contains(
             "baml_go.OptionalEncoder(baml_go.ListEncoderWithType(baml_go.OptionalBAMLType(baml_go.PrimitiveBAMLType(baml_go.StringType)), baml_go.OptionalEncoder(baml_go.String)))(items)"
@@ -6606,7 +6685,7 @@ mod tests {
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains("package baml_sdk"));
         assert!(
-            functions.contains("func BillingV2LookupInvoice(ctx_ context.Context) (string, error)")
+            functions.contains("func BillingV2LookupInvoice(ctx_ context.Context, options_ ...baml_go.CallOption) (string, error)")
         );
         assert!(functions.contains("\"user.billing.v2.lookup_invoice\""));
     }
@@ -6750,7 +6829,7 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         assert!(files[&PathBuf::from("functions.go")].contains(
-            "func ReservedArgs(ctx_ context.Context, ctx string, result string, err string)"
+            "func ReservedArgs(ctx_ context.Context, ctx string, result string, err string, options_ ...baml_go.CallOption)"
         ));
     }
 
@@ -6884,14 +6963,19 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains("\n\t\"math/big\"\n"));
-        assert!(functions.contains("func NoOp(ctx_ context.Context) error"));
-        assert!(functions.contains("func AlwaysPanics(ctx_ context.Context) error"));
+        assert!(
+            functions
+                .contains("func NoOp(ctx_ context.Context, options_ ...baml_go.CallOption) error")
+        );
+        assert!(functions.contains(
+            "func AlwaysPanics(ctx_ context.Context, options_ ...baml_go.CallOption) error"
+        ));
         assert!(functions.contains("return baml_go.UnexpectedNeverReturn(\"user.always_panics\")"));
         assert!(functions.contains(
             "// AlwaysPanics BAML failures are returned as Go errors containing the current runtime trace text; structured BAML error values are not exposed yet."
         ));
         assert!(functions.contains(
-            "func RoundTripBigint(ctx_ context.Context, value *big.Int) (*big.Int, error)"
+            "func RoundTripBigint(ctx_ context.Context, value *big.Int, options_ ...baml_go.CallOption) (*big.Int, error)"
         ));
     }
 
@@ -6928,10 +7012,10 @@ mod tests {
         let types = &files[&PathBuf::from("types.go")];
         assert!(
             functions
-                .contains("func RoundTripOuter(ctx_ context.Context, value Outer) (Outer, error)")
+                .contains("func RoundTripOuter(ctx_ context.Context, value Outer, options_ ...baml_go.CallOption) (Outer, error)")
         );
         assert!(functions.contains(
-            "func RoundTripNumberOrText(ctx_ context.Context, value StringOrBigint) (StringOrBigint, error)"
+            "func RoundTripNumberOrText(ctx_ context.Context, value StringOrBigint, options_ ...baml_go.CallOption) (StringOrBigint, error)"
         ));
         assert!(!functions.contains("\"math/big\""));
         assert!(types.contains("\"math/big\""));
@@ -6962,11 +7046,11 @@ mod tests {
             },
         );
         let functions = &files[&PathBuf::from("functions.go")];
-        assert!(functions.contains("func Small(ctx_ context.Context, value int64) (int64, error)"));
+        assert!(functions.contains("func Small(ctx_ context.Context, value int64, options_ ...baml_go.CallOption) (int64, error)"));
         assert!(functions.contains(
-            "func Boundary(ctx_ context.Context, value StringOrInt) (StringOrInt, error)"
+            "func Boundary(ctx_ context.Context, value StringOrInt, options_ ...baml_go.CallOption) (StringOrInt, error)"
         ));
-        assert!(functions.contains("func Large(ctx_ context.Context, value any) (any, error)"));
+        assert!(functions.contains("func Large(ctx_ context.Context, value any, options_ ...baml_go.CallOption) (any, error)"));
         assert!(functions.contains("Known BAML candidates: string | int64 | bool."));
         assert!(files[&PathBuf::from("types.go")].contains("type StringOrInt struct"));
     }
@@ -6988,7 +7072,7 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func RoundTripRustType(ctx_ context.Context, value baml_go.RustType) (baml_go.RustType, error)"
+            "func RoundTripRustType(ctx_ context.Context, value baml_go.RustType, options_ ...baml_go.CallOption) (baml_go.RustType, error)"
         ));
         assert!(functions.contains("baml_go.RustTypeInput(value)"));
         assert!(functions.contains("baml_go.Value.RustType"));
@@ -7051,7 +7135,7 @@ mod tests {
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(
             functions
-                .contains("func RoundTripAllMedia(ctx_ context.Context, value any) (any, error)")
+                .contains("func RoundTripAllMedia(ctx_ context.Context, value any, options_ ...baml_go.CallOption) (any, error)")
         );
         assert!(functions.contains(
             "Known BAML candidates: baml_go.Image | baml_go.Audio | baml_go.Video | baml_go.Pdf."
@@ -7080,7 +7164,7 @@ mod tests {
             },
         );
         let functions = &files[&PathBuf::from("functions.go")];
-        assert!(functions.contains("values []any) ([]any, error)"));
+        assert!(functions.contains("values []any, options_ ...baml_go.CallOption) ([]any, error)"));
         assert!(!functions.contains("*any"));
         assert!(
             functions.contains("Parameter values list element is represented dynamically as any")
@@ -7113,7 +7197,7 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func RoundTripDynamicPrimitives(ctx_ context.Context, value any) (any, error)"
+            "func RoundTripDynamicPrimitives(ctx_ context.Context, value any, options_ ...baml_go.CallOption) (any, error)"
         ));
         assert!(!functions.contains("\"math/big\""));
     }
@@ -7152,7 +7236,7 @@ mod tests {
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(
             functions.contains(
-                "func RoundTripNestedDynamic(ctx_ context.Context, value any) (any, error)"
+                "func RoundTripNestedDynamic(ctx_ context.Context, value any, options_ ...baml_go.CallOption) (any, error)"
             )
         );
         assert!(functions.contains("value_.([]any)"));
