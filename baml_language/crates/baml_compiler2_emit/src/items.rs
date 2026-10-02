@@ -480,6 +480,7 @@ pub(crate) fn build_interface_def(
     InterfaceDef {
         type_tag,
         name: iface_wire,
+        structural_default: None,
         args: args
             .into_iter()
             .map(|(name, bounds)| {

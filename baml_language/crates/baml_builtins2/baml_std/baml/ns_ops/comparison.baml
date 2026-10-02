@@ -33,9 +33,9 @@
 ///
 /// This is the interface a `T extends baml.ops.Equals` bound asks for, and the
 /// hook a type implements to be compared through dynamic dispatch — Python's
-/// `__eq__`, near enough. It is narrower than the `==` operator:
-/// `baml.ops.equals_equals` below compares any pair of compatible types and
-/// routes here only when the operand's runtime type implements this interface.
+/// `__eq__`, near enough. Every type has an implicit implementation
+/// unless an explicit implementation applies. `==` additionally compares
+/// compatible operands with different concrete runtime types.
 ///
 /// An implementation may panic, which `throws never` does not rule out; a
 /// caller working through a generic bound cannot enumerate the panics and must
@@ -49,7 +49,9 @@ interface Equals {
     /// [`Eq`](https://doc.rust-lang.org/std/cmp/trait.Eq.html), not
     /// `PartialEq`: the `float` impl keeps the law by making `NaN` equal to
     /// itself rather than agreeing with IEEE.
-    function eq(self, other: Self) -> bool throws never;
+    function eq(self, other: Self) -> bool throws never {
+        baml._equals_structural_default(self, other)
+    }
     /// Whether `self` and `other` differ. Defaults to `!self.eq(other)`.
     ///
     /// Override this only to compute the answer more directly; an override that
@@ -147,14 +149,14 @@ enum Ordering {
 
 /// The broad `==` / `!=` operator driver.
 ///
-/// Unlike `Equals`, which is only available on types that implement it, `==`
+/// Unlike the same-`Self` signature of `Equals.eq`, `==`
 /// works on any pair of compatible types, and gives the same answer whether
 /// those types are known statically or erased to `unknown`, a union, or an
 /// interface. This function is what `==` means in the erased case, and what
 /// structural comparison recurses through.
 ///
-/// It compares by the operands' concrete runtime types: a type that implements
-/// `Equals` uses its `eq`; a class without `Equals` compares structurally,
+/// It compares by the operands' concrete runtime types: an explicit `Equals.eq`
+/// override wins; a class with the implicit default compares structurally,
 /// field by field; enums compare by identity; and operands whose concrete
 /// runtime types differ are never equal. Containers recurse — arrays must have
 /// the same length and compare element-wise by position, maps must have the

@@ -1074,6 +1074,7 @@ fn a_rule_body_aimed_at_a_named_function_is_an_invalid_unit() {
     let mut unit = unit_with_fn("user.named", vec![Instruction::Return]);
     unit.interfaces
         .push(Object::Interface(Box::new(InterfaceDef {
+            structural_default: None,
             name: baml_type::TypeName::local(Name::new("Greeter")),
             type_tag: TypeHead::unresolved_operand(ObjectIndex::from_raw(0)).tag(),
             args: Vec::new(),

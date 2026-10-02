@@ -7,6 +7,8 @@ use crate::{HeapPtr, ObjectIndex};
 pub struct InterfaceDef {
     // Signature
     pub name: baml_type::TypeName,
+    /// The implicit implementation shared by all types without an explicit impl.
+    pub structural_default: Option<StructuralDefault>,
 
     /// This interface's head identity — assigned by the linker (`CLASS_BASE +`
     /// its object index in the image) or minted fresh by the grafter; in a
@@ -36,6 +38,14 @@ pub struct InterfaceDef {
     /// GC edge, never serialized.
     #[borsh(skip)]
     pub owner: HeapPtr,
+}
+
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct StructuralDefault {
+    pub kind: baml_type::StructuralInterface,
+    pub function: ObjectIndex,
+    #[borsh(skip)]
+    pub function_ptr: HeapPtr,
 }
 
 /// One field an interface declares, at its dispatch index (its position in

@@ -21,14 +21,14 @@ namespace baml:
   type ToString
   class Uint8Array { methods: [length, at, push, pop, concat, includes, index_of, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort] }
   function _cleanup_begin<T>
-  function _from_json_shim<T>
+  function _equals_structural_default
+  function _from_json_structural_default<T>
   function _is_primitive_array<T>
   function _median_float
   function _rust_sort<A>
   function _sum_float
   function _sum_int
   function _to_json_default<T>
-  function _to_json_shim<T>
   function _to_string_default<T>
   function _trunc_to_int
   function deep_copy<T>

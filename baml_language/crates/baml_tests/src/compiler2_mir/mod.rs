@@ -42,6 +42,79 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 }
 
 #[test]
+fn structural_defaults_call_native_helpers_directly() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Record {
+  value int
+}
+function roundtrip(value: Record) -> bool {
+  let decoded = Record.from_json(value.to_json());
+  value.to_string();
+  value == decoded
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    for native in [
+        "_to_json_default",
+        "_from_json_structural_default",
+        "_to_string_default",
+        "_equals_structural_default",
+    ] {
+        assert!(output.contains(native), "missing {native}:\n{output}");
+    }
+    assert!(!output.contains("virtual_call"), "{output}");
+    assert!(!output.contains("make_virtual_function"), "{output}");
+    assert!(!output.contains("equals_equals"), "{output}");
+    let program = baml_db::compile_program(&db, db.workspace_root().unwrap(), OptLevel::Two)
+        .expect("compile direct calls");
+    let function = program
+        .objects
+        .iter()
+        .find_map(|object| match object {
+            bex_vm_types::Object::Function(function) if function.name.ends_with("roundtrip") => {
+                Some(function)
+            }
+            _ => None,
+        })
+        .expect("roundtrip compiled");
+    assert!(
+        function.bytecode.call_layouts.is_empty(),
+        "known native calls need no argument adaptation metadata"
+    );
+}
+
+#[test]
+fn structural_defaults_keep_unresolved_receivers_virtual() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Box<T> {
+  value T
+}
+function generic<T>(value: T) -> string {
+  value.to_string()
+}
+function generic_class<T>(value: Box<T>) -> string {
+  value.to_string()
+}
+function erased(value: unknown) -> string {
+  value.to_string()
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    assert_eq!(output.matches("virtual_call").count(), 3, "{output}");
+    assert!(!output.contains("_to_string_default"), "{output}");
+}
+
+#[test]
 fn mounted_await_any_kind_is_trusted_only_for_precompiled_packages() {
     let mut dependency = make_db();
     dependency.dependency("dependency");

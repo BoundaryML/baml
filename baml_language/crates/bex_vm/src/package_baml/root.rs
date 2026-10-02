@@ -108,26 +108,22 @@ impl BamlPackageBaml for PackageBamlImpl {
         render_to_string_honoring_overrides(vm, *value)
     }
 
-    /// `baml._to_json_default(value)` and `baml._to_json_shim(value)` both render
+    /// `baml._to_json_default(value)` renders
     /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
-    /// overrides at every depth. The json analog of `_to_string_default`; both
-    /// delegate to the override-honoring walker in `json.rs`. Unlike the string
+    /// overrides at every depth. The json analog of `_to_string_default`;
+    /// delegates to the override-honoring walker in `json.rs`. Unlike the string
     /// renderer, this can throw `SerializationError` for values with no json
     /// representation.
     fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         super::json::render_to_json_honoring_overrides(vm, *value)
     }
 
-    fn _to_json_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
-        super::json::render_to_json_honoring_overrides(vm, *value)
+    fn _from_json_structural_default(vm: &mut BexVm, j: &Value) -> NativeCallResult {
+        super::json::json_to_structural_default(vm, *j)
     }
 
-    /// `baml._from_json_shim<T>(j)` backs `baml.json.to<T>`: decode `j` into the
-    /// target type `T` (read from the call's type-args), dispatching a user
-    /// `implements baml.FromJson` override on `T` and otherwise decoding
-    /// structurally. The deserialize analog of `_to_json_shim`.
-    fn _from_json_shim(vm: &mut BexVm, j: &Value) -> NativeCallResult {
-        super::json::json_to_shim(vm, *j)
+    fn _equals_structural_default(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        super::ops::equals_structural_default(vm, *a, *b)
     }
 
     /// `baml._cleanup_begin(value)` — BEP-042 `cleanup` run-once guard.

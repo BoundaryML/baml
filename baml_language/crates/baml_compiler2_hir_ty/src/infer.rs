@@ -60,7 +60,7 @@ use crate::{
     extern_loc::{
         ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef, extern_class_method,
         extern_class_row, extern_function_row, extern_interface_method, mounted_class_loc,
-        mounted_class_method, mounted_enum_loc,
+        mounted_enum_loc,
     },
     facts::Facts,
     infer::unify::InferenceTable,
@@ -1244,11 +1244,6 @@ pub struct InferenceResult<'db, T = baml_type::Ty> {
     /// Coercion steps per expression (r-a's `expr_adjustments` shape).
     /// S16: MIR synthesizes the recorded coercions instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment<T>]>>,
-    /// Callee expressions the walk resolved through a LANGUAGE-SUGAR
-    /// tier (`to_string`/`to_json`/`from_json` lang-item desugars): the
-    /// callee is typed as the desugar target and records no member
-    /// resolution; MIR lowers the sugar on this mark.
-    pub desugared_callees: rustc_hash::FxHashSet<ExprId>,
 }
 
 /// The working instantiation: the engine records in its native interned
@@ -1273,7 +1268,6 @@ impl<T> InferenceResult<'_, T> {
             call_plans: FxHashMap::default(),
             type_bindings: FxHashMap::default(),
             expr_adjustments: FxHashMap::default(),
-            desugared_callees: rustc_hash::FxHashSet::default(),
         }
     }
 }
@@ -6042,12 +6036,8 @@ impl<'db> InferenceContext<'db> {
                 }
 
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
-                let (ty, bound, resolution, desugar) =
-                    self.member_callee(call, callee, &receiver, &member);
+                let (ty, bound, resolution) = self.member_callee(call, callee, &receiver, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
-                if desugar {
-                    self.result.desugared_callees.insert(callee);
-                }
                 if let Some(resolution) = resolution {
                     self.write_member_resolution(callee, resolution);
                 }
@@ -6060,12 +6050,8 @@ impl<'db> InferenceContext<'db> {
 
                 let receiver = self.infer_expr(body, *base, &Expectation::None);
                 let nonnull = self.peel_chain_null(&receiver);
-                let (ty, bound, resolution, desugar) =
-                    self.member_callee(call, callee, &nonnull, &member);
+                let (ty, bound, resolution) = self.member_callee(call, callee, &nonnull, &member);
                 self.result.type_of_expr.insert(callee, ty.clone());
-                if desugar {
-                    self.result.desugared_callees.insert(callee);
-                }
                 if let Some(resolution) = resolution {
                     self.write_member_resolution(callee, resolution);
                 }
@@ -6094,12 +6080,8 @@ impl<'db> InferenceContext<'db> {
                 let (receiver, mut steps) =
                     self.walk_path_members(callee, root, &segments[1..segments.len() - 1]);
                 let member = segments.last().expect("checked len");
-                let (ty, bound, resolution, desugar) =
-                    self.member_callee(call, callee, &receiver, member);
+                let (ty, bound, resolution) = self.member_callee(call, callee, &receiver, member);
                 self.result.type_of_expr.insert(callee, ty.clone());
-                if desugar {
-                    self.result.desugared_callees.insert(callee);
-                }
                 steps.push(ResolvedPathSegment {
                     ty: ty.clone(),
                     resolution,
@@ -6125,16 +6107,11 @@ impl<'db> InferenceContext<'db> {
         member_expr: ExprId,
         receiver: &Ty,
         member: &baml_type::Name,
-    ) -> (Ty, bool, Option<MemberResolution<'db, Ty>>, bool) {
+    ) -> (Ty, bool, Option<MemberResolution<'db, Ty>>) {
         let resolved = self.structurally_resolve(receiver);
         // Callee position on a UNION: the member resolves through the
         // single interface every arm shares (TIR's rule - the union as
-        // the intersection existential), `Self` bound to the union. No
-        // shared declarer FALLS THROUGH - the operator-style sugars at
-        // the bottom of the ladder are TOTAL and apply to the WHOLE
-        // union (`(int | null).to_string()` is `string.from<int | null>`);
-        // a full miss then reports "no common interface" instead of the
-        // bare "no member".
+        // the intersection existential), `Self` bound to the union.
         if let InferTy::Union(union_members) = resolved.kind() {
             let union_members = union_members.to_vec();
             match crate::method_resolution::lookup_union_member(
@@ -6151,7 +6128,7 @@ impl<'db> InferenceContext<'db> {
                     // existential — same rejection as the value road's.
                     if self.reject_selfless_instance_member(&interface_member, member, member_expr)
                     {
-                        return (Ty::error(), false, None, false);
+                        return (Ty::error(), false, None);
                     }
                     let resolution = self.declarer_resolution(
                         &interface_member.declarer,
@@ -6159,7 +6136,7 @@ impl<'db> InferenceContext<'db> {
                         Receiver::Bound,
                     );
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
-                    return (ty, bound, resolution, false);
+                    return (ty, bound, resolution);
                 }
                 crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
                     if self.member_probe_depth == 0 {
@@ -6171,7 +6148,7 @@ impl<'db> InferenceContext<'db> {
                             is_field,
                         });
                     }
-                    return (Ty::error(), false, None, false);
+                    return (Ty::error(), false, None);
                 }
                 crate::method_resolution::UnionMemberLookup::SelfRestricted {
                     interface,
@@ -6185,7 +6162,7 @@ impl<'db> InferenceContext<'db> {
                             position,
                         });
                     }
-                    return (Ty::error(), false, None, false);
+                    return (Ty::error(), false, None);
                 }
                 crate::method_resolution::UnionMemberLookup::NoCommonInterface => {}
             }
@@ -6213,7 +6190,7 @@ impl<'db> InferenceContext<'db> {
                     is_field,
                 });
             }
-            return (Ty::error(), false, None, false);
+            return (Ty::error(), false, None);
         }
         let Some(candidate) = candidate else {
             // Interface members (I3): existential and bounded-var
@@ -6231,7 +6208,7 @@ impl<'db> InferenceContext<'db> {
                 crate::method_resolution::InterfaceMemberLookup::Found(interface_member) => {
                     if self.reject_selfless_instance_member(&interface_member, member, member_expr)
                     {
-                        return (Ty::error(), false, None, false);
+                        return (Ty::error(), false, None);
                     }
                     let resolution = self.declarer_resolution(
                         &interface_member.declarer,
@@ -6239,7 +6216,7 @@ impl<'db> InferenceContext<'db> {
                         Receiver::Bound,
                     );
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
-                    return (ty, bound, resolution, false);
+                    return (ty, bound, resolution);
                 }
                 crate::method_resolution::InterfaceMemberLookup::Ambiguous {
                     sources,
@@ -6254,7 +6231,7 @@ impl<'db> InferenceContext<'db> {
                             is_field,
                         });
                     }
-                    return (Ty::error(), false, None, false);
+                    return (Ty::error(), false, None);
                 }
                 crate::method_resolution::InterfaceMemberLookup::FieldRequiresProjection {
                     interface,
@@ -6268,7 +6245,7 @@ impl<'db> InferenceContext<'db> {
                                 interface,
                             });
                     }
-                    return (Ty::intern(InferTy::Unknown), false, None, false);
+                    return (Ty::intern(InferTy::Unknown), false, None);
                 }
                 crate::method_resolution::InterfaceMemberLookup::SelfRestricted {
                     interface,
@@ -6282,7 +6259,7 @@ impl<'db> InferenceContext<'db> {
                             position,
                         });
                     }
-                    return (Ty::error(), false, None, false);
+                    return (Ty::error(), false, None);
                 }
                 crate::method_resolution::InterfaceMemberLookup::NotFound => {}
             }
@@ -6295,34 +6272,11 @@ impl<'db> InferenceContext<'db> {
                 && let Some(interface_member) = self.probe_impl_member(&resolved, member, call)
             {
                 let (ty, bound) = self.interface_member_callee(interface_member, call, true);
-                return (ty, bound, None, false);
+                return (ty, bound, None);
             }
             self.member_probe_depth += 1;
             let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
             self.member_probe_depth -= 1;
-            // `recv.to_json()` is language sugar for `baml.json.from(recv)`
-            // (universal serialization; TIR's builder lowers the call the
-            // same way). It is a FALLBACK tier: an `implements baml.ToJson`
-            // method or a field named `to_json` resolves above. `bound`
-            // makes the receiver fill the `value: T` slot.
-            if field.has_error()
-                && member.as_str() == "to_json"
-                && let Some(fn_ty) = self.json_desugar_callee("from", resolved.clone())
-            {
-                // Desugar tiers record no resolution; the callee gets a
-                // `desugared_callees` mark, which MIR lowers the sugar on.
-                return (fn_ty, true, None, true);
-            }
-            // `recv.to_string()` with no real `implements baml.ToString`
-            // member is likewise sugar for `string.from(recv)` (TIR's
-            // operator-style fallback; total, `throws never`, honoring
-            // overrides via the runtime shim) - the same lang-item tier.
-            if field.has_error()
-                && member.as_str() == "to_string"
-                && let Some(fn_ty) = self.string_from_callee(resolved.clone())
-            {
-                return (fn_ty, true, None, true);
-            }
             // Every tier exhausted: the COMMITTED member failure reports
             // here (probes above stayed silent). A union base says "no
             // common interface" - each arm may well declare `member` via
@@ -6347,11 +6301,11 @@ impl<'db> InferenceContext<'db> {
                     });
                 }
             }
-            return (field, false, field_resolution, false);
+            return (field, false, field_resolution);
         };
         let crate::method_resolution::MethodCandidate { method, class_args } = candidate;
         if self.reject_selfless_inherent_method(method, member, member_expr) {
-            return (Ty::error(), false, None, false);
+            return (Ty::error(), false, None);
         }
         let own_params = callable_signature(self.db, method).generic_params.clone();
         let method_name = callable_display_name(self.db, method).clone();
@@ -6380,7 +6334,7 @@ impl<'db> InferenceContext<'db> {
                 Receiver::Unbound
             },
         };
-        (fn_ty, bound, Some(resolution), false)
+        (fn_ty, bound, Some(resolution))
     }
 
     /// The `default` receiver's meaning inside an `implements` block:
@@ -6512,77 +6466,6 @@ impl<'db> InferenceContext<'db> {
             self.result.call_plans.entry(call).or_default();
         }
         (interface_member.ty, bound)
-    }
-
-    /// The instantiated stdlib callee a json desugar lowers to
-    /// (`baml.json.from` for `recv.to_json()`, `baml.json.to` for
-    /// `Type.from_json(j)`), its one generic pinned to `target`. The
-    /// r-a/rustc lang-item discipline (`infer_expr_await` resolving
-    /// `LangItem::Future`): the sugar types as a call to the known
-    /// library function, so parameter, result, and throws charge exactly
-    /// as the runtime-lowered call's real signature says.
-    fn json_desugar_callee(&mut self, name: &str, target: Ty) -> Option<Ty> {
-        let segments = [
-            baml_type::Name::new("baml"),
-            baml_type::Name::new("json"),
-            baml_type::Name::new(name),
-        ];
-        if let Some(ResolvedValue::Source(
-            baml_compiler2_hir::contributions::Definition::Function(function),
-        )) = self.lower.resolve_value(&segments)
-        {
-            let signature = function_signature(self.db, function);
-            // The desugar targets are single-`<T>`-generic by contract;
-            // anything else is stdlib drift this tier must not paper over.
-            if signature.generic_params.len() != 1 {
-                return None;
-            }
-            return Some(instantiate_callable_signature(
-                self.db,
-                DeclRef::Source(function),
-                &[target],
-            ));
-        }
-        let Some(ResolvedValue::External(function)) = self.lower.resolve_value(&segments) else {
-            return None;
-        };
-        (extern_function_row(self.db, function).generic_params.len() == 1).then(|| {
-            instantiate_callable_signature(self.db, DeclRef::External(function), &[target])
-        })
-    }
-
-    /// The instantiated `string.from` callee backing the `to_string`
-    /// operator-style fallback - a class STATIC (`baml.String.from<T>`),
-    /// resolved through the same static-class correspondence written
-    /// `string.from(..)` calls use, its `T` pinned to the receiver.
-    fn string_from_callee(&mut self, target: Ty) -> Option<Ty> {
-        if let Some((DeclRef::Source(class), _)) =
-            self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))
-        {
-            let method = baml_compiler2_hir::item_data::class_data(self.db, class)
-                .methods
-                .iter()
-                .copied()
-                .find(|&method| {
-                    baml_compiler2_hir::item_data::function_data(self.db, method)
-                        .name
-                        .as_str()
-                        == "from"
-                })?;
-            let signature = function_signature(self.db, method);
-            if signature.generic_params.len() != 1 {
-                return None;
-            }
-            return Some(instantiate_callable_signature(
-                self.db,
-                DeclRef::Source(method),
-                &[target],
-            ));
-        }
-        let qtn = self.lang_decl(baml_base::LangPackage::Baml, &[], "String")?;
-        let method = mounted_class_method(self.db, &qtn, &baml_type::Name::new("from"))?;
-        (extern_function_row(self.db, method).generic_params.len() == 1)
-            .then(|| instantiate_callable_signature(self.db, DeclRef::External(method), &[target]))
     }
 
     /// Generic methods follow the same realization rule as free functions:
@@ -6914,8 +6797,11 @@ impl<'db> InferenceContext<'db> {
         // the own suffix fresh (only a call site can spell turbofish).
         if segments.len() >= 2 {
             let (prefix, member) = segments.split_at(segments.len() - 1);
-            if let Some(fn_ty) =
-                self.class_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
+            if let Some(fn_ty) = self
+                .interface_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
+                .or_else(|| {
+                    self.class_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
+                })
             {
                 return fn_ty;
             }
@@ -6928,39 +6814,12 @@ impl<'db> InferenceContext<'db> {
         {
             return self.interface_member_value(interface_member);
         }
-        // An INTERFACE-qualified method as a VALUE (`Trait::method`):
-        // the uniform item road with every frame slot fresh - the call
-        // that consumes the value solves `Self` from its argument.
-        if segments.len() >= 2 {
-            let (prefix, member) = segments.split_at(segments.len() - 1);
-            if let Some(fn_ty) =
-                self.interface_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
-            {
-                return fn_ty;
-            }
-        }
         // Enum VARIANT values (`Shape.Rectangle`): the variant's singleton
         // literal type - the same product the type-position path gives
         // (`lower_path` fallback 2; r-a resolves the value namespace to
         // the variant the same way).
         if let Some(ty) = self.enum_variant_value(segments, Some(expr)) {
             return ty;
-        }
-        // `Type.from_json(j)` is language sugar for `baml.json.to<Type>(j)`
-        // - the decode counterpart of the `to_json` desugar, same lang-item
-        // discipline. The prefix is any written type (class, enum, alias,
-        // or an in-scope generic param) through the same resolution
-        // annotations use; a real `from_json` static (an `implements
-        // baml.FromJson` impl) already resolved above.
-        if segments.len() >= 2
-            && segments
-                .last()
-                .is_some_and(|segment| segment.as_str() == "from_json")
-            && let Some(fn_ty) =
-                self.from_json_desugar_value(&segments[..segments.len() - 1], OwnArgs::Fresh, None)
-        {
-            self.result.desugared_callees.insert(expr);
-            return fn_ty;
         }
         // A name that RESOLVES to a definition kind this road doesn't
         // type (clients, top-level lets outside their tier) is not
@@ -7478,7 +7337,14 @@ impl<'db> InferenceContext<'db> {
     ) -> Option<Ty> {
         // The qualifier is resolved ONCE, to the class it denotes wherever
         // that class is declared; each tier below then reads that class.
-        let (class, pinned) = self.static_class_for(prefix)?;
+        let Some((class, pinned)) = self.static_class_for(prefix) else {
+            let written = self.lower_scoped_type_path(prefix);
+            if written.contains_error() {
+                return None;
+            }
+            let target = crate::impls::interned_ty(&crate::lower::reject_holes(&written));
+            return self.impl_static_value(target, member, own, anchor, record_at);
+        };
         let inherent = match class {
             DeclRef::Source(class) => self.source_class_static_value(
                 class,
@@ -7641,6 +7507,22 @@ impl<'db> InferenceContext<'db> {
             }
         };
         let qself = crate::lower::class_ty(self.lang(), self.class_ref_name(class), args);
+        let own = if channel_consumed {
+            OwnArgs::Fresh
+        } else {
+            own
+        };
+        self.impl_static_value(qself, member, own, anchor, record_at)
+    }
+
+    fn impl_static_value(
+        &mut self,
+        qself: Ty,
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+        record_at: Option<ExprId>,
+    ) -> Option<Ty> {
         if qself.has_infer() || qself.has_error() {
             return None;
         }
@@ -7686,13 +7568,6 @@ impl<'db> InferenceContext<'db> {
             | crate::interfaces::Determination::Poisoned => return None,
         };
         let interface = self.interface_ref_for(&realized.name)?;
-        // A consumed channel holds the CLASS args, so the member's own
-        // generics (if any) instantiate fresh instead of re-reading it.
-        let own = if channel_consumed {
-            OwnArgs::Fresh
-        } else {
-            own
-        };
         self.item_projection_value(
             interface,
             Some(&WrittenQualifier {
@@ -7828,46 +7703,12 @@ impl<'db> InferenceContext<'db> {
         Some(ty)
     }
 
-    /// TIER: the `Type.from_json` decode desugar (`baml.json.to<Type>`).
-    /// The target is the WRITTEN qualifier, nominal; only the turbofish
-    /// class spelling needs the call channel's hoisted args instead. A
-    /// real `from_json` static outranks this tier in every consumer.
-    #[allow(clippy::wrong_self_convention)]
-    fn from_json_desugar_value(
-        &mut self,
-        prefix: &[baml_type::Name],
-        own: OwnArgs,
-        record_base: Option<ExprId>,
-    ) -> Option<Ty> {
-        let written = self.lower_scoped_type_path(prefix);
-        let target = if !written.contains_error() {
-            crate::impls::interned_ty(&crate::lower::reject_holes(&written))
-        } else if let (OwnArgs::Call(call), Some((class, _))) = (own, self.static_class_for(prefix))
-        {
-            let frame = self.class_ref_generic_frame(class);
-            let args = self.instantiation_args(call, &frame, None);
-            crate::lower::class_ty(self.lang(), self.class_ref_name(class), args)
-        } else {
-            return None;
-        };
-        let fn_ty = self.json_desugar_callee("to", target.clone())?;
-        if let Some(base) = record_base {
-            self.result.type_of_expr.insert(base, target);
-        }
-        Some(fn_ty)
-    }
-
-    /// The `MemberAccess` spelling of a TYPE-QUALIFIED callee
-    /// (`Box<int>.from_json(j)`, `Temp.from_json(j)` when lowering kept
-    /// the FieldAccess): the same ladder the Path spelling walks -
-    /// interface static, class static, then the `from_json` decode
-    /// desugar with the class applied at the CALL's type-arg channel
-    /// (where BEP-039 hoisted the receiver's written args). A real
-    /// `from_json` static outranks the sugar, as in the path road.
+    /// The `MemberAccess` spelling of a type-qualified callee uses the
+    /// same interface, inherent, and impl lookup as a path spelling.
     fn type_qualified_member_callee(
         &mut self,
         call: ExprId,
-        base_expr: ExprId,
+        _base_expr: ExprId,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
         record_at: ExprId,
@@ -7879,15 +7720,6 @@ impl<'db> InferenceContext<'db> {
                 let mut full = prefix.to_vec();
                 full.push(member.clone());
                 self.enum_variant_value(&full, Some(record_at))
-            })
-            .or_else(|| {
-                (member.as_str() == "from_json")
-                    .then(|| {
-                        let fn_ty = self.from_json_desugar_value(prefix, own, Some(base_expr))?;
-                        self.result.desugared_callees.insert(record_at);
-                        Some(fn_ty)
-                    })
-                    .flatten()
             })
     }
 
@@ -13721,7 +13553,6 @@ impl<'db> InferenceContext<'db> {
             call_plans,
             type_bindings,
             expr_adjustments,
-            desugared_callees,
         } = working;
         InferenceResult {
             type_of_expr: type_of_expr
@@ -13791,7 +13622,6 @@ impl<'db> InferenceContext<'db> {
                     )
                 })
                 .collect(),
-            desugared_callees,
         }
     }
 

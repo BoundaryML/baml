@@ -405,6 +405,13 @@ impl Program {
                     }
                 }
                 Object::Interface(interface) => {
+                    if let Some(default) = &interface.structural_default {
+                        function(
+                            default.function,
+                            &format!("{role} structural default"),
+                            false,
+                        )?;
+                    }
                     for method in &interface.methods {
                         if let Some(default) = method.default {
                             function(

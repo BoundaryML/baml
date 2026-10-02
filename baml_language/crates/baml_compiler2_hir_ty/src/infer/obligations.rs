@@ -326,7 +326,10 @@ impl<'db> InferenceContext<'db> {
                 // before the shared verdict, whose existential arm answers by
                 // the existential's own reference — right for a coercion
                 // (a `Show` value is usable as a `Show`), never for a bound.
-                if purpose == GoalPurpose::Bound && is_abstract_head(ty.kind()) {
+                if purpose == GoalPurpose::Bound
+                    && is_abstract_head(ty.kind())
+                    && !crate::impls::is_structural_interface(self.db, &interface)
+                {
                     self.pending_diags
                         .push(super::PendingDiag::BoundedArgNotConcrete {
                             expr: at,
@@ -433,7 +436,7 @@ impl<'db> InferenceContext<'db> {
         required_for: &[RequiredFor],
     ) -> Selection {
         let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
-        let mut applicable = None;
+        let mut applicable: Option<&crate::impls::ImplFacts<'_>> = None;
         for facts in candidates {
             let probe = self.probe();
             let applies = self.confirm_impl(goal, interface, facts).is_some();
@@ -446,6 +449,9 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let Some(facts) = applicable else {
+            if crate::impls::is_structural_interface(self.db, interface) {
+                return Selection::Confirmed;
+            }
             return Selection::NoCandidate;
         };
         let instantiation = self
@@ -842,7 +848,7 @@ impl<'db> InferenceContext<'db> {
         if !crate::impls::is_concrete_receiver(receiver) {
             return None;
         }
-        let mut applicable = None;
+        let mut applicable: Option<&crate::impls::ImplFacts<'_>> = None;
         for facts in crate::impls::all_impl_facts(self.db, self.viewer()) {
             if !crate::impls::provides_concrete_members(
                 baml_compiler2_hir::package::lang_roots(self.db),
@@ -860,7 +866,22 @@ impl<'db> InferenceContext<'db> {
                 applicable = Some(facts);
             }
         }
-        let facts = applicable?;
+        let Some(facts) = applicable else {
+            let mut candidates = crate::impls::structural_interface_roots(self.db)
+                .into_iter()
+                .filter_map(|interface| {
+                    crate::method_resolution::member_on_interface(
+                        self.db,
+                        &self.facts,
+                        &interface,
+                        receiver,
+                        name,
+                        false,
+                    )
+                });
+            let member = candidates.next()?;
+            return candidates.next().is_none().then_some(member);
+        };
         let (member, instantiation) = self
             .probe_candidate(receiver, name, facts)
             .expect("the unique applicable candidate re-confirms");
@@ -930,6 +951,9 @@ impl<'db> InferenceContext<'db> {
     /// construction: a union reaches the registry and no impl subject is
     /// a union, so it fails - never "passes as a subtype".
     fn implements_holds(&mut self, ty: &Ty, interface: &InferInterface) -> bool {
+        if crate::impls::is_structural_interface(self.db, interface) {
+            return true;
+        }
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {

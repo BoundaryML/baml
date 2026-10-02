@@ -560,7 +560,7 @@ fn builtin_equals_compare_visible_from_user_package() {
     use baml_type::normalize::TypeContext;
 
     let mut db = make_db();
-    // A user file so the `user` package exists; `Bare` implements nothing.
+    // A user file so the `user` package exists; `Bare` declares no impls.
     db.file("main.baml", "class Bare { x: int }");
     let user_pkg = db.workspace_root().unwrap();
     let baml_root = baml_compiler2_hir::package::lang_roots(&db)
@@ -595,8 +595,8 @@ fn builtin_equals_compare_visible_from_user_package() {
     // uint8array implements Equals but not Compare.
     assert!(ctx.implements_interface(&u8_ty, &equals));
     assert!(!ctx.implements_interface(&u8_ty, &compare));
-    // A class with no `implements` satisfies neither.
-    assert!(!ctx.implements_interface(&bare, &equals));
+    // Structural equality is synthesized; ordering still requires an impl.
+    assert!(ctx.implements_interface(&bare, &equals));
     assert!(!ctx.implements_interface(&bare, &compare));
 }
 

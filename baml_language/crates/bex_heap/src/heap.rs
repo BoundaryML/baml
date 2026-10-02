@@ -472,6 +472,9 @@ impl BexHeap {
                     })
                     .collect();
             } else if let Object::Interface(interface) = obj {
+                if let Some(default) = &mut interface.structural_default {
+                    default.function_ptr = resolve_idx(default.function);
+                }
                 // The one place a static interface's default body becomes a
                 // pointer: from here on, a witness reads `default_fn` and never
                 // resolves a name.

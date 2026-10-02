@@ -3407,13 +3407,12 @@ impl BexVm {
             }
         };
         let resolver = crate::package_baml::ImplResolver::for_value(self, world_anchor);
-        let (rule, bound_args) = resolver
-            .resolve_implements_rule(self_ty, iface_head, &iface_args)
+        let implementation = resolver
+            .resolve_implementation(self_ty, iface_head, &iface_args)
             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                 method: method_name.to_string(),
             })?;
-        let method = resolver.rule_method_impl(&rule, method_name)?.method;
-        let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
+        let (callee, mut frame) = resolver.implementation_method(&implementation, method_name)?;
         // Only `.tys` reaches the callee frame. `method_type_args.values` (the
         // exact `TypeValue`s) is dropped, which is sound here: a type argument
         // carries its declaration heads inside the `RealizedTy` itself, so the
@@ -3423,7 +3422,7 @@ impl BexVm {
         // exact value the caller passed rather than an equal twin built
         // from the type.
         frame.extend(method_type_args.tys);
-        Ok((method.fqn, frame))
+        Ok((callee, frame))
     }
 
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
@@ -8554,25 +8553,14 @@ impl BexVm {
                             );
                             let resolver =
                                 crate::package_baml::ImplResolver::for_value(self, receiver);
-                            let (rule, bound_args) = resolver
-                                .resolve_implements_rule(&self_ty, iface_qtn, &iface_args)
+                            let implementation = resolver
+                                .resolve_implementation(&self_ty, iface_qtn, &iface_args)
                                 .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                     method: method_name.clone(),
                                 })?;
-                            let method = resolver
-                                .rule_method_impl(&rule, method_name.as_str())?
-                                .method;
-                            // `fqn` is the resolved callee's heap pointer (provided
-                            // row or adopted interface default) — invoke it directly.
-                            let callee = method.fqn;
-                            // Seed the callee frame: the impl's frame realized against
-                            // its bound args (the impl's own generics for a provided
-                            // method, or `[Self, interface args..]` for an adopted
-                            // default — associated types are never frame slots), then
-                            // the method-level type args — matching the callee's
-                            // De Bruijn layout `[owner… ++ method…]`.
-                            let frame = resolver.realize_frame(&method.frame, &bound_args)?;
-                            let cacheable = rule.is_static();
+                            let (callee, frame) = resolver
+                                .implementation_method(&implementation, method_name.as_str())?;
+                            let cacheable = implementation.is_static();
                             if cacheable && let Some(cache_key) = cache_key {
                                 self.static_virtual_call_cache.insert(
                                     cache_key,
