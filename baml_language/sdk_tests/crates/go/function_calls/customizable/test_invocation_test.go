@@ -401,3 +401,20 @@ func Test_invocation_inheritance(t *testing.T) {
 		}
 	})
 }
+
+// SDK_PARITY_LINT(skip): Go cancellation controls remain usable with a canceled context
+func Test_cancel_controls_with_cancelled_context_go_only(t *testing.T) {
+	token, err := baml.SpawnCancelTokenNew(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := token.Cancel(ctx); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err := token.IsCancelled(ctx)
+	if err != nil || !cancelled {
+		t.Fatalf("cancelled token: %v %v", cancelled, err)
+	}
+}

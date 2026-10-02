@@ -44,8 +44,10 @@ describe('invocation_options', () => {
   it('timeout_upper_bound_accepted', () => {
     expect(hello_world({ $baml: { timeoutMs: 2147483647 } })).toBe('hello world');
   });
-  it.each([[], 3, { cancel: {} }, { trace: {} }])('invalid_controls_rejected %j', (options: unknown) => {
-    expect(() => hello_world({ $baml: options as BamlOptions })).toThrow();
+  it('invalid_controls_rejected', () => {
+    for (const options of [[], 3, { cancel: {} }, { trace: {} }]) {
+      expect(() => hello_world({ $baml: options as BamlOptions })).toThrow();
+    }
   });
   it('legacy_controls_rejected', () => {
     for (const name of ['$ctx', '$trace', '$call']) {
@@ -144,16 +146,18 @@ describe('invocation_lifecycle', () => {
     try { await started; token.cancel(); await expect(call).rejects.toBeInstanceOf(BamlAbortError); expect(exited).toBe(false); }
     finally { release(); await call.catch(() => {}); }
   });
-  it.each([false, true])('retained_effective_token_stays_live_after_callback %s', async (retainFrame: boolean) => {
-    const source = CancelToken.new();
-    let captured: ReturnType<typeof invocation.current>;
-    await baml.call_int_callback_async(value => { captured = invocation.current(); return value; }, 1, { $baml: { cancel: source } });
-    expect(invocation.current()).toBe(null);
-    const token = retainFrame ? undefined : captured!.cancel;
-    source.cancel();
-    expect((token ?? captured!.cancel).is_cancelled()).toBe(true);
-    expect(captured!.cancel).toBe(captured!.cancel);
-    await new Promise<void>(resolve => captured!.signal.aborted ? resolve() : captured!.signal.addEventListener('abort', () => resolve(), { once: true }));
+  it('retained_effective_token_stays_live_after_callback', async () => {
+    for (const retainFrame of [false, true]) {
+      const source = CancelToken.new();
+      let captured: ReturnType<typeof invocation.current>;
+      await baml.call_int_callback_async(value => { captured = invocation.current(); return value; }, 1, { $baml: { cancel: source } });
+      expect(invocation.current()).toBe(null);
+      const token = retainFrame ? undefined : captured!.cancel;
+      source.cancel();
+      expect((token ?? captured!.cancel).is_cancelled()).toBe(true);
+      expect(captured!.cancel).toBe(captured!.cancel);
+      await new Promise<void>(resolve => captured!.signal.aborted ? resolve() : captured!.signal.addEventListener('abort', () => resolve(), { once: true }));
+    }
   });
   it('deadline_reentry_does_not_reset_budget', async () => {
     let nested!: Promise<number>;
@@ -196,40 +200,43 @@ describe('invocation_callbacks', () => {
     expect(await baml.call_int_callback_async(callback as unknown as (value: number) => number, 1, { $baml: options })).toBe(1);
     expect(options.trace.inspect().context.metadata.request).toBe(99);
   });
-  it.each([false, true])('layered_callback_context_restores_after_returned_callable %s', async (leafThrows: boolean) => {
-    const original = new Error('leaf failed');
-    const leaf = invocation.withInvocation(async (active, value: number) => {
-      expect(trace.current_context().metadata).toEqual({ request: 'C', keep: 7 });
-      await Promise.resolve();
-      expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'C', keep: 7 });
-      if (leafThrows) throw original;
-      return value + 1;
-    });
-    const forward = await baml.make_callback_forwarder_async(leaf as unknown as (value: number) => number, { $baml: { trace: trace.context({ metadata: { request: 'factory' } }) } });
-    const overridden = invocation.withInvocation(async (active, value: number) => {
-      try { return await forward.callAsync(value); }
-      finally { expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'C', keep: 7 }); }
-    });
-    const inherited = invocation.withInvocation(async (active, value: number) => {
-      let result: number;
-      try { result = await baml.call_int_callback_async(overridden as unknown as (value: number) => number, value, { $baml: { trace: trace.context({ metadata: { request: 'C' } }) } }); }
-      catch (error) { expect(leafThrows).toBe(true); expect(error).toBe(original); result = value + 1; }
-      expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'A', keep: 7 });
-      expect(await active.run(() => baml.call_int_callback_async(v => { expect(trace.current_context().metadata).toEqual({ request: 'A', keep: 7 }); return v; }, value))).toBe(value);
-      return result;
-    });
-    const outer = invocation.withInvocation(async (active, value: number) => {
-      const result = await baml.call_int_callback_async(inherited as unknown as (value: number) => number, value);
-      expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'A', keep: 7 });
-      return result;
-    });
-    expect(await baml.call_int_callback_async(outer as unknown as (value: number) => number, 6, { $baml: { trace: trace.hidden().context({ metadata: { request: 'A', keep: 7 } }) } })).toBe(7);
-    expect(invocation.current()).toBe(null); expect(trace.current_context().metadata).toEqual({});
+  it('layered_callback_context_restores_after_returned_callable', async () => {
+    for (const leafThrows of [false, true]) {
+      const original = new Error('leaf failed');
+      const leaf = invocation.withInvocation(async (active, value: number) => {
+        expect(trace.current_context().metadata).toEqual({ request: 'C', keep: 7 });
+        await Promise.resolve();
+        expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'C', keep: 7 });
+        if (leafThrows) throw original;
+        return value + 1;
+      });
+      const forward = await baml.make_callback_forwarder_async(leaf as unknown as (value: number) => number, { $baml: { trace: trace.context({ metadata: { request: 'factory' } }) } });
+      const overridden = invocation.withInvocation(async (active, value: number) => {
+        try { return await forward.callAsync(value); }
+        finally { expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'C', keep: 7 }); }
+      });
+      const inherited = invocation.withInvocation(async (active, value: number) => {
+        let result: number;
+        try { result = await baml.call_int_callback_async(overridden as unknown as (value: number) => number, value, { $baml: { trace: trace.context({ metadata: { request: 'C' } }) } }); }
+        catch (error) { expect(leafThrows).toBe(true); expect(error).toBe(original); result = value + 1; }
+        expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'A', keep: 7 });
+        expect(await active.run(() => baml.call_int_callback_async(v => { expect(trace.current_context().metadata).toEqual({ request: 'A', keep: 7 }); return v; }, value))).toBe(value);
+        return result;
+      });
+      const outer = invocation.withInvocation(async (active, value: number) => {
+        const result = await baml.call_int_callback_async(inherited as unknown as (value: number) => number, value);
+        expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'A', keep: 7 });
+        return result;
+      });
+      expect(await baml.call_int_callback_async(outer as unknown as (value: number) => number, 6, { $baml: { trace: trace.hidden().context({ metadata: { request: 'A', keep: 7 } }) } })).toBe(7);
+      expect(invocation.current()).toBe(null); expect(trace.current_context().metadata).toEqual({});
+    }
   });
 });
 
-// SDK_PARITY_LINT(skip): Node's ambient async carrier has no Web equivalent.
+// Node's ambient async carrier has no Web equivalent.
 describe.runIf(isTestRuntime('node'))('invocation_typescript_only', () => {
+  // SDK_PARITY_LINT(skip): Node async carrier, native signals, and entry-time snapshots are specific to TypeScript
   it('async_callback_preserves_ambient_frame_typescript_only', async () => {
     expect(await baml.call_int_callback_async(asyncCallback(async value => {
       const active = invocation.current();
@@ -241,14 +248,16 @@ describe.runIf(isTestRuntime('node'))('invocation_typescript_only', () => {
   });
 });
 
-// SDK_PARITY_LINT(skip): Node async carrier and entry-time snapshot semantics.
+// Node async carrier and entry-time snapshot semantics.
 describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () => {
+  // SDK_PARITY_LINT(skip): Node async carrier, native signals, and entry-time snapshots are specific to TypeScript
   it('options_snapshot_at_async_entry_typescript_only', async () => {
     const options = { timeoutMs: 1000 };
     const pending = hello_world_async({ $baml: options });
     options.timeoutMs = 0;
     expect(await pending).toBe('hello world');
   });
+  // SDK_PARITY_LINT(skip): Node async carrier, native signals, and entry-time snapshots are specific to TypeScript
   it('native_signal_cancels_without_cancelling_input_token_typescript_only', async () => {
     const source = new AbortController();
     const token = CancelToken.new();
@@ -266,6 +275,7 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
     await exited; expect(token.is_cancelled()).toBe(false);
   });
+  // SDK_PARITY_LINT(skip): Node async carrier, native signals, and entry-time snapshots are specific to TypeScript
   it('pre_aborted_native_signal_does_not_enter_callback_typescript_only', async () => {
     const source = new AbortController(); source.abort();
     let entered = false;
@@ -275,9 +285,10 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
   // Four nested BAML calls; A sets context, B inherits, C patches, D inherits.
   // Intermediate synchronous JS bodies return the child Promise; Node cannot
   // synchronously block its event loop on a child that dispatches JS work.
-  for (let modes = 0; modes < 16; modes++) {
-    for (const controls of [undefined, {}, null, { trace: null, cancel: null, timeoutMs: null }]) {
-      it(`layered_callback_context_inheritance_and_restoration_typescript_only ${modes} ${JSON.stringify(controls)}`, async () => {
+  // SDK_PARITY_LINT(skip): Node async carrier, native signals, and entry-time snapshots are specific to TypeScript
+  it('layered_callback_context_inheritance_and_restoration_typescript_only', async () => {
+    for (let modes = 0; modes < 16; modes++) {
+      for (const controls of [undefined, {}, null, { trace: null, cancel: null, timeoutMs: null }]) {
         const { AsyncLocalStorage } = await import(/* @vite-ignore */ ['node', 'async_hooks'].join(':')) as typeof import('node:async_hooks');
         const local = new AsyncLocalStorage<string>();
         const rootMetadata = { request: 'A', keep: 7, remove: 9 };
@@ -302,7 +313,7 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
         expect(await local.run('application', () => baml.call_int_callback_async(callbackFor(3), 3, { $baml: { trace: trace.hidden().context({ distinct_id: 'root-id', metadata: rootMetadata }) } }))).toBe(7);
         expect(visited).toEqual([3, 2, 1, 0]); expect(local.getStore()).toBeUndefined();
         expect(invocation.current()).toBe(null); expect(trace.current_context().metadata).toEqual({}); expect(trace.current_context().distinct_id).toBe(null);
-      });
+      }
     }
-  }
+  });
 });

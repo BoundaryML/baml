@@ -145,7 +145,7 @@ def normalize(options: Any, call_id: int):
 
 def _dynamic_args(target, arguments, types, options):
     from .baml_py import new_function_call
-    from .proto import BamlClosure, encode_call_args, python_type_to_wire_ty
+    from .proto import BamlClosure, BamlType, encode_call_args, python_type_to_wire_ty
 
     if not isinstance(arguments, dict) or any(
         not isinstance(key, str) for key in arguments
@@ -164,7 +164,9 @@ def _dynamic_args(target, arguments, types, options):
             "target must be a fully qualified BAML name or returned callable"
         )
     bindings = [
-        (name, python_type_to_wire_ty(value)) for name, value in (types or {}).items()
+        (name, value if isinstance(value, BamlType) else python_type_to_wire_ty(value))
+        for name, value in (types or {}).items()
+        if value is not None
     ]
     call_id = new_function_call()
     return call_id, encode_call_args(

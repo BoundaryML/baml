@@ -396,7 +396,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	}
 	defer nativeReleaseFunctionCall(engineCallID)
 	defer runtime.KeepAlive(ctx)
-	options, controlTransaction, err := prepareInvocation(ctx, engineCallID, controls)
+	options, controlTransaction, err := prepareInvocation(waitContext, engineCallID, controls)
 	defer controlTransaction.rollback()
 	if err != nil {
 		return Value{}, err
@@ -489,6 +489,13 @@ func waitForCallResult(ctx context.Context, result <-chan []byte) ([]byte, error
 		// cancellation panic envelope.
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		// The runtime and Go timer can observe the same deadline in different
+		// orders. Once the caller deadline has elapsed, wait for its timer to
+		// publish the exact context error instead of exposing a native panic.
+		if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) && ctx.Done() != nil {
+			<-ctx.Done()
+			return nil, ctx.Err()
 		}
 		return payload, nil
 	case <-ctx.Done():
@@ -813,11 +820,13 @@ func invocationOptions(ctx context.Context, id uint64) (*cffi.InvocationOptions,
 		options.InheritedState = carrier.state
 	}
 	if deadline, ok := ctx.Deadline(); ok {
+		// Sample the remaining host budget first so the conversion cannot
+		// shorten it by the time spent querying the runtime's clock.
+		remaining := time.Until(deadline)
 		now, err := nativeInvocationClockNs(id)
 		if err != nil {
 			return nil, err
 		}
-		remaining := time.Until(deadline)
 		absolute := now
 		if remaining > 0 {
 			if uint64(remaining) > math.MaxUint64-now {

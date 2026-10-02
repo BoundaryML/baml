@@ -194,6 +194,7 @@ Require(
     await Functions.ProduceAsync<long>(
         () =>
         {
+            var cancellationToken = Invocation.Current!.CancellationToken;
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(17L);
         }) == 17L,
@@ -284,7 +285,7 @@ using (var caller = new CancellationTokenSource())
                 callbackCanceled.TrySetResult();
             }
         },
-        caller.Token);
+        new BamlOptions { CancellationToken = caller.Token });
     CancellationToken suppliedToken = await callbackStarted.Task.WaitAsync(
         TimeSpan.FromSeconds(5));
     caller.Cancel();
@@ -311,7 +312,7 @@ static OperationCanceledException CaptureUnrelatedCancellation(
 {
     try
     {
-        ThrowUnrelatedCancellation(Invocation.Current!.CancellationToken);
+        ThrowUnrelatedCancellation(cancellationToken);
     }
     catch (OperationCanceledException exception)
     {

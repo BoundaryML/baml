@@ -16,6 +16,7 @@ from baml_sdk import (
     hello_world_async,
     invocation,
     invoke,
+    invoke_async,
     optional_args_probe,
     optional_args_probe_async,
     trace,
@@ -108,6 +109,18 @@ def test_dynamic_call_accepts_controls():
     ]
     # Dynamic application maps never strip a key named _baml as a control.
     # Generic _types is separate; specialized handles reject new type bindings.
+    from baml_sdk import reflect
+
+    for binding in [int, reflect.Type.of(int), None]:
+        assert invoke("user.generic_tests.identity", {"x": 17}, _types={"T": binding}, _baml={}) == 17
+
+
+# SDK_PARITY_LINT(skip): Python dynamic type bindings accept Python classes and reflected BamlType handles
+async def test_dynamic_type_bindings_async_python_only():
+    from baml_sdk import reflect
+
+    for binding in [int, reflect.Type.of(int), None]:
+        assert await invoke_async("user.generic_tests.identity", {"x": 17}, _types={"T": binding}, _baml={}) == 17
 
 
 # invocation_lifecycle: admission, linked sources, and reservation ownership.
@@ -257,7 +270,6 @@ async def test_null_controls_preserve_inherited_context():
     # Context survives even with recording disabled; no extra plumbing span.
 
 
-# SDK_PARITY_LINT(skip): Python sync/async re-entry and ContextVar propagation
 @pytest.mark.parametrize("async_entry", [False, True], ids=["sync-entry", "async-entry"])
 @pytest.mark.parametrize(
     "async_callbacks",
@@ -270,6 +282,7 @@ async def test_null_controls_preserve_inherited_context():
     [{}, {"_baml": {}}, {"_baml": None}, {"_baml": {"trace": None, "cancel": None, "timeout_ms": None}}],
     ids=["omitted-controls", "empty-controls", "none-controls", "null-fields"],
 )
+# SDK_PARITY_LINT(skip): Python sync/async re-entry and ContextVar propagation
 def test_layered_callback_context_inheritance_and_restoration_python_only(
     async_entry, async_callbacks, async_reentry, inherited_controls
 ):

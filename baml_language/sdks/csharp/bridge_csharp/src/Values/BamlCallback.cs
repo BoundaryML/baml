@@ -152,6 +152,15 @@ public static class BamlCallback
         return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15));
     }
 
+    /// <summary>Adapts a synchronous value-returning callback without invoking it.</summary>
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, Task<TResult>> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, TResult>(
+        Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, TResult> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16) => Task.FromResult(callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16));
+    }
+
     /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
     public static Func<Task> FromSync(
         Action callback)
@@ -356,6 +365,18 @@ public static class BamlCallback
         return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15) =>
         {
             callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15);
+            return Task.CompletedTask;
+        };
+    }
+    /// <summary>Adapts a synchronous BAML-void callback without invoking it.</summary>
+    public static Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, Task> FromSync<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(
+        Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return (value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16) =>
+        {
+            callback(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15, value16);
             return Task.CompletedTask;
         };
     }

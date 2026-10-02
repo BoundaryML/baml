@@ -10,7 +10,7 @@ use baml_sdk::{
 mod invocation_options {
     use super::*;
     #[test]
-    fn four_call_forms() {
+    fn test_four_call_forms() {
         let options = BamlOptions::new().timeout_ms(1000);
         assert_eq!(
             baml_sdk::optional_args_probe(1, Unset, Unset).unwrap(),
@@ -30,7 +30,7 @@ mod invocation_options {
         );
     }
     #[tokio::test]
-    async fn four_call_forms_async() {
+    async fn test_four_call_forms_async() {
         let options = BamlOptions::new().timeout_ms(1000);
         assert_eq!(
             baml_sdk::optional_args_probe_async(1, Unset, Unset)
@@ -58,14 +58,14 @@ mod invocation_options {
         );
     }
     #[test]
-    fn empty_controls() {
+    fn test_empty_controls() {
         assert_eq!(
             hello_world().unwrap(),
             hello_world_with_options(BamlOptions::default()).unwrap()
         );
     }
     #[test]
-    fn omitted_argument_is_not_null() {
+    fn test_omitted_argument_is_not_null() {
         assert_eq!(
             baml_sdk::optional_args_probe_with_options(1, None, Unset, BamlOptions::default())
                 .unwrap(),
@@ -73,11 +73,11 @@ mod invocation_options {
         );
     }
     #[test]
-    fn invalid_timeout_rejected() {
+    fn test_invalid_timeout_rejected() {
         assert!(hello_world_with_options(BamlOptions::new().timeout_ms(2147483648)).is_err());
     }
     #[test]
-    fn timeout_upper_bound_accepted() {
+    fn test_timeout_upper_bound_accepted() {
         assert_eq!(
             hello_world_with_options(BamlOptions::new().timeout_ms(2147483647)).unwrap(),
             "hello world"
@@ -87,7 +87,7 @@ mod invocation_options {
 mod invocation_surfaces {
     use super::*;
     #[test]
-    fn methods_accept_controls() {
+    fn test_methods_accept_controls() {
         let value = baml_sdk::OptBox::make_with_options(1, Unset, BamlOptions::default()).unwrap();
         assert_eq!(
             value
@@ -97,7 +97,7 @@ mod invocation_surfaces {
         );
     }
     #[tokio::test]
-    async fn methods_accept_controls_async() {
+    async fn test_methods_accept_controls_async() {
         let value = baml_sdk::OptBox::make_async_with_options(1, Unset, BamlOptions::default())
             .await
             .unwrap();
@@ -110,7 +110,7 @@ mod invocation_surfaces {
         );
     }
     #[test]
-    fn returned_callable_accepts_controls() {
+    fn test_returned_callable_accepts_controls() {
         let add = baml::make_adder(3).unwrap();
         assert_eq!(
             add.call_with_options((4,), BamlOptions::default()).unwrap(),
@@ -120,7 +120,7 @@ mod invocation_surfaces {
         assert_eq!(add.call_with_options((4,), &token).unwrap(), 7);
     }
     #[tokio::test]
-    async fn returned_callable_accepts_controls_async() {
+    async fn test_returned_callable_accepts_controls_async() {
         let add = baml::make_adder_async(3).await.unwrap();
         assert_eq!(
             add.call_async_with_options((4,), BamlOptions::default())
@@ -133,7 +133,7 @@ mod invocation_surfaces {
 mod invocation_lifecycle {
     use super::*;
     #[test]
-    fn pre_cancelled_call_does_not_enter_callback() {
+    fn test_pre_cancelled_call_does_not_enter_callback() {
         let token = CancelToken::new().unwrap();
         token.cancel().unwrap();
         assert!(
@@ -146,7 +146,7 @@ mod invocation_lifecycle {
         );
     }
     #[test]
-    fn zero_timeout_does_not_enter_callback() {
+    fn test_zero_timeout_does_not_enter_callback() {
         assert!(
             baml::call_int_callback_with_options(
                 |_| -> i64 { panic!("must not dispatch") },
@@ -157,7 +157,7 @@ mod invocation_lifecycle {
         );
     }
     #[test]
-    fn composite_token_observes_every_source() {
+    fn test_composite_token_observes_every_source() {
         for index in 0..2 {
             let sources = [CancelToken::new().unwrap(), CancelToken::new().unwrap()];
             let token = CancelToken::any(sources.to_vec()).unwrap();
@@ -168,7 +168,7 @@ mod invocation_lifecycle {
         }
     }
     #[test]
-    fn child_cancellation_does_not_cancel_input() {
+    fn test_child_cancellation_does_not_cancel_input() {
         let source = CancelToken::new().unwrap();
         let captured = source.clone();
         let (checked, finished) = std::sync::mpsc::channel();
@@ -190,13 +190,13 @@ mod invocation_lifecycle {
         assert!(!source.is_cancelled().unwrap());
     }
     #[test]
-    fn reservation_is_single_use() {
+    fn test_reservation_is_single_use() {
         let reserved = trace::hidden().unwrap().reserve().unwrap();
         assert_eq!(hello_world_with_options(&reserved).unwrap(), "hello world");
         assert!(hello_world_with_options(&reserved).is_err());
     }
     #[test]
-    fn failed_admission_does_not_consume_reservation() {
+    fn test_failed_admission_does_not_consume_reservation() {
         let reserved = trace::hidden().unwrap().reserve().unwrap();
         assert!(
             hello_world_with_options(BamlOptions::new().trace(reserved.clone()).timeout_ms(0))
@@ -205,7 +205,7 @@ mod invocation_lifecycle {
         assert_eq!(hello_world_with_options(&reserved).unwrap(), "hello world");
     }
     #[test]
-    fn retained_effective_token_observes_late_parent_cancellation() {
+    fn test_retained_effective_token_observes_late_parent_cancellation() {
         let source = CancelToken::new().unwrap();
         let retained = std::sync::Arc::new(std::sync::Mutex::new(None));
         let output = retained.clone();
@@ -231,7 +231,7 @@ fn context(name: &str) -> trace::Options {
 mod invocation_inheritance {
     use super::*;
     #[test]
-    fn callback_frame_is_installed_and_restored() {
+    fn test_callback_frame_is_installed_and_restored() {
         let options = context("parent");
         let result = baml::call_int_callback_with_options(
             |value: i64| {
@@ -265,7 +265,7 @@ mod invocation_inheritance {
         assert!(trace::current_context().unwrap().distinct_id.is_none());
     }
     #[test]
-    fn multi_layer_context_patch_inherits_and_restores() {
+    fn test_multi_layer_context_patch_inherits_and_restores() {
         let outer = context("A");
         let patch = context("C");
         baml::call_int_callback_with_options(
@@ -327,7 +327,8 @@ mod invocation_inheritance {
         .unwrap();
     }
     #[tokio::test(flavor = "multi_thread")]
-    async fn ambient_context_survives_await_rust_only() {
+    // SDK_PARITY_LINT(skip): Rust task scopes and lazy future cancellation are specific to Rust
+    async fn test_ambient_context_survives_await_rust_only() {
         let options = trace::context_async(Unset, Some("async".to_owned()))
             .await
             .unwrap();
@@ -390,7 +391,8 @@ mod invocation_inheritance {
         assert!(invocation::current().is_none());
     }
     #[tokio::test]
-    async fn unpolled_future_starts_nothing_rust_only() {
+    // SDK_PARITY_LINT(skip): Rust task scopes and lazy future cancellation are specific to Rust
+    async fn test_unpolled_future_starts_nothing_rust_only() {
         let call = baml::call_int_callback_async_with_options(
             |_| -> i64 { panic!("unpolled future must not start") },
             1,
@@ -410,7 +412,7 @@ mod invocation_dynamic {
     use super::*;
     use baml_sdk::{Arguments, Input, Target, Type, TypeBindings, invoke, invoke_async};
     #[test]
-    fn dynamic_name_and_handle_accept_controls() {
+    fn test_dynamic_name_and_handle_accept_controls() {
         let result = invoke(
             Target::named("user.hello_world"),
             Arguments::new(),
@@ -453,7 +455,7 @@ mod invocation_dynamic {
         );
     }
     #[tokio::test]
-    async fn dynamic_name_and_handle_accept_controls_async() {
+    async fn test_dynamic_name_and_handle_accept_controls_async() {
         let result = invoke_async(
             Target::named("user.hello_world"),
             Arguments::new(),
@@ -479,7 +481,8 @@ mod invocation_dynamic {
         );
     }
     #[tokio::test(flavor = "multi_thread")]
-    async fn dropping_started_future_cancels_rust_only() {
+    // SDK_PARITY_LINT(skip): Rust task scopes and lazy future cancellation are specific to Rust
+    async fn test_dropping_started_future_cancels_rust_only() {
         let (started, ready) = tokio::sync::oneshot::channel();
         let (release, cleanup) = tokio::sync::oneshot::channel();
         let channels = std::sync::Arc::new(std::sync::Mutex::new(Some((started, cleanup))));

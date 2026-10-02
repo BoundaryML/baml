@@ -266,6 +266,10 @@ public final class ProtoWriter {
             return encodeInboundValue(inner, selected, true);
         }
         BamlType exactNodeType = selectedArm ? contextualType : null;
+        baml_bridge.BamlHandle returnedHandle = baml_bridge.BamlFfi.returnedClosureHandle(value);
+        if (returnedHandle != null) {
+            return encodeInboundValue(returnedHandle, contextualType, selectedArm);
+        }
         boolean alreadyTyped = false;
         // bool must precede the integer arms (mirrors Python's isinstance order).
         if (value instanceof Boolean b) {

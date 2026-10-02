@@ -160,7 +160,7 @@ CheckParity("image media", mediaValue, value =>
     Check(value.As<BamlImage>().Equals(image), "image dynamic projection changed"));
 
 int probeCalls = 0;
-Func<CancellationToken, Task<long>> probe = _ =>
+Func<Task<long>> probe = () =>
 {
     Interlocked.Increment(ref probeCalls);
     return Task.FromResult(1L);

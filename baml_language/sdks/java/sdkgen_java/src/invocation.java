@@ -1,6 +1,6 @@
 public final class Invocation implements baml_bridge.InvocationCapture {
     private final baml_bridge.internal.InvocationFrames.Frame frame;
-    private Invocation(baml_bridge.internal.InvocationFrames.Frame frame) { this.frame = frame; }
+    private Invocation(baml_bridge.internal.InvocationFrames.Frame frame) { this.frame = frame.capture(); }
     public static java.util.Optional<Invocation> current() { return java.util.Optional.ofNullable(baml_bridge.internal.InvocationFrames.CURRENT.get()).map(Invocation::new); }
     public baml_sdk.baml.spawn.CancelToken cancel() { return (baml_sdk.baml.spawn.CancelToken) frame.cancel(); }
     public <T,R> java.util.function.Function<T,R> wrapFunction(java.util.function.Function<T,R> body) { return frame.wrapFunction(body); }

@@ -303,6 +303,20 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
             let mut imports = result.imports;
             let mut positional = Vec::new();
             let mut optional = Vec::new();
+            let required_names: Vec<String> = params
+                .iter()
+                .enumerate()
+                .filter(|(_, param)| param.mode != CodegenFunctionParamMode::Optional)
+                .map(|(index, param)| {
+                    param
+                        .name
+                        .as_ref()
+                        .map_or_else(|| format!("arg{index}"), |name| name.as_str().to_string())
+                })
+                .collect();
+            let required_refs: Vec<&str> = required_names.iter().map(String::as_str).collect();
+            let mut projected_required =
+                crate::leaf::safe_required_param_names(&required_refs, true).into_iter();
             for (index, param) in params.iter().enumerate() {
                 let translated = translate_ty(&param.ty, ctx);
                 imports.extend(translated.imports);
@@ -317,11 +331,9 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
                         translated.expr
                     ));
                 } else {
-                    let name = if name == "$opts" {
-                        "$opts_".to_string()
-                    } else {
-                        name
-                    };
+                    let name = projected_required
+                        .next()
+                        .expect("every required callback parameter has a projected name");
                     positional.push(format!("{name}: {}", translated.expr));
                 }
             }
@@ -350,10 +362,12 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
             let value = translate_return_ty(value, ctx);
             let mut imports = key.imports;
             imports.extend(value.imports);
-            TranslatedType {
-                expr: format!("{{ [key in {}]: {} }}", key.expr, value.expr),
-                imports,
-            }
+            let expr = if key.expr == "string" {
+                format!("{{ [key: string]: {} }}", value.expr)
+            } else {
+                format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
+            };
+            TranslatedType { expr, imports }
         }
         Ty::Union(items) => {
             let mut imports = BTreeSet::new();
@@ -455,6 +469,32 @@ mod tests {
             ty,
             mode: CodegenFunctionParamMode::Optional,
         }
+    }
+
+    #[test]
+    fn returned_callable_names_are_legal_unique_and_reserve_options() {
+        let params = ["default", "new", "arguments", "eval", "$opts", "$opts_"]
+            .into_iter()
+            .map(|name| baml_sdkgen_types::CallableParam {
+                name: Some(BaseName::new(name)),
+                ty: Ty::Int,
+                mode: CodegenFunctionParamMode::Required,
+            })
+            .collect();
+        let translated = translate_return_ty(&callable(params, boxed(Ty::Int)), &ctx(&[]));
+        assert!(translated.expr.contains("default_: number, new_: number, arguments_: number, eval_: number, $opts_: number, $opts__: number, $opts?:"));
+        assert!(translated.expr.contains("callAsync("));
+    }
+
+    #[test]
+    fn returned_callable_maps_preserve_partial_enum_keys() {
+        let ty = Ty::Map {
+            key: Box::new(enum_ty(name("user", &[], "Color"))),
+            value: Box::new(callable(Vec::new(), boxed(Ty::Int))),
+        };
+        let translated = translate_return_ty(&ty, &ctx(&[]));
+        assert!(translated.expr.contains("]?: { ("));
+        assert!(translated.expr.contains("callAsync("));
     }
 
     /// Forces this test file to be updated whenever a `Ty` variant is added.

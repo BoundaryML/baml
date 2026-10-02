@@ -8,7 +8,7 @@ rule:
     - follows:
         all:
           - kind: attribute_item
-          - regex: '^#\[(tokio::)?test\]$'
+          - regex: '^#\[(tokio::)?test(\(.*\))?\]$'
         stopBy:
           kind: function_item
 constraints:

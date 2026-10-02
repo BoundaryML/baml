@@ -563,6 +563,7 @@ internal sealed class HostInvocation
     {
         cancellation.Dispose();
         Controls?.Dispose();
+        EffectiveState?.Dispose();
     }
 }
 

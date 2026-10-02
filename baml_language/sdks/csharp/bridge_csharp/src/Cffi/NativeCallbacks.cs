@@ -141,6 +141,7 @@ internal static unsafe class NativeCallbacks
         global::BamlBridge.Cffi.V1.HostInvocation? wire = null;
         BamlSafeHandle? state = null;
         OutboundOwnershipScope? controls = null;
+        HostInvocation? invocation = null;
         try
         {
             if (length > int.MaxValue || (length != 0 && content is null))
@@ -150,22 +151,27 @@ internal static unsafe class NativeCallbacks
             controls = OutboundOwnershipScope.Create(new global::BamlBridge.Cffi.V1.BamlOutboundResult { Ok = wire.Cancel }, api);
             if (wire.CallbackId == 0 || wire.HostValueKey == 0 || wire.Cancel is null)
                 throw new InvalidDataException("Incomplete host invocation controls.");
-            HostInvocation invocation = HostValueRegistry.Shared.TryStartInvocation(
+            invocation = HostValueRegistry.Shared.TryStartInvocation(
                 wire.HostValueKey, wire.CallbackId, wire.ApplicationArgs.ToByteArray(), out string? diagnostic,
                 wire.HostEnvironment) ?? throw new InvalidDataException(diagnostic);
             invocation.EffectiveState = state;
             invocation.Controls = controls;
-            var ownedCancel = CloneControl(wire.Cancel, api);
-            var cancelValue = PrimitiveProtocol.DecodeCallResult(new global::BamlBridge.Cffi.V1.BamlOutboundResult { Ok = ownedCancel }.ToByteArray(), "<effective cancellation>", api);
-            invocation.Frame = new global::Baml.Generated.V1.BamlInvocationCapture(state.CloneOwned(), cancelValue, invocation.CancellationToken);
             state = null;
             controls = null;
+            var ownedCancel = CloneControl(wire.Cancel, api);
+            var cancelValue = PrimitiveProtocol.DecodeCallResult(new global::BamlBridge.Cffi.V1.BamlOutboundResult { Ok = ownedCancel }.ToByteArray(), "<effective cancellation>", api);
+            invocation.Frame = new global::Baml.Generated.V1.BamlInvocationCapture(invocation.EffectiveState.CloneOwned(), cancelValue, invocation.CancellationToken);
             ThreadPool.UnsafeQueueUserWorkItem(
                 static work => _ = HostCallDispatcher.ExecuteAsync(work.Api, work.Invocation),
                 new HostDispatchWork(api, invocation), preferLocal: false);
         }
         catch (Exception error)
         {
+            if (invocation is not null)
+            {
+                invocation.Frame?.State.Dispose();
+                invocation.Complete();
+            }
             state?.Dispose();
             controls?.Dispose();
             if (wire is not null) HostCallDispatcher.QueueBoundaryException(api, wire.CallbackId, wire.HostEnvironment, error);

@@ -134,6 +134,9 @@ fn to_source_code_internal(
     // `<root>.Baml.ensure()` reference (the `Fns` holders and each binding
     // class's runtime-init static block).
     let anchor_ident = root_anchor_ident(pool);
+    let target_ident = root_facade_ident(pool, "Target");
+    let options_ident = root_facade_ident(pool, "BamlOptions");
+    let invocation_ident = root_facade_ident(pool, "Invocation");
     let anchor_fqn = format!("baml_sdk.{anchor_ident}");
 
     // Group symbols per package. BTreeMap/BTreeSet for deterministic
@@ -404,8 +407,12 @@ fn to_source_code_internal(
     let anchor_body = format!(
         "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] bytecode = in.readAllBytes();\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
     );
-    let anchor_body = anchor_body.replace("    public static void ensure() {}", "    public static void ensure() {}\n    public static Object invoke(Target target, java.util.Map<String,Object> arguments, baml_bridge.BamlTypes types, BamlOptions baml) { ensure(); return baml_bridge.BamlFfi.invoke(target.bridgeTarget(), arguments, types, baml); }\n    public static java.util.concurrent.CompletableFuture<Object> invokeAsync(Target target, java.util.Map<String,Object> arguments, baml_bridge.BamlTypes types, BamlOptions baml) { ensure(); return baml_bridge.BamlFfi.invokeAsync(target.bridgeTarget(), arguments, types, baml); }");
-    out.insert(java_file_path(&root, "Target"), with_package(&root, "public final class Target { private final baml_bridge.DynamicTarget target; private Target(baml_bridge.DynamicTarget target) { this.target = target; } public static Target named(String name) { return new Target(baml_bridge.DynamicTarget.named(name)); } public static Target callable(Object callable) { return new Target(baml_bridge.BamlFfi.callableTarget(callable)); } baml_bridge.DynamicTarget bridgeTarget() { return target; } }\n"));
+    let invocation_methods = format!(
+        "    public static void ensure() {{}}\n    public static Object invoke({target_ident} target, java.util.Map<String,Object> arguments, baml_bridge.BamlTypes types, {options_ident} baml) {{ ensure(); return baml_bridge.BamlFfi.invoke(target.bridgeTarget(), arguments, types, baml); }}\n    public static java.util.concurrent.CompletableFuture<Object> invokeAsync({target_ident} target, java.util.Map<String,Object> arguments, baml_bridge.BamlTypes types, {options_ident} baml) {{ ensure(); return baml_bridge.BamlFfi.invokeAsync(target.bridgeTarget(), arguments, types, baml); }}"
+    );
+    let anchor_body =
+        anchor_body.replace("    public static void ensure() {}", &invocation_methods);
+    out.insert(java_file_path(&root, &target_ident), with_package(&root, &replace_java_ident( "public final class Target { private final baml_bridge.DynamicTarget target; private Target(baml_bridge.DynamicTarget target) { this.target = target; } public static Target named(String name) { return new Target(baml_bridge.DynamicTarget.named(name)); } public static Target callable(Object callable) { return new Target(baml_bridge.BamlFfi.callableTarget(callable)); } baml_bridge.DynamicTarget bridgeTarget() { return target; } }\n", "Target", &target_ident)));
     let anchor_body = if embedded_baml_toml.is_some() {
         anchor_body.replace(
             "            baml_bridge.BamlFfi.initFromBytecode(bytecode);",
@@ -426,19 +433,33 @@ fn to_source_code_internal(
         .any(|name| name.to_string() == "baml.spawn.CancelToken")
     {
         out.insert(
-            java_file_path(&root, "BamlOptions"),
-            with_package(&root, include_str!("invocation_options.java")),
+            java_file_path(&root, &options_ident),
+            with_package(
+                &root,
+                &replace_java_ident(
+                    include_str!("invocation_options.java"),
+                    "BamlOptions",
+                    &options_ident,
+                ),
+            ),
         );
         out.insert(
-            java_file_path(&root, "Invocation"),
-            with_package(&root, include_str!("invocation.java")),
+            java_file_path(&root, &invocation_ident),
+            with_package(
+                &root,
+                &replace_java_ident(
+                    include_str!("invocation.java"),
+                    "Invocation",
+                    &invocation_ident,
+                ),
+            ),
         );
         let trace = PackagePath {
             segments: vec!["vendor".into(), "trace".into()],
         };
         out.insert(java_file_path(&trace, "TraceSelection"), with_package(&trace, "public sealed interface TraceSelection permits Options, ReservedSpan { baml_bridge.BamlHandle bamlTraceHandle(); }\n"));
     } else {
-        out.insert(java_file_path(&root, "BamlOptions"), with_package(&root, "public final class BamlOptions extends baml_bridge.InvocationOptions { private BamlOptions() { super(null, null, null); } public static BamlOptions empty() { return new BamlOptions(); } }\n"));
+        out.insert(java_file_path(&root, &options_ident), with_package(&root, &replace_java_ident("public final class BamlOptions extends baml_bridge.InvocationOptions { private BamlOptions() { super(null, null, null); } public static BamlOptions empty() { return new BamlOptions(); } }\n", "BamlOptions", &options_ident)));
     }
 
     // Compiled BAML bytecode as an embedded-bytecode text resource (base64
@@ -465,6 +486,10 @@ fn to_source_code_internal(
             .and_then(|e| e.to_str())
             .is_some_and(|e| e == "java");
         if is_java {
+            *content = content.replace(
+                "@BAML_OPTIONS_FACADE@",
+                &format!("baml_sdk.{options_ident}"),
+            );
             content.insert_str(0, JAVA_BANNER);
         }
     }
@@ -609,17 +634,50 @@ fn union_registration(
 /// root-package `Class`/`Enum`/recursive `TypeAlias`). Non-recursive aliases
 /// erase (no file), and functions land on `Fns`, so only those three kinds can
 /// collide. Mirrors the `Fns` → `Fns$` holder escape.
-fn root_anchor_ident(pool: &SymbolPool) -> &'static str {
-    let claimed = pool.iter().any(|(name, symbol)| {
+fn root_type_claimed(pool: &SymbolPool, ident: &str) -> bool {
+    pool.iter().any(|(name, symbol)| {
         route(name).segments.is_empty()
-            && java_identifier(name.name().as_str()) == "Baml"
+            && java_identifier(name.name().as_str()) == ident
             && match symbol {
                 Symbol::Class(_) | Symbol::Enum(_) => true,
                 Symbol::TypeAlias(alias) => alias.recursive,
                 Symbol::Function(_) => false,
             }
-    });
-    if claimed { "Baml$" } else { "Baml" }
+    })
+}
+
+fn root_anchor_ident(pool: &SymbolPool) -> &'static str {
+    if root_type_claimed(pool, "Baml") {
+        "Baml$"
+    } else {
+        "Baml"
+    }
+}
+
+fn root_facade_ident(pool: &SymbolPool, ident: &str) -> String {
+    if root_type_claimed(pool, ident) {
+        format!("{ident}$")
+    } else {
+        ident.to_string()
+    }
+}
+
+/// Replace a generator-owned Java identifier without altering longer names such
+/// as `InvocationOptions` or `DynamicTarget`.
+fn replace_java_ident(source: &str, ident: &str, replacement: &str) -> String {
+    let is_ident = |ch: char| ch.is_alphanumeric() || ch == '_' || ch == '$';
+    let mut out = String::new();
+    let mut start = 0;
+    for (index, _) in source.match_indices(ident) {
+        out.push_str(&source[start..index]);
+        let before = source[..index].chars().next_back();
+        let after = source[index + ident.len()..].chars().next();
+        let isolated = !before.is_some_and(is_ident) && !after.is_some_and(is_ident);
+        out.push_str(if isolated { replacement } else { ident });
+        start = index + ident.len();
+    }
+    out.push_str(&source[start..]);
+    out
 }
 
 fn java_file_path(pkg: &PackagePath, ident: &str) -> PathBuf {
@@ -943,10 +1001,10 @@ mod tests {
     }
 
     #[test]
-    fn ctx_param_name_yields_to_user_argument_named_ctx() {
-        // The shared go_codegen fixtures declare a BAML argument literally
-        // named `ctx`; the synthetic cancellation parameter must escape
-        // (`ctx` -> `ctx$`) instead of colliding (javac: "variable ctx is
+    fn baml_param_name_yields_to_user_argument_named_baml() {
+        // A BAML argument can be literally
+        // named `baml`; the synthetic cancellation parameter must escape
+        // (`baml` -> `baml$`) instead of colliding (javac: "variable baml is
         // already defined").
         let mut pool = SymbolPool::new();
         pool.insert(
@@ -957,7 +1015,7 @@ mod tests {
                 docstring: None,
                 arguments: vec![FunctionArgument {
                     injected: false,
-                    name: BaseName::new("ctx"),
+                    name: BaseName::new("baml"),
                     docstring: None,
                     ty: t_string(),
                     default: None,
@@ -971,16 +1029,16 @@ mod tests {
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("lorem/Fns.java")];
         assert!(
-            file.contains("reserved_args(java.lang.String ctx, baml_bridge.BamlCallContext ctx$)"),
+            file.contains("reserved_args(java.lang.String baml, baml_sdk.BamlOptions baml$)"),
             "{file}"
         );
         assert!(
-            file.contains(", $RET0, ctx$);"),
+            file.contains(", $RET0, baml$);"),
             "escaped name must thread to the runtime call: {file}"
         );
-        // The plain pair keeps the user's `ctx` untouched.
+        // The plain pair keeps the user's `baml` untouched.
         assert!(
-            file.contains("reserved_args(java.lang.String ctx) {"),
+            file.contains("reserved_args(java.lang.String baml) {"),
             "{file}"
         );
     }
@@ -1012,33 +1070,31 @@ mod tests {
         // wildcard-bridge cast — no `thenApply` stage.
         assert!(
             file.contains(
-                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) (java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
             ),
             "{file}"
         );
         assert!(!file.contains("thenApply"), "{file}");
 
-        // Trailing-`ctx` overload pair (cancellation): `BamlCallContext` last,
+        // Trailing-`baml` overload pair (cancellation): `BamlOptions` last,
         // threaded to the runtime as the final callSync/callAsync argument.
         assert!(
+            file.contains("public static long extract_resume(long x, baml_sdk.BamlOptions baml) {"),
+            "{file}"
+        );
+        assert!(
             file.contains(
-                "public static long extract_resume(long x, baml_bridge.BamlCallContext ctx) {"
+                "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, baml);"
             ),
             "{file}"
         );
         assert!(
-            file.contains(
-                "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
-            ),
-            "{file}"
-        );
-        assert!(
-            file.contains("public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x, baml_bridge.BamlCallContext ctx) {"),
+            file.contains("public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x, baml_sdk.BamlOptions baml) {"),
             "{file}"
         );
         assert!(
             file.contains(
-                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) (java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, baml);"
             ),
             "{file}"
         );
@@ -1081,7 +1137,7 @@ mod tests {
         assert!(file.contains(" * @throws ParseError\n"), "{file}");
         assert!(file.contains(" * @throws TimeoutError\n"), "{file}");
         // Each entry point carries the same javadoc: the required-only pair
-        // (sync + async) and its trailing-`ctx` overload pair → four of each.
+        // (sync + async) and its trailing-`baml` overload pair → four of each.
         assert_eq!(file.matches("@throws ParseError").count(), 4, "{file}");
         assert_eq!(file.matches("@throws TimeoutError").count(), 4, "{file}");
         // The summary precedes the `@throws` block.
@@ -1158,18 +1214,18 @@ mod tests {
         ));
         assert!(!file.contains("thenApply"), "{file}");
         assert!(file.contains(
-            "return (java.util.concurrent.CompletableFuture<java.lang.String>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
+            "return (java.util.concurrent.CompletableFuture<java.lang.String>) (java.util.concurrent.CompletableFuture<?>) (java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
         ), "{file}");
 
-        // Trailing-`ctx` overloads land on both the static and instance methods.
+        // Trailing-`baml` overloads land on both the static and instance methods.
         assert!(file.contains(
-            "public static java.lang.String create(java.lang.String name, baml_bridge.BamlCallContext ctx) {"
+            "public static java.lang.String create(java.lang.String name, baml_sdk.BamlOptions baml) {"
         ), "{file}");
         assert!(file.contains(
-            "public java.lang.String greet(java.lang.String greeting, baml_bridge.BamlCallContext ctx) {"
+            "public java.lang.String greet(java.lang.String greeting, baml_sdk.BamlOptions baml) {"
         ), "{file}");
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0, ctx);"
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0, baml);"
         ), "{file}");
     }
 
@@ -1244,16 +1300,16 @@ mod tests {
             "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0);"
         ));
 
-        // The configurator overload gains its own trailing-`ctx` pair, with
-        // `ctx` after the Consumer (always last).
+        // The configurator overload gains its own trailing-`baml` pair, with
+        // `baml` after the Consumer (always last).
         assert!(file.contains(
-            "public static long optional_args_probe(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_bridge.BamlCallContext ctx) {"
+            "public static long optional_args_probe(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_sdk.BamlOptions baml) {"
         ), "{file}");
         assert!(file.contains(
-            "public static java.util.concurrent.CompletableFuture<java.lang.Long> optional_args_probe_async(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_bridge.BamlCallContext ctx) {"
+            "public static java.util.concurrent.CompletableFuture<java.lang.Long> optional_args_probe_async(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_sdk.BamlOptions baml) {"
         ), "{file}");
         assert!(file.contains(
-            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx);"
+            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, baml);"
         ), "{file}");
 
         // Nested opts class with BOXED fluent setters (null must be passable).
@@ -1709,13 +1765,13 @@ mod tests {
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("generic_tests/Fns.java")];
 
-        // The required-only pair and its trailing-`ctx` pair are preserved.
+        // The required-only pair and its trailing-`baml` pair are preserved.
         assert!(
             file.contains("public static <T> T identity(T x) {"),
             "{file}"
         );
         assert!(
-            file.contains("public static <T> T identity(T x, baml_bridge.BamlCallContext ctx) {"),
+            file.contains("public static <T> T identity(T x, baml_sdk.BamlOptions baml) {"),
             "{file}"
         );
 
@@ -1733,15 +1789,15 @@ mod tests {
             "{file}"
         );
 
-        // The `types` + `ctx` overload passes both, in `(ctx, types)` order.
+        // The `types` + `baml` overload passes both, in `(baml, types)` order.
         assert!(
             file.contains(
-                "public static <T> T identity(T x, baml_bridge.BamlTypes types, baml_bridge.BamlCallContext ctx) {"
+                "public static <T> T identity(T x, baml_bridge.BamlTypes types, baml_sdk.BamlOptions baml) {"
             ),
             "{file}"
         );
         assert!(
-            file.contains("new java.lang.Object[] {x}, $RET0, ctx, types);"),
+            file.contains("new java.lang.Object[] {x}, $RET0, baml, types);"),
             "{file}"
         );
 
@@ -1754,7 +1810,7 @@ mod tests {
         );
 
         // Exactly four sync + four async entry points (8 declarations): the
-        // required-only base's {types?}×{ctx?} family.
+        // required-only base's {types?}×{baml?} family.
         assert_eq!(file.matches("public static <T>").count(), 8, "{file}");
         // A free function has no receiver, so no explicit-bag receiver guard.
         assert!(!file.contains("reified receiver"), "{file}");
@@ -1774,7 +1830,7 @@ mod tests {
     fn generic_optional_function_emits_full_overload_matrix() {
         use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault};
         // A generic (`<T>`) function with one optional arg → the worst-case
-        // matrix: {opts?}×{types?}×{ctx?} = 8 pairs = 16 entry-point methods.
+        // matrix: {opts?}×{types?}×{baml?} = 8 pairs = 16 entry-point methods.
         let mut pool = SymbolPool::new();
         let f = Function {
             name: BaseName::new("probe"),
@@ -1811,10 +1867,10 @@ mod tests {
         // final class`, not `public static <T>`, so it doesn't count).
         assert_eq!(file.matches("public static <T>").count(), 16, "{file}");
         // The fullest overload stacks every trailing param in order:
-        // `f(required…, opts, types, ctx)`.
+        // `f(required…, opts, types, baml)`.
         assert!(
             file.contains(
-                "public static <T> T probe(T x, java.util.function.Consumer<probe$Opts> $cfg, baml_bridge.BamlTypes types, baml_bridge.BamlCallContext ctx) {"
+                "public static <T> T probe(T x, java.util.function.Consumer<probe$Opts> $cfg, baml_bridge.BamlTypes types, baml_sdk.BamlOptions baml) {"
             ),
             "{file}"
         );
@@ -1822,7 +1878,7 @@ mod tests {
         // bag through the runtime call.
         assert!(
             file.contains(
-                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx, types);"
+                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, baml, types);"
             ),
             "{file}"
         );
@@ -2135,6 +2191,38 @@ mod tests {
         // The Fns holder references the escaped anchor.
         let fns = &out[&PathBuf::from("lorem/Fns.java")];
         assert!(fns.contains("baml_sdk.Baml$.ensure();"), "{fns}");
+    }
+
+    #[test]
+    fn invocation_facades_preserve_colliding_user_types_and_binding_references() {
+        let mut pool = SymbolPool::new();
+        for ident in ["Target", "BamlOptions", "Invocation"] {
+            let user = name("user", &[], ident);
+            pool.insert(
+                user.clone(),
+                class_sym_with_props(&user, &[], vec![("x", t_int())], 0),
+            );
+        }
+        let cancel = name("baml", &["spawn"], "CancelToken");
+        pool.insert(cancel.clone(), class_sym(&cancel, &[], 1));
+        pool.insert(name("user", &["lorem"], "extract_resume"), func_sym(2));
+        let out = emit_sdk(&pool);
+        for ident in ["Target", "BamlOptions", "Invocation"] {
+            assert!(out[&PathBuf::from(format!("{ident}.java"))].contains("private final long x;"));
+            assert!(
+                out[&PathBuf::from(format!("{ident}$.java"))]
+                    .contains(&format!("public final class {ident}$"))
+            );
+        }
+        assert!(out[&PathBuf::from("lorem/Fns.java")].contains("baml_sdk.BamlOptions$ baml"));
+        let anchor = &out[&PathBuf::from("Baml.java")];
+        assert!(anchor.contains("invoke(Target$ target,"));
+        assert!(anchor.contains("BamlOptions$ baml)"));
+        assert!(anchor.contains("baml_sdk.BamlOptions"));
+        assert!(
+            out.values()
+                .all(|body| !body.contains("@BAML_OPTIONS_FACADE@"))
+        );
     }
 
     // ---- JSpecify nullness annotations ---------------------------------------

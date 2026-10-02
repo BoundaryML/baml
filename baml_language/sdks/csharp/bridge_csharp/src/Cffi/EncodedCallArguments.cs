@@ -36,8 +36,10 @@ internal sealed class EncodedCallArguments : IDisposable
 
     private static void SetInvocation(CallFunctionArgs call)
     {
-        call.Invocation ??= new InvocationOptions();
-        call.Invocation.InheritedState = InvocationFrame.Current.Value?.State.Key ?? 0;
+        call.Invocation ??= new InvocationOptions
+        {
+            InheritedState = InvocationFrame.Current.Value?.State.Key ?? 0,
+        };
         call.Invocation.HostEnvironment = call.CallId;
     }
 

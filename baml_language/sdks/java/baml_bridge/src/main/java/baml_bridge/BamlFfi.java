@@ -193,8 +193,7 @@ public final class BamlFfi {
      * ({@code bridge_cffi::cancel_function_call_by_id}). Returns {@code true}
      * when the runtime accepted the cancel, {@code false} otherwise (unknown /
      * already-completed id, id 0, or an uninitialized runtime). Never throws —
-     * both {@link InvocationOptions#abort()} and a host {@code future.cancel(true)}
-     * fire it and tolerate a {@code false}.
+     * a host {@code future.cancel(true)} fires it and tolerates a {@code false}.
      */
     static native boolean nativeCancelFunctionCall(long callId);
 
@@ -325,9 +324,19 @@ public final class BamlFfi {
         return result;
     }
 
+    public static BamlHandle returnedClosureHandle(Object callable) {
+        if (callable != null && Proxy.isProxyClass(callable.getClass())
+                && Proxy.getInvocationHandler(callable) instanceof ReturnedClosure owner) {
+            owner.handle().key();
+            return owner.handle();
+        }
+        return null;
+    }
+
     public static DynamicTarget callableTarget(Object callable) {
-        if (callable == null || !Proxy.isProxyClass(callable.getClass()) || !(Proxy.getInvocationHandler(callable) instanceof ReturnedClosure owner)) throw new IllegalArgumentException("target must be a live returned BAML callable");
-        owner.handle().key(); return DynamicTarget.callable(owner.handle());
+        BamlHandle handle = returnedClosureHandle(callable);
+        if (handle == null) throw new IllegalArgumentException("target must be a live returned BAML callable");
+        return DynamicTarget.callable(handle);
     }
     public static Object invoke(DynamicTarget target, Map<String,Object> arguments, BamlTypes types, InvocationOptions controls) {
         String[] names = arguments.keySet().toArray(String[]::new);
@@ -343,7 +352,10 @@ public final class BamlFfi {
     }
 
     private record ReturnedClosure(BamlHandle handle, String[] names, BamlType returnDesc) implements InvocationHandler {
-        @Override public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] arguments) {
+        @Override public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] arguments) throws Throwable {
+                    if (method.getName().equals("__bamlDispatch") && method.isDefault()) {
+                        return InvocationHandler.invokeDefault(proxy, method, arguments);
+                    }
                     if (method.getDeclaringClass() == Object.class) {
                         return switch (method.getName()) {
                             case "toString" -> "BAML closure " + handle.key();
@@ -428,15 +440,9 @@ public final class BamlFfi {
     }
 
     /**
-     * As {@link #callSync(String, String[], Object[], BamlType)}, but bound to an
-     * optional {@link InvocationOptions} for cancellation: the minted
-     * {@code call_id} is attached to {@code ctx} for the duration of the call and
-     * detached in a {@code finally}, so a concurrent {@link InvocationOptions#abort()}
-     * (or an abort that already happened) cancels this call engine-side. A sync
-     * cancellation surfaces as a {@link BamlPanic} whose {@code value()} is a
-     * {@code baml.panics.Cancelled} (the async path remaps that to
-     * {@link BamlCancelledError}; sync keeps the panic). A {@code null} {@code ctx}
-     * is exactly the four-arg behavior.
+     * As {@link #callSync(String, String[], Object[], BamlType)}, with a snapshot
+     * of cancellation, deadline, and tracing options prepared before submission.
+     * A {@code null} options value uses the current invocation's inherited controls.
      */
     public static Object callSync(
             String fqn, String[] names, Object[] args, BamlType returnDesc, InvocationOptions ctx) {
@@ -979,7 +985,7 @@ public final class BamlFfi {
             // the executor task must not propagate it.
         } finally {
             HostFrame frame = HOST_FRAMES.remove(callId);
-            if (frame != null) frame.state.close();
+            if (frame != null) frame.active.state().close();
         }
     }
 

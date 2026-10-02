@@ -3232,7 +3232,7 @@ fn render_program(
     let instance = allocated(render.names, instance_request).source();
     let deferred_instance = allocated(render.names, deferred_instance_request).source();
     let mut source = format!(
-        "{GENERATED_HEADER}\nnamespace {namespace};\n\ninternal static class {program_type}\n{{\n    private const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n\n    private static readonly byte[] Bytecode =\n    [\n{PROGRAM_BYTES_PLACEHOLDER}    ];\n\n    private static readonly global::System.Lazy<global::Baml.Generated.V1.BamlGeneratedProgram> Program =\n        new(Register, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);\n\n    internal static readonly global::Baml.Generated.V1.BamlGeneratedRegistry {registry};\n"
+        "{GENERATED_HEADER}\nnamespace {namespace};\n\npublic static class {program_type}\n{{\n    private const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n\n    private static readonly byte[] Bytecode =\n    [\n{PROGRAM_BYTES_PLACEHOLDER}    ];\n\n    private static readonly global::System.Lazy<global::Baml.Generated.V1.BamlGeneratedProgram> Program =\n        new(Register, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);\n\n    internal static readonly global::Baml.Generated.V1.BamlGeneratedRegistry {registry};\n"
     );
     for ty in render.type_specs {
         source.push_str(&format!(
@@ -5945,7 +5945,7 @@ mod tests {
     #[test]
     fn host_callable_projection_is_task_only_and_reflection_free() {
         let source = host_callable_source();
-        let delegate = "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<string>>";
+        let delegate = "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task<string>>";
         assert!(source.contains(delegate));
         assert!(source.contains("context.Required("));
         assert!(source.contains("context.Optional(\"p1\","));
@@ -5960,11 +5960,15 @@ mod tests {
     fn generic_host_callable_uses_closed_generated_type_tokens() {
         let source = generic_host_callable_source();
         assert!(source.contains("Task<R> ApplyAsync<T, R>("));
-        assert!(source.contains("global::System.Func<T, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<R>> f"));
+        assert!(
+            source.contains("global::System.Func<T, global::System.Threading.Tasks.Task<R>> f")
+        );
         assert!(source.contains(".AddHostCallable("));
         assert!(source.contains(".Required(bamlType0)"));
         assert!(source.contains(".Result(bamlType1)"));
-        assert!(source.contains("((global::System.Func<T, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<R>>)"));
+        assert!(
+            source.contains("((global::System.Func<T, global::System.Threading.Tasks.Task<R>>)")
+        );
         assert!(!source.contains("ResolveType<global::System.Func<"));
     }
 
@@ -6105,24 +6109,25 @@ mod tests {
             symbols: HashMap::new(),
             callables: HashMap::new(),
         };
-        require_supported_type(&host_callable_type(15), &model, "callback").unwrap();
-        let error = require_supported_type(&host_callable_type(16), &model, "callback")
-            .expect_err("sixteen BAML callback parameters must be rejected");
-        assert!(error.to_string().contains("C# v1 limit is 15"));
+        require_supported_type(&host_callable_type(16), &model, "callback").unwrap();
+        let error = require_supported_type(&host_callable_type(17), &model, "callback")
+            .expect_err("seventeen BAML callback parameters must be rejected");
+        assert!(error.to_string().contains("C# delegate limit is 16"));
         assert!(error.to_string().contains("at callback"));
     }
 
     #[test]
     fn returned_callable_decode_lambdas_preserve_task_shapes_and_optional_presence() {
         let source = returned_callable_codec_source();
+        assert!(source.contains("public static class BamlProgram"));
         assert!(source.contains(
-            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<long>>"
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task<long>>"
         ));
         assert!(source.contains(
-            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task>"
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task>"
         ));
         assert!(source.contains(
-            "return async (long argument0, global::Baml.BamlOptional<string> argument1, global::System.Threading.CancellationToken cancellationToken) =>"
+            "return async (long argument0, global::Baml.BamlOptional<string> argument1) =>"
         ));
         assert!(source.contains("if (argument1.TryGetValue(out var value1))"));
         assert!(source.contains(

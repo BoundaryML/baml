@@ -81,7 +81,7 @@ using (var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
 
 using (var uncanceledCaller = new CancellationTokenSource())
 {
-    Task<long> canceled = Functions.EngineCancelAsync(uncanceledCaller.Token);
+    Task<long> canceled = Functions.EngineCancelAsync(new BamlOptions { CancellationToken = uncanceledCaller.Token });
     BamlOperationCanceledException cancellation = await ExpectCanceled(canceled);
     Require(
         cancellation.Origin == BamlCancellationOrigin.Engine

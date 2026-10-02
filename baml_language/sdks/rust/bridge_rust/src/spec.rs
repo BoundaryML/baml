@@ -644,7 +644,7 @@ impl<T: BamlValue> Stream<T> {
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Option<T>, Error<Infallible>> {
-        crate::runtime::invoke_sync_with_options(
+        let value: wire::BamlOutboundValue = crate::runtime::invoke_sync_with_options(
             "ai.stream.Stream.next",
             || {
                 (
@@ -653,13 +653,14 @@ impl<T: BamlValue> Stream<T> {
                 )
             },
             baml.into(),
-        )
+        )?;
+        decode_stream_item(value).map_err(Error::Decode)
     }
     pub async fn next_async_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Option<T>, Error<Infallible>> {
-        crate::runtime::invoke_with_options(
+        let value: wire::BamlOutboundValue = crate::runtime::invoke_with_options(
             "ai.stream.Stream.next",
             || {
                 (
@@ -669,7 +670,8 @@ impl<T: BamlValue> Stream<T> {
             },
             baml.into(),
         )
-        .await
+        .await?;
+        decode_stream_item(value).map_err(Error::Decode)
     }
     pub fn final_with_options(
         &self,

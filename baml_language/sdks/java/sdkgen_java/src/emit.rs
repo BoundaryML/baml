@@ -1231,7 +1231,7 @@ fn render_method_pair(
         trailing.push_str(&format!(", baml_bridge.BamlTypes {name}"));
     }
     if let Some(name) = ctx_name {
-        trailing.push_str(&format!(", baml_sdk.BamlOptions {name}"));
+        trailing.push_str(&format!(", @BAML_OPTIONS_FACADE@ {name}"));
     }
     let sig_params = if params.is_empty() {
         trailing.strip_prefix(", ").unwrap_or("").to_string()
@@ -1600,7 +1600,7 @@ pub(crate) fn render_callback_interface(iface: &CallbackInterface) -> String {
         .join(", ");
     let params = apply_params.join(", ");
     let controlled = format!(
-        "{params}{}baml_sdk.BamlOptions $baml",
+        "{params}{}@BAML_OPTIONS_FACADE@ $baml",
         if params.is_empty() { "" } else { ", " }
     );
     let _ = std::fmt::Write::write_fmt(
