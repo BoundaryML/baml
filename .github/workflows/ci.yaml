@@ -690,7 +690,8 @@ jobs:
         run: pnpm --filter @b/pkg-grammar test
         working-directory: typescript2
 
-      - name: "Analyze grammar test results in Trunk"
+      - name: "Upload grammar test results to Trunk"
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: typescript2/pkg-grammar/junit.xml
@@ -709,7 +710,8 @@ jobs:
         run: pnpm --filter @b/pkg-grammar-hljs test
         working-directory: typescript2
 
-      - name: "Analyze highlight.js results in Trunk"
+      - name: "Upload highlight.js results to Trunk"
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: typescript2/pkg-grammar-hljs/junit.xml

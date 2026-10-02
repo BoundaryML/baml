@@ -102,7 +102,8 @@ jobs:
         run: pnpm --filter app-developer-docs test:ci
         working-directory: typescript2
 
-      - name: Analyze test results in Trunk
+      - name: Upload test results to Trunk
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: typescript2/app-developer-docs/junit.xml
