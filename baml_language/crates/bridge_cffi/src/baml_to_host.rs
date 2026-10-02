@@ -395,18 +395,25 @@ pub async fn invoke_prepared(runtime: Arc<dyn Bex>, call: PreparedCall) -> Vec<u
     let options = CffiHandleTableOptions::for_wire();
     let _route = crate::register_active_call_runtime(call.context.host_call_id.0, &runtime);
 
-    let caught = AssertUnwindSafe(async move {
-        match call.target {
-            PreparedTarget::Named(name) => {
-                runtime.call_function(&name, call.args, call.context).await
-            }
-            PreparedTarget::Callable(handle) => {
-                runtime.call_callable(handle, call.args, call.context).await
-            }
+    let PreparedCall {
+        target,
+        args,
+        context,
+    } = call;
+    #[cfg(not(target_arch = "wasm32"))]
+    let (context, log_sink) = crate::host_logs::attach_env_log_sink(context);
+
+    let future = AssertUnwindSafe(async move {
+        match target {
+            PreparedTarget::Named(name) => runtime.call_function(&name, args, context).await,
+            PreparedTarget::Callable(handle) => runtime.call_callable(handle, args, context).await,
         }
     })
-    .catch_unwind()
-    .await;
+    .catch_unwind();
+    #[cfg(not(target_arch = "wasm32"))]
+    let caught = crate::host_logs::drive_with_log_drain(future, log_sink.as_ref()).await;
+    #[cfg(target_arch = "wasm32")]
+    let caught = future.await;
 
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
