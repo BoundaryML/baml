@@ -751,6 +751,211 @@ test "bedrock_cache_points" {
     assert.equal(bedrock_cache_points(), "default|default|ABSENT|2|2")
 }
 
+// ─── 7b. cache delimiters: `${cache(args)}` ──────────────────────────────────
+//
+// A `${cache(args)}` in the prompt becomes one `cachePoint` block at the
+// position it was written, and `args` is the block's value, as written.
+
+// A cached system prompt.
+function BedrockCachedSystem(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        You greet people.
+        ${cache({ "type": "default" })}
+        ${role("user")}
+        Greet ${name}.
+    `
+}
+
+// A stable prefix and a variable suffix inside one user turn.
+function BedrockCachedPrefix(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        You greet people.
+        ${role("user")}
+        Long stable reference document.
+        ${cache({ "type": "default" })}
+        Greet ${name}.
+    `
+}
+
+// A marked message with three parts before the delimiter, and a TTL.
+function BedrockCachedMedia(picture: image) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Before image.
+        ${picture}
+        After image.
+        ${cache({ "type": "default", "ttl": "1h" })}
+        Describe it.
+    `
+}
+
+function _cached_body(spec: ai.FunctionSpec<string>) -> json {
+    let cl = aws.BedrockClient.new(model = _model(), region = "us-east-1");
+    _body(cl, _turn_input(spec, _empty_journal(), _no_tools()))
+}
+
+function bedrock_cache_delimiter_system() -> string {
+    let body = _cached_body(BedrockCachedSystem@spec("Ada"));
+    [
+        baml.json.stringify(baml.json.path<json>(body, ".system")),
+        baml.json.stringify(baml.json.path<json>(body, ".messages")),
+    ].join("\n")
+}
+
+test "bedrock_cache_delimiter_system" {
+    assert.equal(
+        bedrock_cache_delimiter_system(),
+        `[{"text":"You greet people."},{"cachePoint":{"type":"default"}}]\n[{"role":"user","content":[{"text":"Greet Ada."}]}]`,
+    )
+}
+
+// The text on either side of the delimiter is two blocks, each trimmed where it
+// faces the checkpoint — the bytes v0 sent for the same breakpoint.
+function bedrock_cache_delimiter_mid_turn() -> string {
+    let body = _cached_body(BedrockCachedPrefix@spec("Ada"));
+    [
+        baml.json.stringify(baml.json.path<json>(body, ".system")),
+        baml.json.stringify(baml.json.path<json>(body, ".messages")),
+    ].join("\n")
+}
+
+test "bedrock_cache_delimiter_mid_turn" {
+    assert.equal(
+        bedrock_cache_delimiter_mid_turn(),
+        `[{"text":"You greet people."}]\n[{"role":"user","content":[{"text":"Long stable reference document."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]}]`,
+    )
+}
+
+// One logical breakpoint is ONE cachePoint, however many parts precede it, and
+// `ttl` reaches the wire.
+function bedrock_cache_delimiter_media_ttl() -> string {
+    let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
+    let body = _cached_body(BedrockCachedMedia@spec(picture));
+    [
+        _array_len(body, ".messages[0].content").to_string(),
+        baml.json.path<string>(body, ".messages[0].content[0].text"),
+        baml.json.path<string>(body, ".messages[0].content[1].image.format"),
+        baml.json.path<string>(body, ".messages[0].content[2].text"),
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[3]")),
+        baml.json.path<string>(body, ".messages[0].content[4].text"),
+    ].join("|")
+}
+
+test "bedrock_cache_delimiter_media_ttl" {
+    assert.equal(
+        bedrock_cache_delimiter_media_ttl(),
+        `5|Before image.|png|After image.|{"cachePoint":{"type":"default","ttl":"1h"}}|Describe it.`,
+    )
+}
+
+// `args` is not checked, defaulted or rewritten: a null member, a nested
+// value and a non-object all go on the wire as written.
+function BedrockCacheArgs(args: json) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Stable.
+        ${cache(args)}
+        Variable.
+    `
+}
+
+function _cache_args_block(args: json) -> string {
+    let body = _cached_body(BedrockCacheArgs@spec(args));
+    baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]"))
+}
+
+function bedrock_cache_delimiter_args_as_written() -> string {
+    [
+        _cache_args_block(baml.json.parse(`{"ttl":"1h","type":"default","extra":{"keep":null}}`)),
+        _cache_args_block(baml.json.parse(`{}`)),
+        _cache_args_block(baml.json.parse(`"1h"`)),
+    ].join("|")
+}
+
+test "bedrock_cache_delimiter_args_as_written" {
+    assert.equal(
+        bedrock_cache_delimiter_args_as_written(),
+        `{"cachePoint":{"ttl":"1h","type":"default","extra":{"keep":null}}}|{"cachePoint":{}}|{"cachePoint":"1h"}`,
+    )
+}
+
+// Where a delimiter produces NO block: before any content of its message, right
+// after another cachePoint, and with null `args` — which is as if it had not
+// been written, so the text around it stays one block.
+function BedrockCacheLeading(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        ${cache({ "type": "default" })}
+        You greet people.
+        ${role("user")}
+        ${cache({ "type": "default" })}
+        Greet ${name}.
+    `
+}
+
+function BedrockCacheTwice(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Stable.
+        ${cache({ "type": "default" })}
+        ${cache({ "type": "default", "ttl": "1h" })}
+        Greet ${name}.
+    `
+}
+
+function bedrock_cache_delimiter_dropped() -> string {
+    let leading = _cached_body(BedrockCacheLeading@spec("Ada"));
+    let twice = _cached_body(BedrockCacheTwice@spec("Ada"));
+    let nulled = _cached_body(BedrockCacheArgs@spec(null));
+    [
+        baml.json.stringify(baml.json.path<json>(leading, ".system")),
+        baml.json.stringify(baml.json.path<json>(leading, ".messages[0].content")),
+        baml.json.stringify(baml.json.path<json>(twice, ".messages[0].content")),
+        baml.json.stringify(baml.json.path<json>(nulled, ".messages[0].content")),
+    ].join("\n")
+}
+
+test "bedrock_cache_delimiter_dropped" {
+    assert.equal(
+        bedrock_cache_delimiter_dropped(),
+        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]\n[{"text":"Stable.\\n\\nVariable."}]`,
+    )
+}
+
+// A system-only prompt folds its system blocks into the leading user message;
+// the checkpoint moves with them, value intact.
+function BedrockCachedSystemOnly(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        Greet ${name}.
+        ${cache({ "type": "default", "ttl": "1h" })}
+    `
+}
+
+function bedrock_cache_delimiter_system_folded() -> string {
+    let body = _cached_body(BedrockCachedSystemOnly@spec("Ada"));
+    [
+        _mentions(body, "system").to_string(),
+        baml.json.stringify(baml.json.path<json>(body, ".messages")),
+    ].join("|")
+}
+
+test "bedrock_cache_delimiter_system_folded" {
+    assert.equal(
+        bedrock_cache_delimiter_system_folded(),
+        `false|[{"role":"user","content":[{"text":"Greet Ada."},{"cachePoint":{"type":"default","ttl":"1h"}}]}]`,
+    )
+}
+
 // ─── 8. passthrough: additionalModelRequestFields + request_body ─────────────
 
 function bedrock_additional_model_request_fields() -> string {
