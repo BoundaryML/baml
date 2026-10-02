@@ -671,6 +671,12 @@ impl Bulk {
                             // Preserve file time coverage without inventing a call row.
                             let _ = tick(log.at_ticks);
                         }
+                        // Network spans are not indexed yet.
+                        Some(
+                            Event::NetworkAnnouncement(_)
+                            | Event::NetworkEvent(_)
+                            | Event::NetworkCompletion(_),
+                        ) => {}
                         None => {}
                     }
                 }

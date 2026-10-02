@@ -21,6 +21,7 @@ pub use bex_heap::BexHeap;
 pub use bex_vm_types::SysOp;
 pub use tokio_util::sync::CancellationToken;
 
+pub mod network;
 pub mod sse;
 
 /// Outcome of [`resolve_name`].
@@ -632,6 +633,10 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Typed async IO interface for calling back into the runtime IO layer.
     /// Built once by the engine from the `SysOps` table and shared across calls.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
+
+    /// The span of the request this call makes. `None` unless telemetry is
+    /// on and the op sends an HTTP request.
+    pub network: Option<network::NetworkContext>,
 }
 
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
@@ -644,6 +649,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
+            network: self.network.clone(),
         }
     }
 }
@@ -824,6 +830,7 @@ impl SysOpContext {
             type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
+            network: None,
         }
     }
 }
@@ -843,6 +850,7 @@ impl EngineSysOpContext {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
             runtime_io: self.runtime_io.clone(),
+            network: None,
         }
     }
 }

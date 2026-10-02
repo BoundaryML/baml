@@ -324,6 +324,37 @@ impl ConversionBuffer {
                 Event::ThreadRunning(proto::ThreadRunning { at_ticks: at.get() }),
             ),
             SpanRecord::ModelUsage(usage) => self.model_usage(thread, usage),
+            SpanRecord::NetworkSpanAnnouncement(span) => self.event(
+                thread,
+                Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                    id: span.id.get(),
+                    parent_id: span.parent_id.get(),
+                    call_path_id: span.call_path.get(),
+                    started_at_ticks: span.started_at.get(),
+                    method: span.method.to_string(),
+                    url: span.url.to_string(),
+                    request_cas_id: span.request.as_ref().map(snapshot_id),
+                }),
+            ),
+            SpanRecord::NetworkEvent(event) => self.event(
+                thread,
+                Event::NetworkEvent(proto::NetworkEvent {
+                    span_id: event.span.get(),
+                    name: event.name.as_str().to_owned(),
+                    at_ticks: event.at.get(),
+                    payload_cas_id: event.payload.as_ref().map(snapshot_id),
+                }),
+            ),
+            SpanRecord::NetworkSpanCompletion(done) => self.event(
+                thread,
+                Event::NetworkCompletion(proto::NetworkCompletion {
+                    span_id: done.span.get(),
+                    completed_at_ticks: done.completed_at.get(),
+                    outcome: flags::outcome(done.outcome) as i32,
+                    panicked: done.outcome == btel_types::InvocationOutcome::Panicked,
+                    error_cas_id: done.error.as_ref().map(snapshot_id),
+                }),
+            ),
             SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
                 self.error_raise_origin(thread, *raise_id, *origin);
             }

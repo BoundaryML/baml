@@ -49,6 +49,7 @@ impl<I, V> SpanRecord<I, V> {
             Self::ThreadSpanAnnouncement { .. }
                 | Self::ThreadSpanCompletion { .. }
                 | Self::FunctionSpanAnnouncement { .. }
+                | Self::NetworkSpanAnnouncement(_)
                 | Self::Log { .. }
         ) || self.completion().is_some()
     }
@@ -153,6 +154,14 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     /// Rare: tokens one model turn used, charged to an explicit span or
     /// thread node. Boxed so the model name never widens the slot.
     ModelUsage(Box<ModelUsage>),
+    /// An HTTP request started. Boxed, like the event and completion below,
+    /// so its method and URL never widen the slot.
+    NetworkSpanAnnouncement(Box<NetworkAnnouncement<InputCapture>>),
+    /// Something happened to an open request, as the IO side timed it.
+    /// May land on another thread than the announcement: it names its span.
+    NetworkEvent(Box<NetworkEventRecord<ValueCapture>>),
+    /// An HTTP request ended. A request never read has no completion.
+    NetworkSpanCompletion(Box<NetworkCompletion<ValueCapture>>),
     /// Entry identity and owned inputs exceed the Timing slot budget.
     FunctionSpanAnnouncement {
         id: TelemetryId,
@@ -471,6 +480,71 @@ pub struct ModelUsage {
     pub cache_read_tokens: Option<u64>,
     pub cache_write_tokens: Option<u64>,
     pub reasoning_tokens: Option<u64>,
+}
+
+/// One HTTP request's span: its parent is the innermost span (or thread)
+/// that made it, its call path the frame that made it.
+#[derive(Debug)]
+pub struct NetworkAnnouncement<InputCapture> {
+    pub id: TelemetryId,
+    pub parent_id: TelemetryId,
+    pub call_path: CallPathId,
+    pub started_at: ClockInstant,
+    pub method: Box<str>,
+    /// Sanitized: query values and credentials are hashed.
+    pub url: Box<str>,
+    /// `{request: {method, url, headers, body}}`, sanitized.
+    pub request: Option<InputCapture>,
+}
+
+#[derive(Debug)]
+pub struct NetworkEventRecord<ValueCapture> {
+    pub span: TelemetryId,
+    pub name: NetworkEventName,
+    pub at: ClockInstant,
+    pub payload: Option<ValueCapture>,
+}
+
+#[derive(Debug)]
+pub struct NetworkCompletion<ValueCapture> {
+    pub span: TelemetryId,
+    pub completed_at: ClockInstant,
+    pub outcome: InvocationOutcome,
+    /// The error that ended it, captured as a function's error is.
+    pub error: Option<ValueCapture>,
+}
+
+/// What a network event records, by the name the recording stores.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NetworkEventName {
+    /// The response's status and headers arrived.
+    Connection,
+    /// A whole body, or one server-sent event.
+    Data,
+    /// A server-sent event stream ended on the wire.
+    End,
+    /// The program finished reading the response.
+    Await,
+    /// The program closed a stream before its end.
+    Close,
+    /// The response was collected without being read.
+    Drop,
+    /// Names for other protocols, such as WebSocket messages.
+    Other(Arc<str>),
+}
+
+impl NetworkEventName {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Connection => "connection",
+            Self::Data => "data",
+            Self::End => "end",
+            Self::Await => "await",
+            Self::Close => "close",
+            Self::Drop => "drop",
+            Self::Other(name) => name,
+        }
+    }
 }
 
 /// An absent PC in `SpanRecord::ErrorRaisedAndEnded`. Compact code never
@@ -1176,6 +1250,9 @@ impl<C> SpanRecord<C, C> {
             Self::FunctionSpanAnnouncement {
                 captured_inputs, ..
             } => captured_inputs.take(),
+            Self::NetworkSpanAnnouncement(announcement) => announcement.request.take(),
+            Self::NetworkEvent(event) => event.payload.take(),
+            Self::NetworkSpanCompletion(completion) => completion.error.take(),
             Self::FunctionSpanCompletionOk { captured_value, .. }
             | Self::FunctionSpanCompletionOkNeedsAnnouncement { captured_value, .. }
             | Self::FunctionSpanCompletionOkReentry { captured_value, .. }
