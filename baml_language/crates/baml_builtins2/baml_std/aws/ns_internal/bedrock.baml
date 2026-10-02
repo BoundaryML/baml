@@ -128,6 +128,13 @@ class CachePointBlock {
     type: string,
 }
 
+/// (internal) The checkpoint the client's own `cache_system_prompt` option
+/// places, as the JSON a content block's `cachePoint` member carries.
+function _default_cache_point() -> baml.json.json {
+    let point: baml.json.json = { "type": "default" };
+    point
+}
+
 class ToolUseBlock {
     toolUseId: string,
     name: string,
@@ -153,7 +160,9 @@ class ContentBlock {
     audio: AudioBlock?,
     toolUse: ToolUseBlock?,
     toolResult: ToolResultBlock?,
-    cachePoint: CachePointBlock?,
+    // `baml.json.json`, not `CachePointBlock`: a `${cache(args)}` in the
+    // prompt supplies this value and it goes on the wire as written.
+    cachePoint: baml.json.json?,
 
     function of_text(text: string) -> ContentBlock {
         ContentBlock { ..._empty_content_block(), text: text }
@@ -184,7 +193,12 @@ class ContentBlock {
     }
 
     function of_cache_point() -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), cachePoint: CachePointBlock { type: "default" } }
+        ContentBlock.of_cache_delimiter(_default_cache_point())
+    }
+
+    /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
+    function of_cache_delimiter(args: baml.json.json) -> ContentBlock {
+        ContentBlock { ..._empty_content_block(), cachePoint: args }
     }
 }
 
@@ -206,14 +220,20 @@ function _empty_content_block() -> ContentBlock {
 /// `build_request/bedrock.rs:174-176`.
 class SystemContentBlock {
     text: string?,
-    cachePoint: CachePointBlock?,
+    // See `ContentBlock.cachePoint`.
+    cachePoint: baml.json.json?,
 
     function of_text(text: string) -> SystemContentBlock {
         SystemContentBlock { text: text, cachePoint: null }
     }
 
     function of_cache_point() -> SystemContentBlock {
-        SystemContentBlock { text: null, cachePoint: CachePointBlock { type: "default" } }
+        SystemContentBlock.of_cache_delimiter(_default_cache_point())
+    }
+
+    /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
+    function of_cache_delimiter(args: baml.json.json) -> SystemContentBlock {
+        SystemContentBlock { text: null, cachePoint: args }
     }
 }
 
@@ -315,13 +335,15 @@ class ConverseRequest {
 // eight null members is not a union at all. So the serialized request is run
 // through `_prune_nulls` before it goes on the wire.
 //
-// Three keys are copied VERBATIM without recursing, because their values are
+// Four keys are copied VERBATIM without recursing, because their values are
 // authored elsewhere (by the user or by the model) and a `null` inside them is
 // meaningful data rather than an unset member:
 //
 //   * `additionalModelRequestFields` — the model-specific parameter blob;
 //   * `json` — a tool's `inputSchema.json` (a JSON Schema may legitimately
 //     say `{"default": null}`);
+//   * `cachePoint` — the `args` of a `${cache(args)}` in the prompt, which
+//     this client sends as written;
 //   * `input` — a replayed `toolUse.input`, i.e. the arguments the MODEL
 //     authored for a tool call. Pruning them rewrites history: a tool whose
 //     schema has nullable parameters would see its explicit `"filter": null`
@@ -335,7 +357,7 @@ class ConverseRequest {
 // ---------------------------------------------------------------------------
 
 function _is_opaque_key(key: string) -> bool {
-    key == "additionalModelRequestFields" || key == "json" || key == "input"
+    key == "additionalModelRequestFields" || key == "json" || key == "input" || key == "cachePoint"
 }
 
 function _prune_nulls(value: baml.json.json) -> baml.json.json {
@@ -619,12 +641,76 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
                 }
                 null
             },
-            _ => {
+            let delimiter: ai.CacheDelimiter => {
+                if (
+                    _takes_cache_point(blocks.at(blocks.length() - 1)?.cachePoint, blocks.length(), delimiter)
+                ) {
+                    blocks.push(SystemContentBlock.of_cache_delimiter(delimiter.args));
+                }
+                null
+            },
+            let media: ai.MediaPart => {
                 throw _reject("Bedrock system messages do not support media content")
             },
         };
     }
     blocks
+}
+
+/// (internal) Whether a `${cache(args)}` becomes a `cachePoint` block at this
+/// position. `lowered` is how many blocks its message has produced so far and
+/// `previous` is the `cachePoint` member of the last of them.
+///
+///   * Nothing lowered yet: there is no content before the delimiter to cache,
+///     and a `cachePoint` that leads a message is a ValidationException.
+///   * The last block is already a `cachePoint`: two in a row mark the same
+///     prefix, and each one counts against the four a request may carry.
+///   * `cache(null)`: there is no value to embed, and a null member is dropped
+///     from the body, which would leave an empty block behind.
+function _takes_cache_point(
+    previous: baml.json.json?,
+    lowered: int,
+    delimiter: ai.CacheDelimiter,
+) -> bool {
+    if (lowered == 0 || previous != null) {
+        return false;
+    }
+    delimiter.args != null
+}
+
+/// (internal) One non-system prompt message as Converse content blocks. Text
+/// and media lower exactly as they do for a journal turn; a `${cache(args)}`
+/// becomes a `cachePoint` block at the position it was written, with `args`
+/// embedded as written.
+function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> ContentBlock[] {
+    let content: ContentBlock[] = [];
+    for (let part in message.parts) {
+        match (part) {
+            let text: string => {
+                let block = ai.content.Text { text: text };
+                if let lowered: ContentBlock = _lower_block(block, preview = preview) {
+                    content.push(lowered);
+                }
+                null
+            },
+            let delimiter: ai.CacheDelimiter => {
+                if (
+                    _takes_cache_point(content.at(content.length() - 1)?.cachePoint, content.length(), delimiter)
+                ) {
+                    content.push(ContentBlock.of_cache_delimiter(delimiter.args));
+                }
+                null
+            },
+            let media: ai.MediaPart => {
+                let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                if let lowered: ContentBlock = _lower_block(block, preview = preview) {
+                    content.push(lowered);
+                }
+                null
+            },
+        };
+    }
+    content
 }
 
 /// (internal) The per-message metadata key that requests a Bedrock prompt-caching
@@ -683,7 +769,7 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPromp
             }
             null
         } else {
-            let content = _lower_blocks(ai.wire.prompt_blocks(message), preview = preview);
+            let content = _prompt_content(message, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
@@ -953,7 +1039,9 @@ function _system_as_user(system: SystemContentBlock[]) -> Message {
             content.push(ContentBlock.of_text(text));
             null
         } else {
-            content.push(ContentBlock.of_cache_point());
+            // A system block is `text` or `cachePoint`; the checkpoint moves
+            // with the content it followed, value intact.
+            content.push(ContentBlock { ..._empty_content_block(), cachePoint: block.cachePoint });
             null
         };
     }

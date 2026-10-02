@@ -27,15 +27,37 @@ type Selector = root.clients.Selector;
 /// Provider-neutral media retained inside a rendered prompt.
 type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;
 
+/// A position in a prompt: everything before it is the prefix a provider may
+/// cache. `${cache(args)}` puts one where it is written, and `args` rides along
+/// untouched. A client that has a cache marker on its wire sends one there,
+/// carrying `args` exactly as written; every other client drops the delimiter
+/// and sends the prompt as if it were not there.
+class CacheDelimiter {
+    args: baml.json.json,
+}
+
+/// Mark a cache position in a prompt. Written `${cache(args)}` in an LLM
+/// function's `prompt:`, and `${ai.cache(args)}` anywhere else.
+///
+/// `args` is the provider's own cache object, sent as written. On
+/// `aws.BedrockClient` it becomes the `cachePoint` block:
+///
+///     ${cache({ "type": "default" })}
+///     ${cache({ "type": "default", "ttl": "1h" })}
+function cache(args: baml.json.json) -> CacheDelimiter throws never {
+    CacheDelimiter { args: args }
+}
+
 /// One structural part of a rendered prompt message.
-type PromptPart = string | MediaPart;
+type PromptPart = string | MediaPart | CacheDelimiter;
 
 /// A single chat message in a rendered prompt.
 class PromptMessage {
     /// The chat role, e.g. "system", "user", or "assistant". Empty for
     /// role-less content.
     role: string,
-    /// The message's rendered text. Media parts use a readable placeholder.
+    /// The message's rendered text. Media parts use a readable placeholder;
+    /// a cache delimiter contributes nothing.
     content: string,
     /// Ordered structural content. Provider clients use this instead of the
     /// readable `content` projection so media survives prompt rendering.

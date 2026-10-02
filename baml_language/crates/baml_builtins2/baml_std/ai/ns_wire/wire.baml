@@ -436,18 +436,42 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 /// A rendered prompt message's parts as content blocks: a `string` part is
 /// `Text`, a media part is `Media` with null provenance. The rendered prompt
 /// then lowers through the same path as the journal's turns.
+///
+/// A `root.CacheDelimiter` is dropped, and the text on either side of it is
+/// joined back into one `Text` block, so a client that lowers these blocks
+/// sends exactly what it would send for the same prompt without the
+/// `${cache(...)}`. A client whose wire has a cache marker walks
+/// `message.parts` itself instead.
 function prompt_blocks(message: root.PromptMessage) -> root.content.Block[] {
     let out: root.content.Block[] = [];
+    // True right after a dropped delimiter: text that follows continues the
+    // `Text` block before the delimiter rather than starting a new one.
+    let rejoin = false;
     for (let part in message.parts) {
         match (part) {
             let text: string => {
-                out.push(root.content.Text { text: text });
+                let joined = false;
+                if (rejoin) {
+                    if let last: root.content.Text = out.at(out.length() - 1) {
+                        last.text = `${last.text}${text}`;
+                        joined = true;
+                    }
+                }
+                if (!joined) {
+                    out.push(root.content.Text { text: text });
+                }
+                rejoin = false;
                 null
             },
             let media: root.MediaPart => {
                 out.push(
                     root.content.Media { media: media, provider_id: null, revised_prompt: null },
                 );
+                rejoin = false;
+                null
+            },
+            let delimiter: root.CacheDelimiter => {
+                rejoin = true;
                 null
             },
         };

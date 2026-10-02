@@ -497,3 +497,62 @@ test "google lowers every supported media part" {
     assert.equal(baml.json.path<string>(inline[3], ".inlineData.mimeType"), "video/mp4");
     assert.equal(baml.json.path<string>(inline[3], ".inlineData.data"), "video-data")
 }
+
+// ── cache delimiters ─────────────────────────────────────────────────────────
+//
+// `${cache(args)}` marks a position. A client with no cache marker for it sends
+// exactly the request it would send for the same prompt without the delimiter:
+// same text, same parts, same string-versus-array content shape.
+
+client PreviewGeneric = openai.GenericClient.new(
+    model = "generic-test",
+    base_url = "http://localhost:1234/v1",
+);
+
+client PreviewOpenRouter = openai.OpenRouterClient.new(
+    model = "router-test",
+    api_key = "test-key",
+    base_url = "http://localhost:1234/v1",
+);
+
+function CacheMarked(name: string, picture: image) -> string {
+    client: PreviewResponses
+    prompt: `${role("system")}You greet people.${cache({ "type": "default" })}${role("user")}Long stable document. ${cache({ "type": "default", "ttl": "1h" })}Greet ${name}.${role("user")}Look at ${picture} closely.${cache({ "type": "default" })}`
+}
+
+function CachePlain(name: string, picture: image) -> string {
+    client: PreviewResponses
+    prompt: `${role("system")}You greet people.${role("user")}Long stable document. Greet ${name}.${role("user")}Look at ${picture} closely.`
+}
+
+function _cache_delimiter_is_dropped_by(target: ai.Client) -> bool {
+    let picture = image.from_base64("image-data", "image/png");
+    let marked = CacheMarked@build_request("Ada", picture, client = target).body;
+    let plain = CachePlain@build_request("Ada", picture, client = target).body;
+    marked == plain
+}
+
+test "clients without a cache marker send the prompt as if the delimiter were absent" {
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewResponses));
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewChat));
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewAnthropic));
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewGemini));
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewGeneric));
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewOpenRouter));
+    assert.is_true(_cache_delimiter_is_dropped_by(UnroutableOllama))
+}
+
+// Bedrock is the one client that sends it, so its two bodies differ.
+test "bedrock sends a cachePoint for a cache delimiter" {
+    let picture = image.from_base64("image-data", "image/png");
+    let body = baml.json.parse(CacheMarked@build_request("Ada", picture, client = PreviewBedrock).body);
+    assert.equal(
+        baml.json.stringify(baml.json.path<json>(body, ".system")),
+        `[{"text":"You greet people."},{"cachePoint":{"type":"default"}}]`,
+    );
+    assert.equal(
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]")),
+        `{"cachePoint":{"type":"default","ttl":"1h"}}`,
+    );
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewBedrock) == false)
+}
