@@ -1193,7 +1193,8 @@ impl<'db> InferenceContext<'db> {
         }
         let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
             // The destructured name resolves nowhere (or to a non-class):
-            // E0003 at the pattern, fields lower against the sentinel.
+            // E0002 at the pattern, as for a type pattern; fields lower
+            // against the sentinel.
             if definition.is_none() {
                 self.pending_diags
                     .push(super::PendingDiag::UnresolvedPatternName {
@@ -1205,6 +1206,7 @@ impl<'db> InferenceContext<'db> {
                                 .collect::<Vec<_>>()
                                 .join("."),
                         ),
+                        suggestions: self.lower.type_suggestions(class_path),
                     });
             }
             for &(_, field_pat) in field_pats {

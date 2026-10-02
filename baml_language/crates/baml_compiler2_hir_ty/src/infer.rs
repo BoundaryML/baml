@@ -778,6 +778,7 @@ enum PendingDiag<'db> {
     UnresolvedName {
         expr: ExprId,
         name: baml_type::Name,
+        suggestions: Box<[baml_type::Name]>,
     },
     TopLevelLetCycle {
         expr: ExprId,
@@ -1185,6 +1186,7 @@ enum PendingDiag<'db> {
     UnresolvedPatternName {
         pat: PatId,
         name: baml_type::Name,
+        suggestions: Box<[baml_type::Name]>,
     },
     UnknownPatternField {
         pat: PatId,
@@ -7179,6 +7181,12 @@ impl<'db> InferenceContext<'db> {
             // the source lane reports it, never under a lane-dependent code.
             // (A dedicated "declared but not exported" report needs the
             // interface to carry those names.)
+            // The whole path names nothing: when it is a path this package
+            // would spell `root.…`, say so.
+            let suggestions = match &failed {
+                Some(_) => Box::default(),
+                None => self.lower.value_suggestions(segments),
+            };
             let name = failed.unwrap_or_else(|| {
                 baml_type::Name::new(
                     segments
@@ -7198,8 +7206,11 @@ impl<'db> InferenceContext<'db> {
                     suggestions,
                 });
             } else {
-                self.pending_diags
-                    .push(PendingDiag::UnresolvedName { expr, name });
+                self.pending_diags.push(PendingDiag::UnresolvedName {
+                    expr,
+                    name,
+                    suggestions,
+                });
             }
         }
         Ty::error()
@@ -9781,7 +9792,12 @@ impl<'db> InferenceContext<'db> {
     fn qualified_interface_display(&self, iface: &baml_type::interned::InferInterface) -> String {
         let qtn = &iface.name;
         let vp = self.viewpoint();
-        let base = if Some(qtn.root()) == vp.viewer() && !self.lower.namespace_context().is_empty()
+        // The hint is source the reader pastes, so an interface of this
+        // package is spelled the way source reaches it: its bare name from
+        // the package's root namespace when it is declared there, else its
+        // full `root.…` path — the only other spelling there is.
+        let base = if Some(qtn.root()) == vp.viewer()
+            && !(self.lower.namespace_context().is_empty() && qtn.namespace().is_empty())
         {
             match qtn.namespace().as_slice() {
                 [] => format!("root.{}", qtn.name()),
@@ -11695,9 +11711,13 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::DuplicateNamedArg { expr, name } => {
                         (TirTypeError::DuplicateNamedArgument { name }, expr)
                     }
-                    PendingDiag::UnresolvedName { expr, name } => (
+                    PendingDiag::UnresolvedName {
+                        expr,
+                        name,
+                        suggestions,
+                    } => (
                         crate::diagnostics::removed_reflect_spelling(&name)
-                            .unwrap_or(TirTypeError::UnresolvedName { name }),
+                            .unwrap_or(TirTypeError::UnresolvedName { name, suggestions }),
                         expr,
                     ),
                     PendingDiag::TopLevelLetCycle { expr } => (TirTypeError::CannotInferType, expr),
@@ -12587,10 +12607,14 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::UnresolvedPatternName { pat, name } => {
+                    PendingDiag::UnresolvedPatternName {
+                        pat,
+                        name,
+                        suggestions,
+                    } => {
                         diags.push(TirDiagnostic {
                             error: crate::diagnostics::removed_reflect_spelling(&name)
-                                .unwrap_or(TirTypeError::UnresolvedName { name }),
+                                .unwrap_or(TirTypeError::UnresolvedType { name, suggestions }),
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Pat(pat),
                             related: Vec::new(),

@@ -259,7 +259,11 @@ pub enum TirTypeError {
     /// members — the union has no single agreed-upon one.
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
-    UnresolvedName { name: Name },
+    UnresolvedName {
+        name: Name,
+        /// "Did you mean" candidates, each a fully qualified `root.…` path.
+        suggestions: Box<[Name]>,
+    },
     /// A value name was written bare in a generic slot. A runtime type is
     /// lifted into a type position only by a `type T = unreflect(value)`
     /// binding; the slot then names `T`.
@@ -1156,8 +1160,20 @@ impl TirTypeError {
                         union.spell(vp)
                     )
                 }
-                TirTypeError::UnresolvedName { name } => {
-                    write!(f, "unresolved name: {name}")
+                TirTypeError::UnresolvedName { name, suggestions } => {
+                    write!(f, "unresolved name: {name}")?;
+                    match &**suggestions {
+                        [] => Ok(()),
+                        [only] => write!(f, ". Did you mean `{only}`?"),
+                        many => {
+                            let joined = many
+                                .iter()
+                                .map(Name::as_str)
+                                .collect::<Vec<_>>()
+                                .join("`, `");
+                            write!(f, ". Did you mean one of these: `{joined}`?")
+                        }
+                    }
                 }
                 TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
                     let diagnostic =

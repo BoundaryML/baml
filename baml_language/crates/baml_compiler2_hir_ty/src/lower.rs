@@ -125,6 +125,10 @@ pub enum HolePolicy {
 /// a projection qualifier - pins only what it writes. (TIR's third
 /// variant, `ConstructorHead`, has no counterpart here: `hir_ty`'s
 /// construction road types heads through `infer_object`, not this path.)
+/// How many "did you mean" candidates an unresolved path reports: a
+/// message, not a listing of the package.
+const MAX_SUGGESTIONS: usize = 5;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypePosition {
     Existential,
@@ -1011,34 +1015,94 @@ impl<'db> LowerCtx<'db> {
         LoweringTy::error()
     }
 
-    /// "Did you mean" candidates for an unresolved SINGLE-SEGMENT type
-    /// name: every namespace that declares the bare name, spelled as its
-    /// fully qualified `root...` path (TIR's `type_suggestions`).
+    /// "Did you mean" candidates for an unresolved type path: every
+    /// namespace of this package that declares the item and whose path ends
+    /// with the namespaces written, spelled as its fully qualified `root...`
+    /// path. For a bare name that is every namespace declaring it; for
+    /// `sub.Item` it is the `root.….sub.Item` the path would have to be
+    /// written as.
     pub(crate) fn type_suggestions(&self, segments: &[Name]) -> Box<[Name]> {
-        if segments.len() != 1 {
+        self.qualified_suggestions(segments, |items, item| items.types.contains_key(item))
+    }
+
+    /// [`Self::type_suggestions`] for an unresolved QUALIFIED value path
+    /// (`sub.make`): the `root.….sub.make` it would have to be written as.
+    /// A path whose item no namespace declares may name a member of a type
+    /// instead (`sub.Kind.A`, `sub.Cls.make`): then the longest prefix that
+    /// is a type path is suggested, with the members written after it. A
+    /// bare name gets none — a misspelled local is the likelier mistake, and
+    /// listing every namespace that declares the name would bury it.
+    pub(crate) fn value_suggestions(&self, segments: &[Name]) -> Box<[Name]> {
+        if segments.len() < 2 {
             return Box::new([]);
         }
-        let item = &segments[0];
-        let mut suggestions: Vec<String> = Vec::new();
-        for (ns_path, ns_items) in &self.package_items.namespaces {
-            if ns_items.types.contains_key(item) {
-                if ns_path.is_empty() {
-                    suggestions.push(format!("root.{item}"));
-                } else {
-                    let ns_str = ns_path
-                        .iter()
-                        .map(smol_str::SmolStr::as_str)
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    suggestions.push(format!("root.{ns_str}.{item}"));
-                }
-            }
+        let direct =
+            self.qualified_suggestions(segments, |items, item| items.values.contains_key(item));
+        if !direct.is_empty() {
+            return direct;
         }
-        suggestions.sort();
-        suggestions
+        (2..segments.len())
+            .rev()
+            .map(|split| segments.split_at(split))
+            .find_map(|(type_path, members)| {
+                let types = self.type_suggestions(type_path);
+                (!types.is_empty()).then(|| {
+                    types
+                        .iter()
+                        .map(|ty| {
+                            Name::new(
+                                std::iter::once(ty.as_str())
+                                    .chain(members.iter().map(Name::as_str))
+                                    .collect::<Vec<_>>()
+                                    .join("."),
+                            )
+                        })
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    }
+
+    /// The fully qualified `root.…` path of every namespace of this package
+    /// that `declares` the path's item and whose own path ends with the
+    /// namespaces written — the first [`MAX_SUGGESTIONS`] of them. The
+    /// namespace the path would have named had it been read relative to the
+    /// writer's (the reading this language does not have) comes first; the
+    /// rest are sorted.
+    fn qualified_suggestions(
+        &self,
+        segments: &[Name],
+        declares: impl Fn(&baml_compiler2_hir::namespace::NamespaceItems<'db>, &Name) -> bool,
+    ) -> Box<[Name]> {
+        let Some((item, written_ns)) = segments.split_last() else {
+            return Box::new([]);
+        };
+        let relative: Vec<&Name> = self.ns_context.iter().chain(written_ns).collect();
+        let mut candidates: Vec<(bool, &[Name])> = self
+            .package_items
+            .namespaces
             .iter()
-            .map(String::as_str)
-            .map(Name::new)
+            .filter(|(ns_path, ns_items)| ns_path.ends_with(written_ns) && declares(ns_items, item))
+            .map(|(ns_path, _)| {
+                (
+                    !ns_path.iter().eq(relative.iter().copied()),
+                    ns_path.as_slice(),
+                )
+            })
+            .collect();
+        candidates.sort();
+        candidates.truncate(MAX_SUGGESTIONS);
+        candidates
+            .into_iter()
+            .map(|(_, ns_path)| {
+                Name::new(
+                    std::iter::once("root")
+                        .chain(ns_path.iter().map(Name::as_str))
+                        .chain(std::iter::once(item.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("."),
+                )
+            })
             .collect()
     }
 
@@ -1338,18 +1402,25 @@ impl<'db> LowerCtx<'db> {
         accessible_package(self.db, self.package_items.root, name)
     }
 
-    /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
-    /// current package (no outward walk); (2) `root.`-absolute or
-    /// package-prefixed.
+    /// The type `segments` names, when the WHOLE path is the item's own
+    /// path. There are two ways to name an item, and no third:
+    /// (1) its bare name, from the namespace that declares it;
+    /// (2) its fully qualified path — `root.<namespaces>.<Item>` in this
+    /// package, `<edge>.<namespaces>.<Item>` in one it reaches.
+    ///
+    /// What decides is the path's HEAD — `root`, an edge, or an item of the
+    /// current namespace — not how long the path is. `Cart.empty` starts at
+    /// a local item and continues with a member of it, so it is not an item
+    /// path and is not answered here: the caller resolves the item (`Cart`)
+    /// and reads the rest as members. What is never done is reading the
+    /// head as a NAMESPACE relative to the current one: `sub.Item` does not
+    /// reach a child namespace `sub`.
     pub(crate) fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
         let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
 
-        let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
-            seg_ns.to_vec()
-        } else {
-            self.ns_context.iter().chain(seg_ns).cloned().collect()
-        };
-        if let Some(def) = self.package_items.lookup_type(&relative_ns, item) {
+        if seg_ns.is_empty()
+            && let Some(def) = self.package_items.lookup_type(&self.ns_context, item)
+        {
             return Some(ResolvedTypeDefinition::Source(def));
         }
 
@@ -1377,34 +1448,12 @@ impl<'db> LowerCtx<'db> {
             }
         }
 
-        // `json` is the sole builtin namespace shorthand. After ordinary
-        // local/package lookup fails, reinterpret `json.*` under `baml`.
-        if segments.first().is_some_and(|root| root.as_str() == "json")
-            && let Some(baml) = self.accessible_package(&Name::new("baml"))
-        {
-            let namespace = &segments[..segments.len() - 1];
-            // Served `baml` (the precompiled stdlib of a runtime compile)
-            // answers from its interface, exactly as the package-prefixed
-            // spelling above and the value shorthand do.
-            if is_served_from_interface(self.db, baml) {
-                return crate::package_interface::exported_type_row(self.db, baml, namespace, item)
-                    .map(|exported| ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
-            }
-            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
-            let visible = self.package_items.root == baml
-                || crate::package_interface::package_interface(self.db, baml)
-                    .lookup_type(namespace, item)
-                    .is_some();
-            if visible && let Some(def) = baml_items.lookup_type(namespace, item) {
-                return Some(ResolvedTypeDefinition::Source(def));
-            }
-        }
-
         None
     }
 
     /// Value-namespace resolution, mirroring `LowerCtx::resolve_type`'s
-    /// algorithm over `lookup_value` (functions, clients, lets).
+    /// algorithm over `lookup_value` (functions, clients, lets): a bare name
+    /// in the current namespace, or a fully qualified path.
     /// TIR's value-path ladder, mirrored, with ONE answer per lane: a
     /// source-served package's definition, or a served package's exported
     /// function by its identity. A served dependency answers from its
@@ -1417,12 +1466,9 @@ impl<'db> LowerCtx<'db> {
     ) -> Option<crate::package_interface::ResolvedValue<'db>> {
         use crate::package_interface::ResolvedValue;
         let (item, seg_ns) = segments.split_last()?;
-        let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
-            seg_ns.to_vec()
-        } else {
-            self.ns_context.iter().chain(seg_ns).cloned().collect()
-        };
-        if let Some(def) = self.package_items.lookup_value(&relative_ns, item) {
+        if seg_ns.is_empty()
+            && let Some(def) = self.package_items.lookup_value(&self.ns_context, item)
+        {
             return Some(ResolvedValue::Source(def));
         }
         if segments.len() >= 2 {
@@ -1443,24 +1489,6 @@ impl<'db> LowerCtx<'db> {
                 {
                     return Some(ResolvedValue::Source(def));
                 }
-            }
-        }
-        // The sole builtin namespace shorthand: `json.x` reads `baml.json.x`.
-        if segments.first().is_some_and(|root| root.as_str() == "json")
-            && let Some(baml) = self.accessible_package(&Name::new("baml"))
-        {
-            let namespace = &segments[..segments.len() - 1];
-            if is_served_from_interface(self.db, baml) {
-                return crate::extern_loc::mounted_function_named(self.db, baml, namespace, item)
-                    .map(ResolvedValue::External);
-            }
-            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
-            let visible = self.package_items.root == baml
-                || crate::package_interface::package_interface(self.db, baml)
-                    .lookup_function(namespace, item)
-                    .is_some();
-            if visible && let Some(def) = baml_items.lookup_value(namespace, item) {
-                return Some(ResolvedValue::Source(def));
             }
         }
         None

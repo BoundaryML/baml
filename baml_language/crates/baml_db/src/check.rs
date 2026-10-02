@@ -1746,9 +1746,22 @@ fn rich_source_aware_tir_type_error_message(
             .type_expr(ty(expected))
             .text(", found ")
             .type_expr(ty(got)),
-        TirTypeError::UnresolvedName { name, .. } => DiagnosticText::new()
-            .text("unresolved name: ")
-            .identifier(name, DiagnosticIdentifierKind::Variable),
+        TirTypeError::UnresolvedName { name, suggestions } => {
+            let text = DiagnosticText::new()
+                .text("unresolved name: ")
+                .identifier(name, DiagnosticIdentifierKind::Variable);
+            match &**suggestions {
+                [] => text,
+                [only] => text.text(". Did you mean ").code(only).text("?"),
+                [first, rest @ ..] => rest
+                    .iter()
+                    .fold(
+                        text.text(". Did you mean one of these: ").code(first),
+                        |text, suggestion| text.text(", ").code(suggestion),
+                    )
+                    .text("?"),
+            }
+        }
         TirTypeError::UnresolvedMember {
             base_type, member, ..
         } => DiagnosticText::new()

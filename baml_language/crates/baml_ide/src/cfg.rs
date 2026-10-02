@@ -1776,7 +1776,7 @@ prompt: `Summarize ${input}`
             std::path::Path::new("/cfg-test/ns_workflows/workflow.baml"),
             r#"
 function Workflow(input: string) -> string {
-prompts.Summarize(input)
+root.workflows.prompts.Summarize(input)
 }
 "#,
         );
@@ -1786,7 +1786,7 @@ prompts.Summarize(input)
         let call_node = graph
             .nodes
             .values()
-            .find(|node| node.label == "prompts.Summarize(input)")
+            .find(|node| node.label == "root.workflows.prompts.Summarize(input)")
             .expect("caller graph should contain the cross-namespace LLM call node");
         assert!(
             matches!(call_node.node_type, NodeType::LlmFunction),

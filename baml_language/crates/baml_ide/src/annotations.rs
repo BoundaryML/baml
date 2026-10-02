@@ -1003,7 +1003,7 @@ function is_true(condition: bool) -> bool { condition }
             r#"
 
 function demo() -> bool {
-    assert.equal(1, 2) && assert.is_true(true)
+    root.assert.equal(1, 2) && root.assert.is_true(true)
 }
 "#,
         );

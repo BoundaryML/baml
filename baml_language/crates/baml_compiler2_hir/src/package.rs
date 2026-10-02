@@ -34,7 +34,7 @@ pub struct NamespaceShadow<'db> {
 }
 
 impl<'db> NamespaceShadow<'db> {
-    /// Convert to a `Diagnostic` warning with the shadowed definition's span.
+    /// The error, at the item's name.
     pub fn to_diagnostic(&self, db: &'db dyn crate::Db) -> Diagnostic {
         let def = self.shadowed_def;
         let file = def.file(db);
@@ -49,23 +49,21 @@ impl<'db> NamespaceShadow<'db> {
             .find(|(_, c)| c.definition == def)
             .map(|(_, c)| c.name_span);
 
+        let kind = def.source_kind_name(db);
         let message = format!(
-            "namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
-            self.ns_name,
-            self.ns_name,
-            def.source_kind_name(db),
-            self.ns_name
+            "`{}` is both a root-level {kind} and the namespace `ns_{}/`",
+            self.ns_name, self.ns_name
         );
 
-        let mut diag = Diagnostic::warning(DiagnosticId::NamespaceShadow, message);
+        let mut diag = Diagnostic::error(DiagnosticId::NamespaceNameCollision, message);
 
         if let Some(range) = name_span {
             diag = diag.with_primary(
                 Span { file_id, range },
                 format!(
-                    "this {} is shadowed by namespace `{}`",
-                    def.source_kind_name(db),
-                    self.ns_name
+                    "rename this {kind} or the namespace: `{}.X` reads a member of the {kind}, \
+                     `root.{}.X` an item of the namespace",
+                    self.ns_name, self.ns_name
                 ),
             );
         }

@@ -4485,10 +4485,10 @@ test "ambiguous_method_across_namespaces_uses_qualified_interface_names" {
         {
             "main.baml": `
                 class Parrot {
-                    implements zoo.Animal {
+                    implements root.zoo.Animal {
                         function speak(self) -> string { return "squawk" }
                     }
-                    implements farm.Animal {
+                    implements root.farm.Animal {
                         function speak(self) -> string { return "cluck" }
                     }
                 }
@@ -4501,7 +4501,7 @@ test "ambiguous_method_across_namespaces_uses_qualified_interface_names" {
             "ns_farm/farm.baml": `interface Animal { function speak(self) -> string throws never }`,
         },
         "E0121",
-        ["zoo.Animal", "farm.Animal", "as<zoo.Animal>", "as<farm.Animal>"],
+        ["root.zoo.Animal", "root.farm.Animal", "as<root.zoo.Animal>", "as<root.farm.Animal>"],
     )
 }
 

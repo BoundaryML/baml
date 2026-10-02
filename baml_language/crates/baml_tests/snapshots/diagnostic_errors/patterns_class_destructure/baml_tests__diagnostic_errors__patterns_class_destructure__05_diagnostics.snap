@@ -82,9 +82,9 @@ source: crates/baml_tests/src/generated_tests.rs
      ·         ──────────────────
      ╰────
 
-  [type] E0003
+  [type] E0002
 
-  × unresolved name: `MissingClass`
+  × unresolved type: MissingClass
      ╭─[patterns_class_destructure.baml:109:5]
  109 │     let MissingClass { age } = Person {
      ·     ────────────────────────

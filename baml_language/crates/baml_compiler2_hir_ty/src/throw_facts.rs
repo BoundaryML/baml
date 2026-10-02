@@ -439,15 +439,14 @@ fn resolve_path_to_ty<'db>(
     }
 }
 
-/// Resolve `type_name` within namespace `ns`, applying the same fallbacks as
-/// declaration path lowering so throw-set recovery resolves a path identically
+/// Resolve `type_name` qualified by `ns`, by the rule declaration path
+/// lowering applies, so throw-set recovery resolves a path identically
 /// whether it appears as an enum-variant prefix or a plain type:
 ///
-/// - a bare name (`ns` empty) is tried in `ns_context` first, then at the
-///   package root;
-/// - a `root.`-prefixed `ns` is retried against the current package with the
-///   prefix stripped (own-package alias);
-/// - any other leading segment is treated as a sibling package name.
+/// - a bare name (`ns` empty) is an item of the namespace it is written in
+///   (`ns_context`), and nothing else;
+/// - a `root.`-prefixed `ns` is the rest of the path in the current package;
+/// - any other leading segment is a package this one reaches.
 fn lookup_type_in_scope<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
@@ -455,22 +454,15 @@ fn lookup_type_in_scope<'db>(
     ns: &[Name],
     type_name: &Name,
 ) -> Option<Definition<'db>> {
-    let direct = if ns.is_empty() && !ns_context.is_empty() {
-        pkg_items
-            .lookup_type(ns_context, type_name)
-            .or_else(|| pkg_items.lookup_type(ns, type_name))
-    } else {
-        pkg_items.lookup_type(ns, type_name)
+    let Some((first, rest)) = ns.split_first() else {
+        return pkg_items.lookup_type(ns_context, type_name);
     };
-    direct.or_else(|| {
-        let (first, rest) = ns.split_first()?;
-        if first.as_str() == "root" {
-            pkg_items.lookup_type(rest, type_name)
-        } else {
-            let package = accessible_package(db, pkg_items.root, first)?;
-            baml_compiler2_hir::package::package_items(db, package).lookup_type(rest, type_name)
-        }
-    })
+    if first.as_str() == "root" {
+        pkg_items.lookup_type(rest, type_name)
+    } else {
+        let package = accessible_package(db, pkg_items.root, first)?;
+        baml_compiler2_hir::package::package_items(db, package).lookup_type(rest, type_name)
+    }
 }
 
 /// Collect, for each `catch` clause binding, the `(binding-name, arm-body-expr)`

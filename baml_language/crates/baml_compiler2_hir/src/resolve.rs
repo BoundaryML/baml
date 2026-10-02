@@ -326,9 +326,7 @@ fn accessible_package<'db>(
 /// Resolve the package and namespace split for a qualified path.
 ///
 /// `root` names the file's own package; otherwise the first segment must be
-/// a package the file's package can spell ([`accessible_package`]). If it is
-/// neither, `json` is interpreted as a namespace of the builtin `baml`
-/// package.
+/// a package the file's package can spell ([`accessible_package`]).
 fn accessible_path_package<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -339,14 +337,8 @@ fn accessible_path_package<'db>(
         let own = crate::file_package::file_package(db, file).root;
         return Some((own, crate::package::package_items(db, own), 1));
     }
-    if let Some((package, items)) = accessible_package(db, file, first) {
-        return Some((package, items, 1));
-    }
-    if first.as_str() == "json" {
-        let (package, items) = accessible_package(db, file, &Name::new("baml"))?;
-        return Some((package, items, 0));
-    }
-    None
+    let (package, items) = accessible_package(db, file, first)?;
+    Some((package, items, 1))
 }
 
 /// Resolve a path expression at a given position.

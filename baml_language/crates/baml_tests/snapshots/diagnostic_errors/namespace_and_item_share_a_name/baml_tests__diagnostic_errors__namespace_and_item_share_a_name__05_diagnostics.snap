@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [validation] E0099
+
+  × `gadgets` is both a root-level class and the namespace `ns_gadgets/`
+   ╭─[main.baml:5:7]
+ 5 │ class gadgets {
+   ·       ───┬───
+   ·          ╰── rename this class or the namespace: `gadgets.X` reads a member of the class, `root.gadgets.X` an item of the namespace
+   ╰────

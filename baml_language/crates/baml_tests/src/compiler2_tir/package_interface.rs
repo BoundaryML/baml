@@ -847,12 +847,15 @@ fn generic_impl_exports_params_bounds_and_patterns() {
 
 #[test]
 fn dep_interface_rows_resolve_only_for_mounted_packages() {
-    // BEP-066 mounted-package linking: an `ExportedType::Interface` row resolves through both
-    // `PackageResolutionContext::resolve_type` paths ONLY when the dependency
+    // BEP-066 mounted-package linking: an `ExportedType::Interface` row resolves through
+    // `PackageResolutionContext::resolve_type` ONLY when the dependency
     // is a MOUNTED (source-less) package — its rows are the sole
     // representation. A source-backed dependency's interface rows stay
     // invisible (its interfaces resolve through source items on the loc path),
     // preserving pre-export resolution for every source-backed dep.
+    //
+    // Every path into a dependency is written in full, from its edge name: a
+    // path that starts at one of its namespaces (`iter.Range`) names nothing.
     use baml_compiler2_tir::package_interface::package_resolution_context;
 
     let mut db = make_db();
@@ -894,29 +897,28 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
             .is_none(),
         "source-backed dep interface row must stay invisible to package-prefixed resolution"
     );
-    assert!(
-        res_ctx
-            .resolve_type(&db, &path(&["iter", "Iterator"]), &[])
-            .is_none(),
-        "source-backed dep interface row must stay invisible to the own-then-deps walk"
-    );
 
-    // A MOUNTED dependency's interface row resolves on both paths.
+    // A MOUNTED dependency's interface row resolves.
     let (_, ty) = res_ctx
         .resolve_type(&db, &path(&["app", "Marker"]), &[])
         .expect("mounted interface row resolves via the package-prefixed path");
     assert!(matches!(ty, Ty::Interface(ref qtn, _, _, _) if qtn.name().as_str() == "Marker"));
 
     // Contrast: a dep CLASS in the same namespace still resolves through the
-    // interface rows on both paths — the gate is interface-specific.
+    // interface rows — the gate is interface-specific.
     let (_, ty) = res_ctx
         .resolve_type(&db, &path(&["baml", "iter", "Range"]), &[])
         .expect("dep class resolves via the package-prefixed path");
     assert!(matches!(ty, Ty::Class(ref qtn, _, _) if qtn.name().as_str() == "Range"));
-    let (_, ty) = res_ctx
-        .resolve_type(&db, &path(&["iter", "Range"]), &[])
-        .expect("dep class resolves via the own-then-deps walk");
-    assert!(matches!(ty, Ty::Class(ref qtn, _, _) if qtn.name().as_str() == "Range"));
+
+    // Without the edge name in front, neither is a path to anything.
+    for unqualified in [&["iter", "Iterator"][..], &["iter", "Range"], &["Marker"]] {
+        assert!(
+            res_ctx.resolve_type(&db, &path(unqualified), &[]).is_none(),
+            "`{}` names a dependency's item without its edge name",
+            unqualified.join(".")
+        );
+    }
 }
 
 #[test]

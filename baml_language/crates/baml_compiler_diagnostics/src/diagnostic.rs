@@ -180,7 +180,7 @@ pub enum DiagnosticId {
     RemovedFeature,
 
     // Namespace diagnostics (E0099)
-    NamespaceShadow,
+    NamespaceNameCollision,
 
     // Lowering diagnostics (E0101-E0105)
     MissingName,
@@ -550,7 +550,7 @@ impl DiagnosticId {
             // Removed feature errors
             DiagnosticId::RemovedFeature => "E0098",
 
-            DiagnosticId::NamespaceShadow => "E0099",
+            DiagnosticId::NamespaceNameCollision => "E0099",
 
             // Lowering diagnostics
             DiagnosticId::MissingName => "E0107",
@@ -927,7 +927,7 @@ mod tests {
             DiagnosticId::DuplicateName,
             DiagnosticId::LoweringError,
             DiagnosticId::RemovedFeature,
-            DiagnosticId::NamespaceShadow,
+            DiagnosticId::NamespaceNameCollision,
         ];
 
         for id in ids {
