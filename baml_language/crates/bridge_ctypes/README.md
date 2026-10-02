@@ -9,6 +9,10 @@ cargo build -p bridge_ctypes
 #   -> sdks/rust/bridge_rust/src/wire/baml_bridge.cffi.v1.rs (committed)
 #   -> sdks/python/src/baml_bridge/cffi/v1/*_pb2.py(i)
 
+# Ruby (protoc) — also driven by bridge_ctypes/build.rs with vendored protoc.
+# The generated clients are COMMITTED so consumers do not need protoc.
+#   -> sdks/ruby/bridge_ruby/lib/baml_bridge/cffi/v1/*_pb.rb
+
 # Node / TypeScript (protobufjs + napi loader)
 cd sdks/typescript/bridge_typescript && pnpm build:debug
 #   -> sdks/typescript/bridge_typescript/typescript_src/proto/baml_cffi.{js,d.ts}
@@ -45,4 +49,4 @@ sdks/swift/scripts/generate-protos.sh
 
 Other consumers (`bridge_cffi`, `bridge_wasm`, `sdks/python/rust/bridge_python`) use the Rust prost types via `bridge_ctypes` — nothing extra to regenerate. `sdks/rust/bridge_rust` is the exception: it vendors the generated file (see above) because it publishes to crates.io and must not depend on this engine-coupled crate.
 
-No clients exist for Ruby, Java/Kotlin, C#/.NET, or PHP.
+No committed clients exist for Java/Kotlin, C#/.NET, or PHP.

@@ -299,7 +299,9 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bridge_ctypes/**/*.proto' \
+            ':baml_language/crates/bridge_ctypes/build.rs' \
             ':baml_language/crates/bridge_cffi/include/**' \
+            ':baml_language/sdks/ruby/bridge_ruby/lib/baml_bridge/cffi/v1/**' \
             ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
             ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
           ; then
@@ -837,7 +839,7 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
-      # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
+      # bridge_ctypes/build.rs uses vendored protoc; bridge_go/build.sh needs
       # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
       # The `cargo build -p bridge_ctypes` step uses cargo from rustup
       # (not mise), so we don't need `go` itself here either.
@@ -851,9 +853,9 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
-      # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
-      - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
+      # Rust (prost), Python, and Ruby (protoc) — all driven by bridge_ctypes/build.rs.
+      # Writes Python pb2/pyi and committed Ruby clients into their SDK trees.
+      - name: "Generate Rust + Python + Ruby proto bindings (bridge_ctypes)"
         run: cargo build -p bridge_ctypes
         working-directory: baml_language
 
@@ -906,6 +908,7 @@ jobs:
             baml_language/crates/bridge_ctypes
             baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_bridge/cffi
+            baml_language/sdks/ruby/bridge_ruby/lib/baml_bridge/cffi/v1
             baml_language/sdks/rust/bridge_rust/src/wire
             baml_language/sdks/swift/Sources/BamlBridge/Proto
             baml_language/sdks/swift/Sources/CBamlBridge/include

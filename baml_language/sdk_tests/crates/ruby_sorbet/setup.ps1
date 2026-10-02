@@ -16,6 +16,9 @@ try {
     cargo build -p bridge_cffi
     if ($LASTEXITCODE -ne 0) { throw "cargo build -p bridge_cffi failed" }
 
+    cargo run --quiet -p sdk_test_codegen -- ruby_sorbet
+    if ($LASTEXITCODE -ne 0) { throw "ruby_sorbet SDK generation failed" }
+
     cargo run --quiet -p sdk_test_codegen -- emit-bytecode --fixture function_calls --out (Join-Path $fixtureDir "function-calls.bytecode")
     if ($LASTEXITCODE -ne 0) { throw "function_calls bytecode generation failed" }
 } finally {
@@ -43,6 +46,8 @@ if ($LASTEXITCODE -ne 0) { throw "thread-callback fixture compilation failed" }
 
 $invalidLibrary = Join-Path $fixtureDir "not-a-library"
 [IO.File]::WriteAllText($invalidLibrary, "not a dynamic library`n")
+
+Write-Host "Sorbet static gate unavailable: checker 0.6.13506 has no Windows binary; runtime tests still run."
 
 $env:BUNDLE_GEMFILE = Join-Path $testRoot "Gemfile"
 $env:BUNDLE_PATH = Join-Path $targetDir "ruby-bundle"

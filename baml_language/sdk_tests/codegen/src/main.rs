@@ -31,6 +31,7 @@ const GENERATORS: &[(&str, RunAll)] = &[
         "python_pydantic2",
         sdk_test_codegen::python_pydantic2::run_all,
     ),
+    ("ruby_sorbet", sdk_test_codegen::ruby_sorbet::run_all),
     ("rust", sdk_test_codegen::rust::run_all),
     ("swift", sdk_test_codegen::swift::run_all),
     ("typescript", sdk_test_codegen::typescript::run_all),

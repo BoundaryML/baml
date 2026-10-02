@@ -15,7 +15,9 @@ module Baml
         @library = nil
         @api = nil
         @result_callback = nil
-        @result_events = Queue.new
+        @pending_mutex = Mutex.new
+        @pending = {}
+        @next_callback_id = 1
         @program_bytes = nil
         @terminal_error = nil
       end
@@ -53,7 +55,43 @@ module Baml
         end
       end
 
+      def call(compiled_program_bytes, function_name, arguments)
+        initialize!(compiled_program_bytes)
+        encoded = Protocol.encode_call(@api.new_function_call, function_name, arguments)
+        # Defer Timeout/Thread#raise so an interrupt cannot land between
+        # registering and dispatching, or be swallowed by a dispatch failure.
+        # Once dispatched, the callback owns completion; an interrupted caller
+        # just stops waiting.
+        result = Thread.handle_interrupt(Exception => :never) do
+          callback_id, queue = register_call
+          begin
+            @api.call_function(encoded, callback_id)
+          rescue Exception # rubocop:disable Lint/RescueException -- a failed dispatch never reaches the callback
+            @pending_mutex.synchronize { @pending.delete(callback_id) }
+            raise
+          end
+          queue
+        end
+        outcome = result.pop
+        raise outcome if outcome.is_a?(Exception)
+
+        Protocol.decode_result(outcome)
+      end
+
       private
+
+      def register_call
+        @pending_mutex.synchronize do
+          # Never reuse IDs: a late duplicate must not complete a newer call.
+          raise Error, "BAML callback correlation IDs are exhausted" if @next_callback_id > 0xffff_ffff
+
+          callback_id = @next_callback_id
+          @next_callback_id += 1
+          queue = Queue.new
+          @pending[callback_id] = queue
+          [callback_id, queue]
+        end
+      end
 
       def owned_program_bytes(value)
         unless value.is_a?(String)
@@ -119,16 +157,11 @@ module Baml
               "#{current_pid} must exec before using BAML"
       end
 
-      def receive_result(call_id, bytes)
-        @result_events << [call_id, bytes, Thread.current.object_id].freeze
-      end
-
-      # The generated call layer will drain one event for each native result
-      # before result delivery is enabled.
-      def pop_result_event
-        @result_events.pop(true)
-      rescue ThreadError
-        nil
+      def receive_result(callback_id, outcome)
+        @pending_mutex.synchronize do
+          queue = @pending.delete(callback_id)
+          queue << outcome if queue
+        end
       end
 
       def open_library(path, flags)
@@ -154,7 +187,10 @@ module Baml
             TOOLCHAIN_VERSION,
             BRIDGE_RUNTIME_VERSION
           )
-          callback = Native::BorrowedBytesCallback.new(&method(:receive_result))
+          callback = Native::BorrowedBytesCallback.new(
+            on_error: ->(id) { receive_result(id, @result_callback.pop_error(id)) },
+            &method(:receive_result)
+          )
           api.register_result_callback(callback.function)
           @result_callback = callback
           @api = api

@@ -259,6 +259,7 @@ function audit_rule_ids(language: string) -> string[] {
             || language == "java"
             || language == "swift"
             || language == "csharp"
+            || language == "ruby"
     ) {
         [`${language}-audit-test`]
     } else {

@@ -3,7 +3,8 @@
 require "minitest/autorun"
 require "open3"
 require "rbconfig"
-require_relative "../../../../sdks/ruby/bridge_ruby/lib/baml/bridge"
+$LOAD_PATH.unshift File.expand_path("../../../../sdks/ruby/bridge_ruby/lib", __dir__)
+require "baml/bridge"
 
 class BridgeLoaderTest < Minitest::Test
   REQUIRED_FUNCTION_FIELDS = Baml::Bridge
