@@ -1467,7 +1467,8 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
                     reported.inputTokens,
                     reported.cacheReadInputTokens,
                     reported.cacheWriteInputTokens,
-                ) ?? 0,
+                )
+                    ?? 0,
                 output_tokens: reported.outputTokens ?? 0,
                 cached_input_tokens: reported.cacheReadInputTokens,
                 // Converse reports no separate reasoning-token count; the

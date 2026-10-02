@@ -110,7 +110,11 @@ function total_input_tokens(uncached: int?, cached: int?, cache_write: int?) -> 
 /// Input tokens billed at the full rate, for a provider whose `total` counts
 /// the cached share (and, where it reports them, the cache writes) too: null
 /// when it reported no total, never below zero.
-function uncached_input_tokens(total: int?, cached: int?, cache_write: int? = null) -> int? throws never {
+function uncached_input_tokens(
+    total: int?,
+    cached: int?,
+    cache_write: int? = null,
+) -> int? throws never {
     match (total) {
         let t: int => {
             let rest = t - (cached ?? 0) - (cache_write ?? 0);
