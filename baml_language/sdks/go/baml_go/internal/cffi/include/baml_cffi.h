@@ -42,9 +42,10 @@
  * Revision 2 changes the `call_function` slot from the legacy four-argument
  * name-plus-payload signature to the unified three-argument payload signature.
  * Hosts and runtimes built against different revisions must reject one another
- * before reading that slot.
+ * before reading that slot. Revision 3 requires runtime-bound allocations,
+ * an invocation clock, allocation release and V2 host dispatch/cancellation.
  */
-#define BAML_API_V1_ABI_VERSION 2
+#define BAML_API_V1_ABI_VERSION 3
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -73,6 +74,8 @@ enum BamlCffiHandleType
   BAML_CFFI_HANDLE_TYPE_HOST_VALUE_OPAQUE = 16,
   BAML_CFFI_HANDLE_TYPE_FUNCTION_SPEC = 17,
   BAML_CFFI_HANDLE_TYPE_RUNTIME_VALUE = 18,
+  BAML_CFFI_HANDLE_TYPE_INVOCATION_STATE = 19,
+  BAML_CFFI_HANDLE_TYPE_TRACE_RESERVATION = 20,
 };
 #ifndef __cplusplus
 typedef int32_t BamlCffiHandleType;
@@ -301,6 +304,27 @@ typedef struct BamlBuffer (*BamlInitializeRuntimeFromBlobWithMetadataFn)(const u
                                                                          size_t length,
                                                                          const char *baml_toml);
 
+typedef uint32_t (*BamlInvocationProtocolVersionFn)(void);
+
+typedef BamlCffiStatus (*BamlInvocationClockNsFn)(uint64_t call_id, uint64_t *out_now);
+
+typedef int32_t (*BamlReleaseFunctionCallFn)(uint64_t call_id);
+
+typedef void (*BamlHostDispatchV2)(const uint8_t *request, size_t length);
+
+typedef void (*BamlRegisterHostDispatchV2Fn)(BamlHostDispatchV2 callback);
+
+typedef void (*BamlHostCancel)(uint32_t callback_id);
+
+typedef void (*BamlRegisterHostCancelCallbackFn)(BamlHostCancel callback);
+
+typedef BamlCffiStatus (*BamlTraceSelectionFn)(uint64_t call_id,
+                                               uint64_t key,
+                                               struct BamlBuffer *out_selection,
+                                               uint64_t *out_reservation);
+
+typedef BamlCffiStatus (*BamlInvocationContextFn)(uint64_t key, struct BamlBuffer *out_context);
+
 /**
  * First version of the shared BAML C API.
  *
@@ -483,6 +507,36 @@ typedef struct BamlApiV1 {
    * Replace the runtime from bytecode after validating embedded generation metadata.
    */
   BamlInitializeRuntimeFromBlobWithMetadataFn initialize_runtime_from_blob_with_metadata;
+  /**
+   * Native invocation contract; protobuf carries no version negotiation.
+   */
+  BamlInvocationProtocolVersionFn invocation_protocol_version;
+  /**
+   * Read the allocated call's original runtime clock, in nanoseconds.
+   */
+  BamlInvocationClockNsFn invocation_clock_ns;
+  /**
+   * Release an unsubmitted allocation; zero means success.
+   */
+  BamlReleaseFunctionCallFn release_function_call;
+  /**
+   * Install the envelope dispatcher. Revision 3 never dispatches through V1.
+   */
+  BamlRegisterHostDispatchV2Fn register_host_dispatch_v2;
+  /**
+   * Request cooperative cancellation; completion still reports actual exit.
+   */
+  BamlRegisterHostCancelCallbackFn register_host_cancel_callback;
+  /**
+   * Project generated trace options without admitting another invocation.
+   * The caller owns the returned buffer and optional reservation handle.
+   */
+  BamlTraceSelectionFn trace_selection;
+  /**
+   * Read a detached generated trace.Context; key zero reads empty context.
+   * The caller owns the returned buffer. This never admits an invocation.
+   */
+  BamlInvocationContextFn invocation_context;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);
@@ -522,14 +576,12 @@ struct BamlBuffer initialize_runtime_from_blob_with_metadata(const uint8_t *byte
 }  // extern "C"
 #endif  // __cplusplus
 
-/* Size of the original required V1 prefix. Future V1 fields may only follow it. */
+/* ABI revision 3 requires every invocation operation below. */
 #define BAML_API_V1_MIN_SIZE \
-  (offsetof(BamlApiV1, register_bridge) + sizeof(((BamlApiV1 *)0)->register_bridge))
+  (offsetof(BamlApiV1, register_host_cancel_callback) + sizeof(((BamlApiV1 *)0)->register_host_cancel_callback))
 
 /*
- * Validate the original V1 prefix without rejecting a runtime that appended
- * fields. Consumers must perform an equivalent end-of-field check before
- * reading any future appended field.
+ * Validate the complete revision-3 table while permitting appended fields.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&

@@ -16,16 +16,13 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 from typing_extensions import Sentinel
 
 from .baml_py import (
-    BamlCallContext,
     BamlPyHandle,
     BamlRuntime,
     FunctionResult,
-    HostSpanManager,
     cancel_function_call,
-    flush_events,
     get_runtime as _rust_get_runtime,
-    get_bridge_runtime_version,
-    get_toolchain_version,
+    get_bridge_runtime_version as get_bridge_runtime_version,
+    get_toolchain_version as get_toolchain_version,
     get_version,
     new_function_call,
     register_unhandled_spawn_error_callback,
@@ -41,7 +38,6 @@ from .errors import (
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
-from .ctx_manager import CtxManager as BamlCtxManager
 from .proto import (
     BamlType,
     decode_call_result,
@@ -56,8 +52,7 @@ from .typemap import (
 )
 
 
-# Complete spawned work before flushing buffered trace events.
-atexit.register(flush_events)
+# Complete spawned work before interpreter shutdown.
 atexit.register(shutdown_runtime)
 
 
@@ -93,16 +88,6 @@ def get_runtime() -> BamlRuntime:
 _CANCELLED_PANIC_CLASS = "baml.panics.Cancelled"
 
 
-def _attach_call_ctx(call_ctx: Any, call_id: int) -> None:
-    if call_ctx is not None:
-        call_ctx._attach_call_id(call_id)
-
-
-def _detach_call_ctx(call_ctx: Any, call_id: int) -> None:
-    if call_ctx is not None:
-        call_ctx._detach_call_id(call_id)
-
-
 def _decode_call_result_async(result_bytes: bytes) -> Any:
     try:
         return decode_call_result(result_bytes)
@@ -126,31 +111,21 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, _ctx=None):
+def call_function_sync(rt, function_name, kwargs, *, _baml=None):
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
-    _attach_call_ctx(_ctx, call_id)
-    try:
-        result_bytes = rt.call_function_sync(args_proto, ctx)
-    finally:
-        _detach_call_ctx(_ctx, call_id)
+    args_proto = encode_call_args(kwargs, call_id, function_name=function_name, _baml=_baml)
+    result_bytes = rt.call_function_sync(args_proto)
     return FunctionResult(decode_call_result(result_bytes))
 
 
-async def call_function(
-    rt, function_name, kwargs, ctx=None, _ctx=None
-):
+async def call_function(rt, function_name, kwargs, *, _baml=None):
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
-    _attach_call_ctx(_ctx, call_id)
+    args_proto = encode_call_args(kwargs, call_id, function_name=function_name, _baml=_baml)
     try:
-        try:
-            result_bytes = await rt.call_function(args_proto, ctx)
-        except asyncio.CancelledError:
-            cancel_function_call(call_id)
-            raise
-    finally:
-        _detach_call_ctx(_ctx, call_id)
+        result_bytes = await rt.call_function(args_proto)
+    except asyncio.CancelledError:
+        cancel_function_call(call_id)
+        raise
     return FunctionResult(_decode_call_result_async(result_bytes))
 
 
@@ -429,7 +404,7 @@ def define_function(
     if mode == "sync":
 
         def _sync(*args: Any, **kwargs: Any) -> Any:
-            call_ctx = kwargs.pop("_ctx", None)
+            options = kwargs.pop("_baml", None)
             types_kwarg = kwargs.pop("_types", None)
             merged = _build_kwargs(
                 args,
@@ -456,12 +431,9 @@ def define_function(
                 call_id,
                 type_args,
                 function_name=baml_fqn,
+                _baml=options,
             )
-            _attach_call_ctx(call_ctx, call_id)
-            try:
-                result_bytes = rt.call_function_sync(args_proto, None)
-            finally:
-                _detach_call_ctx(call_ctx, call_id)
+            result_bytes = rt.call_function_sync(args_proto)
             return decode_call_result(result_bytes)
 
         _set_binding_metadata(_sync)
@@ -469,7 +441,7 @@ def define_function(
     elif mode == "async":
 
         async def _async(*args: Any, **kwargs: Any) -> Any:
-            call_ctx = kwargs.pop("_ctx", None)
+            options = kwargs.pop("_baml", None)
             types_kwarg = kwargs.pop("_types", None)
             merged = _build_kwargs(
                 args,
@@ -496,16 +468,13 @@ def define_function(
                 call_id,
                 type_args,
                 function_name=baml_fqn,
+                _baml=options,
             )
-            _attach_call_ctx(call_ctx, call_id)
             try:
-                try:
-                    result_bytes = await rt.call_function(args_proto, None)
-                except asyncio.CancelledError:
-                    cancel_function_call(call_id)
-                    raise
-            finally:
-                _detach_call_ctx(call_ctx, call_id)
+                result_bytes = await rt.call_function(args_proto)
+            except asyncio.CancelledError:
+                cancel_function_call(call_id)
+                raise
             return _decode_call_result_async(result_bytes)
 
         _set_binding_metadata(_async)
@@ -515,7 +484,6 @@ def define_function(
 
 
 __all__ = [
-    "BamlCallContext",
     "BamlPyHandle",
     "BamlRuntime",
     "BamlType",
@@ -523,14 +491,11 @@ __all__ = [
     "BamlFunctionSpec",
     "BamlRuntimeValue",
     "FunctionResult",
-    "HostSpanManager",
     "UNSET",
-    "BamlCtxManager",
     "BamlCancelledError",
     "BamlError",
     "BamlPanic",
     "make_sdk_panic",
-    "flush_events",
     "shutdown_runtime",
     "get_runtime",
     "get_version",

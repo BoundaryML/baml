@@ -5,17 +5,16 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-// Single-registration helper for runtime shutdown and event flushing.
-import { flushEvents, shutdownRuntime } from './native.js';
+// Single-registration helper for runtime shutdown.
+import { shutdownRuntime } from './native.js';
 let installed = false;
-export function installFlushOnExit() {
+export function installShutdownOnExit() {
     if (installed)
         return;
     installed = true;
     process.once('beforeExit', async () => {
         try {
             await shutdownRuntime();
-            flushEvents();
         }
         catch {
             /* ignore */

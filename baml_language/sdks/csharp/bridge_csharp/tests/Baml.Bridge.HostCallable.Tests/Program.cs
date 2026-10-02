@@ -10,6 +10,7 @@ using Baml.Generated.V1;
 using Baml.Proto;
 using BamlBridge.Cffi.V1;
 using Google.Protobuf;
+using HostInvocation = Baml.Cffi.HostInvocation;
 
 internal static class Program
 {
@@ -37,12 +38,12 @@ internal static class Program
     {
         MethodInfo[] methods = typeof(BamlCallback).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Require(methods.Length == 32, "BamlCallback must expose exactly 32 public adapter overloads");
+        Require(methods.Length == 34, "BamlCallback must expose exactly 34 public adapter overloads");
         Require(
             methods.All(method => method.Name == nameof(BamlCallback.FromSync)),
             "BamlCallback exposed a public member outside the canonical FromSync family");
 
-        for (int arity = 0; arity <= 15; arity++)
+        for (int arity = 0; arity <= 16; arity++)
         {
             MethodInfo value = methods.Single(method =>
                 method.GetGenericArguments().Length == arity + 1
@@ -63,57 +64,55 @@ internal static class Program
             BamlCallback.FromSync((Action)null!));
 
         int valueCalls = 0;
-        Func<CancellationToken, Task<long>> zeroValue = BamlCallback.FromSync<long>(() =>
+        Func<Task<long>> zeroValue = BamlCallback.FromSync<long>(() =>
         {
             valueCalls++;
             return 41L;
         });
         Require(valueCalls == 0, "value callback ran while its adapter was constructed");
-        using var canceled = new CancellationTokenSource();
-        canceled.Cancel();
         Require(
-            await zeroValue(canceled.Token) == 41L && valueCalls == 1,
-            "zero-argument value adapter observed the injected token or changed its result");
+            await zeroValue() == 41L && valueCalls == 1,
+            "zero-argument value adapter changed its result");
 
         int voidCalls = 0;
-        Func<CancellationToken, Task> zeroVoid = BamlCallback.FromSync(() => voidCalls++);
+        Func<Task> zeroVoid = BamlCallback.FromSync(() => voidCalls++);
         Require(voidCalls == 0, "void callback ran while its adapter was constructed");
-        await zeroVoid(canceled.Token);
+        await zeroVoid();
         Require(voidCalls == 1, "zero-argument void adapter did not invoke its callback once");
 
-        Func<long, BamlOptional<string>, CancellationToken, Task<string>> optional =
+        Func<long, BamlOptional<string>, Task<string>> optional =
             BamlCallback.FromSync<long, BamlOptional<string>, string>(
                 static (value, suffix) =>
                     suffix.IsSet ? $"{value}:{suffix.Value}" : $"{value}:unset");
         Require(
-            await optional(7L, BamlOptional<string>.Unset, canceled.Token) == "7:unset"
-                && await optional(7L, BamlOptional<string>.FromValue("tail"), canceled.Token)
+            await optional(7L, BamlOptional<string>.Unset) == "7:unset"
+                && await optional(7L, BamlOptional<string>.FromValue("tail"))
                     == "7:tail",
             "BamlOptional did not flow naturally through the synchronous adapter");
 
-        Func<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, CancellationToken, Task<long>> maxValue =
-            BamlCallback.FromSync<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, long>(
-                static (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) =>
-                    v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15);
+        Func<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, Task<long>> maxValue =
+            BamlCallback.FromSync<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, long>(
+                static (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16) =>
+                    v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16);
         Require(
-            await maxValue(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, canceled.Token) == 120L,
+            await maxValue(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L) == 136L,
             "maximum-arity value adapter changed argument order");
 
         long maxVoidSum = 0L;
-        Func<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, CancellationToken, Task> maxVoid =
-            BamlCallback.FromSync<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long>(
-                (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) =>
-                    maxVoidSum = v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15);
-        await maxVoid(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, canceled.Token);
-        Require(maxVoidSum == 120L, "maximum-arity void adapter changed argument order");
+        Func<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, Task> maxVoid =
+            BamlCallback.FromSync<long, long, long, long, long, long, long, long, long, long, long, long, long, long, long, long>(
+                (v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16) =>
+                    maxVoidSum = v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16);
+        await maxVoid(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L);
+        Require(maxVoidSum == 136L, "maximum-arity void adapter changed argument order");
 
         var original = new SyncSentinelException();
-        Func<CancellationToken, Task<string>> throwing =
+        Func<Task<string>> throwing =
             BamlCallback.FromSync<string>(() => throw original);
         Exception? observed = null;
         try
         {
-            _ = throwing(CancellationToken.None);
+            _ = throwing();
         }
         catch (Exception exception)
         {
@@ -133,13 +132,10 @@ internal static class Program
         Type returnType = method.ReturnType;
         Require(
             returnType.IsGenericType
-                && returnType.GetGenericTypeDefinition().FullName == $"System.Func`{arity + 2}",
+                && returnType.GetGenericTypeDefinition().FullName == $"System.Func`{arity + 1}",
             $"{method} did not return the canonical Func delegate at arity {arity}");
         Type[] arguments = returnType.GetGenericArguments();
-        Require(
-            arguments[arity] == typeof(CancellationToken),
-            $"{method} omitted the injected CancellationToken at arity {arity}");
-        Type task = arguments[arity + 1];
+        Type task = arguments[arity];
         Require(
             returnsValue
                 ? task.IsGenericType
@@ -432,9 +428,17 @@ internal static class Program
         caller.Cancel();
         await canceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
+        HostCompletion completion = await NextCompletion();
         Require(
-            supplied.IsCancellationRequested && Completions.IsEmpty,
-            "exact supplied-token cancellation was misclassified as a callback fault");
+            supplied.IsCancellationRequested
+                && completion.CallId == hostCallId
+                && completion.IsError == 1
+                && Completions.IsEmpty,
+            "a canceled callback must report its actual exit exactly once");
+        InboundValue inbound = InboundValue.Parser.ParseFrom(completion.Bytes);
+        ulong exceptionKey = inbound.ClassValue.Fields
+            .Single(field => field.StringKey == "_handle").Value.Handle.Key;
+        HostValueRegistry.Shared.Release(exceptionKey);
 
         HostValueRegistry.Shared.Release(registration.Key);
         registration.Dispose();
@@ -751,6 +755,18 @@ internal static class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void RegisterHostDispatchV2(
+        delegate* unmanaged[Cdecl]<byte*, nuint, void> callback)
+    {
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void RegisterHostCancel(
+        delegate* unmanaged[Cdecl]<uint, void> callback)
+    {
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void RegisterHostDispatch(
         delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void> callback)
     {
@@ -793,10 +809,12 @@ internal static class Program
             table = (BamlApiV1*)NativeMemory.AllocZeroed((nuint)sizeof(BamlApiV1));
             *table = new BamlApiV1
             {
-                AbiVersion = 2,
+                AbiVersion = 3,
                 StructSize = (nuint)sizeof(BamlApiV1),
                 RegisterCallback = &RegisterResult,
                 RegisterHostDispatchCallback = &RegisterHostDispatch,
+                RegisterHostDispatchV2 = &RegisterHostDispatchV2,
+                RegisterHostCancelCallback = &RegisterHostCancel,
                 RegisterHostReleaseCallback = &RegisterHostRelease,
                 CompleteHostCall = &CompleteHostCall,
             };

@@ -126,6 +126,11 @@ public final class ProtoWriter {
      */
     public static byte[] encodeCallFunctionArgs(
             String[] names, Object[] args, long callId, BamlTypes typeArgs) {
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, InvocationFrames.currentState()); invocation.writeInt64(5, callId);
+        return encodeCallFunctionArgs(names, args, callId, typeArgs, invocation.toByteArray());
+    }
+    public static byte[] encodeCallFunctionArgs(String[] names, Object[] args, long callId, BamlTypes typeArgs, byte[] preparedInvocation) {
         if (names.length != args.length) {
             throw new IllegalArgumentException(
                     "names/args length mismatch: " + names.length + " vs " + args.length);
@@ -151,6 +156,7 @@ public final class ProtoWriter {
             }
         }
         w.writeInt64(CALL_ARGS_CALL_ID, callId);
+        w.writeMessage(6, preparedInvocation);
         if (typeArgs != null && !typeArgs.isEmpty()) {
             for (Map.Entry<String, BamlType> binding : typeArgs.bindings()) {
                 w.writeMessage(CALL_ARGS_TYPE_ARGS, encodeTypeArg(binding.getKey(), binding.getValue()));
@@ -165,19 +171,25 @@ public final class ProtoWriter {
             Object[] args,
             long callId,
             BamlTypes typeArgs) {
+        return encodeNamedCallFunctionArgs(functionName, names, args, callId, typeArgs, null);
+    }
+    public static byte[] encodeNamedCallFunctionArgs(String functionName, String[] names, Object[] args, long callId, BamlTypes typeArgs, byte[] preparedInvocation) {
         WireWriter w = new WireWriter();
-        w.writeRawBytes(encodeCallFunctionArgs(names, args, callId, typeArgs));
+        w.writeRawBytes(preparedInvocation == null ? encodeCallFunctionArgs(names, args, callId, typeArgs) : encodeCallFunctionArgs(names, args, callId, typeArgs, preparedInvocation));
         w.writeString(CALL_ARGS_FUNCTION_NAME, functionName);
         return w.toByteArray();
     }
 
     public static byte[] encodeHandleCallFunctionArgs(
             long functionHandle, String[] names, Object[] args, long callId) {
+        return encodeHandleCallFunctionArgs(functionHandle, names, args, callId, null);
+    }
+    public static byte[] encodeHandleCallFunctionArgs(long functionHandle, String[] names, Object[] args, long callId, byte[] preparedInvocation) {
         if (functionHandle <= 0) {
             throw new IllegalArgumentException("function handle must be positive");
         }
         WireWriter w = new WireWriter();
-        w.writeRawBytes(encodeCallFunctionArgs(names, args, callId, null));
+        w.writeRawBytes(preparedInvocation == null ? encodeCallFunctionArgs(names, args, callId, null) : encodeCallFunctionArgs(names, args, callId, null, preparedInvocation));
         w.writeInt64(CALL_ARGS_FUNCTION_HANDLE, functionHandle);
         return w.toByteArray();
     }
@@ -254,6 +266,10 @@ public final class ProtoWriter {
             return encodeInboundValue(inner, selected, true);
         }
         BamlType exactNodeType = selectedArm ? contextualType : null;
+        baml_bridge.BamlHandle returnedHandle = baml_bridge.BamlFfi.returnedClosureHandle(value);
+        if (returnedHandle != null) {
+            return encodeInboundValue(returnedHandle, contextualType, selectedArm);
+        }
         boolean alreadyTyped = false;
         // bool must precede the integer arms (mirrors Python's isinstance order).
         if (value instanceof Boolean b) {

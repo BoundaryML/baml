@@ -307,7 +307,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // The uninhabited type: never appears as a field/param/return type
         // (throws-nothing is `throws: None`, handled before translation).
         Ty::Never => Err(unsupported("never")),
-        Ty::RustType => Err(unsupported("$rust_type handle")),
+        Ty::RustType => Ok(quote! { ::baml_bridge::RustType }),
     }
 }
 

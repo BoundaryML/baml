@@ -1,9 +1,12 @@
 package pkg
 
 import (
+	pb "bridge_go/cffi/proto/baml_bridge/cffi/v1"
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"time"
 	"unsafe"
 
 	"bridge_go/cffi"
@@ -39,12 +42,42 @@ func Version() string {
 func (rt *BamlRuntime) CallFunction(ctx context.Context, name string, args map[string]any) (any, error) {
 	callbackID, ch := createUniqueID()
 
-	encodedArgs, err := encodeCallArgs(args, name, uint64(callbackID))
+	callID := cffi.NewFunctionCall()
+	if callID == 0 {
+		deleteCallback(callbackID)
+		return nil, fmt.Errorf("runtime call allocation failed")
+	}
+	controls := &pb.InvocationOptions{HostEnvironment: callID}
+	if frame, ok := ctx.Value(invocationStateContextKey{}).(*callbackInvocationFrame); ok {
+		controls.InheritedState = frame.state
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		now, err := cffi.InvocationClockNs(callID)
+		if err != nil {
+			cffi.ReleaseFunctionCall(callID)
+			deleteCallback(callbackID)
+			return nil, err
+		}
+		remaining := time.Until(deadline)
+		absolute := now
+		if remaining > 0 {
+			if uint64(remaining) > math.MaxUint64-now {
+				cffi.ReleaseFunctionCall(callID)
+				deleteCallback(callbackID)
+				return nil, fmt.Errorf("invocation deadline overflow")
+			}
+			absolute += uint64(remaining)
+		}
+		controls.DeadlineNs = &absolute
+	}
+	// Resolve controls before encoding application values: failures here must
+	// not strand the owners minted by the value encoder.
+	encodedArgs, err := encodeCallArgs(args, name, callID, controls)
 	if err != nil {
+		cffi.ReleaseFunctionCall(callID)
 		deleteCallback(callbackID)
 		return nil, fmt.Errorf("encoding args: %w", err)
 	}
-
 	cffi.CallFunction(encodedArgs, callbackID)
 
 	select {
@@ -54,7 +87,7 @@ func (rt *BamlRuntime) CallFunction(ctx context.Context, name string, args map[s
 		}
 		return result.Data, nil
 	case <-ctx.Done():
-		cffi.CancelFunctionCall(callbackID)
+		cffi.CancelFunctionCall(callID)
 		deleteCallback(callbackID)
 		return nil, ctx.Err()
 	}

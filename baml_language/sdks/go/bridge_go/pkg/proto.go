@@ -24,7 +24,11 @@ import (
 // releases — the callables we registered for earlier kwargs, leaking them
 // for the life of the process. To avoid that, we track every key registered
 // during this encode and unregister them all if any kwarg fails.
-func encodeCallArgs(kwargs map[string]any, functionName string, callID uint64) ([]byte, error) {
+func encodeCallArgs(kwargs map[string]any, functionName string, callID uint64, options ...*pb.InvocationOptions) ([]byte, error) {
+	controls := &pb.InvocationOptions{}
+	if len(options) != 0 {
+		controls = options[0]
+	}
 	var registered []uint64
 	entries, err := encodeKwargs(kwargs, &registered)
 	if err != nil {
@@ -34,6 +38,7 @@ func encodeCallArgs(kwargs map[string]any, functionName string, callID uint64) (
 	call := &pb.CallFunctionArgs{
 		Kwargs:     entries,
 		CallId:     callID,
+		Invocation: controls,
 		CallTarget: &pb.CallFunctionArgs_FunctionName{FunctionName: functionName},
 	}
 	out, err := proto.Marshal(call)

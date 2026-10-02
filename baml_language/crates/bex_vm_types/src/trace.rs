@@ -18,6 +18,11 @@ impl SpanId {
     pub fn new(scope: RecordingId, local: TelemetryId) -> Self {
         Self { scope, local }
     }
+
+    /// Return the recording-local ID only when it belongs to `scope`.
+    pub fn local_in(&self, scope: RecordingId) -> Option<TelemetryId> {
+        (self.scope == scope).then_some(self.local)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -60,6 +65,17 @@ impl ReservedSpanData {
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map(|_| self.id.local)
             .map_err(|_| ReservationError::AlreadyAttached)
+    }
+
+    /// Preparation verifies ownership/liveness without claiming the span.
+    pub fn validate(&self, scope: RecordingId) -> Result<(), ReservationError> {
+        if self.id.scope != scope {
+            return Err(ReservationError::WrongScope);
+        }
+        if self.attached.load(Ordering::Acquire) {
+            return Err(ReservationError::AlreadyAttached);
+        }
+        Ok(())
     }
 }
 
@@ -147,4 +163,51 @@ mod tests {
             Err(ReservationError::AlreadyAttached)
         );
     }
+}
+
+/// Lexical definition and wrapper site, independent of request data and object
+/// addresses. Adapters must distinguish explicitly stacked wrapper sites.
+#[derive(Clone, Debug)]
+pub struct HostDefinition {
+    pub language: String,
+    pub module: String,
+    pub qualified_name: String,
+    pub source_file: String,
+    pub definition_line: u32,
+    pub wrapper_line: u32,
+    pub display_name: String,
+}
+
+pub type HostDefinitionKey = (String, String, String, String, u32, u32);
+
+impl HostDefinition {
+    pub fn key(&self) -> HostDefinitionKey {
+        (
+            self.language.clone(),
+            self.module.clone(),
+            self.qualified_name.clone(),
+            self.source_file.clone(),
+            self.definition_line,
+            self.wrapper_line,
+        )
+    }
+}
+
+/// A native source coordinate, interned independently of display names.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct HostCallSite {
+    pub source_file: String,
+    pub line: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct HostMarker {
+    pub definition: HostDefinition,
+    pub options: TraceOptionsData,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct HostCallOptions {
+    pub options: TraceOptionsData,
+    pub reserved_id: Option<TelemetryId>,
 }

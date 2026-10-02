@@ -20,7 +20,6 @@ import pytest
 from baml_bridge import (
     BamlRuntime,
     FunctionResult,
-    HostSpanManager,
     get_bridge_runtime_version,
     get_toolchain_version,
     get_version,
@@ -409,23 +408,3 @@ class TestCallFunctionAsync:
         rt = make_runtime(EXPR_FUNCS_BAML)
         result = await call_function(rt,"Identity", {"s": "async hello"})
         assert result.result() == "async hello"
-
-
-# ============================================================================
-# TEST: HostSpanManager (stub — all should pass since they're no-ops)
-# ============================================================================
-
-
-class TestHostSpanManager:
-    def test_create_host_span_manager(self):
-        hsm = HostSpanManager()
-        assert isinstance(hsm, HostSpanManager)
-
-    def test_deep_clone(self):
-        hsm = HostSpanManager()
-        cloned = hsm.deep_clone()
-        assert isinstance(cloned, HostSpanManager)
-
-    def test_context_depth_is_zero(self):
-        hsm = HostSpanManager()
-        assert hsm.context_depth() == 0

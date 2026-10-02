@@ -5,8 +5,8 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-import { BamlRuntime, BamlCallContext, HostSpanManager } from './native.js';
-export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, flushEvents, } from './native.js';
+import { BamlRuntime } from './native.js';
+export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
@@ -14,7 +14,6 @@ export { BamlFunctionSpec } from './function_spec.js';
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
 export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
 export type { BamlPromptCallOptions, BamlPromptMessage } from './proto.js';
-export { CtxManager } from './ctx_manager.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 export type { GenericParams } from './define_function.js';
@@ -42,6 +41,10 @@ export declare class FunctionResult {
     result(): unknown;
     toString(): string;
 }
-export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, callCtx?: BamlCallContext): FunctionResult;
-export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, callCtx?: BamlCallContext): Promise<FunctionResult>;
+export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): FunctionResult;
+export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): Promise<FunctionResult>;
+export { current as _currentExecutionContext, ExecutionContext as _ExecutionContext, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, currentCancelToken as _currentCancelToken, withExecutionContext as _withExecutionContext } from './execution_context.js';
+export { invoke as _invoke, invokeAsync as _invokeAsync } from './invocation.js';
+export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
+import type { InvocationOptions } from './invocation.js';
 //# sourceMappingURL=index.d.ts.map

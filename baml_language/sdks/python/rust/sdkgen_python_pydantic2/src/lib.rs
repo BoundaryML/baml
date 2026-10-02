@@ -329,6 +329,9 @@ fn to_source_code_internal(
             render_package_init(&kids)
         };
         content.push_str(&render_leaf_body(body, &callable_child_names));
+        if dir == &["vendor".to_string(), "trace".to_string()] {
+            content.push_str("\n# Host inspection reads the dispatch frame without another invocation.\nfrom baml_bridge._execution_context import current_context as current_context, current_cancel_token as current_cancel_token\nfrom baml_bridge._instrumentation import instrument as instrument, TraceUsageError as TraceUsageError\n\nasync def current_context_async():\n    return current_context()\n");
+        }
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
@@ -341,6 +344,7 @@ fn to_source_code_internal(
             content.push_str(
                 "\n# BEP-066 host reflection surface.\nfrom . import reflect as reflect\n",
             );
+            content.push_str("\n__all__ = list(globals().get(\"__all__\", [])) + [\"BamlOptions\", \"experimental\", \"trace\"]\n");
         }
         out.insert(init_py_path(dir), content);
 
@@ -357,6 +361,10 @@ fn to_source_code_internal(
         };
         let callable_child_bodies = callable_child_bodies(dir, &callable_child_names, &bodies);
         pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
+        if dir == &["vendor".to_string(), "trace".to_string()] {
+            pyi_content.push_str("\nfrom ...baml.spawn import CancelToken as _CancelToken\n\ndef current_cancel_token() -> typing.Optional[_CancelToken]: ...\n");
+            pyi_content.push_str("\nfrom baml_bridge._instrumentation import TraceUsageError as TraceUsageError\n\n_HostP = typing_extensions.ParamSpec(\"_HostP\")\n_HostR = typing.TypeVar(\"_HostR\")\n\n@typing.overload\ndef instrument(function_or_options: typing.Callable[_HostP, _HostR], *, name: typing.Optional[str] = ...) -> typing.Callable[_HostP, _HostR]: ...\n@typing.overload\ndef instrument(function_or_options: typing.Optional[Options] = ..., *, name: typing.Optional[str] = ...) -> typing.Callable[[typing.Callable[_HostP, _HostR]], typing.Callable[_HostP, _HostR]]: ...\n");
+        }
         pyi_content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
@@ -370,6 +378,23 @@ fn to_source_code_internal(
         }
         out.insert(init_pyi_path(dir), pyi_content);
     }
+
+    out.insert(
+        PathBuf::from("_invocation_types.py"),
+        include_str!("invocation_types.py").into(),
+    );
+    out.insert(
+        PathBuf::from("_invocation_types.pyi"),
+        include_str!("invocation_types.pyi").into(),
+    );
+    out.insert(
+        PathBuf::from("experimental/__init__.py"),
+        include_str!("experimental_facade.py").into(),
+    );
+    out.insert(
+        PathBuf::from("experimental/__init__.pyi"),
+        include_str!("experimental_facade.pyi").into(),
+    );
 
     // `_inlinedbaml.py` lives at the SDK root so the root init can
     // `from . import _inlinedbaml` without loading the `baml/` subpackage
@@ -591,6 +616,12 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
     }
     out.push_str("})\n\n");
     out.push_str("def __getattr__(name):\n");
+    out.push_str("    if name == \"experimental\" and __name__ == \"baml_sdk\":\n");
+    out.push_str("        import importlib\n");
+    out.push_str("        return importlib.import_module(\".experimental\", __name__)\n");
+    out.push_str("    if name == \"trace\" and __name__ == \"baml_sdk\":\n");
+    out.push_str("        import importlib\n");
+    out.push_str("        return importlib.import_module(\".vendor.trace\", __name__)\n");
     out.push_str("    if name in _LAZY_CHILDREN:\n");
     out.push_str("        import importlib\n");
     out.push_str("        return importlib.import_module(f\".{name}\", __name__)\n");
@@ -623,6 +654,7 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("    from ._baml_sources import FILES\n");
     out.push_str("    return FILES\n\n");
     out.push_str("set_type_map(_TYPE_MAP)\n");
+    out.push_str("from ._invocation_types import BamlOptions as BamlOptions\n");
     if !top_children.is_empty() {
         append_lazy_children_block(&mut out, top_children);
     }
@@ -643,6 +675,9 @@ fn render_root_init_pyi(
         out.push('\n');
         out.push_str(runtime_reexports);
     }
+    out.push_str("\nfrom ._invocation_types import BamlOptions as BamlOptions\n");
+    out.push_str("from . import experimental as experimental\n");
+    out.push_str("from .vendor import trace as trace\n");
     out.push_str("\ndef get_baml_source_files() -> dict[str, str]: ...\n");
     if !top_children.is_empty() {
         out.push('\n');
@@ -920,8 +955,11 @@ mod tests {
         assert!(root.contains("    \"baml\",\n"));
         assert!(root.contains("def __getattr__(name):\n"));
         assert!(!root.contains("from . import baml\n"));
-        // No symbols → no __all__ emitted (preserves G1 byte shape).
-        assert!(!root.contains("__all__"));
+        // Experimental dynamic calls exist even without application symbols.
+        assert!(root.contains("BamlOptions"));
+        assert!(out.contains_key(&PathBuf::from("experimental/__init__.py")));
+        assert!(!out.contains_key(&PathBuf::from("invocation.py")));
+        assert!(!root.contains("invoke as invoke"));
 
         // The `.pyi` sibling drops the runtime wiring but keeps the
         // explicit `from . import <child>` cascade so pyright can
@@ -1107,16 +1145,18 @@ mod tests {
         let pyi = &out[&PathBuf::from("vendor/factory/__init__.pyi")];
         assert!(!pyi.contains("from . import id\n"));
         assert!(pyi.contains("class _BamlCallableNamespace_id(typing.Protocol):\n"));
-        assert!(pyi.contains("    def __call__(self) -> str: ...\n"));
         assert!(pyi.contains(
-            "from ...ai.stream import Done as _BamlStreamDone\nfrom baml_bridge import BamlStream as _BamlStream\n"
+            "    def __call__(self, *, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "    def current(self) -> _BamlStream[typing.Union[vendor.factory.id.Value, _BamlStreamDone], vendor.factory.id.Value, vendor.factory.id.Value]: ...\n"
+            "from ...ai.stream import Done as _BamlStreamDone\nfrom ..._invocation_types import BamlStream as _BamlStream\n"
+        ));
+        assert!(pyi.contains(
+            "    def current(self, *, _baml: _BamlOptions | None = None) -> _BamlStream[typing.Union[vendor.factory.id.Value, _BamlStreamDone], vendor.factory.id.Value, vendor.factory.id.Value]: ...\n"
         ));
         assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
-        assert!(!pyi.contains("def id() -> str: ..."));
+        assert!(!pyi.contains("def id(*, _baml: _BamlOptions | None = None) -> str: ..."));
     }
 
     // ── /// docstring emission ──────────────────────────────────────────────
@@ -1436,7 +1476,7 @@ mod tests {
             [&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             leaf.contains(
-                "def ExtractResume(x: int) -> int:\n    \"\"\"Extract resume from PDF.\"\"\"\n"
+                "def ExtractResume(x: int, *, _baml: _BamlOptions | None = None) -> int:\n    \"\"\"Extract resume from PDF.\"\"\"\n"
             ),
             "got:\n{leaf}"
         );
@@ -1453,7 +1493,9 @@ mod tests {
 
         let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
             [&PathBuf::from("lorem/__init__.pyi")];
-        assert!(leaf.contains("def ExtractResume(x: int) -> int: ..."));
+        assert!(leaf.contains(
+            "def ExtractResume(x: int, *, _baml: _BamlOptions | None = None) -> int: ..."
+        ));
     }
 
     #[test]
@@ -1534,9 +1576,9 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let stub = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(stub.contains("from ..ai.stream import Done as _BamlStreamDone\n"));
-        assert!(stub.contains("from baml_bridge import BamlStream as _BamlStream\n"));
+        assert!(stub.contains("from .._invocation_types import BamlStream as _BamlStream\n"));
         assert!(stub.contains(
-            "def extract_resume_stream(x: int) -> _BamlStream[typing.Union[int, _BamlStreamDone], int, int]:"
+            "def extract_resume_stream(x: int, *, _baml: _BamlOptions | None = None) -> _BamlStream[typing.Union[int, _BamlStreamDone], int, int]:"
         ));
         assert!(!stub.contains("ai.stream.Stream"));
     }
@@ -1931,7 +1973,7 @@ mod tests {
             );
         }
         let pyi = &output[&PathBuf::from("lorem/__init__.pyi")];
-        assert!(pyi.contains("def accept_nullable(value: typing.Optional[str]) -> int: ...\n"));
+        assert!(pyi.contains("def accept_nullable(value: typing.Optional[str], *, _baml: _BamlOptions | None = None) -> int: ...\n"));
         assert!(!pyi.contains("def accept_nullable(value: typing.Optional[str] = None)"));
     }
 
@@ -2284,10 +2326,10 @@ mod tests {
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(pyi.contains(
-            "def search(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "def search(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def search_async(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "async def search_async(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         // The sentinel is imported as a bare name so it can appear in the
         // `typing.Union[..., UNSET]` type expressions above (type checkers
@@ -2342,10 +2384,10 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         assert!(pyi.contains(
-            "def defaults(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "def defaults(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def defaults_async(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
+            "async def defaults_async(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None, _baml: _BamlOptions | None = None) -> str: ...\n"
         ));
     }
 
@@ -2728,11 +2770,11 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         assert!(
-            leaf.contains("def extract_resume(text: str) -> Resume: ...\n"),
+            leaf.contains("def extract_resume(text: str, *, _baml: _BamlOptions | None = None) -> Resume: ...\n"),
             "missing sync sig in:\n{leaf}"
         );
         assert!(
-            leaf.contains("async def extract_resume_async(text: str) -> Resume: ...\n"),
+            leaf.contains("async def extract_resume_async(text: str, *, _baml: _BamlOptions | None = None) -> Resume: ...\n"),
             "missing async sig in:\n{leaf}"
         );
         // No factory call, no `_define_function`.
@@ -2796,11 +2838,11 @@ mod tests {
         assert!(!leaf.contains("class Counter(pydantic.BaseModel): ..."));
         // Each fan-out gets its own @staticmethod decorator.
         assert!(
-            leaf.contains("    @staticmethod\n    def zero() -> int: ...\n"),
+            leaf.contains("    @staticmethod\n    def zero(*, _baml: _BamlOptions | None = None) -> int: ...\n"),
             "missing static sync sig in:\n{leaf}"
         );
         assert!(
-            leaf.contains("    @staticmethod\n    async def zero_async() -> int: ...\n"),
+            leaf.contains("    @staticmethod\n    async def zero_async(*, _baml: _BamlOptions | None = None) -> int: ...\n"),
             "missing static async sig in:\n{leaf}"
         );
     }
@@ -2825,11 +2867,13 @@ mod tests {
 
         // Instance methods: `self` (no annotation) + typed remaining params.
         assert!(
-            leaf.contains("    def bump(self, by: int) -> int: ...\n"),
+            leaf.contains(
+                "    def bump(self, by: int, *, _baml: _BamlOptions | None = None) -> int: ...\n"
+            ),
             "missing instance sync sig in:\n{leaf}"
         );
         assert!(
-            leaf.contains("    async def bump_async(self, by: int) -> int: ...\n"),
+            leaf.contains("    async def bump_async(self, by: int, *, _baml: _BamlOptions | None = None) -> int: ...\n"),
             "missing instance async sig in:\n{leaf}"
         );
         // No `@staticmethod` decorator on instance methods.
@@ -2899,8 +2943,8 @@ mod tests {
                 continue;
             }
             assert!(
-                !content.contains("baml_bridge"),
-                "{} must not import baml_bridge",
+                !content.contains("define_function"),
+                "{} must not import runtime call factories",
                 path.display()
             );
             assert!(
@@ -3290,7 +3334,9 @@ mod tests {
             pyi.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
             "pyi missing guarded ipsum import:\n{pyi}"
         );
-        assert!(pyi.contains("def classify(text: str) -> ipsum.Sentiment: ..."));
+        assert!(pyi.contains(
+            "def classify(text: str, *, _baml: _BamlOptions | None = None) -> ipsum.Sentiment: ..."
+        ));
 
         // .py for a function-only leaf — typing must still be imported
         // (the TYPE_CHECKING block needs it).
@@ -3453,25 +3499,25 @@ mod tests {
         // Required value arguments make `_types=` optional.
         assert!(
             pyi.contains(
-                "def echo(value: T, *, _types: dict[str, typing.Any] | None = None) -> T: ..."
+                "def echo(value: T, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> T: ..."
             ),
             "pyi missing typed echo signature:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "async def echo_async(value: T, *, _types: dict[str, typing.Any] | None = None) -> T: ..."
+                "async def echo_async(value: T, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> T: ..."
             ),
             "pyi missing async echo signature:\n{pyi}",
         );
         // A body-only TypeVar has no inference source, so `_types=` stays
         // statically required on both host modes.
         assert!(
-            pyi.contains("def one_type_arg(*, _types: dict[str, typing.Any]) -> str: ..."),
+            pyi.contains("def one_type_arg(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."),
             "pyi should require body-only TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "async def one_type_arg_async(*, _types: dict[str, typing.Any]) -> str: ..."
+                "async def one_type_arg_async(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."
             ),
             "pyi should require async body-only TypeVars:\n{pyi}",
         );
@@ -3788,35 +3834,35 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains(
-                "def pair_with(self, other: U, *, _types: dict[str, typing.Any] | None = None) -> U: ..."
+                "def pair_with(self, other: U, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> U: ..."
             ),
             "pyi should allow inferred method TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "async def pair_with_async(self, other: U, *, _types: dict[str, typing.Any] | None = None) -> U: ..."
+                "async def pair_with_async(self, other: U, *, _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> U: ..."
             ),
             "pyi should allow inferred async method TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "def pair_with_default(self, other: U, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None) -> U: ..."
+                "def pair_with_default(self, other: U, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> U: ..."
             ),
             "pyi should keep inferred `_types` after instance defaults:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "def static_with_default(value: V, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None) -> V: ..."
+                "def static_with_default(value: V, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None, _baml: _BamlOptions | None = None) -> V: ..."
             ),
             "pyi should keep inferred `_types` after static defaults:\n{pyi}",
         );
         assert!(
-            pyi.contains("def static_type_name(*, _types: dict[str, typing.Any]) -> str: ..."),
+            pyi.contains("def static_type_name(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."),
             "zero-arg static own generics should require `_types`:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "async def static_type_name_async(*, _types: dict[str, typing.Any]) -> str: ..."
+                "async def static_type_name_async(*, _types: dict[str, typing.Any], _baml: _BamlOptions | None = None) -> str: ..."
             ),
             "zero-arg async static own generics should require `_types`:\n{pyi}",
         );
@@ -3985,7 +4031,7 @@ mod tests {
             "{py}"
         );
         assert!(
-            pyi.contains("def from_(class__: None__, class_: None__, _types_: None__)")
+            pyi.contains("def from_(class__: None__, class_: None__, _types_: None__, *, _baml: _BamlOptions | None = None)")
                 && pyi.contains("-> None__"),
             "{pyi}"
         );

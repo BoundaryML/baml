@@ -5,24 +5,23 @@ import builtins
 import typing
 __all__ = [
     "BamlAudio",
-    "BamlCallContext",
     "BamlImage",
     "BamlPdf",
     "BamlPyHandle",
     "BamlRuntime",
     "BamlVideo",
     "FunctionResult",
-    "HostSpanManager",
     "cancel_function_call",
-    "flush_events",
     "get_bridge_runtime_version",
     "get_runtime",
     "get_toolchain_version",
     "get_version",
+    "invocation_clock_ns",
     "lookup_host_value",
     "new_function_call",
     "register_host_callable",
     "register_unhandled_spawn_error_callback",
+    "release_function_call",
     "release_host_callable",
     "shutdown_runtime",
 ]
@@ -52,44 +51,6 @@ class BamlAudio:
         """
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
-
-@typing.final
-class BamlCallContext:
-    r"""
-    A call context for cancelling BAML function calls.
-
-    Usage from Python:
-    ```python
-    ctx = BamlCallContext()
-    # Pass to call_function / call_function_sync:
-    result = await call_function(rt, "MyFunc", args, _ctx=ctx)
-    # Cancel from another task:
-    ctx.abort()
-    ```
-    """
-    @property
-    def aborted(self) -> builtins.bool:
-        r"""
-        Whether `abort()` has been called.
-        """
-    def __new__(cls) -> BamlCallContext: ...
-    def abort(self) -> None:
-        r"""
-        Cancel the associated function call.
-
-        If the function is still running, it will be interrupted at the next
-        cancellation check point (before HTTP calls, between retries, etc.).
-        Calling `abort()` multiple times is harmless.
-        """
-    def _attach_call_id(self, call_id: builtins.int) -> None:
-        r"""
-        Bind this controller to an in-flight CFFI call id for the duration of
-        one host call. Private runtime hook used by `baml_bridge`.
-        """
-    def _detach_call_id(self, call_id: builtins.int) -> None:
-        r"""
-        Remove a call-id binding installed by `_attach_call_id`.
-        """
 
 @typing.final
 class BamlImage:
@@ -152,6 +113,7 @@ class BamlPyHandle:
         r"""
         Clone this handle for inbound wire ownership.
         """
+    def _key_for_invocation(self) -> builtins.int: ...
     def _key_for_call(self) -> builtins.int:
         r"""
         Borrow this handle key as a call target without transferring ownership.
@@ -189,11 +151,11 @@ class BamlRuntime:
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> typing.Any:
+    def call_function(self, args_proto: bytes) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> bytes:
+    def call_function_sync(self, args_proto: bytes) -> bytes:
         r"""
         Call a BAML function synchronously (blocking).
         """
@@ -242,39 +204,11 @@ class FunctionResult:
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
 
-@typing.final
-class HostSpanManager:
-    r"""
-    Manages host-side span tracking for `@trace` in Python.
+def _complete_host_call_error(call_id: builtins.int, error: typing.Any) -> None: ...
 
-    This is a thin PyO3 wrapper around `bridge_cffi::host_spans::HostSpanManager`.
-    All core logic (span stack, event emission) lives in bridge_cffi.
-    """
-    def __new__(cls) -> HostSpanManager: ...
-    def enter(self, name: builtins.str, args: typing.Any) -> None:
-        r"""
-        Enter a new host-language span (`@trace` function start).
-        """
-    def exit_ok(self) -> None:
-        r"""
-        Exit the current span successfully.
-        """
-    def exit_error(self, error_message: builtins.str) -> None:
-        r"""
-        Exit the current span with an error.
-        """
-    def upsert_tags(self, tags: typing.Mapping[builtins.str, builtins.str]) -> None:
-        r"""
-        Merge tags into the current span and emit a `SetTags` event.
-        """
-    def deep_clone(self) -> HostSpanManager:
-        r"""
-        Deep clone for async context forking.
-        """
-    def context_depth(self) -> builtins.int:
-        r"""
-        Number of active spans (call depth).
-        """
+def _complete_host_call_success(call_id: builtins.int, value: typing.Any) -> None: ...
+
+def _discard_host_call_args(args: typing.Sequence[builtins.int]) -> None: ...
 
 def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     r"""
@@ -283,10 +217,26 @@ def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     exactly-once imbalance on a shared engine-heap key, which row counts hide.
     """
 
+def _invocation_context(handle: typing.Optional[BamlPyHandle]) -> builtins.list[builtins.int]: ...
+
+def _invoke_host_callable(callable: typing.Any, args: typing.Sequence[builtins.int]) -> typing.Any:
+    r"""
+    Private Python scheduler entrypoints. Decoding, callable invocation and
+    result encoding run on the selected Python thread, with the original error
+    object preserved by the existing host-value transport.
+    """
+
 def _live_handle_count() -> builtins.int:
     r"""
     Test-only: return the number of live ordinary HANDLE_TABLE rows (a
     refcounted engine-heap row counts once however many owners it has).
+    """
+
+def _register_host_call_execution(call_id: builtins.int, event_loop: typing.Any) -> builtins.bool:
+    r"""
+    Connect cancellation to the task's actual owning loop. If cancellation
+    already removed this dispatch, Python must not start its body. The hook
+    keeps the loop alive independently of the SDK entry's environment guard.
     """
 
 def _release_wire_handle(key: builtins.int) -> None:
@@ -314,13 +264,9 @@ def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.in
     `slab_key` share a key.
     """
 
-def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
+def _trace_selection(handle: BamlPyHandle, call_id: builtins.int) -> tuple[builtins.list[builtins.int], typing.Optional[BamlPyHandle]]: ...
 
-def flush_events() -> None:
-    r"""
-    No-op: tracing has been removed. Kept as a live symbol for ABI stability
-    (SDK `atexit` + `__all__` reference it).
-    """
+def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def get_bridge_runtime_version() -> builtins.str: ...
 
@@ -337,6 +283,8 @@ def get_runtime() -> BamlRuntime:
 def get_toolchain_version() -> builtins.str: ...
 
 def get_version() -> builtins.str: ...
+
+def invocation_clock_ns(call_id: builtins.int) -> builtins.int: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
@@ -356,7 +304,7 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
 
 def new_function_call() -> builtins.int: ...
 
-def register_host_callable(callable: typing.Any) -> builtins.int:
+def register_host_callable(callable: typing.Any, marker: typing.Optional[BamlPyHandle] = None) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
 
@@ -366,6 +314,8 @@ def register_host_callable(callable: typing.Any) -> builtins.int:
     """
 
 def register_unhandled_spawn_error_callback(callback: typing.Any) -> None: ...
+
+def release_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def release_host_callable(host_value_key: builtins.int) -> None:
     r"""
@@ -391,3 +341,13 @@ def shutdown_runtime(timeout: typing.Optional[builtins.float] = None) -> None:
     work does, as Python's own exit waits for non-daemon threads. Either way,
     Ctrl+C ends it with `KeyboardInterrupt`.
     """
+
+
+class _HostExecution:
+    def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
+
+def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
+
+def _validate_host_options(options: typing.Optional[BamlPyHandle]) -> tuple[builtins.bool, builtins.bool, builtins.bool]: ...
+
+def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> BamlPyHandle: ...

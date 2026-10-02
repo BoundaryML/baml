@@ -15,6 +15,8 @@ use std::{
     task::{Poll, Waker},
 };
 
+use prost::Message;
+
 use crate::capi;
 
 /// One in-flight call's state.
@@ -38,6 +40,7 @@ struct Slot {
 /// reclaimed by the callback or eagerly on drop).
 pub(crate) struct Receiver {
     dispatch_id: u32,
+    call_id: Option<u64>,
     slot: Arc<Slot>,
 }
 
@@ -77,10 +80,17 @@ pub(crate) fn register(api: &'static capi::Api) -> Receiver {
         .lock()
         .expect("completion registry poisoned")
         .insert(dispatch_id, Arc::clone(&slot));
-    Receiver { dispatch_id, slot }
+    Receiver {
+        dispatch_id,
+        call_id: None,
+        slot,
+    }
 }
 
 impl Receiver {
+    pub(crate) fn bind_call_id(&mut self, id: u64) {
+        self.call_id = Some(id);
+    }
     pub(crate) fn dispatch_id(&self) -> u32 {
         self.dispatch_id
     }
@@ -146,7 +156,21 @@ impl Drop for Receiver {
             .expect("completion registry poisoned")
             .remove(&self.dispatch_id);
         let mut state = self.slot.state.lock().expect("completion slot poisoned");
-        *state = State::Abandoned;
+        let pending = matches!(*state, State::Pending | State::PendingWithWaker(_));
+        let previous = std::mem::replace(&mut *state, State::Abandoned);
+        drop(state);
+        if let State::Ready(bytes) = previous {
+            release_result(&bytes);
+        }
+        if pending {
+            if let (Some(id), Ok(api)) = (self.call_id, capi::api()) {
+                // SAFETY: only a submitted invocation is bound to this receiver.
+                #[expect(unsafe_code)]
+                unsafe {
+                    (api.cancel_function_call)(id);
+                }
+            }
+        }
     }
 }
 
@@ -169,14 +193,23 @@ extern "C" fn trampoline(call_id: u32, content: *const c_char, length: usize) {
             .remove(&call_id);
         if let Some(slot) = slot {
             let mut state = slot.state.lock().expect("completion slot poisoned");
-            let previous = std::mem::replace(&mut *state, State::Ready(bytes));
-            drop(state);
-            match previous {
-                State::PendingWithWaker(waker) => waker.wake(),
-                State::Pending => slot.ready.notify_all(),
-                // Receiver dropped between registry removal and here.
-                State::Abandoned | State::Ready(_) => {}
+            match &*state {
+                State::Pending | State::PendingWithWaker(_) => {
+                    let previous = std::mem::replace(&mut *state, State::Ready(bytes));
+                    drop(state);
+                    if let State::PendingWithWaker(waker) = previous {
+                        waker.wake();
+                    } else {
+                        slot.ready.notify_all();
+                    }
+                }
+                State::Abandoned | State::Ready(_) => {
+                    drop(state);
+                    release_result(&bytes);
+                }
             }
+        } else {
+            release_result(&bytes);
         }
     });
     if caught.is_err() {
@@ -188,6 +221,22 @@ extern "C" fn trampoline(call_id: u32, content: *const c_char, length: usize) {
         {
             eprintln!("baml_bridge internal error: completion callback panicked");
         }
+    }
+}
+
+fn release_result(bytes: &[u8]) {
+    use crate::wire::baml_outbound_result::Result;
+    let Ok(result) = crate::wire::BamlOutboundResult::decode(bytes) else {
+        return;
+    };
+    let value = match result.result {
+        Some(Result::Ok(value)) => Some(value),
+        Some(Result::Error(error)) => error.value,
+        Some(Result::Panic(panic)) => panic.value,
+        None => None,
+    };
+    if let (Some(value), Ok(api)) = (value, capi::api()) {
+        crate::host_value::release_callback_value(api, value);
     }
 }
 

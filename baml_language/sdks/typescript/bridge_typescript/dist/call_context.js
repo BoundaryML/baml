@@ -5,14 +5,19 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-/** Attach one outer call ID and return its absent-safe lifecycle owner. */
-export function attachCallContext(ctx, callId) {
-    const serialized = callId.toString();
-    ctx?._attachCallId(serialized);
-    return {
-        detach() {
-            ctx?._detachCallId(serialized);
-        },
-    };
+import { captureCallbackContext } from './platform.js';
+import { attachSignal } from './invocation.js';
+import { encodedInvocation } from './proto.js';
+export function attachInvocation(encoded, callId) {
+    const snapshot = encodedInvocation(encoded);
+    const disposeSignal = attachSignal(snapshot?.signal, callId);
+    const disposeContext = captureCallbackContext(callId);
+    return { detach() { try {
+            disposeSignal();
+            snapshot?.retained.splice(0);
+        }
+        finally {
+            disposeContext();
+        } } };
 }
 //# sourceMappingURL=call_context.js.map

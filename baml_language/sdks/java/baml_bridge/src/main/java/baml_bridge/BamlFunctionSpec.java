@@ -171,4 +171,135 @@ public final class BamlFunctionSpec<TOut> {
         return (CompletableFuture<String>) (CompletableFuture<?>)
                 BamlFfi.callAsync("ai.FunctionSpec.client_id", SELF_NAMES, new Object[] {this}, null);
     }
+
+    public TOut call(InvocationOptions baml) {
+        return (TOut) BamlFfi.callSync("ai.FunctionSpec.call", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public TOut call(Object client, Object on_event, InvocationOptions baml) {
+        return (TOut)
+                BamlFfi.callSync(
+                        "ai.FunctionSpec.call",
+                        new String[] {"self", "client", "on_event"},
+                        new Object[] {this, client, on_event},
+                        null, baml);
+    }
+
+    public CompletableFuture<TOut> call_async(InvocationOptions baml) {
+        return (CompletableFuture<TOut>) (CompletableFuture<?>)
+                BamlFfi.callAsync("ai.FunctionSpec.call", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<TOut> call_async(Object client, Object on_event, InvocationOptions baml) {
+        return (CompletableFuture<TOut>) (CompletableFuture<?>)
+                BamlFfi.callAsync(
+                        "ai.FunctionSpec.call",
+                        new String[] {"self", "client", "on_event"},
+                        new Object[] {this, client, on_event},
+                        null, baml);
+    }
+
+    public TOut parse(String json, InvocationOptions baml) {
+        return (TOut)
+                BamlFfi.callSync(
+                        "ai.FunctionSpec.parse",
+                        new String[] {"self", "json"},
+                        new Object[] {this, json},
+                        null, baml);
+    }
+
+    public CompletableFuture<TOut> parse_async(String json, InvocationOptions baml) {
+        return (CompletableFuture<TOut>) (CompletableFuture<?>)
+                BamlFfi.callAsync(
+                        "ai.FunctionSpec.parse",
+                        new String[] {"self", "json"},
+                        new Object[] {this, json},
+                        null, baml);
+    }
+
+    public BamlPrompt prompt(InvocationOptions baml) {
+        return (BamlPrompt)
+                BamlFfi.callSync(
+                        "ai.FunctionSpec.prompt", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<BamlPrompt> prompt_async(InvocationOptions baml) {
+        return (CompletableFuture<BamlPrompt>) (CompletableFuture<?>)
+                BamlFfi.callAsync(
+                        "ai.FunctionSpec.prompt", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public Object build_request(InvocationOptions baml) {
+        return BamlFfi.callSync("ai.FunctionSpec.build_request", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public Object build_request(Object client, InvocationOptions baml) {
+        return BamlFfi.callSync(
+                "ai.FunctionSpec.build_request",
+                new String[] {"self", "client"},
+                new Object[] {this, client},
+                null, baml);
+    }
+
+    public CompletableFuture<Object> build_request_async(InvocationOptions baml) {
+        return BamlFfi.callAsync(
+                "ai.FunctionSpec.build_request", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<Object> build_request_async(Object client, InvocationOptions baml) {
+        return BamlFfi.callAsync(
+                "ai.FunctionSpec.build_request",
+                new String[] {"self", "client"},
+                new Object[] {this, client},
+                null, baml);
+    }
+
+    public String name(InvocationOptions baml) {
+        return (String) BamlFfi.callSync("ai.FunctionSpec.name", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<String> name_async(InvocationOptions baml) {
+        return (CompletableFuture<String>) (CompletableFuture<?>)
+                BamlFfi.callAsync("ai.FunctionSpec.name", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public java.util.Map<String, Object> arguments(InvocationOptions baml) {
+        return (java.util.Map<String, Object>)
+                BamlFfi.callSync("ai.FunctionSpec.arguments", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<java.util.Map<String, Object>> arguments_async(InvocationOptions baml) {
+        return (CompletableFuture<java.util.Map<String, Object>>) (CompletableFuture<?>)
+                BamlFfi.callAsync("ai.FunctionSpec.arguments", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public BamlType output_type(InvocationOptions baml) {
+        return (BamlType)
+                BamlFfi.callSync(
+                        "ai.FunctionSpec.output_type", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<BamlType> output_type_async(InvocationOptions baml) {
+        return (CompletableFuture<BamlType>) (CompletableFuture<?>)
+                BamlFfi.callAsync(
+                        "ai.FunctionSpec.output_type", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public Object tools(InvocationOptions baml) {
+        return BamlFfi.callSync("ai.FunctionSpec.tools", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<Object> tools_async(InvocationOptions baml) {
+        return BamlFfi.callAsync("ai.FunctionSpec.tools", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public String client_id(InvocationOptions baml) {
+        return (String)
+                BamlFfi.callSync("ai.FunctionSpec.client_id", SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<String> client_id_async(InvocationOptions baml) {
+        return (CompletableFuture<String>) (CompletableFuture<?>)
+                BamlFfi.callAsync("ai.FunctionSpec.client_id", SELF_NAMES, new Object[] {this}, null, baml);
+    }
 }

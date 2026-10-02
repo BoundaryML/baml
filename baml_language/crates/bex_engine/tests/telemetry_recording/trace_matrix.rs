@@ -1212,14 +1212,11 @@ async fn llm_capture_case(
         .collect();
     assert_eq!(root_spans.len(), 1, "the LLM invocation remains a span");
     let (_, entry, done) = root_spans[0];
-    assert_eq!(
-        entry.inputs_cas_id.is_some(),
-        inputs.unwrap_or(true),
-        "inputs={inputs:?}"
-    );
-    assert_eq!(
+    // AI policy requests capture independently of local options. False and
+    // null add no request, and neither can veto those applicable requests.
+    assert!(entry.inputs_cas_id.is_some(), "inputs={inputs:?}");
+    assert!(
         done.value_cas_id.is_some(),
-        (if fail { error } else { output }).unwrap_or(true),
         "output={output:?}/error={error:?}/fail={fail}",
     );
     assert_eq!(
@@ -1234,10 +1231,7 @@ async fn llm_capture_case(
     );
     if !fail {
         let expected = snapshot(false, &[text("captured llm")]);
-        recording.assert_capture(
-            done.value_cas_id.as_ref(),
-            output.unwrap_or(true).then_some(&expected),
-        );
+        recording.assert_capture(done.value_cas_id.as_ref(), Some(&expected));
     }
 }
 
@@ -1327,13 +1321,13 @@ fn trace_contract_end_to_end() {
                 }
             }
             if mode == "medium" {
-                capture_flags(&program).await;
+                Box::pin(capture_flags(&program)).await;
                 Box::pin(scalar_values(&program)).await;
                 Box::pin(arguments_and_graphs(&program)).await;
                 call_structure(&program).await;
                 callable_shapes(&program).await;
                 exceptional_completion(&program).await;
-                unions_and_opaque_values(&program).await;
+                Box::pin(unions_and_opaque_values(&program)).await;
                 llm_policy(&program).await;
             }
         });

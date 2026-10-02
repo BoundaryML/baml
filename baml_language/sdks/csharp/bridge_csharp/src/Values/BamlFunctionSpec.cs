@@ -23,17 +23,17 @@ public sealed class BamlFunctionSpec<TFinal> : IDisposable
     }
 
     /// <summary>Execute this bound spec using its default client.</summary>
-    public TFinal Call(CancellationToken cancellationToken = default) =>
-        CallAsync(cancellationToken).GetAwaiter().GetResult();
+    public TFinal Call(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        CallAsync(baml).GetAwaiter().GetResult();
 
     /// <summary>Execute this bound spec asynchronously using its default client.</summary>
     public async Task<TFinal> CallAsync(
-        CancellationToken cancellationToken = default)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         BamlGeneratedValue result = await InvokeAsync(
                 "ai.FunctionSpec.call",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false);
         return registry.Decode(finalType, result);
     }
@@ -41,74 +41,74 @@ public sealed class BamlFunctionSpec<TFinal> : IDisposable
     /// <summary>Parse an existing model reply using this spec's output type.</summary>
     public TFinal Parse(
         string json,
-        CancellationToken cancellationToken = default) =>
-        ParseAsync(json, cancellationToken).GetAwaiter().GetResult();
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        ParseAsync(json, baml).GetAwaiter().GetResult();
 
     /// <summary>Parse an existing model reply asynchronously.</summary>
     public async Task<TFinal> ParseAsync(
         string json,
-        CancellationToken cancellationToken = default)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         ArgumentNullException.ThrowIfNull(json);
         BamlGeneratedValue result = await InvokeAsync(
                 "ai.FunctionSpec.parse",
                 [new("json", BamlGeneratedValue.CreateString(json))],
-                cancellationToken)
+                baml)
             .ConfigureAwait(false);
         return registry.Decode(finalType, result);
     }
 
     /// <summary>Render the portable provider-neutral prompt for this spec.</summary>
-    public BamlPrompt Prompt(CancellationToken cancellationToken = default) =>
-        PromptAsync(cancellationToken).GetAwaiter().GetResult();
+    public BamlPrompt Prompt(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        PromptAsync(baml).GetAwaiter().GetResult();
 
     /// <summary>Render the portable prompt asynchronously.</summary>
     public async Task<BamlPrompt> PromptAsync(
-        CancellationToken cancellationToken = default)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         BamlGeneratedValue result = await InvokeAsync(
                 "ai.FunctionSpec.prompt",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false);
         return new BamlPrompt(result.ReadPromptAst(), registry);
     }
 
     /// <summary>Build the provider HTTP request without invoking the model.</summary>
-    public BamlValue BuildRequest(CancellationToken cancellationToken = default) =>
-        BuildRequestAsync(cancellationToken).GetAwaiter().GetResult();
+    public BamlValue BuildRequest(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        BuildRequestAsync(baml).GetAwaiter().GetResult();
 
     /// <summary>Build the provider HTTP request asynchronously.</summary>
     public async Task<BamlValue> BuildRequestAsync(
-        CancellationToken cancellationToken = default) =>
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         new(await InvokeAsync(
                 "ai.FunctionSpec.build_request",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false));
 
-    public string Name(CancellationToken cancellationToken = default) =>
-        NameAsync(cancellationToken).GetAwaiter().GetResult();
+    public string Name(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        NameAsync(baml).GetAwaiter().GetResult();
 
     public async Task<string> NameAsync(
-        CancellationToken cancellationToken = default) =>
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         (await InvokeAsync(
                 "ai.FunctionSpec.name",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false)).ReadString();
 
     public IReadOnlyDictionary<string, BamlValue> Arguments(
-        CancellationToken cancellationToken = default) =>
-        ArgumentsAsync(cancellationToken).GetAwaiter().GetResult();
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        ArgumentsAsync(baml).GetAwaiter().GetResult();
 
     public async Task<IReadOnlyDictionary<string, BamlValue>> ArgumentsAsync(
-        CancellationToken cancellationToken = default)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         BamlGeneratedValue result = await InvokeAsync(
                 "ai.FunctionSpec.arguments",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false);
         return new ReadOnlyDictionary<string, BamlValue>(
             result.ReadMapEntries().ToDictionary(
@@ -117,41 +117,41 @@ public sealed class BamlFunctionSpec<TFinal> : IDisposable
                 StringComparer.Ordinal));
     }
 
-    public BamlType OutputType(CancellationToken cancellationToken = default) =>
-        OutputTypeAsync(cancellationToken).GetAwaiter().GetResult();
+    public BamlType OutputType(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        OutputTypeAsync(baml).GetAwaiter().GetResult();
 
     public async Task<BamlType> OutputTypeAsync(
-        CancellationToken cancellationToken = default) =>
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         (await InvokeAsync(
                 "ai.FunctionSpec.output_type",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false)).ReadType();
 
     /// <summary>
     /// Return the spec's toolbox as a type-erased BAML value. Tool schemas and
     /// callbacks remain represented by their canonical BAML values.
     /// </summary>
-    public BamlValue Tools(CancellationToken cancellationToken = default) =>
-        ToolsAsync(cancellationToken).GetAwaiter().GetResult();
+    public BamlValue Tools(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        ToolsAsync(baml).GetAwaiter().GetResult();
 
     public async Task<BamlValue> ToolsAsync(
-        CancellationToken cancellationToken = default) =>
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         new(await InvokeAsync(
                 "ai.FunctionSpec.tools",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false));
 
-    public string ClientId(CancellationToken cancellationToken = default) =>
-        ClientIdAsync(cancellationToken).GetAwaiter().GetResult();
+    public string ClientId(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        ClientIdAsync(baml).GetAwaiter().GetResult();
 
     public async Task<string> ClientIdAsync(
-        CancellationToken cancellationToken = default) =>
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         (await InvokeAsync(
                 "ai.FunctionSpec.client_id",
                 additionalArguments: null,
-                cancellationToken)
+                baml)
             .ConfigureAwait(false)).ReadString();
 
     public void Dispose()
@@ -179,7 +179,7 @@ public sealed class BamlFunctionSpec<TFinal> : IDisposable
     private Task<BamlGeneratedValue> InvokeAsync(
         string functionIdentity,
         IReadOnlyList<KeyValuePair<string, BamlGeneratedValue>>? additionalArguments,
-        CancellationToken cancellationToken)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml)
     {
         var arguments = new List<KeyValuePair<string, BamlGeneratedValue>>(
             1 + (additionalArguments?.Count ?? 0))
@@ -194,6 +194,6 @@ public sealed class BamlFunctionSpec<TFinal> : IDisposable
         return registry.RequireProgram().CallRuntimeMethodAsync(
             functionIdentity,
             arguments.AsReadOnly(),
-            cancellationToken);
+            baml);
     }
 }

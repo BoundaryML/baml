@@ -90,8 +90,8 @@ func (value Value) Prompt() (Prompt, error) {
 
 // Text renders this portable prompt through the canonical ai.Prompt method.
 // The prompt remains reusable because every call sends a fresh payload copy.
-func (prompt Prompt) Text(ctx context.Context) (string, error) {
-	value, err := Call(ctx, "ai.Prompt.text", map[string]Input{"self": prompt.BAMLInput()})
+func (prompt Prompt) Text(ctx context.Context, options ...CallOption) (string, error) {
+	value, err := Call(ctx, "ai.Prompt.text", map[string]Input{"self": prompt.BAMLInput()}, options...)
 	if err != nil {
 		return "", err
 	}
@@ -99,8 +99,8 @@ func (prompt Prompt) Text(ctx context.Context) (string, error) {
 }
 
 // Messages returns the canonical structural message projection.
-func (prompt Prompt) Messages(ctx context.Context) ([]PromptMessage, error) {
-	value, err := Call(ctx, "ai.Prompt.messages", map[string]Input{"self": prompt.BAMLInput()})
+func (prompt Prompt) Messages(ctx context.Context, options ...CallOption) ([]PromptMessage, error) {
+	value, err := Call(ctx, "ai.Prompt.messages", map[string]Input{"self": prompt.BAMLInput()}, options...)
 	if err != nil {
 		return nil, err
 	}

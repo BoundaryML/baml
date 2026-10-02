@@ -27,7 +27,7 @@
 
 import { vi } from 'vitest';
 
-import { BamlRuntime } from '../dist/native.js';
+import { BamlRuntime, newFunctionCall, releaseFunctionCall } from '../dist/native.js';
 import { callFunction, callFunctionSync } from '../dist/index.js';
 import { encodeCallArgs } from '../dist/proto.js';
 import * as hostValueRegistry from '../dist/host_value_registry.js';
@@ -51,6 +51,17 @@ function makeRuntime(): BamlRuntime {
 }
 
 describe('host-callable round-trip', () => {
+    test('invalid target preparation releases its allocated call', () => {
+        makeRuntime();
+        const callId = BigInt(newFunctionCall());
+        expect(() => encodeCallArgs({}, {
+            callId,
+            functionName: 'CallCb',
+            functionHandle: '1',
+        })).toThrow(/exactly one BAML call target/);
+        expect(releaseFunctionCall(callId.toString())).toBe(false);
+    });
+
     test('plain function callback returns a string', async () => {
         const rt = makeRuntime();
         const cb = (x: number) => `got ${x}`;

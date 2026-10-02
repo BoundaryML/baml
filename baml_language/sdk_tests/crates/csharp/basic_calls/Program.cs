@@ -24,4 +24,9 @@ if (asynchronous != Text)
     throw new InvalidOperationException("asynchronous primitive result changed");
 }
 
+invocation_options.four_call_forms();
+await invocation_options.four_call_forms_async();
+invocation_options.omitted_argument_is_not_null();
+invocation_options.explicit_controls_are_applied();
+await invocation_options.explicit_controls_are_applied_async();
 Console.WriteLine("csharp_basic_calls=ok");

@@ -20,6 +20,7 @@ mod decode;
 mod encoding;
 mod graph;
 mod hash;
+pub mod host;
 mod memory;
 mod pool;
 mod shape;

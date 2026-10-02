@@ -194,6 +194,9 @@ impl ConversionBuffer {
             self.link_unwound(thread, record);
         }
         match record {
+            SpanRecord::HostFunctionDefined(metadata) => {
+                self.functions.register_host(metadata);
+            }
             SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
             SpanRecord::Log {
                 parent_id,

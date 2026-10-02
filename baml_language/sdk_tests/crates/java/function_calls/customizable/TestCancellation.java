@@ -5,9 +5,9 @@
 // java-port notes (asyncio -> CompletableFuture), per ref-java-state-of-
 // completeness.md. Cancellation follows Design B:
 //   * `_ctx=ctx` becomes a trailing `BamlCallContext` overload:
-//     `Fns.SleepMs(ms, ctx)` / `Fns.SleepMs_async(ms, ctx)` (the decided
+//     `Fns.SleepMs(ms, BamlOptions.builder().cancel(ctx).build())` / `Fns.SleepMs_async(ms, BamlOptions.builder().cancel(ctx).build())` (the decided
 //     trailing-parameter overload; `ctx` is always last).
-//   * Engine-driven cancellation (ctx.abort()) completes the async future
+//   * Engine-driven cancellation (ctx.cancel()) completes the async future
 //     exceptionally with `BamlCancelledError`, which extends
 //     `java.util.concurrent.CancellationException` and carries the decoded
 //     `baml.panics.Cancelled` on `.value()`. Because it IS a
@@ -22,7 +22,7 @@
 //     manually via `whenComplete`.
 //   * `asyncio.wait_for(..., timeout)` -> `future.get(timeout, MILLISECONDS)`
 //     -> `java.util.concurrent.TimeoutException`.
-//   * Sync cancellation via a background `ctx.abort()` still surfaces as a
+//   * Sync cancellation via a background `ctx.cancel()` still surfaces as a
 //     `BamlPanic` whose `.value()` is a `Cancelled` (parity with Python).
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -30,7 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import baml_bridge.BamlCallContext;
+import baml_sdk.BamlOptions;
+import baml_sdk.baml.spawn.CancelToken;
 import baml_bridge.BamlCancelledError;
 import baml_bridge.BamlPanic;
 import baml_sdk.baml.panics.Cancelled;
@@ -87,20 +88,20 @@ class TestCancellation {
     @Test
     void test_cancellation_sync_cancel_via_call_context() {
         long start = System.nanoTime();
-        BamlCallContext ctx = new BamlCallContext();
+        CancelToken ctx = CancelToken.new$();
         Timer timer = new Timer();
         timer.schedule(
                 new TimerTask() {
                     @Override
                     public void run() {
-                        ctx.abort();
+                        ctx.cancel();
                     }
                 },
                 50);
 
         try {
             BamlPanic exc =
-                    assertThrows(BamlPanic.class, () -> Fns.SleepMs(60000L, ctx));
+                    assertThrows(BamlPanic.class, () -> Fns.SleepMs(60000L, BamlOptions.builder().cancel(ctx).build()));
             assertCancelledPanic(exc);
         } finally {
             timer.cancel();
@@ -112,11 +113,11 @@ class TestCancellation {
     @Test
     void test_cancellation_async_cancel_via_call_context() {
         long start = System.nanoTime();
-        BamlCallContext ctx = new BamlCallContext();
-        CompletableFuture<Void> future = Fns.SleepMs_async(60000L, ctx);
+        CancelToken ctx = CancelToken.new$();
+        CompletableFuture<Void> future = Fns.SleepMs_async(60000L, BamlOptions.builder().cancel(ctx).build());
 
         sleepMillis(50);
-        ctx.abort();
+        ctx.cancel();
 
         // Design B: BamlCancelledError extends CancellationException, so join()
         // surfaces it DIRECTLY (not wrapped in CompletionException) and the
