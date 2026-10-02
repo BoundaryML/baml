@@ -1747,6 +1747,10 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
                         stop_reason: null,
                         input_tokens: event.usage?.inputTokens,
                         output_tokens: event.usage?.outputTokens,
+                        cached_input_tokens: event.usage?.cacheReadInputTokens,
+                        cache_write_input_tokens: event.usage?.cacheWriteInputTokens,
+                        // inputTokens excludes both cache counts.
+                        uncached_input_tokens: event.usage?.inputTokens,
                     },
                 );
                 out.push(ai.stream.TurnDone {});

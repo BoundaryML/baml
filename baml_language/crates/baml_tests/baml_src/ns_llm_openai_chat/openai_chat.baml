@@ -1011,12 +1011,12 @@ test "chat_sse_decodes_text_and_usage" {
 }
 
 // A streamed turn reports the cache split a non-streamed one does:
-// prompt_tokens counts the cached share too.
+// prompt_tokens counts the cached share and the cache writes too.
 function chat_sse_usage_splits_the_cache() -> string {
     root.llm_mock.mock_sse_serve(
         [
             root.llm_mock.sse_data(`{"id":"c","model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}`),
-            root.llm_mock.sse_data(`{"id":"c","choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":800},"completion_tokens_details":{"reasoning_tokens":5}}}`),
+            root.llm_mock.sse_data(`{"id":"c","choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":800,"cache_write_tokens":150},"completion_tokens_details":{"reasoning_tokens":5}}}`),
             root.llm_mock.sse_data(`[DONE]`),
         ],
         (mock: root.llm_mock.MockSseServer) -> {
@@ -1029,7 +1029,7 @@ function chat_sse_usage_splits_the_cache() -> string {
 
 test "chat_sse_usage_splits_the_cache" {
     // input/cached/cache writes/uncached/output/reasoning
-    assert.equal(chat_sse_usage_splits_the_cache(), "1000/800/-1/200/20/5")
+    assert.equal(chat_sse_usage_splits_the_cache(), "1000/800/150/50/20/5")
 }
 
 // The total request deadline remains active after visible deltas arrive and

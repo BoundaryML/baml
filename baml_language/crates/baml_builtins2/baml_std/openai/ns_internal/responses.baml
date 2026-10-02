@@ -165,6 +165,7 @@ class OaOutputItem {
 
 class OaInputTokenDetails {
     cached_tokens: int?,
+    cache_write_tokens: int?,
 }
 
 class OaOutputTokenDetails {
@@ -1005,8 +1006,13 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
             output_tokens: u.output_tokens ?? 0,
             cached_input_tokens: u.input_tokens_details?.cached_tokens,
             reasoning_tokens: u.output_tokens_details?.reasoning_tokens,
-            // input_tokens counts the cached share too.
-            uncached_input_tokens: ai.internal.uncached_input_tokens(u.input_tokens, u.input_tokens_details?.cached_tokens),
+            cache_write_input_tokens: u.input_tokens_details?.cache_write_tokens,
+            // input_tokens counts the cached share and the cache writes too.
+            uncached_input_tokens: ai.internal.uncached_input_tokens(
+                u.input_tokens,
+                u.input_tokens_details?.cached_tokens,
+                cache_write = u.input_tokens_details?.cache_write_tokens,
+            ),
         }
     } else {
         null
