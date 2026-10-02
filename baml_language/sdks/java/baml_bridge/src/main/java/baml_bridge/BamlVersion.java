@@ -1,8 +1,8 @@
 package baml_bridge;
 
 final class BamlVersion {
-    static final String TOOLCHAIN_VERSION = "0.20.1";
-    static final String BRIDGE_RUNTIME_VERSION = "0.20.1";
+    static final String TOOLCHAIN_VERSION = "0.21.0";
+    static final String BRIDGE_RUNTIME_VERSION = "0.21.0";
 
     private BamlVersion() {}
 }
