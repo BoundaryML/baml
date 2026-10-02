@@ -698,6 +698,7 @@ dependencies = [
  "btel_file",
  "btel_recorder",
  "btel_settings",
+ "btel_types",
  "clap",
  "console",
  "ctrlc",

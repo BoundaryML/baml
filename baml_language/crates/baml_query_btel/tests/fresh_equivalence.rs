@@ -243,6 +243,7 @@ mod crafted {
                 command: vec!["baml".into(), "run".into(), "main".into()],
                 process_started_at_unix_ns: Some(1_000),
                 source_cas_id: None,
+                initial_context_cas_id: None,
             });
             file.sequence = sequence;
             std::fs::write(

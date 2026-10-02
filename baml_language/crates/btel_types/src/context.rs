@@ -21,6 +21,23 @@ static EMPTY: ContextData = ContextData {
     distinct_id: None,
 };
 
+static PROCESS: std::sync::OnceLock<Context> = std::sync::OnceLock::new();
+
+/// Immutable launch context shared by all engines in this process.
+pub struct ProcessContext;
+
+impl ProcessContext {
+    /// Set before creating engines. Reading the context freezes an empty default.
+    /// A second initialization is rejected, even when the values match.
+    pub fn initialize(context: Context) -> Result<(), Context> {
+        PROCESS.set(context)
+    }
+
+    pub fn get() -> &'static Context {
+        PROCESS.get_or_init(Context::default)
+    }
+}
+
 /// A frame owns one pointer, not a copy of its ancestor's metadata.
 /// Empty roots need no allocation. Published versions are immutable.
 #[derive(Clone, Debug, Default, PartialEq)]

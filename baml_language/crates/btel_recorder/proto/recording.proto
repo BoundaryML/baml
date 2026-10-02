@@ -35,6 +35,8 @@ message RecordingHeader {
                                  // 5 adds structured log observations.
                                  // 6 adds when spawned futures began running.
                                  // 7 adds network spans.
+                                 // 8 adds generic call type arguments.
+                                 // 9 adds process launch context.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -46,6 +48,9 @@ message RecordingHeader {
   optional sfixed64 process_started_at_unix_ns = 9;
   // The project's BAML sources, as a CAS map<path, content> snapshot.
   optional SnapshotId source_cas_id = 10;
+  // Minor 9. Immutable process launch context, including explicit empty context.
+  // Absent means unavailable (legacy producer or failed capture), never empty.
+  optional SnapshotId initial_context_cas_id = 11;
 }
 
 message Definitions {

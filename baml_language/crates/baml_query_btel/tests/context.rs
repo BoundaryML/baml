@@ -10,6 +10,78 @@ use support::*;
 const SOURCE: &str = include_str!("../../baml_tests/baml_src/ns_trace_context/query.baml");
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn process_context_empty_legacy_and_missing_cas_in_both_ingesters() {
+    use btel_recorder::proto;
+
+    let project = tempfile::tempdir().unwrap();
+    record_program(project.path(), SOURCE, &[], &[("query_context_main", 7)]).await;
+    let layout = SourceLayout::for_project(project.path());
+    let mut files = Vec::new();
+    for recording in std::fs::read_dir(&layout.recordings).unwrap() {
+        for entry in std::fs::read_dir(recording.unwrap().path()).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|ext| ext == "btel") {
+                let file =
+                    proto::RecordingFile::decode(std::fs::read(&path).unwrap().as_slice()).unwrap();
+                assert!(file.header.as_ref().unwrap().format_minor >= 9);
+                files.push((path, file));
+            }
+        }
+    }
+    let original = files[0]
+        .1
+        .header
+        .as_ref()
+        .unwrap()
+        .initial_context_cas_id
+        .unwrap();
+    let cas_path = layout.blob_path(original.into());
+    let bytes = std::fs::read(&cas_path).unwrap();
+    let statement = "SELECT context_distinct_id, baml_kind(context_metadata) FROM processes";
+    for fresh_bytes in [u64::MAX, 0] {
+        for legacy in [false, true] {
+            for (path, file) in &mut files {
+                file.header.as_mut().unwrap().initial_context_cas_id =
+                    (!legacy).then_some(original);
+                // No event references: process context must survive snapshot cleanup alone.
+                file.spans = None;
+                std::fs::write(path, file.encode_to_vec()).unwrap();
+            }
+            let db = layout.root.join("query.sqlite");
+            if db.exists() {
+                std::fs::remove_file(db).unwrap();
+            }
+            let mut options = IndexOptions::default();
+            options.refresh.fresh_bytes = fresh_bytes;
+            let mut index = Index::open(layout.clone(), options).unwrap();
+            let expected = if legacy { "unavailable" } else { "json" };
+            assert_eq!(
+                sql(&mut index, statement).rows,
+                vec![vec![json!(null), json!(expected)]]
+            );
+            if !legacy {
+                std::fs::remove_file(&cas_path).unwrap();
+                // Rebuild to forget the previously hydrated snapshot.
+                drop(index);
+                std::fs::remove_file(layout.root.join("query.sqlite")).unwrap();
+                let mut options = IndexOptions::default();
+                options.refresh.fresh_bytes = fresh_bytes;
+                index = Index::open(layout.clone(), options).unwrap();
+                assert_eq!(
+                    sql(&mut index, statement).rows,
+                    vec![vec![json!(null), json!("unavailable")]]
+                );
+                std::fs::write(&cas_path, &bytes).unwrap();
+                assert_eq!(
+                    sql(&mut index, statement).rows,
+                    vec![vec![json!(null), json!("json")]]
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn context_queries_are_lazy_and_recover_without_new_recordings() {
     let project = tempfile::tempdir().unwrap();
     let results = record_program(project.path(), SOURCE, &[], &[("query_context_main", 7)]).await;

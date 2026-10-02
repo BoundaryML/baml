@@ -346,7 +346,8 @@ pub(super) fn record_process(
                baml_version = COALESCE(baml_version, ?3), host = COALESCE(host, ?4),
                command = COALESCE(command, ?5),
                process_started_ns = COALESCE(process_started_ns, ?6),
-               source_cas = COALESCE(source_cas, ?7)
+               source_cas = COALESCE(source_cas, ?7),
+               initial_context_cas = COALESCE(initial_context_cas, ?8)
              WHERE rec = ?1",
         )?
         .execute(params![
@@ -356,8 +357,15 @@ pub(super) fn record_process(
             header.host,
             command,
             header.process_started_at_unix_ns,
-            header.source_cas_id.as_ref().map(snapshot_id)
+            header.source_cas_id.as_ref().map(snapshot_id),
+            header.initial_context_cas_id.as_ref().map(snapshot_id)
         ])?;
+        if let Some(context) = &header.initial_context_cas_id {
+            tx.execute(
+                "INSERT OR IGNORE INTO context_snapshot (cas) VALUES (?1)",
+                [snapshot_id(context)],
+            )?;
+        }
     }
     if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref()) {
         tx.prepare_cached(
@@ -595,7 +603,7 @@ fn reconcile(
             tx.execute(
                 "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                    source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-                   generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
+                   generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, initial_context_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
                  WHERE rec = ?1",
                 [rec_key],
             )?;
@@ -834,7 +842,7 @@ fn apply_fresh<'p>(
         tx.execute(
             "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-               generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
+               generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, initial_context_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
              WHERE rec = ?1",
             [rec],
         )?;

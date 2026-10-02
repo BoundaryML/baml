@@ -229,6 +229,10 @@ impl TelemetryRecording {
                     btel_snapshot::string_map(&pool, &self.sources)
                 })
                 .flatten(),
+            context: btel_snapshot::context::capture(
+                btel_types::context::ProcessContext::get(),
+                &btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default()),
+            ),
             exit: Arc::clone(&self.exit),
         }
     }
