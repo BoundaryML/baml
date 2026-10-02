@@ -29,6 +29,7 @@ type Page = [OnceLock<TelemetryPolicy>; PAGE_SIZE];
 /// can safely finish using an old ID while a function's policy is updated.
 pub struct TelemetryPolicies {
     auto_level: btel_settings::mode::AutoTelemetryLevel,
+    http_bodies: bool,
     pages: [OnceLock<Box<Page>>; PAGE_COUNT],
     interned: Mutex<FxHashMap<TelemetryPolicy, u16>>,
 }
@@ -47,13 +48,26 @@ impl TelemetryPolicies {
     pub fn with_auto_level(auto_level: btel_settings::mode::AutoTelemetryLevel) -> Self {
         Self {
             auto_level,
+            http_bodies: true,
             pages: [const { OnceLock::new() }; PAGE_COUNT],
             interned: Mutex::new(FxHashMap::default()),
         }
     }
 
+    /// Whether network spans record request and response bodies; see
+    /// `btel_settings::network::bodies_from_env`. On by default.
+    #[must_use]
+    pub fn with_http_bodies(mut self, http_bodies: bool) -> Self {
+        self.http_bodies = http_bodies;
+        self
+    }
+
     pub fn auto_level(&self) -> btel_settings::mode::AutoTelemetryLevel {
         self.auto_level
+    }
+
+    pub fn http_bodies(&self) -> bool {
+        self.http_bodies
     }
 
     #[inline(always)]

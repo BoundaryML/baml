@@ -141,7 +141,6 @@ async fn telemetry_performance_child() {
             RecordingConfig::default(),
             btel_bcs::CloudPublisherConfig::default(),
             DeliveryConfig {
-                allow_http: true,
                 ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
         )

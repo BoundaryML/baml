@@ -8,7 +8,7 @@ class ReplayHandler {
   sse_body: string
   stop: baml.spawn.CancelToken
 
-  function handle(self, req: baml.http.Request) -> baml.http.Response {
+  function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
     if (req.url == "/__replay__/health") {
       baml.http.Response.new(200, { }, "ok".to_utf8())
     } else if (req.url == "/__replay__/shutdown") {

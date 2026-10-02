@@ -15,6 +15,7 @@ To run one provider, replace `-i root.llm_providers::live::` with `-i root.llm_p
 | Test | Client | Model | Required environment variables |
 | --- | --- | --- | --- |
 | `BedrockHaiku45` | `aws.BedrockClient` | Claude Haiku 4.5 | `BEDROCK_AWS_REGION`, `BEDROCK_AWS_ACCESS_KEY_ID`, `BEDROCK_AWS_SECRET_ACCESS_KEY` |
+| `BedrockHaiku45Cache` | `aws.BedrockClient` | Claude Haiku 4.5 | the same as `BedrockHaiku45` |
 | `BedrockGptOss20b` | `openai.ResponsesClient` | `openai.gpt-oss-20b`, low reasoning | `BEDROCK_MANTLE_API_KEY` |
 | `AzureGpt5MiniLow` | `openai.ResponsesClient` | `gpt-5-mini`, low reasoning | `AZURE_OPENAI_RESPONSES_BASE_URL`, `AZURE_OPENAI_API_KEY` |
 | `Gemini31FlashLiteMinimal` | `google.GeminiClient` | `gemini-3.1-flash-lite`, minimal thinking | `GOOGLE_API_KEY` |
@@ -22,5 +23,7 @@ To run one provider, replace `-i root.llm_providers::live::` with `-i root.llm_p
 | `VertexLlama4ScoutRouter` | `openai.GenericClient` | `meta/llama-4-scout-17b-16e-instruct-maas` | `VERTEX_LLAMA_OPENAI_BASE_URL`, `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` or `VERTEX_ACCESS_TOKEN` |
 
 Vertex Gemini resolves the project from the service account document or `GOOGLE_CLOUD_PROJECT`. Vertex Model Garden uses `VERTEX_ACCESS_TOKEN` when set; otherwise it mints an OAuth token from the service account. The Llama endpoint is in `us-east5` and requires `max_tokens`. Mantle uses its `/v1` endpoint for gpt-oss.
+
+`BedrockHaiku45Cache` checks `${cache(...)}` end to end: it sends a prompt with a fresh ~12,000-token prefix and a cache delimiter twice, and asserts that the first call reports the prefix as written to the cache and the second reports the same number of tokens read from it.
 
 The default client on `HelloWorld` supplies the function spec only: every test overrides it with the corresponding provider client, so no OpenAI API key is needed. The group lives in `baml_tests` under `testset "live" with testing.Sequential()`. The default `offline` profile excludes it before any credentials are read; the command above selects only this six-model group. Missing credentials fail a selected test rather than silently reducing coverage.

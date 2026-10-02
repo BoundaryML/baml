@@ -121,6 +121,7 @@ function pa_message_parts_preserve_media() -> string {
             let audio: baml.media.Audio => kinds.push(`audio=${audio.url() ?? ""}`),
             let video: baml.media.Video => kinds.push(`video=${video.url() ?? ""}`),
             let pdf: baml.media.Pdf => kinds.push(`pdf=${pdf.url() ?? ""}`),
+            let delimiter: ai.CacheDelimiter => kinds.push(`cache=${baml.json.stringify(delimiter.args)}`),
         }
     }
     kinds.join("|")
@@ -131,4 +132,61 @@ test "message_parts_preserve_all_media_structurally" {
         pa_message_parts_preserve_media(),
         "text=before:|image=https://example.com/photo.png|text=:|audio=https://example.com/sound.mp3|text=:|video=https://example.com/movie.mp4|text=:|pdf=https://example.com/document.pdf|text=:after",
     )
+}
+
+// ─── cache delimiters ─────────────────────────────────────────────────────────
+
+// An interpolated `ai.CacheDelimiter` is its own structural part, at the position it was
+// written and nowhere else, carrying `args` as written. It holds no text: the
+// readable projections are those of the same prompt without it.
+function pa_cache_delimiter_parts() -> string {
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
+    let img = image.from_url("https://example.com/photo.png", "image/png");
+    let render = prompt`${role("system")}
+        Be terse.
+        ${role("user")}
+        before ${img} after
+        ${ai.CacheDelimiter { args: { "type": "default", "ttl": "1h" } }}
+        question
+    `;
+    let out: string[] = [];
+    for (let message in render(ctx).messages()) {
+        let kinds: string[] = [];
+        for (let part in message.parts) {
+            match (part) {
+                let text: string => kinds.push(`text=${text}`),
+                let delimiter: ai.CacheDelimiter => kinds.push(`cache=${baml.json.stringify(delimiter.args)}`),
+                _ => kinds.push("media"),
+            }
+        }
+        out.push(`${message.role}:${kinds.join("|")}`);
+    }
+    out.join(";")
+}
+
+test "cache_delimiter_is_a_part_where_it_was_written" {
+    assert.equal(
+        pa_cache_delimiter_parts(),
+        `system:text=Be terse.;user:text=before|media|text=after\n        |cache={"type":"default","ttl":"1h"}|text=\n        question`,
+    )
+}
+
+function pa_cache_delimiter_text() -> string {
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
+    let marked = prompt`${role("user")}stable ${ai.CacheDelimiter { args: { "type": "default" } }}variable ${ai.CacheDelimiter { args: { "type": "default" } }}`;
+    let plain = prompt`${role("user")}stable variable `;
+    [
+        marked(ctx).text(),
+        (marked(ctx).text() == plain(ctx).text()).to_string(),
+        marked(ctx).messages()[0].content,
+        marked(ctx).messages()[0].parts.length().to_string(),
+    ].join("|")
+}
+
+// A trailing delimiter does not shield the text before it from the message's
+// edge trim, and the readable text never mentions a delimiter.
+test "cache_delimiter_holds_no_text" {
+    assert.equal(pa_cache_delimiter_text(), "[user]\nstable variable|true|stable variable|4")
 }

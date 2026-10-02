@@ -14,7 +14,7 @@ Require(Functions.EchoInt(BamlIntMinimum) == BamlIntMinimum, "minimum int roundt
 Require(Functions.EchoInt(BamlIntMaximum) == BamlIntMaximum, "maximum int roundtrip changed");
 
 int primitiveProbeCalls = 0;
-Func<CancellationToken, Task<long>> probe = _ =>
+Func<Task<long>> probe = () =>
 {
     Interlocked.Increment(ref primitiveProbeCalls);
     return Task.FromResult(1L);

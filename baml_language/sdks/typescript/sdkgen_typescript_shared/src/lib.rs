@@ -177,6 +177,16 @@ pub fn to_source_code_with_metadata(
         let is_root = dir.is_empty();
 
         let mut content = render_index_ts(body, &kids, is_root, config.runtime_package);
+        if dir == &["vendor", "trace"] {
+            let _ = write!(
+                content,
+                "\nimport {{ _currentCancelToken }} from \"{}\";\nimport type {{ CancelToken }} from \"../../baml/spawn/index.js\";\nexport const current_cancel_token = _currentCancelToken as () => CancelToken | null;\n",
+                config.runtime_package
+            );
+        }
+        if dir == &["vendor", "trace"] && config.runtime_package == "@boundaryml/baml-bridge" {
+            content.push_str("\nimport { _instrument } from \"@boundaryml/baml-bridge\";\nexport { TraceUsageError } from \"@boundaryml/baml-bridge\";\nexport const instrument: {\n  <F extends (...args: any[]) => any>(body: F): F;\n  <F extends (...args: any[]) => any>(options: Options | null | undefined, body: F, display?: { readonly name?: string }): F;\n} = _instrument;\n");
+        }
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
@@ -185,6 +195,19 @@ pub fn to_source_code_with_metadata(
         ));
         out.insert(init_ts_path(dir), content);
     }
+
+    out.insert(
+        PathBuf::from("_invocation.ts"),
+        include_str!("invocation_facade.ts").replace("__RUNTIME__", config.runtime_package),
+    );
+    out.insert(
+        PathBuf::from("experimental.ts"),
+        include_str!("experimental_facade.ts").replace("__RUNTIME__", config.runtime_package),
+    );
+    let root = out
+        .get_mut(&PathBuf::from("index.ts"))
+        .expect("root module");
+    root.push_str("\nexport * as experimental from \"./experimental.js\";\nexport type { BamlOptions } from \"./_invocation.js\";\nexport * as trace from \"./vendor/trace/index.js\";\n");
 
     // Root-only data modules.
     out.insert(

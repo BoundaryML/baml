@@ -32,3 +32,9 @@ pub const LOG_FORMAT_MINOR: u32 = 5;
 /// Spawned futures record when their body began running (`ThreadRunning`),
 /// apart from when they were scheduled.
 pub const THREAD_RUNNING_FORMAT_MINOR: u32 = 6;
+/// HTTP requests recorded as network spans: `NetworkAnnouncement`,
+/// `NetworkEvent` and `NetworkCompletion`.
+pub const NETWORK_FORMAT_MINOR: u32 = 7;
+/// A generic function's span announcement names the type arguments it was
+/// called with (`FunctionAnnouncement.type_args_cas_id`).
+pub const TYPE_ARGS_FORMAT_MINOR: u32 = 8;

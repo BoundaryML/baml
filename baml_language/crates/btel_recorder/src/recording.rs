@@ -86,7 +86,7 @@ pub struct ProcessRecording {
 
 struct ProcessHeader {
     info: btel_types::ProcessInfo,
-    source: Option<proto::SnapshotId>,
+    source: Option<proto::CasId>,
     exit: std::sync::Arc<btel_types::ProcessExitSlot>,
 }
 
@@ -165,7 +165,7 @@ impl RecordingBuilder {
     /// end marker reports `exit` when the host set it before shutdown.
     #[must_use]
     pub fn with_process(mut self, process: ProcessRecording) -> Self {
-        let source = process.sources.as_ref().map(crate::snapshot_id);
+        let source = process.sources.as_ref().map(crate::cas_id);
         if let Some(sources) = process.sources {
             self.pending_captures.push(sources);
         }
@@ -215,7 +215,7 @@ impl RecordingBuilder {
         self.span_credit = 0;
         self.pending_span_reservation = 0;
     }
-    fn seal(&mut self, end: bool) -> Result<Option<SealedFile>, RecordingError> {
+    fn seal(&mut self, sealing: Sealing) -> Result<Option<SealedFile>, RecordingError> {
         self.clear_batch();
         if self.ended {
             return if self.buffer.is_empty() {
@@ -224,10 +224,11 @@ impl RecordingBuilder {
                 Err(RecordingError::InputAfterEnd)
             };
         }
-        // The terminal file exists even when nothing else is pending.
-        if !end && self.buffer.is_empty() {
-            return Ok(None);
-        }
+        let end = match sealing {
+            Sealing::Pending if self.buffer.is_empty() => return Ok(None),
+            Sealing::Pending | Sealing::Carrier => false,
+            Sealing::End => true,
+        };
         let sequence = self
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
@@ -273,7 +274,8 @@ impl RecordingBuilder {
             }),
             // Appended below from its pre-encoded body.
             errors: None,
-            usage: (!ready.usage.entries.is_empty()).then_some(ready.usage),
+            // Only read now: cost comes from network spans.
+            usage: None,
         };
         // Absent without exceptions, so error-free files keep their bytes.
         let errors_len = if ready.errors.is_empty() {
@@ -337,11 +339,22 @@ impl RecordingBuilder {
             if !self.buffer.is_empty() {
                 self.buffer.observe_unsettled_clocks(false);
             }
-            let file = self.seal(false)?;
+            let file = self.seal(Sealing::Pending)?;
             self.deadline = None;
             return Ok(file);
         }
         Ok(None)
+    }
+    /// Seal consumed input into a file even when nothing is pending, so that
+    /// a file exists to carry captures. Otherwise as `Self::flush_recording`.
+    pub fn flush_carrier(&mut self) -> Result<Option<SealedFile>, RecordingError> {
+        self.clear_batch();
+        if !self.buffer.is_empty() {
+            self.buffer.observe_unsettled_clocks(false);
+        }
+        let file = self.seal(Sealing::Carrier)?;
+        self.deadline = None;
+        Ok(file)
     }
     /// Seal consumed input now. Missing references do not block emission;
     /// readers resolve them later. Not recording completion: subsequent input
@@ -364,10 +377,14 @@ impl RecordingBuilder {
     /// `Self::flush_recording`.
     pub fn end_recording(&mut self) -> Result<Option<SealedFile>, RecordingError> {
         if self.ended {
-            return self.seal(false);
+            return self.seal(Sealing::Pending);
         }
         let settled = self.buffer.observe_unsettled_clocks(true);
-        let file = self.seal(settled)?;
+        let file = self.seal(if settled {
+            Sealing::End
+        } else {
+            Sealing::Pending
+        })?;
         self.ended = settled;
         self.deadline = None;
         Ok(file)
@@ -384,17 +401,14 @@ impl RecordingBuilder {
         if self.span_credit == 0 {
             terminal(self.admit_spans());
         }
-        if let SpanRecord::Log {
-            event_name: Some(name),
-            ..
-        } = record
-        {
-            // Preserve the outstanding fixed-record reservation after a
-            // variable-length name; later completion writes use that credit.
+        let strings = string_bytes(record);
+        if strings != 0 {
+            // Preserve the outstanding fixed-record reservation after
+            // variable-length strings; later completion writes use that credit.
             let bytes = self
                 .span_credit
                 .checked_mul(encoding::MAX_EVENT_BYTES)
-                .and_then(|bytes| bytes.checked_add(name.len()))
+                .and_then(|bytes| bytes.checked_add(strings))
                 .ok_or(RecordingError::EncodingTooLarge);
             let bytes = terminal(bytes);
             terminal(self.reserve_encoding(bytes));
@@ -404,10 +418,10 @@ impl RecordingBuilder {
     }
     pub fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
         self.span_reference(thread, record);
-        if let Some(snapshot) = record.take_capture()
-            && let Some(snapshot) = self.captures.retain(snapshot)
-        {
-            self.pending_captures.push(snapshot);
+        while let Some(snapshot) = record.take_capture() {
+            if let Some(snapshot) = self.captures.retain(snapshot) {
+                self.pending_captures.push(snapshot);
+            }
         }
     }
     /// Begin a non-sliding flush interval at the first event in the open file.
@@ -449,6 +463,21 @@ impl RecordingBuilder {
     pub fn flush_if_due(&mut self, now: Instant) -> Result<Option<SealedFile>, RecordingError> {
         self.clear_batch();
         self.service(now, false)
+    }
+}
+
+/// Bytes of a record's strings, beyond the fixed per-event bound.
+fn string_bytes(record: &SpanRecord<Snapshot, Snapshot>) -> usize {
+    match record {
+        SpanRecord::Log {
+            event_name: Some(name),
+            ..
+        } => name.len(),
+        SpanRecord::NetworkSpanAnnouncement(span) => {
+            span.method.len().saturating_add(span.url.len())
+        }
+        SpanRecord::NetworkEvent(event) => event.name.as_str().len(),
+        _ => 0,
     }
 }
 
@@ -574,6 +603,17 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> Publisher<Snapshot, Snapshot>
     fn finish(&mut self) {
         terminal(self.end_recording());
     }
+}
+
+/// What a sealed file is for.
+#[derive(Clone, Copy)]
+enum Sealing {
+    /// Pending input; no file when there is none.
+    Pending,
+    /// A file even with nothing pending, to carry captures.
+    Carrier,
+    /// The terminal file, which exists even with nothing pending.
+    End,
 }
 
 #[cfg(test)]

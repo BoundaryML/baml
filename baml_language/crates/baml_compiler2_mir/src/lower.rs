@@ -4952,6 +4952,12 @@ impl<'db> LoweringContext<'db> {
             // A lambda carries neither a docstring nor generic parameters.
             docstring: None,
             display_type_params: Vec::new(),
+            // Its frame is the enclosing one, captured by `MakeClosure`.
+            type_param_names: RuntimeGenericLayout::new(&sig_frame_params)
+                .params()
+                .iter()
+                .map(|param| param.name().to_string())
+                .collect(),
             generic_param_bounds: Vec::new(),
             display_param_types: sig_display_param_types,
             display_return_type: sig_display_return_type,

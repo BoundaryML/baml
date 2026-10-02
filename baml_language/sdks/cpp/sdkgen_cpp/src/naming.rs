@@ -302,6 +302,16 @@ pub(crate) enum GeneratorIdent {
     WriterParam,
     SetterValueParam,
     OptsParam,
+    BamlParam,
+    BamlOptions,
+    InvocationNamespace,
+    TraceAlias,
+    InvocationTarget,
+    InvocationArguments,
+    TypeBindings,
+    InvocationValue,
+    Invoke,
+    InvokeAsync,
     EnsureRuntime,
     DetailNamespace,
 }
@@ -313,6 +323,16 @@ impl GeneratorIdent {
             GeneratorIdent::WriterParam => "w",
             GeneratorIdent::SetterValueParam => "v",
             GeneratorIdent::OptsParam => "opts",
+            GeneratorIdent::BamlParam => "baml",
+            GeneratorIdent::BamlOptions => "baml_options",
+            GeneratorIdent::InvocationNamespace => "invocation",
+            GeneratorIdent::TraceAlias => "trace",
+            GeneratorIdent::InvocationTarget => "target",
+            GeneratorIdent::InvocationArguments => "arguments",
+            GeneratorIdent::TypeBindings => "type_bindings",
+            GeneratorIdent::InvocationValue => "value",
+            GeneratorIdent::Invoke => "invoke",
+            GeneratorIdent::InvokeAsync => "invoke_async",
             GeneratorIdent::EnsureRuntime => "ensure_runtime",
             GeneratorIdent::DetailNamespace => "detail",
         }
@@ -326,12 +346,22 @@ const CALLABLE_RESERVED: &[GeneratorIdent] = &[
     GeneratorIdent::WriterParam,
     GeneratorIdent::SetterValueParam,
     GeneratorIdent::OptsParam,
+    GeneratorIdent::BamlParam,
 ];
 
 /// Tokens reserved in *namespace* scopes.
 const NAMESPACE_RESERVED: &[GeneratorIdent] = &[
     GeneratorIdent::EnsureRuntime,
     GeneratorIdent::DetailNamespace,
+    GeneratorIdent::BamlOptions,
+    GeneratorIdent::InvocationNamespace,
+    GeneratorIdent::TraceAlias,
+    GeneratorIdent::InvocationTarget,
+    GeneratorIdent::InvocationArguments,
+    GeneratorIdent::TypeBindings,
+    GeneratorIdent::InvocationValue,
+    GeneratorIdent::Invoke,
+    GeneratorIdent::InvokeAsync,
 ];
 
 fn reserved_in(scope_kind: CppNameKind, token: &str) -> bool {
@@ -758,6 +788,28 @@ mod tests {
         let names = CppNames::allocate(&set);
         assert_ne!(names.get(&req).declared(), "args");
         assert_eq!(names.get(&req).wire().to_string(), "args");
+    }
+
+    #[test]
+    fn test_invocation_facades_reserve_namespace_names_without_changing_wire_names() {
+        for ident in [
+            "trace",
+            "target",
+            "arguments",
+            "type_bindings",
+            "value",
+            "invoke",
+            "invoke_async",
+        ] {
+            let request = NameRequest::new(BamlFqn::symbol(&name(&[], ident)), CppNameKind::Class);
+            let requests = BTreeSet::from([request.clone()]);
+            let names = CppNames::allocate(&requests);
+            assert_ne!(names.get(&request).declared(), ident);
+            assert_eq!(
+                names.get(&request).wire().to_string(),
+                format!("user.{ident}")
+            );
+        }
     }
 
     #[test]

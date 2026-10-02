@@ -110,6 +110,13 @@ impl ObjectFinalize for BamlHandle {
     }
 }
 
+/// Release one owned wire reference that never reached a host wrapper.
+#[napi(js_name = "_releaseWireHandle")]
+pub fn release_wire_handle(key: HandleKey) -> napi::Result<()> {
+    handle_cffi::release_handle(key.to_u64())
+        .map_err(|error| status_to_napi("host-call decode rollback", error.into()))
+}
+
 /// Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
 /// `[key, handleType]` so test code can construct a `BamlHandle`.
 #[napi(js_name = "_seedFunctionRefHandle")]

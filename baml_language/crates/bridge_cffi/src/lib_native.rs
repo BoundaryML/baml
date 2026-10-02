@@ -12,14 +12,12 @@ use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
-use crate::{BridgeError, baml_to_host, error_to_outbound};
+use crate::{BridgeError, Buffer, baml_to_host, error_to_outbound};
 
 #[path = "api.rs"]
 pub mod api;
 #[path = "ffi/mod.rs"]
 mod ffi;
-#[path = "host_spans.rs"]
-pub mod host_spans;
 #[path = "panic.rs"]
 mod panic;
 
@@ -37,10 +35,9 @@ pub use ffi::{
         baml_media_url,
     },
     host_value::{
-        HostDispatchFn, complete_host_call, register_host_dispatch_callback,
-        register_host_release_callback,
+        HostDispatchFn, complete_host_call, register_host_cancel_callback,
+        register_host_dispatch_callback, register_host_dispatch_v2, register_host_release_callback,
     },
-    objects::flush_events,
     runtime::{
         BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
         initialize_runtime_from_blob as initialize_runtime_from_blob_ffi,
@@ -137,7 +134,6 @@ pub extern "C" fn call_function(encoded_args: *const u8, length: usize, id: u32)
 }
 
 fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Result<(), BridgeError> {
-    let runtime = get_runtime()?;
     let bytes: &[u8] = if encoded_args.is_null() || length == 0 {
         &[]
     } else {
@@ -146,10 +142,10 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     };
     // Pin the target before yielding to the executor: the SDK may release the
     // callable's key as soon as this returns.
-    let prepared = crate::prepare_call(bytes)?;
+    let request = crate::decode_invocation_request(bytes)?;
 
     get_tokio_runtime()?.spawn(async move {
-        let encoded = AssertUnwindSafe(crate::invoke_prepared(runtime, prepared))
+        let encoded = AssertUnwindSafe(crate::execute_invocation(request))
             .catch_unwind()
             .await;
 
@@ -161,4 +157,78 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     });
 
     Ok(())
+}
+
+/// Reports the fixed native invocation contract. Wire messages are unversioned.
+#[unsafe(no_mangle)]
+pub extern "C" fn invocation_protocol_version() -> u32 {
+    1
+}
+
+/// Read the original runtime clock. The output is untouched on failure.
+/// # Safety
+/// `out_now` must point to writable u64 storage unless null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn invocation_clock_ns(call_id: u64, out_now: *mut u64) -> BamlCffiStatus {
+    if out_now.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match crate::invocation_clock_by_id(call_id) {
+        Ok(now) => {
+            unsafe {
+                out_now.write(now);
+            }
+            BamlCffiStatus::Ok
+        }
+        Err(_) => BamlCffiStatus::InvalidHandle,
+    }
+}
+
+/// Project a generated trace capability without executing a BAML call.
+/// # Safety
+/// Both outputs must point to writable storage. They remain untouched on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn trace_selection_ffi(
+    call_id: u64,
+    key: u64,
+    out_selection: *mut Buffer,
+    out_reservation: *mut u64,
+) -> BamlCffiStatus {
+    if out_selection.is_null() || out_reservation.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match std::panic::catch_unwind(|| crate::control_projection::trace_selection(call_id, key)) {
+        Ok(Ok((wire, owner))) => {
+            unsafe {
+                out_selection.write(Buffer::from(wire));
+                out_reservation.write(owner.unwrap_or(0));
+            }
+            BamlCffiStatus::Ok
+        }
+        Ok(Err(_)) => BamlCffiStatus::TypeMismatch,
+        Err(_) => BamlCffiStatus::InternalError,
+    }
+}
+
+/// Inspect a retained callback context without executing a BAML call.
+/// # Safety
+/// The output must point to writable storage and remains untouched on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn invocation_context_ffi(
+    key: u64,
+    out_context: *mut Buffer,
+) -> BamlCffiStatus {
+    if out_context.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match std::panic::catch_unwind(|| crate::control_projection::invocation_context(key)) {
+        Ok(Ok(wire)) => {
+            unsafe {
+                out_context.write(Buffer::from(wire));
+            }
+            BamlCffiStatus::Ok
+        }
+        Ok(Err(_)) => BamlCffiStatus::InvalidHandle,
+        Err(_) => BamlCffiStatus::InternalError,
+    }
 }

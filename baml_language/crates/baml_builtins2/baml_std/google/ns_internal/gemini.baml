@@ -932,7 +932,7 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
 // ---------------------------------------------------------------------------
 // Transport helpers — shared by both clients.
 
-/// (internal) `baml.http.fetch_sse` rejects a non-2xx response by throwing an
+/// (internal) `baml.http.send_sse` rejects a non-2xx response by throwing an
 /// `baml.errors.Io` whose message embeds the status and the body
 /// (sys_native/src/io_impls.rs). Recover that status so an SSE failure lands in
 /// the SAME taxonomy as a unary one: a 400 must NOT become a retry-safe
@@ -986,20 +986,9 @@ function _gm_route_sse_open(
 }
 
 /// (internal) Open the SSE connection, classifying the failure precisely.
-function _gm_open_sse(
-    req: baml.http.Request,
-    provider: string,
-    span: trace.ReservedSpan,
-    request_timeout_ms: int? = null,
-    time_to_first_token_timeout_ms: int? = null,
-) -> baml.http.SseStream {
+function _gm_open_sse(req: baml.http.Request, provider: string) -> baml.http.SseStream {
     _gm_route_sse_open(provider, () -> {
-        baml.http.fetch_sse(
-            req,
-            timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-            first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
-            $trace = span,
-        )
+        baml.http.send_sse(req)
     })
 }
 
@@ -1043,11 +1032,19 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
             for (let p in parts) {
                 if let t: string = p.text {
                     if (p.thought ?? false) {
+                        // Thinking is content with no TextDelta.
+                        if (t != "") {
+                            out.push(ai.stream.ContentSeen {});
+                        }
                         null
                     } else {
                         out.push(ai.stream.TextDelta { text: t });
                         null
                     }
+                } else if (p.functionCall != null || p.inlineData != null || p.fileData != null) {
+                    // A complete tool-call or file part.
+                    out.push(ai.stream.ContentSeen {});
+                    null
                 } else {
                     null
                 };
@@ -1156,10 +1153,10 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     // the runner appends will land at this index, so ids synthesized
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
-    let req = render(c, input);
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
     let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value, seq);
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 function _decode_batch(batch: string) -> ai.stream.Event[] {
@@ -1172,10 +1169,10 @@ function gemini_invoke_stream(
     c: root.GeminiClient,
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
-    let req = _request(c, input, true);
+    let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
+    let req = limits._apply(_request(c, input, true));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = _gm_open_sse(req, "google", span);
+    let sse = _gm_open_sse(req, "google");
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
     // a connection that closes before it is a truncated turn, not an answer.
     let stream = ai.stream.TurnStream.from_sse(
@@ -1186,8 +1183,8 @@ function gemini_invoke_stream(
             }
         },
         require_terminal = "google",
-        model = c.model,
-        usage_target = trace._usage_target_of(span.id()),
+        timeout_options = limits,
+        dispatched = started,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

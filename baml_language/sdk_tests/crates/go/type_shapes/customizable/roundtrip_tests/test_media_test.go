@@ -14,20 +14,20 @@ const mediaURL = "https://example.com/asset"
 const mediaBase64 = "aGVsbG8="
 
 var (
-	_ func(context.Context, string, *string) (baml_go.Image, error)                         = baml_sdk.MediaReturnImage
-	_ func(context.Context, string, *string) (baml_go.Audio, error)                         = baml_sdk.MediaReturnAudio
-	_ func(context.Context, string, *string) (baml_go.Video, error)                         = baml_sdk.MediaReturnVideo
-	_ func(context.Context, string, *string) (baml_go.Pdf, error)                           = baml_sdk.MediaReturnPdf
-	_ func(context.Context, baml_go.Image) (baml_go.Image, error)                           = baml_sdk.MediaRoundTripImage
-	_ func(context.Context, baml_go.Audio) (baml_go.Audio, error)                           = baml_sdk.MediaRoundTripAudio
-	_ func(context.Context, baml_go.Video) (baml_go.Video, error)                           = baml_sdk.MediaRoundTripVideo
-	_ func(context.Context, baml_go.Pdf) (baml_go.Pdf, error)                               = baml_sdk.MediaRoundTripPdf
-	_ func(context.Context, *baml_go.Image) (*baml_go.Image, error)                         = baml_sdk.MediaRoundTripOptionalImage
-	_ func(context.Context, []baml_go.Image) ([]baml_go.Image, error)                       = baml_sdk.MediaRoundTripImageList
-	_ func(context.Context, map[string]baml_go.Image) (map[string]baml_go.Image, error)     = baml_sdk.MediaRoundTripImageMap
-	_ func(context.Context, baml_sdk.ImageOrAudio) (baml_sdk.ImageOrAudio, error)           = baml_sdk.MediaRoundTripImageOrAudio
-	_ func(context.Context, baml_sdk.ImageOrMediaImage) (baml_sdk.ImageOrMediaImage, error) = baml_sdk.MediaRoundTripMediaOrImageClass
-	_ func(context.Context, any) (any, error)                                               = baml_sdk.MediaRoundTripAllMedia
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Image, error)                         = baml_sdk.MediaReturnImage
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Audio, error)                         = baml_sdk.MediaReturnAudio
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Video, error)                         = baml_sdk.MediaReturnVideo
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Pdf, error)                           = baml_sdk.MediaReturnPdf
+	_ func(context.Context, baml_go.Image, ...baml_go.CallOption) (baml_go.Image, error)                           = baml_sdk.MediaRoundTripImage
+	_ func(context.Context, baml_go.Audio, ...baml_go.CallOption) (baml_go.Audio, error)                           = baml_sdk.MediaRoundTripAudio
+	_ func(context.Context, baml_go.Video, ...baml_go.CallOption) (baml_go.Video, error)                           = baml_sdk.MediaRoundTripVideo
+	_ func(context.Context, baml_go.Pdf, ...baml_go.CallOption) (baml_go.Pdf, error)                               = baml_sdk.MediaRoundTripPdf
+	_ func(context.Context, *baml_go.Image, ...baml_go.CallOption) (*baml_go.Image, error)                         = baml_sdk.MediaRoundTripOptionalImage
+	_ func(context.Context, []baml_go.Image, ...baml_go.CallOption) ([]baml_go.Image, error)                       = baml_sdk.MediaRoundTripImageList
+	_ func(context.Context, map[string]baml_go.Image, ...baml_go.CallOption) (map[string]baml_go.Image, error)     = baml_sdk.MediaRoundTripImageMap
+	_ func(context.Context, baml_sdk.ImageOrAudio, ...baml_go.CallOption) (baml_sdk.ImageOrAudio, error)           = baml_sdk.MediaRoundTripImageOrAudio
+	_ func(context.Context, baml_sdk.ImageOrMediaImage, ...baml_go.CallOption) (baml_sdk.ImageOrMediaImage, error) = baml_sdk.MediaRoundTripMediaOrImageClass
+	_ func(context.Context, any, ...baml_go.CallOption) (any, error)                                               = baml_sdk.MediaRoundTripAllMedia
 )
 
 func assertOptionalString(t *testing.T, got *string, want string) {

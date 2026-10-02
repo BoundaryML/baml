@@ -45,7 +45,10 @@ pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
 mod spawn;
-pub use spawn::{SpawnLaunch, plan_body, spawn_launch};
+pub use spawn::{
+    SpawnLaunch, alloc_projected_cancel_token, cancel_token_members, plan_body,
+    projected_cancel_token_data, spawn_launch,
+};
 mod stack_trace;
 mod string;
 mod sys;
@@ -430,6 +433,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 param_types: function.param_types,
                 param_has_default: function.param_has_default,
                 display_type_params: function.display_type_params,
+                type_param_names: function.type_param_names,
                 generic_param_bounds: function.generic_param_bounds,
                 display_param_types: function.display_param_types,
                 display_return_type: function.display_return_type,

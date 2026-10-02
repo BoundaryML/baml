@@ -31,6 +31,7 @@ use serde::Serialize;
 use crate::{Error, store};
 
 mod bulk;
+mod context;
 mod profile;
 
 #[derive(Clone, Debug)]
@@ -98,7 +99,7 @@ pub(crate) fn id(value: u64) -> [u8; 8] {
     value.to_be_bytes()
 }
 
-fn snapshot_id(id: &proto::SnapshotId) -> [u8; 16] {
+fn cas_id(id: &proto::CasId) -> [u8; 16] {
     let mut bytes = [0; 16];
     bytes[..8].copy_from_slice(&id.low.to_le_bytes());
     bytes[8..].copy_from_slice(&id.high.to_le_bytes());
@@ -123,6 +124,39 @@ fn saturating(value: u64) -> i64 {
 fn sequence_i64(sequence: u64) -> Result<i64, Error> {
     i64::try_from(sequence).map_err(|_| Error::Unsupported("recording sequence exceeds i64".into()))
 }
+
+/// A network event's place in recording order: its file's sequence, then
+/// its position among the file's network events.
+fn event_seq(sequence: u64, position: u32) -> Result<i64, Error> {
+    i64::try_from((u128::from(sequence) << 32) | u128::from(position)).map_err(|_| {
+        Error::Unsupported("recording sequence exceeds the network event order".into())
+    })
+}
+
+/// Network evidence the file reader does not check: an announcement,
+/// event or completion that names no span or parent, or a completion with
+/// an impossible outcome. Both index paths skip it with an issue.
+fn network_invalid(event: &Event) -> Option<u64> {
+    let (span, valid) = match event {
+        Event::NetworkAnnouncement(entry) => (entry.id, entry.id != 0 && entry.parent_id != 0),
+        Event::NetworkEvent(event) => (event.span_id, event.span_id != 0),
+        Event::NetworkCompletion(done) => (
+            done.span_id,
+            done.span_id != 0
+                && (1..=3).contains(&done.outcome)
+                && (!done.panicked || done.outcome == proto::InvocationOutcome::Errored as i32),
+        ),
+        _ => return None,
+    };
+    (!valid).then_some(span)
+}
+
+const NETWORK_INVALID: &str = "network_evidence_invalid";
+const NETWORK_INVALID_DETAIL: &str = "network span evidence without a span or parent ID, or with an impossible outcome; it is ignored";
+const NETWORK_SPAN_CONFLICT: &str =
+    "two different announcements for one network span; the first is kept";
+const NETWORK_COMPLETION_CONFLICT: &str =
+    "a network span completed twice with different evidence; the first is kept";
 
 struct Known {
     rec: i64,
@@ -163,6 +197,7 @@ pub fn refresh(
     conn: &mut Connection,
     layout: &SourceLayout,
     options: &RefreshOptions,
+    cas: &btel_reader::cas::CasStore,
 ) -> Result<RefreshMetrics, Error> {
     let started = Instant::now();
     let mut metrics = RefreshMetrics::default();
@@ -170,7 +205,7 @@ pub fn refresh(
         store::WriterLock::acquire(&store::lock_path(layout), options.lock_timeout)?;
     metrics.lock_wait_ms = ms(waited);
     conn.pragma_update(None, "cache_size", store::REFRESH_CACHE_KIB)?;
-    let result = refresh_locked(conn, layout, options, &mut metrics);
+    let result = refresh_locked(conn, layout, options, cas, &mut metrics);
     // Shrinking the cache releases the pages the refresh held.
     conn.pragma_update(None, "cache_size", store::QUERY_CACHE_KIB)?;
     result?;
@@ -182,6 +217,7 @@ fn refresh_locked(
     conn: &mut Connection,
     layout: &SourceLayout,
     options: &RefreshOptions,
+    cas: &btel_reader::cas::CasStore,
     metrics: &mut RefreshMetrics,
 ) -> Result<(), Error> {
     metrics.schema_rebuilt = store::ensure_schema(conn)?;
@@ -216,6 +252,14 @@ fn refresh_locked(
         )?;
     }
     profile::rebuild_pending(conn)?;
+    context::resolve(
+        conn,
+        cas,
+        options,
+        metrics.files_applied > 0
+            || metrics.recordings_rebuilt > 0
+            || metrics.recordings_removed > 0,
+    )?;
     Ok(())
 }
 
@@ -312,7 +356,7 @@ pub(super) fn record_process(
             header.host,
             command,
             header.process_started_at_unix_ns,
-            header.source_cas_id.as_ref().map(snapshot_id)
+            header.source_cas_id.as_ref().map(cas_id)
         ])?;
     }
     if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref()) {
@@ -956,6 +1000,8 @@ struct References {
     paths: HashSet<u32>,
     functions: HashSet<u64>,
     epochs: HashSet<u64>,
+    /// Network spans named by events.
+    network_spans: HashSet<u64>,
 }
 
 /// Applies files to one recording inside a transaction.
@@ -1006,6 +1052,9 @@ impl<'t> Applier<'t> {
     }
 
     fn apply(&mut self, sequence: u64, file: &proto::RecordingFile) -> Result<(), Error> {
+        let mut contexts = context::Contexts::default();
+        contexts.apply(file);
+        contexts.write(self.tx, self.rec)?;
         let mut ticks_out_of_range = false;
         let mut tick = |value: u64| {
             let converted = quantity(value);
@@ -1093,9 +1142,20 @@ impl<'t> Applier<'t> {
             }
         }
         if let Some(spans) = &file.spans {
+            // Each network event's position among the file's.
+            let mut network_events = 0_u32;
             for section in &spans.sections {
                 self.references.threads.insert(section.thread_id);
                 for event in &section.events {
+                    if let Some(span) = event.event.as_ref().and_then(network_invalid) {
+                        self.issue(
+                            sequence,
+                            NETWORK_INVALID,
+                            Some(&span.to_string()),
+                            NETWORK_INVALID_DETAIL,
+                        )?;
+                        continue;
+                    }
                     match event.event.as_ref() {
                         Some(Event::ThreadAnnouncement(_)) => {
                             self.tx
@@ -1179,8 +1239,8 @@ impl<'t> Applier<'t> {
                             self.tx
                                 .prepare_cached(
                                     "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id,
-                                       announced_sequence, entered_ticks, inputs_cas)
-                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                                       announced_sequence, entered_ticks, inputs_cas, type_args_cas)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                                      ON CONFLICT (rec, call_id) DO UPDATE SET
                                        conflict = CASE WHEN conflict > 0 THEN conflict
                                          WHEN announced_sequence IS NOT NULL
@@ -1190,7 +1250,8 @@ impl<'t> Applier<'t> {
                                            OR entered_ticks IS NOT excluded.entered_ticks
                                          THEN 1 ELSE 0 END,
                                        announced_sequence = excluded.announced_sequence,
-                                       inputs_cas = excluded.inputs_cas",
+                                       inputs_cas = excluded.inputs_cas,
+                                       type_args_cas = excluded.type_args_cas",
                                 )?
                                 .execute(params![
                                     self.rec,
@@ -1200,7 +1261,8 @@ impl<'t> Applier<'t> {
                                     i64::from(entry.call_path_id),
                                     sequence_i64(sequence)?,
                                     tick(entry.entered_at_ticks),
-                                    entry.inputs_cas_id.as_ref().map(snapshot_id)
+                                    entry.inputs_cas_id.as_ref().map(cas_id),
+                                    entry.type_args_cas_id.as_ref().map(cas_id)
                                 ])?;
                         }
                         Some(Event::FunctionCompletion(done)) => {
@@ -1212,6 +1274,35 @@ impl<'t> Applier<'t> {
                         Some(Event::Log(log)) => {
                             // Log query projections are separate from call indexing.
                             let _ = tick(log.at_ticks);
+                        }
+                        Some(Event::NetworkAnnouncement(entry)) => {
+                            self.network_announcement(
+                                sequence,
+                                section.thread_id,
+                                entry,
+                                &mut tick,
+                            )?;
+                        }
+                        Some(Event::NetworkEvent(observed)) => {
+                            let seq = event_seq(sequence, network_events)?;
+                            network_events += 1;
+                            self.references.network_spans.insert(observed.span_id);
+                            self.tx
+                                .prepare_cached(
+                                    "INSERT INTO network_event (rec, span_id, seq, name, at_ticks, payload_cas)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                                )?
+                                .execute(params![
+                                    self.rec,
+                                    id(observed.span_id),
+                                    seq,
+                                    observed.name,
+                                    tick(observed.at_ticks),
+                                    observed.payload_cas_id.as_ref().map(cas_id)
+                                ])?;
+                        }
+                        Some(Event::NetworkCompletion(done)) => {
+                            self.network_completion(sequence, done, &mut tick)?;
                         }
                         None => {}
                     }
@@ -1280,9 +1371,134 @@ impl<'t> Applier<'t> {
                 tick(done.self_await_ticks),
                 outcome.code(),
                 needs_announcement,
-                done.value_cas_id.as_ref().map(snapshot_id),
+                done.value_cas_id.as_ref().map(cas_id),
                 done.panicked
             ])?;
+        Ok(())
+    }
+
+    /// The first announcement of a network span wins, filling in a
+    /// placeholder its events or completion left; a different one is a
+    /// conflict.
+    fn network_announcement(
+        &mut self,
+        sequence: u64,
+        thread: u64,
+        entry: &proto::NetworkAnnouncement,
+        tick: &mut impl FnMut(u64) -> Option<i64>,
+    ) -> Result<(), Error> {
+        let path = (entry.call_path_id != 0).then_some(entry.call_path_id);
+        self.references.paths.extend(path);
+        let values = params![
+            self.rec,
+            id(entry.id),
+            id(thread),
+            id(entry.parent_id),
+            path.map(i64::from),
+            entry.method,
+            entry.url,
+            entry.request_cas_id.as_ref().map(cas_id),
+            tick(entry.started_at_ticks)
+        ];
+        let inserted = self
+            .tx
+            .prepare_cached(
+                "INSERT OR IGNORE INTO network_span (rec, span_id, defined, thread_id, parent_id,
+                   call_path_id, method, url, request_cas, started_ticks)
+                 VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            )?
+            .execute(values)?;
+        if inserted > 0 {
+            return Ok(());
+        }
+        let upgraded = self
+            .tx
+            .prepare_cached(
+                "UPDATE network_span SET defined = 1, thread_id = ?3, parent_id = ?4,
+                   call_path_id = ?5, method = ?6, url = ?7, request_cas = ?8, started_ticks = ?9
+                 WHERE rec = ?1 AND span_id = ?2 AND defined = 0",
+            )?
+            .execute(values)?;
+        if upgraded > 0 {
+            return Ok(());
+        }
+        let same: bool = self
+            .tx
+            .prepare_cached(
+                "SELECT thread_id = ?3 AND parent_id = ?4 AND call_path_id IS ?5 AND method = ?6
+                   AND url = ?7 AND request_cas IS ?8 AND started_ticks IS ?9
+                 FROM network_span WHERE rec = ?1 AND span_id = ?2",
+            )?
+            .query_row(values, |r| r.get(0))?;
+        if !same {
+            self.tx
+                .prepare_cached(
+                    "UPDATE network_span SET conflict = 1 WHERE rec = ?1 AND span_id = ?2",
+                )?
+                .execute(params![self.rec, id(entry.id)])?;
+            self.issue(
+                sequence,
+                "network_span_conflict",
+                Some(&entry.id.to_string()),
+                NETWORK_SPAN_CONFLICT,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The first completion of a network span wins, even before its
+    /// announcement; a different one is a conflict.
+    fn network_completion(
+        &mut self,
+        sequence: u64,
+        done: &proto::NetworkCompletion,
+        tick: &mut impl FnMut(u64) -> Option<i64>,
+    ) -> Result<(), Error> {
+        let values = params![
+            self.rec,
+            id(done.span_id),
+            tick(done.completed_at_ticks),
+            done.outcome,
+            done.panicked,
+            done.error_cas_id.as_ref().map(cas_id)
+        ];
+        self.tx
+            .prepare_cached(
+                "INSERT OR IGNORE INTO network_span (rec, span_id, defined) VALUES (?1, ?2, 0)",
+            )?
+            .execute(params![self.rec, id(done.span_id)])?;
+        let changed = self
+            .tx
+            .prepare_cached(
+                "UPDATE network_span SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
+                   error_cas = ?6
+                 WHERE rec = ?1 AND span_id = ?2 AND outcome IS NULL",
+            )?
+            .execute(values)?;
+        if changed > 0 {
+            return Ok(());
+        }
+        let same: bool = self
+            .tx
+            .prepare_cached(
+                "SELECT completed_ticks IS ?3 AND outcome = ?4 AND panicked = ?5
+                   AND error_cas IS ?6
+                 FROM network_span WHERE rec = ?1 AND span_id = ?2",
+            )?
+            .query_row(values, |r| r.get(0))?;
+        if !same {
+            self.tx
+                .prepare_cached(
+                    "UPDATE network_span SET conflict = 1 WHERE rec = ?1 AND span_id = ?2",
+                )?
+                .execute(params![self.rec, id(done.span_id)])?;
+            self.issue(
+                sequence,
+                "network_completion_conflict",
+                Some(&done.span_id.to_string()),
+                NETWORK_COMPLETION_CONFLICT,
+            )?;
+        }
         Ok(())
     }
 
@@ -1762,6 +1978,12 @@ impl<'t> Applier<'t> {
         )?;
         for epoch in &self.references.epochs {
             placeholder.execute(params![self.rec, id(*epoch)])?;
+        }
+        let mut placeholder = self.tx.prepare_cached(
+            "INSERT OR IGNORE INTO network_span (rec, span_id, defined) VALUES (?1, ?2, 0)",
+        )?;
+        for span in &self.references.network_spans {
+            placeholder.execute(params![self.rec, id(*span)])?;
         }
         // The lowest defined top-level path wins, whatever order files arrive in.
         let mut entry = self.tx.prepare_cached(

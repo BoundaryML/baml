@@ -110,4 +110,22 @@ public final class BamlStream<T> {
         return (CompletableFuture<T>) (CompletableFuture<?>)
                 BamlFfi.callAsync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null);
     }
+
+    public T next(InvocationOptions baml) {
+        return (T) BamlFfi.callSync(methodFqn("next"), SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<T> next_async(InvocationOptions baml) {
+        return (CompletableFuture<T>) (CompletableFuture<?>)
+                BamlFfi.callAsync(methodFqn("next"), SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public T get_final(InvocationOptions baml) {
+        return (T) BamlFfi.callSync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null, baml);
+    }
+
+    public CompletableFuture<T> get_final_async(InvocationOptions baml) {
+        return (CompletableFuture<T>) (CompletableFuture<?>)
+                BamlFfi.callAsync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null, baml);
+    }
 }

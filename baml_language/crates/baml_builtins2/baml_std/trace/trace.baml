@@ -5,8 +5,9 @@ enum Mode {
     Span,
 }
 
-/// Per-invocation capture overrides: true captures, false disables capture,
-/// and null inherits automatic behavior. Explicit values override function policy.
+/// Per-invocation capture requests: true requests capture; false and null add
+/// no request. Applicable function-policy requests still capture; false is not
+/// a privacy veto. Requests do not propagate to descendant invocations.
 class Capture {
     inputs: bool?,
     output: bool?,
@@ -59,7 +60,7 @@ class Options {
         $rust_function
     }
 
-    /// Select Span mode and replace all three capture overrides.
+    /// Select Span mode and replace all three capture requests.
     function span(
         self,
         inputs: bool? = null,
@@ -166,37 +167,5 @@ function context(
 /// Read a detached snapshot of the current invocation, even with tracing off.
 //baml:mut_vm
 function current_context() -> Context throws never {
-    $rust_function
-}
-
-/// (internal) The span or thread that model usage recorded later belongs
-/// to: this invocation's innermost span, else its thread. 0 when tracing is
-/// off. Model clients capture it when a call starts.
-//baml:mut_vm
-function _usage_target() -> int throws never {
-    $rust_function
-}
-
-/// (internal) A span as a target for `_record_usage`, like `_usage_target`:
-/// the span an HTTP request ran in, so the tokens its reply reports belong
-/// to that request. 0 for a span of another runtime.
-//baml:mut_vm
-function _usage_target_of(span: SpanId) -> int throws never {
-    $rust_function
-}
-
-/// (internal) Record the tokens one model turn used against a target from
-/// `_usage_target`. `input_tokens` excludes cache reads and writes. Returns
-/// whether anything was recorded.
-//baml:mut_vm
-function _record_usage(
-    target: int,
-    model: string?,
-    input_tokens: int,
-    output_tokens: int,
-    cache_read_tokens: int?,
-    cache_write_tokens: int?,
-    reasoning_tokens: int?,
-) -> bool throws never {
     $rust_function
 }

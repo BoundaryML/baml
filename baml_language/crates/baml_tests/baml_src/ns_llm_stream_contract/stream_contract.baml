@@ -70,7 +70,7 @@ function contract_decode(batch: string) -> ai.stream.Event[] throws ai.errors.In
 
 // Open the mock's SSE endpoint. The mock answers any method/path.
 function contract_open(base_url: string) -> baml.http.SseStream {
-    baml.http.fetch_sse(
+    baml.http.send_sse(
         baml.http.Request {
             method: "GET",
             url: base_url + "/v1/stream",

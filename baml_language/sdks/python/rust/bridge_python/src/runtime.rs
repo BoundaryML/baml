@@ -11,7 +11,10 @@ use pyo3_stub_gen::{
     inventory::submit,
 };
 
-use crate::errors::{bridge_error_to_sdk_panic, py_sdk_panic};
+use crate::{
+    callback_dispatch::{DispatchScope, SyncMessage},
+    errors::{bridge_error_to_sdk_panic, py_sdk_panic},
+};
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
 /// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
@@ -76,10 +79,10 @@ submit! {
         import typing
 
         class BamlRuntime:
-            def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> typing.Any:
+            def call_function(self, args_proto: bytes) -> typing.Any:
                 """Call a BAML function asynchronously."""
 
-            def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> bytes:
+            def call_function_sync(self, args_proto: bytes) -> bytes:
                 """Call a BAML function synchronously (blocking)."""
         "#
     }
@@ -91,35 +94,28 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None))]
-    fn call_function<'py>(
-        &self,
-        py: Python<'py>,
-        args_proto: Vec<u8>,
-        ctx: Option<&crate::types::HostSpanManager>,
-    ) -> PyResult<Py<PyAny>> {
+    #[pyo3(signature = (args_proto))]
+    fn call_function<'py>(&self, py: Python<'py>, args_proto: Vec<u8>) -> PyResult<Py<PyAny>> {
         // Byte-returning site (32c): pre-call host-boundary failures don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // future yields bytes that decode_call_result raises uniformly (same
         // BamlError(baml.errors.*) as an engine failure).
-        // `prepare_call` pins a handle target before we yield to the event
+        // `decode_invocation_request` pins a handle target before we yield to the event
         // loop, so a Python-side release of that handle cannot race the call.
-        let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let prepared = bridge_cffi::prepare_call(&args_proto)?;
-            Ok((runtime, prepared))
-        })();
+        let request = bridge_cffi::decode_invocation_request(&args_proto);
 
-        // Host tracing context is accepted for compatibility but is not wired into the call.
-        let _ = &ctx;
+        let environment = match &request {
+            Ok(call) => Some(DispatchScope::asynchronous(py, call.host_call_id())?),
+            Err(_) => None,
+        };
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
         // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let bytes = match prepared {
-                Ok((runtime, prepared)) => bridge_cffi::invoke_prepared(runtime, prepared).await,
+            let _environment = environment;
+            let bytes = match request {
+                Ok(request) => bridge_cffi::execute_invocation(request).await,
                 Err(e) => bridge_cffi::error_to_outbound(e),
             };
             Ok(bytes)
@@ -131,37 +127,60 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None))]
-    fn call_function_sync(
-        &self,
-        py: Python<'_>,
-        args_proto: Vec<u8>,
-        ctx: Option<&crate::types::HostSpanManager>,
-    ) -> PyResult<Vec<u8>> {
+    #[pyo3(signature = (args_proto))]
+    fn call_function_sync(&self, py: Python<'_>, args_proto: Vec<u8>) -> PyResult<Vec<u8>> {
         // Byte-returning site (32c): pre-call host-boundary failures
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // returned bytes decode + raise uniformly via decode_call_result.
-        let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let prepared = bridge_cffi::prepare_call(&args_proto)?;
+        let request = (|| -> Result<_, bridge_cffi::BridgeError> {
+            let request = bridge_cffi::decode_invocation_request(&args_proto)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
-            Ok((runtime, prepared, rt))
+            Ok((request, rt))
         })();
 
-        let (runtime, prepared, rt) = match prepared {
+        let (request, rt) = match request {
             Ok(v) => v,
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
         };
 
-        // Host tracing context is accepted for compatibility but is not wired into the call.
-        let _ = &ctx;
-
-        // Same shared invoke_prepared as the async + C-ABI paths — returns the
+        // Same shared execute_invocation as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
-        let bytes = py.detach(|| rt.block_on(bridge_cffi::invoke_prepared(runtime, prepared)));
-        Ok(bytes)
+        let call_id = request.host_call_id();
+        let (sender, mut receiver) = std::sync::mpsc::channel();
+        let _environment = DispatchScope::synchronous(call_id, sender.clone())?;
+        let task = rt.spawn(bridge_cffi::execute_invocation(request));
+        // Observe panics/cancellation of the engine task as well as normal
+        // results; a producer disappearing must never strand the caller queue.
+        rt.spawn(async move {
+            let bytes = match task.await {
+                Ok(bytes) => bytes,
+                Err(error) => bridge_cffi::error_to_outbound(bridge_cffi::BridgeError::Internal(
+                    format!("BAML execution task failed: {error}"),
+                )),
+            };
+            let _ = sender.send(SyncMessage::Finished(bytes));
+        });
+        loop {
+            let message = py.detach({
+                let receiver = &mut receiver;
+                move || receiver.recv_timeout(std::time::Duration::from_millis(100))
+            });
+            if let Err(error) = py.check_signals() {
+                bridge_cffi::cancel_function_call_by_id(call_id);
+                return Err(error);
+            }
+            match message {
+                Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
+                Ok(SyncMessage::Finished(bytes)) => return Ok(bytes),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(py_sdk_panic(
+                        "BAML callback queue disconnected before completion",
+                    ));
+                }
+            }
+        }
     }
 }
 

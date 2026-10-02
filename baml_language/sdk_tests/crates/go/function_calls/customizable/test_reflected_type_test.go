@@ -155,7 +155,7 @@ func Test_reflected_type_closed_dynamic_unions_and_callback(t *testing.T) {
 		t.Fatalf("dynamic union = %#v (%T)", gotDynamic, gotDynamic)
 	}
 
-	gotCallback, err := baml_sdk.GoTypeTestsCallTypeCallback(ctx, func(value baml_go.BAMLType) baml_go.BAMLType {
+	gotCallback, err := baml_sdk.GoTypeTestsCallTypeCallback(ctx, func(_ context.Context, value baml_go.BAMLType) baml_go.BAMLType {
 		if !value.Equal(integer) {
 			t.Fatalf("callback input = %#v", value)
 		}

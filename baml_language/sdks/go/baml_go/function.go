@@ -47,11 +47,18 @@ func (function Function) ParameterNames() []string {
 }
 
 // Call invokes the closure through the native handle table.
-func (function Function) Call(ctx context.Context, args map[string]Input) (Value, error) {
+func (function Function) Call(ctx context.Context, args map[string]Input, options ...CallOption) (Value, error) {
 	if function.key == 0 || function.owner == nil {
 		return Value{}, errors.New("call BAML function: invalid or released function handle")
 	}
-	value, err := callHandle(ctx, function.key, args)
+	prepared := ApplyInvocationOptions(args, nil, options...)
+	if prepared.options.err != nil {
+		return Value{}, prepared.options.err
+	}
+	if len(prepared.options.typeArgs) != 0 {
+		return Value{}, errors.New("specialized callable rejects type bindings")
+	}
+	value, err := callHandle(ctx, function.key, args, prepared.options.controls)
 	runtime.KeepAlive(function.owner)
 	return value, err
 }
@@ -62,6 +69,7 @@ func (function Function) CallPositional(
 	ctx context.Context,
 	required []Input,
 	optional map[string]Input,
+	options ...CallOption,
 ) (Value, error) {
 	if len(required) > len(function.parameters) {
 		return Value{}, fmt.Errorf(
@@ -77,5 +85,16 @@ func (function Function) CallPositional(
 	for name, value := range optional {
 		arguments[name] = value
 	}
-	return function.Call(ctx, arguments)
+	return function.Call(ctx, arguments, options...)
 }
+
+// ReturnedFunction preserves the owning callable identity alongside its typed Call surface.
+type ReturnedFunction[Call any] struct {
+	Call     Call
+	function Function
+}
+
+func NewReturnedFunction[Call any](function Function, call Call) ReturnedFunction[Call] {
+	return ReturnedFunction[Call]{call, function}
+}
+func (function ReturnedFunction[Call]) BAMLFunction() Function { return function.function }

@@ -486,7 +486,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
                 );
                 let _ = cl.invoke(timeout_provider_input()) catch_all (e) {
                     let timeout: baml.errors.Timeout => {
-                        return `Timeout:${timeout.message}:${timeout.duration_ms ?? -1}`;
+                        return `Timeout:${timeout.message}:${timeout.duration?.to_milliseconds() ?? -1n}`;
                     },
                     _ => { return `unexpected:${e.to_string()}`; },
                 };

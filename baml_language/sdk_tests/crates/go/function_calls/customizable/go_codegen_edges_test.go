@@ -14,30 +14,30 @@ import (
 )
 
 var (
-	_ func(context.Context, func(int64, baml_sdk.CallbackIntWithYIntWithZIntOptions) int64, int64) ([]int64, error)     = baml_sdk.HostCallableTestsCallCallbackWithOptionalArgsAllUnset
-	_ func(context.Context, func(int64, baml_sdk.CallbackIntWithValueOptionalIntOptions) int64, int64) ([]int64, error) = baml_sdk.HostCallableTestsCallCallbackWithNullableOptionalStates
-	_ func(context.Context, int64, ...baml_sdk.OptionalArgsProbeOption) ([]*int64, error)                               = baml_sdk.OptionalArgsProbe
-	_ func(*int64) baml_sdk.OptionalArgsProbeOption                                                                     = baml_sdk.WithOptionalArgsProbeOpt1
-	_ func(*int64) baml_sdk.OptionalArgsProbeOption                                                                     = baml_sdk.WithOptionalArgsProbeOpt2
-	_ func(context.Context, ...baml_sdk.DefaultArgsMatrixOption) (baml_sdk.DefaultArgsMatrixResult, error)              = baml_sdk.DefaultArgsMatrix
-	_ func(string) baml_sdk.DefaultArgsMatrixOption                                                                     = baml_sdk.WithDefaultArgsMatrixStringValue
-	_ func(int64) baml_sdk.DefaultArgsMatrixOption                                                                      = baml_sdk.WithDefaultArgsMatrixIntValue
-	_ func(*big.Int) baml_sdk.DefaultArgsMatrixOption                                                                   = baml_sdk.WithDefaultArgsMatrixBigintValue
-	_ func(float64) baml_sdk.DefaultArgsMatrixOption                                                                    = baml_sdk.WithDefaultArgsMatrixFloatValue
-	_ func(bool) baml_sdk.DefaultArgsMatrixOption                                                                       = baml_sdk.WithDefaultArgsMatrixBoolValue
-	_ func(baml_go.Null) baml_sdk.DefaultArgsMatrixOption                                                               = baml_sdk.WithDefaultArgsMatrixNullValue
-	_ func(*[]byte) baml_sdk.DefaultArgsMatrixOption                                                                    = baml_sdk.WithDefaultArgsMatrixBytesValue
-	_ func(baml_sdk.Person) baml_sdk.DefaultArgsMatrixOption                                                            = baml_sdk.WithDefaultArgsMatrixClassValue
-	_ func([]string) baml_sdk.DefaultArgsMatrixOption                                                                   = baml_sdk.WithDefaultArgsMatrixListValue
-	_ func(map[string]int64) baml_sdk.DefaultArgsMatrixOption                                                           = baml_sdk.WithDefaultArgsMatrixMapValue
-	_ func([]*string) baml_sdk.DefaultArgsMatrixOption                                                                  = baml_sdk.WithDefaultArgsMatrixListOptional
-	_ func(map[string]*int64) baml_sdk.DefaultArgsMatrixOption                                                          = baml_sdk.WithDefaultArgsMatrixMapOptional
-	_ func(*string) baml_sdk.DefaultArgsMatrixOption                                                                    = baml_sdk.WithDefaultArgsMatrixNullableValue
-	_ func(*baml_sdk.Person) baml_sdk.DefaultArgsMatrixOption                                                           = baml_sdk.WithDefaultArgsMatrixOptionalClass
-	_ func(*[]string) baml_sdk.DefaultArgsMatrixOption                                                                  = baml_sdk.WithDefaultArgsMatrixOptionalList
-	_ func(*map[string]int64) baml_sdk.DefaultArgsMatrixOption                                                          = baml_sdk.WithDefaultArgsMatrixOptionalMap
-	_ func(context.Context, ...baml_sdk.DefaultedVoidOption) error                                                      = baml_sdk.DefaultedVoid
-	_ func(string) baml_sdk.DefaultedVoidOption                                                                         = baml_sdk.WithDefaultedVoidValue
+	_ func(context.Context, func(context.Context, int64, baml_sdk.CallbackIntWithYIntWithZIntOptions) int64, int64, ...baml_go.CallOption) ([]int64, error)     = baml_sdk.HostCallableTestsCallCallbackWithOptionalArgsAllUnset
+	_ func(context.Context, func(context.Context, int64, baml_sdk.CallbackIntWithValueOptionalIntOptions) int64, int64, ...baml_go.CallOption) ([]int64, error) = baml_sdk.HostCallableTestsCallCallbackWithNullableOptionalStates
+	_ func(context.Context, int64, ...baml_sdk.OptionalArgsProbeOption) ([]*int64, error)                                                                       = baml_sdk.OptionalArgsProbe
+	_ func(*int64) baml_sdk.OptionalArgsProbeOption                                                                                                             = baml_sdk.WithOptionalArgsProbeOpt1
+	_ func(*int64) baml_sdk.OptionalArgsProbeOption                                                                                                             = baml_sdk.WithOptionalArgsProbeOpt2
+	_ func(context.Context, ...baml_sdk.DefaultArgsMatrixOption) (baml_sdk.DefaultArgsMatrixResult, error)                                                      = baml_sdk.DefaultArgsMatrix
+	_ func(string) baml_sdk.DefaultArgsMatrixOption                                                                                                             = baml_sdk.WithDefaultArgsMatrixStringValue
+	_ func(int64) baml_sdk.DefaultArgsMatrixOption                                                                                                              = baml_sdk.WithDefaultArgsMatrixIntValue
+	_ func(*big.Int) baml_sdk.DefaultArgsMatrixOption                                                                                                           = baml_sdk.WithDefaultArgsMatrixBigintValue
+	_ func(float64) baml_sdk.DefaultArgsMatrixOption                                                                                                            = baml_sdk.WithDefaultArgsMatrixFloatValue
+	_ func(bool) baml_sdk.DefaultArgsMatrixOption                                                                                                               = baml_sdk.WithDefaultArgsMatrixBoolValue
+	_ func(baml_go.Null) baml_sdk.DefaultArgsMatrixOption                                                                                                       = baml_sdk.WithDefaultArgsMatrixNullValue
+	_ func(*[]byte) baml_sdk.DefaultArgsMatrixOption                                                                                                            = baml_sdk.WithDefaultArgsMatrixBytesValue
+	_ func(baml_sdk.Person) baml_sdk.DefaultArgsMatrixOption                                                                                                    = baml_sdk.WithDefaultArgsMatrixClassValue
+	_ func([]string) baml_sdk.DefaultArgsMatrixOption                                                                                                           = baml_sdk.WithDefaultArgsMatrixListValue
+	_ func(map[string]int64) baml_sdk.DefaultArgsMatrixOption                                                                                                   = baml_sdk.WithDefaultArgsMatrixMapValue
+	_ func([]*string) baml_sdk.DefaultArgsMatrixOption                                                                                                          = baml_sdk.WithDefaultArgsMatrixListOptional
+	_ func(map[string]*int64) baml_sdk.DefaultArgsMatrixOption                                                                                                  = baml_sdk.WithDefaultArgsMatrixMapOptional
+	_ func(*string) baml_sdk.DefaultArgsMatrixOption                                                                                                            = baml_sdk.WithDefaultArgsMatrixNullableValue
+	_ func(*baml_sdk.Person) baml_sdk.DefaultArgsMatrixOption                                                                                                   = baml_sdk.WithDefaultArgsMatrixOptionalClass
+	_ func(*[]string) baml_sdk.DefaultArgsMatrixOption                                                                                                          = baml_sdk.WithDefaultArgsMatrixOptionalList
+	_ func(*map[string]int64) baml_sdk.DefaultArgsMatrixOption                                                                                                  = baml_sdk.WithDefaultArgsMatrixOptionalMap
+	_ func(context.Context, ...baml_sdk.DefaultedVoidOption) error                                                                                              = baml_sdk.DefaultedVoid
+	_ func(string) baml_sdk.DefaultedVoidOption                                                                                                                 = baml_sdk.WithDefaultedVoidValue
 )
 
 func Test_go_codegen_person_round_trip(t *testing.T) {

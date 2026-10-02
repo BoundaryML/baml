@@ -281,6 +281,13 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
         initialize_runtime_from_blob_with_metadata
     );
 
+    field!("BamlApiV1", BamlApiV1, invocation_protocol_version);
+    field!("BamlApiV1", BamlApiV1, invocation_clock_ns);
+    field!("BamlApiV1", BamlApiV1, release_function_call);
+    field!("BamlApiV1", BamlApiV1, register_host_dispatch_v2);
+    field!("BamlApiV1", BamlApiV1, register_host_cancel_callback);
+    field!("BamlApiV1", BamlApiV1, trace_selection);
+    field!("BamlApiV1", BamlApiV1, invocation_context);
     assert_eq!(actual, expected, "C and Rust ABI layouts differ");
     assert_eq!(BamlCffiStatus::Ok as u32, 0);
     assert_eq!(BamlCffiStatus::InvalidHandle as u32, 1);

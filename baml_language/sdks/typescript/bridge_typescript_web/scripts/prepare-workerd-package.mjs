@@ -10,7 +10,7 @@ const workerdWasm = resolve(dist, "workerd-wasm");
 rmSync(workerd, { recursive: true, force: true });
 mkdirSync(workerd, { recursive: true });
 
-for (const file of ["index.js", "index.js.map", "index.d.ts", "index.d.ts.map", "native.d.ts", "native.d.ts.map"]) {
+for (const file of ["index.js", "index.js.map", "index.d.ts", "index.d.ts.map", "instrumentation.js", "instrumentation.js.map", "instrumentation.d.ts", "instrumentation.d.ts.map", "native.d.ts", "native.d.ts.map"]) {
   cpSync(resolve(dist, file), resolve(workerd, file));
 }
 cpSync(resolve(dist, "shared"), resolve(workerd, "shared"), { recursive: true });

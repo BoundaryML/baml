@@ -31,6 +31,7 @@ use rustc_hash::FxHashMap;
 
 mod errors;
 pub(crate) use errors::{ErrorBook, LandingMatch};
+mod network;
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
 
@@ -60,8 +61,8 @@ const _: () = assert!(CALL_PATH_CACHE_SLOTS == 1);
 const _: () = assert!(matches!(NATIVE_DEFAULT_MODE, InvocationMode::Hidden));
 
 const SPAN: u8 = 1 << 0;
-const INHERITED_CAPTURE_OUTPUT: u8 = 1 << 1;
-const INHERITED_CAPTURE_ERROR: u8 = 1 << 2;
+const POLICY_CAPTURE_OUTPUT: u8 = 1 << 1;
+const POLICY_CAPTURE_ERROR: u8 = 1 << 2;
 const REENTRY: u8 = 1 << 3;
 const REQUIRES_ANNOUNCEMENT: u8 = 1 << 4;
 
@@ -96,14 +97,34 @@ pub struct FrameTelemetry {
     pub await_duration: AwaitDuration,
     pub saved_call_path: CallPathId,
     flags: u8,
-    // Keep call-site overrides distinct from inherited requests latched at entry.
-    output_override: Option<bool>,
-    error_override: Option<bool>,
+    // Requests are local to this invocation. False adds no request; policy
+    // requests latched at entry (and later updates) cannot be vetoed here.
+    output_request: bool,
+    error_request: bool,
 }
 
 const _: () = assert!(size_of::<FrameTelemetry>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
 const _: () =
     assert!(size_of::<Option<FrameTelemetry>>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
+
+/// The type arguments a call's frame starts with, in the callee's De Bruijn
+/// order: those the callee value carries (a bound method's receiver class
+/// and method arguments, a closure's captured ones, a generic function
+/// value's), then those the call site passes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CallTypeArgs<'a> {
+    pub carried: &'a [bex_vm_types::RealizedTy],
+    pub passed: &'a [bex_vm_types::RealizedTy],
+}
+
+impl<'a> CallTypeArgs<'a> {
+    fn is_empty(&self) -> bool {
+        self.carried.is_empty() && self.passed.is_empty()
+    }
+    fn iter(&self) -> impl Iterator<Item = &'a bex_vm_types::RealizedTy> {
+        self.carried.iter().chain(self.passed)
+    }
+}
 
 /// Invocation-local tracing controls resolved by the call boundary.
 #[derive(Clone, Copy, Debug, Default)]
@@ -139,6 +160,7 @@ impl FrameTelemetry {
 
 pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
+mod host;
 mod snapshot;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
 const _: () = assert!(size_of::<TimingRecord>() <= btel_settings::layout::TIMING_RECORD_MAX_BYTES);
@@ -164,7 +186,7 @@ pub struct ThreadTelemetry {
 pub struct TelemetryState {
     context: btel_types::context::Context,
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
-    context_snapshot: Option<(btel_types::context::Context, btel_snapshot::SnapshotId)>,
+    context_snapshot: Option<(btel_types::context::Context, btel_snapshot::CasId)>,
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
     pending_context_snapshot: Option<btel_snapshot::Snapshot>,
     capture_scratch: snapshot::Scratch,
@@ -208,8 +230,11 @@ impl TelemetryState {
             return;
         }
         if let Some(builder) = self.runtime.acquire_snapshot() {
-            self.pending_context_snapshot =
-                btel_snapshot::context::capture_with_builder(&self.context, builder);
+            self.pending_context_snapshot = btel_snapshot::context::capture_with_builder(
+                &self.context,
+                builder,
+                self.capture_scratch.shaper(),
+            );
         }
     }
 
@@ -259,6 +284,32 @@ impl TelemetryState {
             #[cfg(test)]
             span_records: Vec::new(),
         }
+    }
+
+    /// A generic call's type arguments as `map<string, Type>`, keyed by the
+    /// names the compiler gave the frame's slots. A slot without a name is
+    /// left out rather than given an invented key; nothing is recorded when
+    /// no slot has one.
+    #[cold]
+    fn capture_type_args(
+        &mut self,
+        function: &Function,
+        type_args: CallTypeArgs<'_>,
+    ) -> Option<btel_snapshot::Snapshot> {
+        let mut named: Vec<(&str, &bex_vm_types::RealizedTy)> =
+            Vec::with_capacity(function.type_param_names.len());
+        for (name, ty) in function.type_param_names.iter().zip(type_args.iter()) {
+            // A frame can bind a name twice (a lambda inside a block that
+            // rebinds it); the later slot is the one its body sees.
+            match named.iter_mut().find(|(seen, _)| *seen == name.as_str()) {
+                Some(slot) => slot.1 = ty,
+                None => named.push((name, ty)),
+            }
+        }
+        if named.is_empty() {
+            return None;
+        }
+        self.capture(snapshot::Input::TypeArgs(&named))
     }
 
     #[cold]
@@ -346,13 +397,6 @@ impl TelemetryState {
         }
     }
 
-    /// Tokens one model turn used, charged to `node`: the span or thread
-    /// that was active when the call started.
-    #[cold]
-    pub fn record_model_usage(&mut self, usage: btel_records::ModelUsage) {
-        self.write_span(SpanRecord::ModelUsage(Box::new(usage)));
-    }
-
     /// Capture a point event without promoting its invocation to a span.
     ///
     /// # Safety
@@ -379,6 +423,125 @@ impl TelemetryState {
             event_name,
             captured_data,
         });
+    }
+
+    /// Open a span for an HTTP request the runtime is about to send, whatever
+    /// the caller's `$trace` options: `None` at the `Low` auto level. Its
+    /// parent is the innermost span, its call path the innermost observed
+    /// frame's. It stays open until `close_network_span`.
+    pub fn open_network_span(
+        &mut self,
+        request: &sys_types::network::NetworkRequest,
+    ) -> Option<TelemetryId> {
+        if self.auto_level == AutoTelemetryLevel::Low {
+            return None;
+        }
+        self.start_thread();
+        let url = network::sanitize_url(&request.url);
+        let headers = network::sanitize_headers(&request.headers, network::Direction::Request);
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        self.prepare_context();
+        let captured_request = self.capture(snapshot::Input::Network(
+            &network::NetworkPayload::Request {
+                method: &request.method,
+                url: &url,
+                headers: &headers,
+                body: self.policies.http_bodies().then_some(&request.body[..]),
+            },
+        ));
+        let id = allocate_telemetry_id();
+        self.write_span(SpanRecord::NetworkSpanAnnouncement(Box::new(
+            btel_records::NetworkAnnouncement {
+                id,
+                parent_id: self.thread.active_id,
+                call_path: self.thread.active_call_path,
+                started_at: self.clock.read(),
+                method: request.method.as_str().into(),
+                url: url.into_boxed_str(),
+                request: captured_request,
+            },
+        )));
+        Some(id)
+    }
+
+    /// Record what happened to an open request at `at`, an instant the IO
+    /// side read from this run's clock. Its span may belong to another thread.
+    pub fn network_event(
+        &mut self,
+        span: TelemetryId,
+        at: ClockInstant,
+        event: &sys_types::network::NetworkEventKind,
+    ) {
+        use sys_types::network::NetworkEventKind;
+
+        self.start_thread();
+        let bodies = self.policies.http_bodies();
+        let payload = match event {
+            NetworkEventKind::Connection { status, headers } => {
+                let headers = network::sanitize_headers(headers, network::Direction::Response);
+                self.capture(snapshot::Input::Network(
+                    &network::NetworkPayload::Connection {
+                        status: *status,
+                        headers: &headers,
+                    },
+                ))
+            }
+            NetworkEventKind::Body(body) if bodies => self.capture(snapshot::Input::Network(
+                &network::NetworkPayload::Body(body),
+            )),
+            NetworkEventKind::SseEvent { event, data, id } if bodies => self.capture(
+                snapshot::Input::Network(&network::NetworkPayload::SseEvent {
+                    event: event.as_deref(),
+                    data,
+                    id: id.as_deref(),
+                }),
+            ),
+            _ => None,
+        };
+        self.write_span(SpanRecord::NetworkEvent(Box::new(
+            btel_records::NetworkEventRecord {
+                span,
+                name: network::event_name(event),
+                at,
+                payload,
+            },
+        )));
+    }
+
+    /// End an open request's span. An errored one captures its error; where
+    /// the error's text quotes one of `raw_urls` (the URLs the request went
+    /// to, as sent), the capture has the sanitized URL instead.
+    ///
+    /// # Safety
+    /// `error` and its reachable objects must remain live under the heap permit.
+    pub unsafe fn close_network_span(
+        &mut self,
+        span: TelemetryId,
+        at: ClockInstant,
+        outcome: InvocationOutcome,
+        error: Option<Value>,
+        raw_urls: &[&str],
+    ) {
+        self.start_thread();
+        let error = error.and_then(|error| {
+            let mut rewrites: Vec<_> = raw_urls
+                .iter()
+                .flat_map(|url| network::url_rewrites(url))
+                .collect();
+            rewrites.sort_by_key(|(from, _)| std::cmp::Reverse(from.len()));
+            self.capture_scratch.rewrites = rewrites;
+            let captured = self.capture(snapshot::Input::Value(error));
+            self.capture_scratch.rewrites.clear();
+            captured
+        });
+        self.write_span(SpanRecord::NetworkSpanCompletion(Box::new(
+            btel_records::NetworkCompletion {
+                span,
+                completed_at: at,
+                outcome,
+                error,
+            },
+        )));
     }
 
     #[inline(always)]
@@ -443,6 +606,7 @@ impl TelemetryState {
                 caller_is_observed,
                 args,
                 None,
+                CallTypeArgs::default(),
                 register,
             )
         }
@@ -465,6 +629,7 @@ impl TelemetryState {
         caller_is_observed: bool,
         args: &[Value],
         trace: Option<TraceConfig>,
+        type_args: CallTypeArgs<'_>,
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> Option<FrameTelemetry> {
         if function.telemetry_function_id.is_none()
@@ -538,20 +703,25 @@ impl TelemetryState {
         if mode == InvocationMode::Span {
             flags |= SPAN;
         }
-        let capture_inputs = trace.and_then(|config| config.inputs).unwrap_or(
-            policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS),
-        );
+        let capture_inputs = trace.and_then(|config| config.inputs) == Some(true)
+            || policy.capture_inputs
+            || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS);
         if policy.capture_output || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT) {
-            flags |= INHERITED_CAPTURE_OUTPUT;
+            flags |= POLICY_CAPTURE_OUTPUT;
         }
         if policy.capture_error || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR) {
-            flags |= INHERITED_CAPTURE_ERROR;
+            flags |= POLICY_CAPTURE_ERROR;
         }
 
         let captured_inputs = (mode == InvocationMode::Span && capture_inputs)
             .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
             .flatten();
-        if captured_inputs.is_some() {
+        // Types are not user data: a span records them whether or not it
+        // captures its arguments.
+        let captured_type_args = (mode == InvocationMode::Span && !type_args.is_empty())
+            .then(|| self.capture_type_args(function, type_args))
+            .flatten();
+        if captured_inputs.is_some() || captured_type_args.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
@@ -570,6 +740,7 @@ impl TelemetryState {
                 call_path,
                 entered_at,
                 captured_inputs,
+                captured_type_args,
             });
             Some(id)
         } else {
@@ -584,8 +755,8 @@ impl TelemetryState {
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
-            output_override: trace.and_then(|config| config.output),
-            error_override: trace.and_then(|config| config.error),
+            output_request: trace.and_then(|config| config.output) == Some(true),
+            error_request: trace.and_then(|config| config.error) == Some(true),
         })
     }
 
@@ -630,8 +801,8 @@ impl TelemetryState {
             await_duration: AwaitDuration::ZERO,
             saved_call_path,
             flags,
-            output_override: trace.and_then(|config| config.output),
-            error_override: trace.and_then(|config| config.error),
+            output_request: trace.and_then(|config| config.output) == Some(true),
+            error_request: trace.and_then(|config| config.error) == Some(true),
         }
     }
 
@@ -644,10 +815,9 @@ impl TelemetryState {
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
             return false;
         }
-        telemetry.error_override.unwrap_or(
-            telemetry.flags & INHERITED_CAPTURE_ERROR != 0
-                || self.policy_by_id(policy_id).capture_error,
-        )
+        telemetry.error_request
+            || telemetry.flags & POLICY_CAPTURE_ERROR != 0
+            || self.policy_by_id(policy_id).capture_error
     }
 
     #[inline(always)]
@@ -699,18 +869,18 @@ impl TelemetryState {
         let policy = self.policy_by_id(policy_id);
         let capture_value = match outcome {
             InvocationOutcome::Ok
-                if telemetry.output_override.unwrap_or(
-                    telemetry.flags & INHERITED_CAPTURE_OUTPUT != 0 || policy.capture_output,
-                ) =>
+                if telemetry.output_request
+                    || telemetry.flags & POLICY_CAPTURE_OUTPUT != 0
+                    || policy.capture_output =>
             {
                 value
             }
             InvocationOutcome::Errored
             | InvocationOutcome::Cancelled
             | InvocationOutcome::Panicked
-                if telemetry.error_override.unwrap_or(
-                    telemetry.flags & INHERITED_CAPTURE_ERROR != 0 || policy.capture_error,
-                ) =>
+                if telemetry.error_request
+                    || telemetry.flags & POLICY_CAPTURE_ERROR != 0
+                    || policy.capture_error =>
             {
                 value
             }
@@ -1232,7 +1402,7 @@ impl TelemetryState {
             } else {
                 self.prepare_context();
                 if let Some(captured) = self.pending_context_snapshot.take() {
-                    let id = captured.id();
+                    let id = captured.root_id();
                     snapshot = Some(captured);
                     ContextReference::Snapshot(id)
                 } else {
@@ -1308,6 +1478,12 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
     }
 }
 
+/// `sha256:` and the hex digits a sanitized value has in place of `value`.
+#[cfg(test)]
+pub(crate) fn network_hash_for_tests(value: &str) -> String {
+    network::hash(value)
+}
+
 #[cfg(test)]
 thread_local! {
     /// Unit tests keep records locally; this makes their VMs build raises
@@ -1354,6 +1530,7 @@ mod tests {
                 false,
                 &[Value::int(7)],
                 trace,
+                CallTypeArgs::default(),
                 |_, _| (None, function.telemetry_function_id.unwrap()),
             )
         }
@@ -1484,7 +1661,7 @@ mod tests {
     }
 
     #[test]
-    fn invocation_capture_overrides_policy_and_records_real_snapshots() {
+    fn invocation_capture_requests_combine_with_policy_and_record_real_snapshots() {
         for [capture_inputs, capture_output, capture_error] in [
             [false, false, false],
             [true, false, false],
@@ -1531,15 +1708,20 @@ mod tests {
                     )
                     .unwrap();
                     let id = frame.span_id().unwrap();
+                    assert_eq!(
+                        state.wants_error_capture(&frame, &function),
+                        error == Some(true) || capture_error,
+                        "error context construction follows additive capture requests",
+                    );
                     unsafe {
                         state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
                     }
-                    let expected_inputs = inputs.unwrap_or(capture_inputs);
+                    let expected_inputs = inputs == Some(true) || capture_inputs;
                     let expected_value = match outcome {
-                        InvocationOutcome::Ok => output.unwrap_or(capture_output),
+                        InvocationOutcome::Ok => output == Some(true) || capture_output,
                         InvocationOutcome::Errored
                         | InvocationOutcome::Cancelled
-                        | InvocationOutcome::Panicked => error.unwrap_or(capture_error),
+                        | InvocationOutcome::Panicked => error == Some(true) || capture_error,
                     };
                     let inputs = state
                         .span_records()
@@ -1619,8 +1801,8 @@ mod tests {
                         }),
                     )
                     .unwrap();
-                    assert_eq!(next.flags & INHERITED_CAPTURE_OUTPUT != 0, capture_output);
-                    assert_eq!(next.flags & INHERITED_CAPTURE_ERROR != 0, capture_error);
+                    assert_eq!(next.flags & POLICY_CAPTURE_OUTPUT != 0, capture_output);
+                    assert_eq!(next.flags & POLICY_CAPTURE_ERROR != 0, capture_error);
                     unsafe {
                         state.complete_invocation(next, &function, InvocationOutcome::Ok, None);
                     }
@@ -1814,6 +1996,211 @@ mod tests {
         drop(state);
     }
 
+    fn network_records(state: &TelemetryState) -> Vec<&VmSpanRecord> {
+        state
+            .span_records()
+            .iter()
+            .filter(|record| {
+                matches!(
+                    record,
+                    SpanRecord::NetworkSpanAnnouncement(_)
+                        | SpanRecord::NetworkEvent(_)
+                        | SpanRecord::NetworkSpanCompletion(_)
+                )
+            })
+            .collect()
+    }
+
+    fn shape(capture: Option<&btel_snapshot::Snapshot>) -> Option<serde_json::Value> {
+        capture.map(|snapshot| snapshot::json(snapshot, snapshot.value().unwrap()))
+    }
+
+    fn request() -> sys_types::network::NetworkRequest {
+        sys_types::network::NetworkRequest {
+            method: "POST".to_owned(),
+            url: "https://example.com/v1/messages?key=secret".to_owned(),
+            headers: vec![
+                ("Content-Type".to_owned(), "application/json".to_owned()),
+                ("X-Api-Key".to_owned(), "sk-secret".to_owned()),
+            ],
+            body: br#"{"model":"m"}"#.to_vec().into(),
+        }
+    }
+
+    #[test]
+    fn network_span_records_its_request_events_and_completion() {
+        use serde_json::json;
+        use sys_types::network::NetworkEventKind;
+
+        let function = function(FunctionKind::Bytecode, None);
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        // Made from inside a span: the span is its parent.
+        let frame = trace_entry(
+            &mut state,
+            &function,
+            Some(TraceConfig {
+                mode: Some(InvocationMode::Span),
+                ..TraceConfig::default()
+            }),
+        )
+        .unwrap();
+        let caller = frame.span_id().unwrap();
+        let call_path = state.active_call_path();
+        let span = state.open_network_span(&request()).unwrap();
+        // A request is not a frame: the caller stays the active span.
+        assert_eq!(state.active_id(), caller);
+        let at = ClockInstant::from_ticks;
+        state.network_event(
+            span,
+            at(10),
+            &NetworkEventKind::Connection {
+                status: 200,
+                headers: vec![
+                    ("Request-Id".to_owned(), "req_1".to_owned()),
+                    ("Set-Cookie".to_owned(), "session".to_owned()),
+                ],
+            },
+        );
+        state.network_event(
+            span,
+            at(11),
+            &NetworkEventKind::SseEvent {
+                event: Some("message_stop".to_owned()),
+                data: "{}".to_owned(),
+                id: None,
+            },
+        );
+        state.network_event(span, at(12), &NetworkEventKind::StreamEnd);
+        state.network_event(span, at(13), &NetworkEventKind::Await);
+        unsafe { state.close_network_span(span, at(13), InvocationOutcome::Ok, None, &[]) };
+        unsafe { state.complete_invocation(frame, &function, InvocationOutcome::Ok, None) };
+
+        let records = network_records(&state);
+        let [
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(connection),
+            SpanRecord::NetworkEvent(data),
+            SpanRecord::NetworkEvent(end),
+            SpanRecord::NetworkEvent(read),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records.as_slice()
+        else {
+            panic!("unexpected network records: {records:?}");
+        };
+        let url = format!(
+            "https://example.com/v1/messages?key={}",
+            network::hash("secret")
+        );
+        assert_eq!(
+            (
+                announcement.id,
+                announcement.parent_id,
+                announcement.call_path
+            ),
+            (span, caller, call_path)
+        );
+        assert_eq!((&*announcement.method, &*announcement.url), ("POST", &*url));
+        assert_eq!(
+            shape(announcement.request.as_ref()),
+            Some(json!({"request": {
+                "method": "POST",
+                "url": url,
+                "headers": {
+                    "content-type": "application/json",
+                    "x-api-key": network::hash("sk-secret"),
+                },
+                "body": r#"{"model":"m"}"#,
+            }}))
+        );
+        for (event, name, ticks) in [
+            (connection, "connection", 10),
+            (data, "data", 11),
+            (end, "end", 12),
+            (read, "await", 13),
+        ] {
+            assert_eq!(
+                (event.span, event.name.as_str(), event.at),
+                (span, name, at(ticks))
+            );
+        }
+        assert_eq!(
+            shape(connection.payload.as_ref()),
+            Some(json!({"status": 200, "headers": {
+                "request-id": "req_1",
+                "set-cookie": network::hash("session"),
+            }}))
+        );
+        assert_eq!(
+            shape(data.payload.as_ref()),
+            Some(json!({"event": "message_stop", "data": "{}", "id": null}))
+        );
+        assert!(end.payload.is_none() && read.payload.is_none());
+        assert_eq!(
+            (completion.span, completion.completed_at, completion.outcome),
+            (span, at(13), InvocationOutcome::Ok)
+        );
+        assert!(completion.error.is_none());
+    }
+
+    #[test]
+    fn network_span_errors_bodies_off_and_low_level() {
+        use sys_types::network::NetworkEventKind;
+
+        let mut state = test_state(
+            Arc::new(TelemetryPolicies::new().with_http_bodies(false)),
+            test_clock(),
+        );
+        // Outside any frame: the thread is the parent.
+        let span = state.open_network_span(&request()).unwrap();
+        let at = ClockInstant::from_ticks;
+        state.network_event(
+            span,
+            at(5),
+            &NetworkEventKind::Body(b"secret".to_vec().into()),
+        );
+        unsafe {
+            state.close_network_span(
+                span,
+                at(6),
+                InvocationOutcome::Errored,
+                Some(Value::int(3)),
+                &[],
+            );
+        }
+        let records = network_records(&state);
+        let [
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(data),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records.as_slice()
+        else {
+            panic!("unexpected network records: {records:?}");
+        };
+        assert_eq!(
+            (announcement.parent_id, announcement.call_path),
+            (state.thread.id, CallPathId::ROOT)
+        );
+        let captured = shape(announcement.request.as_ref()).unwrap();
+        assert!(captured["request"].get("body").is_none());
+        assert_eq!(captured["request"]["method"], "POST");
+        assert_eq!((data.name.as_str(), data.payload.is_none()), ("data", true));
+        assert_eq!(completion.outcome, InvocationOutcome::Errored);
+        assert!(matches!(
+            completion
+                .error
+                .as_ref()
+                .and_then(btel_snapshot::Snapshot::value),
+            Some(btel_snapshot::SnapshotValue::Int(3))
+        ));
+
+        let mut low = test_state(
+            Arc::new(TelemetryPolicies::with_auto_level(AutoTelemetryLevel::Low)),
+            test_clock(),
+        );
+        assert_eq!(low.open_network_span(&request()), None);
+        assert!(network_records(&low).is_empty());
+    }
+
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
         Function {
             name: "telemetry_test".to_string(),
@@ -1839,6 +2226,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
@@ -1849,6 +2237,88 @@ mod tests {
             body_meta,
             runtime_package: HeapPtr::null(),
         }
+    }
+
+    /// Records of one generic call made with `type_args`: its announced
+    /// type arguments, and whether its completion depends on the
+    /// announcement.
+    fn type_args_of(
+        function: &Function,
+        inputs: bool,
+        type_args: CallTypeArgs<'_>,
+    ) -> (Option<serde_json::Value>, bool) {
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        let trace = TraceConfig {
+            mode: Some(InvocationMode::Span),
+            inputs: Some(inputs),
+            ..TraceConfig::default()
+        };
+        // SAFETY: no heap values; the registration hook dereferences nothing.
+        let frame = unsafe {
+            state.enter_bytecode_with_trace(
+                function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[],
+                Some(trace),
+                type_args,
+                |_, _| (None, function.telemetry_function_id.unwrap()),
+            )
+        }
+        .unwrap();
+        unsafe {
+            state.complete_invocation(frame, function, InvocationOutcome::Ok, None);
+        }
+        let announced = state.span_records().iter().find_map(|record| match record {
+            SpanRecord::FunctionSpanAnnouncement {
+                captured_type_args, ..
+            } => Some(shape(captured_type_args.as_ref())),
+            _ => None,
+        });
+        let completed = state.span_records().last().unwrap().completion().unwrap();
+        (announced.unwrap(), completed.requires_announcement)
+    }
+
+    #[test]
+    fn a_generic_call_records_its_type_args_by_name_whether_or_not_inputs_are() {
+        let mut generic = function(FunctionKind::Bytecode, None);
+        // A method of `Box<T>`: the class's parameter rides on the receiver,
+        // the method's own is passed by the call.
+        generic.type_param_names = vec!["T".into(), "U".into()];
+        let carried = [bex_vm_types::RealizedTy::int()];
+        let passed = [bex_vm_types::RealizedTy::string()];
+        let both = CallTypeArgs {
+            carried: &carried,
+            passed: &passed,
+        };
+        for inputs in [false, true] {
+            assert_eq!(
+                type_args_of(&generic, inputs, both),
+                (
+                    Some(serde_json::json!({"T": "type: int", "U": "type: string"})),
+                    true
+                ),
+                "inputs captured: {inputs}"
+            );
+        }
+        // Without type arguments nothing is recorded, and the completion
+        // does not wait for an announcement.
+        let plain = function(FunctionKind::Bytecode, None);
+        assert_eq!(
+            type_args_of(&plain, false, CallTypeArgs::default()),
+            (None, false)
+        );
+        // A slot the compiler did not name is left out, never given a key.
+        let mut partial = generic;
+        partial.type_param_names.truncate(1);
+        assert_eq!(
+            type_args_of(&partial, false, both),
+            (Some(serde_json::json!({"T": "type: int"})), true)
+        );
+        partial.type_param_names.clear();
+        assert_eq!(type_args_of(&partial, false, both), (None, false));
     }
 
     #[test]
@@ -2505,7 +2975,7 @@ mod tests {
     }
 
     #[test]
-    fn capture_overrides_survive_policy_changes_and_late_promotion() {
+    fn capture_requests_survive_policy_changes_and_late_promotion() {
         for mode in [
             None,
             Some(InvocationMode::Timing),
@@ -2573,7 +3043,7 @@ mod tests {
                                     snapshot.roots()[0],
                                     btel_snapshot::SnapshotValue::Int(7)
                                 )),
-                                override_.unwrap_or(initial || current).then_some(true),
+                                (override_ == Some(true) || initial || current).then_some(true),
                                 "{mode:?}/{initial}/{current}/{override_:?}/{outcome:?}",
                             );
                         }

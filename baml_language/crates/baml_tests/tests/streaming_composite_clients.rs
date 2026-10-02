@@ -1,11 +1,15 @@
-//! End-to-end streaming reliability tests through the real OpenAI Responses
-//! client and a replay server. The BAML unit corpus pins the policy itself;
-//! these tests prove failures from a strict SSE transport reach that policy at
-//! the correct boundary.
+//! End-to-end reliability tests through the real OpenAI Responses client and a
+//! replay server. The BAML unit corpus pins the policy itself; these tests prove
+//! failures from a strict SSE transport, and member deadlines from the real HTTP
+//! layer, reach that policy at the correct boundary. A deadline needs a server
+//! that holds its response past wall-clock time, which BAML source cannot fake.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
 };
 
 use baml_tests::baml_test;
@@ -28,16 +32,63 @@ fn truncated_sse(text: &str) -> String {
     format!("data: {{\"type\":\"response.output_text.delta\",\"delta\":{delta}}}\n\n")
 }
 
+/// How long a stalled member holds its response: far past `MEMBER_TIMEOUT_MS`.
+const STALLED_RESPONSE: Duration = Duration::from_secs(3);
+/// The member's own request deadline under test.
+const MEMBER_TIMEOUT_MS: u64 = 200;
+
+fn completed_json(text: &str) -> String {
+    let text = serde_json::to_string(text).expect("response text is JSON-serializable");
+    format!(
+        "{{\"status\":\"completed\",\"output\":[{{\"type\":\"message\",\"role\":\"assistant\",\
+         \"content\":[{{\"type\":\"output_text\",\"text\":{text}}}]}}],\
+         \"usage\":{{\"input_tokens\":1,\"output_tokens\":1}}}}"
+    )
+}
+
 fn response_client(name: &str, model: &str, base_url: &str) -> String {
+    response_client_with_options(name, model, base_url, "")
+}
+
+/// A Responses client whose own request deadline is `MEMBER_TIMEOUT_MS`.
+fn timed_response_client(name: &str, model: &str, base_url: &str) -> String {
+    response_client_with_options(
+        name,
+        model,
+        base_url,
+        &format!("timeout = baml.time.Duration.from_milliseconds({MEMBER_TIMEOUT_MS}),"),
+    )
+}
+
+fn response_client_with_options(name: &str, model: &str, base_url: &str, options: &str) -> String {
     format!(
         r#"
         client {name} = openai.ResponsesClient.new(
             model = "{model}",
             api_key = "test-key",
             base_url = "{base_url}",
+            {options}
         );
         "#
     )
+}
+
+async fn responses_server(template: ResponseTemplate) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(template)
+        .mount(&server)
+        .await;
+    server
+}
+
+async fn request_count(server: &MockServer) -> usize {
+    server
+        .received_requests()
+        .await
+        .expect("requests should be recorded")
+        .len()
 }
 
 #[tokio::test]
@@ -293,5 +344,149 @@ async fn round_robin_selects_once_and_rotates_between_streams() {
             .expect("second member request should be recorded")
             .len(),
         1
+    );
+}
+
+#[tokio::test]
+async fn fallback_moves_past_member_request_timeout() {
+    let stalled = responses_server(
+        ResponseTemplate::new(200)
+            .insert_header("content-type", "application/json")
+            .set_body_string(completed_json("stalled"))
+            .set_delay(STALLED_RESPONSE),
+    )
+    .await;
+    let backup = responses_server(
+        ResponseTemplate::new(200)
+            .insert_header("content-type", "application/json")
+            .set_body_string(completed_json("backup")),
+    )
+    .await;
+
+    let source = format!(
+        r#"
+        {stalled_client}
+        {backup_client}
+        client Reliable = ai.clients.Fallback {{ members: [Stalled, Backup] }};
+
+        function Echo() -> string {{
+            client: Reliable
+            prompt: `Say backup.`
+        }}
+
+        function main() -> string {{
+            Echo()
+        }}
+        "#,
+        stalled_client = timed_response_client("Stalled", "stalled", &stalled.uri()),
+        backup_client = response_client("Backup", "backup", &backup.uri()),
+    );
+
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("backup".to_string().into())),
+        "the stalled member's timeout must hand the call to the next member"
+    );
+    assert_eq!(request_count(&stalled).await, 1);
+    assert_eq!(request_count(&backup).await, 1);
+}
+
+#[tokio::test]
+async fn fallback_stream_moves_past_member_request_timeout() {
+    let stalled = responses_server(
+        ResponseTemplate::new(200)
+            .insert_header("content-type", "text/event-stream")
+            .set_body_string(completed_sse("stalled"))
+            .set_delay(STALLED_RESPONSE),
+    )
+    .await;
+    let backup = responses_server(
+        ResponseTemplate::new(200)
+            .insert_header("content-type", "text/event-stream")
+            .set_body_string(completed_sse("backup")),
+    )
+    .await;
+
+    let source = format!(
+        r#"
+        {stalled_client}
+        {backup_client}
+        client Reliable = ai.clients.Fallback {{ members: [Stalled, Backup] }};
+
+        function Echo() -> string {{
+            client: Reliable
+            prompt: `Say backup.`
+        }}
+
+        function main() -> string {{
+            Echo@stream().final()
+        }}
+        "#,
+        stalled_client = timed_response_client("Stalled", "stalled", &stalled.uri()),
+        backup_client = response_client("Backup", "backup", &backup.uri()),
+    );
+
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("backup".to_string().into())),
+        "a member deadline before the first delta must hand the stream to the next member"
+    );
+    assert_eq!(request_count(&stalled).await, 1);
+    assert_eq!(request_count(&backup).await, 1);
+}
+
+#[tokio::test]
+async fn retry_retries_member_request_timeout() {
+    let server = MockServer::start().await;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let responder_calls = Arc::clone(&calls);
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |_: &wiremock::Request| {
+            let template = ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(completed_json("ok"));
+            if responder_calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                template.set_delay(STALLED_RESPONSE)
+            } else {
+                template
+            }
+        })
+        .mount(&server)
+        .await;
+
+    let source = format!(
+        r#"
+        {leaf}
+        client Retried = ai.clients.Retry.new(
+            inner = Leaf,
+            max_attempts = 2,
+            backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+        );
+
+        function Echo() -> string {{
+            client: Retried
+            prompt: `Say ok.`
+        }}
+
+        function main() -> string {{
+            Echo()
+        }}
+        "#,
+        leaf = timed_response_client("Leaf", "retry-leaf", &server.uri()),
+    );
+
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("ok".to_string().into())),
+        "a timed-out attempt must be retried"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        2,
+        "one retry must send one new request"
     );
 }

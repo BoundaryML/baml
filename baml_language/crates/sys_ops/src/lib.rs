@@ -1458,6 +1458,7 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _c: CallId,
         _url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1471,6 +1472,7 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _c: CallId,
         _req: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1478,13 +1480,13 @@ impl io::IoNamespaceHttp for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _fetch_sse(
+    fn _send_sse(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _req: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
-        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2499,10 +2501,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_http__fetch_sse = {
+        self.inner.baml_http__send_sse = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http__fetch_sse(heap, permit, args, ctx, call_id)
+                t.__glue_baml_http__send_sse(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_ssestream_next = {

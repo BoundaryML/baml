@@ -1,5 +1,7 @@
 package sdk_test
 
+import baml_go "github.com/boundaryml/baml-go"
+
 import (
 	"context"
 	"math/big"
@@ -12,15 +14,15 @@ import (
 )
 
 var (
-	_ func(context.Context, baml.TimeInstant) (baml.TimeInstant, error)                              = baml_sdk.GoTimeTestsRoundTripInstant
-	_ func(context.Context, baml.TimeDuration) (baml.TimeDuration, error)                            = baml_sdk.GoTimeTestsRoundTripDuration
-	_ func(context.Context, baml.TimePlainDate) (baml.TimePlainDate, error)                          = baml_sdk.GoTimeTestsRoundTripPlainDate
-	_ func(context.Context, baml.TimePlainTime) (baml.TimePlainTime, error)                          = baml_sdk.GoTimeTestsRoundTripPlainTime
-	_ func(context.Context, baml.TimePlainDateTime) (baml.TimePlainDateTime, error)                  = baml_sdk.GoTimeTestsRoundTripPlainDateTime
-	_ func(context.Context, baml.TimeTimeZoneOffset) (baml.TimeTimeZoneOffset, error)                = baml_sdk.GoTimeTestsRoundTripTimeZoneOffset
-	_ func(context.Context, baml.TimeZonedDateTime) (baml.TimeZonedDateTime, error)                  = baml_sdk.GoTimeTestsRoundTripZonedDateTime
-	_ func(context.Context, *baml.TimeInstant) (*baml.TimeInstant, error)                            = baml_sdk.GoTimeTestsRoundTripOptionalInstant
-	_ func(context.Context, ...baml_sdk.GoTimeTestsDefaultDurationOption) (baml.TimeDuration, error) = baml_sdk.GoTimeTestsDefaultDuration
+	_ func(context.Context, baml.TimeInstant, ...baml_go.CallOption) (baml.TimeInstant, error)               = baml_sdk.GoTimeTestsRoundTripInstant
+	_ func(context.Context, baml.TimeDuration, ...baml_go.CallOption) (baml.TimeDuration, error)             = baml_sdk.GoTimeTestsRoundTripDuration
+	_ func(context.Context, baml.TimePlainDate, ...baml_go.CallOption) (baml.TimePlainDate, error)           = baml_sdk.GoTimeTestsRoundTripPlainDate
+	_ func(context.Context, baml.TimePlainTime, ...baml_go.CallOption) (baml.TimePlainTime, error)           = baml_sdk.GoTimeTestsRoundTripPlainTime
+	_ func(context.Context, baml.TimePlainDateTime, ...baml_go.CallOption) (baml.TimePlainDateTime, error)   = baml_sdk.GoTimeTestsRoundTripPlainDateTime
+	_ func(context.Context, baml.TimeTimeZoneOffset, ...baml_go.CallOption) (baml.TimeTimeZoneOffset, error) = baml_sdk.GoTimeTestsRoundTripTimeZoneOffset
+	_ func(context.Context, baml.TimeZonedDateTime, ...baml_go.CallOption) (baml.TimeZonedDateTime, error)   = baml_sdk.GoTimeTestsRoundTripZonedDateTime
+	_ func(context.Context, *baml.TimeInstant, ...baml_go.CallOption) (*baml.TimeInstant, error)             = baml_sdk.GoTimeTestsRoundTripOptionalInstant
+	_ func(context.Context, ...baml_sdk.GoTimeTestsDefaultDurationOption) (baml.TimeDuration, error)         = baml_sdk.GoTimeTestsDefaultDuration
 )
 
 func mustBigInt(t *testing.T, value string) *big.Int {

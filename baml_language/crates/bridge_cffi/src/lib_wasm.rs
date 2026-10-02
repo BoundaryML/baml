@@ -133,16 +133,9 @@ pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     })
 }
 
-fn prepare_runtime_call(
-    encoded_args: &[u8],
-) -> Result<(Arc<dyn Bex>, crate::PreparedCall), BridgeError> {
-    let call = crate::prepare_call(encoded_args)?;
-    Ok((get_runtime()?, call))
-}
-
 pub async fn call_function_in_wasm(encoded_args: &[u8]) -> Vec<u8> {
-    match prepare_runtime_call(encoded_args) {
-        Ok((runtime, call)) => crate::invoke_prepared(runtime, call).await,
+    match crate::decode_invocation_request(encoded_args) {
+        Ok(call) => crate::execute_invocation(call).await,
         Err(error) => error_to_outbound(error),
     }
 }
@@ -150,8 +143,8 @@ pub async fn call_function_in_wasm(encoded_args: &[u8]) -> Vec<u8> {
 pub fn call_function_in_wasm_sync(encoded_args: &[u8]) -> Vec<u8> {
     // Engine construction acquires its initial heap permits with block_on.
     // Complete it before entering the executor used for the synchronous call.
-    match prepare_runtime_call(encoded_args) {
-        Ok((runtime, call)) => futures::executor::block_on(crate::invoke_prepared(runtime, call)),
+    match crate::decode_invocation_request(encoded_args) {
+        Ok(call) => futures::executor::block_on(crate::execute_invocation(call)),
         Err(error) => error_to_outbound(error),
     }
 }

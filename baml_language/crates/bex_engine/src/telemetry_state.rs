@@ -9,6 +9,10 @@ use bex_vm::{
 pub(crate) struct EngineTelemetry {
     pub(super) clock: btel_clock::ClockRuntime,
     pub(super) policies: Arc<TelemetryPolicies>,
+    /// Events of traced HTTP requests, queued by the IO side and written by
+    /// whichever VM thread runs the next sys-op. Holds raw header values:
+    /// never handed to anything but the IO side's `NetworkContext`.
+    pub(super) network: Arc<sys_types::network::NetworkQueue>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) runtime: Arc<btel_processor::TelemetryRuntime>,
     #[cfg(not(target_arch = "wasm32"))]

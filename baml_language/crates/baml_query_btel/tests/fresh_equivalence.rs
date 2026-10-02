@@ -27,6 +27,8 @@ const TABLES: &[(&str, &str)] = &[
         "rec, sequence",
     ),
     ("rejected", "rec, sequence"),
+    ("event_context", "rec, node_id, slot"),
+    ("context_snapshot", "cas"),
     ("function_def", "rec, function_id"),
     ("function_param", "rec, function_id, position"),
     ("call_path", "rec, call_path_id"),
@@ -37,6 +39,8 @@ const TABLES: &[(&str, &str)] = &[
     ("sysop", "rec, call_path_id"),
     ("model_usage", "rec, sequence, position"),
     ("call", "rec, call_id"),
+    ("network_span", "rec, span_id"),
+    ("network_event", "rec, span_id, seq"),
     ("profile_part", "rec, node_id"),
     ("profile_node", "process_id, node_id"),
 ];
@@ -60,9 +64,15 @@ function main(n: int) -> int {
     let d = Deferred(n) catch (e) { Failure => 4 };
     let child = spawn { Middle(n) };
     let e = (await child) catch (x) { Failure => 5 };
-    a + b + c + d + e
+    let f = Pick(Box { value: n }).map((v) -> string { "v" }).value;
+    a + b + c + d + e + Pick(f.length())
 }
 function crash(n: int) -> int { Middle(n) }
+class Box<T> {
+    value T
+    function map<U>(self, f: (T) -> U throws never) -> Box<U> { Box { value: f(self.value) } }
+}
+function Pick<T>(x: T) -> T { x }
 "#;
 
 fn small_files() -> RecordingConfig {
@@ -94,8 +104,14 @@ async fn record_corpus(project: &Path) {
         .await
         .expect("shutdown");
     let calls: Vec<(&str, i64)> = (0..24).map(|n| ("main", n)).chain([("crash", 1)]).collect();
-    let results =
-        record_program_with(project, ERRORS, &["Middle", "Recur"], &calls, small_files()).await;
+    let results = record_program_with(
+        project,
+        ERRORS,
+        &["Middle", "Recur", "Pick", "map"],
+        &calls,
+        small_files(),
+    )
+    .await;
     assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 24);
 }
 
@@ -185,7 +201,15 @@ async fn fresh_and_incremental_indexes_are_identical() {
     let mut incremental = Index::for_project(&incremental_project, options).unwrap();
     let metrics = incremental.refresh().unwrap();
     assert_eq!(metrics.transactions, metrics.files_applied);
-    assert_same(&dump(&fresh), &dump(&incremental));
+    let fresh = dump(&fresh);
+    // Pick<T> and Box<T>.map<U> recorded their type arguments.
+    let calls = &fresh.iter().find(|(table, _)| table == "call").unwrap().1;
+    assert_eq!(
+        calls.iter().filter(|row| row[9] != Value::Null).count(),
+        24 * 3,
+        "type_args_cas"
+    );
+    assert_same(&fresh, &dump(&incremental));
 }
 
 mod crafted {
@@ -333,6 +357,41 @@ mod crafted {
         }
     }
 
+    fn snapshot(n: u64) -> proto::CasId {
+        proto::CasId { low: n, high: 0 }
+    }
+
+    fn announce(id: u64, path: u32, method: &str, started: u64) -> Event {
+        Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+            id,
+            parent_id: 100,
+            call_path_id: path,
+            started_at_ticks: started,
+            method: method.into(),
+            url: "https://api.example.com/v1/messages".into(),
+            request_cas_id: Some(snapshot(id)),
+        })
+    }
+
+    fn network_event(span: u64, name: &str, at: u64, payload: Option<u64>) -> Event {
+        Event::NetworkEvent(proto::NetworkEvent {
+            span_id: span,
+            name: name.into(),
+            at_ticks: at,
+            payload_cas_id: payload.map(snapshot),
+        })
+    }
+
+    fn network_done(span: u64, at: u64, outcome: proto::InvocationOutcome) -> Event {
+        Event::NetworkCompletion(proto::NetworkCompletion {
+            span_id: span,
+            completed_at_ticks: at,
+            outcome: outcome as i32,
+            panicked: false,
+            error_cas_id: None,
+        })
+    }
+
     fn usage(node: u64, model: &str, input: u64) -> proto::ModelUsage {
         proto::ModelUsage {
             node_id: node,
@@ -355,13 +414,26 @@ mod crafted {
                 clock_epochs: vec![epoch(1)],
             }),
             spans: Some(proto::SpanBatch {
-                sections: vec![section(
-                    T2,
-                    vec![
-                        Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
-                        completion(100, T2, 2, 20),
-                    ],
-                )],
+                sections: vec![
+                    section(
+                        T2,
+                        vec![
+                            Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
+                            completion(100, T2, 2, 20),
+                        ],
+                    ),
+                    // A request's events and completion before its announcement.
+                    section(
+                        T3,
+                        vec![
+                            network_event(200, "data", 30, Some(7)),
+                            network_event(200, "connection", 25, Some(8)),
+                            network_event(0, "data", 26, None),
+                            network_done(200, 40, proto::InvocationOutcome::Ok),
+                            network_event(201, "connection", 24, None),
+                        ],
+                    ),
+                ],
             }),
             aggregates: Some(proto::AggregateBatch {
                 entries: vec![aggregate(2, 3, 30, 1), aggregate(4, 1, 7, 0)],
@@ -399,18 +471,31 @@ mod crafted {
                                 outcome: 1,
                                 ..Default::default()
                             }),
+                            // Late: its completion was in the first file.
                             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                                 id: 100,
                                 parent_id: T2,
                                 call_path_id: 2,
                                 entered_at_ticks: 21,
                                 inputs_cas_id: None,
+                                type_args_cas_id: Some(proto::CasId { low: 3, high: 4 }),
                             }),
                         ],
                     ),
                     section(
                         T3,
                         vec![completion(101, T3, 4, 30), completion(101, T3, 4, 31)],
+                    ),
+                    section(
+                        T2,
+                        vec![
+                            announce(200, 4, "GET", 22),
+                            network_event(200, "end", 30, None),
+                            network_done(200, 41, proto::InvocationOutcome::Ok),
+                            // Never completed, made from a path only it uses.
+                            announce(201, 6, "POST", 23),
+                            network_done(202, 50, proto::InvocationOutcome::Unspecified),
+                        ],
                     ),
                 ],
             }),
@@ -433,6 +518,7 @@ mod crafted {
                 call_paths: vec![
                     path(1, 0, None, 0, CALLER, 1),
                     path(4, 1, Some(CALLER), 2, CALLEE, 1),
+                    path(6, 1, Some(CALLER), 6, CALLEE, 1),
                 ],
                 threads: vec![
                     thread(T1, None, 0, 10),
@@ -446,11 +532,16 @@ mod crafted {
             spans: Some(proto::SpanBatch {
                 sections: vec![section(
                     T2,
-                    vec![Event::ThreadCompletion(proto::ThreadCompletion {
-                        completed_at_ticks: 95,
-                        outcome: 2,
-                        panicked: true,
-                    })],
+                    vec![
+                        Event::ThreadCompletion(proto::ThreadCompletion {
+                            completed_at_ticks: 95,
+                            outcome: 2,
+                            panicked: true,
+                        }),
+                        announce(200, 4, "POST", 22),
+                        network_event(200, "await", 41, None),
+                        network_event(201, "data", 60, Some(9)),
+                    ],
                 )],
             }),
             end: Some(proto::RecordingEnd {
@@ -508,6 +599,9 @@ fn late_and_conflicting_evidence_indexes_identically() {
         "thread_completion_conflict",
         "call_evidence_conflict",
         "aggregate_outcome_invalid",
+        "network_span_conflict",
+        "network_completion_conflict",
+        "network_evidence_invalid",
     ] {
         assert!(
             issues.iter().any(|issue| issue.contains(code)),
@@ -527,5 +621,35 @@ fn late_and_conflicting_evidence_indexes_identically() {
             .any(|row| row[4] == Value::Text("user.Callee".into())),
         "{profile:?}"
     );
+    // The fold keeps the path only a network span reads.
+    let paths = &fresh
+        .iter()
+        .find(|(table, _)| table == "call_path")
+        .unwrap()
+        .1;
+    assert!(
+        paths.iter().any(|row| row[1] == Value::Integer(6)),
+        "{paths:?}"
+    );
+    let events = &fresh
+        .iter()
+        .find(|(table, _)| table == "network_event")
+        .unwrap()
+        .1;
+    assert_eq!(events.len(), 6, "{events:?}");
+    // The late announcement gives its call the type arguments.
+    let type_args: Vec<i64> = fresh
+        .iter()
+        .find(|(table, _)| table == "call")
+        .unwrap()
+        .1
+        .iter()
+        .filter(|row| row[9] != Value::Null)
+        .map(|row| match &row[1] {
+            Value::Blob(id) => i64::from_be_bytes(id[..].try_into().unwrap()),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(type_args, vec![100]);
     assert_same(&fresh, &incremental);
 }

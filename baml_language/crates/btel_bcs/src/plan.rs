@@ -56,14 +56,22 @@ pub(crate) fn validate_proposal(request: &PrepareUploadsRequest) -> Result<(), D
     Ok(())
 }
 
-pub(crate) fn checked_url(value: &str, allow_http: bool) -> Result<Url, DeliveryError> {
+/// Upload targets may use plain HTTP only when the prepare base does, so an
+/// HTTPS base never sends payloads in the clear.
+pub(crate) fn checked_url(value: &str, base: &Url) -> Result<Url, DeliveryError> {
     let url = Url::parse(value).map_err(|_| DeliveryError::InvalidPlan)?;
-    validate_url(&url, allow_http)?;
+    validate_url(&url, is_loopback_http(base))?;
     Ok(url)
 }
 
-pub(crate) fn validate_url(url: &Url, allow_http: bool) -> Result<(), DeliveryError> {
-    if (url.scheme() != "https" && !(allow_http && url.scheme() == "http"))
+/// Plain HTTP is accepted only for loopback hosts, so local development can
+/// reach a local data plane without TLS.
+pub(crate) fn is_loopback_http(url: &Url) -> bool {
+    url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
+}
+
+pub(crate) fn validate_url(url: &Url, loopback_http: bool) -> Result<(), DeliveryError> {
+    if (url.scheme() != "https" && !(loopback_http && is_loopback_http(url)))
         || url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
@@ -77,7 +85,7 @@ pub(crate) fn validate_url(url: &Url, allow_http: bool) -> Result<(), DeliveryEr
 pub(crate) fn validate_response(
     request: &PrepareUploadsRequest,
     response: &PrepareUploadsResponse,
-    allow_http: bool,
+    base: &Url,
 ) -> Result<(), DeliveryError> {
     if response.plan_id.is_empty() {
         return Err(DeliveryError::InvalidPlan);
@@ -108,7 +116,7 @@ pub(crate) fn validate_response(
         {
             return Err(DeliveryError::InvalidPlan);
         }
-        checked_url(&upload.presigned_put_url, allow_http)?;
+        checked_url(&upload.presigned_put_url, base)?;
         let mut headers = HashSet::new();
         for (name, value) in &upload.required_headers {
             let name =
@@ -197,4 +205,42 @@ pub(crate) fn validate_response(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_http_is_limited_to_loopback_hosts_and_loopback_bases() {
+        let http_base = Url::parse("http://127.0.0.1:9000/publisher").unwrap();
+        let https_base = Url::parse("https://bcs.example/publisher").unwrap();
+        for value in [
+            "http://localhost:8080/put",
+            "http://127.0.0.1:1/put",
+            "http://[::1]:8080/put",
+        ] {
+            let url = Url::parse(value).unwrap();
+            assert_eq!(validate_url(&url, true), Ok(()), "{value}");
+            assert_eq!(checked_url(value, &http_base), Ok(url), "{value}");
+            assert_eq!(
+                checked_url(value, &https_base),
+                Err(DeliveryError::InvalidPlan),
+                "{value}"
+            );
+        }
+        for value in [
+            "http://example.com/",
+            "http://localhost.example/",
+            "http://127.0.0.2/",
+        ] {
+            let url = Url::parse(value).unwrap();
+            assert_eq!(validate_url(&url, true), Err(DeliveryError::InvalidPlan));
+            assert_eq!(
+                checked_url(value, &http_base),
+                Err(DeliveryError::InvalidPlan)
+            );
+        }
+        assert!(checked_url("https://uploads.example/put", &http_base).is_ok());
+    }
 }

@@ -16,8 +16,8 @@ use common::{EngineProgram, assert_engine_executes};
 async fn portable_prompt_ast_reconstructs_a_reusable_prompt_wrapper() {
     use std::sync::Arc;
 
-    use baml_builtins2::{PromptAst, PromptAstSimple};
     use bex_engine::BexEngine;
+    use bex_vm_types::{PromptAst, PromptAstSimple};
     use sys_native::SysOpsExt;
 
     let snapshot = common::compile_for_engine(

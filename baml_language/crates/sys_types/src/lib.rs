@@ -21,6 +21,7 @@ pub use bex_heap::BexHeap;
 pub use bex_vm_types::SysOp;
 pub use tokio_util::sync::CancellationToken;
 
+pub mod network;
 pub mod sse;
 
 /// Outcome of [`resolve_name`].
@@ -141,7 +142,11 @@ impl CallId {
     /// bridges (e.g. Python) when multiple overlapping calls can occur.
     #[inline]
     pub fn next() -> Self {
-        CallId(NEXT_CALL_ID.fetch_add(1, Ordering::Relaxed))
+        CallId(
+            NEXT_CALL_ID
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                .unwrap_or(0),
+        )
     }
 }
 
@@ -563,6 +568,11 @@ pub type SysOpFn = Arc<
 pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     Send + Sync
 {
+    /// Engine-owned callback frame. Transport layers may downcast it through
+    /// the runtime facade; application SDK packages never participate here.
+    fn capture_invocation(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        None
+    }
     /// Spawn a a new VM with the given function name and arguments.
     ///
     /// Generally just calls `BexEngine::call_function`.
@@ -632,6 +642,10 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Typed async IO interface for calling back into the runtime IO layer.
     /// Built once by the engine from the `SysOps` table and shared across calls.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
+
+    /// The span of the request this call makes. `None` unless telemetry is
+    /// on and the op sends an HTTP request.
+    pub network: Option<network::NetworkContext>,
 }
 
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
@@ -644,6 +658,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
+            network: self.network.clone(),
         }
     }
 }
@@ -824,6 +839,7 @@ impl SysOpContext {
             type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
+            network: None,
         }
     }
 }
@@ -843,6 +859,7 @@ impl EngineSysOpContext {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
             runtime_io: self.runtime_io.clone(),
+            network: None,
         }
     }
 }
@@ -1040,7 +1057,8 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
         let err: bex_vm_types::errors::VmRustFnError = bex_vm_types::errors::VmBamlError::Timeout {
             message: "timed out".into(),
-            duration_ms: Some(30_000),
+            duration: Some(std::time::Duration::from_secs(30)),
+            timeout_type: "timeout".into(),
         }
         .into();
         assert!(validate_sys_op_error(op, &err).is_ok());
@@ -1144,7 +1162,8 @@ mod tests {
             },
             VmBamlError::Timeout {
                 message: "t".into(),
-                duration_ms: Some(1_000),
+                duration: Some(std::time::Duration::from_secs(1)),
+                timeout_type: "timeout".into(),
             },
             VmBamlError::Unsupported {
                 message: "u".into(),

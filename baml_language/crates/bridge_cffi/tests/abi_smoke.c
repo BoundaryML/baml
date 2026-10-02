@@ -61,7 +61,10 @@ static int baml_required_functions_exist(const BamlApiV1 *api) {
          api->handle_clone != NULL && api->handle_release != NULL && api->media_from_url != NULL &&
          api->media_from_file != NULL && api->media_from_base64 != NULL && api->media_url != NULL &&
          api->media_file != NULL && api->media_base64 != NULL && api->media_mime_type != NULL &&
-         api->register_bridge != NULL;
+         api->register_bridge != NULL && api->invocation_protocol_version != NULL &&
+         api->invocation_clock_ns != NULL && api->release_function_call != NULL &&
+         api->register_host_dispatch_v2 != NULL && api->register_host_cancel_callback != NULL &&
+         api->trace_selection != NULL && api->invocation_context != NULL;
 }
 
 static int baml_test_evolution_checks(const BamlApiV1 *api) {

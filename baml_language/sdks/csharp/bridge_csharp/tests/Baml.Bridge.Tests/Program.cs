@@ -61,6 +61,19 @@ internal static unsafe class Program
 
     private static int RunNativeChild(string[] args)
     {
+        if (args.Length == 1 && args[0] == "abi-migration")
+        {
+            VerifyNativeAbiLayoutAndValidation();
+            VerifyOwnedBuffers();
+            VerifyCallPipeline();
+            VerifyCallbackIdentifiersAndCopy();
+            VerifySafeHandleOwnership();
+            VerifyStreamProtocolOwnership();
+            VerifyMediaAndHandleProtocol();
+            Console.WriteLine("managed_abi_migration=ok");
+            return 0;
+        }
+
         if (args.Length == 1 && args[0] == "spec-prompt")
         {
             VerifyFunctionSpecAndPromptMethods();
@@ -1239,7 +1252,7 @@ internal static unsafe class Program
     {
         Require(sizeof(BamlBuffer) == 16, "BamlBuffer layout changed");
         Require(sizeof(BamlBridgeInfoV1) == 64, "BamlBridgeInfoV1 layout changed");
-        Require(sizeof(BamlApiV1) == 200, "BamlApiV1 layout changed");
+        Require(sizeof(BamlApiV1) == 240, "BamlApiV1 layout changed");
         (string Field, int Offset)[] layout =
         [
             (nameof(BamlApiV1.AbiVersion), 0),
@@ -1267,6 +1280,11 @@ internal static unsafe class Program
             (nameof(BamlApiV1.RegisterUnhandledSpawnErrorCallback), 176),
             (nameof(BamlApiV1.ShutdownRuntime), 184),
             (nameof(BamlApiV1.InitializeRuntimeFromBlobWithMetadata), 192),
+            (nameof(BamlApiV1.InvocationProtocolVersion), 200),
+            (nameof(BamlApiV1.InvocationClockNs), 208),
+            (nameof(BamlApiV1.ReleaseFunctionCall), 216),
+            (nameof(BamlApiV1.RegisterHostDispatchV2), 224),
+            (nameof(BamlApiV1.RegisterHostCancelCallback), 232),
         ];
         foreach ((string field, int offset) in layout)
         {
@@ -1278,7 +1296,7 @@ internal static unsafe class Program
         BamlApiV1 table = CreateValidTable();
         NativeApi.ValidateTable(&table);
         Require(
-            BamlApiV1Layout.RequiredPrefixSize == 200,
+            BamlApiV1Layout.RequiredPrefixSize == 240,
             "BamlApiV1 required prefix changed");
         table = CreateValidTable();
         table.StructSize += 64;
@@ -1294,7 +1312,7 @@ internal static unsafe class Program
         table = CreateValidTable();
         table.RegisterBridge = null;
         ExpectInvalidTable(table);
-        for (int field = 0; field < 23; field++)
+        for (int field = 0; field < 28; field++)
         {
             table = CreateValidTable();
             ClearRequiredFunction(ref table, field);
@@ -2125,7 +2143,7 @@ internal static unsafe class Program
 
         var streamClass = new BamlTyClass { Name = "ai.stream.Stream" };
         streamClass.TypeArgs.Add(partialType);
-        streamClass.TypeArgs.Add(finalType);
+
         var streamEnvelope = new BamlOutboundResult
         {
             Ok = new BamlOutboundValue
@@ -2142,7 +2160,6 @@ internal static unsafe class Program
         using (BamlStreamNativeHandle stream = PrimitiveProtocol.DecodeStreamHandle(
             streamEnvelope.ToByteArray(),
             partialMetadata,
-            finalMetadata,
             "test.echo@stream",
             api))
         {
@@ -2163,7 +2180,6 @@ internal static unsafe class Program
             _ = PrimitiveProtocol.DecodeStreamHandle(
                 streamEnvelope.ToByteArray(),
                 partialMetadata,
-                finalMetadata,
                 "test.echo@stream",
                 api));
         streamClass.Name = "ai.stream.Stream";
@@ -2716,7 +2732,7 @@ internal static unsafe class Program
 
     private static BamlApiV1 CreateValidTable() => new()
     {
-        AbiVersion = 2,
+        AbiVersion = 3,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
         InitializeRuntimeFromBlob = &Initialize,
@@ -2741,6 +2757,11 @@ internal static unsafe class Program
         RegisterUnhandledSpawnErrorCallback = &RegisterUnhandledSpawnError,
         ShutdownRuntime = &Shutdown,
         InitializeRuntimeFromBlobWithMetadata = &InitializeWithMetadata,
+        InvocationProtocolVersion = &ProtocolVersion,
+        InvocationClockNs = &InvocationClock,
+        ReleaseFunctionCall = &ReleaseCall,
+        RegisterHostDispatchV2 = &RegisterHostDispatchV2,
+        RegisterHostCancelCallback = &RegisterHostCancel,
     };
 
     private static void ExpectInvalidTable(BamlApiV1 table, bool passNull = false)
@@ -2784,6 +2805,11 @@ internal static unsafe class Program
             case 20: table.RegisterUnhandledSpawnErrorCallback = null; break;
             case 21: table.ShutdownRuntime = null; break;
             case 22: table.InitializeRuntimeFromBlobWithMetadata = null; break;
+            case 23: table.InvocationProtocolVersion = null; break;
+            case 24: table.InvocationClockNs = null; break;
+            case 25: table.ReleaseFunctionCall = null; break;
+            case 26: table.RegisterHostDispatchV2 = null; break;
+            case 27: table.RegisterHostCancelCallback = null; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }
@@ -2866,6 +2892,17 @@ internal static unsafe class Program
             }
         }
     }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static uint ProtocolVersion() => 1;
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus InvocationClock(ulong id, ulong* now) { *now = 0; return BamlCffiStatus.Ok; }
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int ReleaseCall(ulong id) => 1;
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void RegisterHostDispatchV2(delegate* unmanaged[Cdecl]<byte*, nuint, void> callback) { }
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void RegisterHostCancel(delegate* unmanaged[Cdecl]<uint, void> callback) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ulong NewCall() => checked((ulong)Interlocked.Increment(ref nextFakeCallId));

@@ -20,7 +20,7 @@ use btel_types::{
 pub enum ContextReference {
     Unavailable,
     Empty,
-    Snapshot(btel_snapshot::SnapshotId),
+    Snapshot(btel_snapshot::CasId),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +49,7 @@ impl<I, V> SpanRecord<I, V> {
             Self::ThreadSpanAnnouncement { .. }
                 | Self::ThreadSpanCompletion { .. }
                 | Self::FunctionSpanAnnouncement { .. }
+                | Self::NetworkSpanAnnouncement(_)
                 | Self::Log { .. }
         ) || self.completion().is_some()
     }
@@ -102,6 +103,8 @@ pub type ThreadName = Arc<Box<str>>;
 /// stay in `TimingRecord` so they do not pay this stride or compete for its cache.
 #[derive(Debug)]
 pub enum SpanRecord<InputCapture, ValueCapture> {
+    /// Owned metadata for a host definition registered after recording startup.
+    HostFunctionDefined(Box<btel_types::FunctionMetadata>),
     /// This ring needs its own thread context; the Timing ring's is independent.
     ThreadSelected { thread_id: TelemetryId },
     /// Execution context for subsequent observations in this chunk and thread.
@@ -112,7 +115,7 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     },
     /// Reselect an already handed-off snapshot without recapturing its values.
     /// The reference does not imply that delivery of the blob succeeded.
-    ContextReferenced { id: btel_snapshot::SnapshotId },
+    ContextReferenced { id: btel_snapshot::CasId },
     /// An explicitly empty execution context, distinct from an unavailable one.
     ContextCleared,
     /// A point observation with context selected by the surrounding run.
@@ -150,9 +153,14 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         clock: Arc<ClockEpoch>,
         name: Option<ThreadName>,
     },
-    /// Rare: tokens one model turn used, charged to an explicit span or
-    /// thread node. Boxed so the model name never widens the slot.
-    ModelUsage(Box<ModelUsage>),
+    /// An HTTP request started. Boxed, like the event and completion below,
+    /// so its method and URL never widen the slot.
+    NetworkSpanAnnouncement(Box<NetworkAnnouncement<InputCapture>>),
+    /// Something happened to an open request, as the IO side timed it.
+    /// May land on another thread than the announcement: it names its span.
+    NetworkEvent(Box<NetworkEventRecord<ValueCapture>>),
+    /// An HTTP request ended. A request never read has no completion.
+    NetworkSpanCompletion(Box<NetworkCompletion<ValueCapture>>),
     /// Entry identity and owned inputs exceed the Timing slot budget.
     FunctionSpanAnnouncement {
         id: TelemetryId,
@@ -160,6 +168,10 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         call_path: CallPathId,
         entered_at: ClockInstant,
         captured_inputs: Option<InputCapture>,
+        /// A generic call's type arguments, `map<string, Type>` keyed by
+        /// type-parameter name. Recorded with the span, whether or not its
+        /// inputs are; `None` for a call without type arguments.
+        captured_type_args: Option<InputCapture>,
     },
     /// Completion variants specialize outcome, reentry and announcement dependency.
     /// This is an in-process dispatch choice; Rust discriminants are not wire IDs.
@@ -459,18 +471,69 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     },
 }
 
-/// Tokens one model turn reported, as its provider counted them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModelUsage {
-    /// The span or thread node that made the call.
-    pub node: TelemetryId,
-    pub model: Option<Box<str>>,
-    /// Input tokens billed at the full rate: cache reads and writes excluded.
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub cache_read_tokens: Option<u64>,
-    pub cache_write_tokens: Option<u64>,
-    pub reasoning_tokens: Option<u64>,
+/// One HTTP request's span: its parent is the innermost span (or thread)
+/// that made it, its call path the frame that made it.
+#[derive(Debug)]
+pub struct NetworkAnnouncement<InputCapture> {
+    pub id: TelemetryId,
+    pub parent_id: TelemetryId,
+    pub call_path: CallPathId,
+    pub started_at: ClockInstant,
+    pub method: Box<str>,
+    /// Sanitized: query values and credentials are hashed.
+    pub url: Box<str>,
+    /// `{request: {method, url, headers, body}}`, sanitized.
+    pub request: Option<InputCapture>,
+}
+
+#[derive(Debug)]
+pub struct NetworkEventRecord<ValueCapture> {
+    pub span: TelemetryId,
+    pub name: NetworkEventName,
+    pub at: ClockInstant,
+    pub payload: Option<ValueCapture>,
+}
+
+#[derive(Debug)]
+pub struct NetworkCompletion<ValueCapture> {
+    pub span: TelemetryId,
+    pub completed_at: ClockInstant,
+    pub outcome: InvocationOutcome,
+    /// The error that ended it, captured as a function's error is.
+    pub error: Option<ValueCapture>,
+}
+
+/// What a network event records, by the name the recording stores.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NetworkEventName {
+    /// The response's status and headers arrived.
+    Connection,
+    /// A whole body, or one server-sent event.
+    Data,
+    /// A server-sent event stream ended on the wire.
+    End,
+    /// The program finished reading the response.
+    Await,
+    /// The program closed a stream before its end.
+    Close,
+    /// The response was collected without being read.
+    Drop,
+    /// Names for other protocols, such as WebSocket messages.
+    Other(Arc<str>),
+}
+
+impl NetworkEventName {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Connection => "connection",
+            Self::Data => "data",
+            Self::End => "end",
+            Self::Await => "await",
+            Self::Close => "close",
+            Self::Drop => "drop",
+            Self::Other(name) => name,
+        }
+    }
 }
 
 /// An absent PC in `SpanRecord::ErrorRaisedAndEnded`. Compact code never
@@ -623,6 +686,22 @@ mod layout_tests {
         assert_eq!(size_of::<TimingRecord>(), 32);
         assert_eq!(size_of::<Box<RaiseStack>>(), 8);
         assert_eq!(size_of::<Option<ThreadName>>(), 8);
+    }
+
+    #[test]
+    fn an_announcement_gives_up_its_inputs_then_its_type_args() {
+        let id = btel_types::allocate_telemetry_id();
+        let mut record = SpanRecord::<u8, u8>::FunctionSpanAnnouncement {
+            id,
+            parent_id: id,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(1),
+            captured_type_args: Some(2),
+        };
+        assert_eq!(record.take_capture(), Some(1));
+        assert_eq!(record.take_capture(), Some(2));
+        assert_eq!(record.take_capture(), None);
     }
 }
 
@@ -1167,15 +1246,26 @@ impl<I, V> SpanRecord<I, V> {
     }
 }
 
-impl<C> SpanRecord<C, C> {
-    /// Transfer the exclusive capture owner; record destruction handles everything else.
-    pub fn take_capture(&mut self) -> Option<C> {
-        match self {
-            Self::Log { captured_data, .. } => captured_data.take(),
-            Self::ContextSelected { captured_context } => captured_context.take(),
+/// The slots holding the captures a record owns, in the order
+/// `take_capture` hands them over, borrowed as `$record` is: `$borrow`
+/// repeats that borrow for a slot behind a box. Every variant is listed, so
+/// a new one must say what it carries. Only an announcement holds two: its
+/// inputs, then its type arguments.
+macro_rules! capture_slots {
+    ($record:expr, $($borrow:tt)+) => {
+        match $record {
+            Self::Log { captured_data, .. } => [Some(captured_data), None],
+            Self::ContextSelected { captured_context } => [Some(captured_context), None],
             Self::FunctionSpanAnnouncement {
-                captured_inputs, ..
-            } => captured_inputs.take(),
+                captured_inputs,
+                captured_type_args,
+                ..
+            } => [Some(captured_inputs), Some(captured_type_args)],
+            Self::NetworkSpanAnnouncement(announcement) => {
+                [Some($($borrow)+ announcement.request), None]
+            }
+            Self::NetworkEvent(event) => [Some($($borrow)+ event.payload), None],
+            Self::NetworkSpanCompletion(completion) => [Some($($borrow)+ completion.error), None],
             Self::FunctionSpanCompletionOk { captured_value, .. }
             | Self::FunctionSpanCompletionOkNeedsAnnouncement { captured_value, .. }
             | Self::FunctionSpanCompletionOkReentry { captured_value, .. }
@@ -1207,22 +1297,42 @@ impl<C> SpanRecord<C, C> {
             }
             | Self::LateFunctionSpanCompletionPanicked { captured_value, .. }
             | Self::LateFunctionSpanCompletionPanickedReentry { captured_value, .. } => {
-                captured_value.take()
+                [Some(captured_value), None]
             }
-            Self::ThreadSelected { .. }
+            Self::HostFunctionDefined(_)
+            | Self::ThreadSelected { .. }
             | Self::ContextCleared
             | Self::ContextReferenced { .. }
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
             | Self::ThreadSpanRunning { .. }
-            | Self::ModelUsage(_)
             | Self::CallPathDefined { .. }
             | Self::ErrorRaiseOrigin { .. }
             | Self::ErrorRaiseStack(_)
             | Self::ErrorRaised { .. }
             | Self::ErrorRaisedAndEnded { .. }
             | Self::ErrorRaiseFrameCompleted { .. }
-            | Self::ErrorUnwindEnded { .. } => None,
+            | Self::ErrorUnwindEnded { .. } => [None, None],
         }
+    };
+}
+
+impl<C> SpanRecord<C, C> {
+    /// The captures this record owns, in the order `take_capture` hands
+    /// them over.
+    pub fn captures(&self) -> impl Iterator<Item = &C> {
+        capture_slots!(self, &)
+            .into_iter()
+            .flatten()
+            .filter_map(Option::as_ref)
+    }
+
+    /// Transfer the exclusive capture owners, one per call until none is
+    /// left; record destruction handles everything else.
+    pub fn take_capture(&mut self) -> Option<C> {
+        capture_slots!(self, &mut)
+            .into_iter()
+            .flatten()
+            .find_map(Option::take)
     }
 }

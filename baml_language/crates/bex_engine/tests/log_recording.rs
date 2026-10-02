@@ -12,11 +12,11 @@ use bex_engine::{
 };
 use btel_bcs::{CloudPublisherConfig, delivery::DeliveryConfig, proto::CloudUploadEnvelope};
 use btel_reader::{
-    cas::{CasLimits, CasOutcome, CasStore},
+    cas::{CasLimits, CasStore},
     context::{ContextReference, reference},
 };
 use btel_recorder::{RecordingConfig, proto};
-use btel_snapshot::{DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, SnapshotId};
+use btel_snapshot::{CasId, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 use prost::Message as _;
 use sys_native::SysOpsExt;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
@@ -103,7 +103,7 @@ fn fields(entries: &btel_snapshot::Entries) -> BTreeMap<&str, &DecodedValue> {
 fn assert_logs(
     files: &[proto::RecordingFile],
     name: &str,
-    mut load: impl FnMut(SnapshotId) -> DecodedSnapshot,
+    mut load: impl FnMut(CasId) -> DecodedSnapshot,
 ) {
     use proto::span_event::Event;
     let functions: BTreeMap<_, _> = files
@@ -269,7 +269,7 @@ async fn log_data_and_event_time_context_reach_local_cas() {
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     let cas = CasStore::new(directory.path().join("cas"), CasLimits::default());
     assert_logs(&read.files, &name, |id| {
-        let CasOutcome::Available(snapshot) = cas.load(id).outcome else {
+        let Ok(snapshot) = cas.load(id).snapshot else {
             panic!("log CAS was not persisted")
         };
         snapshot.as_ref().clone()
@@ -295,13 +295,12 @@ async fn log_data_and_context_use_existing_cloud_uploads() {
         TelemetryRecording::cloud(
             RecordingConfig::default(),
             CloudPublisherConfig {
-                snapshot_target: 1,
+                candidate_target: 1,
                 max_pending_snapshots: 1,
                 inline_target_bytes: 1024 * 1024,
                 ..CloudPublisherConfig::default()
             },
             DeliveryConfig {
-                allow_http: true,
                 max_pending_snapshots: 1,
                 max_candidates: 1,
                 max_targets: 2,

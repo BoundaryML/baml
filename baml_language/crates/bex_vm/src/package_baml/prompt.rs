@@ -1,9 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use baml_builtins2::{PromptAst, PromptAstSimple};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr,
+    HeapPtr, PromptAst, PromptAstSimple,
     types::{Object, Value},
 };
 
@@ -16,7 +15,6 @@ use crate::{
     package_ai::{
         BamlClassPrompt, BamlNamespaceInternal, BamlPackageAi, PackageAiImpl, view as ai_view,
     },
-    vec_ext::VecExt,
 };
 
 #[derive(Default)]
@@ -29,28 +27,31 @@ impl PromptContentSink {
         // Legacy renderer parity: when media splits a message into parts,
         // every text chunk was trimmed and whitespace-only chunks between
         // media dropped. Text-only content is left untouched.
+        //
+        // A cache delimiter is zero-width here: the text on either side of it
+        // is one chunk for trimming, so only the edges facing media (or the
+        // ends of the message) are trimmed.
         if self
             .parts
             .iter()
             .any(|part| matches!(part.as_ref(), PromptAstSimple::Media(_)))
         {
-            self.parts = self
-                .parts
-                .into_iter()
-                .filter_map(|part| match part.as_ref() {
-                    PromptAstSimple::String(text) => {
-                        let trimmed = text.trim();
-                        if trimmed.is_empty() {
-                            None
-                        } else if trimmed.len() == text.len() {
-                            Some(part)
-                        } else {
-                            Some(Arc::new(PromptAstSimple::String(trimmed.to_string())))
-                        }
-                    }
-                    _ => Some(part),
-                })
-                .collect();
+            let mut trimmed = Vec::with_capacity(self.parts.len());
+            let mut run = Vec::new();
+            for part in self.parts {
+                if matches!(part.as_ref(), PromptAstSimple::Media(_)) {
+                    trim_leading_text(&mut run);
+                    trim_trailing_text(&mut run);
+                    trimmed.append(&mut run);
+                    trimmed.push(part);
+                } else {
+                    run.push(part);
+                }
+            }
+            trim_leading_text(&mut run);
+            trim_trailing_text(&mut run);
+            trimmed.append(&mut run);
+            self.parts = trimmed;
         }
         match self.parts.len() {
             0 => Arc::new(PromptAstSimple::String(String::new())),
@@ -77,11 +78,16 @@ impl StructuralRenderSink for PromptContentSink {
     }
 
     fn try_push_special(&mut self, vm: &BexVm, value: Value) -> bool {
-        let Some(media) = super::json::read_media_value(vm, value) else {
-            return false;
-        };
-        self.parts.push(Arc::new(PromptAstSimple::Media(media)));
-        true
+        if let Some(media) = super::json::read_media_value(vm, value) {
+            self.parts.push(Arc::new(PromptAstSimple::Media(media)));
+            return true;
+        }
+        if let Some(args) = read_cache_delimiter(vm, value) {
+            self.parts
+                .push(Arc::new(PromptAstSimple::CacheDelimiter(args)));
+            return true;
+        }
+        false
     }
 }
 
@@ -95,49 +101,80 @@ struct PromptRole {
     synthetic: bool,
 }
 
+/// The `args` of an `ai.CacheDelimiter` instance, which is what `${cache(args)}`
+/// interpolates. `None` for any other value.
+fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
+    let ptr = value.as_object_ptr()?;
+    let (class, args) = match vm.get_object(ptr) {
+        Object::Instance(instance) => (instance.class, instance.fields.first()?.load()),
+        _ => return None,
+    };
+    let head = match vm.get_object(class) {
+        Object::Class(c) => bex_vm_types::TypeHead::new(class, c.type_tag),
+        _ => return None,
+    };
+    if !vm.stdlib_heads().is_cache_delimiter(head) {
+        return None;
+    }
+    Some(super::json::value_to_serde(vm, args))
+}
+
+/// Trim leading whitespace off a run of content parts: whitespace-only text
+/// parts are removed and the first part with text is start-trimmed. A cache
+/// delimiter holds no text, so the trim looks past it; media stops it.
+fn trim_leading_text(parts: &mut Vec<Arc<PromptAstSimple>>) {
+    let mut index = 0;
+    while let Some(part) = parts.get(index) {
+        match part.as_ref() {
+            PromptAstSimple::String(text) => {
+                let trimmed = text.trim_start();
+                if trimmed.is_empty() {
+                    parts.remove(index);
+                } else {
+                    if trimmed.len() != text.len() {
+                        parts[index] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
+                    }
+                    break;
+                }
+            }
+            PromptAstSimple::CacheDelimiter(_) => index += 1,
+            PromptAstSimple::Media(_) | PromptAstSimple::Multiple(_) => break,
+        }
+    }
+}
+
+/// The trailing counterpart of [`trim_leading_text`].
+fn trim_trailing_text(parts: &mut Vec<Arc<PromptAstSimple>>) {
+    let mut end = parts.len();
+    while end > 0 {
+        let index = end - 1;
+        match parts[index].as_ref() {
+            PromptAstSimple::String(text) => {
+                let trimmed = text.trim_end();
+                if trimmed.is_empty() {
+                    parts.remove(index);
+                    end = index;
+                } else {
+                    if trimmed.len() != text.len() {
+                        parts[index] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
+                    }
+                    break;
+                }
+            }
+            PromptAstSimple::CacheDelimiter(_) => end = index,
+            PromptAstSimple::Media(_) | PromptAstSimple::Multiple(_) => break,
+        }
+    }
+}
+
 // Legacy renderer parity: each chat message's content is trimmed of leading
 // and trailing whitespace (whitespace-only edge text parts removed, edge text
 // parts trimmed). Media parts at the edges are untouched. Without this, the
 // newline after a `${role(...)}` marker line and the blank line before the
 // next marker leak into every explicit-role message.
 fn trim_message_edges(sink: &mut PromptContentSink) {
-    while let Some(first) = sink.parts.first() {
-        match first.as_ref() {
-            PromptAstSimple::String(text) => {
-                let trimmed = text.trim_start();
-                if trimmed.is_empty() {
-                    sink.parts.remove(0);
-                } else {
-                    if trimmed.len() != text.len() {
-                        sink.parts[0] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
-                    }
-                    break;
-                }
-            }
-            _ => break,
-        }
-    }
-    while let Some(last) = sink.parts.last() {
-        match last.as_ref() {
-            PromptAstSimple::String(text) => {
-                let trimmed = text.trim_end();
-                if trimmed.is_empty() {
-                    // SAFETY: the loop matched the last part and has not removed it.
-                    #[allow(unsafe_code)]
-                    unsafe {
-                        sink.parts.no_return_pop();
-                    };
-                } else {
-                    if trimmed.len() != text.len() {
-                        let index = sink.parts.len() - 1;
-                        sink.parts[index] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
-                    }
-                    break;
-                }
-            }
-            _ => break,
-        }
-    }
+    trim_leading_text(&mut sink.parts);
+    trim_trailing_text(&mut sink.parts);
 }
 
 fn message(role: PromptRole, mut content: PromptContentSink, trim: bool) -> Arc<PromptAst> {
@@ -323,7 +360,7 @@ impl BamlClassPrompt for PackageAiImpl {
         let data = prompt.instance.load_field(0);
         let prompt = vm
             .as_rust_data::<PromptAst>(&data)
-            .expect("ai.Prompt._data must contain baml_builtins2::PromptAst");
+            .expect("ai.Prompt._data must contain bex_vm_types::PromptAst");
         bex_str::BexStr::from(prompt.render_text())
     }
 
@@ -334,7 +371,7 @@ impl BamlClassPrompt for PackageAiImpl {
                 .expect("ai.Prompt.messages receiver must be an ai.Prompt instance");
             let data = instance.load_field(0);
             vm.as_rust_data::<PromptAst>(&data)
-                .expect("ai.Prompt._data must contain baml_builtins2::PromptAst")
+                .expect("ai.Prompt._data must contain bex_vm_types::PromptAst")
                 .to_structured_messages()
         };
         let message_class = vm.resolve_class("ai.PromptMessage");
@@ -383,6 +420,11 @@ fn prompt_content_values(vm: &mut BexVm, content: &PromptAstSimple) -> Vec<Value
             let class = vm.resolve_class(class_name);
             let data = Value::object(vm.alloc_rust_data(media.clone()));
             vec![Value::object(vm.alloc_instance(class, vec![data]))]
+        }
+        PromptAstSimple::CacheDelimiter(args) => {
+            let class = vm.resolve_class("ai.CacheDelimiter");
+            let args = super::json::serde_to_value(vm, args);
+            vec![Value::object(vm.alloc_instance(class, vec![args]))]
         }
         PromptAstSimple::Multiple(parts) => parts
             .iter()

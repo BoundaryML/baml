@@ -7,13 +7,35 @@ use btel_snapshot::{DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 pub(super) const SOURCE: &str =
     include_str!("../../../baml_tests/baml_src/ns_trace_context/recording.baml");
 
+/// The entries of a context map, which must have been captured whole.
+fn whole_map(snapshot: &DecodedSnapshot, id: btel_snapshot::NodeId) -> &[(Box<str>, DecodedValue)] {
+    let DecodedObject::Map {
+        entries,
+        original_len,
+        ..
+    } = snapshot.object(id)
+    else {
+        panic!("context values must be maps");
+    };
+    assert_eq!(
+        entries.len() as u64,
+        *original_len,
+        "context captured whole"
+    );
+    assert!(
+        !entries
+            .iter()
+            .any(|(_, value)| matches!(value, DecodedValue::Truncated(_))),
+        "context captured whole"
+    );
+    entries
+}
+
 fn metadata(snapshot: &DecodedSnapshot) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
     let DecodedRoot::Value(DecodedValue::Object(root)) = snapshot.root else {
         panic!("context root must be a map");
     };
-    let DecodedObject::Map { entries, .. } = snapshot.object(root) else {
-        panic!("context root must be a map");
-    };
+    let entries = whole_map(snapshot, root);
     let fields: BTreeMap<_, _> = entries
         .iter()
         .map(|(key, value)| (key.as_ref(), value))
@@ -26,9 +48,7 @@ fn metadata(snapshot: &DecodedSnapshot) -> (Option<&str>, BTreeMap<&str, &Decode
     let DecodedValue::Object(metadata) = fields["metadata"] else {
         panic!("context metadata must be a map");
     };
-    let DecodedObject::Map { entries, .. } = snapshot.object(*metadata) else {
-        panic!("context metadata must be a map");
-    };
+    let entries = whole_map(snapshot, *metadata);
     (
         identity,
         entries
@@ -55,7 +75,6 @@ pub(super) fn assert_leaf_contexts(
             continue;
         };
         let snapshot = &snapshots[id.as_bytes()];
-        assert!(!snapshot.limited);
         let (identity, values) = metadata(snapshot);
         let Some(DecodedValue::String(phase)) = values.get("phase").copied() else {
             continue;

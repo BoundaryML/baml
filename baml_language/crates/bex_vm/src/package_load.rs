@@ -578,7 +578,8 @@ pub enum TimeClass {
 }
 
 /// The stdlib declarations the runtime recognizes structurally — the CSV
-/// cell classes, the JSON media wrappers, the `json` alias, and the live
+/// cell classes, the JSON media wrappers, the `json` alias, the prompt cache
+/// delimiter, and the live
 /// capabilities a host proxies — resolved to heads once from the loaded
 /// packages and shared by every VM the engine spawns, like the error and
 /// panic class tables.
@@ -590,6 +591,7 @@ pub struct StdlibHeads {
     time: Vec<(TimeClass, TypeHead)>,
     media: Vec<(MediaKind, TypeHead)>,
     json: Option<TypeHead>,
+    cache_delimiter: Option<TypeHead>,
     capabilities: Vec<(StdlibCapability, TypeHead)>,
 }
 
@@ -646,6 +648,7 @@ impl StdlibHeads {
             time,
             media,
             json: head("baml.json.json"),
+            cache_delimiter: head("ai.CacheDelimiter"),
             capabilities,
         }
     }
@@ -673,6 +676,12 @@ impl StdlibHeads {
             .iter()
             .find(|(_, h)| *h == head)
             .map(|(kind, _)| *kind)
+    }
+
+    /// Whether `head` is `ai.CacheDelimiter`, the value `${cache(args)}`
+    /// interpolates into a prompt.
+    pub fn is_cache_delimiter(&self, head: TypeHead) -> bool {
+        self.cache_delimiter == Some(head)
     }
 
     /// The recursive `baml.json.json` alias, if the program loads it.

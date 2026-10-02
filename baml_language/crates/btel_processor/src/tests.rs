@@ -185,6 +185,7 @@ fn bounded_processing_releases_captures_and_clock_ownership() {
         captured_inputs: Some(
             vec![Capture(drops.clone()), Capture(drops.clone())].into_boxed_slice(),
         ),
+        captured_type_args: None,
     });
     producer.write_span(span(Capture(drops.clone())));
     let private = processor.process_available();
@@ -619,6 +620,7 @@ fn every_completion_form_and_timing_outcome_counts_once_by_outcome() {
         call_path: CallPathId::new_non_root(99).unwrap(),
         entered_at: ClockInstant::from_ticks(1),
         captured_inputs: None,
+        captured_type_args: None,
     });
     producer.write_timing(TimingRecord::ThreadSelected { thread_id });
     let mut raw = 100;
@@ -720,6 +722,7 @@ fn borrowed_spans_keep_context_after_switches_and_producer_retirement() {
         call_path: CallPathId::new_non_root(1).unwrap(),
         entered_at: ClockInstant::from_ticks(1),
         captured_inputs: None,
+        captured_type_args: None,
     };
     let mut producer = pool.register_producer().unwrap();
     producer.write_span(SpanRecord::ThreadSelected { thread_id: a });

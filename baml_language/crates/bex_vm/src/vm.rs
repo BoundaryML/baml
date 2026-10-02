@@ -21,7 +21,10 @@ use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
 use crate::{
-    telemetry::{ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome, TelemetryState},
+    telemetry::{
+        CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome,
+        TelemetryState,
+    },
     vec_ext::{CopyVecExt, VecExt},
 };
 
@@ -402,9 +405,12 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            pending_host_trace: None,
+            entry_trace: None,
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
+            pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             telemetry: Some(TelemetryState::new_root(
@@ -446,6 +452,7 @@ pub(crate) mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "int".to_string(),
@@ -515,6 +522,65 @@ pub(crate) mod tests {
             })
             .expect("completed span");
         assert_eq!(public_id, SpanId::new(vm.trace_scope, local_id));
+    }
+
+    #[test]
+    fn network_span_wrappers_record_through_the_vm_telemetry() {
+        use crate::telemetry::{ClockInstant, InvocationOutcome, SpanRecord};
+
+        let mut vm = test_vm(Vec::new());
+        let request = sys_types::network::NetworkRequest {
+            method: "GET".to_owned(),
+            url: "https://example.com/".to_owned(),
+            ..Default::default()
+        };
+        let span = vm.open_network_span(&request).unwrap();
+        vm.network_event(
+            span,
+            ClockInstant::from_ticks(1),
+            &sys_types::network::NetworkEventKind::Close,
+        );
+        // Bare test VMs have no error classes: the error is captured as is,
+        // but never quoting the raw URL or its query.
+        let raw = "https://example.com/v1?key=secret";
+        let message = format!("failed for url ({raw}), query key=secret");
+        let error = vm.tlab.alloc_string(message.as_str());
+        vm.close_network_span(
+            span,
+            ClockInstant::from_ticks(2),
+            InvocationOutcome::Errored,
+            Some(Value::object(error)),
+            &[raw],
+        );
+        let records = vm.telemetry.as_ref().unwrap().span_records();
+        let [
+            SpanRecord::ThreadSpanAnnouncement { .. },
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(close),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records
+        else {
+            panic!("unexpected records: {records:?}");
+        };
+        assert_eq!(announcement.id, span);
+        assert_eq!(&*announcement.url, "https://example.com/");
+        assert_eq!(close.name, btel_records::NetworkEventName::Close);
+        let captured = completion.error.as_ref().unwrap();
+        let Some(btel_snapshot::SnapshotValue::String(text)) = captured.value() else {
+            panic!("the error is a string");
+        };
+        let hashed = crate::telemetry::network_hash_for_tests("secret");
+        assert_eq!(
+            captured.string(text).as_str(),
+            format!("failed for url (https://example.com/v1?key={hashed}), query key={hashed}")
+        );
+        // The program's value is untouched.
+        assert_eq!(
+            vm.as_string(&Value::object(error)).unwrap().as_str(),
+            message
+        );
+        vm.telemetry = None;
+        assert_eq!(vm.open_network_span(&request), None);
     }
 
     #[test]
@@ -1566,9 +1632,15 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
+    pending_host_trace: Option<CallTrace>,
+    entry_trace: Option<crate::telemetry::TraceConfig>,
     root_context: Context,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
+    /// Set by a call that passes type arguments, for its callee's entry
+    /// only: telemetry records the frame's type arguments before the call's
+    /// writeback appends `pending_call_type_args` to the new frame.
+    pending_call_passes_type_args: bool,
 
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
@@ -1791,15 +1863,24 @@ pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::Con
 /// [`ErrorClass`] discriminant. The result is identical for every VM sharing a
 /// `packages` index, so it is resolved once and shared (`Arc`) across spawns
 /// rather than re-resolved per [`BexVm::new`].
+///
+/// One extra entry follows the error classes, at `DURATION_CLASS_PTR_INDEX`:
+/// `baml.time.Duration`, which `baml.errors.Timeout.duration` is an instance of.
 pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     ErrorClass::ALL
         .iter()
-        .map(|ec| {
-            crate::package_load::lookup_type_by_fqn(packages, ec.fqn())
-                .unwrap_or_else(|| panic!("error class {:?} not in packages", ec.fqn()))
+        .map(ErrorClass::fqn)
+        .chain(std::iter::once("baml.time.Duration"))
+        .map(|fqn| {
+            crate::package_load::lookup_type_by_fqn(packages, fqn)
+                .unwrap_or_else(|| panic!("error class {fqn:?} not in packages"))
         })
         .collect()
 }
+
+/// Where `baml.time.Duration` sits in the error class table: right after the
+/// last [`ErrorClass`].
+const DURATION_CLASS_PTR_INDEX: usize = ErrorClass::ALL.len();
 
 /// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
 /// [`PanicClass`] discriminant. Shared across spawns like
@@ -2109,9 +2190,12 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            pending_host_trace: None,
+            entry_trace: None,
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
+            pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             telemetry,
@@ -2164,7 +2248,7 @@ impl BexVm {
         }))
     }
 
-    pub(crate) fn current_context(&self) -> &Context {
+    pub fn current_context(&self) -> &Context {
         self.frames
             .iter()
             .rev()
@@ -2181,6 +2265,32 @@ impl BexVm {
             "root context must precede invocation entry"
         );
         self.root_context = context;
+    }
+
+    pub fn invocation_ancestry(&self) -> Option<crate::telemetry::ThreadSpawnContext> {
+        self.telemetry
+            .as_ref()
+            .map(TelemetryState::hidden_spawn_context)
+    }
+
+    pub fn set_invocation_ancestry(&mut self, context: &crate::telemetry::ThreadSpawnContext) {
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.configure_spawn(context);
+        }
+    }
+
+    pub fn set_entry_trace(
+        &mut self,
+        options: &bex_vm_types::trace::TraceOptionsData,
+        reserved_id: Option<btel_types::TelemetryId>,
+    ) {
+        self.entry_trace = Some(crate::telemetry::TraceConfig {
+            mode: options.mode,
+            inputs: options.inputs,
+            output: options.output,
+            error: options.error,
+            reserved_id,
+        });
     }
 
     fn decode_log_event(
@@ -4122,13 +4232,18 @@ impl BexVm {
                     };
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                        telemetry.enter_bytecode(
+                        telemetry.enter_bytecode_with_trace(
                             function_ref,
                             function_identity,
                             None,
                             0,
                             false,
                             args,
+                            self.entry_trace.take(),
+                            CallTypeArgs {
+                                carried: &effective_type_args,
+                                passed: &[],
+                            },
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -4298,6 +4413,7 @@ impl BexVm {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type,
@@ -4309,7 +4425,33 @@ impl BexVm {
 
             runtime_package: HeapPtr::null(),
         };
-        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
+        let explicit_trace = self.entry_trace.is_some();
+        let entry_ptr = if explicit_trace {
+            self.tlab
+                .alloc_function(Box::new(entry_function))
+                .expect("entry telemetry function identity")
+        } else {
+            self.tlab.alloc(Object::Function(Box::new(entry_function)))
+        };
+        let frame_telemetry = self.entry_trace.take().and_then(|trace| {
+            // SAFETY: the entry and arguments are live under the active permit.
+            let Object::Function(function) = (unsafe { entry_ptr.get() }) else {
+                unreachable!()
+            };
+            self.telemetry.as_mut().and_then(|telemetry| unsafe {
+                telemetry.enter_bytecode_with_trace(
+                    function,
+                    entry_ptr,
+                    None,
+                    0,
+                    false,
+                    args,
+                    Some(trace),
+                    CallTypeArgs::default(),
+                    |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+                )
+            })
+        });
 
         // Synthetic `$entry::` wrapper frame; the wrapped native/sysop emits
         // its own pair through the normal Call/SysOp instruction paths.
@@ -4320,7 +4462,7 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
-            telemetry: None,
+            telemetry: frame_telemetry,
             context: self.root_context.clone(),
         }));
     }
@@ -4380,6 +4522,7 @@ impl BexVm {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type,
@@ -4391,7 +4534,33 @@ impl BexVm {
 
             runtime_package: HeapPtr::null(),
         };
-        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
+        let explicit_trace = self.entry_trace.is_some();
+        let entry_ptr = if explicit_trace {
+            self.tlab
+                .alloc_function(Box::new(entry_function))
+                .expect("entry telemetry function identity")
+        } else {
+            self.tlab.alloc(Object::Function(Box::new(entry_function)))
+        };
+        let frame_telemetry = self.entry_trace.take().and_then(|trace| {
+            // SAFETY: the entry and arguments are live under the active permit.
+            let Object::Function(function) = (unsafe { entry_ptr.get() }) else {
+                unreachable!()
+            };
+            self.telemetry.as_mut().and_then(|telemetry| unsafe {
+                telemetry.enter_bytecode_with_trace(
+                    function,
+                    entry_ptr,
+                    None,
+                    0,
+                    false,
+                    args,
+                    Some(trace),
+                    CallTypeArgs::default(),
+                    |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+                )
+            })
+        });
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
             instruction_ptr: 0,
@@ -4399,7 +4568,7 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
-            telemetry: None,
+            telemetry: frame_telemetry,
             context: self.root_context.clone(),
         }));
     }
@@ -4915,16 +5084,23 @@ impl BexVm {
                 ErrorClass::Io,
                 vec![Value::object(self.alloc_string(message))],
             ),
+            // Field order matches the `Timeout` class in
+            // `ns_errors/errors.baml`: message, duration, timeout_type.
             VmBamlError::Timeout {
                 message,
-                duration_ms,
-            } => (
-                ErrorClass::Timeout,
-                vec![
-                    Value::object(self.alloc_string(message)),
-                    duration_ms.map_or(Value::NULL, Value::int),
-                ],
-            ),
+                duration,
+                timeout_type,
+            } => {
+                let duration = duration.map_or(Value::NULL, |d| self.alloc_duration(d));
+                (
+                    ErrorClass::Timeout,
+                    vec![
+                        Value::object(self.alloc_string(message)),
+                        duration,
+                        Value::object(self.alloc_string(timeout_type)),
+                    ],
+                )
+            }
             VmBamlError::Unsupported { message } => (
                 ErrorClass::Unsupported,
                 vec![Value::object(self.alloc_string(message))],
@@ -4981,6 +5157,28 @@ impl BexVm {
             }
         };
         self.alloc_error_value(class, fields)
+    }
+
+    /// A `baml.time.Duration` instance (`{ _nanoseconds: bigint }`), or null
+    /// when the class is not loaded (bare test VMs).
+    fn alloc_duration(&mut self, duration: std::time::Duration) -> Value {
+        let Some(class_ptr) = self
+            .error_class_ptrs
+            .get(DURATION_CLASS_PTR_INDEX)
+            .copied()
+            .filter(|ptr| !ptr.is_null())
+        else {
+            return Value::NULL;
+        };
+        // A `u128` nanosecond count is far below the bigint size limit.
+        let nanos = Value::object(self.tlab.alloc(Object::Bigint(std::sync::Arc::new(
+            num_bigint::BigInt::from(duration.as_nanos()),
+        ))));
+        Value::object(self.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Box::new([]),
+            vec![nanos],
+        ))))
     }
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
@@ -5895,7 +6093,9 @@ impl BexVm {
         &mut self,
         closure_ptr: HeapPtr,
         user_args: Vec<Value>,
+        trace: Option<CallTrace>,
     ) -> VmExecState {
+        self.pending_host_trace = trace;
         // Read arity + return/throws types out of the closure, then drop the
         // borrow before allocating (a TLAB allocation may move/collect heap
         // objects).
@@ -5969,6 +6169,22 @@ impl BexVm {
         }
     }
 
+    pub fn take_host_call_options(&mut self) -> bex_vm_types::trace::HostCallOptions {
+        let Some(trace) = self.pending_host_trace.take() else {
+            return bex_vm_types::trace::HostCallOptions::default();
+        };
+        bex_vm_types::trace::HostCallOptions {
+            options: bex_vm_types::trace::TraceOptionsData {
+                mode: trace.telemetry.mode,
+                inputs: trace.telemetry.inputs,
+                output: trace.telemetry.output,
+                error: trace.telemetry.error,
+                context: trace.context,
+            },
+            reserved_id: trace.telemetry.reserved_id,
+        }
+    }
+
     /// Drain a sys-op's arguments off the eval stack and produce the
     /// [`VmExecState::SysOp`] yield that hands control to the engine.
     ///
@@ -6028,6 +6244,7 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         let trace = self.pending_call_trace.take();
+        let passes_type_args = std::mem::take(&mut self.pending_call_passes_type_args);
         // Record the caller's call-site PC before descending. Once a callee
         // frame is pushed, this (now-outer) frame is no longer the innermost, so
         // its live PC must be persisted into `faulting_pc` for correct unwinding
@@ -6055,13 +6272,8 @@ impl BexVm {
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
         if matches!(callee_object, Object::HostClosure(_)) {
-            if trace.is_some() {
-                return Err(
-                    self.trace_attachment_error("$trace is not supported on host functions")
-                );
-            }
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
-            let state = self.host_closure_call_sysop(callee_ptr, user_args);
+            let state = self.host_closure_call_sysop(callee_ptr, user_args, trace);
             return Ok(Some(state));
         }
 
@@ -6324,6 +6536,14 @@ impl BexVm {
                     let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
                     let args = &self.stack.0
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
+                    let type_args = CallTypeArgs {
+                        carried: initial_type_args,
+                        passed: if passes_type_args {
+                            &self.pending_call_type_args
+                        } else {
+                            &[]
+                        },
+                    };
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
                         telemetry.enter_bytecode_with_trace(
@@ -6334,6 +6554,7 @@ impl BexVm {
                             caller_is_observed,
                             args,
                             trace.as_ref().map(|trace| trace.telemetry),
+                            type_args,
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -6452,6 +6673,7 @@ impl BexVm {
             options.type_values.to_vec(),
         );
         let frames_before = self.frames.len();
+        self.pending_call_passes_type_args = !options.type_args.is_empty();
         let result = self.execute_call_from_locals_offset(
             callee_ptr,
             locals_offset,
@@ -6883,41 +7105,51 @@ impl BexVm {
         }
     }
 
-    /// The node model usage recorded now belongs to: the innermost span, or
-    /// the thread outside any. `None` when telemetry is off.
-    pub(crate) fn usage_target(&self) -> Option<btel_types::TelemetryId> {
-        self.telemetry.as_ref().map(TelemetryState::active_id)
+    /// Open a span for an HTTP request about to be sent. `None` when
+    /// telemetry is off or at its `Low` auto level.
+    pub fn open_network_span(
+        &mut self,
+        request: &sys_types::network::NetworkRequest,
+    ) -> Option<btel_types::TelemetryId> {
+        self.telemetry.as_ref()?;
+        let context = self.current_context().clone();
+        let state = self.telemetry.as_mut()?;
+        state.set_context(context);
+        state.open_network_span(request)
     }
 
-    /// Record one model turn's tokens against `target`, a telemetry ID from
-    /// [`Self::usage_target`]. False when telemetry is off or `target` is 0.
-    #[allow(clippy::too_many_arguments, reason = "mirrors ai.events.Usage")]
-    pub(crate) fn record_model_usage(
+    /// Record an event of an open request, at an instant the IO side read.
+    pub fn network_event(
         &mut self,
-        target: u64,
-        model: Option<Box<str>>,
-        input_tokens: u64,
-        output_tokens: u64,
-        cache_read_tokens: Option<u64>,
-        cache_write_tokens: Option<u64>,
-        reasoning_tokens: Option<u64>,
-    ) -> bool {
-        let (Some(telemetry), Some(node)) = (
-            self.telemetry.as_mut(),
-            btel_types::TelemetryId::from_raw(target),
-        ) else {
-            return false;
-        };
-        telemetry.record_model_usage(btel_records::ModelUsage {
-            node,
-            model,
-            input_tokens,
-            output_tokens,
-            cache_read_tokens,
-            cache_write_tokens,
-            reasoning_tokens,
-        });
-        true
+        span: btel_types::TelemetryId,
+        at: ClockInstant,
+        event: &sys_types::network::NetworkEventKind,
+    ) {
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.network_event(span, at, event);
+        }
+    }
+
+    /// End an open request's span. An `error` is the thrown value: its span
+    /// records the `baml.errors.Context` a handler would bind, as a function
+    /// span does, with each of `raw_urls` it quotes sanitized. The value the
+    /// program sees is unchanged.
+    pub fn close_network_span(
+        &mut self,
+        span: btel_types::TelemetryId,
+        at: ClockInstant,
+        outcome: InvocationOutcome,
+        error: Option<Value>,
+        raw_urls: &[&str],
+    ) {
+        if self.telemetry.is_none() {
+            return;
+        }
+        let error = error.map(|error| self.error_context_value(error, &[], Value::NULL));
+        let state = self.telemetry.as_mut().unwrap();
+        // SAFETY: the engine calls this under the heap permit; neither the
+        // context allocation above nor capture collects.
+        unsafe { state.close_network_span(span, at, outcome, error, raw_urls) };
     }
 
     /// Name this thread's future for telemetry; call before its entry point.
@@ -8637,15 +8869,11 @@ impl BexVm {
                         let obj = self.get_object(callee_ptr);
 
                         if let Object::HostClosure(host_closure) = obj {
-                            if self.pending_call_trace.is_some() {
-                                return Err(self.trace_attachment_error(
-                                    "$trace is not supported on host functions",
-                                ));
-                            }
                             // Host-callable dispatch via a single-yield sys-op. See
                             // `Instruction::CallIndirect` / `host_closure_call_sysop`
                             // for the args-layout rationale.
                             let arity = host_closure.arity;
+                            let trace = self.pending_call_trace.take();
                             let _popped_callee = self.stack.ensure_pop();
                             let arity = match Self::recorded_call_layout(function, self.cur_pc) {
                                 Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
@@ -8672,7 +8900,7 @@ impl BexVm {
                                 .drain(StackIndex::from_raw(args_offset)..)
                                 .collect();
 
-                            let state = self.host_closure_call_sysop(callee_ptr, user_args);
+                            let state = self.host_closure_call_sysop(callee_ptr, user_args, trace);
                             return Ok(Some(state));
                         } else if let Object::BoundMethod(bm) = obj {
                             let func_obj = unsafe { bm.function.get() };

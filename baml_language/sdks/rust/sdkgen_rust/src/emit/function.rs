@@ -276,6 +276,17 @@ fn emit_binding(
     };
     let sync_name = idents::ident(binding_name);
     let async_name = format_ident!("{}_async", idents::dir_segment(binding_name));
+    let sync_options_name = format_ident!("{}_with_options", idents::dir_segment(binding_name));
+    let async_options_name =
+        format_ident!("{}_async_with_options", idents::dir_segment(binding_name));
+    let mut control_name = "baml".to_string();
+    while host_arguments
+        .iter()
+        .any(|argument| argument.name.as_str() == control_name)
+    {
+        control_name.push('_');
+    }
+    let control = idents::ident(&control_name);
     let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
     // The receiver counts toward clippy's tally (`self` is one of the
     // `fn_decl` inputs), so it counts here too.
@@ -380,18 +391,58 @@ fn emit_binding(
         TokenStream::new()
     };
 
+    let controlled_bindings = quote! {
+        #(#doc_attrs)*
+        #[allow(clippy::too_many_arguments)]
+        #schema_method_name_attr
+        pub fn #sync_options_name #generics_decl (#self_param #(#params,)* #control: impl ::std::convert::Into<crate::BamlOptions>) -> #result_ty {
+            crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+            let invocation_options: ::baml_bridge::invocation::InvocationOptions = ::std::convert::Into::<crate::BamlOptions>::into(#control).into();
+            ::baml_bridge::runtime::invoke_sync_with_options(#fqn, || {
+                #(#converts)*
+                (::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]), #type_args_expr)
+            }, invocation_options)
+        }
+        #(#doc_attrs)*
+        #[allow(clippy::too_many_arguments)]
+        #schema_method_name_attr
+        pub async fn #async_options_name #generics_decl (#self_param #(#params,)* #control: impl ::std::convert::Into<crate::BamlOptions>) -> #result_ty {
+            crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+            let invocation_options: ::baml_bridge::invocation::InvocationOptions = ::std::convert::Into::<crate::BamlOptions>::into(#control).into();
+            ::baml_bridge::runtime::invoke_with_options(#fqn, || {
+                #(#converts)*
+                (::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]), #type_args_expr)
+            }, invocation_options).await
+        }
+    };
+    let sync_body = if fqn == "trace.current_context" {
+        quote! { ::baml_bridge::invocation::current_context() }
+    } else {
+        quote! {
+            ::baml_bridge::runtime::invoke_sync_with_options(#fqn, || {
+                #(#converts)*
+                (::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]), #type_args_expr)
+            }, ::baml_bridge::invocation::InvocationOptions::default())
+        }
+    };
+    let async_body = if fqn == "trace.current_context" {
+        quote! { ::baml_bridge::invocation::current_context() }
+    } else {
+        quote! {
+            ::baml_bridge::runtime::invoke_with_options(#fqn, || {
+                #(#converts)*
+                (::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]), #type_args_expr)
+            }, ::baml_bridge::invocation::InvocationOptions::default()).await
+        }
+    };
+
     Ok(quote! {
         #(#doc_attrs)*
         #too_many_arguments_attr
         #schema_method_name_attr
         pub fn #sync_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
-            #(#converts)*
-            ::baml_bridge::runtime::invoke_sync(
-                #fqn,
-                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr,
-            )
+            #sync_body
         }
 
         #(#doc_attrs)*
@@ -399,16 +450,11 @@ fn emit_binding(
         #schema_method_name_attr
         pub async fn #async_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
-            #(#converts)*
-            ::baml_bridge::runtime::invoke(
-                #fqn,
-                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr,
-            )
-            .await
+            #async_body
         }
 
         #stream_with_bindings
+        #controlled_bindings
     })
 }
 

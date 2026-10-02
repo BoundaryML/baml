@@ -30,11 +30,11 @@ class ResponsesClient {
     // always safe — and a `Ref` keeps the secret out of the client value.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // Native request deadline, including a streaming response body. Null or a
-    // non-positive value is unbounded; browser/Wasm does not enforce it.
-    request_timeout_ms: int?,
-    // Native streaming deadline from SSE open until the first parsed event.
-    time_to_first_token_timeout_ms: int?,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect, first-token and
+    // stream-token limits. Null is the default: 5 minutes total, 10 seconds
+    // to connect. Browser/Wasm does not enforce the transport limits.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
 
     // --- typed request parameters (omitted from the body when null) --------
     temperature: float?,
@@ -75,8 +75,7 @@ class ResponsesClient {
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        request_timeout_ms: int? = null,
-        time_to_first_token_timeout_ms: int? = null,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
         temperature: float? = null,
         top_p: float? = null,
         max_output_tokens: int? = null,
@@ -94,8 +93,7 @@ class ResponsesClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            request_timeout_ms: request_timeout_ms,
-            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
+            timeout: timeout,
             temperature: temperature,
             top_p: top_p,
             max_output_tokens: max_output_tokens,

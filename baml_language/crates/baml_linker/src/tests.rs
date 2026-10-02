@@ -42,6 +42,7 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        type_param_names: Vec::new(),
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: String::new(),

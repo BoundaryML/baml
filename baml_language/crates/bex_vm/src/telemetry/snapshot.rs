@@ -1,32 +1,57 @@
 //! Heap traversal stays in the VM. Frozen graphs contain only owned leaves and
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
-use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
+use std::borrow::Cow;
+
+use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Description, Limit, ObjectId, Snapshot, SnapshotObject, SnapshotValue,
+    Builder, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType, Reserved, Shaper,
+    Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
 };
 use rustc_hash::FxHashMap;
+
+use super::network::NetworkPayload;
 
 #[derive(Clone, Copy)]
 pub(super) enum Input<'a> {
     Value(Value),
     FunctionArgs(&'a [Value]),
+    /// Built from Rust values; no heap is involved.
+    Network(&'a NetworkPayload<'a>),
+    /// A generic call's type arguments by parameter name: `map<string, Type>`.
+    /// Types hold no heap values.
+    TypeArgs(&'a [(&'a str, &'a bex_vm_types::RealizedTy)]),
 }
 #[derive(Default)]
 pub(super) struct Scratch {
     // Heap addresses are construction-only. Leaf entries reuse storage, not identity.
     seen: FxHashMap<HeapPtr, SnapshotValue>,
     rust_seen: FxHashMap<usize, ObjectId>,
-    work: Vec<(ObjectId, HeapPtr, usize)>,
+    /// Objects named already, whose content is still to be captured.
+    work: Vec<(Reserved, HeapPtr, usize)>,
+    shaper: Shaper,
+    /// Text replaced wherever a captured string, map key or media URL quotes
+    /// it, longest first. Empty except while a network span's error is
+    /// captured: it must not quote the request's raw URL. The heap value is
+    /// never changed.
+    pub(super) rewrites: Vec<(String, String)>,
 }
 impl Scratch {
-    fn add(&mut self, b: &mut Builder, value: Value, depth: usize) -> SnapshotValue {
+    /// The capturing thread's shaping scratch, for captures built outside
+    /// [`Self::capture`].
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    pub(super) fn shaper(&mut self) -> &mut Shaper {
+        &mut self.shaper
+    }
+    /// The value as the capture holds it. An object gets its identity here
+    /// and its content later, so that what it holds can name it.
+    fn add(&mut self, leaves: &mut Leaves<'_>, value: Value, depth: usize) -> SnapshotValue {
         if let Some(ptr) = value.as_object_ptr() {
             if let Some(value) = self.seen.get(&ptr) {
                 return *value;
             }
         }
-        if b.limits().max_depth.is_some_and(|max| depth > max) {
-            return b.limited(Limit::Depth);
+        if leaves.limits().max_depth.is_some_and(|max| depth > max) {
+            return SnapshotValue::Truncated(Limit::Depth);
         }
         let ptr = match value.kind() {
             ValueKind::Null => return SnapshotValue::Null,
@@ -40,27 +65,20 @@ impl Scratch {
             // Boxes are an execution detail, not snapshot identity. No work item
             // or memo-table entry for floats, even when every source box differs.
             Object::Float(v) => return SnapshotValue::Float(*v),
-            Object::String(s) => b.string(s).map_or(
-                SnapshotValue::Truncated(Limit::Bytes),
-                SnapshotValue::String,
-            ),
-            Object::Bigint(n) => b.bigint(n).map_or(
-                SnapshotValue::Truncated(Limit::Bytes),
-                SnapshotValue::Bigint,
-            ),
-            Object::Type(value) => SnapshotValue::Type(b.push_type(owned_type(&value.ty))),
+            Object::String(s) => leaves.string_value(&rewritten(&self.rewrites, s)),
+            Object::Bigint(n) => leaves.bigint(n),
+            Object::Type(value) => SnapshotValue::Type(leaves.ty(owned_type(&value.ty))),
             Object::Variant(v) => {
-                let declaration = match self.add(b, Value::object(v.enm), depth + 1) {
+                let declaration = match self.add(leaves, Value::object(v.enm), depth + 1) {
                     SnapshotValue::Object(id) => id,
-                    SnapshotValue::Truncated(reason) => return b.limited(reason),
+                    SnapshotValue::Truncated(reason) => return SnapshotValue::Truncated(reason),
                     _ => unreachable!("enum declaration is an object"),
                 };
                 // SAFETY: enum declaration lives under the same heap permit.
                 let Object::Enum(enm) = (unsafe { v.enm.get() }) else {
                     unreachable!("variant enum")
                 };
-                let name = b.string(&enm.variants[v.index].name.as_str().into());
-                match name {
+                match leaves.label(&enm.variants[v.index].name.as_str().into()) {
                     Some(name) => SnapshotValue::Enum {
                         declaration,
                         variant: u32::try_from(v.index).expect("enum variant index"),
@@ -74,22 +92,27 @@ impl Scratch {
                 let id = if let Some(id) = self.rust_seen.get(&identity) {
                     *id
                 } else {
-                    let Some(id) = b.reserve_object() else {
-                        return b.limited(Limit::Objects);
+                    // Media is the one host value captured by content. Others
+                    // hold keys and cipher state, and stay opaque.
+                    let object = match data.downcast_ref::<MediaValue>() {
+                        Some(value) => media(leaves, &self.rewrites, value),
+                        None => SnapshotObject::NonSnapshotableValue {},
+                    };
+                    let Some(id) = leaves.object(object) else {
+                        return SnapshotValue::Truncated(Limit::Objects);
                     };
                     self.rust_seen.insert(identity, id);
-                    b.set_object(id, SnapshotObject::NonSnapshotableValue {});
                     id
                 };
                 SnapshotValue::Object(id)
             }
             _ => {
-                let Some(id) = b.reserve_object() else {
-                    return b.limited(Limit::Objects);
+                let Some(slot) = leaves.reserve() else {
+                    return SnapshotValue::Truncated(Limit::Objects);
                 };
-                // Destination identity exists before children are visited.
-                self.work.push((id, ptr, depth));
-                SnapshotValue::Object(id)
+                let value = SnapshotValue::Object(slot.id());
+                self.work.push((slot, ptr, depth));
+                value
             }
         };
         self.seen.insert(ptr, result);
@@ -101,124 +124,66 @@ impl Scratch {
         self.seen.clear();
         self.rust_seen.clear();
         self.work.clear();
-        let mut value_root = SnapshotValue::Null;
-        let args_start = b.value_start();
-        if let Input::FunctionArgs(args) = input {
-            let count = args.len().min(b.remaining_values());
-            b.reserve_values(count);
-            for value in args.iter().take(count) {
-                let value = self.add(&mut b, *value, 0);
-                b.push_value(value);
+        let root = match input {
+            Input::FunctionArgs(args) => {
+                b.arguments(args.iter(), |leaves, value| self.add(leaves, *value, 0))
             }
-            if count < args.len() {
-                b.limited(Limit::Values);
-            }
-        } else if let Input::Value(value) = input {
-            value_root = self.add(&mut b, value, 0);
-        }
-        let args_range = b.value_range(args_start);
-        while let Some((id, ptr, depth)) = self.work.pop() {
+            Input::Value(value) => SnapshotRoot::Value(self.add(&mut b.leaves(), value, 0)),
+            // Built from Rust values: nothing is queued.
+            Input::Network(payload) => SnapshotRoot::Value(network(&mut b, payload)),
+            Input::TypeArgs(args) => SnapshotRoot::Value(type_args(&mut b, args)),
+        };
+        while let Some((slot, ptr, depth)) = self.work.pop() {
             // SAFETY: inherited heap permit, never relinquished during traversal.
             let object = match unsafe { ptr.get() } {
-                Object::Uint8Array(data) => {
-                    let data = data.lock();
-                    SnapshotObject::Bytes {
-                        data: b.copy_bytes(&data),
-                        original_len: data.len(),
-                    }
-                }
+                Object::Uint8Array(data) => b.bytes(&data.lock()),
                 Object::Array(data) => {
-                    let element_type = b.push_type(owned_type(&data.element_ty));
+                    let element_type = b.leaves().ty(owned_type(&data.element_ty));
                     let data = data.lock();
-                    let start = b.value_start();
-                    let count = data.len().min(b.remaining_values());
-                    b.reserve_values(count);
-                    for value in data.iter().take(count) {
-                        let value = self.add(&mut b, *value, depth + 1);
-                        b.push_value(value);
-                    }
-                    if count < data.len() {
-                        b.limited(Limit::Values);
-                    }
-                    SnapshotObject::List {
-                        element_type,
-                        items: b.value_range(start),
-                        original_len: data.len(),
-                    }
+                    b.list(element_type, data.iter(), |leaves, value| {
+                        self.add(leaves, *value, depth + 1)
+                    })
                 }
                 Object::Map(data) => {
-                    let key_type = b.push_type(owned_type(&data.key_ty));
-                    let value_type = b.push_type(owned_type(&data.value_ty));
+                    let key_type = b.leaves().ty(owned_type(&data.key_ty));
+                    let value_type = b.leaves().ty(owned_type(&data.value_ty));
                     let data = data.lock();
-                    let start = b.entry_start();
-                    let count = data.len().min(b.remaining_entries());
-                    b.reserve_entries(count);
-                    for (key, value) in data.iter().take(count) {
-                        if !b.content(key.len(), !matches!(key, bex_str::BexStr::Inline { .. })) {
-                            break;
-                        }
-                        let value = self.add(&mut b, *value, depth + 1);
-                        b.entry(key, value);
-                    }
-                    let entries = b.entry_range(start);
-                    if entries.len() < data.len() {
-                        b.limited(Limit::Values);
-                    }
-                    SnapshotObject::Map {
-                        key_type,
-                        value_type,
-                        entries,
-                        original_len: data.len(),
-                    }
+                    b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
+                        let key = rewritten(&self.rewrites, key).into_owned();
+                        (key, self.add(leaves, *value, depth + 1))
+                    })
                 }
                 Object::Instance(instance) => {
-                    let types_start = b.type_start();
-                    for ty in &instance.class_type_args {
-                        b.push_type(owned_type(ty));
-                    }
-                    let type_arguments = b.type_range(types_start);
-                    let declaration =
-                        match self.add(&mut b, Value::object(instance.class), depth + 1) {
-                            SnapshotValue::Object(id) => id,
-                            SnapshotValue::Truncated(reason) => {
-                                b.set_object(id, SnapshotObject::Truncated(reason));
-                                continue;
-                            }
-                            _ => unreachable!("class declaration is an object"),
-                        };
-                    // SAFETY: class lives under the same heap permit.
-                    let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                        unreachable!("instance class")
-                    };
-                    let start = b.entry_start();
-                    let count = instance.field_len().min(b.remaining_entries());
-                    b.reserve_entries(count);
-                    for (i, field) in class.fields.iter().enumerate().take(count) {
-                        if !b.content(field.name.len(), false) {
-                            break;
+                    let class = Value::object(instance.class);
+                    match self.add(&mut b.leaves(), class, depth + 1) {
+                        SnapshotValue::Object(declaration) => {
+                            // SAFETY: class lives under the same heap permit.
+                            let Object::Class(class) = (unsafe { instance.class.get() }) else {
+                                unreachable!("instance class")
+                            };
+                            b.instance(
+                                declaration,
+                                instance.class_type_args.iter().map(owned_type),
+                                (0..instance.field_len()).zip(&class.fields),
+                                |leaves, (at, field)| {
+                                    let value =
+                                        self.add(leaves, instance.load_field(at), depth + 1);
+                                    (field.name.as_str().into(), value)
+                                },
+                            )
                         }
-                        let value = self.add(&mut b, instance.load_field(i), depth + 1);
-                        b.entry(&field.name.as_str().into(), value);
-                    }
-                    let fields = b.entry_range(start);
-                    if fields.len() < instance.field_len() {
-                        b.limited(Limit::Values);
-                    }
-                    SnapshotObject::Instance {
-                        type_arguments,
-                        declaration,
-                        fields,
-                        original_len: instance.field_len(),
+                        SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
+                        _ => unreachable!("class declaration is an object"),
                     }
                 }
-                Object::Class(class) => declaration(&mut b, &class.name, class.type_tag, false),
-                Object::Enum(enm) => declaration(&mut b, &enm.name, enm.type_tag, true),
+                Object::Class(class) => b.declaration(&class.name, class.type_tag, false),
+                Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true),
                 Object::Cell(cell) => {
-                    SnapshotObject::Cell(self.add(&mut b, cell.load(), depth + 1))
+                    SnapshotObject::Cell(self.add(&mut b.leaves(), cell.load(), depth + 1))
                 }
                 Object::Function(f) => SnapshotObject::Descriptive {
                     kind: Description::Function,
-                    name: b.string(&f.name.as_str().into()),
+                    name: b.leaves().label(&f.name.as_str().into()),
                 },
                 Object::Closure(_) => describe(Description::Closure),
                 Object::BoundMethod(_) => describe(Description::BoundMethod),
@@ -238,16 +203,125 @@ impl Scratch {
                 | Object::Variant(_)
                 | Object::RustData(_) => unreachable!("inline value queued as object"),
             };
-            b.set_object(id, object);
+            b.fill(slot, object);
         }
         self.seen.clear();
         self.rust_seen.clear();
         self.work.clear();
-        match input {
-            Input::Value(_) => b.finish_value(value_root),
-            Input::FunctionArgs(args) => b.finish_args(args.len(), args_range),
+        b.finish(root, &mut self.shaper)
+    }
+}
+/// What `text` reads as once every rewrite it quotes is applied.
+fn rewritten<'a>(
+    rewrites: &[(String, String)],
+    text: &'a bex_str::BexStr,
+) -> Cow<'a, bex_str::BexStr> {
+    let mut rewritten: Option<String> = None;
+    for (from, to) in rewrites {
+        let current = rewritten.as_deref().unwrap_or(text.as_str());
+        if current.contains(from.as_str()) {
+            rewritten = Some(current.replace(from.as_str(), to));
         }
     }
+    rewritten.map_or(Cow::Borrowed(text), |text| Cow::Owned(text.into()))
+}
+/// A traced request's payload. Every string, a body included, is capped at
+/// `BODY_CAPTURE_MAX_BYTES`; a longer one is recorded as truncated.
+fn network(b: &mut Builder, payload: &NetworkPayload<'_>) -> SnapshotValue {
+    match *payload {
+        NetworkPayload::Request {
+            method,
+            url,
+            headers,
+            body,
+        } => {
+            let headers = string_map(b, headers);
+            let mut fields = vec![
+                ("method", text(&mut b.leaves(), method)),
+                ("url", text(&mut b.leaves(), url)),
+                ("headers", headers),
+            ];
+            if let Some(body) = body {
+                fields.push(("body", self::body(b, body)));
+            }
+            let request = map(b, OwnedType::Unknown, &fields);
+            map(b, OwnedType::Unknown, &[("request", request)])
+        }
+        NetworkPayload::Connection { status, headers } => {
+            let headers = string_map(b, headers);
+            let status = SnapshotValue::Int(i64::from(status));
+            map(
+                b,
+                OwnedType::Unknown,
+                &[("status", status), ("headers", headers)],
+            )
+        }
+        NetworkPayload::Body(bytes) => body(b, bytes),
+        NetworkPayload::SseEvent { event, data, id } => {
+            let mut leaves = b.leaves();
+            let fields = [
+                (
+                    "event",
+                    event.map_or(SnapshotValue::Null, |event| text(&mut leaves, event)),
+                ),
+                ("data", text(&mut leaves, data)),
+                (
+                    "id",
+                    id.map_or(SnapshotValue::Null, |id| text(&mut leaves, id)),
+                ),
+            ];
+            map(b, OwnedType::Unknown, &fields)
+        }
+    }
+}
+fn type_args(b: &mut Builder, args: &[(&str, &bex_vm_types::RealizedTy)]) -> SnapshotValue {
+    let fields = args
+        .iter()
+        .map(|(name, ty)| (*name, SnapshotValue::Type(b.leaves().ty(owned_type(ty)))))
+        .collect::<Vec<_>>();
+    map(b, OwnedType::Type, &fields)
+}
+fn text(leaves: &mut Leaves<'_>, text: &str) -> SnapshotValue {
+    if text.len() > btel_settings::network::BODY_CAPTURE_MAX_BYTES {
+        return SnapshotValue::Truncated(Limit::Bytes);
+    }
+    leaves.string_value(&text.into())
+}
+fn body(b: &mut Builder, body: &[u8]) -> SnapshotValue {
+    if body.len() > btel_settings::network::BODY_CAPTURE_MAX_BYTES {
+        return SnapshotValue::Truncated(Limit::Bytes);
+    }
+    if let Ok(body) = std::str::from_utf8(body) {
+        return text(&mut b.leaves(), body);
+    }
+    let bytes = b.bytes(body);
+    object(b, bytes)
+}
+fn string_map(b: &mut Builder, entries: &[(String, String)]) -> SnapshotValue {
+    let key_type = b.leaves().ty(OwnedType::string());
+    let value_type = b.leaves().ty(OwnedType::string());
+    let map = b.map(
+        key_type,
+        value_type,
+        entries.iter(),
+        |leaves, (key, value)| (key.as_str().into(), text(leaves, value)),
+    );
+    object(b, map)
+}
+/// A string-keyed map of values already built.
+fn map(b: &mut Builder, value_type: OwnedType, fields: &[(&str, SnapshotValue)]) -> SnapshotValue {
+    let key_type = b.leaves().ty(OwnedType::string());
+    let value_type = b.leaves().ty(value_type);
+    let map = b.map(key_type, value_type, fields.iter(), |_, (key, value)| {
+        ((*key).into(), *value)
+    });
+    object(b, map)
+}
+fn object(b: &mut Builder, object: SnapshotObject) -> SnapshotValue {
+    b.leaves().object(object).map_or(
+        SnapshotValue::Truncated(Limit::Objects),
+        SnapshotValue::Object,
+    )
 }
 // Preserve immutable type metadata; replace every VM type head with owned identity.
 fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
@@ -256,33 +330,74 @@ fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
         None => btel_snapshot::TypeIdentity::Unresolved(head.tag()),
     })
 }
-fn declaration(
-    b: &mut Builder,
-    name: &baml_type::DeclarationName,
-    tag: baml_type::typetag::TypeTag,
-    is_enum: bool,
+/// A media value as the runtime holds it: its kind, MIME type and source, and
+/// loaded content as base64 text shared by handle. Reads no file and fetches
+/// nothing. A part past the byte limit truncates the whole object.
+fn media(
+    leaves: &mut Leaves<'_>,
+    rewrites: &[(String, String)],
+    value: &MediaValue,
 ) -> SnapshotObject {
-    let mut bytes = name.item_name().len();
-    if let Some(q) = name.declared() {
-        bytes += q.package().len();
-        bytes += q
-            .namespace()
-            .iter()
-            .map(baml_type::Name::len)
-            .sum::<usize>();
-    }
-    if b.content(bytes, false) {
-        SnapshotObject::Declaration {
-            name: name.clone(),
-            tag,
-            is_enum,
-        }
-    } else {
-        SnapshotObject::Truncated(Limit::Bytes)
+    let Ok(mime_type) = value.read_mime_type(|mime| {
+        mime.map(|mime| leaves.label(&mime.into()).ok_or(()))
+            .transpose()
+    }) else {
+        return SnapshotObject::Truncated(Limit::Bytes);
+    };
+    let source = value.read_content(|content| {
+        let loaded = |leaves: &mut Leaves<'_>, data: Option<&bex_str::BexStr>| match data {
+            Some(data) => leaves.string(data).map(Some),
+            None => Some(None),
+        };
+        Some(match content {
+            MediaContent::Url { url, base64_data } => MediaSource::Url {
+                url: leaves.label(&rewritten(rewrites, &url.as_str().into()))?,
+                data: loaded(leaves, base64_data.as_ref())?,
+            },
+            MediaContent::File { file, base64_data } => MediaSource::File {
+                path: leaves.label(&file.as_str().into())?,
+                data: loaded(leaves, base64_data.as_ref())?,
+            },
+            MediaContent::Base64 { base64_data } => MediaSource::Base64 {
+                data: leaves.string(base64_data)?,
+            },
+        })
+    });
+    match source {
+        Some(source) => SnapshotObject::Media {
+            kind: value.kind,
+            mime_type,
+            source,
+        },
+        None => SnapshotObject::Truncated(Limit::Bytes),
     }
 }
 fn describe(kind: Description) -> SnapshotObject {
     SnapshotObject::Descriptive { kind, name: None }
+}
+/// A network or type-argument snapshot as JSON, to compare shapes in tests:
+/// bytes become an array of numbers, a truncated value names its limit, a
+/// type is `"type: <type>"`.
+#[cfg(test)]
+pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Value {
+    match value {
+        SnapshotValue::Null => serde_json::Value::Null,
+        SnapshotValue::Int(value) => value.into(),
+        SnapshotValue::String(id) => snapshot.string(id).as_str().into(),
+        SnapshotValue::Truncated(limit) => format!("truncated: {limit:?}").into(),
+        SnapshotValue::Type(id) => format!("type: {}", snapshot.ty(id)).into(),
+        SnapshotValue::Object(id) => match snapshot.object(id) {
+            SnapshotObject::Map { entries, .. } => snapshot
+                .entries(*entries)
+                .iter()
+                .map(|entry| (entry.key.as_str().to_owned(), json(snapshot, entry.value)))
+                .collect::<serde_json::Map<_, _>>()
+                .into(),
+            SnapshotObject::Uint8Array { data } => snapshot.bytes(*data).into(),
+            object => panic!("not a network snapshot object: {object:?}"),
+        },
+        value => panic!("not a network snapshot value: {value:?}"),
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -345,7 +460,7 @@ mod tests {
         let children = snapshot.values(*items);
         assert_eq!(children[0], children[1]);
         assert_eq!(children[2], root);
-        let Obj::Bytes { data, .. } = captured_object(&snapshot, children[0]) else {
+        let Obj::Uint8Array { data, .. } = captured_object(&snapshot, children[0]) else {
             panic!()
         };
         assert_eq!(snapshot.bytes(*data), [1, 2, 3]);
@@ -359,11 +474,7 @@ mod tests {
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.alloc_float(2.5);
-        let opaque: Arc<dyn std::any::Any + Send + Sync> = baml_builtins2::MediaValue::from_file(
-            baml_type::MediaKind::Image,
-            "/nonexistent/telemetry-must-not-read.png",
-            None,
-        );
+        let opaque: Arc<dyn std::any::Any + Send + Sync> = Arc::new(7_u64);
         let weak = Arc::downgrade(&opaque);
         let first = vm.tlab.alloc_rust_data(opaque.clone());
         let second = vm.tlab.alloc_rust_data(opaque.clone());
@@ -409,6 +520,88 @@ mod tests {
         ));
     }
     #[test]
+    fn media_is_captured_by_content_without_reading_files_or_retaining_sources() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        // Longer than the inline capacity, so the payload is heap-backed.
+        let payload = bex_str::BexStr::from("iVBORw0K".repeat(64));
+        let bex_str::BexStr::Flat(stored) = &payload else {
+            panic!("expected a heap-backed payload, got {payload:?}")
+        };
+        let stored = Arc::clone(stored);
+        let sources: [Arc<dyn std::any::Any + Send + Sync>; 3] = [
+            MediaValue::from_file(
+                baml_type::MediaKind::Image,
+                "/nonexistent/telemetry-must-not-read.png",
+                None,
+            ),
+            MediaValue::from_url(
+                baml_type::MediaKind::Pdf,
+                "https://example.test/report.pdf",
+                Some("application/pdf"),
+            ),
+            MediaValue::from_base64(baml_type::MediaKind::Audio, payload, Some("audio/wav")),
+        ];
+        let weak: Vec<_> = sources.iter().map(Arc::downgrade).collect();
+        // Two host wrappers of one media value are one captured object.
+        let values: Vec<_> = [&sources[0], &sources[1], &sources[2], &sources[2]]
+            .into_iter()
+            .map(|source| Value::object(vm.tlab.alloc_rust_data(Arc::clone(source))))
+            .collect();
+        drop(sources);
+        let snapshot = capture(&values);
+        unsafe {
+            vm.heap
+                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major)
+        };
+        drop(vm);
+        assert!(weak.iter().all(|weak| weak.upgrade().is_none()));
+        let roots = snapshot.roots();
+        assert_eq!(roots[2], roots[3]);
+        assert_eq!(snapshot.object_count(), 3);
+        let media = |value| match captured_object(&snapshot, value) {
+            Obj::Media {
+                kind,
+                mime_type,
+                source,
+            } => (
+                *kind,
+                mime_type.map(|id| snapshot.label(id).as_str()),
+                *source,
+            ),
+            other => panic!("expected media, got {other:?}"),
+        };
+        let (kind, mime_type, MediaSource::File { path, data: None }) = media(roots[0]) else {
+            panic!("expected a file without content")
+        };
+        assert_eq!((kind, mime_type), (baml_type::MediaKind::Image, None));
+        assert_eq!(
+            snapshot.label(path).as_str(),
+            "/nonexistent/telemetry-must-not-read.png"
+        );
+        let (kind, mime_type, MediaSource::Url { url, data: None }) = media(roots[1]) else {
+            panic!("expected a URL without content")
+        };
+        assert_eq!(
+            (kind, mime_type),
+            (baml_type::MediaKind::Pdf, Some("application/pdf"))
+        );
+        assert_eq!(
+            snapshot.label(url).as_str(),
+            "https://example.test/report.pdf"
+        );
+        let (kind, mime_type, MediaSource::Base64 { data }) = media(roots[2]) else {
+            panic!("expected base64 content")
+        };
+        assert_eq!(
+            (kind, mime_type),
+            (baml_type::MediaKind::Audio, Some("audio/wav"))
+        );
+        let bex_str::BexStr::Flat(captured) = snapshot.string(data) else {
+            panic!("expected the payload's own handle")
+        };
+        assert!(Arc::ptr_eq(captured, &stored), "capture shares the payload");
+    }
+    #[test]
     fn concurrent_container_mutation_and_depth_limits_terminate() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let ptr = vm.tlab.alloc_array(ty(), vec![Value::int(1); 8]);
@@ -446,7 +639,85 @@ mod tests {
                 Input::FunctionArgs(&[Value::object(ptr)]),
             )
         };
-        assert!(snapshot.stats().limited);
+        // The list is at the depth limit, so what it holds is cut.
+        let Obj::List { items, .. } = captured_object(&snapshot, snapshot.roots()[0]) else {
+            panic!()
+        };
+        let items = snapshot.values(*items);
+        assert_eq!(items.len(), 8);
+        assert!(
+            items
+                .iter()
+                .all(|item| *item == Val::Truncated(Limit::Depth))
+        );
+    }
+    #[test]
+    fn a_value_too_large_to_hold_whole_is_captured_as_truncated() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let string =
+            |vm: &mut crate::BexVm, length| Value::object(vm.tlab.alloc_string("s".repeat(length)));
+        let bigint = |vm: &mut crate::BexVm, bits: u32| {
+            Value::object(
+                vm.tlab
+                    .alloc_bigint(num_bigint::BigInt::from(1) << (bits - 1)),
+            )
+        };
+        let bytes = |vm: &mut crate::BexVm, length| {
+            Value::object(vm.tlab.alloc_uint8array(vec![7; length]))
+        };
+        let image = |vm: &mut crate::BexVm, length: usize| {
+            let media: Arc<dyn std::any::Any + Send + Sync> = MediaValue::from_base64(
+                baml_type::MediaKind::Image,
+                bex_str::BexStr::from("A".repeat(length)),
+                None,
+            );
+            Value::object(vm.tlab.alloc_rust_data(media))
+        };
+        // Each kind at the limit, then just over it.
+        let values = [
+            string(&mut vm, 64),
+            string(&mut vm, 65),
+            bigint(&mut vm, 64 * 8),
+            bigint(&mut vm, 64 * 8 + 1),
+            bytes(&mut vm, 64),
+            bytes(&mut vm, 65),
+            image(&mut vm, 64),
+            image(&mut vm, 65),
+        ];
+        let pool = btel_snapshot::SnapshotPool::new(
+            1,
+            btel_snapshot::Limits {
+                max_leaf_bytes: 64,
+                ..Default::default()
+            },
+        );
+        // SAFETY: the values stay live and nothing collects during capture.
+        let snapshot = unsafe {
+            Scratch::default().capture(pool.try_acquire().unwrap(), Input::FunctionArgs(&values))
+        };
+        drop(vm);
+        let roots = snapshot.roots();
+        assert!(matches!(roots[0], Val::String(_)));
+        assert_eq!(roots[1], Val::Truncated(Limit::Bytes));
+        assert!(matches!(roots[2], Val::Bigint(_)));
+        assert_eq!(roots[3], Val::Truncated(Limit::Bytes));
+        let Obj::Uint8Array { data } = captured_object(&snapshot, roots[4]) else {
+            panic!("the bytes at the limit are held")
+        };
+        assert_eq!(snapshot.bytes(*data), [7; 64]);
+        // The length stays; none of the content does.
+        assert!(matches!(
+            captured_object(&snapshot, roots[5]),
+            Obj::Uint8ArrayTruncated { original_len: 65 }
+        ));
+        assert!(matches!(
+            captured_object(&snapshot, roots[6]),
+            Obj::Media { .. }
+        ));
+        assert!(matches!(
+            captured_object(&snapshot, roots[7]),
+            Obj::Truncated(Limit::Bytes)
+        ));
     }
     #[test]
     fn maps_instances_and_variants_keep_identity_and_fields_after_gc() {
@@ -577,7 +848,8 @@ mod tests {
         else {
             panic!()
         };
-        let baml_type::RealizedTy::Class(head, ..) = &snapshot.type_arguments(*type_arguments)[0]
+        let Some(baml_type::RealizedTy::Class(head, ..)) =
+            snapshot.type_arguments(*type_arguments).next()
         else {
             panic!("lost class type argument");
         };
@@ -590,7 +862,7 @@ mod tests {
         else {
             panic!()
         };
-        assert_eq!(name.item_name().as_str(), "TestClass");
+        assert_eq!(snapshot.name(*name).item_name().as_str(), "TestClass");
         assert_eq!(*tag, baml_type::typetag::TypeTag::from_i64(100));
         let fields = snapshot.entries(*fields);
         assert_eq!(fields[0].key.as_str(), "x");
@@ -604,7 +876,7 @@ mod tests {
             panic!()
         };
         assert_eq!(index, 1);
-        assert_eq!(snapshot.string(name).as_str(), "Green");
+        assert_eq!(snapshot.label(name).as_str(), "Green");
         assert!(matches!(
             snapshot.object(declaration),
             Obj::Declaration { is_enum: true, .. }
@@ -664,7 +936,7 @@ mod tests {
         // Both walks must preserve the same graph topology and values despite
         // distinct VM heap addresses; no source addresses appear in either graph.
         assert_eq!(format!("{snapshot:?}"), format!("{copied_snapshot:?}"));
-        assert_eq!(snapshot.id(), copied_snapshot.id());
+        assert_eq!(snapshot.root_id(), copied_snapshot.root_id());
     }
 
     #[test]
@@ -676,7 +948,6 @@ mod tests {
             value = Value::object(vm.tlab.alloc_array(ty(), vec![value]));
         }
         let snapshot = capture(&[value]);
-        assert!(!snapshot.stats().limited);
         let mut node = snapshot.roots()[0];
         for _ in 0..256 {
             let Obj::List { items, .. } = captured_object(&snapshot, node) else {
@@ -684,11 +955,10 @@ mod tests {
             };
             node = snapshot.values(*items)[0];
         }
-        let Obj::Bytes { data, original_len } = captured_object(&snapshot, node) else {
+        let Obj::Uint8Array { data } = captured_object(&snapshot, node) else {
             panic!()
         };
-        assert_eq!(*original_len, 9 * 1024 * 1024);
-        assert_eq!(snapshot.bytes(*data).len(), *original_len);
+        assert_eq!(snapshot.bytes(*data).len(), 9 * 1024 * 1024);
         assert!(snapshot.bytes(*data).iter().all(|byte| *byte == 42));
     }
 
@@ -799,6 +1069,134 @@ mod tests {
         let Val::String(id) = values[3] else { panic!() };
         drop(vm);
         assert_eq!(snapshot.string(id).as_str(), "shared immutable content");
+    }
+    #[test]
+    fn a_rewrite_reaches_every_place_a_capture_quotes_text() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let raw = "https://example.test/report.pdf?key=secret";
+        let clean = "https://example.test/report.pdf?key=sha256:0123";
+        let media: Arc<dyn std::any::Any + Send + Sync> =
+            MediaValue::from_url(baml_type::MediaKind::Pdf, raw, None);
+        let message = format!("GET {raw} failed");
+        let values = [
+            Value::object(vm.tlab.alloc_string(message.as_str())),
+            Value::object(vm.tlab.alloc_rust_data(media)),
+        ];
+        let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let mut scratch = Scratch {
+            rewrites: vec![(raw.to_owned(), clean.to_owned())],
+            ..Scratch::default()
+        };
+        // SAFETY: the values stay live and nothing collects during capture.
+        let snapshot =
+            unsafe { scratch.capture(pool.try_acquire().unwrap(), Input::FunctionArgs(&values)) };
+        let roots = snapshot.roots();
+        let Val::String(text) = roots[0] else {
+            panic!("expected a string, got {:?}", roots[0])
+        };
+        assert_eq!(
+            snapshot.string(text).as_str(),
+            format!("GET {clean} failed")
+        );
+        let Obj::Media {
+            source: MediaSource::Url { url, data: None },
+            ..
+        } = captured_object(&snapshot, roots[1])
+        else {
+            panic!("expected a URL without content")
+        };
+        assert_eq!(snapshot.label(*url).as_str(), clean);
+    }
+    #[test]
+    fn network_payloads_have_their_recorded_shapes() {
+        use serde_json::json;
+
+        use crate::telemetry::network::NetworkPayload;
+
+        let pool = btel_snapshot::SnapshotPool::new(4, btel_snapshot::Limits::default());
+        let capture = |payload: &NetworkPayload<'_>| {
+            let mut b = pool.try_acquire().unwrap();
+            let root = network(&mut b, payload);
+            b.finish(root, &mut Shaper::default())
+        };
+        let shape = |payload: &NetworkPayload<'_>| {
+            let snapshot = capture(payload);
+            json(&snapshot, snapshot.value().unwrap())
+        };
+        let headers = vec![
+            ("content-type".to_owned(), "application/json".to_owned()),
+            (
+                "authorization".to_owned(),
+                "sha256:0123456789abcdef".to_owned(),
+            ),
+        ];
+        assert_eq!(
+            shape(&NetworkPayload::Request {
+                method: "POST",
+                url: "https://api.anthropic.com/v1/messages",
+                headers: &headers,
+                body: Some(br#"{"model":"claude"}"#),
+            }),
+            json!({"request": {
+                "method": "POST",
+                "url": "https://api.anthropic.com/v1/messages",
+                "headers": {
+                    "content-type": "application/json",
+                    "authorization": "sha256:0123456789abcdef",
+                },
+                "body": r#"{"model":"claude"}"#,
+            }})
+        );
+        // Bodies not recorded: no body at all, not an empty one.
+        assert_eq!(
+            shape(&NetworkPayload::Request {
+                method: "GET",
+                url: "https://example.com/",
+                headers: &[],
+                body: None,
+            }),
+            json!({"request": {"method": "GET", "url": "https://example.com/", "headers": {}}})
+        );
+        assert_eq!(
+            shape(&NetworkPayload::Connection {
+                status: 429,
+                headers: &headers[..1],
+            }),
+            json!({"status": 429, "headers": {"content-type": "application/json"}})
+        );
+        assert_eq!(
+            shape(&NetworkPayload::Body(b"plain text")),
+            json!("plain text")
+        );
+        assert_eq!(
+            shape(&NetworkPayload::Body(&[0xff, 0, 7])),
+            json!([255, 0, 7])
+        );
+        assert_eq!(
+            shape(&NetworkPayload::SseEvent {
+                event: Some("message_delta"),
+                data: r#"{"usage":{"output_tokens":30}}"#,
+                id: None,
+            }),
+            json!({
+                "event": "message_delta",
+                "data": r#"{"usage":{"output_tokens":30}}"#,
+                "id": null,
+            })
+        );
+        // Identical bodies are one CAS blob.
+        assert_eq!(
+            capture(&NetworkPayload::Body(b"same")).root_id(),
+            capture(&NetworkPayload::Body(b"same")).root_id()
+        );
+        let over = vec![b'a'; btel_settings::network::BODY_CAPTURE_MAX_BYTES + 1];
+        let truncated = capture(&NetworkPayload::Body(&over));
+        assert!(matches!(
+            truncated.value(),
+            Some(Val::Truncated(Limit::Bytes))
+        ));
+        let at_cap = capture(&NetworkPayload::Body(&over[1..]));
+        assert!(matches!(at_cap.value(), Some(Val::String(_))));
     }
     #[test]
     fn cell_cycles_and_distinct_opaque_objects_keep_identity_without_retaining_sources() {

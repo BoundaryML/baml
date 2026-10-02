@@ -37,6 +37,53 @@ function check_BedrockHaiku45() -> void {
     )
 }
 
+// A prompt with a stable prefix, a `${cache(...)}` after it, and a question
+// that changes. The nonce makes the prefix new to the provider on each run, so
+// the first call has to write the cache.
+function CachedReference(nonce: string, reference: string, question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Reference document ${nonce}.
+        ${reference}
+        ${cache({ "type": "default" })}
+        ${question}
+    `
+}
+
+// Two calls sharing the prefix: the first writes it to the cache and the
+// second reads it back. Claude Haiku 4.5 caches nothing under 4,096 tokens;
+// 600 lines is about three times that.
+function check_BedrockHaiku45Cache() -> void {
+    let bedrock = aws.BedrockClient.new(
+        model = "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        region = baml.env.get_or_panic("BEDROCK_AWS_REGION"),
+        access_key_id = baml.env.get_or_panic("BEDROCK_AWS_ACCESS_KEY_ID"),
+        secret_access_key = baml.env.get_or_panic("BEDROCK_AWS_SECRET_ACCESS_KEY"),
+        max_tokens = 256,
+        temperature = 0.0,
+    );
+    let nonce = baml.time.Instant.now().to_string();
+    let lines: string[] = [];
+    let i = 0;
+    while (i < 600) {
+        lines.push(`Entry ${i}: the quick brown fox jumps over the lazy dog, item ${i * 7}.`);
+        i += 1;
+    }
+    let reference = lines.join("\n");
+    let agent = ai.Agent.new(client = bedrock);
+
+    let first = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: one"));
+    log.info(`BedrockHaiku45Cache first call: ${baml.json.stringify(baml.json.to_json(first.usage))}`);
+    assert.equal(first.value, "one");
+    assert.is_true((first.usage.cache_write_input_tokens ?? 0) > 4096);
+
+    let second = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: two"));
+    log.info(`BedrockHaiku45Cache second call: ${baml.json.stringify(baml.json.to_json(second.usage))}`);
+    assert.equal(second.value, "two");
+    assert.equal(second.usage.cached_input_tokens, first.usage.cache_write_input_tokens);
+}
+
 function check_BedrockGptOss20b() -> void {
     check_hello_world(
         openai.ResponsesClient.new(
@@ -106,6 +153,9 @@ function check_VertexLlama4ScoutRouter() -> void {
 testset "live" with testing.Sequential() {
     test "BedrockHaiku45" {
         check_BedrockHaiku45()
+    }
+    test "BedrockHaiku45Cache" {
+        check_BedrockHaiku45Cache()
     }
     test "BedrockGptOss20b" {
         check_BedrockGptOss20b()

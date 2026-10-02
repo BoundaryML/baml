@@ -565,7 +565,7 @@ internal static class PrimitiveProtocol
     internal static InboundValue Encode(BamlGeneratedValue value) =>
         Encode(value, api: null, ownership: null, functionCallId: 0);
 
-    private static InboundValue Encode(
+    internal static InboundValue Encode(
         BamlGeneratedValue value,
         NativeApi? api,
         EncodedCallArguments? ownership,

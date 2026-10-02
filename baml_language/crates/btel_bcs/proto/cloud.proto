@@ -11,8 +11,8 @@ message CloudUploadEnvelope {
 }
 
 message CasObject {
-  bytes snapshot_id = 1;
-  uint32 snapshot_format_version = 2;
+  bytes snapshot_id = 1;              // The CAS ID of this blob; a capture may be several.
+  uint32 snapshot_format_version = 2; // The blob format version.
   bytes blob = 3;
   bytes blob_sha256 = 4;
 }

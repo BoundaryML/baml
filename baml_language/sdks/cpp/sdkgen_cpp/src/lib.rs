@@ -474,6 +474,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/errors.h"),
     ),
     (
+        "include/baml/invocation.h",
+        include_str!("../../bridge_cpp/include/baml/invocation.h"),
+    ),
+    (
         "include/baml/future.h",
         include_str!("../../bridge_cpp/include/baml/future.h"),
     ),
@@ -755,7 +759,9 @@ mod injected_argument_tests {
         let bindings = &files[&PathBuf::from("src/bindings.cc")];
 
         assert!(
-            header.contains("extract(const std::string& input)"),
+            header.contains(
+                "extract(const std::string& input, const ::baml_sdk::baml_options& baml = {})"
+            ),
             "{header}"
         );
         assert!(!header.contains("on_event"), "{header}");
@@ -1222,7 +1228,9 @@ fn emit_callable(
     let ret = match &function.return_type {
         Ty::Void => "void".to_string(),
         Ty::Function { params, ret, .. } => {
-            translate_callable_ty(pool, names, params, ret, emitted_types)?.0
+            translate_callable_ty(pool, names, params, ret, emitted_types)?
+                .0
+                .replacen("std::function<", "::baml::function<", 1)
         }
         return_type => {
             match translate_ty(pool, names, return_type, emitted_types, &BTreeSet::new()) {
@@ -1481,9 +1489,7 @@ fn translate_ty(
         Ty::Bool => "bool".to_string(),
         Ty::Null => "std::monostate".to_string(),
         Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
-        Ty::RustType => {
-            return Translated::Unsupported("handle type (post-step-8)".to_string());
-        }
+        Ty::RustType => "::baml::rust_type".to_string(),
         Ty::Bigint => "::baml::bigint".to_string(),
         Ty::Media(kind) => match kind {
             baml_base::MediaKind::Image => "::baml::image".to_string(),
@@ -1813,6 +1819,14 @@ fn signature(f: &EmittedFn, pos: RenderPos, variant: FnVariant) -> String {
             opts = GeneratorIdent::OptsParam.token()
         ));
     }
+    let controls_default = match pos {
+        RenderPos::Def | RenderPos::StaticDef { .. } | RenderPos::InstanceDef { .. } => "",
+        _ => " = {}",
+    };
+    params.push(format!(
+        "const ::baml_sdk::baml_options& {}{controls_default}",
+        GeneratorIdent::BamlParam.token()
+    ));
     let (ret, name) = match variant {
         FnVariant::Sync => (f.ret.clone(), f.name.declared()),
         FnVariant::Async => (future_ret(f), f.async_name.declared()),
@@ -1881,7 +1895,27 @@ fn render_body(
         detail = GeneratorIdent::DetailNamespace.token(),
         ensure = GeneratorIdent::EnsureRuntime.token()
     );
-    let _ = writeln!(buf, "{indent}::baml::detail::args_encoder {args};");
+    if f.call_fqn == "trace.current_context" {
+        match variant {
+            FnVariant::Sync => {
+                let _ = writeln!(
+                    buf,
+                    "{indent}(void)baml; return ::baml::codec<{}>::decode(::baml::detail::current_trace_context());",
+                    f.ret
+                );
+                return;
+            }
+            FnVariant::Async => {
+                let _ = writeln!(
+                    buf,
+                    "{indent}(void)baml; return ::baml::detail::current_context_future<{}>();",
+                    f.ret
+                );
+                return;
+            }
+        }
+    }
+    let _ = writeln!(buf, "{indent}::baml::detail::args_encoder {args}(baml);");
     if let Some(self_type) = self_type {
         let _ = writeln!(
             buf,
@@ -1993,6 +2027,8 @@ fn render_header(
         }
     }
 
+    render_invocation_declarations(&mut buf, &classes);
+
     for e in enums {
         buf.push('\n');
         open_namespaces(&mut buf, &e.ns);
@@ -2096,6 +2132,8 @@ fn render_header(
 
     render_codecs(&mut buf, enums, &classes);
 
+    render_invocation_definitions(&mut buf, &classes);
+
     if !skipped.is_empty() {
         buf.push_str("\n// Symbols not yet emitted by this sdkgen_cpp slice:\n");
         for line in skipped {
@@ -2104,6 +2142,60 @@ fn render_header(
     }
     buf.push_str("\n#endif  // BAML_SDK_H_\n");
     buf
+}
+
+fn control_class<'a>(classes: &'a [&EmittedClass], wire: &str) -> Option<&'a EmittedClass> {
+    classes
+        .iter()
+        .copied()
+        .find(|class| class.name.wire().to_string() == wire)
+}
+fn render_invocation_declarations(buf: &mut String, classes: &[&EmittedClass]) {
+    let (Some(options), Some(reserved), Some(cancel)) = (
+        control_class(classes, "trace.Options"),
+        control_class(classes, "trace.ReservedSpan"),
+        control_class(classes, "baml.spawn.CancelToken"),
+    ) else {
+        buf.push_str("using baml_options = ::baml::invocation_options;\n");
+        return;
+    };
+    let _ = writeln!(
+        buf,
+        "class baml_options : public ::baml::invocation_options {{ public: baml_options() = default; baml_options trace(std::variant<{}, {}>) const; baml_options cancel({}) const; baml_options timeout_ms(int64_t timeout) const {{ auto copy = *this; copy.timeout = timeout; return copy; }} }};",
+        options.name.identifier(),
+        reserved.name.identifier(),
+        cancel.name.identifier()
+    );
+}
+fn render_invocation_definitions(buf: &mut String, classes: &[&EmittedClass]) {
+    let (Some(options), Some(reserved), Some(cancel)) = (
+        control_class(classes, "trace.Options"),
+        control_class(classes, "trace.ReservedSpan"),
+        control_class(classes, "baml.spawn.CancelToken"),
+    ) else {
+        return;
+    };
+    let trace_handle = options
+        .fields
+        .iter()
+        .find(|field| field.name.wire().to_string() == "_handle")
+        .unwrap()
+        .name
+        .declared();
+    let token = cancel.name.identifier();
+    let trace_ns = options.ns.join("::");
+    let _ = writeln!(
+        buf,
+        "namespace baml_sdk {{ namespace trace = ::baml_sdk::{trace_ns}; }}"
+    );
+    buf.push_str("namespace baml_sdk { using target = ::baml::target; using arguments = ::baml::arguments; using type_bindings = ::baml::type_bindings; using value = ::baml::value; inline ::baml::future<value> invoke_async(const target& target, const arguments& args, const type_bindings& types, const baml_options& baml = {}) { detail::ensure_runtime(); return ::baml::invoke_async(target, args, types, baml); } inline value invoke(const target& target, const arguments& args, const type_bindings& types, const baml_options& baml = {}) { detail::ensure_runtime(); return ::baml::invoke(target, args, types, baml); } }\n");
+    let _ = writeln!(
+        buf,
+        "namespace baml_sdk {{\ninline baml_options baml_options::trace(std::variant<{}, {}> selection) const {{ auto copy = *this; copy.trace_key = [selection = std::move(selection)] {{ return std::visit([](const auto& value) {{ return value.{}.key(); }}, selection); }}; return copy; }}\ninline baml_options baml_options::cancel({token} token) const {{ auto copy = *this; copy.encode_cancel = [token = std::move(token)](::baml::detail::pb::InboundValue& out) {{ ::baml::codec<{token}>::encode(out, token); }}; return copy; }}\nnamespace invocation {{\nclass Invocation {{ public: explicit Invocation(std::shared_ptr<::baml::detail::invocation_state> state) : state_(std::move(state)) {{}} {token} cancel() const {{ return ::baml::codec<{token}>::decode(::baml::detail::clone_control_value(state_->cancel)); }} template <typename Body> decltype(auto) run(Body&& body) const {{ struct restore {{ std::shared_ptr<::baml::detail::invocation_state> prior; ~restore() {{ ::baml::detail::current_invocation_state = std::move(prior); }} }} guard{{::baml::detail::current_invocation_state}}; ::baml::detail::current_invocation_state = state_; return std::forward<Body>(body)(); }} private: std::shared_ptr<::baml::detail::invocation_state> state_; }};\ninline std::optional<Invocation> current() {{ auto state = ::baml::detail::current_invocation_state; if (!state) return std::nullopt; return Invocation(std::move(state)); }}\n}} }}",
+        options.name.identifier(),
+        reserved.name.identifier(),
+        trace_handle
+    );
 }
 
 /// codec<T> specializations for the generated enums and classes. Emitted in

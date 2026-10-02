@@ -25,6 +25,8 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::HostValueCallable => "host_value_callable",
         // Host-owned opaque values: same per-bridge tracking as callables.
         BamlHandleType::HostValueOpaque => "host_value_opaque",
+        BamlHandleType::InvocationState => "invocation_state",
+        BamlHandleType::TraceReservation => "trace_reservation",
     }
 }
 

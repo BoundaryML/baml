@@ -1,6 +1,7 @@
 package baml_go
 
 import (
+	"context"
 	"testing"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
@@ -8,7 +9,7 @@ import (
 
 func TestEventCallbackInputUsesTheHostCallableABI(t *testing.T) {
 	var received Value
-	input := EventCallbackInput(func(value Value) { received = value })
+	input := EventCallbackInput(func(_ context.Context, value Value) { received = value })
 	transaction := &inputTransaction{}
 	encoded, err := input.encodeValue(transaction)
 	if err != nil {

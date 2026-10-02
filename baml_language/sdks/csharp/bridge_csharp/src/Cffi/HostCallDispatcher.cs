@@ -19,11 +19,6 @@ internal static class HostCallDispatcher
                 invocation.Arguments);
             Task<object?> completion = StartInCapturedContext(invocation, arguments);
             object? result = await completion.ConfigureAwait(false);
-            if (invocation.CancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
-
             BamlGeneratedValue generated = invocation.Callable.Descriptor.Result.Encode(result);
             using EncodedCallArguments encoded = PrimitiveProtocol.EncodeOwnedValue(
                 generated,
@@ -31,13 +26,6 @@ internal static class HostCallDispatcher
                 invocation.FunctionCallId);
             Complete(api, invocation.HostCallId, isError: false, encoded.Bytes);
             encoded.Commit();
-        }
-        catch (OperationCanceledException error)
-            when (invocation.CancellationToken.IsCancellationRequested
-                && error.CancellationToken == invocation.CancellationToken)
-        {
-            // The parent function-call cancellation abandons its native host
-            // invocation, so Canary has no live V1 completion to receive.
         }
         catch (Exception error)
         {
@@ -102,9 +90,12 @@ internal static class HostCallDispatcher
     private static void StartWithoutSynchronizationContext(InvocationStart state)
     {
         SynchronizationContext? previous = SynchronizationContext.Current;
+        BamlInvocationCapture? previousFrame = InvocationFrame.Current.Value;
         try
         {
             SynchronizationContext.SetSynchronizationContext(null);
+            InvocationFrame.Current.Value = state.Invocation.Frame;
+            state.Invocation.CancellationToken.ThrowIfCancellationRequested();
             state.Completion = state.Invocation.Callable.Descriptor.Invoke(
                 state.Invocation.Callable.Callback,
                 state.Arguments,
@@ -112,6 +103,7 @@ internal static class HostCallDispatcher
         }
         finally
         {
+            InvocationFrame.Current.Value = previousFrame;
             SynchronizationContext.SetSynchronizationContext(previous);
         }
     }

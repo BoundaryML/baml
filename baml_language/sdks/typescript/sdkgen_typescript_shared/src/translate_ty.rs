@@ -294,6 +294,100 @@ fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> TranslatedType {
     }
 }
 
+/// Returned engine functions carry invocation controls; application callbacks
+/// keep their application-only signatures.
+pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
+    match ty {
+        Ty::Function { params, ret, .. } => {
+            let result = translate_return_ty(ret, ctx);
+            let mut imports = result.imports;
+            let mut positional = Vec::new();
+            let mut optional = Vec::new();
+            let required_names: Vec<String> = params
+                .iter()
+                .enumerate()
+                .filter(|(_, param)| param.mode != CodegenFunctionParamMode::Optional)
+                .map(|(index, param)| {
+                    param
+                        .name
+                        .as_ref()
+                        .map_or_else(|| format!("arg{index}"), |name| name.as_str().to_string())
+                })
+                .collect();
+            let required_refs: Vec<&str> = required_names.iter().map(String::as_str).collect();
+            let mut projected_required =
+                crate::leaf::safe_required_param_names(&required_refs, true).into_iter();
+            for (index, param) in params.iter().enumerate() {
+                let translated = translate_ty(&param.ty, ctx);
+                imports.extend(translated.imports);
+                let name = param
+                    .name
+                    .as_ref()
+                    .map_or_else(|| format!("arg{index}"), |name| name.as_str().to_string());
+                if param.mode == CodegenFunctionParamMode::Optional {
+                    optional.push(format!(
+                        "{}?: {} | undefined",
+                        crate::leaf::option_field_name(&name),
+                        translated.expr
+                    ));
+                } else {
+                    let name = projected_required
+                        .next()
+                        .expect("every required callback parameter has a projected name");
+                    positional.push(format!("{name}: {}", translated.expr));
+                }
+            }
+            let up = "../".repeat(ctx.current_leaf.segments.len());
+            let prefix = if up.is_empty() { "./" } else { &up };
+            optional.push(format!(
+                "$baml?: import(\"{prefix}_invocation.js\").BamlOptions | null | undefined"
+            ));
+            positional.push(format!("$opts?: {{ {} }} | undefined", optional.join("; ")));
+            let args = positional.join(", ");
+            TranslatedType {
+                expr: format!(
+                    "{{ ({args}): {}; callAsync({args}): Promise<{}> }}",
+                    result.expr, result.expr
+                ),
+                imports,
+            }
+        }
+        Ty::List(inner) => {
+            let mut result = translate_return_ty(inner, ctx);
+            result.expr = format!("({})[]", result.expr);
+            result
+        }
+        Ty::Map { key, value, .. } => {
+            let key = translate_ty(key, ctx);
+            let value = translate_return_ty(value, ctx);
+            let mut imports = key.imports;
+            imports.extend(value.imports);
+            let expr = if key.expr == "string" {
+                format!("{{ [key: string]: {} }}", value.expr)
+            } else {
+                format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
+            };
+            TranslatedType { expr, imports }
+        }
+        Ty::Union(items) => {
+            let mut imports = BTreeSet::new();
+            let parts: Vec<_> = items
+                .iter()
+                .map(|item| {
+                    let result = translate_return_ty(item, ctx);
+                    imports.extend(result.imports);
+                    result.expr
+                })
+                .collect();
+            TranslatedType {
+                expr: parts.join(" | "),
+                imports,
+            }
+        }
+        _ => translate_ty(ty, ctx),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
@@ -375,6 +469,32 @@ mod tests {
             ty,
             mode: CodegenFunctionParamMode::Optional,
         }
+    }
+
+    #[test]
+    fn returned_callable_names_are_legal_unique_and_reserve_options() {
+        let params = ["default", "new", "arguments", "eval", "$opts", "$opts_"]
+            .into_iter()
+            .map(|name| baml_sdkgen_types::CallableParam {
+                name: Some(BaseName::new(name)),
+                ty: Ty::Int,
+                mode: CodegenFunctionParamMode::Required,
+            })
+            .collect();
+        let translated = translate_return_ty(&callable(params, boxed(Ty::Int)), &ctx(&[]));
+        assert!(translated.expr.contains("default_: number, new_: number, arguments_: number, eval_: number, $opts_: number, $opts__: number, $opts?:"));
+        assert!(translated.expr.contains("callAsync("));
+    }
+
+    #[test]
+    fn returned_callable_maps_preserve_partial_enum_keys() {
+        let ty = Ty::Map {
+            key: Box::new(enum_ty(name("user", &[], "Color"))),
+            value: Box::new(callable(Vec::new(), boxed(Ty::Int))),
+        };
+        let translated = translate_return_ty(&ty, &ctx(&[]));
+        assert!(translated.expr.contains("]?: { ("));
+        assert!(translated.expr.contains("callAsync("));
     }
 
     /// Forces this test file to be updated whenever a `Ty` variant is added.

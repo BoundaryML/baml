@@ -462,7 +462,10 @@ function gateway_images_invoke(
     c: root.AiGatewayImageClient,
     input: ai.ModelTurnInput,
 ) -> ai.ModelTurn {
-    let req = gateway_images_render(c, input, preview = false);
+    // No streaming here: only the two transport deadlines apply.
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(
+        gateway_images_render(c, input, preview = false),
+    );
     let sent = ai.wire.send_as_with_wire<GwImagesResponse>(
         req,
         "ai-gateway-images",
@@ -470,5 +473,5 @@ function gateway_images_invoke(
         capture_wire = c.capture_wire,
     );
     let turn = gateway_images_parse(c, sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target }
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }

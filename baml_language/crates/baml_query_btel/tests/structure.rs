@@ -229,6 +229,122 @@ fn rows(index: &mut Index, sql: &str) -> Vec<Vec<Json>> {
     run(index, sql).rows
 }
 
+#[test]
+fn context_evidence_is_section_local_and_announcement_wins_in_both_ingesters() {
+    use proto::thread_section::Context;
+    let announcement = |id| {
+        Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+            id,
+            parent_id: ROOT,
+            call_path_id: 3,
+            entered_at_ticks: 10,
+            inputs_cas_id: None,
+            type_args_cas_id: None,
+        })
+    };
+    let completion = |id, late| {
+        let done = proto::FunctionCompletion {
+            id,
+            parent_id: ROOT,
+            node: 3 << 1,
+            entered_at_ticks: 10,
+            exited_at_ticks: 40,
+            completion_flags: 1,
+            ..Default::default()
+        };
+        if late {
+            Event::LateFunctionCompletion(done)
+        } else {
+            Event::FunctionCompletion(done)
+        }
+    };
+    let context_section = |thread, context, events| {
+        let mut section = section(thread, events);
+        section.context = context;
+        section
+    };
+    for incremental in [false, true] {
+        let project = tempfile::tempdir().unwrap();
+        let recording = Recording::new(project.path(), 55, None);
+        let mut first = tree(vec![], vec![]);
+        first.spans = Some(proto::SpanBatch {
+            sections: vec![
+                context_section(ROOT, None, vec![completion(30, false)]),
+                context_section(
+                    ROOT,
+                    Some(Context::EmptyContext(true)),
+                    vec![completion(31, false), completion(32, true)],
+                ),
+                context_section(ROOT, None, vec![completion(33, true)]),
+                context_section(
+                    CHILD,
+                    Some(Context::EmptyContext(true)),
+                    vec![Event::ThreadAnnouncement(proto::ThreadAnnouncement {})],
+                ),
+                context_section(
+                    3,
+                    Some(Context::EmptyContext(true)),
+                    vec![Event::ThreadAnnouncement(proto::ThreadAnnouncement {})],
+                ),
+            ],
+        });
+        recording.write(1, first);
+        let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+        if incremental {
+            index.refresh().unwrap();
+        }
+        let second = proto::RecordingFile {
+            spans: Some(proto::SpanBatch {
+                sections: vec![
+                    context_section(
+                        ROOT,
+                        Some(Context::EmptyContext(true)),
+                        vec![announcement(30)],
+                    ),
+                    context_section(ROOT, None, vec![announcement(31)]),
+                    context_section(
+                        CHILD,
+                        None,
+                        vec![
+                            Event::ThreadRunning(proto::ThreadRunning { at_ticks: 20 }),
+                            thread_done(20, proto::InvocationOutcome::Cancelled, false),
+                        ],
+                    ),
+                    context_section(
+                        3,
+                        None,
+                        vec![thread_done(20, proto::InvocationOutcome::Cancelled, false)],
+                    ),
+                ],
+            }),
+            ..Default::default()
+        };
+        recording.write(2, second);
+        let query = "SELECT span_id, baml_kind(context_metadata),
+             context_distinct_id FROM spans ORDER BY span_id";
+        let id = |node| json!(format!("{}:{node}", "37".repeat(16)));
+        assert_eq!(
+            rows(&mut index, query),
+            vec![
+                vec![id(2), json!("json"), Json::Null],
+                vec![id(3), json!("json"), Json::Null],
+                vec![id(30), json!("json"), Json::Null],
+                vec![id(31), json!("unavailable"), Json::Null],
+                vec![id(32), json!("json"), Json::Null],
+                vec![id(33), json!("unavailable"), Json::Null],
+            ]
+        );
+        assert_eq!(
+            rows(
+                &mut index,
+                "SELECT baml_kind(context_metadata) FROM span_announcements
+             WHERE span_id LIKE '%:32'"
+            ),
+            vec![vec![json!("unavailable")]]
+        );
+    }
+}
+
 /// Each node by its path of function names and edges, for readable rows.
 const PROFILE: &str = "SELECT n.function_name, p.function_name, n.invocation_count,
     n.return_count, n.error_count, n.panic_error_count, n.nonpanic_error_count,
@@ -609,6 +725,7 @@ fn model_usage_is_priced_on_the_span_that_made_the_call() {
                     call_path_id: 3,
                     entered_at_ticks: 10,
                     inputs_cas_id: None,
+                    type_args_cas_id: None,
                 }),
                 Event::FunctionCompletion(proto::FunctionCompletion {
                     id: call,

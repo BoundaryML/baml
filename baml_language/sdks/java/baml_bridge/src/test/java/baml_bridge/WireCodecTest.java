@@ -340,6 +340,9 @@ class WireCodecTest {
         expected.writeMessage(1, entry.toByteArray()); // CallFunctionArgs.kwargs = 1
         expected.writeInt64(2, 1L); // call_id = 2
 
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, 0L); invocation.writeInt64(5, 1L);
+        expected.writeMessage(6, invocation.toByteArray());
         assertArrayEquals(expected.toByteArray(), got);
     }
 
@@ -1420,6 +1423,9 @@ class WireCodecTest {
         WireWriter expected = new WireWriter();
         expected.writeMessage(1, xEntry.toByteArray()); // CallFunctionArgs.kwargs = 1
         expected.writeInt64(2, 5L); // call_id = 2
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, 0L); invocation.writeInt64(5, 5L);
+        expected.writeMessage(6, invocation.toByteArray());
         expected.writeMessage(3, tyArg.toByteArray()); // type_args = 3
 
         assertArrayEquals(expected.toByteArray(), got);
@@ -1450,6 +1456,9 @@ class WireCodecTest {
 
         WireWriter expected = new WireWriter();
         expected.writeInt64(2, 9L); // call_id = 2 (no kwargs)
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, 0L); invocation.writeInt64(5, 9L);
+        expected.writeMessage(6, invocation.toByteArray());
         expected.writeMessage(3, tyArg.toByteArray()); // type_args = 3
 
         assertArrayEquals(expected.toByteArray(), got);

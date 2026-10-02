@@ -364,22 +364,16 @@ function _vertex_request(
 /// The one internal entry point: render, send, normalize — one model turn.
 /// Claude models round-trip the Anthropic Messages format instead.
 function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = vertex_render(c, input);
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(vertex_render(c, input));
     if (_vertex_publisher(c) == "anthropic") {
         let sent = ai.wire.send_as_with_wire<anthropic.internal.Response>(
             req,
             "vertex",
             c.id(),
             capture_wire = c.capture_wire,
-            request_timeout_ms = c.request_timeout_ms,
         );
         let turn = anthropic.internal.parse(sent.value);
-        return ai.ModelTurn {
-            ...turn,
-            calls: [sent.call],
-            _usage_target: sent.usage_target,
-            model: c.model,
-        };
+        return ai.ModelTurn { ...turn, calls: [sent.call], model: c.model };
     }
     let seq = input.journal.entries().length();
     let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
@@ -387,10 +381,9 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
         "vertex",
         c.id(),
         capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
     );
     let turn = root.internal.parse(sent.value, seq, provider = "vertex");
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 function _vertex_decode_batch(batch: string) -> ai.stream.Event[] {
@@ -405,16 +398,10 @@ function vertex_invoke_stream(
     c: root.VertexClient,
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
-    let req = _vertex_request(c, input, true, preview = false);
+    let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
+    let req = limits._apply(_vertex_request(c, input, true, preview = false));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = root.internal._gm_open_sse(
-        req,
-        "vertex",
-        span,
-        request_timeout_ms = c.request_timeout_ms,
-        time_to_first_token_timeout_ms = c.time_to_first_token_timeout_ms,
-    );
+    let sse = root.internal._gm_open_sse(req, "vertex");
     // Both decoders yield an explicit `TurnDone` (Anthropic's `message_stop`,
     // Gemini's `finishReason` fragment), so both streams are strict: a
     // connection cut mid-answer raises instead of reporting the partial text
@@ -429,8 +416,8 @@ function vertex_invoke_stream(
                 }
             },
             require_terminal = "vertex",
-            model = c.model,
-            usage_target = trace._usage_target_of(span.id()),
+            timeout_options = limits,
+            dispatched = started,
         )
     } else {
         ai.stream.TurnStream.from_sse(
@@ -441,8 +428,8 @@ function vertex_invoke_stream(
                 }
             },
             require_terminal = "vertex",
-            model = c.model,
-            usage_target = trace._usage_target_of(span.id()),
+            timeout_options = limits,
+            dispatched = started,
         )
     };
     let call = ai.events.LLMCall {

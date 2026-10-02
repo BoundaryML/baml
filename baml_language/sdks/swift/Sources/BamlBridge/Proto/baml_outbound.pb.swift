@@ -831,6 +831,50 @@ nonisolated struct BamlBridge_Cffi_V1_BamlToHostCall: Sendable {
   init() {}
 }
 
+/// V2 host dispatch envelope. The adapter owns the effective-state reference
+/// and ordinary references in application_args/cancel until transferred or
+/// released. application_args remains an encoded BamlToHostCall.
+nonisolated struct BamlBridge_Cffi_V1_HostInvocation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var hostValueKey: UInt64 = 0
+
+  var callbackID: UInt32 = 0
+
+  var applicationArgs: Data = Data()
+
+  var effectiveState: UInt64 = 0
+
+  var hostEnvironment: UInt64 = 0
+
+  var cancel: BamlBridge_Cffi_V1_BamlOutboundValue {
+    get {_cancel ?? BamlBridge_Cffi_V1_BamlOutboundValue()}
+    set {_cancel = newValue}
+  }
+  /// Returns true if `cancel` has been explicitly set.
+  var hasCancel: Bool {self._cancel != nil}
+  /// Clears the value of `cancel`. Subsequent reads from it will return its default value.
+  mutating func clearCancel() {self._cancel = nil}
+
+  var deadlineNs: UInt64 {
+    get {_deadlineNs ?? 0}
+    set {_deadlineNs = newValue}
+  }
+  /// Returns true if `deadlineNs` has been explicitly set.
+  var hasDeadlineNs: Bool {self._deadlineNs != nil}
+  /// Clears the value of `deadlineNs`. Subsequent reads from it will return its default value.
+  mutating func clearDeadlineNs() {self._deadlineNs = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _cancel: BamlBridge_Cffi_V1_BamlOutboundValue? = nil
+  fileprivate var _deadlineNs: UInt64? = nil
+}
+
 nonisolated struct BamlBridge_Cffi_V1_BamlToHostArg: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2200,6 +2244,70 @@ nonisolated extension BamlBridge_Cffi_V1_BamlToHostCall: SwiftProtobuf.Message, 
 
   static func ==(lhs: BamlBridge_Cffi_V1_BamlToHostCall, rhs: BamlBridge_Cffi_V1_BamlToHostCall) -> Bool {
     if lhs.args != rhs.args {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_HostInvocation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".HostInvocation"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}host_value_key\0\u{3}callback_id\0\u{3}application_args\0\u{3}effective_state\0\u{3}host_environment\0\u{1}cancel\0\u{3}deadline_ns\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.hostValueKey) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.callbackID) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.applicationArgs) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.effectiveState) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.hostEnvironment) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._cancel) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self._deadlineNs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.hostValueKey != 0 {
+      try visitor.visitSingularUInt64Field(value: self.hostValueKey, fieldNumber: 1)
+    }
+    if self.callbackID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.callbackID, fieldNumber: 2)
+    }
+    if !self.applicationArgs.isEmpty {
+      try visitor.visitSingularBytesField(value: self.applicationArgs, fieldNumber: 3)
+    }
+    if self.effectiveState != 0 {
+      try visitor.visitSingularUInt64Field(value: self.effectiveState, fieldNumber: 4)
+    }
+    if self.hostEnvironment != 0 {
+      try visitor.visitSingularUInt64Field(value: self.hostEnvironment, fieldNumber: 5)
+    }
+    try { if let v = self._cancel {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._deadlineNs {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 7)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_HostInvocation, rhs: BamlBridge_Cffi_V1_HostInvocation) -> Bool {
+    if lhs.hostValueKey != rhs.hostValueKey {return false}
+    if lhs.callbackID != rhs.callbackID {return false}
+    if lhs.applicationArgs != rhs.applicationArgs {return false}
+    if lhs.effectiveState != rhs.effectiveState {return false}
+    if lhs.hostEnvironment != rhs.hostEnvironment {return false}
+    if lhs._cancel != rhs._cancel {return false}
+    if lhs._deadlineNs != rhs._deadlineNs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

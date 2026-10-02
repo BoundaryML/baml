@@ -33,32 +33,32 @@ public sealed class BamlPrompt
     }
 
     /// <summary>Render this prompt as readable text.</summary>
-    public string Text(CancellationToken cancellationToken = default) =>
-        TextAsync(cancellationToken).GetAwaiter().GetResult();
+    public string Text(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        TextAsync(baml).GetAwaiter().GetResult();
 
     /// <summary>Render this prompt as readable text asynchronously.</summary>
     public async Task<string> TextAsync(
-        CancellationToken cancellationToken = default)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         BamlGeneratedValue result = await InvokeAsync(
                 "ai.Prompt.text",
-                cancellationToken)
+                baml)
             .ConfigureAwait(false);
         return result.ReadString();
     }
 
     /// <summary>Return the ordered structural messages in this prompt.</summary>
     public IReadOnlyList<BamlPromptMessage> Messages(
-        CancellationToken cancellationToken = default) =>
-        MessagesAsync(cancellationToken).GetAwaiter().GetResult();
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        MessagesAsync(baml).GetAwaiter().GetResult();
 
     /// <summary>Return the ordered structural messages asynchronously.</summary>
     public async Task<IReadOnlyList<BamlPromptMessage>> MessagesAsync(
-        CancellationToken cancellationToken = default)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         BamlGeneratedValue result = await InvokeAsync(
                 "ai.Prompt.messages",
-                cancellationToken)
+                baml)
             .ConfigureAwait(false);
         return Array.AsReadOnly(
             result.ReadList()
@@ -72,7 +72,7 @@ public sealed class BamlPrompt
 
     private Task<BamlGeneratedValue> InvokeAsync(
         string functionIdentity,
-        CancellationToken cancellationToken)
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml)
     {
         IReadOnlyList<KeyValuePair<string, BamlGeneratedValue>> arguments =
         [
@@ -81,7 +81,7 @@ public sealed class BamlPrompt
         return registry.RequireProgram().CallRuntimeMethodAsync(
             functionIdentity,
             arguments,
-            cancellationToken);
+            baml);
     }
 }
 

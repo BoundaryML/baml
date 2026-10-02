@@ -9,10 +9,10 @@
 
 use std::sync::Arc;
 
-use baml_builtins2::{PromptAst, PromptAstSimple};
 use baml_tests::{baml_test, engine::TestOutput};
 use bex_engine::BexExternalValue;
 use bex_external_types::BexExternalAdt;
+use bex_vm_types::{PromptAst, PromptAstSimple};
 
 fn test_result(output: TestOutput) -> BexExternalValue {
     output.result.expect("BAML execution should succeed")
@@ -42,7 +42,7 @@ fn role_and_metadata(message: &PromptAst) -> (&str, &serde_json::Value) {
 fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::MediaKind>) {
     fn collect_content(content: &PromptAstSimple, out: &mut Vec<baml_base::MediaKind>) {
         match content {
-            PromptAstSimple::String(_) => {}
+            PromptAstSimple::String(_) | PromptAstSimple::CacheDelimiter(_) => {}
             PromptAstSimple::Media(media) => out.push(media.kind),
             PromptAstSimple::Multiple(parts) => {
                 for part in parts {

@@ -80,6 +80,17 @@ impl BamlPyHandle {
         Ok((new_key, self.handle_type))
     }
 
+    fn _key_for_invocation(&self) -> PyResult<u64> {
+        if self.handle_type
+            != bridge_ctypes::baml_bridge::cffi::BamlHandleType::InvocationState as u64
+        {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "expected an invocation-state handle",
+            ));
+        }
+        Ok(self.handle_key)
+    }
+
     /// Borrow this handle key as a call target without transferring ownership.
     fn _key_for_call(&self) -> PyResult<u64> {
         use bridge_ctypes::baml_bridge::cffi::BamlHandleType;

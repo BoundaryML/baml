@@ -376,8 +376,6 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
         throw bamlError(from: error.value, trace: error.trace)
     case .panic(let panic):
         if panic.isExitPanic {
-            // (The pre-V1 ABI had a flush_events() hook here; event
-            // production was removed upstream, so exit directly.)
             exit(Int32(truncatingIfNeeded: panic.exitCode))
         }
         let (message, className) = describeThrownValue(panic.value)

@@ -156,10 +156,10 @@ if (CanCreateLoopbackSockets())
     Task<TcpClient> peerAccept = systemListener.AcceptTcpClientAsync(networkTimeout.Token).AsTask();
     using Baml.Net.TcpStream outbound = await Baml.Net.TcpStream.ConnectAsync(
         $"127.0.0.1:{systemListenerPort}",
-        cancellationToken: networkTimeout.Token);
+        baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     using TcpClient outboundPeer = await peerAccept;
     using NetworkStream outboundPeerStream = outboundPeer.GetStream();
-    _ = await outbound.CloseAsync(networkTimeout.Token);
+    _ = await outbound.CloseAsync(baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     byte[] outboundClosedProbe = new byte[1];
     Require(
         await outboundPeerStream.ReadAsync(outboundClosedProbe, networkTimeout.Token) == 0,
@@ -169,10 +169,10 @@ if (CanCreateLoopbackSockets())
     int bamlListenerPort = ReserveTcpPort();
     Baml.Net.TcpListener originalListener = Baml.Net.TcpListener.Bind(
         $"127.0.0.1:{bamlListenerPort}",
-        networkTimeout.Token);
+        baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     using Baml.Net.TcpListener clonedListener = originalListener.Clone();
     originalListener.Dispose();
-    Task<Baml.Net.TcpStream> acceptedStream = clonedListener.AcceptAsync(networkTimeout.Token);
+    Task<Baml.Net.TcpStream> acceptedStream = clonedListener.AcceptAsync(baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     using TcpClient inboundPeer = new();
     await inboundPeer.ConnectAsync(IPAddress.Loopback, bamlListenerPort, networkTimeout.Token);
     using Baml.Net.TcpStream inbound = await acceptedStream;
@@ -182,21 +182,21 @@ if (CanCreateLoopbackSockets())
     Require(
         await inboundPeerStream.ReadAsync(inboundClosedProbe, networkTimeout.Token) == 0,
         "TcpListener.accept returned a stream without live native state");
-    _ = await clonedListener.CloseAsync(networkTimeout.Token);
+    _ = await clonedListener.CloseAsync(baml: new BamlOptions { CancellationToken = networkTimeout.Token });
 
     int bamlUdpPort = ReserveUdpPort();
     using UdpClient udpPeer = new(new IPEndPoint(IPAddress.Loopback, 0));
     int udpPeerPort = ((IPEndPoint)udpPeer.Client.LocalEndPoint!).Port;
     Baml.Net.UdpSocket originalUdp = await Baml.Net.UdpSocket.BindAsync(
         $"127.0.0.1:{bamlUdpPort}",
-        networkTimeout.Token);
+        baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     using Baml.Net.UdpSocket udp = originalUdp.Clone();
     originalUdp.Dispose();
     Require(
         await udp.SendToAsync(
             Encoding.UTF8.GetBytes("datagram-out"),
             $"127.0.0.1:{udpPeerPort}",
-            cancellationToken: networkTimeout.Token) == "datagram-out".Length,
+            baml: new BamlOptions { CancellationToken = networkTimeout.Token }) == "datagram-out".Length,
         "UdpSocket.send_to returned the wrong byte count");
     UdpReceiveResult outboundDatagram = await udpPeer.ReceiveAsync(networkTimeout.Token);
     Require(
@@ -206,7 +206,7 @@ if (CanCreateLoopbackSockets())
         Encoding.UTF8.GetBytes("datagram-in"),
         new IPEndPoint(IPAddress.Loopback, bamlUdpPort),
         networkTimeout.Token);
-    Baml.Net.Datagram inboundDatagram = udp.RecvFrom(cancellationToken: networkTimeout.Token);
+    Baml.Net.Datagram inboundDatagram = udp.RecvFrom(baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     Require(
         inboundDatagram.Data.Span.SequenceEqual(Encoding.UTF8.GetBytes("datagram-in"))
             && inboundDatagram.Addr.Contains($":{udpPeerPort}", StringComparison.Ordinal),
@@ -219,19 +219,19 @@ if (CanCreateLoopbackSockets())
         Encoding.UTF8.GetBytes("served-by-baml"));
     using Baml.Http.Server bamlServer = await Baml.Http.Server.BindAsync(
         "127.0.0.1:0",
-        networkTimeout.Token);
-    TaskCompletionSource<Baml.Http.Request> receivedRequest = new(
+        baml: new BamlOptions { CancellationToken = networkTimeout.Token });
+    TaskCompletionSource<Baml.Http.ServerRequest> receivedRequest = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
     using CancellationTokenSource serveCancellation = CancellationTokenSource.CreateLinkedTokenSource(
         networkTimeout.Token);
     Task serveTask = bamlServer.ServeAsync(
-        (request, _) =>
+        request =>
         {
             receivedRequest.TrySetResult(request);
             return Task.FromResult(servedResponse.Clone());
         },
         headerReadTimeout: Baml.Time.Duration.FromSeconds(2L),
-        cancellationToken: serveCancellation.Token);
+        baml: new BamlOptions { CancellationToken = serveCancellation.Token });
     using (System.Net.Http.HttpClient client = new())
     {
         using HttpResponseMessage served = await client.GetAsync(
@@ -243,13 +243,13 @@ if (CanCreateLoopbackSockets())
             $"Server.serve returned {(int)served.StatusCode}: {servedBody}");
         Require(servedBody == "served-by-baml", "Server.serve response changed");
     }
-    Baml.Http.Request serverRequest = await receivedRequest.Task.WaitAsync(networkTimeout.Token);
+    Baml.Http.ServerRequest serverRequest = await receivedRequest.Task.WaitAsync(networkTimeout.Token);
     Require(
         serverRequest.Method == "GET"
             && serverRequest.Url == "/resource?q=1"
             && serverRequest.Headers.ContainsKey("host")
             && serverRequest.Body == "",
-        "Server.serve lost Request structural fields");
+        "Server.serve lost ServerRequest structural fields");
     serveCancellation.Cancel();
     _ = await ExpectAsync<OperationCanceledException>(serveTask);
 
@@ -258,23 +258,25 @@ if (CanCreateLoopbackSockets())
     int ssePort = ((IPEndPoint)ssePeer.LocalEndpoint).Port;
     Task ssePeerTask = ServeOneSseResponseAsync(ssePeer, networkTimeout.Token);
     string sseUrl = $"http://127.0.0.1:{ssePort}/events";
-    using Baml.Http.SseStream sse = await Baml.Http.Functions.FetchSseAsync(
+    using Baml.Http.SseStream sse = await Baml.Http.Functions.SendSseAsync(
         new Baml.Http.Request
         {
             Method = "GET",
             Url = sseUrl,
             Headers = new Dictionary<string, string>(),
             Body = "",
+            Timeout = null,
+            ConnectTimeout = null,
         },
-        cancellationToken: networkTimeout.Token);
-    string? firstEvent = await sse.NextAsync(networkTimeout.Token);
+        baml: new BamlOptions { CancellationToken = networkTimeout.Token });
+    string? firstEvent = await sse.NextAsync(baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     Require(
         sse.Url == sseUrl
             && firstEvent is not null
             && firstEvent.Contains("\"data\":\"from-csharp\"", StringComparison.Ordinal)
-            && sse.Next(networkTimeout.Token) is null,
+            && sse.Next(baml: new BamlOptions { CancellationToken = networkTimeout.Token }) is null,
         "SseStream url/next/EOF state changed");
-    _ = await sse.CloseAsync(networkTimeout.Token);
+    _ = await sse.CloseAsync(baml: new BamlOptions { CancellationToken = networkTimeout.Token });
     await ssePeerTask;
     ssePeer.Stop();
 }

@@ -392,10 +392,20 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
     ));
 }
 
+fn root_blob(snapshot: &btel_snapshot::Snapshot) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+        .unwrap();
+    bytes
+}
+
 fn snapshot(pool: &btel_snapshot::SnapshotPool, n: i64) -> btel_snapshot::Snapshot {
-    pool.try_acquire()
-        .unwrap()
-        .finish_value(btel_snapshot::SnapshotValue::Int(n))
+    pool.try_acquire().unwrap().finish(
+        btel_snapshot::SnapshotValue::Int(n),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 #[test]
@@ -404,9 +414,8 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     let cas = root.path().join("cas");
     let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
-    let id = value.id();
-    let mut expected = Vec::new();
-    value.write_blob(&mut expected).unwrap();
+    let id = value.root_id();
+    let expected = root_blob(&value);
     drop(value);
     let mut a = LocalDelivery::create_with_cas(
         root.path(),
@@ -433,14 +442,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     assert_eq!(fs::read(&path).unwrap(), expected);
     let filename = path.file_name().unwrap().to_str().unwrap();
     assert_eq!(filename.len(), 32);
-    assert_eq!(
-        path,
-        cas.join("v2")
-            .join(&filename[..2])
-            .join(&filename[2..4])
-            .join(&filename[4..6])
-            .join(filename)
-    );
+    assert_eq!(path, cas.join("v3").join(&filename[..2]).join(filename));
     assert_eq!(
         fs::read_dir(path.parent().unwrap()).unwrap().count(),
         1,
@@ -464,23 +466,103 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     );
 }
 
+/// A list of three strings, two of them large enough for blobs of their own.
+fn cut_snapshot(pool: &btel_snapshot::SnapshotPool) -> btel_snapshot::Snapshot {
+    use btel_snapshot::SnapshotValue;
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let texts = ["a".repeat(100), "small".to_owned(), "b".repeat(100)];
+    let list = b.list(element_type, texts.iter(), |leaves, text| {
+        leaves.string_value(&text.as_str().into())
+    });
+    let list = b.leaves().object(list).unwrap();
+    let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 64,
+    });
+    b.finish(SnapshotValue::Object(list), &mut shaper)
+}
+
+#[test]
+fn every_blob_of_a_capture_is_written_and_stored_ones_are_kept() {
+    let root = tempfile::tempdir().unwrap();
+    let cas = root.path().join("cas");
+    let pool = btel_snapshot::SnapshotPool::new(2, btel_snapshot::Limits::default());
+    let value = cut_snapshot(&pool);
+    let mut scratch = btel_snapshot::BlobScratch::default();
+    let expected: Vec<_> = value
+        .blobs()
+        .map(|blob| {
+            let mut bytes = Vec::new();
+            blob.write(&mut scratch, &mut bytes).unwrap();
+            (cas_path(&cas, blob.id()), bytes)
+        })
+        .collect();
+    assert_eq!(
+        expected.len(),
+        3,
+        "two strings and the list that names them"
+    );
+    // One child is stored already, as another capture would have left it.
+    let (stored, bytes) = &expected[0];
+    fs::create_dir_all(stored.parent().unwrap()).unwrap();
+    fs::write(stored, bytes).unwrap();
+    let modified = fs::metadata(stored).unwrap().modified().unwrap();
+
+    let mut delivery = LocalDelivery::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        LocalDeliveryConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    delivery.take_handle().send_snapshot(value).unwrap();
+    delivery.finish().unwrap();
+    assert_eq!(pool.stats().in_use, 0);
+    for (path, bytes) in &expected {
+        assert_eq!(&fs::read(path).unwrap(), bytes);
+    }
+    assert_eq!(fs::metadata(stored).unwrap().modified().unwrap(), modified);
+}
+
+#[test]
+fn a_writer_does_not_check_again_for_blobs_it_placed() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let value = cut_snapshot(&pool);
+    let child = cas_path(root.path(), value.blobs().next().unwrap().id());
+    let mut writer = crate::cas::CasWriter::new(root.path().to_owned());
+    writer.write(&value).unwrap();
+    let bytes = fs::read(&child).unwrap();
+    // Removing a blob behind a running writer is outside its contract: the
+    // writer trusts what it placed and does not look again.
+    fs::remove_file(&child).unwrap();
+    writer.write(&value).unwrap();
+    assert!(!child.exists());
+    crate::cas::CasWriter::new(root.path().to_owned())
+        .write(&value)
+        .unwrap();
+    assert_eq!(fs::read(&child).unwrap(), bytes);
+}
+
 #[test]
 fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
     let root = tempfile::tempdir().unwrap();
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
-    let path = cas_path(root.path(), value.id());
+    let path = cas_path(root.path(), value.root_id());
     let legacy = root
         .path()
-        .join("v1")
-        .join(path.strip_prefix(root.path().join("v2")).unwrap());
+        .join("v2")
+        .join(path.strip_prefix(root.path().join("v3")).unwrap());
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-    fs::write(&legacy, b"existing v1 entry").unwrap();
-    crate::cas::write_snapshot(root.path(), &value).unwrap();
-    let mut expected = Vec::new();
-    value.write_blob(&mut expected).unwrap();
-    assert_eq!(fs::read(&path).unwrap(), expected);
-    assert_eq!(fs::read(&legacy).unwrap(), b"existing v1 entry");
+    fs::write(&legacy, b"existing v2 entry").unwrap();
+    crate::cas::CasWriter::new(root.path().to_owned())
+        .write(&value)
+        .unwrap();
+    assert_eq!(fs::read(&path).unwrap(), root_blob(&value));
+    assert_eq!(fs::read(&legacy).unwrap(), b"existing v2 entry");
 }
 
 #[test]

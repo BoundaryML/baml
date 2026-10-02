@@ -457,6 +457,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         call_path: path,
         entered_at: ClockInstant::from_ticks(4),
         captured_inputs: Some(snapshot()),
+        captured_type_args: None,
     };
     producer.write_span(announcement(thread));
     producer.write_span(SpanRecord::ThreadSelected { thread_id: child });
@@ -823,5 +824,8 @@ fn outcome_merge_growth_and_spills_keep_exact_encoded_size() {
 fn snapshot() -> btel_snapshot::Snapshot {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let b = pool.try_acquire().unwrap();
-    b.finish_value(btel_snapshot::SnapshotValue::Int(42))
+    b.finish(
+        btel_snapshot::SnapshotValue::Int(42),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }

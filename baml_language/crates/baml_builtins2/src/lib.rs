@@ -217,6 +217,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "spec.baml"),
     builtin!("ai", "ns_tools/tools.baml"),
     builtin!("ai", "turn.baml"),
+    builtin!("ai", "timeouts.baml"),
     builtin!("ai", "ns_wire/wire.baml"),
     builtin!("ai", "ns_clients/clients.baml"),
     builtin!("ai", "runner.baml"),
@@ -400,8 +401,3 @@ mod reserved_edge_name_tests {
         );
     }
 }
-
-mod adt;
-mod media;
-pub use adt::*;
-pub use media::{MediaContent, MediaValue};

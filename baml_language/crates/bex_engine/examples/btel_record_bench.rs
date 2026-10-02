@@ -50,7 +50,15 @@ fn usage() -> (f64, u64) {
     let micros = u32::try_from(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec)
         .expect("two sub-second microsecond counts fit in u32");
     let cpu = usage.ru_utime.tv_sec as f64 + usage.ru_stime.tv_sec as f64 + f64::from(micros) / 1e6;
-    (cpu, usage.ru_maxrss as u64 * 1024)
+    // `ru_maxrss` is bytes on Apple platforms and kilobytes elsewhere
+    // (`man getrusage`).
+    let peak_rss = u64::try_from(usage.ru_maxrss).expect("peak RSS is not negative");
+    let peak_rss_bytes = if cfg!(target_vendor = "apple") {
+        peak_rss
+    } else {
+        peak_rss * 1024
+    };
+    (cpu, peak_rss_bytes)
 }
 
 /// Not measured without `getrusage`.

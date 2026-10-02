@@ -316,3 +316,167 @@ async fn http_response_text_consumed() {
     uncaught throw: baml.errors.Io {message: "Response body has already been consumed"}
     "#);
 }
+
+/// A listener that accepts connections and then says nothing, so a request
+/// hangs after connecting. Kept in Rust for the reason given on
+/// `http_fetch_timeout_fires`.
+async fn silent_server() -> (tokio::task::JoinHandle<()>, std::net::SocketAddr) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let mut held = Vec::new();
+        loop {
+            if let Ok((conn, _)) = listener.accept().await {
+                held.push(conn);
+            }
+        }
+    });
+    (server, addr)
+}
+
+/// BAML that labels the `Timeout` thrown by `call`: which deadline fired and
+/// the limit it reports.
+fn timeout_label_program(call: &str) -> String {
+    format!(
+        r#"
+        function main() -> string {{
+            {call} catch_all (e) {{
+                let t: baml.errors.Timeout => {{
+                    return `${{t.timeout_type}}:${{t.duration?.to_milliseconds() ?? -1n}}`;
+                }},
+                _ => {{ return `other:${{e.to_string()}}`; }},
+            }};
+            "unexpected success"
+        }}
+        "#
+    )
+}
+
+#[tokio::test]
+async fn http_send_uses_request_timeout() {
+    let (server, addr) = silent_server().await;
+    let output = baml_test!(&timeout_label_program(&format!(
+        r#"baml.http.send(
+            baml.http.Request.from_url("http://{addr}/")
+                .set_method("GET")
+                .set_timeout(baml.time.Duration.from_milliseconds(100))
+        )"#
+    )));
+    server.abort();
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("timeout:100".into()))
+    );
+}
+
+#[tokio::test]
+async fn http_send_timeout_argument_overrides_request_timeout() {
+    let (server, addr) = silent_server().await;
+    // The request's own limit is an hour; the argument wins.
+    let output = baml_test!(&timeout_label_program(&format!(
+        r#"baml.http.send(
+            baml.http.Request.from_url("http://{addr}/")
+                .set_method("GET")
+                .set_timeout(baml.time.Duration.from_hours(1)),
+            timeout = baml.time.Duration.from_milliseconds(150),
+        )"#
+    )));
+    server.abort();
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("timeout:150".into()))
+    );
+}
+
+#[tokio::test]
+async fn http_send_sse_uses_request_timeout() {
+    let (server, addr) = silent_server().await;
+    let output = baml_test!(&timeout_label_program(&format!(
+        r#"baml.http.send_sse(
+            baml.http.Request {{
+                method: "GET",
+                url: "http://{addr}/",
+                headers: {{}},
+                body: "",
+                timeout: baml.time.Duration.from_milliseconds(100),
+            }}
+        )"#
+    )));
+    server.abort();
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("timeout:100".into()))
+    );
+}
+
+#[tokio::test]
+async fn http_connect_timeout_includes_tls_handshake() {
+    // TCP succeeds, but the peer never answers the TLS ClientHello. This
+    // exercises connection establishment deterministically, without a
+    // blackhole IP. The total is left at its default, so only the connect
+    // limit can fire.
+    let (server, addr) = silent_server().await;
+    let output = baml_test!(&timeout_label_program(&format!(
+        r#"baml.http.send(
+            baml.http.Request.from_url("https://{addr}/")
+                .set_method("GET")
+                .set_connect_timeout(baml.time.Duration.from_milliseconds(100))
+        )"#
+    )));
+    server.abort();
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("connect_timeout:100".into()))
+    );
+}
+
+#[tokio::test]
+async fn http_non_positive_timeout_is_no_limit() {
+    // A zero total opts out of the default instead of failing immediately.
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/ok",
+        status: 200,
+        body: Some("body"),
+    }])
+    .await;
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let zero = baml.http.fetch("{uri}/ok", timeout = baml.time.Duration.from_seconds(0)).text();
+            let negative = baml.http.send(
+                baml.http.Request.from_url("{uri}/ok")
+                    .set_method("GET")
+                    .set_timeout(baml.time.Duration.from_seconds(-1))
+                    .set_connect_timeout(baml.time.Duration.from_seconds(0))
+            ).text();
+            `${{zero}}|${{negative}}`
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("body|body".into()))
+    );
+}
+
+#[tokio::test]
+async fn http_request_from_url_needs_a_method() {
+    // `from_url` leaves the method unset, and sending that is an error.
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            baml.http.send(baml.http.Request.from_url("http://127.0.0.1:9/")) catch_all (e) {
+                let invalid: baml.errors.InvalidArgument => { return invalid.message; },
+                _ => { return `other:${e.to_string()}`; },
+            };
+            "unexpected success"
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "Invalid HTTP method '': the request has no method set".into()
+        ))
+    );
+}

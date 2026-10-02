@@ -647,7 +647,6 @@ dependencies = [
  "baml_base",
  "baml_type",
  "serde",
- "serde_json",
  "yaml_serde",
 ]
 
@@ -694,7 +693,9 @@ dependencies = [
  "bex_project",
  "bex_vm_types",
  "borsh",
+ "btel_bcs",
  "btel_file",
+ "btel_recorder",
  "btel_settings",
  "clap",
  "console",
@@ -705,6 +706,7 @@ dependencies = [
  "libsui",
  "mimalloc",
  "mime_guess",
+ "prost",
  "rayon",
  "reqwest",
  "sdkgen_cpp",
@@ -727,6 +729,7 @@ dependencies = [
  "toml_edit 0.22.27",
  "uuid",
  "webbrowser",
+ "wiremock",
  "yaml_serde",
 ]
 
@@ -1126,6 +1129,7 @@ dependencies = [
  "btel_reader",
  "btel_recorder",
  "btel_snapshot",
+ "btel_types",
  "fs2",
  "prost",
  "rusqlite",
@@ -1315,7 +1319,6 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "async-trait",
- "baml_builtins2",
  "baml_db",
  "baml_type",
  "baml_type_runtime",
@@ -1340,6 +1343,7 @@ dependencies = [
  "btel_types",
  "clap",
  "futures",
+ "gloo-timers",
  "indexmap",
  "libc",
  "num-bigint",
@@ -1354,6 +1358,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "url",
  "wasm-bindgen-futures",
  "web-time",
  "wiremock",
@@ -1381,7 +1386,6 @@ dependencies = [
 name = "bex_external_types"
 version = "0.0.0-beta"
 dependencies = [
- "baml_builtins2",
  "baml_type",
  "bex_resource_types",
  "bex_str",
@@ -1436,6 +1440,7 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "borsh",
+ "btel_settings",
  "ignore",
  "indexmap",
  "log",
@@ -1533,6 +1538,7 @@ dependencies = [
  "sha2",
  "smallvec",
  "sys_regex",
+ "sys_types",
  "time",
  "tokio",
  "tokio-util",
@@ -1557,6 +1563,7 @@ dependencies = [
  "hex",
  "indexmap",
  "num-bigint",
+ "serde_json",
  "sha2",
  "thiserror 2.0.18",
  "tokio",
@@ -1670,6 +1677,7 @@ dependencies = [
  "bex_events",
  "bex_project",
  "bridge_ctypes",
+ "btel_types",
  "cbindgen",
  "cc",
  "futures",
@@ -1728,6 +1736,8 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "btel_snapshot",
+ "btel_types",
  "indexmap",
  "log",
  "prost",
@@ -1756,6 +1766,8 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "btel_snapshot",
+ "btel_types",
  "indexmap",
  "log",
  "napi",
@@ -1774,7 +1786,9 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "futures",
  "js-sys",
+ "prost",
  "serde-wasm-bindgen",
  "sys_wasm",
  "wasm-bindgen",
@@ -1848,6 +1862,7 @@ dependencies = [
  "bytes",
  "futures",
  "hex",
+ "num-bigint",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
@@ -1882,6 +1897,7 @@ dependencies = [
  "btel_snapshot",
  "btel_types",
  "prost",
+ "rustc-hash 2.1.2",
  "tempfile",
 ]
 
@@ -1972,6 +1988,7 @@ dependencies = [
  "btel_settings",
  "btel_types",
  "num-bigint",
+ "rustc-hash 2.1.2",
  "xxhash-rust",
 ]
 
@@ -3846,6 +3863,18 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax 0.8.10",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -7424,6 +7453,7 @@ dependencies = [
  "bex_heap",
  "bex_str",
  "bex_vm_types",
+ "bytes",
  "forked_aws_smithy_eventstream",
  "indexmap",
  "num-bigint",

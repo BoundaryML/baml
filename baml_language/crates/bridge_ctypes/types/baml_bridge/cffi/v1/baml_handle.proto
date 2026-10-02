@@ -66,6 +66,10 @@ enum BamlHandleType {
   // display name through a generated typemap; only the originating engine can
   // interpret the rooted declaration identity.
   ADT_RUNTIME_VALUE = 18;
+  // Internal BEP-81 capabilities. They belong to their issuing runtime and
+  // cannot be supplied as ordinary application values.
+  INVOCATION_STATE = 19;
+  TRACE_RESERVATION = 20;
 }
 
 message BamlHandle {

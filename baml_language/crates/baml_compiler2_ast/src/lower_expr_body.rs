@@ -451,7 +451,7 @@ pub(crate) fn synthesize_llm_spec_body(
     );
     // Flatten the template exactly like the public `prompt` tag: values stay
     // structural until the Rust prompt assembler sees them. Rewrite the
-    // prompt-local role constructor before name resolution; it is the same
+    // prompt-local constructors before name resolution; `role` is the same
     // binding that the public tag supplies to its body lambda.
     //
     // A quoted prompt is the degenerate template: regular string literals do
@@ -465,24 +465,31 @@ pub(crate) fn synthesize_llm_spec_body(
             vec![TemplateSegment::Text(lit.value())]
         }
     };
-    let role_callees: Vec<ExprId> = ctx
+    // `cache(...)` is prompt-local in the same way: a bare call lowers to
+    // `ai.internal.make_cache`.
+    let prompt_local_callees: Vec<(ExprId, &[&str])> = ctx
         .exprs
         .iter()
-        .filter_map(|(_, expr)| match expr {
-            Expr::Call { callee, .. }
-                if matches!(&ctx.exprs[*callee], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "role") =>
-            {
-                Some(*callee)
-            }
-            _ => None,
+        .filter_map(|(_, expr)| {
+            let Expr::Call { callee, .. } = expr else {
+                return None;
+            };
+            let Expr::Path(path) = &ctx.exprs[*callee] else {
+                return None;
+            };
+            let [name] = path.as_slice() else {
+                return None;
+            };
+            let target: &[&str] = match name.as_str() {
+                "role" => &["ai", "internal", "make_role"],
+                "cache" => &["ai", "internal", "make_cache"],
+                _ => return None,
+            };
+            Some((*callee, target))
         })
         .collect();
-    for callee in role_callees {
-        ctx.exprs[callee] = Expr::Path(vec![
-            Name::new("ai"),
-            Name::new("internal"),
-            Name::new("make_role"),
-        ]);
+    for (callee, target) in prompt_local_callees {
+        ctx.exprs[callee] = Expr::Path(target.iter().map(Name::new).collect());
     }
 
     let prev_synth = std::mem::replace(&mut ctx.synthesizing, true);

@@ -16,14 +16,14 @@ import (
 // Spec projection. There is no synthetic `$parse` function binding.
 
 var (
-	_ func(context.Context, string) (baml_go.FunctionSpec[baml_sdk.LoremResume], error)                                                                    = baml_sdk.LoremExtractResumeSpec
+	_ func(context.Context, string, ...baml_go.CallOption) (baml_go.FunctionSpec[baml_sdk.LoremResume], error)                = baml_sdk.LoremExtractResumeSpec
 	_ func(context.Context, string, ...baml_sdk.LoremExtractResumeStreamOption) (baml_go.Stream[baml_sdk.LoremResume], error) = baml_sdk.LoremExtractResumeStream
 )
 
 // SDK_PARITY_LINT(skip): pins the Go generator's typed option surface for flat stream controls.
 func Test_flat_stream_controls_are_typed_options(t *testing.T) {
 	client := baml_sdk.LoremExtractResumeStreamClient(nil)
-	onEvent := baml_sdk.LoremExtractResumeStreamOnEvent(func(baml_go.Value) {})
+	onEvent := baml_sdk.LoremExtractResumeStreamOnEvent(func(context.Context, baml_go.Value) {})
 	_ = []baml_sdk.LoremExtractResumeStreamOption{client, onEvent}
 }
 

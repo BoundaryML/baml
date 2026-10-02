@@ -251,6 +251,7 @@ fn apply_signature_metadata(
     f.docstring.clone_from(&sig.docstring);
     f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
+    f.type_param_names.clone_from(&sig.type_param_names);
     f.generic_param_bounds = sig
         .generic_param_bounds
         .iter()
@@ -700,6 +701,11 @@ fn compute_function_metadata<'db>(
         docstring: func.docstring.clone(),
         name: Some(func.name.to_string()),
         display_type_params,
+        type_param_names: baml_type::RuntimeGenericLayout::new(&frame_params)
+            .params()
+            .iter()
+            .map(|param| param.name().to_string())
+            .collect(),
         generic_param_bounds: runtime_generic_param_bounds,
         display_param_types,
         display_return_type,
@@ -1124,6 +1130,7 @@ fn builtin_emit_function(
         param_types: Vec::new(),
         param_has_default: Vec::new(),
         display_type_params: Vec::new(),
+        type_param_names: Vec::new(),
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),

@@ -61,6 +61,16 @@ and lists the rest as `// LATER(<reason>)` comments. The single source of
 truth is the `TEST_MODS` table in `sdk_tests/codegen/src/rust.rs` —
 enabling a port is a one-line flip there.
 
+## Callable execution contracts
+
+The `callback_dispatch`, `callable_lifecycle`, and `callable_reentry` suites
+separate shared bridge behavior from host-language behavior. Shared cases use
+the same canonical names and assertions in each SDK port. Language-specific
+files and cases use a `_<lang>_only` suffix, such as `_python_only` or
+`_typescript_only`, and retain an explicit parity-lint waiver for other languages.
+Shared ports currently cover Python and TypeScript; other SDK ports remain
+coverage gaps.
+
 ## SDK implementation
 
 Each SDK is implemented in two parts: an FFI to provide core runtime bindings and an SDK generator to generate typed bindings.

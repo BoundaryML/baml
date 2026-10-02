@@ -1300,7 +1300,8 @@ mod tests {
             .find(|c| c.name == "Request")
             .expect("missing Request");
         assert_eq!(request.namespace_prefix, "baml.http");
-        assert_eq!(request.fields.len(), 4);
+        // method, url, headers, body, timeout, connect_timeout
+        assert_eq!(request.fields.len(), 6);
 
         // The structural prompt lives in the ai package.
         let (_ai_vm, _ai_io, ai_class_defs) = extract_native_builtins_for("ai").unwrap();

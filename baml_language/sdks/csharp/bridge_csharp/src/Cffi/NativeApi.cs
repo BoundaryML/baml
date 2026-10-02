@@ -4,7 +4,7 @@ namespace Baml.Cffi;
 
 internal sealed unsafe partial class NativeApi
 {
-    private const uint AbiVersion = 2;
+    private const uint AbiVersion = 3;
     private const uint CSharpBridgeLanguage = 5;
 
     private static readonly Lazy<NativeApi> Current = new(
@@ -40,6 +40,14 @@ internal sealed unsafe partial class NativeApi
     internal ulong NewFunctionCall()
     {
         return RequireFunctionCallIdentifier(table->NewFunctionCall());
+    }
+
+    internal ulong InvocationClockNs(ulong callId)
+    {
+        ulong now = 0;
+        if (table->InvocationClockNs(callId, &now) != BamlCffiStatus.Ok)
+            throw new BamlProtocolException("Invalid invocation clock allocation.", $"Unknown call {callId}.");
+        return now;
     }
 
     internal static ulong RequireFunctionCallIdentifier(ulong identifier)
@@ -93,25 +101,28 @@ internal sealed unsafe partial class NativeApi
     internal Task<byte[]> InvokeOwnedFunctionAsync(
         string functionIdentity,
         Func<ulong, EncodedCallArguments> encodeArguments,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         NativeCallCompletion.CompleteManagedOperationAsync(StartOwnedFunction(
             functionIdentity,
             encodeArguments,
-            cancellationToken));
+            cancellationToken, baml));
 
     internal Task<byte[]> InvokeOwnedHandleAsync(
         ulong handleKey,
         Func<ulong, EncodedCallArguments> encodeArguments,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         NativeCallCompletion.CompleteManagedOperationAsync(StartOwnedHandle(
             handleKey,
             encodeArguments,
-            cancellationToken));
+            cancellationToken, baml));
 
     internal NativeFunctionCall StartOwnedFunction(
         string functionIdentity,
         Func<ulong, EncodedCallArguments> encodeArguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(functionIdentity);
         ArgumentNullException.ThrowIfNull(encodeArguments);
@@ -130,11 +141,13 @@ internal sealed unsafe partial class NativeApi
                 "The function identity contained an interior NUL byte.");
         }
 
-        ulong callId = NewFunctionCall();
+        using var prepared = global::Baml.Generated.V1.BamlInvocationPreparation.Take(baml);
+        ulong callId = prepared.CallId;
         HostValueRegistry.Shared.BeginFunctionCall(callId, cancellationToken);
         try
         {
             using EncodedCallArguments arguments = encodeArguments(callId);
+            arguments.ApplyInvocation(prepared);
             arguments.SetCallTarget(functionIdentity);
             (uint callbackId, Task<byte[]> completion) = NativeCallbacks.AddPending();
             var cancellation = new CallCancellation(
@@ -157,6 +170,10 @@ internal sealed unsafe partial class NativeApi
                     {
                         arguments.Commit();
                     }
+                    else
+                    {
+                        _ = table->ReleaseFunctionCall(callId);
+                    }
                 }
             }
             catch
@@ -172,6 +189,7 @@ internal sealed unsafe partial class NativeApi
         }
         catch
         {
+            _ = table->ReleaseFunctionCall(callId);
             HostValueRegistry.Shared.CompleteFunctionCall(callId);
             throw;
         }
@@ -180,7 +198,8 @@ internal sealed unsafe partial class NativeApi
     internal NativeFunctionCall StartOwnedHandle(
         ulong handleKey,
         Func<ulong, EncodedCallArguments> encodeArguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        global::Baml.Generated.V1.IBamlInvocationOptions? baml = null)
     {
         if (handleKey == 0)
         {
@@ -196,11 +215,13 @@ internal sealed unsafe partial class NativeApi
         }
 
         NativeCallbacks.ThrowIfCallbackFailed();
-        ulong callId = NewFunctionCall();
+        using var prepared = global::Baml.Generated.V1.BamlInvocationPreparation.Take(baml);
+        ulong callId = prepared.CallId;
         HostValueRegistry.Shared.BeginFunctionCall(callId, cancellationToken);
         try
         {
             using EncodedCallArguments arguments = encodeArguments(callId);
+            arguments.ApplyInvocation(prepared);
             arguments.SetCallTarget(handleKey);
             (uint callbackId, Task<byte[]> completion) = NativeCallbacks.AddPending();
             var cancellation = new CallCancellation(
@@ -223,6 +244,10 @@ internal sealed unsafe partial class NativeApi
                     {
                         arguments.Commit();
                     }
+                    else
+                    {
+                        _ = table->ReleaseFunctionCall(callId);
+                    }
                 }
             }
             catch
@@ -238,6 +263,7 @@ internal sealed unsafe partial class NativeApi
         }
         catch
         {
+            _ = table->ReleaseFunctionCall(callId);
             HostValueRegistry.Shared.CompleteFunctionCall(callId);
             throw;
         }
@@ -285,6 +311,13 @@ internal sealed unsafe partial class NativeApi
         Require(api->RegisterBridge is not null, "register_bridge");
         Require(api->RegisterUnhandledSpawnErrorCallback is not null, "register_unhandled_spawn_error_callback");
         Require(api->ShutdownRuntime is not null, "shutdown_runtime");
+        Require(api->InvocationProtocolVersion is not null, "invocation_protocol_version");
+        Require(api->InvocationClockNs is not null, "invocation_clock_ns");
+        Require(api->ReleaseFunctionCall is not null, "release_function_call");
+        Require(api->RegisterHostDispatchV2 is not null, "register_host_dispatch_v2");
+        Require(api->RegisterHostCancelCallback is not null, "register_host_cancel_callback");
+        Require(api->TraceSelection is not null, "trace_selection");
+        Require(api->InvocationContext is not null, "invocation_context");
     }
 
     private static NativeApi Load()

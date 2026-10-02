@@ -218,7 +218,9 @@ enum BuiltinProjection {
 
 fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
     match name.to_string().as_str() {
-        "baml.http.Request"
+        "trace.Capture" | "trace.Settings" | "trace.ContextOptions" | "trace.Context"
+        | "baml.http.Request"
+        | "baml.http.ServerRequest"
         | "baml.glob.ScanOptions"
         | "baml.fs.DirEntry"
         | "baml.fs.MkdirOptions"
@@ -233,8 +235,9 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         // `baml.iter.Done`.
         | "baml.spawn.Root"
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
-        "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
-        "baml.spawn.Limit"
+        "trace.Mode" | "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
+        "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
+        | "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
         | "baml.http.Response"
         | "baml.http.SseStream"
@@ -297,6 +300,9 @@ fn is_resource_projection(name: &Name) -> bool {
 fn is_public_resource_stdlib_function(name: &Name) -> bool {
     if name.name().as_str().starts_with('_') {
         return false;
+    }
+    if name.package().as_str() == "trace" {
+        return true;
     }
     name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {
@@ -400,6 +406,39 @@ fn generate_program_inner(
     let instance_request = helper_request(&program_fqn, "Instance");
     let deferred_instance_request = helper_request(&program_fqn, "DeferredProgram");
 
+    let facade_owner = BamlFqn::symbol(&Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("$invocation_facade"),
+    ));
+    let facade_scope = CSharpScope::Namespace {
+        package: BaseName::new("user"),
+        path: vec![],
+    };
+    let options_request = generated_request(
+        facade_owner.member(&BaseName::new("$options")),
+        "BamlOptions",
+        CSharpNameKind::HelperType,
+        facade_scope.clone(),
+    );
+    let invocation_request = generated_request(
+        facade_owner.member(&BaseName::new("$invocation")),
+        "Invocation",
+        CSharpNameKind::HelperType,
+        facade_scope.clone(),
+    );
+    let selection_request = generated_request(
+        facade_owner.member(&BaseName::new("$selection")),
+        "TraceSelection",
+        CSharpNameKind::HelperType,
+        facade_scope,
+    );
+    let facade_file_request = generated_request(
+        facade_owner.clone(),
+        "BamlInvocation",
+        CSharpNameKind::FileStem,
+        CSharpScope::Type(facade_owner.clone()),
+    );
     let classes = collect_classes(model, runtime_identities)?;
     let enums = collect_enums(model)?;
     let functions = collect_functions(model, &program_fqn)?;
@@ -585,7 +624,26 @@ fn generate_program_inner(
                 .map(|variant| variant.request.clone()),
         );
     }
+    requests.extend([
+        options_request.clone(),
+        invocation_request.clone(),
+        selection_request.clone(),
+        facade_file_request.clone(),
+    ]);
+    for ty in &type_specs {
+        if matches!(ty.ty, Ty::Function { .. }) {
+            requests.push(helper_request(
+                &program_fqn,
+                &format!("{}Callable", type_helper_stem(&ty.ty)),
+            ));
+        }
+    }
     let names = CSharpNames::allocate(requests);
+    let facade_route = FileRouteRequest::new(
+        facade_owner,
+        std::iter::empty(),
+        allocated(&names, &facade_file_request).clone(),
+    )?;
 
     let program_route_request = FileRouteRequest::new(
         program_fqn.clone(),
@@ -643,7 +701,8 @@ fn generate_program_inner(
         std::iter::once(program_route_request.clone())
             .chain(function_routes.values().cloned())
             .chain(class_routes.iter().cloned())
-            .chain(enum_routes.iter().cloned()),
+            .chain(enum_routes.iter().cloned())
+            .chain(std::iter::once(facade_route.clone())),
     )?;
     let plan = CSharpRenderPlan::new(model, &names, &routes)?;
     let render = RenderContext {
@@ -652,9 +711,20 @@ fn generate_program_inner(
         type_specs: &type_specs,
         classes: &classes,
         enums: &enums,
+        options_request: &options_request,
+        selection_request: &selection_request,
     };
 
     let mut sources = Vec::<RoutedSource>::new();
+    sources.push(plan.render_source(&facade_route, |_| {
+        render_invocation_facade(
+            &render,
+            &invocation_request,
+            &program_namespace_requests,
+            &program_type_request,
+        )
+        .into_bytes()
+    })?);
     for (namespace, request) in &function_routes {
         let leaf_functions = functions
             .iter()
@@ -710,9 +780,40 @@ struct RenderContext<'a> {
     type_specs: &'a [TypeSpec],
     classes: &'a [ClassSpec<'a>],
     enums: &'a [EnumSpec<'a>],
+    options_request: &'a CSharpNameRequest,
+    selection_request: &'a CSharpNameRequest,
 }
 
 impl RenderContext<'_> {
+    fn returned_callable_name(&self, ty: &Ty) -> String {
+        allocated(
+            self.names,
+            &helper_request(
+                &generated_program_fqn(),
+                &format!("{}Callable", type_helper_stem(ty)),
+            ),
+        )
+        .source()
+        .to_string()
+    }
+    fn returned_callable_source(&self, ty: &Ty, program: &str) -> Option<String> {
+        matches!(ty, Ty::Function { .. })
+            .then(|| format!("{program}.{}", self.returned_callable_name(ty)))
+    }
+    fn selection_source(&self) -> String {
+        let selection = allocated(self.names, self.selection_request).source();
+        self.classes
+            .iter()
+            .find(|class| class.name.to_string() == "trace.Options")
+            .map(|class| {
+                format!(
+                    "global::{}.{selection}",
+                    rendered_namespace(self.names, &class.namespace_requests)
+                )
+            })
+            .unwrap_or_else(|| format!("global::{selection}"))
+    }
+
     fn type_source(&self, ty: &Ty) -> String {
         match ty {
             Ty::Bool => "bool".to_string(),
@@ -1014,7 +1115,7 @@ fn function_type_source(
             }
         })
         .collect::<Vec<_>>();
-    arguments.push("global::System.Threading.CancellationToken".to_string());
+
     let task = if matches!(ret, Ty::Void) {
         "global::System.Threading.Tasks.Task".to_string()
     } else {
@@ -1286,7 +1387,7 @@ fn collect_methods<'a>(
         );
         let cancellation_request = generated_request(
             callable_fqn.member(&BaseName::new("$cancellation")),
-            "cancellation_token",
+            "baml",
             CSharpNameKind::Parameter,
             CSharpScope::Callable(callable_fqn.clone()),
         );
@@ -1562,7 +1663,7 @@ fn collect_functions<'a>(
         );
         let cancellation_request = generated_request(
             callable_fqn.member(&BaseName::new("$cancellation")),
-            "cancellation_token",
+            "baml",
             CSharpNameKind::Parameter,
             CSharpScope::Callable(callable_fqn.clone()),
         );
@@ -1745,11 +1846,11 @@ fn require_supported_type_inner(
             throws,
             ..
         } => {
-            if params.len() > 15 {
+            if params.len() > 16 {
                 return Err(unsupported(
                     path,
                     &format!(
-                        "host callable with {} BAML parameters; the C# v1 limit is 15 because CancellationToken occupies CLR Func input 16",
+                        "host callable with {} BAML parameters; the C# delegate limit is 16",
                         params.len()
                     ),
                 ));
@@ -2309,7 +2410,8 @@ fn render_functions(
             })
             .collect::<Vec<_>>();
         parameters.push(format!(
-            "global::System.Threading.CancellationToken {cancellation} = default"
+            "global::{}? {cancellation} = null",
+            allocated(render.names, render.options_request).source()
         ));
         let parameters = parameters.join(",\n        ");
         let builder = if function.generic_params.is_empty() {
@@ -2317,6 +2419,13 @@ fn render_functions(
         } else {
             render_generic_argument_builder(render, function, &program)
         };
+        let builder = format!(
+            "        _ = {program}.{instance};\n        using var invocationPreparation = global::Baml.Generated.V1.BamlInvocationPreparation.Begin({cancellation});\n{builder}"
+        );
+        if function.name.to_string() == "trace.current_context" {
+            source.push_str(&format!("    public static {result} {method}({parameters}) => {program}.Registry.Decode({program}.{result_token}, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentTraceContext());\n\n    public static global::System.Threading.Tasks.Task<{result}> {async_method}({parameters}) => global::System.Threading.Tasks.Task.FromResult({method}({cancellation}));\n", result_token = render.type_field(&function.result)));
+            continue;
+        }
         if is_stream_callable_variant(function.variant) {
             let callable = if function.generic_params.is_empty() {
                 format!("{program}.{function_field}")
@@ -2347,6 +2456,40 @@ fn render_functions(
         ));
     }
     source.push_str("}\n");
+    for function in functions {
+        if let Some(wrapper) = render.returned_callable_source(&function.result, &program) {
+            let raw = render.type_source_for(&function.result, &function.generic_params);
+            let method = allocated(render.names, &function.method_request).source();
+            let async_method = allocated(render.names, &function.async_request).source();
+            // Restrict edits to this callable's two bodies; other symbols may share a return shape.
+            for (name, asynchronous) in [(method, false), (async_method, true)] {
+                let start = source
+                    .find(&format!(" {name}(\n"))
+                    .or_else(|| source.find(&format!(" {name}<")))
+                    .expect("rendered callable declaration");
+                let declaration_start = source[..start].rfind("    public static").unwrap();
+                let end = source[start..]
+                    .find("    }\n")
+                    .map(|end| start + end + 6)
+                    .unwrap();
+                let mut block = source[declaration_start..end].to_string();
+                if asynchronous {
+                    block = block.replacen(&format!("Task<{raw}>"), &format!("Task<{wrapper}>"), 1);
+                    block = block.replacen("return ", &format!("return {wrapper}.FromAsync("), 1);
+                } else {
+                    block = block.replacen(
+                        &format!("public static {raw}"),
+                        &format!("public static {wrapper}"),
+                        1,
+                    );
+                    block = block.replacen("return ", &format!("return new {wrapper}("), 1);
+                }
+                let tail = block.rfind(");").unwrap();
+                block.insert(tail, ')');
+                source.replace_range(declaration_start..end, &block);
+            }
+        }
+    }
     source
 }
 
@@ -2532,7 +2675,7 @@ fn render_generic_host_callable_add(
     } else {
         format!("{context}.Result({})", type_token(ret))
     };
-    let mut invocation = params
+    let invocation = params
         .iter()
         .enumerate()
         .map(|(index, parameter)| {
@@ -2545,7 +2688,6 @@ fn render_generic_host_callable_add(
             format!("({source}){invocation_arguments}[{index}]!")
         })
         .collect::<Vec<_>>();
-    invocation.push(invocation_cancellation.to_string());
 
     format!(
         "{indent}{arguments}.AddHostCallable(\n{indent}    {argument},\n{indent}    {callback_value},\n{indent}    ({context}, {encoded_delegate}) =>\n{indent}        {context}.HostCallable(\n{indent}            {encoded_delegate},\n{indent}            new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n{indent}            {result},\n{indent}            static ({invoked_delegate}, {invocation_arguments}, {invocation_cancellation}) =>\n{indent}                global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n{indent}                    (({delegate_type}){invoked_delegate})({invocation}))));\n",
@@ -2615,13 +2757,27 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     };
     let resource = is_resource_projection(class.name);
     let implements_disposable = if resource {
-        " : global::System.IDisposable"
+        if matches!(
+            class.name.to_string().as_str(),
+            "trace.Options" | "trace.ReservedSpan"
+        ) {
+            " : TRACE_SELECTION_PLACEHOLDER, global::System.IDisposable"
+        } else {
+            " : global::System.IDisposable"
+        }
     } else {
         ""
     };
     source.push_str(&format!(
         "\npublic sealed partial class {name}{generic_params}{implements_disposable}\n{{\n"
     ));
+    if matches!(
+        class.name.to_string().as_str(),
+        "trace.Options" | "trace.ReservedSpan"
+    ) {
+        source = source.replace("TRACE_SELECTION_PLACEHOLDER", &render.selection_source());
+        source.push_str("    internal override global::Baml.BamlHandle Handle => resource.InvocationHandle;\n\n");
+    }
     if resource {
         let resource_source = format!("{name}{generic_params}");
         let public_properties = class
@@ -2820,15 +2976,19 @@ fn render_method(
         })
         .collect::<Vec<_>>();
     parameters.push(format!(
-        "global::System.Threading.CancellationToken {cancellation} = default"
+        "global::{}? {cancellation} = null",
+        allocated(render.names, render.options_request).source()
     ));
     let parameters = parameters.join(",\n        ");
     if is_resource_iterator_identity_method(class, method) {
         return format!(
-            "    public {result} {method_name}{type_parameters}(\n        {parameters})\n    {{\n        {cancellation}.ThrowIfCancellationRequested();\n        return this;\n    }}\n\n    public global::System.Threading.Tasks.Task<{result}> {async_name}{type_parameters}(\n        {parameters})\n    {{\n        return {cancellation}.IsCancellationRequested\n            ? global::System.Threading.Tasks.Task.FromCanceled<{result}>({cancellation})\n            : global::System.Threading.Tasks.Task.FromResult<{result}>(this);\n    }}\n\n"
+            "    public {result} {method_name}{type_parameters}(\n        {parameters})\n    {{\n        ({cancellation}?.CancellationToken ?? default).ThrowIfCancellationRequested();\n        return this;\n    }}\n\n    public global::System.Threading.Tasks.Task<{result}> {async_name}{type_parameters}(\n        {parameters})\n    {{\n        return ({cancellation}?.CancellationToken ?? default).IsCancellationRequested\n            ? global::System.Threading.Tasks.Task.FromCanceled<{result}>({cancellation}!.CancellationToken)\n            : global::System.Threading.Tasks.Task.FromResult<{result}>(this);\n    }}\n\n"
         );
     }
     let builder = render_method_argument_builder(render, class, method, program);
+    let builder = format!(
+        "        _ = {program}.{instance};\n        using var invocationPreparation = global::Baml.Generated.V1.BamlInvocationPreparation.Begin({cancellation});\n{builder}"
+    );
     if is_stream_callable_variant(method.variant) {
         let deferred_instance = allocated(
             render.names,
@@ -3072,7 +3232,7 @@ fn render_program(
     let instance = allocated(render.names, instance_request).source();
     let deferred_instance = allocated(render.names, deferred_instance_request).source();
     let mut source = format!(
-        "{GENERATED_HEADER}\nnamespace {namespace};\n\ninternal static class {program_type}\n{{\n    private const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n\n    private static readonly byte[] Bytecode =\n    [\n{PROGRAM_BYTES_PLACEHOLDER}    ];\n\n    private static readonly global::System.Lazy<global::Baml.Generated.V1.BamlGeneratedProgram> Program =\n        new(Register, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);\n\n    internal static readonly global::Baml.Generated.V1.BamlGeneratedRegistry {registry};\n"
+        "{GENERATED_HEADER}\nnamespace {namespace};\n\npublic static class {program_type}\n{{\n    private const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n\n    private static readonly byte[] Bytecode =\n    [\n{PROGRAM_BYTES_PLACEHOLDER}    ];\n\n    private static readonly global::System.Lazy<global::Baml.Generated.V1.BamlGeneratedProgram> Program =\n        new(Register, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);\n\n    internal static readonly global::Baml.Generated.V1.BamlGeneratedRegistry {registry};\n"
     );
     for ty in render.type_specs {
         source.push_str(&format!(
@@ -3289,6 +3449,7 @@ fn render_program(
         }
         source.push('\n');
     }
+    source.push_str(&render_returned_callable_wrappers(render));
     source.push_str("}\n");
     source
 }
@@ -3416,7 +3577,7 @@ fn render_function_codec(
     } else {
         format!("context.Result({})", render.type_field(ret))
     };
-    let mut invocation_arguments = params
+    let invocation_arguments = params
         .iter()
         .enumerate()
         .map(|(index, parameter)| {
@@ -3429,7 +3590,7 @@ fn render_function_codec(
             format!("({source})arguments[{index}]!")
         })
         .collect::<Vec<_>>();
-    invocation_arguments.push("cancellationToken".to_string());
+
     let encode = format!(
         "            return context.HostCallable(\n                value,\n                new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n                {result},\n                static (callback, arguments, cancellationToken) =>\n                    global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n                        (({delegate_type})callback)({invocation})));\n",
         invocation = invocation_arguments.join(", "),
@@ -3446,9 +3607,6 @@ fn render_function_codec(
             };
             format!("{source} argument{index}")
         })
-        .chain(std::iter::once(
-            "global::System.Threading.CancellationToken cancellationToken".to_string(),
-        ))
         .collect::<Vec<_>>()
         .join(", ");
     let argument_encoding = params
@@ -3478,10 +3636,10 @@ fn render_function_codec(
         })
         .collect::<String>();
     let decode_result = if matches!(ret, Ty::Void) {
-        "                _ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n".to_string()
+        "                _ = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);\n".to_string()
     } else {
         format!(
-            "                var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n                return context.Decode({}, result);\n",
+            "                var result = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);\n                return context.Decode({}, result);\n",
             render.type_field(ret)
         )
     };
@@ -4455,7 +4613,11 @@ fn generated_program_fqn() -> BamlFqn {
 }
 
 fn namespace_requests(name: &Name, origin: CSharpNameOrigin) -> Vec<CSharpNameRequest> {
-    let namespace = if name.package().as_str() == "baml"
+    let namespace = if name.package().as_str() == "trace" {
+        std::iter::once(BaseName::new("Trace"))
+            .chain(name.namespace().iter().cloned())
+            .collect::<Vec<_>>()
+    } else if name.package().as_str() == "baml"
         && (is_structural_class_projection(name)
             || is_structural_enum_projection(name)
             || is_resource_projection(name)
@@ -5783,7 +5945,7 @@ mod tests {
     #[test]
     fn host_callable_projection_is_task_only_and_reflection_free() {
         let source = host_callable_source();
-        let delegate = "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<string>>";
+        let delegate = "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task<string>>";
         assert!(source.contains(delegate));
         assert!(source.contains("context.Required("));
         assert!(source.contains("context.Optional(\"p1\","));
@@ -5798,11 +5960,15 @@ mod tests {
     fn generic_host_callable_uses_closed_generated_type_tokens() {
         let source = generic_host_callable_source();
         assert!(source.contains("Task<R> ApplyAsync<T, R>("));
-        assert!(source.contains("global::System.Func<T, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<R>> f"));
+        assert!(
+            source.contains("global::System.Func<T, global::System.Threading.Tasks.Task<R>> f")
+        );
         assert!(source.contains(".AddHostCallable("));
         assert!(source.contains(".Required(bamlType0)"));
         assert!(source.contains(".Result(bamlType1)"));
-        assert!(source.contains("((global::System.Func<T, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<R>>)"));
+        assert!(
+            source.contains("((global::System.Func<T, global::System.Threading.Tasks.Task<R>>)")
+        );
         assert!(!source.contains("ResolveType<global::System.Func<"));
     }
 
@@ -5943,31 +6109,32 @@ mod tests {
             symbols: HashMap::new(),
             callables: HashMap::new(),
         };
-        require_supported_type(&host_callable_type(15), &model, "callback").unwrap();
-        let error = require_supported_type(&host_callable_type(16), &model, "callback")
-            .expect_err("sixteen BAML callback parameters must be rejected");
-        assert!(error.to_string().contains("C# v1 limit is 15"));
+        require_supported_type(&host_callable_type(16), &model, "callback").unwrap();
+        let error = require_supported_type(&host_callable_type(17), &model, "callback")
+            .expect_err("seventeen BAML callback parameters must be rejected");
+        assert!(error.to_string().contains("C# delegate limit is 16"));
         assert!(error.to_string().contains("at callback"));
     }
 
     #[test]
     fn returned_callable_decode_lambdas_preserve_task_shapes_and_optional_presence() {
         let source = returned_callable_codec_source();
+        assert!(source.contains("public static class BamlProgram"));
         assert!(source.contains(
-            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<long>>"
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task<long>>"
         ));
         assert!(source.contains(
-            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task>"
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task>"
         ));
         assert!(source.contains(
-            "return async (long argument0, global::Baml.BamlOptional<string> argument1, global::System.Threading.CancellationToken cancellationToken) =>"
+            "return async (long argument0, global::Baml.BamlOptional<string> argument1) =>"
         ));
         assert!(source.contains("if (argument1.TryGetValue(out var value1))"));
         assert!(source.contains(
-            "var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+            "var result = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);"
         ));
         assert!(source.contains(
-            "_ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+            "_ = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);"
         ));
     }
 
@@ -6213,4 +6380,121 @@ mod shared_traversal_tests {
             Box::new(Ty::Never)
         )));
     }
+}
+
+fn render_invocation_facade(
+    render: &RenderContext<'_>,
+    invocation_request: &CSharpNameRequest,
+    namespace_requests: &[CSharpNameRequest],
+    program_request: &CSharpNameRequest,
+) -> String {
+    let options = allocated(render.names, render.options_request).source();
+    let invocation = allocated(render.names, invocation_request).source();
+    let selection = allocated(render.names, render.selection_request).source();
+    let program = qualified_name(render.names, namespace_requests, program_request);
+    let token = render
+        .classes
+        .iter()
+        .find(|class| class.name.to_string() == "baml.spawn.CancelToken");
+    let (token_source, token_decode, token_encode) = if let Some(token) = token {
+        let ty = Ty::Class(token.name.clone(), Box::new([]));
+        let src = render.type_source(&ty);
+        let field = render.type_field(&ty);
+        (
+            src,
+            format!("{program}.Registry.Decode({program}.{field}, captured.CancelValue)"),
+            "Cancel?.Resource.InvocationValue".to_string(),
+        )
+    } else {
+        (
+            "global::Baml.BamlHandle".into(),
+            "captured.CancelValue.ReadHandle()".into(),
+            "null".into(),
+        )
+    };
+    let selection_source = render.selection_source();
+    let selection_namespace = render
+        .classes
+        .iter()
+        .find(|class| class.name.to_string() == "trace.Options")
+        .map(|class| rendered_namespace(render.names, &class.namespace_requests));
+    let selection_open = selection_namespace
+        .as_ref()
+        .map_or(String::new(), |ns| format!("namespace {ns} {{"));
+    let selection_close = if selection_namespace.is_some() {
+        "}"
+    } else {
+        ""
+    };
+    format!("{GENERATED_HEADER}
+{selection_open}
+public abstract class {selection} {{ internal {selection}() {{}} internal abstract global::Baml.BamlHandle Handle {{ get; }} }}
+{selection_close}
+public sealed record {options} : global::Baml.Generated.V1.IBamlInvocationOptions {{
+    public {selection_source}? Trace {{ get; init; }}
+    public {token_source}? Cancel {{ get; init; }}
+    public global::System.Threading.CancellationToken CancellationToken {{ get; init; }}
+    public long? TimeoutMs {{ get; init; }}
+    global::Baml.BamlHandle? global::Baml.Generated.V1.IBamlInvocationOptions.TraceHandle => Trace?.Handle;
+    global::Baml.Generated.V1.BamlGeneratedValue? global::Baml.Generated.V1.IBamlInvocationOptions.CancelValue => {token_encode};
+}}
+public sealed class {invocation} {{
+    private readonly global::Baml.Generated.V1.BamlInvocationCapture captured;
+    private {invocation}(global::Baml.Generated.V1.BamlInvocationCapture captured) {{ this.captured = captured; }}
+    public static {invocation}? Current => global::Baml.Generated.V1.BamlInvocationCapture.Current is {{}} active ? new(active) : null;
+    public {token_source} Cancel => {token_decode};
+    public global::System.Threading.CancellationToken CancellationToken => captured.CancellationToken;
+}}
+")
+}
+
+fn render_returned_callable_wrappers(render: &RenderContext<'_>) -> String {
+    let mut output = String::new();
+    let options = allocated(render.names, render.options_request).source();
+    for spec in render.type_specs {
+        let Ty::Function { params, ret, .. } = &spec.ty else {
+            continue;
+        };
+        if contains_type_var(&spec.ty) {
+            continue;
+        }
+        let name = render.returned_callable_name(&spec.ty);
+        let delegate = render.type_source(&spec.ty);
+        let result = if matches!(ret.as_ref(), Ty::Void) {
+            "void".into()
+        } else {
+            render.type_source(ret)
+        };
+        let task = if result == "void" {
+            "global::System.Threading.Tasks.Task".into()
+        } else {
+            format!("global::System.Threading.Tasks.Task<{result}>")
+        };
+        let mut parameters = params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| {
+                let ty = render.type_source(&param.ty);
+                if param.mode == CodegenFunctionParamMode::Optional {
+                    format!("global::Baml.BamlOptional<{ty}> argument{index} = default")
+                } else {
+                    format!("{ty} argument{index}")
+                }
+            })
+            .collect::<Vec<_>>();
+        parameters.push(format!("global::{options}? baml = null"));
+        let signature = parameters.join(", ");
+        let arguments = (0..params.len())
+            .map(|index| format!("argument{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sync_arguments = if arguments.is_empty() {
+            "baml".into()
+        } else {
+            format!("{arguments}, baml")
+        };
+        let return_kw = if result == "void" { "" } else { "return " };
+        output.push_str(&format!("    public sealed class {name} {{\n        private readonly {delegate} body;\n        internal {name}({delegate} body) {{ this.body = body; }}\n        internal static async global::System.Threading.Tasks.Task<{name}> FromAsync(global::System.Threading.Tasks.Task<{delegate}> task) => new(await task.ConfigureAwait(false));\n        public {result} Invoke({signature}) {{ {return_kw}InvokeAsync({sync_arguments}).GetAwaiter().GetResult(); }}\n        public {task} InvokeAsync({signature}) {{ using var prepared = global::Baml.Generated.V1.BamlInvocationPreparation.Begin(baml); return body({arguments}); }}\n    }}\n"));
+    }
+    output
 }

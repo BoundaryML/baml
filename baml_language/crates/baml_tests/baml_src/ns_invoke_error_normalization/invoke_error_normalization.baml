@@ -1,7 +1,7 @@
 function normalized_kind(error: ai.errors.RaisedInClient) -> string {
     match (ai.errors.normalize_invoke(error)) {
         let timeout: baml.errors.Timeout => {
-            `Timeout:${timeout.message}:${timeout.duration_ms ?? -1}`
+            `Timeout:${timeout.message}:${timeout.duration?.to_milliseconds() ?? -1n}`
         },
         let network: ai.errors.NetworkFailure => `NetworkFailure:${network.detail}`,
         let unknown_error: baml.errors.UnknownError => {
@@ -71,16 +71,16 @@ function capture_agent_timeout(client: ai.Client) -> unknown {
 
 function timeout_detail(error: unknown) -> string {
     match (error) {
-        let timeout: baml.errors.Timeout => `${timeout.message}:${timeout.duration_ms ?? -1}`,
+        let timeout: baml.errors.Timeout => `${timeout.message}:${timeout.duration?.to_milliseconds() ?? -1n}`,
         _ => `unexpected:${error.to_string()}`,
     }
 }
 
 test "normalize_invoke_preserves_timeout_identity" {
-    let original = baml.errors.Timeout { message: "before", duration_ms: 10 };
+    let original = baml.errors.Timeout { message: "before", duration: baml.time.Duration.from_milliseconds(10), timeout_type: "timeout" };
     let normalized = ai.errors.normalize_invoke(original);
     original.message = "after";
-    original.duration_ms = 20;
+    original.duration = baml.time.Duration.from_milliseconds(20);
     assert.equal(normalized_kind(normalized), "Timeout:after:20")
 }
 
@@ -114,7 +114,7 @@ test "normalize_invoke_classifies_config_errors" {
 }
 
 test "Client and Agent preserve typed timeout" {
-    let timeout = baml.errors.Timeout { message: "deadline elapsed", duration_ms: 30000 };
+    let timeout = baml.errors.Timeout { message: "deadline elapsed", duration: baml.time.Duration.from_milliseconds(30000), timeout_type: "timeout" };
     let direct_probe = TimeoutInvocationProbe { count: 0 };
     let direct = TimeoutInvokeClient { timeout: timeout, probe: direct_probe };
     let direct_error = capture_client_timeout(direct);
@@ -129,10 +129,14 @@ test "Client and Agent preserve typed timeout" {
     assert.equal(agent_probe.count, 1)
 }
 
-test "non-stream composed clients preserve typed timeout without replay" {
+// A member's own deadline (its request timeout, a first-token timeout, or a
+// `with_timeout` the member applies itself) is a failed attempt, like a safe
+// transport failure: Retry tries again and Fallback moves to the next member.
+// When nothing is left, the caller still receives the original typed Timeout.
+test "non-stream composed clients exhaust member timeouts and keep the type" {
     let retry_probe = TimeoutInvocationProbe { count: 0 };
     let retry_inner = TimeoutInvokeClient {
-        timeout: baml.errors.Timeout { message: "retry-timeout", duration_ms: 100 },
+        timeout: baml.errors.Timeout { message: "retry-timeout", duration: baml.time.Duration.from_milliseconds(100), timeout_type: "timeout" },
         probe: retry_probe,
     };
     let retry = ai.clients.Retry.new(
@@ -144,7 +148,7 @@ test "non-stream composed clients preserve typed timeout without replay" {
 
     let round_robin_probe = TimeoutInvocationProbe { count: 0 };
     let round_robin_inner = TimeoutInvokeClient {
-        timeout: baml.errors.Timeout { message: "round-robin-timeout", duration_ms: 200 },
+        timeout: baml.errors.Timeout { message: "round-robin-timeout", duration: baml.time.Duration.from_milliseconds(200), timeout_type: "timeout" },
         probe: round_robin_probe,
     };
     let round_robin = ai.clients.RoundRobin.new([round_robin_inner]);
@@ -152,12 +156,12 @@ test "non-stream composed clients preserve typed timeout without replay" {
 
     let fallback_probe = TimeoutInvocationProbe { count: 0 };
     let fallback_inner = TimeoutInvokeClient {
-        timeout: baml.errors.Timeout { message: "fallback-timeout", duration_ms: 300 },
+        timeout: baml.errors.Timeout { message: "fallback-timeout", duration: baml.time.Duration.from_milliseconds(300), timeout_type: "timeout" },
         probe: fallback_probe,
     };
     let backup_probe = TimeoutInvocationProbe { count: 0 };
     let backup = TimeoutInvokeClient {
-        timeout: baml.errors.Timeout { message: "backup-timeout", duration_ms: 400 },
+        timeout: baml.errors.Timeout { message: "backup-timeout", duration: baml.time.Duration.from_milliseconds(400), timeout_type: "timeout" },
         probe: backup_probe,
     };
     let fallback = ai.clients.Fallback { members: [fallback_inner, backup] };
@@ -165,9 +169,88 @@ test "non-stream composed clients preserve typed timeout without replay" {
 
     assert.equal(timeout_detail(retry_error), "retry-timeout:100");
     assert.equal(timeout_detail(round_robin_error), "round-robin-timeout:200");
-    assert.equal(timeout_detail(fallback_error), "fallback-timeout:300");
-    assert.equal(retry_probe.count, 1);
+    assert.equal(timeout_detail(fallback_error), "backup-timeout:400");
+    assert.equal(retry_probe.count, 3);
     assert.equal(round_robin_probe.count, 1);
     assert.equal(fallback_probe.count, 1);
-    assert.equal(backup_probe.count, 0)
+    assert.equal(backup_probe.count, 1)
+}
+
+// Times out on its first `timeouts` invocations, then answers.
+class FlakyTimeoutClient {
+    client_id: string,
+    timeouts: int,
+    probe: TimeoutInvocationProbe,
+
+    implements ai.Client {
+        function id(self) -> string {
+            self.client_id
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            let _ = input;
+            baml.http.Request {
+                method: "POST",
+                url: `https://example.invalid/${self.client_id}`,
+                headers: {},
+                body: "{}",
+            }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            let _ = input;
+            self.probe.count += 1;
+            if (self.probe.count <= self.timeouts) {
+                throw baml.errors.Timeout { message: `${self.client_id} timed out`, duration: baml.time.Duration.from_milliseconds(100), timeout_type: "timeout" }
+            }
+            ai.ModelTurn {
+                calls: [],
+                content: [ai.content.Text { text: `answer from ${self.client_id}` }],
+                stop_reason: ai.content.StopReason.Complete,
+                usage: null,
+            }
+        }
+    }
+}
+
+function failed_leg_names(turn: ai.ModelTurn) -> string {
+    turn.calls
+        .filter((call) -> {
+            !call.selected
+        })
+        .map((call) -> {
+            call.client_name
+        })
+        .join(",")
+}
+
+test "Fallback moves past a timed-out member to the next one" {
+    let slow_probe = TimeoutInvocationProbe { count: 0 };
+    let slow = FlakyTimeoutClient { client_id: "slow", timeouts: 1, probe: slow_probe };
+    let backup_probe = TimeoutInvocationProbe { count: 0 };
+    let backup = FlakyTimeoutClient { client_id: "backup", timeouts: 0, probe: backup_probe };
+    let fallback = ai.clients.Fallback { members: [slow, backup] };
+
+    let turn = fallback.invoke(timeout_input());
+
+    assert.equal(turn.terminal_text(), "answer from backup");
+    assert.equal(failed_leg_names(turn), "slow");
+    assert.equal(slow_probe.count, 1);
+    assert.equal(backup_probe.count, 1)
+}
+
+test "Retry retries a timed-out attempt until one answers" {
+    let probe = TimeoutInvocationProbe { count: 0 };
+    let flaky = FlakyTimeoutClient { client_id: "flaky", timeouts: 2, probe: probe };
+    let retry = ai.clients.Retry.new(
+        flaky,
+        max_attempts = 3,
+        backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+    );
+
+    let turn = retry.invoke(timeout_input());
+
+    assert.equal(turn.terminal_text(), "answer from flaky");
+    assert.equal(failed_leg_names(turn), "flaky,flaky");
+    assert.equal(probe.count, 3)
 }
