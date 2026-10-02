@@ -1153,7 +1153,7 @@ jobs:
 
   cargo-test-linux-musl:
     name: "KILN: cargo test (x86_64-unknown-linux-musl)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 70
@@ -1291,7 +1291,7 @@ jobs:
 
   cargo-test-wasm:
     name: "KILN: cargo test (wasm32-unknown-unknown)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 90
@@ -1431,7 +1431,7 @@ jobs:
 
   cargo-build-msrv:
     name: "KILN: cargo build (msrv)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 50
@@ -1551,7 +1551,7 @@ jobs:
 
   cargo-doc:
     name: "KILN: cargo doc"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 50
@@ -1699,7 +1699,7 @@ jobs:
           - {"sdk-label": "python-pydantic2", "sdk-dir": "python", "package-name": "sdk_test_python_pydantic2", "sdk-path": "python_pydantic2", "install-args": "sccache direnv python uv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "size": "xlarge", "memory": "standard"}
           - {"sdk-label": "ruby-sorbet", "sdk-dir": "ruby", "package-name": "sdk_test_ruby_sorbet", "sdk-path": "ruby_sorbet", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "size": "large", "memory": "low"}
           - {"sdk-label": "typescript", "sdk-dir": "typescript", "package-name": "sdk_test_typescript", "sdk-path": "typescript", "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "size": "xlarge", "memory": "standard"}
-          - {"sdk-label": "typescript-web", "sdk-dir": "typescript", "package-name": "sdk_test_typescript_web", "sdk-path": "typescript_web", "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack", "os-label": "linux", "timeout": 60, "size": "large", "memory": "standard"}
+          - {"sdk-label": "typescript-web", "sdk-dir": "typescript", "package-name": "sdk_test_typescript_web", "sdk-path": "typescript_web", "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack", "os-label": "linux", "timeout": 60, "size": "large", "memory": "high"}
           - {"sdk-label": "cpp", "sdk-dir": "cpp", "package-name": "sdk_test_cpp", "sdk-path": "cpp", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "size": "xlarge", "memory": "standard"}
           - {"sdk-label": "csharp", "sdk-dir": "csharp", "package-name": "sdk_test_csharp", "sdk-path": "csharp", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "size": "xlarge", "memory": "high"}
           - {"sdk-label": "rust", "sdk-dir": "rust", "package-name": "sdk_test_rust", "sdk-path": "rust", "install-args": "sccache direnv cargo:cargo-nextest", "os-label": "linux", "timeout": 60, "size": "large", "memory": "low"}
@@ -1707,7 +1707,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          clean: false
           persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -2283,7 +2305,7 @@ jobs:
 
   size-gate-wasm:
     name: "KILN: measure-baml-size (wasm)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 50
