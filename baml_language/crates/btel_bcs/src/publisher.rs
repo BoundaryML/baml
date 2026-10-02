@@ -1477,6 +1477,7 @@ mod tests {
                 started_at_unix_ns: 0,
             },
             sources: Some(sources),
+            context: None,
             exit: Arc::default(),
         });
         assert_eq!(publisher.queue.len(), 1);
