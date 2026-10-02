@@ -34,7 +34,10 @@ use bex_engine::{
     RuntimeTy,
 };
 use bex_resource_types::{HostValueArc, HostValueKind};
-use bridge_ctypes::baml_bridge::cffi::{BamlOutboundValue, BamlToHostCall, baml_outbound_value};
+use bridge_ctypes::{
+    OwnedHostInvocation,
+    baml_bridge::cffi::{BamlOutboundValue, BamlToHostCall, HostInvocation, baml_outbound_value},
+};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use prost::Message;
@@ -191,8 +194,27 @@ fn next_host_key() -> u64 {
 /// per-key behaviour table.
 fn ensure_dispatch_registered() {
     DISPATCH_REGISTERED.get_or_init(|| {
-        sys_native::host_dispatch::set_dispatch_fn(global_dispatch);
+        sys_native::host_dispatch::set_dispatch_v2(global_dispatch_v2);
+        sys_native::host_dispatch::set_cancel_fn(cancel_fake_dispatch);
     });
+}
+
+extern "C" fn cancel_fake_dispatch(call_id: u32) {
+    // NeverComplete parks delivery but runs no host body after dispatch returns.
+    sys_native::host_dispatch::finish_abi_execution(call_id);
+}
+
+extern "C" fn global_dispatch_v2(request: *const u8, length: usize) {
+    // SAFETY: the engine supplies a live request slice for this callback.
+    let bytes = unsafe { std::slice::from_raw_parts(request, length) };
+    let frame = OwnedHostInvocation(HostInvocation::decode(bytes).expect("valid host invocation"));
+    global_dispatch(
+        frame.0.host_value_key,
+        frame.0.callback_id,
+        frame.0.application_args.as_ptr(),
+        frame.0.application_args.len(),
+    );
+    // The fake host consumes controls here; it never schedules another host body.
 }
 
 extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8, length: usize) {

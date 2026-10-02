@@ -83,6 +83,7 @@ pub(crate) struct UnionSink {
     pub(crate) unions: BTreeMap<(PackagePath, String), Vec<Ty>>,
     /// Per-package list of `(signature key, interface)` in insertion order.
     pub(crate) callbacks: BTreeMap<PackagePath, Vec<(String, CallbackInterface)>>,
+    pub(crate) reserved: BTreeMap<PackagePath, std::collections::BTreeSet<String>>,
 }
 
 /// Everything `translate_ty` needs beyond the type itself.
@@ -690,11 +691,28 @@ fn translate_callable(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
+    translate_callable_profile(params, ret, ctx, sink, false)
+}
+pub(crate) fn translate_return_callable(
+    params: &[baml_sdkgen_types::CallableParam],
+    ret: &Ty,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
+    translate_callable_profile(params, ret, ctx, sink, true)
+}
+fn translate_callable_profile(
+    params: &[baml_sdkgen_types::CallableParam],
+    ret: &Ty,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+    owning: bool,
+) -> String {
     use baml_sdkgen_types::CodegenFunctionParamMode;
     let has_optional = params
         .iter()
         .any(|p| matches!(p.mode, CodegenFunctionParamMode::Optional));
-    if !has_optional && params.len() <= 2 {
+    if !owning && !has_optional && params.len() <= 2 {
         // Plain arity-≤-2 all-required callable → a java.util.function shape.
         let ret_is_unit = matches!(ret, Ty::Void);
         let p: Vec<String> = params
@@ -756,7 +774,12 @@ fn translate_callable(
     if let Some((_, iface)) = entries.iter().find(|(k, _)| *k == sig) {
         return format!("{}.{}", ctx.pkg.java_package(), iface.name);
     }
-    let name = dedup_callback_name(&base, entries);
+    let mut name = dedup_callback_name(&base, entries);
+    let reserved = sink.reserved.entry(ctx.pkg.clone()).or_default();
+    while reserved.contains(&name) {
+        name.push('$');
+    }
+    reserved.insert(name.clone());
     entries.push((
         sig,
         CallbackInterface {

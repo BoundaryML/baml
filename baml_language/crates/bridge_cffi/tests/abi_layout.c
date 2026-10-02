@@ -91,5 +91,12 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, register_unhandled_spawn_error_callback);
   PRINT_OFFSET(BamlApiV1, shutdown_runtime);
   PRINT_OFFSET(BamlApiV1, initialize_runtime_from_blob_with_metadata);
+  PRINT_OFFSET(BamlApiV1, invocation_protocol_version);
+  PRINT_OFFSET(BamlApiV1, invocation_clock_ns);
+  PRINT_OFFSET(BamlApiV1, release_function_call);
+  PRINT_OFFSET(BamlApiV1, register_host_dispatch_v2);
+  PRINT_OFFSET(BamlApiV1, register_host_cancel_callback);
+  PRINT_OFFSET(BamlApiV1, trace_selection);
+  PRINT_OFFSET(BamlApiV1, invocation_context);
   return 0;
 }

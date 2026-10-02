@@ -17,6 +17,7 @@ use num_bigint::BigInt;
 
 pub mod context;
 mod decode;
+pub mod host;
 pub use decode::{
     BlobError, DecodeLimits, DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot,
     DecodedValue, Entries, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,

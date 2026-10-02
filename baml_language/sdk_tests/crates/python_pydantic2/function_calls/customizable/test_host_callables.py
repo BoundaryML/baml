@@ -227,18 +227,20 @@ def test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry():
 
 
 @pytest.mark.xfail(
-    reason="host-callable release fires only when the engine GCs the "
-    "Object::HostClosure on its heap; one BAML call rarely triggers "
-    "the GC heuristic, so for now the callable leaks until the engine "
-    "collects.",
+    reason="Python gc.collect() does not collect the BAML engine's heap. "
+    "The engine-owned Object::HostClosure retains the registered Python "
+    "callback until engine GC releases it; this test does not trigger "
+    "engine GC, so immediate callback release is not guaranteed.",
     strict=False,
 )
 def test_host_callables_release_fires_on_drop_of_callable():
-    """After BAML finishes invoking the callable and the engine GCs the
-    `Object::HostClosure` it allocated, the registered release callback
-    removes the Python callable from the bridge's host-value table.
-    Dropping the user's last reference then leaves the object
-    unreachable for the cycle collector.
+    """Probe immediate release after dropping the application's reference.
+
+    This is an expected failure because Python's collector does not trigger
+    engine GC. The bridge registry still owns the Python callback while the
+    engine retains its `Object::HostClosure`. Release follows engine GC, not
+    necessarily completion of this call. This test does not verify eventual
+    release after engine GC.
     """
 
     class CallableObj:

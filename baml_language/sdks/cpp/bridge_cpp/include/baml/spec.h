@@ -212,20 +212,21 @@ class function_spec {
     return !(lhs == rhs);
   }
 
-  Out call() const {
-    detail::args_encoder args;
+  Out call(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::call_sync<Out>("ai.FunctionSpec.call", std::move(args));
   }
 
-  future<Out> call_async() const {
-    detail::args_encoder args;
+  future<Out> call_async(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::start_call<Out>("ai.FunctionSpec.call", std::move(args));
   }
 
-  Out parse(const std::string& json) const {
-    detail::args_encoder args;
+  Out parse(const std::string& json,
+            const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     args.add_arg("json", [&](detail::pb::InboundValue& target) {
       codec<std::string>::encode(target, json);
@@ -233,8 +234,9 @@ class function_spec {
     return detail::call_sync<Out>("ai.FunctionSpec.parse", std::move(args));
   }
 
-  future<Out> parse_async(const std::string& json) const {
-    detail::args_encoder args;
+  future<Out> parse_async(const std::string& json,
+                          const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     args.add_arg("json", [&](detail::pb::InboundValue& target) {
       codec<std::string>::encode(target, json);
@@ -242,34 +244,36 @@ class function_spec {
     return detail::start_call<Out>("ai.FunctionSpec.parse", std::move(args));
   }
 
-  ::baml::prompt prompt() const;
-  future<::baml::prompt> prompt_async() const;
+  ::baml::prompt prompt(const invocation_options& baml = {}) const;
+  future<::baml::prompt> prompt_async(
+      const invocation_options& baml = {}) const;
 
   template <typename Request>
-  Request build_request() const {
-    detail::args_encoder args;
+  Request build_request(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::call_sync<Request>("ai.FunctionSpec.build_request",
                                       std::move(args));
   }
 
   template <typename Request>
-  future<Request> build_request_async() const {
-    detail::args_encoder args;
+  future<Request> build_request_async(
+      const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::start_call<Request>("ai.FunctionSpec.build_request",
                                        std::move(args));
   }
 
-  std::string name() const {
-    detail::args_encoder args;
+  std::string name(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::call_sync<std::string>("ai.FunctionSpec.name",
                                           std::move(args));
   }
 
-  future<std::string> name_async() const {
-    detail::args_encoder args;
+  future<std::string> name_async(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::start_call<std::string>("ai.FunctionSpec.name",
                                            std::move(args));
@@ -308,28 +312,28 @@ class stream {
     return !(lhs == rhs);
   }
 
-  stream_item<T> next() const {
-    detail::args_encoder args;
+  stream_item<T> next(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::call_sync<stream_item<T>>("ai.stream.Stream.next",
                                              std::move(args));
   }
 
-  future<stream_item<T>> next_async() const {
-    detail::args_encoder args;
+  future<stream_item<T>> next_async(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::start_call<stream_item<T>>("ai.stream.Stream.next",
                                               std::move(args));
   }
 
-  T final_() const {
-    detail::args_encoder args;
+  T final_(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::call_sync<T>("ai.stream.Stream.final", std::move(args));
   }
 
-  future<T> final_async() const {
-    detail::args_encoder args;
+  future<T> final_async(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::start_call<T>("ai.stream.Stream.final", std::move(args));
   }
@@ -362,21 +366,21 @@ class prompt {
     return !(lhs == rhs);
   }
 
-  std::string text() const {
-    detail::args_encoder args;
+  std::string text(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::call_sync<std::string>("ai.Prompt.text", std::move(args));
   }
 
-  future<std::string> text_async() const {
-    detail::args_encoder args;
+  future<std::string> text_async(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::start_call<std::string>("ai.Prompt.text", std::move(args));
   }
 
   template <typename Messages>
-  Messages messages() const {
-    detail::args_encoder args;
+  Messages messages(const invocation_options& baml = {}) const {
+    detail::args_encoder args(baml);
     add_self(args);
     return detail::call_sync<Messages>("ai.Prompt.messages", std::move(args));
   }
@@ -398,16 +402,18 @@ class prompt {
 };
 
 template <typename Out>
-::baml::prompt function_spec<Out>::prompt() const {
-  detail::args_encoder args;
+::baml::prompt function_spec<Out>::prompt(
+    const invocation_options& baml) const {
+  detail::args_encoder args(baml);
   add_self(args);
   return detail::call_sync<::baml::prompt>("ai.FunctionSpec.prompt",
                                            std::move(args));
 }
 
 template <typename Out>
-future<::baml::prompt> function_spec<Out>::prompt_async() const {
-  detail::args_encoder args;
+future<::baml::prompt> function_spec<Out>::prompt_async(
+    const invocation_options& baml) const {
+  detail::args_encoder args(baml);
   add_self(args);
   return detail::start_call<::baml::prompt>("ai.FunctionSpec.prompt",
                                             std::move(args));

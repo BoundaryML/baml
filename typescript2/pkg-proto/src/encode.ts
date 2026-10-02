@@ -160,6 +160,14 @@ export function encodeCallArgs(
 
   const args: CallFunctionArgsType = {
     callId,
+    callTarget: undefined,
+    invocation: {
+      cancel: undefined,
+      deadlineNs: undefined,
+      hostEnvironment: 0,
+      inheritedState: 0,
+      trace: undefined,
+    },
     kwargs: entries,
     // Generic TypeVar bindings (`type_args`) — unused by this playground
     // encoder, which only sends positional kwargs.

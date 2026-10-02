@@ -75,6 +75,10 @@ fn to_source_code_with_optional_metadata(
         render_inlined_baml(baml_bytecode, embedded_baml_toml),
     );
 
+    out.insert(
+        PathBuf::from("_Invocation.swift"),
+        include_str!("invocation_facade.swift").to_string(),
+    );
     let ctx = build_translate_ctx(pool);
     let boxed_fields = compute_boxed_fields(pool, &ctx);
 

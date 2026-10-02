@@ -27,7 +27,18 @@ func Init(libraryPath string) error {
 		errStr := C.GoString(C.dlerror())
 		return fmt.Errorf("dlopen(%s): %s", libraryPath, errStr)
 	}
+	getAPI, err := resolveSymbol(handle, "baml_get_api_v1")
+	if err != nil || C.validateInvocationApi(getAPI) == 0 {
+		C.dlclose(handle)
+		return fmt.Errorf("incompatible BAML invocation ABI: revision 3 required")
+	}
 	symbols := map[string]func(unsafe.Pointer){
+		"new_function_call":             func(p unsafe.Pointer) { C.setNewFunctionCallFn(p) },
+		"release_function_call":         func(p unsafe.Pointer) { C.setReleaseFunctionCallFn(p) },
+		"invocation_clock_ns":           func(p unsafe.Pointer) { C.setInvocationClockNsFn(p) },
+		"register_host_dispatch_v2":     func(p unsafe.Pointer) { C.setRegisterHostDispatchV2Fn(p) },
+		"register_host_cancel_callback": func(p unsafe.Pointer) { C.setRegisterHostCancelCallbackFn(p) },
+
 		"version":              func(p unsafe.Pointer) { C.setVersionFn(p) },
 		"create_baml_runtime":  func(p unsafe.Pointer) { C.setCreateBamlRuntimeFn(p) },
 		"destroy_baml_runtime": func(p unsafe.Pointer) { C.setDestroyBamlRuntimeFn(p) },
@@ -40,7 +51,6 @@ func Init(libraryPath string) error {
 		"__testonly_seed_function_ref": func(p unsafe.Pointer) {
 			C.setTestonlySeedFunctionRefFn(p)
 		},
-		"flush_events": func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
 		// Host-value callable C symbols.
 		"register_host_dispatch_callback": func(p unsafe.Pointer) { C.setRegisterHostDispatchCallbackFn(p) },
 		"register_host_release_callback":  func(p unsafe.Pointer) { C.setRegisterHostReleaseCallbackFn(p) },
@@ -158,8 +168,8 @@ func CallFunction(encodedArgs []byte, id uint32) {
 // invocation. If CancelFunctionCall were to return an error, it would have to be
 // returned through ctx.Cancel(), but since there's no way to return an error
 // through this path, there's no reason for CancelFunctionCall to return an error.
-func CancelFunctionCall(id uint32) {
-	if rc := C.wrapCancelFunctionCall(C.uint32_t(id)); rc != 0 {
+func CancelFunctionCall(id uint64) {
+	if rc := C.wrapCancelFunctionCall(C.uint64_t(id)); rc != 0 {
 		log.Printf("bridge_go: cancel_function_call failed for id=%d (rc=%d)", id, rc)
 	}
 }
@@ -222,11 +232,6 @@ func TestonlySeedFunctionRef(globalIndex uint64) (uint64, int32, error) {
 	return uint64(key), int32(handleType), nil
 }
 
-// FlushEvents flushes the event sink.
-func FlushEvents() {
-	C.wrapFlushEvents()
-}
-
 // RegisterHostDispatchCallback registers a Go callback that Rust calls when
 // BAML invokes a host-value callable. `cb` must be a C-callable function
 // pointer (a //export function cast to unsafe.Pointer).
@@ -257,4 +262,20 @@ func CompleteHostCall(callID uint32, isError int32, content []byte) {
 		cContent = (*C.int8_t)(unsafe.Pointer(&content[0]))
 	}
 	C.wrapCompleteHostCall(C.uint32_t(callID), C.int32_t(isError), cContent, C.size_t(len(content)))
+}
+
+func NewFunctionCall() uint64            { return uint64(C.wrapNewFunctionCall()) }
+func ReleaseFunctionCall(id uint64) bool { return C.wrapReleaseFunctionCall(C.uint64_t(id)) == 0 }
+func InvocationClockNs(id uint64) (uint64, error) {
+	var now C.uint64_t
+	if status := C.wrapInvocationClockNs(C.uint64_t(id), &now); status != 0 {
+		return 0, fmt.Errorf("invocation clock unavailable: status %d", uint32(status))
+	}
+	return uint64(now), nil
+}
+func RegisterHostDispatchV2(cb unsafe.Pointer) {
+	C.wrapRegisterHostDispatchV2((C.BamlHostDispatchV2)(cb))
+}
+func RegisterHostCancelCallback(cb unsafe.Pointer) {
+	C.wrapRegisterHostCancelCallback((C.BamlHostCancel)(cb))
 }

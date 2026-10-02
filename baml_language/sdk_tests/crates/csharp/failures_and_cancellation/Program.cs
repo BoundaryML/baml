@@ -56,7 +56,7 @@ RequireRedacted(panic);
 
 using (var caller = new CancellationTokenSource())
 {
-    Task<long> canceled = Functions.SleepMsAsync(10_000L, caller.Token);
+    Task<long> canceled = Functions.SleepMsAsync(10_000L, new BamlOptions { CancellationToken = caller.Token });
     caller.CancelAfter(TimeSpan.FromMilliseconds(50));
     BamlOperationCanceledException cancellation = await ExpectCanceled(canceled);
     Require(
@@ -72,7 +72,7 @@ using (var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
 {
     BamlOperationCanceledException cancellation =
         Expect<BamlOperationCanceledException>(() =>
-            _ = Functions.SleepMs(10_000L, caller.Token));
+            _ = Functions.SleepMs(10_000L, new BamlOptions { CancellationToken = caller.Token }));
     Require(
         cancellation.Origin == BamlCancellationOrigin.Caller
             && cancellation.CancellationToken == caller.Token,
@@ -81,7 +81,7 @@ using (var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
 
 using (var uncanceledCaller = new CancellationTokenSource())
 {
-    Task<long> canceled = Functions.EngineCancelAsync(uncanceledCaller.Token);
+    Task<long> canceled = Functions.EngineCancelAsync(new BamlOptions { CancellationToken = uncanceledCaller.Token });
     BamlOperationCanceledException cancellation = await ExpectCanceled(canceled);
     Require(
         cancellation.Origin == BamlCancellationOrigin.Engine

@@ -28,6 +28,8 @@ pub(crate) type HostDispatchFn =
 /// The engine's host-value release callback: the engine dropped its last
 /// reference to a host-owned value.
 pub(crate) type HostReleaseFn = extern "C" fn(host_value_key: u64);
+pub(crate) type HostDispatchV2 = extern "C" fn(*const u8, usize);
+pub(crate) type HostCancelFn = extern "C" fn(u32);
 
 /// Owned byte buffer returned by the engine. Must be released exactly once
 /// with [`Api::free_buffer`]. Layout-identical to `bridge_cffi::Buffer`.
@@ -50,11 +52,17 @@ pub(crate) struct Api {
         unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer,
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
+    pub(crate) cancel_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) call_function: unsafe extern "C" fn(*const u8, usize, u32),
     pub(crate) handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) handle_release: unsafe extern "C" fn(u64) -> u32,
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
-    pub(crate) register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
+    pub(crate) register_host_dispatch_v2: unsafe extern "C" fn(HostDispatchV2),
+    pub(crate) register_host_cancel_callback: unsafe extern "C" fn(HostCancelFn),
+    pub(crate) trace_selection: unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32,
+    pub(crate) invocation_context: unsafe extern "C" fn(u64, *mut Buffer) -> u32,
+    pub(crate) invocation_clock_ns: unsafe extern "C" fn(u64, *mut u64) -> u32,
+    pub(crate) release_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
     /// Complete one outstanding BAML→host call. `is_error` is 0 or 1;
     /// `content` is a protobuf `InboundValue`, borrowed only for the call.
@@ -76,7 +84,7 @@ impl Api {
     }
 
     /// Copy an engine-owned buffer's bytes out and free it exactly once.
-    fn copy_and_free(&self, buffer: Buffer) -> Vec<u8> {
+    pub(crate) fn copy_and_free(&self, buffer: Buffer) -> Vec<u8> {
         // SAFETY: the engine hands over an owned buffer of `len` bytes that
         // we must free exactly once; the bytes are copied before the free.
         #[expect(unsafe_code)]
@@ -168,6 +176,13 @@ struct BamlApiV1 {
     shutdown_runtime: Option<unsafe extern "C" fn() -> Buffer>,
     initialize_runtime_from_blob_with_metadata:
         Option<unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer>,
+    invocation_protocol_version: Option<unsafe extern "C" fn() -> u32>,
+    invocation_clock_ns: Option<unsafe extern "C" fn(u64, *mut u64) -> u32>,
+    release_function_call: Option<unsafe extern "C" fn(u64) -> i32>,
+    register_host_dispatch_v2: Option<unsafe extern "C" fn(HostDispatchV2)>,
+    register_host_cancel_callback: Option<unsafe extern "C" fn(HostCancelFn)>,
+    trace_selection: Option<unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32>,
+    invocation_context: Option<unsafe extern "C" fn(u64, *mut Buffer) -> u32>,
 }
 
 #[repr(C)]
@@ -229,10 +244,10 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     // contract returns a process-lifetime table.
     #[expect(unsafe_code)]
     let table = unsafe { &*table_ptr };
-    if table.abi_version != 2 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
+    if table.abi_version != 3 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
         return Err(LoaderError::LoadLibrary(format!(
             "{} exposes an incompatible BAML C API (abi_version {}, {} bytes; \
-             baml_bridge needs ABI revision 2 with at least {} bytes)",
+             baml_bridge needs ABI revision 3 with at least {} bytes)",
             path.display(),
             table.abi_version,
             table.struct_size,
@@ -255,8 +270,9 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let register_callback = required_slot(table.register_callback, "register_callback", &path)?;
     let call_function = required_slot(table.call_function, "call_function", &path)?;
     let new_function_call = required_slot(table.new_function_call, "new_function_call", &path)?;
-    required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
-    let register_host_dispatch_callback = required_slot(
+    let cancel_function_call =
+        required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
+    required_slot(
         table.register_host_dispatch_callback,
         "register_host_dispatch_callback",
         &path,
@@ -284,6 +300,29 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     )?;
     required_slot(table.shutdown_runtime, "shutdown_runtime", &path)?;
 
+    required_slot(
+        table.invocation_protocol_version,
+        "invocation_protocol_version",
+        &path,
+    )?;
+    let invocation_clock_ns =
+        required_slot(table.invocation_clock_ns, "invocation_clock_ns", &path)?;
+    let release_function_call =
+        required_slot(table.release_function_call, "release_function_call", &path)?;
+    let register_host_dispatch_v2 = required_slot(
+        table.register_host_dispatch_v2,
+        "register_host_dispatch_v2",
+        &path,
+    )?;
+    let register_host_cancel_callback = required_slot(
+        table.register_host_cancel_callback,
+        "register_host_cancel_callback",
+        &path,
+    )?;
+
+    let trace_selection = required_slot(table.trace_selection, "trace_selection", &path)?;
+    let invocation_context = required_slot(table.invocation_context, "invocation_context", &path)?;
+
     let api = Api {
         // Not part of BamlApiV1 (a legacy direct export); resolved directly.
         create_baml_runtime: sym(&library, b"create_baml_runtime\0")?,
@@ -291,11 +330,17 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         initialize_runtime_from_blob_with_metadata,
         register_callback,
         new_function_call,
+        cancel_function_call,
         call_function,
         handle_clone,
         handle_release,
         free_buffer,
-        register_host_dispatch_callback,
+        register_host_dispatch_v2,
+        register_host_cancel_callback,
+        trace_selection,
+        invocation_context,
+        invocation_clock_ns,
+        release_function_call,
         register_host_release_callback,
         complete_host_call,
     };

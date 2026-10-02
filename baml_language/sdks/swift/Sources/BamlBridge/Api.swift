@@ -35,6 +35,13 @@ enum BamlApi {
     static let newFunctionCall = v1.new_function_call!
     static let cancelFunctionCall = v1.cancel_function_call!
     static let registerHostDispatchCallback = v1.register_host_dispatch_callback!
+    static let invocationProtocolVersion = v1.invocation_protocol_version!
+    static let invocationClockNs = v1.invocation_clock_ns!
+    static let releaseFunctionCall = v1.release_function_call!
+    static let registerHostDispatchV2 = v1.register_host_dispatch_v2!
+    static let registerHostCancelCallback = v1.register_host_cancel_callback!
+    static let traceSelection = v1.trace_selection!
+    static let invocationContext = v1.invocation_context!
     static let registerHostReleaseCallback = v1.register_host_release_callback!
     static let completeHostCall = v1.complete_host_call!
     static let handleClone = v1.handle_clone!

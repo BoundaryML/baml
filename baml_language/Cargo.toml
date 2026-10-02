@@ -309,6 +309,7 @@ walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+gloo-timers = { version = "0.3", features = [ "futures" ] }
 wasm-bindgen-test = "0.3"
 jni = "0.21"
 js-sys = "0.3"

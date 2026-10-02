@@ -15,6 +15,7 @@
 #include <baml/detail/registry.h>
 #include <baml/errors.h>
 #include <baml/future.h>
+#include <baml/invocation.h>
 #include <baml/lit.h>
 #include <baml/media.h>
 #include <baml/runtime.h>

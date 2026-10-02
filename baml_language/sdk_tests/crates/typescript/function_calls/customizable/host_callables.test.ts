@@ -1,5 +1,6 @@
+import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 import "./baml_sdk/index.js";
-import { BamlAbortError, BamlCallContext, BamlError, BamlPanic, initializeRuntimeFromBlob } from "@boundaryml/baml-bridge";
+import { BamlAbortError, BamlError, BamlPanic, initializeRuntimeFromBlob } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { BYTECODE } from "./baml_sdk/_inlinedbaml.js";
 import {
@@ -233,7 +234,7 @@ describe("function_calls — generated SDK host callables", () => {
   });
 
   it("host_callables_ignores_a_host_promise_settlement_after_its_outer_call_is_cancelled", async () => {
-    const ctx = new BamlCallContext();
+    const ctx = CancelToken.new();
     let settle!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
@@ -242,9 +243,9 @@ describe("function_calls — generated SDK host callables", () => {
       dispatched();
     })) as unknown as (value: number) => string;
 
-    const pending = call_with_callback_async(callback, 10, { $ctx: ctx });
+    const pending = call_with_callback_async(callback, 10, { $baml: { cancel: ctx } });
     await wasDispatched;
-    ctx.abort();
+    ctx.cancel();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
     settle("too late");
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -252,7 +253,7 @@ describe("function_calls — generated SDK host callables", () => {
   });
 
   it("host_callables_cancels_through_the_originating_runtime_after_runtime_replacement", async () => {
-    const ctx = new BamlCallContext();
+    const ctx = CancelToken.new();
     let settle!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
@@ -261,10 +262,10 @@ describe("function_calls — generated SDK host callables", () => {
       dispatched();
     })) as unknown as (value: number) => string;
 
-    const pending = call_with_callback_async(callback, 12, { $ctx: ctx });
+    const pending = call_with_callback_async(callback, 12, { $baml: { cancel: ctx } });
     await wasDispatched;
     initializeRuntimeFromBlob(BYTECODE);
-    ctx.abort();
+    ctx.cancel();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
     settle("late after replacement");
   });

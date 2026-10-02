@@ -10,14 +10,14 @@ string synchronous = Functions.BasicCalls(
     ratio: 1.25,
     text: Text,
     nullable: null,
-    cancellation.Token);
+    baml: new BamlOptions { CancellationToken = cancellation.Token });
 string asynchronous = await Functions.BasicCallsAsync(
     flag: false,
     count: -17,
     ratio: -2.5,
     text: Text,
     nullable: "present",
-    cancellation.Token);
+    baml: new BamlOptions { CancellationToken = cancellation.Token });
 Require(synchronous == Text && asynchronous == Text, "function example changed");
 
 BamlOptional<string?> omitted = default;
@@ -47,14 +47,15 @@ Require(
 BamlClient client = BamlClient.FromShorthand("openai/gpt-5");
 Require(client.Name == "openai/gpt-5", "client example changed");
 
-Func<long, CancellationToken, Task<long>> callback =
-    async (value, token) =>
+Func<long, Task<long>> callback =
+    async value =>
     {
         await Task.Yield();
+        CancellationToken token = Invocation.Current?.CancellationToken ?? CancellationToken.None;
         token.ThrowIfCancellationRequested();
         return checked(value * 2);
     };
-Require(await callback(21, cancellation.Token) == 42L, "callback example changed");
+Require(await callback(21) == 42L, "callback example changed");
 
 Func<BamlStream<string>, Func<string, Task>, CancellationToken, Task<string>>
     streamExample = ConsumeStreamAsync;
@@ -67,7 +68,8 @@ Require(await service.EchoAsync(Text, cancellation.Token) == Text, "DI example c
 
 try
 {
-    _ = await Functions.BasicCallsAsync(true, 1, 1.0, Text, null, cancellation.Token);
+    _ = await Functions.BasicCallsAsync(true, 1, 1.0, Text, null,
+        baml: new BamlOptions { CancellationToken = cancellation.Token });
 }
 catch (BamlTypeMismatchException error)
 {
@@ -133,5 +135,5 @@ public sealed class PrimitiveService : IPrimitiveService
             ratio: 1.0,
             text,
             nullable: null,
-            cancellationToken);
+            baml: new BamlOptions { CancellationToken = cancellationToken });
 }

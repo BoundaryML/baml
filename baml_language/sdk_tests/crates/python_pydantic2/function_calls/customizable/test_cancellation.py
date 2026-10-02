@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_bridge import BamlCallContext
+from baml_sdk.baml.spawn import CancelToken
 from baml_bridge import BamlCancelledError
 from baml_sdk.baml.panics import Cancelled
 from baml_sdk import throws_test
@@ -49,13 +49,13 @@ async def test_cancellation_async_call_returns_none():
 
 def test_cancellation_sync_cancel_via_call_context():
     start = time.monotonic()
-    ctx = BamlCallContext()
-    timer = threading.Timer(0.05, ctx.abort)
+    ctx = CancelToken.new()
+    timer = threading.Timer(0.05, ctx.cancel)
 
     timer.start()
     try:
         with pytest.raises(BamlCancelledError) as exc_info:
-            throws_test.SleepMs(2000, _ctx=ctx)
+            throws_test.SleepMs(2000, _baml={"cancel": ctx})
     finally:
         timer.cancel()
 
@@ -65,16 +65,16 @@ def test_cancellation_sync_cancel_via_call_context():
 
 async def test_cancellation_async_cancel_via_call_context():
     start = time.monotonic()
-    ctx = BamlCallContext()
+    ctx = CancelToken.new()
 
     async def _abort_soon() -> None:
         await asyncio.sleep(0.05)
-        ctx.abort()
+        ctx.cancel()
 
     abort_task = asyncio.create_task(_abort_soon())
 
     with pytest.raises(asyncio.CancelledError) as exc_info:
-        await throws_test.SleepMs_async(2000, _ctx=ctx)
+        await throws_test.SleepMs_async(2000, _baml={"cancel": ctx})
 
     await abort_task
 

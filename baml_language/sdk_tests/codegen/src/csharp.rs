@@ -265,13 +265,13 @@ fn verify_host_callables_surface(fixture: &std::path::Path) {
 
     for expected in [
         "Task<R> ApplyAsync<T, R>(",
-        "global::System.Func<T, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<R>> callback",
+        "global::System.Func<T, global::System.Threading.Tasks.Task<R>> callback",
         ".AddHostCallable(",
         ".Required(bamlType0)",
         ".Result(bamlType1)",
         ".Optional(\"fallback\", bamlType0)",
         ".VoidResult()",
-        "global::System.Func<global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task> callback",
+        "global::System.Func<global::System.Threading.Tasks.Task> callback",
     ] {
         assert!(
             functions.contains(expected),

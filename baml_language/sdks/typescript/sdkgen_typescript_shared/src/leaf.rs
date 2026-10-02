@@ -396,7 +396,7 @@ fn fn_type_sig(
                 ty.expr
             ));
         }
-        fields.push("$ctx?: BamlCallContext | undefined".to_string());
+        fields.push("$baml?: BamlOptions | null | undefined".to_string());
         if !type_binding_params.is_empty() {
             let bindings = type_binding_params
                 .iter()
@@ -459,6 +459,12 @@ pub(crate) fn render_index_ts(
         is_root,
         runtime_package,
     );
+    if body_str.contains("_currentTraceContext") {
+        let _ = writeln!(
+            out,
+            "import {{ _currentTraceContext, _currentTraceContextAsync }} from \"{runtime_package}\";"
+        );
+    }
     if !body_str.is_empty() {
         if !out.is_empty() {
             out.push('\n');
@@ -559,9 +565,6 @@ fn runtime_import_line(state: &RenderState, extra: &[&str], runtime_package: &st
     if state.uses_define_instance {
         names.push("defineInstanceFunction");
     }
-    if state.uses_define_function || state.uses_define_instance {
-        names.push("type BamlCallContext");
-    }
     // Type-only import (inline `type` modifier) for the generic `$types` field
     // token. Sorted alongside the value imports; TS accepts a mixed
     // value/type-only named import.
@@ -590,6 +593,14 @@ fn write_preamble_ts(
     is_root: bool,
     runtime_package: &str,
 ) {
+    if state.uses_define_function || state.uses_define_instance {
+        let up = "../".repeat(body.leaf.segments.len());
+        let prefix = if up.is_empty() { "./" } else { &up };
+        let _ = writeln!(
+            out,
+            "import type {{ BamlOptions }} from \"{prefix}_invocation.js\";"
+        );
+    }
     if state.uses_baml_handle {
         let _ = writeln!(
             out,
@@ -817,7 +828,7 @@ fn binding_surface<'a>(
         tt
     }));
 
-    let ret = translate_ty(&m.return_ty, ctx);
+    let ret = crate::translate_ty::translate_return_ty(&m.return_ty, ctx);
     state.merge(&ret);
 
     let defaults = vec![None; m.required_args.len()]
@@ -906,7 +917,7 @@ fn render_function_ts(
             tt
         })
         .collect();
-    let ret = translate_ty(&f.return_ty, ctx);
+    let ret = crate::translate_ty::translate_return_ty(&f.return_ty, ctx);
     state.merge(&ret);
     let names: Vec<&str> = f.param_names.iter().map(String::as_str).collect();
     let is_async = f.mode == SyncAsync::Async;
@@ -932,6 +943,16 @@ fn render_function_ts(
         f.baml_fqn,
         mode_str(f.mode),
     );
+    if f.baml_fqn == "trace.current_context" {
+        let binding = if is_async {
+            "_currentTraceContextAsync"
+        } else {
+            "_currentTraceContext"
+        };
+        // Dynamic import paths are computed by the surrounding generator;
+        // the runtime facade never imports a generated application package.
+        factory = format!("{binding} as {sig}");
+    }
     if let Some(alias) = child_namespace_alias {
         factory = format!("Object.assign({factory}, {alias})");
     }
@@ -1184,11 +1205,9 @@ mod tests {
             ],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains(
-            "import { defineFunction, type BamlCallContext } from \"@boundaryml/baml-bridge\";"
-        ));
-        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => number;"));
-        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<number>;"));
+        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => number;"));
+        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<number>;"));
     }
 
     #[test]
@@ -1221,7 +1240,7 @@ mod tests {
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
         assert!(ts.contains(
-            "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined; $ctx?: BamlCallContext | undefined } | undefined) => number;"
+            "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined; $baml?: BamlOptions | null | undefined } | undefined) => number;"
         ));
         assert!(!ts.contains("default_?:"));
     }
@@ -1254,7 +1273,7 @@ mod tests {
             "defineFunction(\"user.lorem.extract\", \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"])"
         ));
         assert!(ts.contains(
-            "as (arguments_: string, arguments__: string, $opts_: string, $opts?: { eval?: string | undefined; $ctx?: BamlCallContext | undefined } | undefined) => string;"
+            "as (arguments_: string, arguments__: string, $opts_: string, $opts?: { eval?: string | undefined; $baml?: BamlOptions | null | undefined } | undefined) => string;"
         ));
     }
 
@@ -1347,11 +1366,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Resource, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"factory.id\", \"sync\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Resource, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<Resource>;"
+                "export const id_async = defineFunction(\"factory.id\", \"async\", []) as ($opts?: { $baml?: BamlOptions | null | undefined } | undefined) => Promise<Resource>;"
             )
         );
     }
@@ -1379,6 +1398,6 @@ mod tests {
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBlob, setTypeMap, type BamlCallContext } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBlob, setTypeMap } from \"@boundaryml/baml-bridge\";"));
     }
 }

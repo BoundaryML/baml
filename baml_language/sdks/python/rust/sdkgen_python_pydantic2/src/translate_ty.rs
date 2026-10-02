@@ -41,6 +41,7 @@ pub(crate) struct TranslateCtx {
     /// runtime `.py` path, where callable types fall back to
     /// `typing.Callable[..., R]` (Protocol classes are stub-only).
     pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
+    pub(crate) returned_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
     /// Rewrite source `ai.stream.Stream<T>` to the underlying host
     /// `_BamlStream` type. `Stream` is a host re-export rather than a normal
     /// generated class, so retaining the source spelling in annotations is
@@ -160,6 +161,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         | Ty::PromptAst
         | Ty::Future(..) => "typing.Any".to_string(),
         Ty::Function { params, ret, .. } => {
+            if let Some(name) = ctx.callback_protocols.as_ref().and_then(|map| map.get(ty)) {
+                return name.clone();
+            }
             let has_optional = params
                 .iter()
                 .any(|param| param.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional);
@@ -302,6 +306,15 @@ fn projected_bare_name(name: &Name, ctx: &TranslateCtx) -> String {
     )
 }
 
+/// Function values returned by BAML expose controls and an async entry path.
+pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
+    let mut returned_ctx = ctx.clone();
+    returned_ctx
+        .callback_protocols
+        .clone_from(&ctx.returned_protocols);
+    translate_ty(ty, &returned_ctx)
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
@@ -328,6 +341,7 @@ mod tests {
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: None,
+            returned_protocols: None,
             type_stream_accessors: false,
             include_stream_done: false,
             names: None,
@@ -344,6 +358,7 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: false,
             callback_protocols: None,
+            returned_protocols: None,
             type_stream_accessors: false,
             include_stream_done: false,
             self_ref: Some(SelfRef {
@@ -367,6 +382,7 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: true,
             callback_protocols: None,
+            returned_protocols: None,
             type_stream_accessors: false,
             include_stream_done: false,
             self_ref: Some(SelfRef {
