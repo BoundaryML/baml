@@ -183,7 +183,7 @@ fn next_call_id() -> u32 {
     NEXT_CALL_ID.with(|cell| {
         let mut next = cell.borrow_mut();
         let id = *next;
-        *next = next.checked_add(1).unwrap_or(0);
+        *next = next.checked_add(1).unwrap_or(1);
         id
     })
 }

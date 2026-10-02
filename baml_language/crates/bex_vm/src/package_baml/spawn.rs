@@ -60,7 +60,7 @@ impl CancelTokenState {
 }
 
 /// The tokens a `baml.spawn.CancelToken` value fires on (see
-/// [`CancelTokenState`]). Field 0 (`_handle`) is the `Object::RustData`
+/// `CancelTokenState`). Field 0 (`_handle`) is the `Object::RustData`
 /// holding the state. Returns `None` if the value is not a well-formed
 /// `CancelToken` instance (including the `OmittedArg` sentinel for an omitted
 /// optional argument).

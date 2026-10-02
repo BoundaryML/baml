@@ -144,9 +144,15 @@ static NEXT_CALL_ID: AtomicU32 = AtomicU32::new(1);
 
 /// Allocate a nonzero candidate ID. Insertion rejects collisions after wrap.
 pub fn next_call_id() -> u32 {
-    NEXT_CALL_ID
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        .unwrap_or(0)
+    allocate_candidate(&NEXT_CALL_ID)
+}
+
+fn allocate_candidate(counter: &AtomicU32) -> u32 {
+    counter
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| {
+            Some(id.wrapping_add(1).max(1))
+        })
+        .expect("candidate update always succeeds")
 }
 
 /// Register a completion for a fresh ID. The complete live set includes host
@@ -481,6 +487,14 @@ mod tests {
     use sys_types::{SysOp, SysOpResult};
 
     use super::*;
+
+    #[test]
+    fn candidate_ids_wrap_without_returning_zero_or_exhausting_allocator() {
+        let counter = AtomicU32::new(u32::MAX);
+        assert_eq!(allocate_candidate(&counter), u32::MAX);
+        assert_eq!(allocate_candidate(&counter), 1);
+        assert_eq!(allocate_candidate(&counter), 2);
+    }
 
     /// Test-only presence check that does not remove the entry.
     fn contains(call_id: u32) -> bool {

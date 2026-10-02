@@ -202,7 +202,7 @@ internal sealed class HostValueRegistry
                 functionCallId,
                 arguments,
                 entry.Callable!,
-                hostEnvironment.HasValue ? operation?.ExecutionContext : entry.ExecutionContext,
+                (hostEnvironment.HasValue ? operation?.ExecutionContext : null) ?? entry.ExecutionContext,
                 cancellation);
             invocations.Add(hostCallId, invocation);
         }

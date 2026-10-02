@@ -10,6 +10,7 @@ using Baml.Generated.V1;
 using Baml.Proto;
 using BamlBridge.Cffi.V1;
 using Google.Protobuf;
+using HostInvocation = Baml.Cffi.HostInvocation;
 
 internal static class Program
 {
@@ -432,9 +433,17 @@ internal static class Program
         caller.Cancel();
         await canceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
+        HostCompletion completion = await NextCompletion();
         Require(
-            supplied.IsCancellationRequested && Completions.IsEmpty,
-            "exact supplied-token cancellation was misclassified as a callback fault");
+            supplied.IsCancellationRequested
+                && completion.CallId == hostCallId
+                && completion.IsError == 1
+                && Completions.IsEmpty,
+            "a canceled callback must report its actual exit exactly once");
+        InboundValue inbound = InboundValue.Parser.ParseFrom(completion.Bytes);
+        ulong exceptionKey = inbound.ClassValue.Fields
+            .Single(field => field.StringKey == "_handle").Value.Handle.Key;
+        HostValueRegistry.Shared.Release(exceptionKey);
 
         HostValueRegistry.Shared.Release(registration.Key);
         registration.Dispose();
@@ -751,6 +760,18 @@ internal static class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void RegisterHostDispatchV2(
+        delegate* unmanaged[Cdecl]<byte*, nuint, void> callback)
+    {
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void RegisterHostCancel(
+        delegate* unmanaged[Cdecl]<uint, void> callback)
+    {
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void RegisterHostDispatch(
         delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void> callback)
     {
@@ -793,10 +814,12 @@ internal static class Program
             table = (BamlApiV1*)NativeMemory.AllocZeroed((nuint)sizeof(BamlApiV1));
             *table = new BamlApiV1
             {
-                AbiVersion = 2,
+                AbiVersion = 3,
                 StructSize = (nuint)sizeof(BamlApiV1),
                 RegisterCallback = &RegisterResult,
                 RegisterHostDispatchCallback = &RegisterHostDispatch,
+                RegisterHostDispatchV2 = &RegisterHostDispatchV2,
+                RegisterHostCancelCallback = &RegisterHostCancel,
                 RegisterHostReleaseCallback = &RegisterHostRelease,
                 CompleteHostCall = &CompleteHostCall,
             };

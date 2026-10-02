@@ -350,6 +350,10 @@ func encodeCallArgs(
     var msg = BamlBridge_Cffi_V1_CallFunctionArgs()
     msg.callID = callId
     msg.callTarget = callTarget
+    var invocation = BamlBridge_Cffi_V1_InvocationOptions()
+    invocation.hostEnvironment = callId
+    invocation.inheritedState = HostInvocationScope.state?.key ?? 0
+    msg.invocation = invocation
     msg.kwargs = args.map { name, value in
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = name

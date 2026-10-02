@@ -929,7 +929,10 @@ public final class BamlFfi {
         } catch (Throwable ignored) {
             // The native completion is written never to throw; if it somehow does,
             // the executor task must not propagate it.
-        } finally { HOST_FRAMES.remove(callId); }
+        } finally {
+            HostFrame frame = HOST_FRAMES.remove(callId);
+            if (frame != null) frame.state.close();
+        }
     }
 
     /**

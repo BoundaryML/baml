@@ -452,11 +452,11 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
-    if (options.functionName !== undefined && options.functionHandle !== undefined) {
-        throw new TypeError('exactly one BAML call target may be set');
-    }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
+        if (options.functionName !== undefined && options.functionHandle !== undefined) {
+            throw new TypeError('exactly one BAML call target may be set');
+        }
         const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
         for (const [key, value] of Object.entries(kwargs)) {
             const entry: baml_bridge.cffi.v1.IInboundMapEntry = { stringKey: key };

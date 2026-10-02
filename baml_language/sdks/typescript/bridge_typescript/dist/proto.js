@@ -376,11 +376,11 @@ export function encodeCallArgs(kwargs, options) {
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
-    if (options.functionName !== undefined && options.functionHandle !== undefined) {
-        throw new TypeError('exactly one BAML call target may be set');
-    }
     const ctx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
+        if (options.functionName !== undefined && options.functionHandle !== undefined) {
+            throw new TypeError('exactly one BAML call target may be set');
+        }
         const entries = [];
         for (const [key, value] of Object.entries(kwargs)) {
             const entry = { stringKey: key };

@@ -4179,15 +4179,16 @@ impl BexEngine {
             .get(&call_id)
             .filter(|call| !call.pending)
             .ok_or(EngineError::FunctionCallNotFound { call_id })?;
+        let frame = call
+            .frame
+            .as_ref()
+            .ok_or(EngineError::FunctionCallNotFound { call_id })?;
         Ok(InheritedInvocationState {
             engine_id: self.engine_id,
             cancellation: call.cancel.clone(),
-            context: call
-                .frame
-                .as_ref()
-                .map_or_else(Default::default, |frame| frame.0.clone()),
-            telemetry: call.frame.as_ref().and_then(|frame| frame.1.clone()),
-            host_environment: call.frame.as_ref().map_or(0, |frame| frame.2),
+            context: frame.0.clone(),
+            telemetry: frame.1.clone(),
+            host_environment: frame.2,
         })
     }
 
@@ -4204,6 +4205,13 @@ impl BexEngine {
             explicit,
         )];
         for token in tokens {
+            if let BexExternalValue::Handle(handle) = token
+                && self.resolve_handle(thread.proof(), handle).is_none()
+            {
+                return Err(EngineError::TypeMismatch {
+                    message: "cancel token belongs to a different runtime".into(),
+                });
+            }
             let value = self.convert_external_to_vm_value(thread, token.clone())?;
             sources.extend(
                 bex_vm::package_baml::cancel_token_members(&thread.vm, value).ok_or_else(|| {
