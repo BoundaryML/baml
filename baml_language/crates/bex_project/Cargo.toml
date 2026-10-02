@@ -66,6 +66,7 @@ borsh = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bex_cache = { workspace = true, default-features = false }
+btel_settings = { workspace = true }
 ignore = { workspace = true }
 # `rt-multi-thread` backs `wasm_helpers::fallback_runtime`'s
 # `tokio::runtime::Runtime::new()`. It used to arrive by feature unification

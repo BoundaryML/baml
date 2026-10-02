@@ -812,7 +812,6 @@ mod tests {
     fn publisher(config: CloudPublisherConfig) -> (BcsDelivery, CloudPublisher) {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                allow_http: true,
                 ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
             },
             |_| {},
@@ -1298,7 +1297,6 @@ mod tests {
     fn a_window_is_cut_by_the_bytes_its_bodies_buffer_and_always_takes_a_blob() {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                allow_http: true,
                 // A window takes a quarter of this.
                 cas_reserved_bytes: 4 * 1024,
                 ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
@@ -1490,7 +1488,6 @@ mod tests {
     fn oversized_recording_is_lost_and_a_carrier_takes_its_blobs() {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                allow_http: true,
                 max_recording_body_bytes: 128,
                 ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
             },
@@ -1566,7 +1563,6 @@ mod tests {
         for rejection in ["body", "plans", "bytes"] {
             let delivery = BcsDelivery::new(
                 DeliveryConfig {
-                    allow_http: true,
                     max_recording_body_bytes: 512,
                     ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
                 },

@@ -22,9 +22,29 @@ from the engine level: the former engine-level spelling `auto` is replaced by
 
 ## Transport
 
+`baml run`, `baml test`, packed binaries, and native SDK runtimes select cloud
+recording when both `BOUNDARY_URL` and `BOUNDARY_API_KEY` are non-empty and the
+URL parses. `BOUNDARY_URL` is the publisher's HTTPS base URL, including any path
+prefix; `BOUNDARY_API_KEY` is its bearer credential. Packed binaries read these
+variables when they run. The language server and WASM playground do not use this
+configuration.
+
+With missing or empty variables, or an unparsable URL, hosts keep their existing
+behavior: the CLI records under the project, packed binaries under the user's
+home, and SDKs do not persist recordings. A parsed but rejected delivery config
+disables recording without failing execution. `BAML_TELEMETRY=off` disables all
+recording regardless of the Boundary variables. Cloud recordings omit process
+arguments. Environment reads live in `bex_engine::TelemetryRecording`, not this
+transport crate.
+
 Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.
 The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and
 rejects credentials, queries, and fragments in that base URL.
+
+Plain HTTP is accepted only for the loopback hosts `localhost`, `127.0.0.1`, and
+`[::1]`, for local development against a local data plane. Upload targets may
+use HTTP only to a loopback host and only when the base URL is itself loopback
+HTTP; an HTTPS base never sends uploads over HTTP.
 
 The runtime posts JSON to
 `/v1/recordings/{recording_id}/uploads:prepare`. Recording IDs and digests are
@@ -65,9 +85,9 @@ several plans, in files that may carry no events. A `snapshot_id` names a
 blob. BCS must decode version 3; older CAS objects remain separate namespaces
 and are not reused as v3 content. The upload envelope remains v1.
 
-Only prepare requests receive the BCS bearer credential. Upload requests use the
-returned URL and required headers; redirects are not followed. URLs and headers
-are capabilities and must not be logged.
+Only prepare and heartbeat requests receive the BCS bearer credential. Upload
+requests use the returned URL and required headers; redirects are not followed.
+URLs and headers are capabilities and must not be logged.
 
 The supported S3 signing policy uses an unsigned payload, optionally with the
 constant required header `x-amz-content-sha256: UNSIGNED-PAYLOAD`. Exact payload

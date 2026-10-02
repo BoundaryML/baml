@@ -901,6 +901,139 @@ fn snapshot() -> btel_snapshot::Snapshot {
 }
 
 #[test]
+fn network_spans_round_trip_at_minor_seven() {
+    use btel_records::{
+        NetworkAnnouncement, NetworkCompletion, NetworkEventName, NetworkEventRecord,
+    };
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let (thread, _, path) = ids();
+    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    let span = allocate_telemetry_id();
+    // Longer than a fixed event: the strings reserve their own bytes.
+    let url = format!(
+        "https://example.com/{}",
+        "a".repeat(4 * encoding::MAX_EVENT_BYTES)
+    );
+    let snapshots = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let capture = |value| {
+        let snapshot = snapshots.try_acquire().unwrap().finish(
+            btel_snapshot::SnapshotValue::Int(value),
+            &mut btel_snapshot::Shaper::default(),
+        );
+        let id = crate::cas_id(&snapshot);
+        (snapshot, id)
+    };
+    let (request, request_id) = capture(1);
+    let (payload, payload_id) = capture(2);
+    let (error, error_id) = capture(3);
+    p.span(
+        thread,
+        &mut SpanRecord::NetworkSpanAnnouncement(Box::new(NetworkAnnouncement {
+            id: span,
+            parent_id: thread,
+            call_path: path,
+            started_at: ClockInstant::from_ticks(1),
+            method: "POST".into(),
+            url: url.as_str().into(),
+            request: Some(request),
+        })),
+    );
+    for (name, at, payload) in [
+        (NetworkEventName::Connection, 2, Some(payload)),
+        (NetworkEventName::Data, 3, None),
+        (NetworkEventName::Other("message_in".into()), 4, None),
+    ] {
+        p.span(
+            thread,
+            &mut SpanRecord::NetworkEvent(Box::new(NetworkEventRecord {
+                span,
+                name,
+                at: ClockInstant::from_ticks(at),
+                payload,
+            })),
+        );
+    }
+    p.span(
+        thread,
+        &mut SpanRecord::NetworkSpanCompletion(Box::new(NetworkCompletion {
+            span,
+            completed_at: ClockInstant::from_ticks(5),
+            outcome: InvocationOutcome::Panicked,
+            error: Some(error),
+        })),
+    );
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[0]);
+    assert_eq!(
+        file.header.unwrap().format_minor,
+        btel_settings::encoding::NETWORK_FORMAT_MINOR
+    );
+    let section = file.spans.unwrap().sections.remove(0);
+    assert_eq!(section.thread_id, thread.get());
+    let events = section
+        .events
+        .into_iter()
+        .map(|event| event.event.unwrap())
+        .collect::<Vec<_>>();
+    let event = |name: &str, at_ticks, payload_cas_id| {
+        Event::NetworkEvent(proto::NetworkEvent {
+            span_id: span.get(),
+            name: name.to_owned(),
+            at_ticks,
+            payload_cas_id,
+        })
+    };
+    assert_eq!(
+        events,
+        [
+            Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                id: span.get(),
+                parent_id: thread.get(),
+                call_path_id: path.get(),
+                started_at_ticks: 1,
+                method: "POST".to_owned(),
+                url,
+                request_cas_id: Some(request_id),
+            }),
+            event("connection", 2, Some(payload_id)),
+            event("data", 3, None),
+            event("message_in", 4, None),
+            Event::NetworkCompletion(proto::NetworkCompletion {
+                span_id: span.get(),
+                completed_at_ticks: 5,
+                outcome: proto::InvocationOutcome::Errored as i32,
+                panicked: true,
+                error_cas_id: Some(error_id),
+            }),
+        ]
+    );
+
+    // The minor belongs to the file that uses it.
+    p.span(
+        thread,
+        &mut SpanRecord::FunctionSpanCompletionOk {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        },
+    );
+    p.flush_recording().unwrap();
+    assert_eq!(
+        decode(&files.borrow()[1]).header.unwrap().format_minor,
+        btel_settings::encoding::FORMAT_MINOR
+    );
+}
+
+#[test]
 fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() {
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
     let snapshots = SnapshotPool::new(2, Limits::default());

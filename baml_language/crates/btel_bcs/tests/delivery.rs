@@ -33,7 +33,6 @@ use support::response;
 fn config(server: &MockServer) -> DeliveryConfig {
     DeliveryConfig {
         bearer_token: Some("prepare-only-secret".into()),
-        allow_http: true,
         max_pending_plans: 4,
         max_candidates: 8,
         max_targets: 8,
@@ -1458,7 +1457,6 @@ async fn required_content_type_is_sent_once_and_short_recording_url_uses_actual_
         .mount(&server)
         .await;
     let settings = DeliveryConfig {
-        allow_http: true,
         ..DeliveryConfig::new(server.uri().parse().unwrap())
     };
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());

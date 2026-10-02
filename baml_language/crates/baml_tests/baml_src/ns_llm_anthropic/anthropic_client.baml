@@ -24,11 +24,10 @@ function AnthMockAsk(question: string) -> string {
 // The SYSTEM message carries an Anthropic cache breakpoint (that is where the
 // marker below puts the `cache_control` metadata, and what
 // `anthropic_cache_control_placement` asserts: `system_cc=ephemeral`,
-// `user_cc=-`). `role(...)` builds a metadata-less marker, so the directive is
-// authored by interpolating the typed marker class directly.
+// `user_cc=-`).
 function AnthMockCached(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } }}Follow the rules.${role("user")}${question}`
+    prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
 }
 
 // An assistant-first prompt with NO system content: the shape that used to
@@ -213,7 +212,7 @@ test "anthropic_request_shape" {
     assert.contains(got, "input=9")
 }
 
-function anthropic_request_timeout_ms() -> string {
+function anthropic_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(anth_canned_text("pong", "end_turn"))],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -221,20 +220,20 @@ function anthropic_request_timeout_ms() -> string {
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                timeout = baml.time.Duration.from_milliseconds(20),
             );
             let outcome = anth_invoke_label(cl, anth_turn_input(AnthMockPlain@spec())) catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "anthropic_request_timeout_ms" {
-    assert.equal(anthropic_request_timeout_ms(), "20|Timeout")
+test "anthropic_request_timeout" {
+    assert.equal(anthropic_request_timeout(), "Timeout:timeout")
 }
 
 // Typed first-class parameters lower into the typed request; `headers` are
@@ -706,7 +705,7 @@ test "anthropic_stream_usage_splits_the_cache" {
     assert.equal(anthropic_stream_usage_splits_the_cache(), "5/2/3/5/7/4")
 }
 
-function anthropic_stream_time_to_first_token_timeout_ms() -> string {
+function anthropic_stream_first_token_timeout() -> string {
     root.llm_mock.mock_sse_serve(
         [
             root.llm_mock.sse_event(
@@ -721,21 +720,23 @@ function anthropic_stream_time_to_first_token_timeout_ms() -> string {
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
-                time_to_first_token_timeout_ms = 20,
+                timeout = ai.LlmTimeoutOptions {
+                    timeout: baml.time.Duration.from_milliseconds(15000),
+                    first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
             );
             let outcome = anth_stream_value(cl) catch_all (e) {
-                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         first_event_delay_ms = 10000,
     )
 }
 
-test "anthropic_stream_time_to_first_token_timeout_ms" {
-    assert.equal(anthropic_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
+test "anthropic_stream_first_token_timeout" {
+    assert.equal(anthropic_stream_first_token_timeout(), "Timeout:first_token_timeout:20")
 }
 
 // A connection that ends BEFORE `message_stop` is a truncated turn, not a
@@ -834,7 +835,7 @@ test "anthropic_stream_error_auth" {
 
 // BUG 7.4: every streaming transport error used to become a retry-SAFE
 // NetworkFailure, so ai.clients.Retry happily replayed a 400. The status
-// `fetch_sse` reports is now routed through the same classifier the
+// `send_sse` reports is now routed through the same classifier the
 // non-streaming path uses.
 function anthropic_stream_http_error(status: int) -> string {
     let canned = `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`;
@@ -904,6 +905,9 @@ function anthropic_decode_tool_stream() -> string {
                 seen.push("done");
                 null
             },
+            // Content with no text of its own (thinking, tool input): it only
+            // feeds the token deadlines, so it is not part of what this checks.
+            let c: ai.stream.ContentSeen => null,
         };
     }
     let calls: string[] = [];

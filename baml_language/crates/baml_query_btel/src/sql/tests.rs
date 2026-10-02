@@ -193,7 +193,7 @@ fn wildcards_expand_so_values_render() {
         "{}",
         t.sql
     );
-    assert_eq!(t.columns.iter().filter(|c| c.value).count(), 5);
+    assert_eq!(t.columns.iter().filter(|c| c.value).count(), 6);
     let t = ok(
         "SELECT p.*, c.output_value FROM processes p JOIN spans c ON c.process_id = p.process_id",
     );

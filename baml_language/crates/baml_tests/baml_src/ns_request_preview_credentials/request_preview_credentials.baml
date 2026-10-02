@@ -199,7 +199,7 @@ test "bedrock preview uses deterministic region without profile resolution" {
 
 function _google_timeout_source() -> string {
     let stream = google.internal._gm_route_sse_open("google", () -> {
-        throw baml.errors.Timeout { message: "google deadline", duration_ms: 47 }
+        throw baml.errors.Timeout { message: "google deadline", duration: baml.time.Duration.from_milliseconds(47), timeout_type: "timeout" }
     });
     "unexpected"
 }
@@ -214,9 +214,9 @@ function _google_cancelled_source() -> string {
 test "provider stream open preserves timeout and cancellation" {
     let chat_timeout = openai.internal._chat_stream_open_failure(
         "openai-chat",
-        baml.errors.Timeout { message: "chat deadline", duration_ms: 37 },
+        baml.errors.Timeout { message: "chat deadline", duration: baml.time.Duration.from_milliseconds(37), timeout_type: "timeout" },
     ) catch_all (e) {
-        let timeout: baml.errors.Timeout => `chat_timeout:${timeout.duration_ms ?? -1}`,
+        let timeout: baml.errors.Timeout => `chat_timeout:${timeout.duration?.to_milliseconds() ?? -1n}`,
         _ => `wrong:${e.to_string()}`,
     };
     assert.equal(chat_timeout, "chat_timeout:37");
@@ -231,9 +231,9 @@ test "provider stream open preserves timeout and cancellation" {
     assert.equal(chat_cancelled, "chat_cancelled:chat stop");
 
     let responses_timeout = openai.internal._stream_open_failure(
-        baml.errors.Timeout { message: "responses deadline", duration_ms: 41 },
+        baml.errors.Timeout { message: "responses deadline", duration: baml.time.Duration.from_milliseconds(41), timeout_type: "timeout" },
     ) catch_all (e) {
-        let timeout: baml.errors.Timeout => `responses_timeout:${timeout.duration_ms ?? -1}`,
+        let timeout: baml.errors.Timeout => `responses_timeout:${timeout.duration?.to_milliseconds() ?? -1n}`,
         _ => `wrong:${e.to_string()}`,
     };
     assert.equal(responses_timeout, "responses_timeout:41");
@@ -245,15 +245,15 @@ test "provider stream open preserves timeout and cancellation" {
     assert.equal(responses_cancelled, "responses_cancelled:responses stop");
 
     let anthropic_timeout = anthropic.internal._stream_open_failure(
-        baml.errors.Timeout { message: "anthropic deadline", duration_ms: 43 },
+        baml.errors.Timeout { message: "anthropic deadline", duration: baml.time.Duration.from_milliseconds(43), timeout_type: "timeout" },
     ) catch_all (e) {
-        let timeout: baml.errors.Timeout => `anthropic_timeout:${timeout.duration_ms ?? -1}`,
+        let timeout: baml.errors.Timeout => `anthropic_timeout:${timeout.duration?.to_milliseconds() ?? -1n}`,
         _ => `wrong:${e.to_string()}`,
     };
     assert.equal(anthropic_timeout, "anthropic_timeout:43");
 
     let google_timeout = _google_timeout_source() catch_all (e) {
-        let timeout: baml.errors.Timeout => `google_timeout:${timeout.duration_ms ?? -1}`,
+        let timeout: baml.errors.Timeout => `google_timeout:${timeout.duration?.to_milliseconds() ?? -1n}`,
         _ => `wrong:${e.to_string()}`,
     };
     assert.equal(google_timeout, "google_timeout:47");

@@ -122,7 +122,11 @@ pub enum VmBamlError {
     #[error("timeout: {message}")]
     Timeout {
         message: String,
-        duration_ms: Option<i64>,
+        /// The limit that elapsed, when it is known.
+        duration: Option<std::time::Duration>,
+        /// Which deadline fired: the name of the field or argument that set
+        /// it (`"timeout"`, `"connect_timeout"`, ...).
+        timeout_type: String,
     },
 
     #[error("unsupported: {message}")]

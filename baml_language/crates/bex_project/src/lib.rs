@@ -145,6 +145,18 @@ pub struct PreparedRuntime {
 
 impl PreparedRuntime {
     pub fn build(self) -> Result<Arc<BexEngine>, RuntimeError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(recording) = bex_engine::TelemetryRecording::from_boundary_env() {
+            let engine = BexEngine::new_with_telemetry_recording(
+                self.program,
+                Arc::new(self.sys_ops),
+                Vec::new(),
+                Some(runtime_compiler()),
+                btel_settings::clock::DEFAULT_MODE,
+                recording,
+            )?;
+            return Ok(Arc::new(engine));
+        }
         let engine = BexEngine::new_with_runtime_compiler(
             self.program,
             Arc::new(self.sys_ops),

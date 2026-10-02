@@ -7,7 +7,11 @@ class Client {
     model: string,
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    request_timeout_ms: int?,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect limit. This client
+    // does not stream, so first_token_timeout and stream_token_timeout are
+    // ignored. Null is the default: 5 minutes total, 10 seconds to connect.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
     capture_wire: bool,
 
     /// Construction is pure. Credentials resolve when invoking, using
@@ -16,14 +20,14 @@ class Client {
         model: string = "jev-latest",
         api_key: ai.Credential? = env.TYPESAFE_API_KEY,
         base_url: ai.Credential? = "https://api.typesafe.ai/v1",
-        request_timeout_ms: int? = null,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
         capture_wire: bool = true,
     ) -> Client {
         Client {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            request_timeout_ms: request_timeout_ms,
+            timeout: timeout,
             capture_wire: capture_wire,
         }
     }

@@ -47,6 +47,7 @@ use sys_ops::io::{SysOpOutput, VmBamlError, owned};
 use sys_types::{
     AsBexExternalValue, BexExternalValue, CancellationToken, Handle, VmInternalError,
     VmRustFnError, VmSpawner,
+    network::{NetworkContext, NetworkEventKind, NetworkTraced},
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -76,10 +77,15 @@ use crate::io_impls::timeout_from_nanos;
 /// server response built with `Response.new` holds buffered bytes. Keeping both
 /// behind one `$rust_type` lets `Response.text()`/`bytes()` and the server's
 /// response writer accept either — including proxying a fetched response
-/// straight back out of a handler.
+/// straight back out of a handler. A traced client body sits behind a
+/// [`NetworkTraced`] carrier; [`downcast_body`] sees through it.
 pub(crate) enum HttpBody {
-    /// A streaming client response body, consumed at most once.
-    Client(tokio::sync::Mutex<Option<reqwest::Response>>),
+    /// A streaming client response body, consumed at most once, with the
+    /// deadlines its request runs under (they keep running while it is read).
+    Client(
+        tokio::sync::Mutex<Option<reqwest::Response>>,
+        crate::io_impls::HttpTimeoutOptions,
+    ),
     /// A fully-buffered body.
     Bytes(Bytes),
     /// A server response body written incrementally by the handler via
@@ -100,19 +106,37 @@ pub(crate) struct StreamingBody {
 
 impl HttpBody {
     /// Wrap a freshly received client response.
-    pub(crate) fn client(response: reqwest::Response) -> Arc<dyn Any + Send + Sync> {
-        Arc::new(HttpBody::Client(tokio::sync::Mutex::new(Some(response))))
+    pub(crate) fn client(
+        response: reqwest::Response,
+        timeout_options: crate::io_impls::HttpTimeoutOptions,
+    ) -> Arc<dyn Any + Send + Sync> {
+        Arc::new(HttpBody::Client(
+            tokio::sync::Mutex::new(Some(response)),
+            timeout_options,
+        ))
     }
 
     /// Consume the body and return it as bytes (reading the network if needed).
-    pub(crate) async fn read_bytes(&self) -> Result<Bytes, VmBamlError> {
+    /// A client body read off the network is queued on its request's span.
+    pub(crate) async fn read_bytes(
+        &self,
+        network: Option<&NetworkContext>,
+    ) -> Result<Bytes, VmBamlError> {
         match self {
             HttpBody::Bytes(b) => Ok(b.clone()),
-            HttpBody::Client(slot) => {
+            HttpBody::Client(slot, timeout_options) => {
                 let resp = Self::take_client(slot)?;
-                resp.bytes().await.map_err(|e| {
-                    crate::io_impls::http_transport_error("failed to read response body", &e)
-                })
+                let bytes = resp.bytes().await.map_err(|e| {
+                    crate::io_impls::http_transport_error(
+                        "failed to read response body",
+                        &e,
+                        *timeout_options,
+                    )
+                })?;
+                if let Some(network) = network {
+                    network.push(NetworkEventKind::Body(bytes.clone()));
+                }
+                Ok(bytes)
             }
             HttpBody::Streaming(_) => Err(VmBamlError::Io {
                 message: "a streaming response body cannot be read with bytes()/text(); \
@@ -162,19 +186,22 @@ impl HttpBody {
     }
 
     /// Consume the body and decode it as text. Client responses use lossy UTF-8
-    /// decoding (via `reqwest`); buffered bytes require valid UTF-8.
-    pub(crate) async fn read_text(&self) -> Result<String, VmBamlError> {
+    /// decoding, as `reqwest`'s `text()` does without its `charset` feature;
+    /// buffered bytes require valid UTF-8.
+    pub(crate) async fn read_text(
+        &self,
+        network: Option<&NetworkContext>,
+    ) -> Result<String, VmBamlError> {
         match self {
             // Decode failures remain `Io`; a client request deadline can also
             // elapse while the lazy response body is being consumed.
             HttpBody::Bytes(b) => String::from_utf8(b.to_vec()).map_err(|e| VmBamlError::Io {
                 message: format!("Invalid UTF-8 in response body: {e}"),
             }),
-            HttpBody::Client(slot) => {
-                let resp = Self::take_client(slot)?;
-                resp.text().await.map_err(|e| {
-                    crate::io_impls::http_transport_error("failed to read response body", &e)
-                })
+            HttpBody::Client(..) => {
+                // Read the bytes once, so the span records them as they came.
+                let bytes = self.read_bytes(network).await?;
+                Ok(String::from_utf8_lossy(&bytes).into_owned())
             }
             HttpBody::Streaming(_) => Err(VmBamlError::Io {
                 message: "a streaming response body cannot be read with bytes()/text(); \
@@ -198,16 +225,21 @@ impl HttpBody {
     }
 }
 
-/// Downcast a `$rust_type` body field to [`HttpBody`].
+/// Downcast a `$rust_type` body field to [`HttpBody`], traced or not.
 pub(crate) fn downcast_body(
     body: &Arc<dyn Any + Send + Sync>,
 ) -> Result<Arc<HttpBody>, VmInternalError> {
-    body.clone()
+    NetworkTraced::inner(Arc::clone(body))
         .downcast::<HttpBody>()
-        .map_err(|_| VmInternalError::RustTypeError {
+        .map_err(|body| VmInternalError::RustTypeError {
             expected: TypeId::of::<HttpBody>(),
-            got: body.type_id(),
+            got: body.as_ref().type_id(),
         })
+}
+
+/// The span of the request a `$rust_type` body or stream handle came from.
+pub(crate) fn network_of(data: &Arc<dyn Any + Send + Sync>) -> Option<NetworkContext> {
+    NetworkTraced::of(data.as_ref()).map(|traced| traced.network().clone())
 }
 
 /// The response body type written to the wire. Boxed so a handler's response
@@ -734,8 +766,8 @@ async fn handle_websocket(
 ) -> HyperResponse<WireBody> {
     // A handshake carries no body (RFC 6455 §4.1), and reading one would
     // consume the stream the upgrade needs, so the handler sees the usual
-    // `Request` shape with an empty body.
-    let request = owned::http::Request {
+    // `ServerRequest` shape with an empty body.
+    let request = owned::http::ServerRequest {
         method: req.method().as_str().to_string(),
         url: req.uri().to_string(),
         headers: collect_headers(req.headers()),
@@ -836,7 +868,7 @@ async fn run_websocket(
     }
 }
 
-/// Why a request couldn't be turned into a BAML `Request`.
+/// Why a request couldn't be turned into a BAML `ServerRequest`.
 enum BadRequest {
     /// The body exceeded `max_body_size` → 413.
     TooLarge,
@@ -844,13 +876,13 @@ enum BadRequest {
     Malformed,
 }
 
-/// Convert a hyper request into the BAML `Request` shape, capping the buffered
+/// Convert a hyper request into the BAML `ServerRequest` shape, capping the buffered
 /// body at `max_body_size` bytes. The body is decoded lossily as UTF-8 to match
-/// `Request.body: string`.
+/// `ServerRequest.body: string`.
 async fn to_baml_request(
     req: HyperRequest<Incoming>,
     max_body_size: usize,
-) -> Result<owned::http::Request, BadRequest> {
+) -> Result<owned::http::ServerRequest, BadRequest> {
     let (parts, body) = req.into_parts();
     let method = parts.method.as_str().to_string();
     let url = parts.uri.to_string();
@@ -867,7 +899,7 @@ async fn to_baml_request(
     };
     let body = String::from_utf8_lossy(&body_bytes).into_owned();
 
-    Ok(owned::http::Request {
+    Ok(owned::http::ServerRequest {
         method,
         url,
         headers,
@@ -875,7 +907,7 @@ async fn to_baml_request(
     })
 }
 
-/// Fold hyper's headers into the `map<string, string>` shape of `Request.headers`.
+/// Fold hyper's headers into the `map<string, string>` shape of `ServerRequest.headers`.
 ///
 /// A header name may repeat, so repeated values are joined with ", " (RFC 7230
 /// §3.2.2) — except `Cookie`, which joins with "; " (RFC 6265 §5.4); HTTP/2 in
@@ -960,7 +992,13 @@ async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<WireBody
             });
             StreamBody::new(frames).boxed()
         }
-        _ => Full::new(body_handle.read_bytes().await?).boxed(),
+        // A fetched response proxied back out still records its body.
+        _ => Full::new(
+            body_handle
+                .read_bytes(network_of(&response._body).as_ref())
+                .await?,
+        )
+        .boxed(),
     };
 
     let mut builder = HyperResponse::builder().status(status);

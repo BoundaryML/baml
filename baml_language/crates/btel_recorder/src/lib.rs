@@ -46,7 +46,6 @@ struct PendingMessages {
     definitions: proto::Definitions,
     aggregates: proto::AggregateBatch,
     clock_states: proto::ClockStateBatch,
-    usage: proto::UsageBatch,
     /// `ErrorBatch` body, encoded as each message arrives: a throw-heavy
     /// program sends one raise and one end per throw, and prost would
     /// otherwise recompute every nested length several times per file.
@@ -156,26 +155,6 @@ impl ConversionBuffer {
                 },
             );
         }
-    }
-
-    /// Usage entries are cold and unbounded in size (a model name), so they
-    /// stay out of the span encoder.
-    fn model_usage(&mut self, thread: TelemetryId, usage: &btel_records::ModelUsage) {
-        push_message(
-            &mut self.pending.usage.entries,
-            &mut self.pending_encoded_bytes,
-            1,
-            proto::ModelUsage {
-                node_id: usage.node.get(),
-                thread_id: thread.get(),
-                model: usage.model.as_deref().map(str::to_owned),
-                input_tokens: usage.input_tokens,
-                output_tokens: usage.output_tokens,
-                cache_read_tokens: usage.cache_read_tokens,
-                cache_write_tokens: usage.cache_write_tokens,
-                reasoning_tokens: usage.reasoning_tokens,
-            },
-        );
     }
 
     fn aggregate(&mut self, delta: AggregateDelta) {
@@ -323,7 +302,37 @@ impl ConversionBuffer {
                 thread,
                 Event::ThreadRunning(proto::ThreadRunning { at_ticks: at.get() }),
             ),
-            SpanRecord::ModelUsage(usage) => self.model_usage(thread, usage),
+            SpanRecord::NetworkSpanAnnouncement(span) => self.event(
+                thread,
+                Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                    id: span.id.get(),
+                    parent_id: span.parent_id.get(),
+                    call_path_id: span.call_path.get(),
+                    started_at_ticks: span.started_at.get(),
+                    method: span.method.to_string(),
+                    url: span.url.to_string(),
+                    request_cas_id: span.request.as_ref().map(cas_id),
+                }),
+            ),
+            SpanRecord::NetworkEvent(event) => self.event(
+                thread,
+                Event::NetworkEvent(proto::NetworkEvent {
+                    span_id: event.span.get(),
+                    name: event.name.as_str().to_owned(),
+                    at_ticks: event.at.get(),
+                    payload_cas_id: event.payload.as_ref().map(cas_id),
+                }),
+            ),
+            SpanRecord::NetworkSpanCompletion(done) => self.event(
+                thread,
+                Event::NetworkCompletion(proto::NetworkCompletion {
+                    span_id: done.span.get(),
+                    completed_at_ticks: done.completed_at.get(),
+                    outcome: flags::outcome(done.outcome) as i32,
+                    panicked: done.outcome == btel_types::InvocationOutcome::Panicked,
+                    error_cas_id: done.error.as_ref().map(cas_id),
+                }),
+            ),
             SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
                 self.error_raise_origin(thread, *raise_id, *origin);
             }

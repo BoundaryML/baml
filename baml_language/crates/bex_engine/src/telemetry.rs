@@ -8,6 +8,9 @@ use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
+const BOUNDARY_URL: &str = "BOUNDARY_URL";
+const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
+
 /// One recording per engine, delivered to local files or BCS. Cloud payload
 /// failures discard that payload and allow later delivery. Local storage and
 /// fatal worker failures disable recording. Errors remain available through
@@ -77,6 +80,24 @@ impl RecordingDelivery {
 }
 
 impl TelemetryRecording {
+    /// Configure cloud delivery when both Boundary environment variables are
+    /// non-empty and the URL parses. Delivery validates the URL and bearer
+    /// header at engine construction; a rejected config disables recording.
+    pub fn from_boundary_env() -> Option<Self> {
+        let url = std::env::var(BOUNDARY_URL).ok()?;
+        let key = std::env::var(BOUNDARY_API_KEY).ok()?;
+        if url.is_empty() || key.is_empty() {
+            return None;
+        }
+        let mut delivery = btel_bcs::delivery::DeliveryConfig::new(url.parse().ok()?);
+        delivery.bearer_token = Some(key);
+        Some(Self::cloud(
+            RecordingConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
+            delivery,
+        ))
+    }
+
     /// Deliver through the proposed BCS prepare protocol and presigned PUTs.
     /// No worker starts until engine construction. There is no durable spool.
     pub fn cloud(
@@ -475,3 +496,6 @@ impl BexEngine {
 
 #[cfg(all(test, unix))]
 mod failure_tests;
+
+#[cfg(test)]
+mod boundary_env_tests;

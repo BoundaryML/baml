@@ -98,6 +98,9 @@ pub struct BexThread {
     pub settles_future: Option<FutureId>,
     /// How the error that escaped this root thread ends it, for telemetry.
     pub escaped_outcome: Option<bex_vm::telemetry::InvocationOutcome>,
+    /// The network span the failing sys-op ends: closed with the thrown
+    /// value once the engine has built it.
+    pub(crate) network_close: Option<crate::telemetry_network::NetworkClose>,
 }
 
 impl BexThread {
@@ -110,6 +113,7 @@ impl BexThread {
             sysop_cancel: CancellationToken::new(),
             settles_future: None,
             escaped_outcome: None,
+            network_close: None,
         }
     }
 
@@ -127,6 +131,7 @@ impl BexThread {
             sysop_cancel: CancellationToken::new(),
             settles_future: Some(settles_future),
             escaped_outcome: None,
+            network_close: None,
         }
     }
 

@@ -528,6 +528,13 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
                 bex_media_to_proto_media(media),
             )),
         },
+        // The portable prompt has no cache delimiter: it encodes as nothing,
+        // so a host sees the prompt's text and media unchanged.
+        bex_project::PromptAstSimple::CacheDelimiter(_) => BamlValuePromptAstSimple {
+            value: Some(BamlValuePromptAstSimpleValue::Multiple(
+                BamlValuePromptAstSimpleMultiple { items: Vec::new() },
+            )),
+        },
         bex_project::PromptAstSimple::Multiple(multiple) => BamlValuePromptAstSimple {
             value: Some(BamlValuePromptAstSimpleValue::Multiple(
                 BamlValuePromptAstSimpleMultiple {

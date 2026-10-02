@@ -901,16 +901,10 @@ function parse(resp: Response) -> ai.ModelTurn {
 
 /// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = _request(c, input, false, preview = false);
-    let sent = ai.wire.send_as_with_wire<Response>(
-        req,
-        "anthropic",
-        c.id(),
-        capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
-    );
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(_request(c, input, false, preview = false));
+    let sent = ai.wire.send_as_with_wire<Response>(req, "anthropic", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -1129,6 +1123,9 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                 },
                                 "thinking" => {
                                     state.thinking = `${state.thinking}${block.thinking ?? ""}`;
+                                    if ((block.thinking ?? "") != "") {
+                                        out.push(ai.stream.ContentSeen {});
+                                    }
                                     null
                                 },
                                 _ => {
@@ -1161,12 +1158,19 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                     if let call: AnthStreamToolCall = _anth_stream_call_at(state, event.index) {
                                         call.args_json = `${call.args_json}${d.partial_json ?? ""}`;
                                     }
+                                    // Tool input is content with no TextDelta.
+                                    if ((d.partial_json ?? "") != "") {
+                                        out.push(ai.stream.ContentSeen {});
+                                    }
                                     null
                                 },
                                 "thinking_delta" => {
                                     // Deliberately NOT a TextDelta: thinking is not part
                                     // of the answer the parser will see.
                                     state.thinking = `${state.thinking}${d.thinking ?? ""}`;
+                                    if ((d.thinking ?? "") != "") {
+                                        out.push(ai.stream.ContentSeen {});
+                                    }
                                     null
                                 },
                                 "signature_delta" => {
@@ -1211,7 +1215,7 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
     out
 }
 
-/// (internal) `fetch_sse` fails a non-2xx status itself, throwing baml.errors.Io with the
+/// (internal) `send_sse` fails a non-2xx status itself, throwing baml.errors.Io with the
 /// status and body in its message ("SSE request failed with status 401: …").
 /// Recover the status and route it through the SAME classifier the non-streaming
 /// path uses: a 400 or 401 must never come back as a retry-safe NetworkFailure,
@@ -1251,15 +1255,10 @@ function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> ne
 /// The streaming entry point: the same request as `invoke` with
 /// `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    let req = _request(c, input, true, preview = false);
+    let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
+    let req = limits._apply(_request(c, input, true, preview = false));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = baml.http.fetch_sse(
-        req,
-        timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
-        first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
-        $trace = span,
-    ) catch (e) {
+    let sse = baml.http.send_sse(req) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
     };
@@ -1277,8 +1276,8 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
             }
         },
         require_terminal = "anthropic",
-        model = c.model,
-        usage_target = trace._usage_target_of(span.id()),
+        timeout_options = limits,
+        dispatched = started,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

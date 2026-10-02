@@ -72,6 +72,11 @@ class ImageClient {
     // through on_event. Status, headers, and timing are always recorded; this
     // flag only gates the bodies.
     capture_wire: bool,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect limit. This client
+    // does not stream, so first_token_timeout and stream_token_timeout are
+    // ignored. Null is the default: 5 minutes total, 10 seconds to connect.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
@@ -94,6 +99,7 @@ class ImageClient {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         capture_wire: bool = true,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
     ) -> ImageClient {
         ImageClient {
             model: model,
@@ -113,6 +119,7 @@ class ImageClient {
             headers: headers,
             query_params: query_params,
             capture_wire: capture_wire,
+            timeout: timeout,
         }
     }
 

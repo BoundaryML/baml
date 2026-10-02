@@ -21,7 +21,8 @@ message RecordingFile {
   // Minor 2. Exception evidence. One unwind's raise, links and end can be
   // in different files; readers join them by raise ID.
   ErrorBatch errors = 8;
-  // Minor 3. Tokens each model turn used.
+  // Minor 3. Tokens each model turn used. Only read now: since minor 7 a
+  // request's cost comes from its network span, and nothing writes this.
   UsageBatch usage = 9;
 }
 
@@ -32,6 +33,8 @@ message RecordingHeader {
                                  // identity, panics, future names, sysop time and usage.
                                  // 4 adds execution-context runs.
                                  // 5 adds structured log observations.
+                                 // 6 adds when spawned futures began running.
+                                 // 7 adds network spans.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -308,6 +311,9 @@ message SpanEvent {
     FunctionCompletion late_function_completion = 5;
     LogEvent log = 6;            // Minor 5. Not a function invocation/completion.
     ThreadRunning thread_running = 7; // Minor 6. Only for a spawned future.
+    NetworkAnnouncement network_announcement = 8; // Minor 7.
+    NetworkEvent network_event = 9;               // Minor 7.
+    NetworkCompletion network_completion = 10;    // Minor 7.
   }
 }
 
@@ -370,6 +376,42 @@ message FunctionCompletion {
   // Minor 3. Only with an ERRORED outcome: a panic ended it. Since minor 3
   // an errored value is the baml.errors.Context a handler would bind.
   bool panicked = 9;
+}
+
+// Minor 7. One HTTP request the runtime made, as its own span. Its events
+// and completion name it by ID and can be in other sections or files; the
+// announcing section's thread gives the clock for all of its ticks.
+message NetworkAnnouncement {
+  uint64 id = 1;               // Nonzero TelemetryId.
+  uint64 parent_id = 2;        // Innermost span or thread that made the request.
+  uint32 call_path_id = 3;     // The frame that made it; zero outside any.
+  fixed64 started_at_ticks = 4;
+  string method = 5;
+  string url = 6;              // Query values and credentials hashed.
+  // {request: {method, url, headers, body}}; header values outside the
+  // allowlist hashed. No body when bodies are not recorded.
+  CasId request_cas_id = 7;
+}
+
+// Minor 7. Names: connection ({status, headers}), data (a whole body, or one
+// server-sent event as {event, data, id}), end (a stream ended on the wire),
+// await (the program finished reading), close (it closed a stream early) and
+// drop (collected unread), all but connection and data without payload.
+// Unknown names are other protocols' events.
+message NetworkEvent {
+  uint64 span_id = 1;
+  string name = 2;
+  fixed64 at_ticks = 3;        // The announcing thread's clock.
+  CasId payload_cas_id = 4; // Absent: no payload, or bodies not recorded.
+}
+
+// Minor 7. A request that is never read has none.
+message NetworkCompletion {
+  uint64 span_id = 1;
+  fixed64 completed_at_ticks = 2;
+  InvocationOutcome outcome = 3;
+  bool panicked = 4;           // Only with ERRORED: a panic ended it.
+  CasId error_cas_id = 5; // The baml.errors.Context of the error.
 }
 
 enum InvocationOutcome {
@@ -536,6 +578,7 @@ enum ProcessStatus {
 }
 
 // Minor 3. Model usage, outside span sections: a model name has no bound.
+// Only read now: nothing writes it since minor 7.
 message UsageBatch {
   repeated ModelUsage entries = 1;
 }

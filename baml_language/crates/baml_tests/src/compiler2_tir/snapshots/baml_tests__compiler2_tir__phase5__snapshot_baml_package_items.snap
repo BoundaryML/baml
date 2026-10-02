@@ -146,20 +146,23 @@ namespace baml.host:
   class Value { methods: [] }
   function call_host_value<T, E>
 namespace baml.http:
-  class Request { methods: [] }
+  class Request { methods: [from_url, set_method, set_headers, set_body, set_timeout, set_connect_timeout] }
   class Response { methods: [text, bytes, ok, new, new_streaming, write, end] }
   class Server { methods: [bind, serve, _serve] }
+  class ServerRequest { methods: [] }
   class SseStream { methods: [next, close] }
   class TlsConfig { methods: [new, _new] }
   type WsAccept
+  function _default_connect_timeout
+  function _default_timeout
   function _fetch
-  function _fetch_sse
   function _send
+  function _send_sse
   function _timeout_nanos
   function fetch
-  function fetch_sse
   function reject_websocket
   function send
+  function send_sse
 namespace baml.io:
   type Read
   type Write

@@ -48,11 +48,10 @@ function OaiSystemLook(pic: image) -> string {
     `
 }
 
-// `role(...)` builds a metadata-less marker, so a per-message directive is
-// authored by interpolating the typed marker class directly.
+// A per-message directive, authored on the role marker.
 function OaiMetaEcho(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${ai.Role { name: "system", metadata: { "cache_hint": "ephemeral" } }}Follow the rules.${role("user")}${question}`
+    prompt: `${role("system", metadata = { "cache_hint": "ephemeral" })}Follow the rules.${role("user")}${question}`
 }
 
 // ─── canned provider bodies ──────────────────────────────────────────────────
@@ -194,7 +193,7 @@ test "oai_request_shape" {
     assert.is_true(!got.includes(`"stream"`))
 }
 
-function oai_request_timeout_ms() -> string {
+function oai_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_text_response())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -202,20 +201,20 @@ function oai_request_timeout_ms() -> string {
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                timeout = baml.time.Duration.from_milliseconds(20),
             );
             let outcome = `turn:${cl.invoke(_oai_input(OaiEcho@spec("Say pong."), ai.Journal { log: [] }, ai.tools.Toolbox.new([]))).terminal_text() ?? ""}` catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "oai_request_timeout_ms" {
-    assert.equal(oai_request_timeout_ms(), "20|Timeout")
+test "oai_request_timeout" {
+    assert.equal(oai_request_timeout(), "Timeout:timeout")
 }
 
 // request_body deep-merges over the serialized typed request: a scalar
@@ -673,7 +672,7 @@ function _oai_stream_final(cl: openai.ResponsesClient) -> string {
     stream.final()
 }
 
-function oai_stream_time_to_first_token_timeout_ms() -> string {
+function oai_stream_first_token_timeout() -> string {
     let completed = `{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1}}}`;
     root.llm_mock.mock_sse_serve(
         [root.llm_mock.sse_data(completed)],
@@ -684,21 +683,23 @@ function oai_stream_time_to_first_token_timeout_ms() -> string {
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
-                time_to_first_token_timeout_ms = 20,
+                timeout = ai.LlmTimeoutOptions {
+                    timeout: baml.time.Duration.from_milliseconds(15000),
+                    first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
             );
             let outcome = _oai_stream_final(cl) catch_all (e) {
-                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+            `${outcome}`
         },
         first_event_delay_ms = 10000,
     )
 }
 
-test "oai_stream_time_to_first_token_timeout_ms" {
-    assert.equal(oai_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
+test "oai_stream_first_token_timeout" {
+    assert.equal(oai_stream_first_token_timeout(), "Timeout:first_token_timeout:20")
 }
 
 // A stream whose text arrives ONLY as `output_text.done` still yields it.
@@ -963,7 +964,9 @@ function oai_stream_decoder_buffers() -> string {
 }
 
 test "oai_stream_decoder_buffers" {
-    assert.equal(oai_stream_decoder_buffers(), "{\"city\":\"paris\"}|0|1|hello|unset")
+    // The two argument deltas carry no text: each yields one ContentSeen, which
+    // only feeds the token deadlines.
+    assert.equal(oai_stream_decoder_buffers(), "{\"city\":\"paris\"}|2|1|hello|unset")
 }
 
 // The dedup key is the CONTENT PART, not the item: a message with two text

@@ -21,7 +21,8 @@ use rusqlite::{Transaction, params};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{
-    Totals, cas_id, id,
+    NETWORK_COMPLETION_CONFLICT, NETWORK_INVALID, NETWORK_INVALID_DETAIL, NETWORK_SPAN_CONFLICT,
+    Totals, cas_id, event_seq, id, network_invalid,
     profile::{self, Counts, Part, PathFacts, Sysop},
     quantity, sequence_i64,
 };
@@ -343,9 +344,50 @@ struct CallRow {
     conflict: i64,
 }
 
+/// A network span's announcement.
+#[derive(PartialEq, Eq)]
+struct NetworkDef {
+    thread: u64,
+    parent: u64,
+    /// `None` outside any frame.
+    path: Option<u32>,
+    started: Option<i64>,
+    method: String,
+    url: String,
+    request_cas: Option<[u8; 16]>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct NetworkDone {
+    completed: Option<i64>,
+    outcome: i64,
+    panicked: bool,
+    error_cas: Option<[u8; 16]>,
+}
+
+/// A network span: its first announcement and first completion, or a
+/// placeholder for one only its events or completion name so far.
+#[derive(Default)]
+struct NetworkRow {
+    def: Option<Box<NetworkDef>>,
+    done: Option<NetworkDone>,
+    conflict: bool,
+}
+
+/// One network event, in recording order by `(sequence, position)`.
+struct EventRow {
+    span: u64,
+    sequence: u64,
+    position: u32,
+    name: String,
+    at: Option<i64>,
+    payload_cas: Option<[u8; 16]>,
+}
+
 /// One recording's facts, merged in memory.
 #[derive(Default)]
 pub(super) struct Bulk {
+    contexts: super::context::Contexts,
     functions: FxHashMap<u64, FunctionRow>,
     paths: Table<u32, PathRow>,
     threads: Table<u64, ThreadRow>,
@@ -362,6 +404,8 @@ pub(super) struct Bulk {
     sysops: BTreeMap<u32, (u128, u128)>,
     /// `(sequence, position)` to one model turn's usage.
     usage: BTreeMap<(u64, usize), proto::ModelUsage>,
+    network_spans: FxHashMap<u64, NetworkRow>,
+    network_events: Vec<EventRow>,
     /// The first header that names the process, and how it ended.
     process: Option<proto::RecordingHeader>,
     process_end: Option<proto::ProcessEnd>,
@@ -497,6 +541,7 @@ impl Bulk {
 
     /// Fold one file, like `Applier::apply`.
     pub(super) fn apply(&mut self, sequence: u64, file: &proto::RecordingFile) {
+        self.contexts.apply(file);
         let mut ticks_out_of_range = false;
         let mut tick = |value: u64| {
             let converted = quantity(value);
@@ -587,9 +632,20 @@ impl Bulk {
             }
         }
         if let Some(spans) = &file.spans {
+            // Each network event's position among the file's.
+            let mut network_events = 0_u32;
             for section in &spans.sections {
                 self.refer_thread(section.thread_id);
                 for event in &section.events {
+                    if let Some(span) = event.event.as_ref().and_then(network_invalid) {
+                        self.issue(
+                            sequence,
+                            NETWORK_INVALID,
+                            Some(span.to_string()),
+                            NETWORK_INVALID_DETAIL,
+                        );
+                        continue;
+                    }
                     match event.event.as_ref() {
                         Some(Event::ThreadAnnouncement(_)) => {
                             self.threads
@@ -668,6 +724,71 @@ impl Bulk {
                         Some(Event::Log(log)) => {
                             // Preserve file time coverage without inventing a call row.
                             let _ = tick(log.at_ticks);
+                        }
+                        Some(Event::NetworkAnnouncement(entry)) => {
+                            let path = (entry.call_path_id != 0).then_some(entry.call_path_id);
+                            if let Some(path) = path {
+                                self.refer_path(path);
+                            }
+                            let def = NetworkDef {
+                                thread: section.thread_id,
+                                parent: entry.parent_id,
+                                path,
+                                started: tick(entry.started_at_ticks),
+                                method: entry.method.clone(),
+                                url: entry.url.clone(),
+                                request_cas: entry.request_cas_id.as_ref().map(cas_id),
+                            };
+                            let row = self.network_spans.entry(entry.id).or_default();
+                            match &row.def {
+                                None => row.def = Some(Box::new(def)),
+                                Some(first) if **first == def => {}
+                                Some(_) => {
+                                    row.conflict = true;
+                                    push_issue(
+                                        &mut self.issues,
+                                        sequence,
+                                        "network_span_conflict",
+                                        Some(entry.id.to_string()),
+                                        NETWORK_SPAN_CONFLICT,
+                                    );
+                                }
+                            }
+                        }
+                        Some(Event::NetworkEvent(observed)) => {
+                            self.network_spans.entry(observed.span_id).or_default();
+                            self.network_events.push(EventRow {
+                                span: observed.span_id,
+                                sequence,
+                                position: network_events,
+                                name: observed.name.clone(),
+                                at: tick(observed.at_ticks),
+                                payload_cas: observed.payload_cas_id.as_ref().map(cas_id),
+                            });
+                            network_events += 1;
+                        }
+                        Some(Event::NetworkCompletion(done)) => {
+                            let completion = NetworkDone {
+                                completed: tick(done.completed_at_ticks),
+                                outcome: i64::from(done.outcome),
+                                panicked: done.panicked,
+                                error_cas: done.error_cas_id.as_ref().map(cas_id),
+                            };
+                            let row = self.network_spans.entry(done.span_id).or_default();
+                            match row.done {
+                                None => row.done = Some(completion),
+                                Some(first) if first == completion => {}
+                                Some(_) => {
+                                    row.conflict = true;
+                                    push_issue(
+                                        &mut self.issues,
+                                        sequence,
+                                        "network_completion_conflict",
+                                        Some(done.span_id.to_string()),
+                                        NETWORK_COMPLETION_CONFLICT,
+                                    );
+                                }
+                            }
                         }
                         None => {}
                     }
@@ -914,6 +1035,7 @@ impl Bulk {
         self.report_call_conflicts();
         self.resolve_entries();
         let nodes = self.resolve_nodes();
+        self.contexts.write(tx, rec)?;
         self.write_process(tx, rec)?;
         self.write_functions(tx, rec)?;
         let mut paths: Vec<u32> = if complete {
@@ -938,6 +1060,12 @@ impl Bulk {
             self.write_sysops(tx, rec)?;
         }
         with_indexes_deferred(tx, "call", self.calls.len(), || self.write_calls(tx, rec))?;
+        with_indexes_deferred(tx, "network_span", self.network_spans.len(), || {
+            self.write_network_spans(tx, rec)
+        })?;
+        self.network_events
+            .sort_unstable_by_key(|event| (event.span, event.sequence, event.position));
+        self.write_network_events(tx, rec)?;
         self.write_usage(tx, rec)?;
         let mut insert = tx.prepare_cached(
             "INSERT INTO issue (rec, sequence, code, subject, detail) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -995,8 +1123,8 @@ impl Bulk {
         }
     }
 
-    /// The paths spans read: each call's, and each thread's spawn and entry
-    /// path. Unsorted, with repeats.
+    /// The paths spans read: each call's and network span's, and each
+    /// thread's spawn and entry path. Unsorted, with repeats.
     fn span_paths(&self) -> Vec<u32> {
         let calls = self.calls.iter().map(|(_, call)| call.path);
         let threads = self.threads.iter().flat_map(|(_, thread)| {
@@ -1005,7 +1133,15 @@ impl Bulk {
                 thread.entry_path,
             ]
         });
-        calls.chain(threads).filter(|path| *path != 0).collect()
+        let network = self
+            .network_spans
+            .values()
+            .filter_map(|row| row.def.as_ref()?.path);
+        calls
+            .chain(threads)
+            .chain(network)
+            .filter(|path| *path != 0)
+            .collect()
     }
 
     /// The paths summed by node, as `profile::fold` sums their rows.
@@ -1510,6 +1646,62 @@ impl Bulk {
                 b.bind(row.needs_announcement)?;
                 b.bind(row.value_cas.as_ref().map(<[u8; 16]>::as_slice))?;
                 b.bind(row.conflict)
+            },
+        )
+    }
+
+    fn write_network_spans(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+        let mut ids: Vec<u64> = self.network_spans.keys().copied().collect();
+        ids.sort_unstable();
+        insert_rows(
+            tx,
+            "network_span (rec, span_id, defined, thread_id, parent_id, call_path_id, method, url,
+               request_cas, started_ticks, completed_ticks, outcome, panicked, error_cas, conflict)",
+            15,
+            &ids,
+            |b, span| {
+                let row = &self.network_spans[&span];
+                let def = row.def.as_deref();
+                b.bind(rec)?;
+                b.bind(id(span))?;
+                b.bind(def.is_some())?;
+                b.bind(def.map(|d| id(d.thread)))?;
+                b.bind(def.map(|d| id(d.parent)))?;
+                b.bind(def.and_then(|d| d.path).map(i64::from))?;
+                b.bind(def.map(|d| d.method.as_str()))?;
+                b.bind(def.map(|d| d.url.as_str()))?;
+                b.bind(def.and_then(|d| d.request_cas))?;
+                b.bind(def.and_then(|d| d.started))?;
+                b.bind(row.done.and_then(|d| d.completed))?;
+                b.bind(row.done.map(|d| d.outcome))?;
+                b.bind(row.done.is_some_and(|d| d.panicked))?;
+                b.bind(row.done.and_then(|d| d.error_cas))?;
+                b.bind(row.conflict)
+            },
+        )
+    }
+
+    /// Events in key order: by span, then recording order.
+    fn write_network_events(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+        let seqs: Vec<i64> = self
+            .network_events
+            .iter()
+            .map(|event| event_seq(event.sequence, event.position))
+            .collect::<Result<_, _>>()?;
+        let rows: Vec<usize> = (0..self.network_events.len()).collect();
+        insert_rows(
+            tx,
+            "network_event (rec, span_id, seq, name, at_ticks, payload_cas)",
+            6,
+            &rows,
+            |b, at| {
+                let event = &self.network_events[at];
+                b.bind(rec)?;
+                b.bind(id(event.span))?;
+                b.bind(seqs[at])?;
+                b.bind(&event.name)?;
+                b.bind(event.at)?;
+                b.bind(event.payload_cas)
             },
         )
     }

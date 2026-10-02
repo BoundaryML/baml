@@ -59,8 +59,23 @@ enum OutputFormatDefault {
 
 /// Construct a typed role marker for structural prompt assembly.
 /// The `${role(...)}` desugar in an LLM prompt body lowers to this call.
-function make_role(name: string) -> root.Role throws never {
-    root.Role { name: name, metadata: {} }
+///
+/// `metadata` carries per-message provider directives, which reach the provider
+/// client as `ai.PromptMessage.metadata`.
+function make_role(
+    name: string,
+    metadata: map<string, baml.json.json> = {},
+) -> root.Role throws never {
+    root.Role { name: name, metadata: metadata }
+}
+
+/// Construct a cache delimiter for structural prompt assembly.
+/// The `${cache(...)}` desugar in an LLM prompt body lowers to this call.
+///
+/// `args` is the provider's own cache object. It reaches the provider client
+/// as `ai.CacheDelimiter.args`, untouched.
+function make_cache(args: baml.json.json) -> root.CacheDelimiter throws never {
+    root.CacheDelimiter { args: args }
 }
 
 /// Look up an LLM function's declared return type. Retained for type-reflection

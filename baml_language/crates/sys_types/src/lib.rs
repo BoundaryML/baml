@@ -21,6 +21,7 @@ pub use bex_heap::BexHeap;
 pub use bex_vm_types::SysOp;
 pub use tokio_util::sync::CancellationToken;
 
+pub mod network;
 pub mod sse;
 
 /// Outcome of [`resolve_name`].
@@ -632,6 +633,10 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Typed async IO interface for calling back into the runtime IO layer.
     /// Built once by the engine from the `SysOps` table and shared across calls.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
+
+    /// The span of the request this call makes. `None` unless telemetry is
+    /// on and the op sends an HTTP request.
+    pub network: Option<network::NetworkContext>,
 }
 
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
@@ -644,6 +649,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
+            network: self.network.clone(),
         }
     }
 }
@@ -760,6 +766,34 @@ pub struct EnumVariantDefinition {
     pub alias: Option<String>,
 }
 
+impl EnumVariantDefinition {
+    /// The description the output format shows for this variant; see
+    /// [`rendered_enum_variant_description`].
+    pub fn rendered_description(&self) -> Option<String> {
+        rendered_enum_variant_description(self.description.as_deref(), self.docstring.as_deref())
+    }
+}
+
+/// The description the output format shows after an enum variant's name
+/// (`<name>: <description>`): its `@description` followed by its `///`
+/// docstring, each trimmed, joined by a space. `None` when both are blank.
+///
+/// The parser matches a model's answer against this same text, so the prompt
+/// and the parser cannot disagree about what a variant is called.
+pub fn rendered_enum_variant_description(
+    description: Option<&str>,
+    docstring: Option<&str>,
+) -> Option<String> {
+    let docs = [description, docstring]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .filter(|docs| !docs.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!docs.is_empty()).then_some(docs)
+}
+
 impl SysOpContext {
     /// Create an empty context (for testing or when no LLM functions exist).
     pub fn empty() -> Self {
@@ -796,6 +830,7 @@ impl SysOpContext {
             type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
+            network: None,
         }
     }
 }
@@ -815,6 +850,7 @@ impl EngineSysOpContext {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
             runtime_io: self.runtime_io.clone(),
+            network: None,
         }
     }
 }
@@ -1012,7 +1048,8 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
         let err: bex_vm_types::errors::VmRustFnError = bex_vm_types::errors::VmBamlError::Timeout {
             message: "timed out".into(),
-            duration_ms: Some(30_000),
+            duration: Some(std::time::Duration::from_secs(30)),
+            timeout_type: "timeout".into(),
         }
         .into();
         assert!(validate_sys_op_error(op, &err).is_ok());
@@ -1116,7 +1153,8 @@ mod tests {
             },
             VmBamlError::Timeout {
                 message: "t".into(),
-                duration_ms: Some(1_000),
+                duration: Some(std::time::Duration::from_secs(1)),
+                timeout_type: "timeout".into(),
             },
             VmBamlError::Unsupported {
                 message: "u".into(),

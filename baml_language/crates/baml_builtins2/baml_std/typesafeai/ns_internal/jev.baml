@@ -375,12 +375,12 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
 
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let p = plan(input);
+    // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
-        request(c, input, p, false),
+        ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),
         "typesafeai",
         c.id(),
         capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
     );
     let values: map<string, unknown> = {};
     for (let leaf in p.leaves) {
@@ -396,7 +396,6 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
         parsed_output: ai.ParsedOutput { value: value },
         stop_reason: ai.content.StopReason.Complete,
         calls: [sent.call],
-        _usage_target: sent.usage_target,
         usage: match (sent.value.usage) {
             let usage: Usage => {
                 ai.events.Usage {

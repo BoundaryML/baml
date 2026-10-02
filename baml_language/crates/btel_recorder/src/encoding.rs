@@ -3,7 +3,8 @@
 //! Containers reserve five bytes for their protobuf length and backpatch by
 //! index, so Vec relocation is safe. Non-minimal varints preserve the protobuf
 //! schema; no whole-buffer shift or nested sizing pass is required. Span
-//! bodies have one-byte lengths; variable-length logs use a full container prefix.
+//! bodies have one-byte lengths; events with strings (logs, network spans)
+//! use a full container prefix.
 use std::mem::MaybeUninit;
 
 #[cfg(test)]
@@ -83,12 +84,16 @@ impl EncodedSpans {
             Event::FunctionCompletion(m) => self.completion(4, &m),
             Event::LateFunctionCompletion(m) => self.completion(5, &m),
             Event::Log(message) => {
-                self.required_minor = self
-                    .required_minor
-                    .max(btel_settings::encoding::LOG_FORMAT_MINOR);
-                let length = begin(&mut self.bytes, 2, LENGTH_BYTES);
-                prost::encoding::message::encode(6, &message, &mut self.bytes);
-                end_container(&mut self.bytes, length);
+                self.require(btel_settings::encoding::LOG_FORMAT_MINOR);
+                self.variable(6, &message);
+            }
+            Event::NetworkAnnouncement(message) => {
+                self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
+                self.variable(8, &message);
+            }
+            Event::NetworkEvent(message) => {
+                self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
+                self.variable(9, &message);
             }
             other => {
                 let length = begin(&mut self.bytes, 2, 1);
@@ -96,17 +101,30 @@ impl EncodedSpans {
                     Event::ThreadAnnouncement(m) => leaf(&mut self.bytes, 1, &m),
                     Event::ThreadCompletion(m) => leaf(&mut self.bytes, 2, &m),
                     Event::ThreadRunning(m) => {
-                        self.required_minor = self
-                            .required_minor
-                            .max(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
+                        self.require(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
                         leaf(&mut self.bytes, 7, &m);
                     }
                     Event::FunctionAnnouncement(m) => leaf(&mut self.bytes, 3, &m),
+                    Event::NetworkCompletion(m) => {
+                        self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
+                        leaf(&mut self.bytes, 10, &m);
+                    }
                     _ => unreachable!(),
                 }
                 end_short(&mut self.bytes, length);
             }
         }
+    }
+
+    fn require(&mut self, minor: u32) {
+        self.required_minor = self.required_minor.max(minor);
+    }
+
+    /// An event with strings, under a full-width length prefix.
+    fn variable<M: Message>(&mut self, tag: u32, message: &M) {
+        let length = begin(&mut self.bytes, 2, LENGTH_BYTES);
+        prost::encoding::message::encode(tag, message, &mut self.bytes);
+        end_container(&mut self.bytes, length);
     }
 
     #[inline]
@@ -325,6 +343,38 @@ mod tests {
                 ..completion
             }),
             Event::LateFunctionCompletion(completion),
+            // Network events' strings reserve their own bytes; the rest fits.
+            Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                id: u64::MAX,
+                parent_id: u64::MAX,
+                call_path_id: u32::MAX,
+                started_at_ticks: u64::MAX,
+                method: String::new(),
+                url: String::new(),
+                request_cas_id: Some(proto::CasId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
+            }),
+            Event::NetworkEvent(proto::NetworkEvent {
+                span_id: u64::MAX,
+                name: String::new(),
+                at_ticks: u64::MAX,
+                payload_cas_id: Some(proto::CasId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
+            }),
+            Event::NetworkCompletion(proto::NetworkCompletion {
+                span_id: u64::MAX,
+                completed_at_ticks: u64::MAX,
+                outcome: proto::InvocationOutcome::Errored as i32,
+                panicked: true,
+                error_cas_id: Some(proto::CasId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
+            }),
         ];
         let mut encoded = EncodedSpans::default();
         for event in &events {

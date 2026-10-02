@@ -518,6 +518,65 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn network_span_wrappers_record_through_the_vm_telemetry() {
+        use crate::telemetry::{ClockInstant, InvocationOutcome, SpanRecord};
+
+        let mut vm = test_vm(Vec::new());
+        let request = sys_types::network::NetworkRequest {
+            method: "GET".to_owned(),
+            url: "https://example.com/".to_owned(),
+            ..Default::default()
+        };
+        let span = vm.open_network_span(&request).unwrap();
+        vm.network_event(
+            span,
+            ClockInstant::from_ticks(1),
+            &sys_types::network::NetworkEventKind::Close,
+        );
+        // Bare test VMs have no error classes: the error is captured as is,
+        // but never quoting the raw URL or its query.
+        let raw = "https://example.com/v1?key=secret";
+        let message = format!("failed for url ({raw}), query key=secret");
+        let error = vm.tlab.alloc_string(message.as_str());
+        vm.close_network_span(
+            span,
+            ClockInstant::from_ticks(2),
+            InvocationOutcome::Errored,
+            Some(Value::object(error)),
+            &[raw],
+        );
+        let records = vm.telemetry.as_ref().unwrap().span_records();
+        let [
+            SpanRecord::ThreadSpanAnnouncement { .. },
+            SpanRecord::NetworkSpanAnnouncement(announcement),
+            SpanRecord::NetworkEvent(close),
+            SpanRecord::NetworkSpanCompletion(completion),
+        ] = records
+        else {
+            panic!("unexpected records: {records:?}");
+        };
+        assert_eq!(announcement.id, span);
+        assert_eq!(&*announcement.url, "https://example.com/");
+        assert_eq!(close.name, btel_records::NetworkEventName::Close);
+        let captured = completion.error.as_ref().unwrap();
+        let Some(btel_snapshot::SnapshotValue::String(text)) = captured.value() else {
+            panic!("the error is a string");
+        };
+        let hashed = crate::telemetry::network_hash_for_tests("secret");
+        assert_eq!(
+            captured.string(text).as_str(),
+            format!("failed for url (https://example.com/v1?key={hashed}), query key={hashed}")
+        );
+        // The program's value is untouched.
+        assert_eq!(
+            vm.as_string(&Value::object(error)).unwrap().as_str(),
+            message
+        );
+        vm.telemetry = None;
+        assert_eq!(vm.open_network_span(&request), None);
+    }
+
+    #[test]
     fn hidden_native_execution_has_only_thread_events() {
         use crate::telemetry::{InvocationOutcome, SpanRecord};
 
@@ -1791,15 +1850,24 @@ pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::Con
 /// [`ErrorClass`] discriminant. The result is identical for every VM sharing a
 /// `packages` index, so it is resolved once and shared (`Arc`) across spawns
 /// rather than re-resolved per [`BexVm::new`].
+///
+/// One extra entry follows the error classes, at `DURATION_CLASS_PTR_INDEX`:
+/// `baml.time.Duration`, which `baml.errors.Timeout.duration` is an instance of.
 pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     ErrorClass::ALL
         .iter()
-        .map(|ec| {
-            crate::package_load::lookup_type_by_fqn(packages, ec.fqn())
-                .unwrap_or_else(|| panic!("error class {:?} not in packages", ec.fqn()))
+        .map(ErrorClass::fqn)
+        .chain(std::iter::once("baml.time.Duration"))
+        .map(|fqn| {
+            crate::package_load::lookup_type_by_fqn(packages, fqn)
+                .unwrap_or_else(|| panic!("error class {fqn:?} not in packages"))
         })
         .collect()
 }
+
+/// Where `baml.time.Duration` sits in the error class table: right after the
+/// last [`ErrorClass`].
+const DURATION_CLASS_PTR_INDEX: usize = ErrorClass::ALL.len();
 
 /// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
 /// [`PanicClass`] discriminant. Shared across spawns like
@@ -4916,16 +4984,23 @@ impl BexVm {
                 ErrorClass::Io,
                 vec![Value::object(self.alloc_string(message))],
             ),
+            // Field order matches the `Timeout` class in
+            // `ns_errors/errors.baml`: message, duration, timeout_type.
             VmBamlError::Timeout {
                 message,
-                duration_ms,
-            } => (
-                ErrorClass::Timeout,
-                vec![
-                    Value::object(self.alloc_string(message)),
-                    duration_ms.map_or(Value::NULL, Value::int),
-                ],
-            ),
+                duration,
+                timeout_type,
+            } => {
+                let duration = duration.map_or(Value::NULL, |d| self.alloc_duration(d));
+                (
+                    ErrorClass::Timeout,
+                    vec![
+                        Value::object(self.alloc_string(message)),
+                        duration,
+                        Value::object(self.alloc_string(timeout_type)),
+                    ],
+                )
+            }
             VmBamlError::Unsupported { message } => (
                 ErrorClass::Unsupported,
                 vec![Value::object(self.alloc_string(message))],
@@ -4982,6 +5057,28 @@ impl BexVm {
             }
         };
         self.alloc_error_value(class, fields)
+    }
+
+    /// A `baml.time.Duration` instance (`{ _nanoseconds: bigint }`), or null
+    /// when the class is not loaded (bare test VMs).
+    fn alloc_duration(&mut self, duration: std::time::Duration) -> Value {
+        let Some(class_ptr) = self
+            .error_class_ptrs
+            .get(DURATION_CLASS_PTR_INDEX)
+            .copied()
+            .filter(|ptr| !ptr.is_null())
+        else {
+            return Value::NULL;
+        };
+        // A `u128` nanosecond count is far below the bigint size limit.
+        let nanos = Value::object(self.tlab.alloc(Object::Bigint(std::sync::Arc::new(
+            num_bigint::BigInt::from(duration.as_nanos()),
+        ))));
+        Value::object(self.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Box::new([]),
+            vec![nanos],
+        ))))
     }
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
@@ -6884,41 +6981,51 @@ impl BexVm {
         }
     }
 
-    /// The node model usage recorded now belongs to: the innermost span, or
-    /// the thread outside any. `None` when telemetry is off.
-    pub(crate) fn usage_target(&self) -> Option<btel_types::TelemetryId> {
-        self.telemetry.as_ref().map(TelemetryState::active_id)
+    /// Open a span for an HTTP request about to be sent. `None` when
+    /// telemetry is off or at its `Low` auto level.
+    pub fn open_network_span(
+        &mut self,
+        request: &sys_types::network::NetworkRequest,
+    ) -> Option<btel_types::TelemetryId> {
+        self.telemetry.as_ref()?;
+        let context = self.current_context().clone();
+        let state = self.telemetry.as_mut()?;
+        state.set_context(context);
+        state.open_network_span(request)
     }
 
-    /// Record one model turn's tokens against `target`, a telemetry ID from
-    /// [`Self::usage_target`]. False when telemetry is off or `target` is 0.
-    #[allow(clippy::too_many_arguments, reason = "mirrors ai.events.Usage")]
-    pub(crate) fn record_model_usage(
+    /// Record an event of an open request, at an instant the IO side read.
+    pub fn network_event(
         &mut self,
-        target: u64,
-        model: Option<Box<str>>,
-        input_tokens: u64,
-        output_tokens: u64,
-        cache_read_tokens: Option<u64>,
-        cache_write_tokens: Option<u64>,
-        reasoning_tokens: Option<u64>,
-    ) -> bool {
-        let (Some(telemetry), Some(node)) = (
-            self.telemetry.as_mut(),
-            btel_types::TelemetryId::from_raw(target),
-        ) else {
-            return false;
-        };
-        telemetry.record_model_usage(btel_records::ModelUsage {
-            node,
-            model,
-            input_tokens,
-            output_tokens,
-            cache_read_tokens,
-            cache_write_tokens,
-            reasoning_tokens,
-        });
-        true
+        span: btel_types::TelemetryId,
+        at: ClockInstant,
+        event: &sys_types::network::NetworkEventKind,
+    ) {
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.network_event(span, at, event);
+        }
+    }
+
+    /// End an open request's span. An `error` is the thrown value: its span
+    /// records the `baml.errors.Context` a handler would bind, as a function
+    /// span does, with each of `raw_urls` it quotes sanitized. The value the
+    /// program sees is unchanged.
+    pub fn close_network_span(
+        &mut self,
+        span: btel_types::TelemetryId,
+        at: ClockInstant,
+        outcome: InvocationOutcome,
+        error: Option<Value>,
+        raw_urls: &[&str],
+    ) {
+        if self.telemetry.is_none() {
+            return;
+        }
+        let error = error.map(|error| self.error_context_value(error, &[], Value::NULL));
+        let state = self.telemetry.as_mut().unwrap();
+        // SAFETY: the engine calls this under the heap permit; neither the
+        // context allocation above nor capture collects.
+        unsafe { state.close_network_span(span, at, outcome, error, raw_urls) };
     }
 
     /// Name this thread's future for telemetry; call before its entry point.

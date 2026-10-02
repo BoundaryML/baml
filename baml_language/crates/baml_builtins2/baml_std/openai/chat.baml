@@ -14,10 +14,11 @@ class ChatClient {
     // never touches env, so declaring/constructing a client is always safe.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // Native request deadline; TTFT begins only after a streaming response opens.
-    // Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
-    request_timeout_ms: int?,
-    time_to_first_token_timeout_ms: int?,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect, first-token and
+    // stream-token limits. Null is the default: 5 minutes total, 10 seconds
+    // to connect. Browser/Wasm does not enforce the transport limits.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
 
     // Escape hatch: deep-merged into the serialized request as the LAST step.
     // A null value removes a key the client set (`{"max_tokens": null}`).
@@ -48,8 +49,7 @@ class ChatClient {
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        request_timeout_ms: int? = null,
-        time_to_first_token_timeout_ms: int? = null,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -65,8 +65,7 @@ class ChatClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            request_timeout_ms: request_timeout_ms,
-            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
+            timeout: timeout,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -151,7 +150,7 @@ class ChatClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                request_timeout_ms = self.request_timeout_ms,
+                timeout_options = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
@@ -165,8 +164,7 @@ class ChatClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                request_timeout_ms = self.request_timeout_ms,
-                time_to_first_token_timeout_ms = self.time_to_first_token_timeout_ms,
+                timeout_options = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }

@@ -58,7 +58,6 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
                     ..btel_bcs::CloudPublisherConfig::default()
                 },
                 DeliveryConfig {
-                    allow_http: true,
                     max_pending_snapshots: 1,
                     max_candidates: 1,
                     max_targets: 2,
@@ -134,7 +133,6 @@ fn engine(server: &MockServer, flush_interval_duration: Duration) -> Arc<BexEngi
             },
             DeliveryConfig {
                 bearer_token: Some("prepare-only-token".into()),
-                allow_http: true,
                 max_attempts: 1,
                 request_timeout: Duration::from_secs(2),
                 retry_delay: Duration::ZERO,
@@ -183,7 +181,6 @@ async fn capture_pressure_cannot_deadlock_vm_or_fail_execution() {
                 ..btel_bcs::CloudPublisherConfig::default()
             },
             DeliveryConfig {
-                allow_http: true,
                 max_pending_plans: 1,
                 max_pending_snapshots: 4,
                 max_candidates: 4,

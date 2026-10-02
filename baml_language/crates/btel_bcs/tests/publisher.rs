@@ -71,7 +71,6 @@ async fn setup(
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            allow_http: true,
             ..DeliveryConfig::new(server.uri().parse().unwrap())
         },
         |_| {},
@@ -236,7 +235,6 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            allow_http: true,
             retry_delay: Duration::from_millis(1),
             ..DeliveryConfig::new(server.uri().parse().unwrap())
         },
@@ -488,7 +486,6 @@ async fn blobs_a_sealed_file_left_queued_are_delivered_without_another_record() 
         .mount(&server)
         .await;
     let config = DeliveryConfig {
-        allow_http: true,
         ..DeliveryConfig::new(server.uri().parse().unwrap())
     };
     let plan = config.max_candidates;
@@ -594,7 +591,6 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            allow_http: true,
             // Less than the strings of any capture below: every plan that
             // carries them is admitted alone.
             cas_reserved_bytes: 16 * 1024,
@@ -722,7 +718,6 @@ async fn strings_sent_with_one_plan_are_let_go_while_their_capture_waits_for_the
         .await;
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            allow_http: true,
             // Many short attempts: the upload is retried until released, and
             // its URL outlives them all.
             max_attempts: 1000,
