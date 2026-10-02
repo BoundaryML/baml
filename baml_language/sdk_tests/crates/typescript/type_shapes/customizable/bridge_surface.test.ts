@@ -21,11 +21,13 @@ const packageRootExports = [
   "BamlVideo",
   "FunctionResult",
   "Never",
+  "TraceUsageError",
   "UNSET",
   "_Invocation",
   "_currentInvocation",
   "_currentTraceContext",
   "_currentTraceContextAsync",
+  "_instrument",
   "_invoke",
   "_invokeAsync",
   "_withInvocation",
@@ -71,6 +73,7 @@ const constructors = [
   "BamlTypeMap",
   "BamlVideo",
   "FunctionResult",
+  "TraceUsageError",
 ] as const;
 
 describe("bridge package-root parity contract", () => {

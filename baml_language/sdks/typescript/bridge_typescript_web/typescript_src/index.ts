@@ -59,4 +59,5 @@ export function cancelFunctionCall(callId: bigint): boolean {
 }
 
 export { current as _currentInvocation, Invocation as _Invocation, invoke as _invoke, invokeAsync as _invokeAsync, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, withInvocation as _withInvocation } from './shared/invocation.js';
+export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
 import type { InvocationOptions } from './shared/invocation.js';
