@@ -1,11 +1,18 @@
-name: "Analyze test results in Trunk"
+name: "Run tests and analyze them in Trunk"
 description: >-
-  Enriches a JUnit report with source-file paths where its reporter cannot
-  emit them, then uploads it to one Flaky Tests collection. The upload gates
-  the job: with quarantining off it reports the test outcome, and with
-  quarantining on it lets Trunk clear failures it owns.
+  Runs a test command, enriches its JUnit report with source-file paths where
+  the reporter cannot emit them, and uploads it to one Flaky Tests collection.
+  The step fails when the tests fail: with quarantining off that is the test
+  outcome, and with quarantining on Trunk clears failures it owns.
 
 inputs:
+  run:
+    description: "Test command. Runs in bash."
+    required: true
+  working-directory:
+    description: "Directory to run the test command in, relative to the repo root."
+    required: false
+    default: "."
   junit-path:
     description: "Path to the JUnit report, relative to the repo root."
     required: true
@@ -24,9 +31,6 @@ inputs:
     description: "Repo-relative directory the report's paths are relative to. Required when normalize is 'prefix'."
     required: false
     default: ""
-  test-outcome:
-    description: "Outcome of the test step, so Trunk sees a failed run as failed."
-    required: true
   token:
     description: "Trunk organization token. Absent on fork PRs, which skips the upload."
     required: false
@@ -35,6 +39,17 @@ inputs:
 runs:
   using: composite
   steps:
+    # Enrichment has to land between the test run and the upload, so the
+    # tests run here rather than through analytics-uploader's own `run`.
+    - name: "Run tests"
+      id: tests
+      continue-on-error: true
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        TEST_COMMAND: ${{ inputs.run }}
+      run: eval "$TEST_COMMAND"
+
     # Best-effort: a missing path costs attribution, not correctness.
     - name: "Enrich the JUnit report"
       continue-on-error: true
@@ -50,11 +65,10 @@ runs:
           --manifest-path "${{ inputs.cargo-manifest-path || 'Cargo.toml' }}" \
           --prefix "${{ inputs.path-prefix }}"
 
-    # This sets the final exit code for the job. If there are no test files,
+    # This sets the step's outcome. If there are no test files,
     # previous-step-outcome is used. If there are test files, the pass or fail
     # is determined by whether there are any unquarantined test failures. When
-    # quarantining is disabled, this matches the existing behavior of the
-    # tests' result.
+    # quarantining is disabled, this matches the tests' own result.
     - name: "Analyze in Trunk"
       if: inputs.token != ''
       uses: trunk-io/analytics-uploader@v2
@@ -63,13 +77,13 @@ runs:
         org-slug: boundaryml
         token: ${{ inputs.token }}
         test-collection-id: ${{ inputs.collection }}
-        previous-step-outcome: ${{ inputs.test-outcome }}
+        previous-step-outcome: ${{ steps.tests.outcome }}
         allow-missing-junit-files: false
         repo-root: .
 
     # Fork PRs have no token, so nothing above gated the result.
     - name: "Fail on test failure when no upload gated it"
-      if: inputs.test-outcome == 'failure' && inputs.token == ''
+      if: steps.tests.outcome == 'failure' && inputs.token == ''
       shell: bash
       run: |
         echo "::error::tests failed and no Trunk token was available to gate the result"
