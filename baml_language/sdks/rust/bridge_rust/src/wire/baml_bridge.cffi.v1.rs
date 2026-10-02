@@ -1107,6 +1107,12 @@ pub struct CallFunctionArgs {
     /// non-generic calls.
     #[prost(message, repeated, tag = "3")]
     pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+    /// Initial `baml.SpawnLocalStorage` values, keyed by storage name. The call
+    /// starts with them as its context and every thread it spawns inherits them.
+    /// Values carry no declared type: one that fits JSON arrives as `json`, and
+    /// `SpawnLocalStorage.get` decodes it into the storage's type.
+    #[prost(message, repeated, tag = "6")]
+    pub spawn_local_storage: ::prost::alloc::vec::Vec<InboundMapEntry>,
     #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
     pub call_target: ::core::option::Option<call_function_args::CallTarget>,
 }

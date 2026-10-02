@@ -161,6 +161,8 @@ export function encodeCallArgs(
   const args: CallFunctionArgsType = {
     callId,
     kwargs: entries,
+    // `baml.SpawnLocalStorage` seeds — unused by this playground encoder.
+    spawnLocalStorage: [],
     // Generic TypeVar bindings (`type_args`) — unused by this playground
     // encoder, which only sends positional kwargs.
     typeArgs: [],

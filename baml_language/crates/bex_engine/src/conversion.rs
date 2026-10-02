@@ -4738,6 +4738,38 @@ fn coerce_arg_to_declared_type_with_aliases(
     }
 }
 
+/// Build the `SpawnLocalStorage` context a host seeds a call with: a
+/// `map<string, unknown>` of storage name to value. Host values carry no
+/// declared type, so a value that fits JSON is materialized as `json`, exactly
+/// like a `baml.json.parse` result; `SpawnLocalStorage.get` then decodes it
+/// into the storage's type.
+pub(crate) fn spawn_local_frame_external(
+    entries: indexmap::IndexMap<String, BexExternalValue>,
+) -> (BexExternalValue, RuntimeTy) {
+    let json_ty = RuntimeTy::TypeAlias(baml_type::TypeName::from_dotted_path("baml.json.json"));
+    let entries = entries
+        .into_iter()
+        .map(|(name, value)| {
+            let value = if value_satisfies_json(&value) {
+                annotate_json_container_types(value, &json_ty)
+            } else {
+                value
+            };
+            (name, value)
+        })
+        .collect();
+    let frame = BexExternalValue::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::Unknown,
+        entries,
+    };
+    let frame_ty = RuntimeTy::Map {
+        key: Box::new(RuntimeTy::string()),
+        value: Box::new(RuntimeTy::Unknown),
+    };
+    (frame, frame_ty)
+}
+
 /// Rewrite every container annotation in a JSON value tree to the `json`
 /// alias itself: lists become `json[]`, maps become `map<string, json>`.
 /// Scalars carry no annotation and pass through; sparse inbound leaf

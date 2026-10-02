@@ -3041,6 +3041,7 @@ impl BexEngine {
 
             type_args,
             type_defs,
+            spawn_local_storage,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -3059,6 +3060,7 @@ impl BexEngine {
 
                 type_args,
                 type_defs,
+                spawn_local_storage,
             },
             copy_objects,
         )
@@ -3107,6 +3109,7 @@ impl BexEngine {
 
             type_args,
             type_defs,
+            spawn_local_storage,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -3474,6 +3477,7 @@ impl BexEngine {
             throws_type,
             host_call_id,
             boundary,
+            spawn_local_storage,
             logger,
             copy_objects,
         )
@@ -3529,11 +3533,20 @@ impl BexEngine {
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
         boundary: BoundaryContext,
+        spawn_local_storage: IndexMap<String, BexExternalValue>,
 
         logger: TraceLogger,
 
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
+        // `SpawnLocalStorage`: install the host's values as the root thread's
+        // context, so the call and everything it spawns can read them.
+        if !spawn_local_storage.is_empty() {
+            let (frame, frame_ty) =
+                crate::conversion::spawn_local_frame_external(spawn_local_storage);
+            thread.vm.spawn_local_frame =
+                self.convert_external_to_vm_value_with_ty(&mut thread, frame, Some(&frame_ty))?;
+        }
         // Finish fallible host type narrowing before setting the entry frame.
         let mut runtime_named_objects = indexmap::IndexMap::new();
         for type_value in type_values.values() {
@@ -3716,6 +3729,7 @@ impl BexEngine {
 
             type_args: _,
             type_defs: _,
+            spawn_local_storage,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -4069,6 +4083,7 @@ impl BexEngine {
             throws_type,
             host_call_id,
             boundary,
+            spawn_local_storage,
             logger,
             copy_objects,
         )
@@ -5042,6 +5057,7 @@ impl BexEngine {
                 .spawn_thread(
                     child_cancel,
                     spawned,
+                    thread.vm.spawn_local_frame,
                     spawn_name,
                     call_id,
                     future_id,
@@ -5105,6 +5121,7 @@ impl BexEngine {
         self: Arc<Self>,
         child_cancel: TaskCancel,
         body: SpawnedBody,
+        spawn_local_frame: Value,
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
@@ -5118,6 +5135,7 @@ impl BexEngine {
         Box::pin(self.spawn_thread_inner(
             child_cancel,
             body,
+            spawn_local_frame,
             name,
             call_id,
             future_id,
@@ -5142,6 +5160,7 @@ impl BexEngine {
         self: Arc<Self>,
         child_cancel: TaskCancel,
         body: SpawnedBody,
+        spawn_local_frame: Value,
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
@@ -5182,6 +5201,10 @@ impl BexEngine {
             self.trace_scope,
         );
         child_vm.thread_id = thread_id;
+        // `SpawnLocalStorage`: the child starts with the parent's context as of
+        // the `spawn`. Frames are never mutated once installed, so sharing the
+        // pointer is a snapshot.
+        child_vm.spawn_local_frame = spawn_local_frame;
         if let Some(name) = &name {
             child_vm.set_telemetry_thread_name(name);
         }

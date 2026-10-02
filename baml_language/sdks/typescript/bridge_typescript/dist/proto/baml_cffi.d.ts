@@ -856,6 +856,9 @@ export namespace baml_bridge {
 
                 /** CallFunctionArgs functionHandle */
                 functionHandle?: (number|Long|null);
+
+                /** CallFunctionArgs spawnLocalStorage */
+                spawnLocalStorage?: (baml_bridge.cffi.v1.IInboundMapEntry[]|null);
             }
 
             /** Represents a CallFunctionArgs. */
@@ -881,6 +884,9 @@ export namespace baml_bridge {
 
                 /** CallFunctionArgs functionHandle. */
                 public functionHandle?: (number|Long|null);
+
+                /** CallFunctionArgs spawnLocalStorage. */
+                public spawnLocalStorage: baml_bridge.cffi.v1.IInboundMapEntry[];
 
                 /** CallFunctionArgs callTarget. */
                 public callTarget?: ("functionName"|"functionHandle");

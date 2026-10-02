@@ -126,9 +126,16 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, _ctx=None):
+def call_function_sync(
+    rt, function_name, kwargs, ctx=None, _ctx=None, spawn_local_storage=None
+):
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
+    args_proto = encode_call_args(
+        kwargs,
+        call_id,
+        function_name=function_name,
+        spawn_local_storage=spawn_local_storage,
+    )
     _attach_call_ctx(_ctx, call_id)
     try:
         result_bytes = rt.call_function_sync(args_proto, ctx)
@@ -138,10 +145,21 @@ def call_function_sync(rt, function_name, kwargs, ctx=None, _ctx=None):
 
 
 async def call_function(
-    rt, function_name, kwargs, ctx=None, _ctx=None
+    rt, function_name, kwargs, ctx=None, _ctx=None, spawn_local_storage=None
 ):
+    """Call a BAML function by name.
+
+    `spawn_local_storage` maps `baml.SpawnLocalStorage` names to the values
+    the call starts with. The function, and every thread it spawns, reads them
+    through a `baml.SpawnLocalStorage` of the same name.
+    """
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
+    args_proto = encode_call_args(
+        kwargs,
+        call_id,
+        function_name=function_name,
+        spawn_local_storage=spawn_local_storage,
+    )
     _attach_call_ctx(_ctx, call_id)
     try:
         try:
@@ -407,6 +425,9 @@ def define_function(
     runtime type args). When either is set, a named, order-preserving `BamlTyArg`
     list (`(type_var, type_value)` per TypeVar) is sent in
     `CallFunctionArgs.type_args` for the engine to seed the entry frame.
+
+    A `_spawn_local_storage=` kwarg (a `{storage_name: value}` dict) seeds the
+    call's `baml.SpawnLocalStorage` values; see `call_function`.
     """
     # Codegen always emits fully-qualified `<pkg>.<ns…>.<name>` FQNs and
     # the engine stores user functions under the same form (see
@@ -431,6 +452,7 @@ def define_function(
         def _sync(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
             types_kwarg = kwargs.pop("_types", None)
+            spawn_local_storage = kwargs.pop("_spawn_local_storage", None)
             merged = _build_kwargs(
                 args,
                 kwargs,
@@ -456,6 +478,7 @@ def define_function(
                 call_id,
                 type_args,
                 function_name=baml_fqn,
+                spawn_local_storage=spawn_local_storage,
             )
             _attach_call_ctx(call_ctx, call_id)
             try:
@@ -471,6 +494,7 @@ def define_function(
         async def _async(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
             types_kwarg = kwargs.pop("_types", None)
+            spawn_local_storage = kwargs.pop("_spawn_local_storage", None)
             merged = _build_kwargs(
                 args,
                 kwargs,
@@ -496,6 +520,7 @@ def define_function(
                 call_id,
                 type_args,
                 function_name=baml_fqn,
+                spawn_local_storage=spawn_local_storage,
             )
             _attach_call_ctx(call_ctx, call_id)
             try:

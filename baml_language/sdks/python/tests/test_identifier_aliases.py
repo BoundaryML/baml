@@ -119,7 +119,7 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
             assert args == b"encoded"
             return b"stream"
 
-    def fake_encode(kwargs, call_id, type_args, *, function_name):
+    def fake_encode(kwargs, call_id, type_args, *, function_name, spawn_local_storage):
         encoded_calls.append((kwargs, call_id, type_args, function_name))
         return b"encoded"
 

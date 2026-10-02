@@ -18,6 +18,7 @@ class            baml.Float                       <builtin>/baml/float.baml:17
 class            baml.Int                         <builtin>/baml/int.baml:33
 class            baml.Null                        <builtin>/baml/null.baml:2
 interface        baml.Sortable                    <builtin>/baml/sortable.baml:22
+class            baml.SpawnLocalStorage           <builtin>/baml/spawn_local_storage.baml:27
 class            baml.String                      <builtin>/baml/string.baml:17
 class            baml.Uint8Array                  <builtin>/baml/uint8array.baml:14
 class            baml.crypto.Aes256GcmSiv         <builtin>/baml/ns_crypto/aes_gcm_siv.baml:24

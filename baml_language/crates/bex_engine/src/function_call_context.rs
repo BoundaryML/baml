@@ -46,6 +46,10 @@ pub struct FunctionCallContext {
     /// Definition graphs accompanying entries in `type_args`. Only host
     /// reflected runtime types populate this map.
     pub type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
+    /// Initial `baml.SpawnLocalStorage` values for the call, keyed by storage
+    /// name. The root thread starts with them as its context, and every thread
+    /// it spawns inherits them. Empty when the host supplies none.
+    pub spawn_local_storage: IndexMap<String, bex_external_types::BexExternalValue>,
 }
 
 /// Builder for `FunctionCallContext`.
@@ -57,6 +61,7 @@ pub struct FunctionCallContextBuilder {
 
     type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
     type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
+    spawn_local_storage: Option<IndexMap<String, bex_external_types::BexExternalValue>>,
 }
 
 impl FunctionCallContextBuilder {
@@ -69,6 +74,7 @@ impl FunctionCallContextBuilder {
             cancel: None,
             type_args: None,
             type_defs: None,
+            spawn_local_storage: None,
         }
     }
 
@@ -82,6 +88,7 @@ impl FunctionCallContextBuilder {
 
             type_args: self.type_args.unwrap_or_default(),
             type_defs: self.type_defs.unwrap_or_default(),
+            spawn_local_storage: self.spawn_local_storage.unwrap_or_default(),
         }
     }
 
@@ -112,6 +119,16 @@ impl FunctionCallContextBuilder {
         type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
     ) -> Self {
         self.type_defs = Some(type_defs);
+        self
+    }
+
+    /// Seed the call's `baml.SpawnLocalStorage` values, keyed by storage name.
+    #[must_use]
+    pub fn with_spawn_local_storage(
+        mut self,
+        spawn_local_storage: IndexMap<String, bex_external_types::BexExternalValue>,
+    ) -> Self {
+        self.spawn_local_storage = Some(spawn_local_storage);
         self
     }
 

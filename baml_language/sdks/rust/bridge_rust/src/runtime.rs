@@ -156,6 +156,7 @@ fn dispatch(
         call_target: Some(wire::call_function_args::CallTarget::FunctionName(
             fqn.to_string(),
         )),
+        spawn_local_storage: Vec::new(),
     }
     .encode_to_vec();
     // SAFETY: `args` outlives the call; the engine copies it before returning.
@@ -187,6 +188,7 @@ fn dispatch_handle(
         call_target: Some(wire::call_function_args::CallTarget::FunctionHandle(
             handle_key,
         )),
+        spawn_local_storage: Vec::new(),
     }
     .encode_to_vec();
     // SAFETY: `args` remains alive for the synchronous ABI call, which copies

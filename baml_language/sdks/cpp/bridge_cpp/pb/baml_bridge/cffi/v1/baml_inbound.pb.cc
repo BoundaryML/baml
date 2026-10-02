@@ -244,6 +244,7 @@ inline constexpr CallFunctionArgs::Impl_::Impl_(
       : _cached_size_{0},
         kwargs_{},
         type_args_{},
+        spawn_local_storage_{},
         call_id_{::uint64_t{0u}},
         call_target_{},
         _oneof_case_{} {}
@@ -3177,6 +3178,7 @@ PROTOBUF_NDEBUG_INLINE CallFunctionArgs::Impl_::Impl_(
         _cached_size_{0},
         kwargs_{visibility, arena, from.kwargs_},
         type_args_{visibility, arena, from.type_args_},
+        spawn_local_storage_{visibility, arena, from.spawn_local_storage_},
         call_target_{},
         _oneof_case_{from._oneof_case_[0]} {}
 
@@ -3213,6 +3215,7 @@ PROTOBUF_NDEBUG_INLINE CallFunctionArgs::Impl_::Impl_(
       : _cached_size_{0},
         kwargs_{visibility, arena},
         type_args_{visibility, arena},
+        spawn_local_storage_{visibility, arena},
         call_target_{},
         _oneof_case_{} {}
 
@@ -3269,6 +3272,10 @@ constexpr auto CallFunctionArgs::InternalNewImpl_() {
           decltype(CallFunctionArgs::_impl_.type_args_)::
               InternalGetArenaOffset(
                   ::google::protobuf::MessageLite::internal_visibility()),
+      PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.spawn_local_storage_) +
+          decltype(CallFunctionArgs::_impl_.spawn_local_storage_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::MessageLite::internal_visibility()),
   });
   if (arena_bits.has_value()) {
     return ::google::protobuf::internal::MessageCreator::ZeroInit(
@@ -3310,17 +3317,17 @@ CallFunctionArgs::GetClassData() const {
   return CallFunctionArgs_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 5, 2, 58, 2>
+const ::_pbi::TcParseTable<3, 6, 3, 58, 2>
 CallFunctionArgs::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_._has_bits_),
     0, // no _extensions_
-    5, 24,  // max_field_number, fast_idx_mask
+    6, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967264,  // skipmap
+    4294967232,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    5,  // num_field_entries
-    2,  // num_aux_entries
+    6,  // num_field_entries
+    3,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     CallFunctionArgs_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -3339,6 +3346,12 @@ CallFunctionArgs::_table_ = {
     // repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 3;
     {::_pbi::TcParser::FastMtR1,
      {26, 63, 1, PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.type_args_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    // repeated .baml_bridge.cffi.v1.InboundMapEntry spawn_local_storage = 6;
+    {::_pbi::TcParser::FastMtR1,
+     {50, 63, 2, PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.spawn_local_storage_)}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -3357,10 +3370,14 @@ CallFunctionArgs::_table_ = {
     // uint64 function_handle = 5;
     {PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.call_target_.function_handle_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kUInt64)},
+    // repeated .baml_bridge.cffi.v1.InboundMapEntry spawn_local_storage = 6;
+    {PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.spawn_local_storage_), -1, 2,
+    (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapEntry>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyArg>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapEntry>()},
   }},
   {{
     "\44\0\0\0\15\0\0\0"
@@ -3377,6 +3394,7 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
 
   _impl_.kwargs_.Clear();
   _impl_.type_args_.Clear();
+  _impl_.spawn_local_storage_.Clear();
   _impl_.call_id_ = ::uint64_t{0u};
   clear_call_target();
   _impl_._has_bits_.Clear();
@@ -3446,6 +3464,17 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
     default:
       break;
   }
+  // repeated .baml_bridge.cffi.v1.InboundMapEntry spawn_local_storage = 6;
+  for (unsigned i = 0, n = static_cast<unsigned>(
+                           this_._internal_spawn_local_storage_size());
+       i < n; i++) {
+    const auto& repfield = this_._internal_spawn_local_storage().Get(i);
+    target =
+        ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+            6, repfield, repfield.GetCachedSize(),
+            target, stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(
         this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
@@ -3482,6 +3511,13 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
     {
       total_size += 1UL * this_._internal_type_args_size();
       for (const auto& msg : this_._internal_type_args()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .baml_bridge.cffi.v1.InboundMapEntry spawn_local_storage = 6;
+    {
+      total_size += 1UL * this_._internal_spawn_local_storage_size();
+      for (const auto& msg : this_._internal_spawn_local_storage()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
@@ -3533,6 +3569,8 @@ void CallFunctionArgs::MergeImpl(::google::protobuf::MessageLite& to_msg, const 
       from._internal_kwargs());
   _this->_internal_mutable_type_args()->MergeFrom(
       from._internal_type_args());
+  _this->_internal_mutable_spawn_local_storage()->MergeFrom(
+      from._internal_spawn_local_storage());
   cached_has_bits = from._impl_._has_bits_[0];
   if ((cached_has_bits & 0x00000001u) != 0) {
     if (from._internal_call_id() != 0) {
@@ -3583,6 +3621,7 @@ void CallFunctionArgs::InternalSwap(CallFunctionArgs* PROTOBUF_RESTRICT PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.kwargs_.InternalSwap(&other->_impl_.kwargs_);
   _impl_.type_args_.InternalSwap(&other->_impl_.type_args_);
+  _impl_.spawn_local_storage_.InternalSwap(&other->_impl_.spawn_local_storage_);
   swap(_impl_.call_id_, other->_impl_.call_id_);
   swap(_impl_.call_target_, other->_impl_.call_target_);
   swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);

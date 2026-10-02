@@ -119,6 +119,11 @@ message CallFunctionArgs {
     string function_name = 4;
     uint64 function_handle = 5;
   }
+  // Initial `baml.SpawnLocalStorage` values, keyed by storage name. The call
+  // starts with them as its context and every thread it spawns inherits them.
+  // Values carry no declared type: one that fits JSON arrives as `json`, and
+  // `SpawnLocalStorage.get` decodes it into the storage's type.
+  repeated InboundMapEntry spawn_local_storage = 6;
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

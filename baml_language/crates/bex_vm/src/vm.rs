@@ -398,6 +398,7 @@ pub(crate) mod tests {
             stdlib_heads: Arc::new(crate::package_load::StdlibHeads::default()),
 
             thread_id: 0,
+            spawn_local_frame: Value::NULL,
 
             context_transfers: Vec::new(),
             argv: Arc::from([]),
@@ -1593,6 +1594,12 @@ pub struct BexVm {
     /// Engine-local logical thread identity for structured logs.
     pub thread_id: u64,
 
+    /// The thread's `baml.SpawnLocalStorage` context: a `map<string, unknown>`
+    /// that is never mutated once installed, or null when none is. A spawned
+    /// thread starts with its parent's frame; a root call starts with the one
+    /// its host supplied.
+    pub spawn_local_frame: Value,
+
     /// VM-owned producer state. It deliberately has no transport or buffer.
     telemetry: Option<TelemetryState>,
     pub(crate) trace_scope: btel_types::RecordingId,
@@ -2173,6 +2180,7 @@ impl BexVm {
             stdlib_heads,
 
             thread_id: 0,
+            spawn_local_frame: Value::NULL,
 
             context_transfers: Vec::new(),
             argv,
@@ -10388,6 +10396,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             });
         }
         roots.extend(self.static_load_type_cache.values().copied());
+        roots.extend(self.spawn_local_frame.as_object_ptr());
         for transfer in &self.context_transfers {
             roots.extend(transfer.handling.as_object_ptr());
             roots.extend(transfer.target.as_object_ptr());
@@ -10469,6 +10478,11 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 key.caller_function_addr = identity;
                 self.static_virtual_call_cache.insert(key, target);
             }
+        }
+        if let Some(ptr) = self.spawn_local_frame.as_object_ptr()
+            && let Some(&new_ptr) = roots.get(&ptr)
+        {
+            self.spawn_local_frame = Value::object(new_ptr);
         }
         for transfer in &mut self.context_transfers {
             for value in [&mut transfer.handling, &mut transfer.target] {
