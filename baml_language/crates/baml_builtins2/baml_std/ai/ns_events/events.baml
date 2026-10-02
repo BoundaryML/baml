@@ -12,8 +12,7 @@ class RunStarted {
 /// client lowers the turn at its position in the journal.
 class UserMessage {
     content: root.content.Block[],
-    /// Free-form per-message data, carried like `root.PromptMessage.metadata`.
-    /// The built-in clients do not read it.
+    /// Merged verbatim into inference requests' `message` objects.
     metadata: map<string, baml.json.json>,
 
     function new(text: string) -> UserMessage {

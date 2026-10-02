@@ -26,10 +26,8 @@ class OutputFormat {
 /// A typed chat-role marker produced by `${role("system")}` in a prompt.
 class Role {
     name: string,
-    /// Free-form per-message data, set with
-    /// `${role("system", metadata = { "source": "kb" })}` and handed to the
-    /// client as `ai.PromptMessage.metadata`. The built-in clients do not read
-    /// it; mark a prompt-cache position with `${cache()}` instead.
+    /// Free-form per-message data, wired via `ai.PromptMessage.metadata`:
+    /// `${role("system", metadata = { "source": "kb" })}`.
     metadata: map<string, baml.json.json>,
 }
 
