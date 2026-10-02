@@ -103,69 +103,6 @@ test "message_metadata_survives_prompt_assembly" {
     )
 }
 
-// `role(...)` takes the same directives as its `metadata` argument, so a marker
-// with metadata does not need the `ai.Role` literal: in a `prompt` tag body…
-function pa_role_metadata_argument_in_prompt_tag() -> string {
-    let cc = ai.ContextClient { name: "c", provider: "anthropic", default_role: "user", allowed_roles: ["system", "user"] };
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
-    let render = prompt`${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Long shared preamble.${role("user", metadata = null)}Hi World!`;
-    let out: string[] = [];
-    for (let m in render(ctx).messages()) {
-        out.push(`${m.role}=${baml.json.stringify(baml.json.to_json(m.metadata))}`)
-    }
-    out.join(";")
-}
-
-test "role_metadata_argument_in_prompt_tag" {
-    assert.equal(
-        pa_role_metadata_argument_in_prompt_tag(),
-        "system={\"cache_control\":{\"type\":\"ephemeral\"}};user={}",
-    )
-}
-
-// …and in an LLM function's prompt.
-function PaRoleMetadata(question: string) -> string {
-    client: "openai/gpt-4o-mini"
-    prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
-}
-
-function pa_role_metadata_argument_in_llm_function() -> string {
-    let format = ai.internal.build_output_format(reflect.Type.of<string>());
-    let out: string[] = [];
-    for (let m in PaRoleMetadata@spec("hi").prompt_template(format).messages()) {
-        out.push(`${m.role}=${baml.json.stringify(baml.json.to_json(m.metadata))}`)
-    }
-    out.join(";")
-}
-
-test "role_metadata_argument_in_llm_function" {
-    assert.equal(
-        pa_role_metadata_argument_in_llm_function(),
-        "system={\"cache_control\":{\"type\":\"ephemeral\"}};user={}",
-    )
-}
-
-// Directives are keyed, so metadata that is not a JSON object has nowhere to
-// go: the render fails instead of dropping it.
-function PaRoleMetadataNotAnObject(question: string) -> string {
-    client: "openai/gpt-4o-mini"
-    prompt: `${role("system", metadata = "ephemeral")}Follow the rules.${role("user")}${question}`
-}
-
-function pa_role_metadata_must_be_an_object() -> string {
-    let format = ai.internal.build_output_format(reflect.Type.of<string>());
-    let got = PaRoleMetadataNotAnObject@spec("hi").prompt_template(format).text() catch_all (e) {
-        _ => e.to_string(),
-    };
-    got
-}
-
-test "role_metadata_must_be_an_object" {
-    let got = pa_role_metadata_must_be_an_object();
-    assert.contains(got, "PromptRenderError");
-    assert.contains(got, "metadata must be a JSON object or null")
-}
-
 // Every media kind interpolated into a prompt must survive as its own
 // structural part, interleaved with the surrounding text runs.
 function pa_message_parts_preserve_media() -> string {

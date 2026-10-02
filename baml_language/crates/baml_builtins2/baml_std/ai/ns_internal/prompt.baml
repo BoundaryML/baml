@@ -60,29 +60,13 @@ enum OutputFormatDefault {
 /// Construct a typed role marker for structural prompt assembly.
 /// The `${role(...)}` desugar in an LLM prompt body lowers to this call.
 ///
-/// `metadata` carries the per-message provider directives of the message the
-/// marker opens (`role("system", metadata = { "cache_control": { "type":
-/// "ephemeral" } })`); they reach the provider client as
-/// `ai.PromptMessage.metadata`. It must be a JSON object, or null for none.
+/// `metadata` carries per-message provider directives, which reach the provider
+/// client as `ai.PromptMessage.metadata`.
 function make_role(
     name: string,
-    metadata: baml.json.json = null,
-) -> root.Role throws baml.errors.InvalidArgument {
-    match (metadata) {
-        null => root.Role { name: name, metadata: {} },
-        let directives: map<string, baml.json.json> => {
-            let entries: map<string, unknown> = {};
-            for (let key in directives.keys()) {
-                entries.set(key, directives.get(key));
-            }
-            root.Role { name: name, metadata: entries }
-        },
-        _ => {
-            throw baml.errors.InvalidArgument {
-                message: `role("${name}") metadata must be a JSON object or null`,
-            }
-        },
-    }
+    metadata: map<string, baml.json.json> = {},
+) -> root.Role throws never {
+    root.Role { name: name, metadata: metadata }
 }
 
 /// Look up an LLM function's declared return type. Retained for type-reflection

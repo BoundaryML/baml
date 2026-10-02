@@ -81,8 +81,8 @@ function prompt(
     body: (
         role: (
             name: string,
-            metadata?: baml.json.json,
-        ) -> root.Role throws baml.errors.InvalidArgument,
+            metadata?: map<string, baml.json.json>,
+        ) -> root.Role throws never,
         ctx: root.Context,
     ) -> baml.TaggedString,
 ) -> (root.Context) -> Prompt throws root.errors.PromptRenderError {
