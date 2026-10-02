@@ -28,23 +28,30 @@ type Selector = root.clients.Selector;
 type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf;
 
 /// A position in a prompt: everything before it is the prefix a provider may
-/// cache. `${cache(args)}` in an LLM function's `prompt:` puts one where it is
-/// written, and `args` rides along untouched. A client that has a cache marker
-/// on its wire sends one there, carrying `args` exactly as written; every other
-/// client drops the delimiter and sends the prompt as if it were not there.
-/// `args` is therefore written for one provider's wire.
+/// cache. `${cache()}` in an LLM function's `prompt:` puts one where it is
+/// written. A client that has a cache marker on its wire sends one there;
+/// every other client drops the delimiter and sends the prompt as if it were
+/// not there.
 ///
-/// `args` is the provider's own cache object:
+/// `${cache()}` leaves `args` null, and the client that sends the request
+/// fills in its own `default_cache_args()`: the marker its wire takes, or
+/// nothing when its model would reject one. So one `${cache()}` is right on
+/// every client, including each member of a fallback.
+///
+/// `${cache(args)}` sets `args`, which rides along untouched and is sent
+/// exactly as written. It is the provider's own cache object, so it is written
+/// for one provider's wire:
 ///
 ///     ${cache({ "type": "default", "ttl": "1h" })}   // aws.BedrockClient: a `cachePoint` block
 ///     ${cache({ "type": "ephemeral", "ttl": "1h" })} // anthropic.Client: `cache_control` on the block before
 ///     ${cache({ "mode": "explicit" })}               // openai.ChatClient, openai.ResponsesClient:
 ///                                                    // `prompt_cache_breakpoint` on the part before
 ///
-/// Clients with no cache marker on their wire send nothing for it.
+/// `${cache(null)}` is `${cache()}`. To mark a position on some calls only,
+/// put the `${cache()}` inside an `${if (...)}`.
 ///
 /// Outside an LLM function's `prompt:` there is no bare `cache`; interpolate
-/// the value itself, `${ai.CacheDelimiter { args: ... }}`.
+/// the value itself, `${ai.CacheDelimiter { args: null }}`.
 class CacheDelimiter {
     args: baml.json.json,
 }

@@ -73,8 +73,9 @@ function make_role(
 /// The `${cache(...)}` desugar in an LLM prompt body lowers to this call.
 ///
 /// `args` is the provider's own cache object. It reaches the provider client
-/// as `ai.CacheDelimiter.args`, untouched.
-function make_cache(args: baml.json.json) -> root.CacheDelimiter throws never {
+/// as `ai.CacheDelimiter.args`, untouched. Null, which is what `${cache()}`
+/// passes, asks that client for its `default_cache_args()`.
+function make_cache(args: baml.json.json = null) -> root.CacheDelimiter throws never {
     root.CacheDelimiter { args: args }
 }
 

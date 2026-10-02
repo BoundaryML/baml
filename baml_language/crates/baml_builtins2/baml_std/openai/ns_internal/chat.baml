@@ -50,6 +50,67 @@ function _azure_reject(detail: string) -> ai.errors.InvalidRequest {
 }
 
 // ---------------------------------------------------------------------------
+// The default cache breakpoint. Shared by the Chat Completions and Responses
+// clients: the field and the models that take it are the same on both APIs.
+
+/// (internal) Whether `model` rejects `prompt_cache_breakpoint`. OpenAI added
+/// the field with GPT-5.6; every earlier model answers 400
+/// ("prompt_cache_breakpoint is not supported on this model") on both Chat
+/// Completions and Responses, and caches implicitly whatever the request says.
+///
+/// The list is the OLD families, because that set is closed and the new one
+/// is not: a model this does not recognize is treated as one that takes the
+/// field, so a new family works without a change here. A model matches a
+/// family by being it or by starting with it plus "-", so "gpt-5" covers
+/// "gpt-5-mini" and "gpt-5-2025-08-07" but not "gpt-5.6-luna". A fine-tune
+/// (`ft:<base model>:<org>:<suffix>:<id>`) is judged by its base model.
+///
+/// `chat-latest` is a moving alias that points at an old model today.
+function _rejects_cache_breakpoint(model: string) -> bool throws never {
+    let name = model;
+    if (name.starts_with("ft:")) {
+        name = name.split(":").at(1) ?? name;
+    }
+    let families = [
+        "gpt-3.5-turbo",
+        "gpt-4",
+        "gpt-4o",
+        "gpt-4.1",
+        "gpt-4.5",
+        "gpt-5",
+        "gpt-5.1",
+        "gpt-5.2",
+        "gpt-5.3",
+        "gpt-5.4",
+        "gpt-5.5",
+        "o1",
+        "o3",
+        "o4",
+        "chatgpt-4o",
+        "chat-latest",
+    ];
+    for (let family in families) {
+        if (name == family || name.starts_with(`${family}-`)) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The `prompt_cache_breakpoint` a `${cache()}` sends to `model`:
+/// `{"mode": "explicit"}`, the only value the field takes, or null for a model
+/// that rejects the field (GPT-5.5 and earlier), where a `${cache()}` sends
+/// nothing. The value marks one position; it is not the request-level
+/// `prompt_cache_options.mode`, so the request stays in OpenAI's implicit mode.
+function default_cache_breakpoint(model: string) -> baml.json.json throws never {
+    if (_rejects_cache_breakpoint(model)) {
+        null
+    } else {
+        { "mode": "explicit" }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Compat record + per-request parameters.
 
 /// How the endpoint authenticates. Sniffing the scheme from the key's shape (the
@@ -112,6 +173,10 @@ class ChatCompat {
     // other OpenAI-compatible servers do not, so everywhere else the delimiter
     // is dropped and the request is the one the prompt would produce without it.
     cache_breakpoints: bool,
+    // What a `${cache()}` written with no args sends as the breakpoint: the
+    // wrapper's `default_cache_args()`. Null sends nothing for it. Read only
+    // when `cache_breakpoints` is set.
+    default_cache_args: baml.json.json,
 
     /// Every field defaults to the plain-OpenAI shape; a wrapper overrides the
     /// handful that differ.
@@ -130,6 +195,7 @@ class ChatCompat {
         default_role: string = "user",
         compat_query: map<string, string>? = null,
         cache_breakpoints: bool = false,
+        default_cache_args: baml.json.json = null,
     ) -> ChatCompat {
         let empty: map<string, string> = {};
         ChatCompat {
@@ -147,6 +213,7 @@ class ChatCompat {
             default_role: default_role,
             compat_query: compat_query ?? empty,
             cache_breakpoints: cache_breakpoints,
+            default_cache_args: default_cache_args,
         }
     }
 }
@@ -650,7 +717,8 @@ function _chat_lower_blocks(
 
 /// (internal) Put a `${cache(args)}` on the wire: `prompt_cache_breakpoint: args` on
 /// the LAST part lowered so far (see ChatExtraPart). Nothing is sent when no
-/// part precedes the delimiter in its message, or when `args` is null. A second
+/// part precedes the delimiter in its message, or when `args` is null (a
+/// `${cache()}` with no default, which `ai.wire.prompt_parts` removes). A second
 /// delimiter with no part in between replaces the first.
 function _chat_apply_cache_delimiter(
     parts: ChatContentPart[],
@@ -686,7 +754,7 @@ function _chat_prompt_parts(
         return _chat_lower_blocks(ai.wire.prompt_blocks(message), compat, preview = preview);
     }
     let parts: ChatContentPart[] = [];
-    for (let part in ai.wire.prompt_parts(message)) {
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = compat.default_cache_args)) {
         match (part) {
             let text: string => {
                 parts.push(ChatTextPart { type: "text", text: text });

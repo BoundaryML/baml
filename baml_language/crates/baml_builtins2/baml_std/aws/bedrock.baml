@@ -67,7 +67,7 @@ class BedrockClient {
     // --- prompt caching -----------------------------------------------------
     /// Append a `cachePoint` after the system content, making the system
     /// prompt reusable across calls. A checkpoint anywhere else is written in
-    /// the prompt, as `${cache({ "type": "default" })}`.
+    /// the prompt, as `${cache()}`.
     cache_system_prompt: bool,
     /// Append a `cachePoint` after the tool list, making the tool definitions
     /// reusable across calls.
@@ -159,6 +159,18 @@ class BedrockClient {
     implements ai.Client {
         function id(self) -> string {
             `bedrock/${self.model}`
+        }
+
+        /// What a `${cache()}` sends as a `cachePoint` block: a checkpoint
+        /// with the default 5-minute lifetime, for a Claude or Nova model.
+        /// Null for every other model, where Converse rejects a checkpoint;
+        /// a `${cache()}` sends nothing there.
+        function default_cache_args(self) -> baml.json.json {
+            if (aws.internal._supports_cache_point(self.model)) {
+                { "type": "default" }
+            } else {
+                null
+            }
         }
 
         /// This is deliberately the unsigned Converse request. Signing is an

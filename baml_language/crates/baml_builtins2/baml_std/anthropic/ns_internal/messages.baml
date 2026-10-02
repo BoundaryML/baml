@@ -412,14 +412,15 @@ function _lower_blocks(
 /// exactly as they do for a journal turn; a `${cache(args)}` sets
 /// `cache_control` on the block before it (`_anth_apply_cache_control`), and
 /// the text on either side is trimmed where it faces the delimiter
-/// (`ai.wire.prompt_parts`).
+/// (`ai.wire.prompt_parts`). A `${cache()}` carries `default_cache_args`.
 function _prompt_blocks(
     message: ai.PromptMessage,
     position: string,
+    default_cache_args: baml.json.json,
     preview: bool = false,
 ) -> AnthBlock[] {
     let blocks: AnthBlock[] = [];
-    for (let part in ai.wire.prompt_parts(message)) {
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
         match (part) {
             let text: string => {
                 let block = ai.content.Text { text: text };
@@ -444,12 +445,16 @@ function _prompt_blocks(
     blocks
 }
 
-function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
+function _lower_prompt(
+    prompt: ai.Prompt,
+    default_cache_args: baml.json.json,
+    preview: bool = false,
+) -> Prompt {
     let system: AnthBlock[] = [];
     let messages: Message[] = [];
     for (let message in prompt.messages()) {
         if (message.role == "system") {
-            let blocks = _prompt_blocks(message, "system", preview = preview);
+            let blocks = _prompt_blocks(message, "system", default_cache_args, preview = preview);
             for (let block in blocks) {
                 system.push(block);
             }
@@ -460,7 +465,7 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
             } else {
                 "user"
             };
-            let blocks = _prompt_blocks(message, role, preview = preview);
+            let blocks = _prompt_blocks(message, role, default_cache_args, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
             if (blocks.length() > 0) {
@@ -630,6 +635,16 @@ class BodyParams {
     request_body: baml.json.json?,
     // The id journal sanitization is performed against — `Client.id()`.
     client_id: string,
+    // What a `${cache()}` in the prompt sends as `cache_control` — the host
+    // client's `default_cache_args()`.
+    default_cache_args: baml.json.json,
+}
+
+/// The `cache_control` a `${cache()}` sends on the Messages wire: an ephemeral
+/// breakpoint with the default 5-minute lifetime. Shared by every client that
+/// speaks that wire (`anthropic.Client`, Claude on `google.VertexClient`).
+function default_cache_control() -> baml.json.json throws never {
+    { "type": "ephemeral" }
 }
 
 function _body_params(c: root.Client) -> BodyParams {
@@ -644,6 +659,7 @@ function _body_params(c: root.Client) -> BodyParams {
         tool_choice: c.tool_choice,
         request_body: c.request_body,
         client_id: c.id(),
+        default_cache_args: c.default_cache_args(),
     }
 }
 
@@ -694,7 +710,7 @@ function messages_request(
     preview: bool = false,
 ) -> MessagesRequest {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
-    let lowered_prompt = _lower_prompt(prompt, preview = preview);
+    let lowered_prompt = _lower_prompt(prompt, params.default_cache_args, preview = preview);
     let system = lowered_prompt.system;
     let lowered = lowered_prompt.messages;
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and

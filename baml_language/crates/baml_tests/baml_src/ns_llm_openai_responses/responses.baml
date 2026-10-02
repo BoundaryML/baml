@@ -470,8 +470,9 @@ test "oai_cache_delimiter_is_a_breakpoint_on_the_part_before" {
     )
 }
 
-// A delimiter with nothing before it in its message, or with null `args`, sends
-// no breakpoint; two in a row leave one, the later one's `args`.
+// A delimiter with nothing before it in its message sends no breakpoint, and
+// neither does one with null `args` on a model that has no default (this one
+// is GPT-5.5 or earlier); two in a row leave one, the later one's `args`.
 function OaiCacheEdges(args: json) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache({ "mode": "explicit" })}${cache(args)} Variable.`
@@ -489,6 +490,33 @@ test "oai_cache_delimiter_edges" {
     assert.equal(
         oai_cache_delimiter_edges(),
         `[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit","later":true}},{"type":"input_text","text":"Variable."}]}]\n[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"input_text","text":"Variable."}]}]`,
+    )
+}
+
+// `${cache()}` takes the client's default: `{"mode": "explicit"}` on GPT-5.6 and
+// later, and nothing on an earlier model, which answers 400 to the field. (The
+// model list itself is asserted in `chat_cache_default_by_model`; both clients
+// read it.)
+function OaiCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}Stable.${cache()} ${question}`
+}
+
+function oai_cache_default_args() -> string {
+    let current = openai.ResponsesClient.new(model = "gpt-5.6-luna", api_key = "test-key");
+    let earlier = openai.ResponsesClient.new(model = "gpt-5.5", api_key = "test-key");
+    [
+        _oai_render_input(current, OaiCacheDefault@spec("Variable.")),
+        _oai_render_input(earlier, OaiCacheDefault@spec("Variable.")),
+        // null `args` is the default
+        _oai_render_input(current, OaiCacheEdges@spec(null)),
+    ].join("\n")
+}
+
+test "oai_cache_default_args" {
+    assert.equal(
+        oai_cache_default_args(),
+        `[{"role":"system","content":[{"type":"input_text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"input_text","text":"Variable."}]}]\n[{"role":"system","content":[{"type":"input_text","text":"Follow the rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable. Variable."}]}]\n[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"input_text","text":"Variable."}]}]`,
     )
 }
 

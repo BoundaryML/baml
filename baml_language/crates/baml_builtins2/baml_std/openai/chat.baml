@@ -105,6 +105,7 @@ class ChatClient {
             api_key_required = true,
             send_stream_options = true,
             cache_breakpoints = true,
+            default_cache_args = self.default_cache_args(),
         )
     }
 
@@ -137,6 +138,13 @@ class ChatClient {
     implements ai.Client {
         function id(self) -> string {
             `openai-chat/${self.model}`
+        }
+
+        /// What a `${cache()}` sends as `prompt_cache_breakpoint` on the part
+        /// before it: `{"mode": "explicit"}`. Null for GPT-5.5 and earlier,
+        /// which reject the field; a `${cache()}` sends nothing there.
+        function default_cache_args(self) -> baml.json.json {
+            openai.internal.default_cache_breakpoint(self.model)
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

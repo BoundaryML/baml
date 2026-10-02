@@ -193,6 +193,12 @@ class Client {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }
+
+        /// What a `${cache()}` sends as `cache_control` on the block before
+        /// it: a 5-minute ephemeral breakpoint.
+        function default_cache_args(self) -> baml.json.json {
+            root.internal.default_cache_control()
+        }
     }
 
     implements ai.stream.StreamingClient {

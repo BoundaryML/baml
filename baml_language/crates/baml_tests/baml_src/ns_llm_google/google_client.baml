@@ -863,8 +863,17 @@ function VertexCached(question: string) -> string {
     prompt: `${role("system")}Follow the rules.${cache({ "type": "ephemeral", "ttl": "1h" })}${role("user")}${question}`
 }
 
-function _vertex_cached_body(model: string) -> string {
-    let spec = VertexCached@spec("Say pong.");
+function VertexCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}${question}`
+}
+
+function _vertex_cached_body(model: string, default_args: bool = false) -> string {
+    let spec = if (default_args) {
+        VertexCacheDefault@spec("Say pong.")
+    } else {
+        VertexCached@spec("Say pong.")
+    };
     let input = ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
@@ -893,6 +902,24 @@ test "vertex_cache_delimiter" {
     assert.equal(
         vertex_cache_delimiter(),
         `[{"type":"text","text":"Follow the rules.","cache_control":{"type":"ephemeral","ttl":"1h"}}]|false`,
+    )
+}
+
+// `${cache()}` on a Claude model is the Anthropic default, the same marker
+// `anthropic.Client` sends; on a Gemini model there is no default.
+function vertex_cache_default_args() -> string {
+    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5", default_args = true));
+    let gemini = _vertex_cached_body("gemini-2.5-flash", default_args = true);
+    [
+        baml.json.stringify(baml.json.path<json>(claude, ".system")),
+        (gemini.includes("cache_control") || gemini.includes("ephemeral")).to_string(),
+    ].join("|")
+}
+
+test "vertex_cache_default_args" {
+    assert.equal(
+        vertex_cache_default_args(),
+        `[{"type":"text","text":"Follow the rules.","cache_control":{"type":"ephemeral"}}]|false`,
     )
 }
 

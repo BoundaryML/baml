@@ -490,11 +490,13 @@ class OaCacheBreakpoint {
 /// sent as written, so the position is recorded in `breakpoints` and
 /// `_apply_cache_breakpoints` writes the key onto the serialized body. The text
 /// on either side is trimmed where it faces the delimiter
-/// (`ai.wire.prompt_parts`). Nothing is recorded when no part precedes the
-/// delimiter in its message, or when `args` is null.
+/// (`ai.wire.prompt_parts`). A `${cache()}` carries `default_cache_args`.
+/// Nothing is recorded when no part precedes the delimiter in its message, or
+/// when the delimiter has no args and there is no default.
 function lower_prompt(
     prompt: ai.Prompt,
     breakpoints: OaCacheBreakpoint[],
+    default_cache_args: baml.json.json = null,
     preview: bool = false,
 ) -> OaInputItem[] {
     let items: OaInputItem[] = [];
@@ -504,7 +506,7 @@ function lower_prompt(
             _ => message.role,
         };
         let content: OaInputPart[] = [];
-        for (let part in ai.wire.prompt_parts(message)) {
+        for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
             match (part) {
                 let text: string => {
                     let block = ai.content.Text { text: text };
@@ -792,7 +794,12 @@ function _request(
 ) -> baml.http.Request {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let breakpoints: OaCacheBreakpoint[] = [];
-    let items = lower_prompt(prompt, breakpoints, preview = preview);
+    let items = lower_prompt(
+        prompt,
+        breakpoints,
+        default_cache_args = c.default_cache_args(),
+        preview = preview,
+    );
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.degrade_tool_media(

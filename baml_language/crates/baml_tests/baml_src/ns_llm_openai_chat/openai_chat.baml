@@ -1530,8 +1530,9 @@ test "chat_cache_delimiter_is_a_breakpoint_on_the_part_before" {
 // body's null-pruning pass exists to drop the CLIENT's unset options — it must
 // not reach into `args`, which is why the breakpoint rides a parked, opaque
 // subtree until after the prune. A delimiter with nothing before it in its
-// message sends no breakpoint, and one with null `args` is as if it were not
-// written.
+// message sends no breakpoint. One with null `args` takes the client's default,
+// which this client's model (GPT-5.5 or earlier) does not have: it is as if it
+// were not written.
 function ChatCacheArgs(args: json) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache(args)} Variable.`
@@ -1575,6 +1576,81 @@ test "chat_cache_delimiter_args_as_written" {
         chat_cache_delimiter_args_as_written(),
         `[{"type":"text","text":"Rules."}]|{"type":"text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit","ttl":null}}|parked=false\n[{"type":"text","text":"Rules."}]|{"type":"text","text":"Stable. Variable."}|parked=false`,
     )
+}
+
+// `${cache()}` takes the client's default: `{"mode": "explicit"}`, the one value
+// `prompt_cache_breakpoint` accepts, on GPT-5.6 and later. Every earlier model
+// answers 400 to the field, so those get no default and the delimiter sends
+// nothing. The list names the OLD families; a model it does not know is
+// treated as new. Azure's `model` is a deployment name, which says nothing
+// about the model behind it, so it has no default either.
+function chat_cache_default_by_model() -> string {
+    let models = [
+        "gpt-5.6-luna",
+        "gpt-6-sol",
+        "gpt-6.1-sol",
+        "some-future-model",
+        "gpt-5.5",
+        "gpt-5.5-pro-2026-04-23",
+        "gpt-5-mini",
+        "gpt-5",
+        "gpt-4o-mini-2024-07-18",
+        "gpt-4.1",
+        "gpt-4-turbo",
+        "gpt-3.5-turbo",
+        "o4-mini",
+        "o3",
+        "chat-latest",
+        "ft:gpt-4.1-mini-2025-04-14:acme:support:abc123",
+        "ft:gpt-5.6-luna:acme:support:abc123",
+    ];
+    let out: string[] = [];
+    for (let model in models) {
+        let chat: ai.Client = openai.ChatClient.new(model = model, api_key = "k");
+        let responses: ai.Client = openai.ResponsesClient.new(model = model, api_key = "k");
+        // the two clients share one list
+        assert.equal(chat.default_cache_args(), responses.default_cache_args());
+        out.push(`${model}=${chat.default_cache_args() != null}`);
+    }
+    out.join(" ")
+}
+
+test "chat_cache_default_by_model" {
+    assert.equal(
+        chat_cache_default_by_model(),
+        "gpt-5.6-luna=true gpt-6-sol=true gpt-6.1-sol=true some-future-model=true gpt-5.5=false gpt-5.5-pro-2026-04-23=false gpt-5-mini=false gpt-5=false gpt-4o-mini-2024-07-18=false gpt-4.1=false gpt-4-turbo=false gpt-3.5-turbo=false o4-mini=false o3=false chat-latest=false ft:gpt-4.1-mini-2025-04-14:acme:support:abc123=false ft:gpt-5.6-luna:acme:support:abc123=true",
+    )
+}
+
+function ChatCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}${question}`
+}
+
+function _chat_default_system(cl: ai.Client) -> string {
+    let spec = ChatCacheDefault@spec("hi");
+    let request = cl.render(
+        ai.ModelTurnInput {
+            prompt: spec.prompt_template,
+            journal: ai.Journal { log: [] },
+            toolbox: spec.tools(),
+            output_type: spec.output_type(),
+        },
+    );
+    baml.json.stringify(baml.json.path<json>(baml.json.parse(request.body), ".messages[0].content"))
+}
+
+test "chat_cache_default_args" {
+    let marked = `[{"type":"text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]`;
+    let unmarked = `[{"type":"text","text":"Follow the rules."}]`;
+    assert.equal(_chat_default_system(openai.ChatClient.new(model = "gpt-5.6-luna", api_key = "k")), marked);
+    assert.equal(_chat_default_system(openai.ChatClient.new(model = "gpt-5.5", api_key = "k")), unmarked);
+    let azure = openai.AzureClient.new(
+        model = "gpt-56-deployment",
+        api_key = "k",
+        base_url = "http://localhost:1234/openai/deployments/gpt-56-deployment",
+    );
+    assert.equal(_chat_default_system(azure), unmarked)
 }
 
 // Role metadata is not forwarded onto a content part any more: a key there

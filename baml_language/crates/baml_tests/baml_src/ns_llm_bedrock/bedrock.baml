@@ -854,8 +854,8 @@ test "bedrock_cache_delimiter_media_ttl" {
     )
 }
 
-// `args` is not checked, defaulted or rewritten: a null member, a nested
-// value and a non-object all go on the wire as written.
+// A non-null `args` is not checked, defaulted or rewritten: a null member, a
+// nested value and a non-object all go on the wire as written.
 function BedrockCacheArgs(args: json) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
@@ -886,9 +886,8 @@ test "bedrock_cache_delimiter_args_as_written" {
     )
 }
 
-// Where a delimiter produces NO block: before any content of its message, right
-// after another cachePoint, and with null `args` — which is as if it had not
-// been written, so the text around it stays one block.
+// Where a delimiter produces NO block: before any content of its message, and
+// right after another cachePoint.
 function BedrockCacheLeading(name: string) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
@@ -915,19 +914,88 @@ function BedrockCacheTwice(name: string) -> string {
 function bedrock_cache_delimiter_dropped() -> string {
     let leading = _cached_body(BedrockCacheLeading@spec("Ada"));
     let twice = _cached_body(BedrockCacheTwice@spec("Ada"));
-    let nulled = _cached_body(BedrockCacheArgs@spec(null));
     [
         baml.json.stringify(baml.json.path<json>(leading, ".system")),
         baml.json.stringify(baml.json.path<json>(leading, ".messages[0].content")),
         baml.json.stringify(baml.json.path<json>(twice, ".messages[0].content")),
-        baml.json.stringify(baml.json.path<json>(nulled, ".messages[0].content")),
     ].join("\n")
 }
 
 test "bedrock_cache_delimiter_dropped" {
     assert.equal(
         bedrock_cache_delimiter_dropped(),
-        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]\n[{"text":"Stable.\\n\\nVariable."}]`,
+        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]`,
+    )
+}
+
+// `${cache()}` (and null `args`, which is the same thing) takes the client's
+// default: `{"type": "default"}` for a Claude or Nova model, whatever region
+// prefix or ARN the id is written with. Converse answers 403 to a checkpoint
+// on any other family, so those models get no default and the delimiter is
+// as if it had not been written: the text around it stays one block.
+function BedrockCacheDefault(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Stable.
+        ${cache()}
+        Greet ${name}.
+    `
+}
+
+function _default_cache_content(model: string) -> string {
+    let cl = aws.BedrockClient.new(model = model, region = "us-east-1");
+    let body = _body(cl, _turn_input(BedrockCacheDefault@spec("Ada"), _empty_journal(), _no_tools()));
+    baml.json.stringify(baml.json.path<json>(body, ".messages[0].content"))
+}
+
+function bedrock_cache_default_by_model() -> string {
+    let models = [
+        "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "us.amazon.nova-lite-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "us.meta.llama3-3-70b-instruct-v1:0",
+        "mistral.mistral-large-2402-v1:0",
+        "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123",
+    ];
+    let out: string[] = [];
+    for (let model in models) {
+        let cl = aws.BedrockClient.new(model = model, region = "us-east-1");
+        out.push(baml.json.stringify(cl.default_cache_args()));
+    }
+    out.join(" ")
+}
+
+test "bedrock_cache_default_by_model" {
+    assert.equal(
+        bedrock_cache_default_by_model(),
+        `{"type":"default"} {"type":"default"} {"type":"default"} {"type":"default"} null null null`,
+    )
+}
+
+test "bedrock_cache_default_args" {
+    let marked = `[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]`;
+    let unmarked = `[{"text":"Stable.\\n\\nGreet Ada."}]`;
+    assert.equal(_default_cache_content("us.anthropic.claude-haiku-4-5-20251001-v1:0"), marked);
+    assert.equal(_default_cache_content("us.amazon.nova-lite-v1:0"), marked);
+    assert.equal(_default_cache_content("us.meta.llama3-3-70b-instruct-v1:0"), unmarked);
+    // null `args` is the default
+    assert.equal(
+        baml.json.stringify(
+            baml.json.path<json>(_cached_body(BedrockCacheArgs@spec(null)), ".messages[0].content"),
+        ),
+        `[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Variable."}]`,
+    );
+    // explicit args are sent as written to a model the default skips
+    let llama = aws.BedrockClient.new(model = "us.meta.llama3-3-70b-instruct-v1:0", region = "us-east-1");
+    let explicit = _body(
+        llama,
+        _turn_input(BedrockCacheArgs@spec(baml.json.parse(`{"type":"default"}`)), _empty_journal(), _no_tools()),
+    );
+    assert.equal(
+        baml.json.stringify(baml.json.path<json>(explicit, ".messages[0].content[1]")),
+        `{"cachePoint":{"type":"default"}}`,
     )
 }
 

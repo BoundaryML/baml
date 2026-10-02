@@ -387,21 +387,54 @@ function _anth_cache_args(args: json) -> string {
     ].join("\n")
 }
 
-// `args` is the value of `cache_control`, as written: not checked, not
-// defaulted, a nested null kept. A delimiter with nothing before it in its
-// message sets nothing, and one with null `args` is as if it were not written.
+// A non-null `args` is the value of `cache_control`, as written: not checked,
+// not merged with the default, a nested null kept. A delimiter with nothing
+// before it in its message sets nothing.
 function anthropic_cache_delimiter_args_as_written() -> string {
     [
         _anth_cache_args(baml.json.parse(`{"ttl":"1h","type":"ephemeral","extra":{"keep":null}}`)),
         _anth_cache_args(baml.json.parse(`"1h"`)),
-        _anth_cache_args(null),
     ].join("\n")
 }
 
 test "anthropic_cache_delimiter_args_as_written" {
     assert.equal(
         anthropic_cache_delimiter_args_as_written(),
-        `[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":{"ttl":"1h","type":"ephemeral","extra":{"keep":null}}}\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":"1h"}\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable. Variable."}`,
+        `[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":{"ttl":"1h","type":"ephemeral","extra":{"keep":null}}}\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":"1h"}`,
+    )
+}
+
+// `${cache()}` takes the client's default, `{"type": "ephemeral"}`: one
+// breakpoint on the block before it. `${cache(null)}` is the same thing, and
+// `${cache(args = ...)}` is `${cache(...)}` spelled by name.
+function AnthCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}Stable.${cache()} ${question}`
+}
+
+function AnthCacheNamed(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache(args = { "type": "ephemeral", "ttl": "1h" })}${role("user")}${question}`
+}
+
+function anthropic_cache_default_args() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let body = anth_render_body(cl, AnthCacheDefault@spec("Variable."), ai.Journal { log: [] });
+    let named = anth_render_body(cl, AnthCacheNamed@spec("hi"), ai.Journal { log: [] });
+    [
+        baml.json.stringify(cl.default_cache_args()),
+        baml.json.stringify(baml.json.path<json>(body, ".system")),
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content")),
+        // null `args` is the default too
+        _anth_cache_args(null),
+        baml.json.stringify(baml.json.path<json>(named, ".system[0].cache_control")),
+    ].join("\n")
+}
+
+test "anthropic_cache_default_args" {
+    assert.equal(
+        anthropic_cache_default_args(),
+        `{"type":"ephemeral"}\n[{"type":"text","text":"Follow the rules.","cache_control":{"type":"ephemeral"}}]\n[{"type":"text","text":"Stable.","cache_control":{"type":"ephemeral"}},{"type":"text","text":"Variable."}]\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":{"type":"ephemeral"}}\n{"type":"ephemeral","ttl":"1h"}`,
     )
 }
 
