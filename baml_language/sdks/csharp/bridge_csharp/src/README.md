@@ -53,8 +53,8 @@ The consumer project should use the product baseline:
 
 Free BAML functions are static members of a namespace-local `Functions`
 class. The unsuffixed method is synchronous; the `Async` method returns a
-`Task<T>`. Both use the same native operation and accept a final cancellation
-token:
+`Task<T>`. Both use the same native operation and accept final `BamlOptions`
+through the `baml` argument:
 
 ```csharp
 using CsharpBasicCalls;
@@ -65,14 +65,14 @@ string result = Functions.BasicCalls(
     ratio: 1.25,
     text: "hello",
     nullable: null,
-    cancellationToken);
+    baml: new BamlOptions { CancellationToken = cancellationToken });
 string asyncResult = await Functions.BasicCallsAsync(
     flag: false,
     count: -17,
     ratio: -2.5,
     text: "hello",
     nullable: "present",
-    cancellationToken);
+    baml: new BamlOptions { CancellationToken = cancellationToken });
 ```
 
 Generated classes are sealed partial classes with required init-only
@@ -119,28 +119,31 @@ case rather than inferring it from the payload type.
 
 ## Callbacks
 
-A BAML callable argument is a `Func<...,CancellationToken,Task<TResult>>` (or
-the `Task` form for `void`). The injected token is always last. Optional BAML
-callback parameters are declaration-ordered `BamlOptional<T>` arguments:
+A BAML callable argument is a `Func<...,Task<TResult>>` (or the `Task` form for
+`void`). Its parameters are the BAML arguments; cancellation is available from
+`Invocation.Current` during dispatch. Optional BAML callback parameters are
+declaration-ordered `BamlOptional<T>` arguments:
 
 ```csharp
-Func<long, CancellationToken, Task<long>> callback =
-    async (value, cancellationToken) =>
+Func<long, Task<long>> callback =
+    async value =>
     {
         await Task.Yield();
+        CancellationToken cancellationToken =
+            Invocation.Current?.CancellationToken ?? CancellationToken.None;
         cancellationToken.ThrowIfCancellationRequested();
         return checked(value * 2);
     };
 
-long result = await callback(21, cancellationToken);
+long result = await callback(21);
 ```
 
 Pass that delegate to the corresponding generated callable parameter; the
 generated signature supplies its exact argument types.
 
-For a tokenless synchronous callback, use `BamlCallback.FromSync`. It accepts
+For a synchronous callback, use `BamlCallback.FromSync`. It accepts
 value-returning `Func` and BAML-`void` `Action` callbacks with zero through
-fifteen BAML parameters and returns the same canonical Task-based delegate:
+sixteen BAML parameters and returns the same canonical Task-based delegate:
 
 ```csharp
 long result = Functions.InvokeDeferred(
@@ -148,15 +151,14 @@ long result = Functions.InvokeDeferred(
     21);
 ```
 
-Constructing the adapter does not run the callback. The injected token is
-ignored by this tokenless parity form; callbacks that need cancellation should
-use the canonical asynchronous delegate directly. Synchronous exceptions use
-the same exact managed-exception restoration path.
+Constructing the adapter does not run the callback. Synchronous callbacks can
+also read `Invocation.Current.CancellationToken` during dispatch. Synchronous
+exceptions use the same exact managed-exception restoration path.
 
 Callbacks may suspend. The runtime restores the captured execution context,
 does not run application code inline on the native callback stack, and returns
 the exact original managed exception (including its preserved stack) when a
-callback fails. A cancellation using the supplied linked token is classified
+callback fails. A cancellation using the current invocation token is classified
 as cancellation; an unrelated `OperationCanceledException` remains a fault.
 
 ## Streams and semantic partials
@@ -263,7 +265,8 @@ Catch the narrowest useful type:
 try
 {
     _ = await Functions.BasicCallsAsync(
-        true, 1, 1.0, text, null, cancellationToken);
+        true, 1, 1.0, text, null,
+        baml: new BamlOptions { CancellationToken = cancellationToken });
 }
 catch (BamlTypeMismatchException error)
 {
@@ -322,7 +325,7 @@ public sealed class PrimitiveService : IPrimitiveService
             ratio: 1.0,
             text,
             nullable: null,
-            cancellationToken);
+            baml: new BamlOptions { CancellationToken = cancellationToken });
 }
 ```
 
