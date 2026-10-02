@@ -794,12 +794,7 @@ function _request(
 ) -> baml.http.Request {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let breakpoints: OaCacheBreakpoint[] = [];
-    let items = lower_prompt(
-        prompt,
-        breakpoints,
-        default_cache_args = c.default_cache_args(),
-        preview = preview,
-    );
+    let items = lower_prompt(prompt, breakpoints, default_cache_args = c.default_cache_args(), preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.degrade_tool_media(
