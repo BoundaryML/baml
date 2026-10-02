@@ -1707,7 +1707,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          clean: false
           persist-credentials: false
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
