@@ -48,8 +48,8 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[stream.baml:632:9]
- 632 │         baml.sys.panic("unreachable")
+     ╭─[stream.baml:593:9]
+ 593 │         baml.sys.panic("unreachable")
      ·         ─────────────────────────────
      ╰────
 
@@ -72,17 +72,17 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_iter/iter.baml:891:13]
- 891 │             Done {}
-     ·             ───────
+     ╭─[stream.baml:712:9]
+ 712 │         baml.sys.panic("unreachable")
+     ·         ─────────────────────────────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[stream.baml:752:9]
- 752 │         baml.sys.panic("unreachable")
-     ·         ─────────────────────────────
+     ╭─[baml/ns_iter/iter.baml:891:13]
+ 891 │             Done {}
+     ·             ───────
      ╰────
 
   [type] E0146

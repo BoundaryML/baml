@@ -7028,43 +7028,6 @@ impl BexVm {
         unsafe { state.close_network_span(span, at, outcome, error, raw_urls) };
     }
 
-    /// The node model usage recorded now belongs to: the innermost span, or
-    /// the thread outside any. `None` when telemetry is off.
-    pub(crate) fn usage_target(&self) -> Option<btel_types::TelemetryId> {
-        self.telemetry.as_ref().map(TelemetryState::active_id)
-    }
-
-    /// Record one model turn's tokens against `target`, a telemetry ID from
-    /// [`Self::usage_target`]. False when telemetry is off or `target` is 0.
-    #[allow(clippy::too_many_arguments, reason = "mirrors ai.events.Usage")]
-    pub(crate) fn record_model_usage(
-        &mut self,
-        target: u64,
-        model: Option<Box<str>>,
-        input_tokens: u64,
-        output_tokens: u64,
-        cache_read_tokens: Option<u64>,
-        cache_write_tokens: Option<u64>,
-        reasoning_tokens: Option<u64>,
-    ) -> bool {
-        let (Some(telemetry), Some(node)) = (
-            self.telemetry.as_mut(),
-            btel_types::TelemetryId::from_raw(target),
-        ) else {
-            return false;
-        };
-        telemetry.record_model_usage(btel_records::ModelUsage {
-            node,
-            model,
-            input_tokens,
-            output_tokens,
-            cache_read_tokens,
-            cache_write_tokens,
-            reasoning_tokens,
-        });
-        true
-    }
-
     /// Name this thread's future for telemetry; call before its entry point.
     pub fn set_telemetry_thread_name(&mut self, name: &str) {
         if let Some(telemetry) = self.telemetry.as_mut() {

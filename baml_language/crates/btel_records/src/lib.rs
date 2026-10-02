@@ -151,9 +151,6 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         clock: Arc<ClockEpoch>,
         name: Option<ThreadName>,
     },
-    /// Rare: tokens one model turn used, charged to an explicit span or
-    /// thread node. Boxed so the model name never widens the slot.
-    ModelUsage(Box<ModelUsage>),
     /// An HTTP request started. Boxed, like the event and completion below,
     /// so its method and URL never widen the slot.
     NetworkSpanAnnouncement(Box<NetworkAnnouncement<InputCapture>>),
@@ -466,20 +463,6 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         handler_pc: Option<u32>,
         unwound_frames: u32,
     },
-}
-
-/// Tokens one model turn reported, as its provider counted them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModelUsage {
-    /// The span or thread node that made the call.
-    pub node: TelemetryId,
-    pub model: Option<Box<str>>,
-    /// Input tokens billed at the full rate: cache reads and writes excluded.
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub cache_read_tokens: Option<u64>,
-    pub cache_write_tokens: Option<u64>,
-    pub reasoning_tokens: Option<u64>,
 }
 
 /// One HTTP request's span: its parent is the innermost span (or thread)
@@ -1292,7 +1275,6 @@ impl<C> SpanRecord<C, C> {
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
             | Self::ThreadSpanRunning { .. }
-            | Self::ModelUsage(_)
             | Self::CallPathDefined { .. }
             | Self::ErrorRaiseOrigin { .. }
             | Self::ErrorRaiseStack(_)

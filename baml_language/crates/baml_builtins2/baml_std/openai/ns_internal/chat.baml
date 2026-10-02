@@ -1379,8 +1379,7 @@ function _chat_send(
     audio_mime: string = "audio/wav",
 ) -> ai.ModelTurn {
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let response = baml.http.send(request, $trace = span) catch_all (e) {
+    let response = baml.http.send(request) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,
@@ -1446,12 +1445,7 @@ function _chat_send(
         selected: true,
         sse_responses: null,
     };
-    ai.ModelTurn {
-        ...turn,
-        calls: [call],
-        _usage_target: trace._usage_target_of(span.id()),
-        model: decoded.model,
-    }
+    ai.ModelTurn { ...turn, calls: [call], model: decoded.model }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1699,8 +1693,7 @@ function chat_invoke_stream(
     let request = limits._apply(chat_render(compat, params, input, true));
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = baml.http.send_sse(request, $trace = span) catch_all (e) {
+    let sse = baml.http.send_sse(request) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };
     // Chat completions has an explicit terminator — the literal `data: [DONE]`
@@ -1716,8 +1709,6 @@ function chat_invoke_stream(
             }
         },
         require_terminal = compat.provider,
-        model = params.model,
-        usage_target = trace._usage_target_of(span.id()),
         timeout_options = limits,
         dispatched = started,
     );

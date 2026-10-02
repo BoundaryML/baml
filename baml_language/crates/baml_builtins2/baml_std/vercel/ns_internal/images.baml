@@ -473,5 +473,5 @@ function gateway_images_invoke(
         capture_wire = c.capture_wire,
     );
     let turn = gateway_images_parse(c, sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target }
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }

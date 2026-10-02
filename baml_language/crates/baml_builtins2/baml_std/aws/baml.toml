@@ -7,5 +7,4 @@ prelude = true
 [dependencies]
 baml = { path = "../baml" }
 ai = { path = "../ai" }
-trace = { path = "../trace" }
 anthropic = { path = "../anthropic" }

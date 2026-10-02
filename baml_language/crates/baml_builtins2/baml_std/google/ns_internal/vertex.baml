@@ -373,12 +373,7 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
             capture_wire = c.capture_wire,
         );
         let turn = anthropic.internal.parse(sent.value);
-        return ai.ModelTurn {
-            ...turn,
-            calls: [sent.call],
-            _usage_target: sent.usage_target,
-            model: c.model,
-        };
+        return ai.ModelTurn { ...turn, calls: [sent.call], model: c.model };
     }
     let seq = input.journal.entries().length();
     let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
@@ -388,7 +383,7 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
         capture_wire = c.capture_wire,
     );
     let turn = root.internal.parse(sent.value, seq, provider = "vertex");
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 function _vertex_decode_batch(batch: string) -> ai.stream.Event[] {
@@ -406,8 +401,7 @@ function vertex_invoke_stream(
     let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
     let req = limits._apply(_vertex_request(c, input, true, preview = false));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = root.internal._gm_open_sse(req, "vertex", span);
+    let sse = root.internal._gm_open_sse(req, "vertex");
     // Both decoders yield an explicit `TurnDone` (Anthropic's `message_stop`,
     // Gemini's `finishReason` fragment), so both streams are strict: a
     // connection cut mid-answer raises instead of reporting the partial text
@@ -422,8 +416,6 @@ function vertex_invoke_stream(
                 }
             },
             require_terminal = "vertex",
-            model = c.model,
-            usage_target = trace._usage_target_of(span.id()),
             timeout_options = limits,
             dispatched = started,
         )
@@ -436,8 +428,6 @@ function vertex_invoke_stream(
                 }
             },
             require_terminal = "vertex",
-            model = c.model,
-            usage_target = trace._usage_target_of(span.id()),
             timeout_options = limits,
             dispatched = started,
         )

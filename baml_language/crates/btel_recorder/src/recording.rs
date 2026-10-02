@@ -273,7 +273,8 @@ impl RecordingBuilder {
             }),
             // Appended below from its pre-encoded body.
             errors: None,
-            usage: (!ready.usage.entries.is_empty()).then_some(ready.usage),
+            // Only read now: cost comes from network spans.
+            usage: None,
         };
         // Absent without exceptions, so error-free files keep their bytes.
         let errors_len = if ready.errors.is_empty() {

@@ -140,19 +140,10 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
     }
 }
 
-/// A span for one HTTP request to a model provider: the tokens its reply
-/// reports are recorded against it, so every call has its own row and cost.
-/// It captures nothing, since a request can carry credentials.
-function request_span() -> trace.ReservedSpan {
-    trace.span(inputs = false, output = false, error = false).reserve()
-}
-
 /// `send_as_with_wire`'s result: the decoded envelope plus the wire record.
 class SentAs<T> {
     value: T,
     call: root.events.LLMCall,
-    // The request's span, as a usage target for `ModelTurn._usage_target`.
-    usage_target: int,
 }
 
 /// Same contract as `send_as`, plus the LLMCall wire record. On a non-2xx or
@@ -169,8 +160,7 @@ function send_as_with_wire<T>(
     capture_wire: bool = true,
 ) -> SentAs<T> {
     let started = baml.time.Instant.now();
-    let span = request_span();
-    let resp = baml.http.send(req, $trace = span) catch_all (e) {
+    let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,
@@ -229,7 +219,7 @@ function send_as_with_wire<T>(
         selected: true,
         sse_responses: null,
     };
-    SentAs { value: value, call: call, usage_target: trace._usage_target_of(span.id()) }
+    SentAs { value: value, call: call }
 }
 
 /// The return type's schema as prompt text, in the standard dialect —

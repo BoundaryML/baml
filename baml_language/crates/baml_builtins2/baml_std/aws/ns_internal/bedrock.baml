@@ -1493,12 +1493,7 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
         capture_wire = client.capture_wire,
     );
     let turn = parse_response(sent.value);
-    ai.ModelTurn {
-        ...turn,
-        calls: [sent.call],
-        _usage_target: sent.usage_target,
-        model: client.model,
-    }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
 }
 
 // ---------------------------------------------------------------------------
@@ -1808,8 +1803,7 @@ function invoke_stream(
     let limits = ai.LlmTimeoutOptions._resolve(client.timeout);
     let request = limits._apply(sign(client, build_request(client, input, preview = false, stream = true)));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = baml.http.send_sse(request, $trace = span) catch (e) {
+    let sse = baml.http.send_sse(request) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
     };
@@ -1824,8 +1818,6 @@ function invoke_stream(
             }
         },
         require_terminal = "aws-bedrock",
-        model = client.model,
-        usage_target = trace._usage_target_of(span.id()),
         timeout_options = limits,
         dispatched = started,
     );

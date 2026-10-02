@@ -396,7 +396,6 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
         parsed_output: ai.ParsedOutput { value: value },
         stop_reason: ai.content.StopReason.Complete,
         calls: [sent.call],
-        _usage_target: sent.usage_target,
         usage: match (sent.value.usage) {
             let usage: Usage => {
                 ai.events.Usage {

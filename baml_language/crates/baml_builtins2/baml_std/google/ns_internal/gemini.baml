@@ -986,13 +986,9 @@ function _gm_route_sse_open(
 }
 
 /// (internal) Open the SSE connection, classifying the failure precisely.
-function _gm_open_sse(
-    req: baml.http.Request,
-    provider: string,
-    span: trace.ReservedSpan,
-) -> baml.http.SseStream {
+function _gm_open_sse(req: baml.http.Request, provider: string) -> baml.http.SseStream {
     _gm_route_sse_open(provider, () -> {
-        baml.http.send_sse(req, $trace = span)
+        baml.http.send_sse(req)
     })
 }
 
@@ -1160,7 +1156,7 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
     let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value, seq);
-    ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
+    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
 }
 
 function _decode_batch(batch: string) -> ai.stream.Event[] {
@@ -1176,8 +1172,7 @@ function gemini_invoke_stream(
     let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
     let req = limits._apply(_request(c, input, true));
     let started = baml.time.Instant.now();
-    let span = ai.wire.request_span();
-    let sse = _gm_open_sse(req, "google", span);
+    let sse = _gm_open_sse(req, "google");
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
     // a connection that closes before it is a truncated turn, not an answer.
     let stream = ai.stream.TurnStream.from_sse(
@@ -1188,8 +1183,6 @@ function gemini_invoke_stream(
             }
         },
         require_terminal = "google",
-        model = c.model,
-        usage_target = trace._usage_target_of(span.id()),
         timeout_options = limits,
         dispatched = started,
     );
