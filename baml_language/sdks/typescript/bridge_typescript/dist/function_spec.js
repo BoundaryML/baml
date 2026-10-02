@@ -84,11 +84,11 @@ export class BamlFunctionSpec {
     }
     _callSync(fqn, kwargs = {}) {
         const argsProto = encodeCallArgs({ self: this, ...kwargs }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
-        return decodeCallResult(getRuntime().callFunctionSync(argsProto, null));
+        return decodeCallResult(getRuntime().callFunctionSync(argsProto));
     }
     async _callAsync(fqn, kwargs = {}) {
         const argsProto = encodeCallArgs({ self: this, ...kwargs }, { callId: newFunctionCall(), functionName: fqn });
-        return decodeCallResult(await getRuntime().callFunction(argsProto, null));
+        return decodeCallResult(await getRuntime().callFunction(argsProto));
     }
     toString() {
         return '<BamlFunctionSpec>';

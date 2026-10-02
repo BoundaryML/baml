@@ -4,8 +4,7 @@ Python bindings for the BAML runtime (powered by `bex_engine`).
 
 `baml_bridge` is the bridge layer that generated `baml_sdk` packages
 import at runtime: it provides the `BamlRuntime` singleton, the
-protobuf encoder/decoder, the function/method factories, and the
-`Collector` / `BamlCtxManager` observability primitives.
+protobuf encoder/decoder and the function/method factories.
 
 ```python
 from baml_bridge import BamlRuntime
@@ -13,7 +12,6 @@ from baml_bridge import BamlRuntime
 rt = BamlRuntime.initialize_runtime(
     root_path=".",
     files={"main.baml": baml_source},
-    sdk_root="my_sdk",
 )
 ```
 

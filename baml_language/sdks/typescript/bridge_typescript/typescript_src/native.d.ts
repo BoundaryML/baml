@@ -107,9 +107,9 @@ export declare class BamlRuntime {
    */
   static initializeRuntimeFromBlob(bytecode: string | Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
-  callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null): Buffer
+  callFunctionSync(argsProto: Buffer): Buffer
   /** Call a BAML function asynchronously. */
-  callFunction(argsProto: Buffer, ctx?: HostSpanManager | undefined | null): Promise<Buffer>
+  callFunction(argsProto: Buffer): Promise<Buffer>
 }
 
 export declare class BamlVideo {
@@ -132,16 +132,6 @@ export declare class BamlVideo {
    * table row (cloned). Used by inbound encode.
    */
   _toHandle(): BamlHandle
-}
-
-export declare class HostSpanManager {
-  constructor()
-  enter(name: string, args: any): void
-  exitOk(): void
-  exitError(errorMessage: string): void
-  upsertTags(tags: Record<string, string>): void
-  deepClone(): HostSpanManager
-  contextDepth(): number
 }
 
 /**
@@ -188,9 +178,6 @@ export declare function cancelFunctionCall(callId: string): boolean
  * the engine uses for cross-language completion.
  */
 export declare function completeHostCall(callId: number, isError: number, content: Buffer): void
-
-/** No-op: tracing has been removed. Kept as a live symbol for ABI stability. */
-export declare function flushEvents(): void
 
 export declare function getBridgeRuntimeVersion(): string
 

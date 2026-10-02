@@ -82,7 +82,6 @@ describe(
           getRuntime(),
           SLEEP_FQN,
           { ms: 60000 },
-          undefined,
           ctx,
         );
         throw new Error("expected callFunctionSync to throw");
@@ -101,7 +100,6 @@ describe(
         getRuntime(),
         HOST_CALLBACK_FQN,
         { callback: host.callback, x: 1 },
-        undefined,
         ctx,
       );
 
@@ -128,7 +126,6 @@ describe(
           getRuntime(),
           HOST_CALLBACK_FQN,
           { callback: (value: number) => `${value}`, x: 1 },
-          undefined,
           ctx,
         );
         throw new Error("expected callFunction to reject");
@@ -149,14 +146,12 @@ describe(
           getRuntime(),
           HOST_CALLBACK_FQN,
           { callback: first.callback, x: 1 },
-          undefined,
           ctx,
         ),
         callFunction(
           getRuntime(),
           HOST_CALLBACK_FQN,
           { callback: second.callback, x: 2 },
-          undefined,
           ctx,
         ),
       ]);
@@ -181,7 +176,6 @@ describe(
         getRuntime(),
         HOST_CALLBACK_FQN,
         { callback: host.callback, x: 1 },
-        undefined,
         ctx,
       );
 

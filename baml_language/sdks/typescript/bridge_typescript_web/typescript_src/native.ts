@@ -5,7 +5,6 @@ import initWasm, {
   cloneHandle as cloneWasmHandle,
   completeWebHostCall,
   configureWebSysops,
-  flushEvents as flushWasmEvents,
   getBridgeRuntimeVersion as getWasmBridgeRuntimeVersion,
   getToolchainVersion as getWasmToolchainVersion,
   getVersion as getWasmVersion,
@@ -367,15 +366,6 @@ export class BamlCallContext {
   _activeCallIdsForTest(): bigint[] { return [...this.activeCallIds]; }
 }
 
-export class HostSpanManager {
-  enter(_name: string, _args: unknown): void {}
-  exitOk(): void {}
-  exitError(_message: string): void {}
-  upsertTags(_tags: Record<string, string>): void {}
-  deepClone(): HostSpanManager { return new HostSpanManager(); }
-  contextDepth(): number { return 0; }
-}
-
 /**
  * Browsers initialize eagerly. The workerd entry point validates sources or
  * bytecode immediately, but builds the engine and runs package initializers on
@@ -406,14 +396,14 @@ export class BamlRuntime {
     runtime = new BamlRuntime();
     return runtime;
   }
-  callFunctionSync(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null): Uint8Array {
+  callFunctionSync(encodedArgs: Uint8Array): Uint8Array {
     try {
       return callWasmFunctionSync(encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
-  async callFunction(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null): Promise<Uint8Array> {
+  async callFunction(encodedArgs: Uint8Array): Promise<Uint8Array> {
     try {
       return await callWasmFunction(encodedArgs);
     } catch (error) {
@@ -437,7 +427,6 @@ export function cancelFunctionCall(callId: bigint | string): boolean {
   }
   return cancelCallId(parsed);
 }
-export function flushEvents(): void { flushWasmEvents(); }
 export function getVersion(): string { return getWasmVersion(); }
 export function getToolchainVersion(): string { return getWasmToolchainVersion(); }
 export function getBridgeRuntimeVersion(): string { return getWasmBridgeRuntimeVersion(); }

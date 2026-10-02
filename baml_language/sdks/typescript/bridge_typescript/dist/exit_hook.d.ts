@@ -5,5 +5,5 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-export declare function installFlushOnExit(): void;
+export declare function installShutdownOnExit(): void;
 //# sourceMappingURL=exit_hook.d.ts.map

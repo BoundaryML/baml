@@ -68,7 +68,3 @@ pub fn get_toolchain_version() -> String {
 pub fn get_bridge_runtime_version() -> String {
     version::BRIDGE_RUNTIME_VERSION.to_string()
 }
-
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(js_name = flushEvents)]
-pub fn flush_events() {}

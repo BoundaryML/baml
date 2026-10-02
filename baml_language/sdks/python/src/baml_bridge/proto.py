@@ -1324,7 +1324,7 @@ def decode_call_result(data: bytes) -> Any:
     - `ok` → the decoded return value.
     - `error` → `raise BamlError` with `.value` = decoded value,
       `.baml_trace` = the pre-rendered frame lines.
-    - `panic` → if `is_exit_panic`, flush telemetry and `os._exit(exit_code)`
+    - `panic` → if `is_exit_panic`, `os._exit(exit_code)`
       (a clean `baml.sys.exit` — terminate the whole process from any
       thread/task, *not* a catchable `SystemExit`); otherwise
       `raise BamlPanic` likewise.
@@ -1376,7 +1376,6 @@ def decode_call_result(data: bytes) -> Any:
         # Check the discriminator *before* decoding — an exit doesn't need its
         # `baml.panics.Exit` payload decoded to act.
         if msg.is_exit_panic:
-            _flush_for_exit()
             os._exit(msg.exit_code)
         panic_type = (
             BamlCancelledError
@@ -1393,14 +1392,3 @@ def decode_call_result(data: bytes) -> Any:
 
     # `ok` (or an absent oneof — an all-default envelope is a null `ok`).
     return decode_value(result.ok, type_map)
-
-
-def _flush_for_exit() -> None:
-    """Best-effort flush of buffered telemetry before `os._exit`, which
-    bypasses `atexit` / buffer flushing. Never raises — exit must proceed."""
-    try:
-        from .baml_py import flush_events
-
-        flush_events()
-    except Exception:
-        pass

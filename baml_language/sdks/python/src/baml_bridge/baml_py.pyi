@@ -12,9 +12,7 @@ __all__ = [
     "BamlRuntime",
     "BamlVideo",
     "FunctionResult",
-    "HostSpanManager",
     "cancel_function_call",
-    "flush_events",
     "get_bridge_runtime_version",
     "get_runtime",
     "get_toolchain_version",
@@ -189,11 +187,11 @@ class BamlRuntime:
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> typing.Any:
+    def call_function(self, args_proto: bytes) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None) -> bytes:
+    def call_function_sync(self, args_proto: bytes) -> bytes:
         r"""
         Call a BAML function synchronously (blocking).
         """
@@ -242,40 +240,6 @@ class FunctionResult:
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
 
-@typing.final
-class HostSpanManager:
-    r"""
-    Manages host-side span tracking for `@trace` in Python.
-
-    This is a thin PyO3 wrapper around `bridge_cffi::host_spans::HostSpanManager`.
-    All core logic (span stack, event emission) lives in bridge_cffi.
-    """
-    def __new__(cls) -> HostSpanManager: ...
-    def enter(self, name: builtins.str, args: typing.Any) -> None:
-        r"""
-        Enter a new host-language span (`@trace` function start).
-        """
-    def exit_ok(self) -> None:
-        r"""
-        Exit the current span successfully.
-        """
-    def exit_error(self, error_message: builtins.str) -> None:
-        r"""
-        Exit the current span with an error.
-        """
-    def upsert_tags(self, tags: typing.Mapping[builtins.str, builtins.str]) -> None:
-        r"""
-        Merge tags into the current span and emit a `SetTags` event.
-        """
-    def deep_clone(self) -> HostSpanManager:
-        r"""
-        Deep clone for async context forking.
-        """
-    def context_depth(self) -> builtins.int:
-        r"""
-        Number of active spans (call depth).
-        """
-
 def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     r"""
     Test-only: the outstanding ownership count of a live key — the releases it
@@ -315,12 +279,6 @@ def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.in
     """
 
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
-
-def flush_events() -> None:
-    r"""
-    No-op: tracing has been removed. Kept as a live symbol for ABI stability
-    (SDK `atexit` + `__all__` reference it).
-    """
 
 def get_bridge_runtime_version() -> builtins.str: ...
 

@@ -58,8 +58,6 @@ export function configureWebSysops(fetch_key: bigint, read_file_sync_key: bigint
  */
 export function configureWorkerdRuntime(): void;
 
-export function flushEvents(): void;
-
 export function getBridgeRuntimeVersion(): string;
 
 export function getToolchainVersion(): string;
@@ -145,7 +143,6 @@ export interface InitOutput {
     readonly seedGenericMediaHandle: () => [bigint, number, number];
     readonly cancelFunctionCall: (a: bigint) => number;
     readonly configureWorkerdRuntime: () => void;
-    readonly flushEvents: () => void;
     readonly getBridgeRuntimeVersion: () => [number, number];
     readonly getToolchainVersion: () => [number, number];
     readonly getVersion: () => [number, number];

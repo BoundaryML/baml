@@ -40,7 +40,6 @@ func Init(libraryPath string) error {
 		"__testonly_seed_function_ref": func(p unsafe.Pointer) {
 			C.setTestonlySeedFunctionRefFn(p)
 		},
-		"flush_events": func(p unsafe.Pointer) { C.setFlushEventsFn(p) },
 		// Host-value callable C symbols.
 		"register_host_dispatch_callback": func(p unsafe.Pointer) { C.setRegisterHostDispatchCallbackFn(p) },
 		"register_host_release_callback":  func(p unsafe.Pointer) { C.setRegisterHostReleaseCallbackFn(p) },
@@ -220,11 +219,6 @@ func TestonlySeedFunctionRef(globalIndex uint64) (uint64, int32, error) {
 		return 0, 0, err
 	}
 	return uint64(key), int32(handleType), nil
-}
-
-// FlushEvents flushes the event sink.
-func FlushEvents() {
-	C.wrapFlushEvents()
 }
 
 // RegisterHostDispatchCallback registers a Go callback that Rust calls when

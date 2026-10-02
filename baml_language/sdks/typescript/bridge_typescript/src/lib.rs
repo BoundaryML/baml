@@ -9,7 +9,6 @@ pub mod handle;
 pub mod host_value;
 pub mod media;
 pub mod runtime;
-mod types;
 pub mod unhandled_spawn;
 mod version;
 
@@ -48,10 +47,6 @@ pub fn get_toolchain_version() -> &'static str {
 pub fn get_bridge_runtime_version() -> &'static str {
     version::BRIDGE_RUNTIME_VERSION
 }
-
-/// No-op: tracing has been removed. Kept as a live symbol for ABI stability.
-#[napi]
-pub fn flush_events() {}
 
 #[napi(js_name = "shutdownRuntime")]
 pub async fn shutdown_runtime() -> napi::Result<()> {

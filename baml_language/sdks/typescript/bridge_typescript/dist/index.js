@@ -8,10 +8,10 @@
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 import { BamlRuntime, cancelFunctionCall as nativeCancelFunctionCall, newFunctionCall as nativeNewFunctionCall, } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
-import { installFlushOnExit } from './exit_hook.js';
+import { installShutdownOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
 import { attachCallContext } from './call_context.js';
-export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, flushEvents, } from './native.js';
+export { BamlRuntime, BamlCallContext, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
@@ -20,7 +20,6 @@ export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
 export { BamlFunctionSpec } from './function_spec.js';
 export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
-export { CtxManager } from './ctx_manager.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.
@@ -65,7 +64,7 @@ export class FunctionResult {
         return `FunctionResult(${JSON.stringify(this._value)})`;
     }
 }
-export function callFunctionSync(rt, functionName, kwargs, ctx, callCtx) {
+export function callFunctionSync(rt, functionName, kwargs, callCtx) {
     // Encode in sync mode so a host callable in the kwargs fast-fails
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
@@ -81,7 +80,7 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, callCtx) {
     try {
         let resultBytes;
         try {
-            resultBytes = rt.callFunctionSync(argsProto, ctx ?? null);
+            resultBytes = rt.callFunctionSync(argsProto);
         }
         catch (err) {
             throw wrapNativeError(err);
@@ -92,7 +91,7 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, callCtx) {
         callCtxBinding.detach();
     }
 }
-export async function callFunction(rt, functionName, kwargs, ctx, callCtx) {
+export async function callFunction(rt, functionName, kwargs, callCtx) {
     const callId = newFunctionCall();
     const argsProto = encodeCallArgs(kwargs, { callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
@@ -104,7 +103,7 @@ export async function callFunction(rt, functionName, kwargs, ctx, callCtx) {
     try {
         let resultBytes;
         try {
-            resultBytes = await rt.callFunction(argsProto, ctx ?? null);
+            resultBytes = await rt.callFunction(argsProto);
         }
         catch (err) {
             throw wrapNativeError(err);
@@ -115,6 +114,6 @@ export async function callFunction(rt, functionName, kwargs, ctx, callCtx) {
         callCtxBinding.detach();
     }
 }
-// Register flush on process exit (single registration; see exit_hook.ts).
-installFlushOnExit();
+// Register runtime shutdown on process exit (single registration; see exit_hook.ts).
+installShutdownOnExit();
 //# sourceMappingURL=index.js.map

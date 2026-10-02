@@ -41,12 +41,6 @@ fn get_bridge_runtime_version() -> &'static str {
     baml_version::PYPI_VERSION
 }
 
-/// No-op: tracing has been removed. Kept as a live symbol for ABI stability
-/// (SDK `atexit` + `__all__` reference it).
-#[gen_stub_pyfunction]
-#[pyfunction]
-fn flush_events() {}
-
 #[gen_stub_pyfunction]
 #[pyfunction]
 fn new_function_call() -> u64 {
@@ -80,11 +74,9 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<runtime::BamlRuntime>()?;
     media::register(m)?;
     m.add_class::<types::FunctionResult>()?;
-    m.add_class::<types::HostSpanManager>()?;
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(get_toolchain_version))?;
     m.add_wrapped(wrap_pyfunction!(get_bridge_runtime_version))?;
-    m.add_wrapped(wrap_pyfunction!(flush_events))?;
     m.add_wrapped(wrap_pyfunction!(new_function_call))?;
     m.add_wrapped(wrap_pyfunction!(cancel_function_call))?;
     m.add_wrapped(wrap_pyfunction!(

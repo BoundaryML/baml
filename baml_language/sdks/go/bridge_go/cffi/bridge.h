@@ -19,7 +19,6 @@ typedef BamlCffiStatus (*BamlHandleCloneFn)(uint64_t key, uint64_t *out_key);
 typedef BamlCffiStatus (*BamlHandleReleaseFn)(uint64_t key);
 typedef BamlCffiStatus (*TestonlySeedFunctionRefFn)(uint64_t global_index, uint64_t *out_key, int32_t *out_handle_type);
 typedef int32_t (*CancelFunctionCallFn)(uint32_t id);
-typedef void (*FlushEventsFn)(void);
 // Host-value callable support
 typedef void (*HostDispatchFn)(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length);
 typedef void (*HostReleaseFn)(uint64_t host_value_key);
@@ -38,7 +37,6 @@ static void *bamlHandleCloneFnPtr = NULL;
 static void *bamlHandleReleaseFnPtr = NULL;
 static void *testonlySeedFunctionRefFnPtr = NULL;
 static void *cancelFunctionCallFnPtr = NULL;
-static void *flushEventsFnPtr = NULL;
 // Host-value callable function pointers
 static void *registerHostDispatchCallbackFnPtr = NULL;
 static void *registerHostReleaseCallbackFnPtr = NULL;
@@ -55,7 +53,6 @@ static void setBamlHandleCloneFn(void *fn) { bamlHandleCloneFnPtr = fn; }
 static void setBamlHandleReleaseFn(void *fn) { bamlHandleReleaseFnPtr = fn; }
 static void setTestonlySeedFunctionRefFn(void *fn) { testonlySeedFunctionRefFnPtr = fn; }
 static void setCancelFunctionCallFn(void *fn) { cancelFunctionCallFnPtr = fn; }
-static void setFlushEventsFn(void *fn) { flushEventsFnPtr = fn; }
 // Host-value callable setters
 static void setRegisterHostDispatchCallbackFn(void *fn) { registerHostDispatchCallbackFnPtr = fn; }
 static void setRegisterHostReleaseCallbackFn(void *fn) { registerHostReleaseCallbackFnPtr = fn; }
@@ -100,9 +97,6 @@ static BamlCffiStatus wrapTestonlySeedFunctionRef(uint64_t global_index, uint64_
 static int32_t wrapCancelFunctionCall(uint32_t id) {
     if (cancelFunctionCallFnPtr) return ((CancelFunctionCallFn)cancelFunctionCallFnPtr)(id);
     return 1;
-}
-static void wrapFlushEvents(void) {
-    if (flushEventsFnPtr) ((FlushEventsFn)flushEventsFnPtr)();
 }
 // Host-value callable wrappers
 static void wrapRegisterHostDispatchCallback(HostDispatchFn cb) {
