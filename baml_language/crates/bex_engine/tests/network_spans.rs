@@ -24,6 +24,22 @@ const SOURCE: &str = r##"
             if (req.url.starts_with("/missing")) {
                 return baml.http.Response.new(404, { "content-type": "text/plain" }, "not here".to_utf8());
             }
+            if (req.url.starts_with("/sse-close")) {
+                // Its event arrives after the program has closed the stream,
+                // which is still read on the wire.
+                let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
+                spawn {
+                    {
+                        baml.sys.sleep(baml.time.Duration.from_milliseconds(300n));
+                        resp.write("event: message\ndata: late\n\n".to_utf8());
+                        resp.end();
+                        null
+                    } catch (e) {
+                        _ => null
+                    }
+                };
+                return resp;
+            }
             if (req.url.starts_with("/sse")) {
                 let events = "event: message\ndata: one\n\nevent: message\ndata: two\n\n";
                 return baml.http.Response.new(200, { "content-type": "text/event-stream" }, events.to_utf8());
@@ -70,12 +86,30 @@ const SOURCE: &str = r##"
             _ => "other"
         };
 
+        // `reqwest` prints this URL parsed: `http://`, the spaces encoded.
+        let normalized = {
+            baml.http.send(baml.http.Request {
+                method: "GET",
+                url: "HTTP://127.0.0.1:1/Refused Path?key=sk-norm&q=a b",
+                headers: {},
+                body: "",
+            });
+            "sent"
+        } catch (e) {
+            baml.errors.Io => if (e.message.includes("/Refused%20Path?key=sk-norm&q=a%20b")) { "normalized" } else { e.message },
+            _ => "other"
+        };
+
         let sse = baml.http.send_sse(request(base, "/sse"));
         let batches = 0;
         while (sse.next() != null) {
             batches = batches + 1;
         }
         let early = baml.http.send_sse(request(base, "/sse-close"));
+        early.close();
+        // Let the late event arrive and be drained by later sys-ops; the
+        // second close keeps the stream alive until then.
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(600n));
         early.close();
 
         let never = baml.http.send(request(base, "/never"));
@@ -88,7 +122,7 @@ const SOURCE: &str = r##"
         let cancelled = (await slow) catch (e) { baml.panics.Cancelled => "cancelled" };
 
         let _ = task.cancel();
-        ok + "|" + missing + "|" + refused + "|" + cancelled
+        ok + "|" + missing + "|" + refused + "|" + normalized + "|" + cancelled
     }
 "##;
 
@@ -118,7 +152,7 @@ async fn record(directory: &Path) -> Arc<BexEngine> {
     .unwrap();
     assert_eq!(
         result,
-        BexExternalValue::String(r#"{"ok":true}|not here|refused|cancelled"#.into())
+        BexExternalValue::String(r#"{"ok":true}|not here|refused|normalized|cancelled"#.into())
     );
     tokio::time::timeout(Duration::from_secs(30), engine.shutdown())
         .await
@@ -132,6 +166,8 @@ struct Span {
     announcement: Option<proto::NetworkAnnouncement>,
     events: Vec<proto::NetworkEvent>,
     completion: Option<proto::NetworkCompletion>,
+    /// Event names and `completion`, in the order the files hold them.
+    written: Vec<String>,
 }
 
 impl Span {
@@ -163,17 +199,16 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
                     (span.id, true)
                 }
                 Some(Event::NetworkEvent(network)) => {
-                    spans
-                        .entry(network.span_id)
-                        .or_default()
-                        .events
-                        .push(network.clone());
+                    let span = spans.entry(network.span_id).or_default();
+                    span.events.push(network.clone());
+                    span.written.push(network.name.clone());
                     (network.span_id, true)
                 }
                 Some(Event::NetworkCompletion(done)) => {
                     let span = spans.entry(done.span_id).or_default();
                     assert!(span.completion.is_none(), "a span ends once");
                     span.completion = Some(*done);
+                    span.written.push("completion".to_owned());
                     (done.span_id, true)
                 }
                 _ => (0, false),
@@ -284,6 +319,7 @@ async fn each_request_records_its_span_events_and_end() {
     assert_eq!(
         spans.keys().map(String::as_str).collect::<Vec<_>>(),
         [
+            "Refused Path",
             "bytes",
             "missing",
             "never",
@@ -349,6 +385,18 @@ async fn each_request_records_its_span_events_and_end() {
     let sanitized = &span.announcement.as_ref().unwrap().url;
     assert!(message.contains(&format!("({sanitized})")), "{error}");
 
+    // The same, when `reqwest` prints the URL differently from how the
+    // program wrote it: the capture quotes the parsed URL, sanitized.
+    let span = &spans["Refused Path"];
+    assert_eq!(outcome(span), (proto::InvocationOutcome::Errored, false));
+    let error = load(span.completion.as_ref().unwrap().error_cas_id);
+    let message = error["error"]["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("(http://127.0.0.1:1/Refused%20Path?key=sha256:"),
+        "{error}"
+    );
+    assert!(!message.contains("sk-norm"), "{error}");
+
     // A stream read to its end: one data per event, its end, then the read.
     let span = &spans["sse"];
     assert_eq!(span.names(), ["connection", "data", "data", "end", "await"]);
@@ -359,11 +407,10 @@ async fn each_request_records_its_span_events_and_end() {
     assert_eq!(load(span.events[2].payload_cas_id)["data"], "two");
     assert_eq!(outcome(span), ok);
 
-    // Closed early: a close, and no read.
+    // Closed early: a close, and nothing after its completion, though the
+    // stream's event arrived on the wire later.
     let span = &spans["sse-close"];
-    assert_eq!(span.names()[0], "connection");
-    assert!(span.names().contains(&"close"));
-    assert!(!span.names().contains(&"await"));
+    assert_eq!(span.written, ["connection", "close", "completion"]);
     assert_eq!(outcome(span), ok);
 
     // Never read: open for good, with what arrived.
@@ -392,7 +439,7 @@ async fn each_request_records_its_span_events_and_end() {
             .count()
     };
     assert!(!files.is_empty());
-    for secret in ["sk-query", "sk-header", "sk-cookie"] {
+    for secret in ["sk-query", "sk-norm", "sk-header", "sk-cookie"] {
         assert_eq!(holding(secret), 0, "{secret} reached the disk");
     }
 }

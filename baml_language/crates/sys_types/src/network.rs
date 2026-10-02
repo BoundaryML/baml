@@ -62,19 +62,37 @@ pub struct NetworkEvent {
 /// Events the IO side queued, waiting for the engine to drain them on a VM
 /// thread. One per engine.
 #[derive(Debug, Default)]
-pub struct NetworkQueue(Mutex<Vec<NetworkEvent>>);
+pub struct NetworkQueue(Mutex<Vec<Queued>>);
+
+/// A queued event, with its span's open flag when it was pushed through a
+/// [`NetworkContext`].
+#[derive(Debug)]
+struct Queued {
+    event: NetworkEvent,
+    open: Option<Arc<AtomicBool>>,
+}
 
 impl NetworkQueue {
     pub fn push(&self, event: NetworkEvent) {
-        self.events().push(event);
+        self.events().push(Queued { event, open: None });
     }
 
-    /// Everything queued so far, in the order it was pushed.
+    /// Everything queued so far, in the order it was pushed, except the
+    /// events of a span that ended since: nothing follows a completion.
     pub fn drain(&self) -> Vec<NetworkEvent> {
         std::mem::take(&mut *self.events())
+            .into_iter()
+            .filter(|queued| {
+                queued
+                    .open
+                    .as_ref()
+                    .is_none_or(|open| open.load(Ordering::Acquire))
+            })
+            .map(|queued| queued.event)
+            .collect()
     }
 
-    fn events(&self) -> std::sync::MutexGuard<'_, Vec<NetworkEvent>> {
+    fn events(&self) -> std::sync::MutexGuard<'_, Vec<Queued>> {
         // A push never panics while holding the lock, so a poisoned queue
         // still holds whole events.
         self.0
@@ -93,16 +111,48 @@ pub struct NetworkContext {
     /// Reads the issuing run's clock. Any OS thread of the run may call it.
     pub now: Arc<dyn Fn() -> u64 + Send + Sync>,
     pub sink: Arc<NetworkQueue>,
+    /// Shared by every clone: false once the engine ended the span.
+    open: Arc<AtomicBool>,
 }
 
 impl NetworkContext {
-    /// Queue `kind` for this request, stamped now.
+    pub fn new(
+        span: u64,
+        now: Arc<dyn Fn() -> u64 + Send + Sync>,
+        sink: Arc<NetworkQueue>,
+    ) -> Self {
+        Self {
+            span,
+            now,
+            sink,
+            open: Arc::new(AtomicBool::new(true)),
+        }
+    }
+
+    /// Queue `kind` for this request, stamped now. Nothing once the span
+    /// ended: a stream closed early can still be read on the wire.
     pub fn push(&self, kind: NetworkEventKind) {
-        self.sink.push(NetworkEvent {
-            span: self.span,
-            at_ticks: (self.now)(),
-            kind,
+        if !self.is_open() {
+            return;
+        }
+        self.sink.events().push(Queued {
+            event: NetworkEvent {
+                span: self.span,
+                at_ticks: (self.now)(),
+                kind,
+            },
+            open: Some(Arc::clone(&self.open)),
         });
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.open.load(Ordering::Acquire)
+    }
+
+    /// End the span, for every clone: later events, and events queued but
+    /// not drained yet, are dropped. True the first time.
+    pub fn close(&self) -> bool {
+        self.open.swap(false, Ordering::AcqRel)
     }
 }
 
@@ -125,7 +175,6 @@ impl std::fmt::Debug for NetworkContext {
 pub struct NetworkTraced {
     network: NetworkContext,
     data: Arc<dyn Any + Send + Sync>,
-    open: AtomicBool,
 }
 
 impl NetworkTraced {
@@ -134,11 +183,7 @@ impl NetworkTraced {
         network: NetworkContext,
         data: Arc<dyn Any + Send + Sync>,
     ) -> Arc<dyn Any + Send + Sync> {
-        Arc::new(Self {
-            network,
-            data,
-            open: AtomicBool::new(true),
-        })
+        Arc::new(Self { network, data })
     }
 
     /// The traced request `data` came from, if it came from one.
@@ -158,11 +203,10 @@ impl NetworkTraced {
         &self.network
     }
 
-    /// The span to close: once, then `None`.
+    /// The span to close: once, then `None`. Closing it ends the request's
+    /// [`NetworkContext`] too.
     pub fn take_span(&self) -> Option<u64> {
-        self.open
-            .swap(false, Ordering::AcqRel)
-            .then_some(self.network.span)
+        self.network.close().then_some(self.network.span)
     }
 }
 
@@ -172,11 +216,11 @@ mod tests {
 
     fn context(sink: &Arc<NetworkQueue>) -> NetworkContext {
         let ticks = Arc::new(std::sync::atomic::AtomicU64::new(10));
-        NetworkContext {
-            span: 7,
-            now: Arc::new(move || ticks.fetch_add(1, Ordering::Relaxed)),
-            sink: Arc::clone(sink),
-        }
+        NetworkContext::new(
+            7,
+            Arc::new(move || ticks.fetch_add(1, Ordering::Relaxed)),
+            Arc::clone(sink),
+        )
     }
 
     #[test]
@@ -216,5 +260,42 @@ mod tests {
         let inner = NetworkTraced::inner(traced);
         assert_eq!(inner.downcast_ref::<u32>(), Some(&42));
         assert_eq!(NetworkTraced::inner(plain).downcast_ref::<u32>(), Some(&5));
+    }
+
+    #[test]
+    fn an_ended_span_records_nothing_more() {
+        let sink = Arc::new(NetworkQueue::default());
+        let network = context(&sink);
+        let reader = network.clone();
+        let other = context(&sink);
+        network.push(NetworkEventKind::Connection {
+            status: 200,
+            headers: Vec::new(),
+        });
+        // Queued before the span ended, drained after: dropped.
+        reader.push(NetworkEventKind::StreamEnd);
+        other.push(NetworkEventKind::StreamEnd);
+        let traced = NetworkTraced::wrap(network, Arc::new(()));
+        assert_eq!(
+            NetworkTraced::of(traced.as_ref()).unwrap().take_span(),
+            Some(7)
+        );
+        assert!(!reader.is_open());
+        assert!(!reader.close());
+        // Pushed after: dropped.
+        reader.push(NetworkEventKind::Body(Bytes::from_static(b"late")));
+        // The other span is untouched; so is an event queued without a context.
+        sink.push(NetworkEvent {
+            span: 9,
+            at_ticks: 1,
+            kind: NetworkEventKind::Await,
+        });
+        assert_eq!(
+            sink.drain()
+                .into_iter()
+                .map(|event| event.kind)
+                .collect::<Vec<_>>(),
+            [NetworkEventKind::StreamEnd, NetworkEventKind::Await]
+        );
     }
 }

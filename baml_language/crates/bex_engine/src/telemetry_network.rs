@@ -42,7 +42,7 @@ pub(crate) enum NetworkOp {
 }
 
 /// A span that ends with the error being thrown. Its error is captured
-/// without the raw `urls` it may quote: they become the sanitized URLs.
+/// without the `urls` it may quote: they become the sanitized URLs.
 pub(crate) struct NetworkClose {
     span: TelemetryId,
     urls: Vec<String>,
@@ -59,16 +59,30 @@ impl NetworkOp {
     /// The span a failed or cancelled op ends, if it is still open.
     pub(crate) fn span_to_close(&self) -> Option<NetworkClose> {
         match self {
-            Self::Opened { span, url, .. } => Some(NetworkClose {
+            Self::Opened { span, context, url } => context.close().then(|| NetworkClose {
                 span: *span,
-                urls: vec![url.clone()],
+                urls: quoted_forms(url),
             }),
             Self::Reads { traced, url, .. } => Some(NetworkClose {
                 span: take_span(traced)?,
-                urls: url.iter().cloned().collect(),
+                urls: url.as_deref().map(quoted_forms).unwrap_or_default(),
             }),
         }
     }
+}
+
+/// The ways an error can quote `url`: as the program wrote it, and as
+/// `reqwest` prints it, parsed (scheme and host lowercased, default port
+/// dropped, empty path made `/`, spaces and other characters
+/// percent-encoded). Each one's query is rewritten too.
+fn quoted_forms(url: &str) -> Vec<String> {
+    let mut forms = vec![url.to_owned()];
+    if let Ok(parsed) = url::Url::parse(url)
+        && parsed.as_str() != url
+    {
+        forms.push(parsed.as_str().to_owned());
+    }
+    forms
 }
 
 fn take_span(traced: &Arc<dyn Any + Send + Sync>) -> Option<TelemetryId> {
@@ -100,11 +114,11 @@ impl BexEngine {
                 let span = thread.vm.open_network_span(&request)?;
                 Some(NetworkOp::Opened {
                     span,
-                    context: NetworkContext {
-                        span: span.get(),
-                        now: Arc::new(move || clock.read().get()),
-                        sink: Arc::clone(&telemetry.network),
-                    },
+                    context: NetworkContext::new(
+                        span.get(),
+                        Arc::new(move || clock.read().get()),
+                        Arc::clone(&telemetry.network),
+                    ),
                     url: request.url,
                 })
             }
@@ -119,7 +133,9 @@ impl BexEngine {
     }
 
     /// Write the events the IO side queued, whatever thread's span they
-    /// belong to. Called after every sys-op, before its result reaches the VM.
+    /// belong to. Called after every sys-op, before its result reaches the VM,
+    /// so a span's events come before the completion that op may write. The
+    /// queue drops the events of a span that ended since they were queued.
     /// Events still queued when the engine shuts down are not written: a
     /// last drain onto the root thread belongs in `shutdown`, with the GC
     /// `drop` hook (see `NetworkTraced`).
@@ -142,8 +158,8 @@ impl BexEngine {
             return;
         };
         match op {
-            NetworkOp::Opened { span, .. } => {
-                if !carries(result, *span) {
+            NetworkOp::Opened { span, context, .. } => {
+                if !carries(result, *span) && context.close() {
                     vm.close_network_span(*span, at, InvocationOutcome::Ok, None, &[]);
                 }
             }
