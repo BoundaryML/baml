@@ -64,7 +64,9 @@ impl Default for CloudPublisherConfig {
 /// all. The queue and staged files share capture count/byte budgets. A
 /// capture is never refused for its size: before one that does not fit, what
 /// is held is sent, waiting on delivery's admission, and one larger than the
-/// byte budget is then held alone. A record can seal
+/// byte budget is then held alone. Queued blobs are due as events are: the
+/// open file's deadline runs while any wait, and a due file is followed by
+/// files carrying whatever it did not take. A record can seal
 /// a file but cannot deliver it until input chunks are recycled. Staging is
 /// additionally bounded by delivery's plan and recording-byte limits. Neither
 /// sealing nor staging releases a capture; only delivery or terminal cleanup
@@ -289,17 +291,32 @@ impl CloudPublisher {
                     .is_some_and(|total| total <= self.config.max_retained_bytes))
     }
 
-    /// Send what is held until a capture retaining `size` may be: the open
-    /// file with the queue's head, then files carrying the rest. Delivery's
-    /// admission is the wait.
-    fn make_room(&mut self, size: usize) {
+    /// Send what is held: the open file with the queue's head, then files
+    /// carrying the rest for as long as `more` asks and any can be sent.
+    /// Delivery's admission is the wait.
+    fn send(&mut self, more: impl Fn(&Self) -> bool) {
         self.service(Instant::now(), Seal::Now);
-        while self.failure.is_none() && !self.has_room(size, true) && !self.queue.is_empty() {
+        while self.failure.is_none() && !self.queue.is_empty() && more(self) {
             let waiting = self.queue.len();
             self.service(Instant::now(), Seal::Drain);
             if self.queue.len() == waiting {
                 break;
             }
+        }
+    }
+
+    /// Seal the open file if it is due and submit what is staged. The
+    /// deadline is for everything that waits, so a due file is followed by
+    /// files carrying the rest of the queue.
+    fn tick(&mut self, now: Instant) {
+        if self
+            .recording
+            .deadline()
+            .is_some_and(|deadline| now >= deadline)
+        {
+            self.send(|_| true);
+        } else {
+            self.service(now, Seal::IfDue);
         }
     }
 
@@ -350,6 +367,8 @@ impl CloudPublisher {
                 .record_payload_loss(DeliveryError::Capacity, false);
             return;
         }
+        // A blob waits no longer than an event does.
+        self.start_window();
         for leaf in leaves {
             let (id, bytes) = (leaf.id(), leaf.retained_bytes());
             self.remember(id);
@@ -479,7 +498,16 @@ impl CloudPublisher {
         }
     }
 
+    /// Stage a sealed file with the queue's head. Sealing ended the open
+    /// file's deadline; blobs still queued start the next file's.
     fn stage(&mut self, sealed: Result<Option<SealedFile>, RecordingError>) {
+        self.stage_file(sealed);
+        if self.failure.is_none() && !self.queue.is_empty() {
+            self.start_window();
+        }
+    }
+
+    fn stage_file(&mut self, sealed: Result<Option<SealedFile>, RecordingError>) {
         let mut file = match sealed {
             Ok(Some(file)) => file,
             Ok(None) => return,
@@ -612,35 +640,27 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         if self.failure.is_some() {
             return;
         }
-        let snapshot = match record {
-            SpanRecord::FunctionSpanAnnouncement {
-                captured_inputs, ..
-            } => captured_inputs.as_ref(),
-            _ => record
-                .completion()
-                .and_then(|completion| completion.captured_value),
-        };
-        if let Some(snapshot) = snapshot {
-            if snapshot
+        if let Some(snapshot) = record.capture()
+            && snapshot
                 .blobs()
                 .any(|blob| !self.already_offered(blob.id()))
-            {
-                let size = snapshot.retained_bytes();
-                self.preflight_size = Some((snapshot.root_id(), size));
-                // Each blob that is one string adds a little when it leaves
-                // the capture.
-                let leaves = snapshot.blobs().len().saturating_mul(size_of::<Leaf>());
-                let size = size.saturating_add(leaves);
-                if !self.has_room(size, true) {
-                    self.make_room(size);
-                }
+        {
+            let size = snapshot.retained_bytes();
+            self.preflight_size = Some((snapshot.root_id(), size));
+            // Each blob that is one string adds a little when it leaves
+            // the capture.
+            let leaves = snapshot.blobs().len().saturating_mul(size_of::<Leaf>());
+            let size = size.saturating_add(leaves);
+            if !self.has_room(size, true) {
+                // Send what is held until this one may be.
+                self.send(|publisher| !publisher.has_room(size, true));
             }
         }
     }
 
     fn after_detached_span(&mut self) {
         if !self.staged.is_empty() || self.failure.is_some() {
-            self.service(Instant::now(), Seal::IfDue);
+            self.tick(Instant::now());
         }
     }
 
@@ -693,7 +713,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 
     fn after_batch(&mut self, _records: usize) {
-        self.service(Instant::now(), Seal::IfDue);
+        self.tick(Instant::now());
     }
 
     fn max_chunks_per_batch(&self) -> usize {
@@ -712,8 +732,9 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         }
     }
 
+    /// Everything consumed is sent, queued blobs included.
     fn flush(&mut self) {
-        self.service(Instant::now(), Seal::Now);
+        self.send(|_| true);
     }
 
     /// Input is exhausted. Queued blobs beyond what one file takes, by count
@@ -1015,6 +1036,127 @@ mod tests {
         assert!(publisher.failure.is_none());
     }
 
+    /// A capture of more blobs than the files sealed for it take, offered
+    /// as the only record of its chunk. Returns how many it left queued.
+    fn offer_with_a_tail(publisher: &mut CloudPublisher, pool: &SnapshotPool) -> usize {
+        let max = publisher.delivery.config().max_candidates;
+        let snapshot = cut_list(pool, 1, 2 * max + 2);
+        publisher.before_batch(1);
+        publisher.before_span_chunk(1);
+        offer(publisher, snapshot);
+        publisher.after_detached_span();
+        assert!(publisher.staged.is_empty());
+        assert_eq!(publisher.owners.len(), 1);
+        publisher.queue.len()
+    }
+
+    #[test]
+    fn blobs_left_queued_by_a_seal_are_sent_when_the_next_deadline_passes() {
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig {
+            candidate_target: 4,
+            ..CloudPublisherConfig::default()
+        });
+        let pool = SnapshotPool::new(4, Limits::default());
+        // The root among them: the capture is held while they wait.
+        assert_eq!(offer_with_a_tail(&mut publisher, &pool), 3);
+        assert_eq!(pool.stats().in_use, 1);
+        // No event is pending, yet a deadline runs for them.
+        assert_eq!(publisher.recording.encoded_size_hint(), 0);
+        let deadline = publisher.deadline().unwrap();
+        publisher.tick(deadline.checked_sub(Duration::from_nanos(1)).unwrap());
+        assert_eq!(publisher.queue.len(), 3);
+        assert_eq!(publisher.deadline(), Some(deadline));
+        publisher.tick(deadline);
+        assert!(publisher.queue.is_empty());
+        assert!(publisher.owners.is_empty());
+        assert_eq!(publisher.retained_snapshots, 0);
+        assert_eq!(publisher.retained_bytes, 0);
+        assert!(publisher.inflight.is_empty());
+        assert!(publisher.deadline().is_none());
+        assert!(publisher.failure.is_none());
+    }
+
+    #[test]
+    fn a_flush_sends_the_blobs_still_queued() {
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig {
+            candidate_target: 4,
+            ..CloudPublisherConfig::default()
+        });
+        let pool = SnapshotPool::new(4, Limits::default());
+        assert_eq!(offer_with_a_tail(&mut publisher, &pool), 3);
+        publisher.flush();
+        assert!(publisher.queue.is_empty());
+        assert!(publisher.owners.is_empty());
+        assert_eq!(publisher.retained_snapshots, 0);
+        assert!(publisher.deadline().is_none());
+        assert!(publisher.failure.is_none());
+    }
+
+    #[test]
+    fn room_is_made_before_every_kind_of_record_that_carries_a_capture() {
+        let thread = allocate_telemetry_id();
+        let function = btel_types::FunctionIdAllocator::default()
+            .allocate()
+            .unwrap();
+        for kind in ["log", "context", "inputs", "output"] {
+            let (delivery, mut publisher) = publisher(CloudPublisherConfig::default());
+            let pool = SnapshotPool::new(4, Limits::default());
+            capture(&mut publisher, &pool, 1);
+            // No room for a second capture beside the first.
+            publisher.config.max_retained_bytes = publisher.retained_bytes;
+            let snapshot = pool
+                .try_acquire()
+                .unwrap()
+                .finish(SnapshotValue::Int(2), &mut Shaper::default());
+            let id = snapshot.root_id();
+            let mut record = match kind {
+                "log" => SpanRecord::Log {
+                    parent_id: thread,
+                    function,
+                    pc: 0,
+                    at: ClockInstant::from_ticks(1),
+                    level: btel_records::LogLevel::Info,
+                    event_name: None,
+                    captured_data: Some(snapshot),
+                },
+                "context" => SpanRecord::ContextSelected {
+                    captured_context: Some(snapshot),
+                },
+                "inputs" => SpanRecord::FunctionSpanAnnouncement {
+                    id: allocate_telemetry_id(),
+                    parent_id: thread,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(1),
+                    captured_inputs: Some(snapshot),
+                },
+                "output" => SpanRecord::FunctionSpanCompletionOk {
+                    id: allocate_telemetry_id(),
+                    parent_id: thread,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(1),
+                    exited_at: ClockInstant::from_ticks(2),
+                    await_time: btel_types::AwaitDuration::ZERO,
+                    captured_value: Some(snapshot),
+                },
+                other => unreachable!("{other}"),
+            };
+            publisher.before_detached_span(&record);
+            publisher.span(thread, &mut record);
+            // The first capture was sent to make room; this one is held.
+            assert_eq!(delivery.handle().loss_count(), 0, "{kind}");
+            assert_eq!(
+                publisher
+                    .queue
+                    .iter()
+                    .map(|queued| queued.id)
+                    .collect::<Vec<_>>(),
+                [id],
+                "{kind}"
+            );
+            assert_eq!(publisher.retained_snapshots, 1, "{kind}");
+        }
+    }
+
     #[test]
     fn blobs_offered_before_are_not_queued_again_and_empty_captures_are_dropped() {
         let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
@@ -1234,7 +1376,7 @@ mod tests {
         )
         .unwrap();
         let id = sources.root_id();
-        let publisher = publisher.with_process(btel_recorder::ProcessRecording {
+        let mut publisher = publisher.with_process(btel_recorder::ProcessRecording {
             info: btel_types::ProcessInfo {
                 process_id: [0; 16],
                 baml_version: "test".into(),
@@ -1249,6 +1391,14 @@ mod tests {
         assert_eq!(publisher.queue[0].id, id);
         assert_eq!(publisher.retained_snapshots, 1);
         assert_eq!(pool.stats().in_use, 1);
+        // It waits for a file no longer than an event would, though no
+        // event came.
+        let deadline = publisher.deadline().unwrap();
+        publisher.tick(deadline);
+        assert!(publisher.queue.is_empty());
+        assert_eq!(publisher.retained_snapshots, 0);
+        assert!(publisher.deadline().is_none());
+        assert!(publisher.failure.is_none());
     }
 
     #[test]

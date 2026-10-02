@@ -473,6 +473,95 @@ async fn a_capture_spanning_plans_delivers_every_blob_once_and_ends_last() {
     assert_eq!(uploaded, wanted);
 }
 
+#[tokio::test]
+async fn blobs_a_sealed_file_left_queued_are_delivered_without_another_record() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(support::response(request, &base, &[]))
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    let config = DeliveryConfig {
+        allow_http: true,
+        ..DeliveryConfig::new(server.uri().parse().unwrap())
+    };
+    let plan = config.max_candidates;
+    let delivery = BcsDelivery::new(config, |_| {}).unwrap();
+    let mut publisher = CloudPublisher::new(
+        RecordingId::generate(),
+        RecordingConfig {
+            flush_interval_duration: Duration::from_millis(50),
+            ..RecordingConfig::default()
+        },
+        CloudPublisherConfig {
+            candidate_target: 4,
+            ..CloudPublisherConfig::default()
+        },
+        delivery.handle(),
+    )
+    .unwrap();
+    let pool = SnapshotPool::new(2, Limits::default());
+    let snapshot = cut_list(&pool, 2 * plan + 2);
+    let root = snapshot.root_id();
+    publisher.before_batch(1);
+    publisher.before_span_chunk(1);
+    let thread = allocate_telemetry_id();
+    publisher.span(
+        thread,
+        &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(snapshot),
+        },
+    );
+    publisher.after_batch(1);
+    // Two files took a plan's worth each. The last three blobs, the root
+    // among them, wait: nothing else is recorded, and the processor only
+    // wakes for the deadline.
+    let deadline = publisher.deadline().expect("a deadline for queued blobs");
+    tokio::time::sleep(deadline.saturating_duration_since(std::time::Instant::now())).await;
+    publisher.after_batch(0);
+    assert!(publisher.deadline().is_none());
+    let uploaded = async {
+        while pool.stats().in_use != 0 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(10), uploaded)
+        .await
+        .expect("the capture is let go without waiting for shutdown");
+    let requests = server.received_requests().await.unwrap();
+    let prepares = prepare_requests(&requests);
+    assert_eq!(
+        prepares
+            .iter()
+            .map(|request| (
+                request.recording.recording_file_sequence,
+                request.candidates.len()
+            ))
+            .collect::<Vec<_>>(),
+        [(1, plan), (2, plan), (3, 3)]
+    );
+    assert_eq!(
+        prepares[2].candidates.last().unwrap().snapshot_id,
+        hex::encode(root.as_bytes())
+    );
+    assert_eq!(
+        recording_ends(&requests),
+        [(1, false), (2, false), (3, false)]
+    );
+    publisher.finish();
+    finish(delivery).await.unwrap();
+}
+
 /// Lists of two strings of `length`, distinct per `seed`: two leaf blobs and
 /// a root.
 fn two_strings(pool: &SnapshotPool, seed: usize, length: usize) -> Snapshot {

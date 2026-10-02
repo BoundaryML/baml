@@ -141,8 +141,11 @@ of blobs, cut short where the bytes their upload bodies buffer pass a quarter
 of delivery's CAS reservation, and always at least one blob. While 16 or more blobs still wait,
 or more than one file takes, further files are sealed to carry them, and at
 the end the last file takes what remains. The non-sliding timer starts at the
-first event, using `RecordingConfig::flush_interval_duration`; idle expiry and
-explicit shutdown also seal pending data.
+first event or the first blob waiting for a file, using
+`RecordingConfig::flush_interval_duration`, and starts again when a sealed
+file leaves blobs queued. When it expires, or on an explicit flush, the open
+file is sealed and further files carry every blob still queued, so a blob
+waits no longer than an event does. Explicit shutdown also seals pending data.
 
 Nothing is refused for its size. A blob is uploaded however large it is: the
 only size a capture is cut for is `btel_settings::snapshot::MAX_LEAF_BYTES`,

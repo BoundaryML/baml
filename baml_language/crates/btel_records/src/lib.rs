@@ -1167,15 +1167,16 @@ impl<I, V> SpanRecord<I, V> {
     }
 }
 
-impl<C> SpanRecord<C, C> {
-    /// Transfer the exclusive capture owner; record destruction handles everything else.
-    pub fn take_capture(&mut self) -> Option<C> {
-        match self {
-            Self::Log { captured_data, .. } => captured_data.take(),
-            Self::ContextSelected { captured_context } => captured_context.take(),
+/// The slot holding the capture a record owns, borrowed as `$record` is.
+/// Every variant is listed, so a new one must say whether it carries one.
+macro_rules! capture_slot {
+    ($record:expr) => {
+        match $record {
+            Self::Log { captured_data, .. } => Some(captured_data),
+            Self::ContextSelected { captured_context } => Some(captured_context),
             Self::FunctionSpanAnnouncement {
                 captured_inputs, ..
-            } => captured_inputs.take(),
+            } => Some(captured_inputs),
             Self::FunctionSpanCompletionOk { captured_value, .. }
             | Self::FunctionSpanCompletionOkNeedsAnnouncement { captured_value, .. }
             | Self::FunctionSpanCompletionOkReentry { captured_value, .. }
@@ -1207,7 +1208,7 @@ impl<C> SpanRecord<C, C> {
             }
             | Self::LateFunctionSpanCompletionPanicked { captured_value, .. }
             | Self::LateFunctionSpanCompletionPanickedReentry { captured_value, .. } => {
-                captured_value.take()
+                Some(captured_value)
             }
             Self::ThreadSelected { .. }
             | Self::ContextCleared
@@ -1224,5 +1225,17 @@ impl<C> SpanRecord<C, C> {
             | Self::ErrorRaiseFrameCompleted { .. }
             | Self::ErrorUnwindEnded { .. } => None,
         }
+    };
+}
+
+impl<C> SpanRecord<C, C> {
+    /// The capture this record owns.
+    pub fn capture(&self) -> Option<&C> {
+        capture_slot!(self).and_then(Option::as_ref)
+    }
+
+    /// Transfer the exclusive capture owner; record destruction handles everything else.
+    pub fn take_capture(&mut self) -> Option<C> {
+        capture_slot!(self).and_then(Option::take)
     }
 }
