@@ -1988,7 +1988,7 @@ type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>
 /// Convert a `Duration._nanoseconds` value (carried as a bigint across the
 /// sys-op boundary) into an operation timeout. Zero or negative disables it
 /// (`None` — block indefinitely, matching Rust's `Option<Duration>` socket
-/// timeout_options); a value too large for `u64` nanoseconds (~584 years) clamps to the
+/// timeouts); a value too large for `u64` nanoseconds (~584 years) clamps to the
 /// maximum. Shared by the net sys-ops and the HTTP server, so it lives here
 /// (always compiled) rather than behind the `bundle-http` feature.
 pub(crate) fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<std::time::Duration> {

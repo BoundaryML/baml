@@ -513,7 +513,7 @@ async fn each_model_request_is_its_own_span() {
             server: baml.http.Server,
             body: string,
 
-            function handle(self, req: baml.http.Request) -> baml.http.Response {
+            function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
                 baml.http.Response.new(200, { "content-type": "application/json" }, self.body.to_utf8())
             }
         }
@@ -605,7 +605,7 @@ async fn streamed_usage_keeps_the_cache_split() {
             server: baml.http.Server,
             events: string[],
 
-            function handle(self, req: baml.http.Request) -> baml.http.Response {
+            function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
                 let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
                 let events = self.events;
                 spawn {
