@@ -23,7 +23,12 @@ function main(name: string) -> string {
 
 /// The playground's own engine construction, recording to the project.
 fn engine(project: &Path) -> Arc<bex_engine::BexEngine> {
-    let mut program = baml_db::testing::compile_source(SOURCE);
+    engine_for(project, SOURCE)
+}
+
+/// `engine` for another program, whose `Ask` is captured the same way.
+fn engine_for(project: &Path, source: &str) -> Arc<bex_engine::BexEngine> {
+    let mut program = baml_db::testing::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && f.name.ends_with(".Ask")
@@ -198,4 +203,81 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
             .list_executions(&elsewhere.path().display().to_string())
             .is_err()
     );
+}
+
+/// An HTTP request is recorded as a network span under the call that made
+/// it. The playground has no view for those yet: they stay out of its span
+/// tree, and the execution opens as it would without them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn network_spans_stay_out_of_the_span_tree() {
+    const FETCHING: &str = r#"
+class Pong {
+    server: baml.http.Server,
+    function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
+        baml.http.Response.new(200, { "content-type": "text/plain" }, "pong".to_utf8())
+    }
+}
+function Ask(url: string) -> string {
+    baml.http.fetch(url).text()
+}
+function main(name: string) -> string {
+    let pong = Pong { server: baml.http.Server.bind("127.0.0.1:0") };
+    let task = spawn { pong.server.serve(pong.handle) };
+    let reply = Ask("http://" + pong.server.addr + "/" + name);
+    task.cancel();
+    reply
+}
+"#;
+    let workspace = tempfile::tempdir().unwrap();
+    let project = workspace.path().to_owned();
+    let telemetry = PlaygroundTelemetry::new(Arc::from(vec![project.clone()]));
+    let project_text = project.display().to_string();
+    let engine = engine_for(&project, FETCHING);
+    assert_eq!(
+        run(&engine, "ann").await.unwrap(),
+        bex_engine::BexExternalValue::String("pong".into())
+    );
+    engine.shutdown().await;
+    // The server's handler runs as a root call of its own.
+    let (executions, _) = telemetry.list_executions(&project_text).unwrap();
+    let main = executions
+        .iter()
+        .find(|execution| execution["entryFqn"] == "user.main")
+        .unwrap_or_else(|| panic!("{executions:#?}"));
+    assert_eq!(main["status"], "succeeded");
+    let execution = main["executionId"].as_str().unwrap().to_owned();
+
+    // The request is recorded, under the call that made it.
+    let mut index = Index::for_project(&project, IndexOptions::default()).unwrap();
+    let network = index
+        .refresh_and_query(&QueryRequest {
+            sql: "SELECT span_id, parent_span_id, is_complete FROM span_announcements
+                  WHERE span_type = 'network_span'"
+                .into(),
+            ..QueryRequest::default()
+        })
+        .unwrap()
+        .rows;
+    assert_eq!(network.len(), 1, "{network:#?}");
+    assert_eq!(network[0][2], 1);
+
+    let opened = telemetry
+        .open_execution(&project_text, &execution, None)
+        .unwrap();
+    let calls = opened["calls"].as_array().unwrap();
+    assert_eq!(calls.len(), 1, "{calls:#?}");
+    assert_eq!(calls[0]["fqn"], "user.Ask");
+    assert_eq!(calls[0]["callId"], network[0][1]);
+    assert_eq!(calls[0]["status"], "ok");
+    assert_eq!(calls[0]["output"], "\"pong\"");
+    assert_eq!(opened["execution"]["callsRetained"], 1);
+    // The root call and the server's future: no lane for the request.
+    let threads = opened["threads"].as_array().unwrap();
+    assert!(
+        threads
+            .iter()
+            .all(|thread| thread["threadId"] != network[0][0]),
+        "{threads:#?}"
+    );
+    assert!(opened["errors"].as_array().unwrap().is_empty());
 }

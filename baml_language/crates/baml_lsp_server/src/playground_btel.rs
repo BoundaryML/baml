@@ -43,11 +43,14 @@ fn ids(count: usize) -> String {
 }
 
 /// Spans started under any of `count` parents, or those spans themselves.
+/// Network spans (HTTP requests) are left out: the UI has no view for them
+/// yet, and would show them as calls.
 fn tree_sql(column: &str, count: usize) -> String {
     format!(
         "SELECT span_id, span_type, span_name, parent_span_id, future_id, profiler_node_id,
            start_time, is_complete, process_id
-         FROM span_announcements WHERE {column} IN ({})",
+         FROM span_announcements
+         WHERE {column} IN ({}) AND span_type <> 'network_span'",
         ids(count)
     )
 }

@@ -315,6 +315,34 @@ impl QueryContext {
         }
     }
 
+    /// `__btel_body_text`: the text of a recorded body, which is a whole
+    /// body (a string), one server-sent event's `data`, or a request
+    /// snapshot's `request.body`. NULL for anything else, such as bytes or a
+    /// cut body. A blob that cannot be read is reported.
+    fn body_text(&self, cas: [u8; 16]) -> rusqlite::Result<Option<String>> {
+        self.check_deadline()?;
+        let mut state = self.state.lock().expect("value state");
+        state.metrics.value_evaluations += 1;
+        let snapshot = match self.load(&mut state, cas) {
+            CasOutcome::Available(snapshot) => snapshot,
+            outcome => {
+                let mut key = cas.to_vec();
+                key.extend_from_slice(b"\xffbody");
+                Self::unavailable(&mut state, &key, outcome.code());
+                return Ok(None);
+            }
+        };
+        let key = |key: &str| Segment::Key(key.to_owned());
+        for path in [vec![], vec![key("data")], vec![key("request"), key("body")]] {
+            if let Nav::Value(DecodedValue::String(text)) =
+                value::navigate(&snapshot, Root::Value, None, &path)
+            {
+                return Ok(Some(text.to_string()));
+            }
+        }
+        Ok(None)
+    }
+
     /// `baml_value_state`: what the path finds, without reporting it as
     /// unavailable evidence (the caller asked for exactly this answer).
     fn state(&self, handle: &[u8]) -> rusqlite::Result<String> {
@@ -1092,6 +1120,14 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         };
         current(&s)?.state(handle)
     })?;
+    let s = slot.clone();
+    conn.create_scalar_function("__btel_body_text", 1, io, move |ctx| {
+        let Some(cas) = opt_blob(ctx, 0)? else {
+            return Ok(None);
+        };
+        let cas = <[u8; 16]>::try_from(cas).map_err(|_| user_error("invalid CAS id"))?;
+        current(&s)?.body_text(cas)
+    })?;
     register_identity_and_time(conn)?;
     register_final_tables(conn)?;
     let _ = Null;
@@ -1356,6 +1392,31 @@ impl Aggregate<Vec<(Option<i64>, i64, Event)>, Vec<u8>> for EventList {
     }
 }
 
+/// `%XX` escapes decoded; a malformed one is kept as it is.
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        let escaped = (bytes[at] == b'%')
+            .then(|| bytes.get(at + 1..at + 3))
+            .flatten()
+            .filter(|hex| hex.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|hex| u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok());
+        match escaped {
+            Some(byte) => {
+                out.push(byte);
+                at += 3;
+            }
+            None => {
+                out.push(bytes[at]);
+                at += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 fn utc_text(ns: Option<i64>) -> Option<String> {
     ns.and_then(|ns| format_unix_ns(i128::from(ns)))
 }
@@ -1391,6 +1452,21 @@ fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
         Ok(inline_handle(&Inline::List(history)))
     })?;
     conn.create_aggregate_function("__btel_usage", 6, pure, UsageSum)?;
+    // `(url, marker)`: the path segment right after the first `marker`, up
+    // to the next '/', ':', '?' or '#', percent-decoded. The model in
+    // `.../models/gemini-2.5-pro:generateContent` or `/model/<id>/converse`.
+    conn.create_scalar_function("__btel_path_segment", 2, pure, |ctx| {
+        let (Some(url), Some(marker)) =
+            (ctx.get::<Option<String>>(0)?, ctx.get::<Option<String>>(1)?)
+        else {
+            return Ok(None);
+        };
+        let Some((_, rest)) = url.split_once(marker.as_str()) else {
+            return Ok(None);
+        };
+        let segment = rest.split(['/', ':', '?', '#']).next().unwrap_or_default();
+        Ok((!segment.is_empty()).then(|| percent_decode(segment)))
+    })?;
     conn.create_aggregate_function("__btel_events", 5, pure, EventList)
 }
 
