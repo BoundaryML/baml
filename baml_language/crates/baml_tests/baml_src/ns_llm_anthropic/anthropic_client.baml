@@ -271,7 +271,8 @@ test "anthropic_request_shape" {
     assert.contains(got, "has_null=false|");
     // usage.cache_read_input_tokens is no longer hardcoded null
     assert.contains(got, "cached=4|");
-    assert.contains(got, "input=9")
+    // input_tokens counts the cache reads and writes: 9 + 4 + 6.
+    assert.contains(got, "input=19")
 }
 
 function anthropic_request_timeout() -> string {
@@ -886,7 +887,7 @@ function anthropic_stream_usage_splits_the_cache() -> string {
 
 test "anthropic_stream_usage_splits_the_cache" {
     // input/cached/cache writes/uncached/output/reasoning
-    assert.equal(anthropic_stream_usage_splits_the_cache(), "5/2/3/5/7/4")
+    assert.equal(anthropic_stream_usage_splits_the_cache(), "10/2/3/5/7/4")
 }
 
 function anthropic_stream_first_token_timeout() -> string {
@@ -1113,7 +1114,7 @@ test "anthropic_decode_tool_stream" {
     // stop/input/output/cached/cache writes/uncached/reasoning, per event
     assert.contains(
         got,
-        "events=meta:-/11/-1/7/3/11/-1,text:Hel,text:lo,meta:ToolUse/-1/42/9/-1/-1/13,done|",
+        "events=meta:-/21/-1/7/3/11/-1,text:Hel,text:lo,meta:ToolUse/-1/42/9/-1/-1/13,done|",
     );
     // thinking never becomes answer text
     assert.contains(got, "thinking=hmm|");

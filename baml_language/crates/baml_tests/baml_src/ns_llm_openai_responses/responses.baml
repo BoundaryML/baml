@@ -752,9 +752,9 @@ test "oai_stream_text" {
 }
 
 // A streamed turn reports the cache split a non-streamed one does:
-// input_tokens counts the cached share too.
+// input_tokens counts the cached share and the cache writes too.
 function oai_stream_usage_splits_the_cache() -> string {
-    let completed = `{"type":"response.completed","response":{"status":"completed","model":"gpt-4o-mini","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":100,"output_tokens":5,"input_tokens_details":{"cached_tokens":40},"output_tokens_details":{"reasoning_tokens":2}}}}`;
+    let completed = `{"type":"response.completed","response":{"status":"completed","model":"gpt-4o-mini","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":100,"output_tokens":5,"input_tokens_details":{"cached_tokens":40,"cache_write_tokens":25},"output_tokens_details":{"reasoning_tokens":2}}}}`;
     root.llm_mock.mock_sse_serve(
         [
             root.llm_mock.sse_data(
@@ -787,7 +787,7 @@ function oai_stream_usage_splits_the_cache() -> string {
 
 test "oai_stream_usage_splits_the_cache" {
     // input/cached/cache writes/uncached/output/reasoning
-    assert.equal(oai_stream_usage_splits_the_cache(), "100/40/-1/60/5/2")
+    assert.equal(oai_stream_usage_splits_the_cache(), "100/40/25/35/5/2")
 }
 
 // One streamed run to completion, as a plain call so a `catch_all` at the call

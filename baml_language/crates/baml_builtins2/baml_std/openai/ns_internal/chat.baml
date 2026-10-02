@@ -514,6 +514,7 @@ class CcChoice {
 
 class CcPromptTokensDetails {
     cached_tokens: int?,
+    cache_write_tokens: int?,
 }
 
 class CcCompletionTokensDetails {
@@ -1467,10 +1468,12 @@ function chat_parse(
                 output_tokens: u.completion_tokens ?? 0,
                 cached_input_tokens: u.prompt_tokens_details?.cached_tokens,
                 reasoning_tokens: u.completion_tokens_details?.reasoning_tokens,
-                // prompt_tokens counts the cached share too.
+                cache_write_input_tokens: u.prompt_tokens_details?.cache_write_tokens,
+                // prompt_tokens counts the cached share and the cache writes too.
                 uncached_input_tokens: ai.internal.uncached_input_tokens(
                     u.prompt_tokens,
                     u.prompt_tokens_details?.cached_tokens,
+                    cache_write = u.prompt_tokens_details?.cache_write_tokens,
                 ),
             }
         },
@@ -1728,10 +1731,12 @@ class ChatStreamDecoder {
                                     input_tokens: usage.prompt_tokens,
                                     output_tokens: usage.completion_tokens,
                                     cached_input_tokens: usage.prompt_tokens_details?.cached_tokens,
-                                    // prompt_tokens counts the cached share too.
+                                    cache_write_input_tokens: usage.prompt_tokens_details?.cache_write_tokens,
+                                    // prompt_tokens counts the cached share and the cache writes too.
                                     uncached_input_tokens: ai.internal.uncached_input_tokens(
                                         usage.prompt_tokens,
                                         usage.prompt_tokens_details?.cached_tokens,
+                                        cache_write = usage.prompt_tokens_details?.cache_write_tokens,
                                     ),
                                     reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens,
                                 },

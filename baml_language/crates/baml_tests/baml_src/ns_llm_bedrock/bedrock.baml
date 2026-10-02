@@ -1252,7 +1252,8 @@ function bedrock_parse_text_and_usage() -> string {
 }
 
 test "bedrock_parse_text_and_usage" {
-    assert.equal(bedrock_parse_text_and_usage(), "Second part.|Complete|10|15|7|2")
+    // input_tokens counts the cache reads and writes: 10 + 7 + 3.
+    assert.equal(bedrock_parse_text_and_usage(), "Second part.|Complete|20|15|7|2")
 }
 
 // A turn whose stop reason means the generation was cut short or is unusable
