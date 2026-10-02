@@ -64,9 +64,11 @@ impl Default for CloudPublisherConfig {
 /// all. The queue and staged files share capture count/byte budgets. A
 /// capture is never refused for its size: before one that does not fit, what
 /// is held is sent, waiting on delivery's admission, and one larger than the
-/// byte budget is then held alone. Queued blobs are due as events are: the
-/// open file's deadline runs while any wait, and a due file is followed by
-/// files carrying whatever it did not take. A record can seal
+/// byte budget is then held alone. Blobs a sealed file left queued are due
+/// as events are: they start the next file's deadline, and a due file is
+/// followed by files carrying whatever it did not take. A capture queued
+/// before the first event (the sources) waits for that event's file. A
+/// record can seal
 /// a file but cannot deliver it until input chunks are recycled. Staging is
 /// additionally bounded by delivery's plan and recording-byte limits. Neither
 /// sealing nor staging releases a capture; only delivery or terminal cleanup
@@ -367,8 +369,6 @@ impl CloudPublisher {
                 .record_payload_loss(DeliveryError::Capacity, false);
             return;
         }
-        // A blob waits no longer than an event does.
-        self.start_window();
         for leaf in leaves {
             let (id, bytes) = (leaf.id(), leaf.retained_bytes());
             self.remember(id);
@@ -498,11 +498,14 @@ impl CloudPublisher {
         }
     }
 
-    /// Stage a sealed file with the queue's head. Sealing ended the open
-    /// file's deadline; blobs still queued start the next file's.
+    /// Stage a sealed file with the queue's head. Sealing a file ended the
+    /// open file's deadline; blobs it left queued start the next file's.
+    /// Nothing sealed starts nothing: blobs queued before the first event
+    /// wait for it.
     fn stage(&mut self, sealed: Result<Option<SealedFile>, RecordingError>) {
+        let left = matches!(sealed, Ok(Some(_)));
         self.stage_file(sealed);
-        if self.failure.is_none() && !self.queue.is_empty() {
+        if left && self.failure.is_none() && !self.queue.is_empty() {
             self.start_window();
         }
     }
@@ -1457,7 +1460,7 @@ mod tests {
     #[test]
     fn the_sources_capture_is_offered_like_any_other() {
         let (_delivery, publisher) = publisher(CloudPublisherConfig::default());
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::new(2, Limits::default());
         let sources = btel_snapshot::string_map(
             &pool,
             &[("main.baml".to_owned(), "function main() {}".to_owned())],
@@ -1480,13 +1483,16 @@ mod tests {
         assert_eq!(publisher.queue[0].id, id);
         assert_eq!(publisher.retained_snapshots, 1);
         assert_eq!(pool.stats().in_use, 1);
-        // It waits for a file no longer than an event would, though no
-        // event came.
+        // It goes with the first event's file: no file is sealed for it
+        // alone, so the first plan is never the sources by themselves.
+        assert!(publisher.deadline().is_none());
+        publisher.after_batch(0);
+        assert!(publisher.deadline().is_none());
+        assert_eq!(publisher.queue.len(), 1);
+        capture(&mut publisher, &pool, 1);
         let deadline = publisher.deadline().unwrap();
         publisher.tick(deadline);
         assert!(publisher.queue.is_empty());
-        assert_eq!(publisher.retained_snapshots, 0);
-        assert!(publisher.deadline().is_none());
         assert!(publisher.failure.is_none());
     }
 
