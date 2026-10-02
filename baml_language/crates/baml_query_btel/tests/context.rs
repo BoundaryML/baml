@@ -8,6 +8,142 @@ use serde_json::json;
 use support::*;
 
 const SOURCE: &str = include_str!("../../baml_tests/baml_src/ns_trace_context/query.baml");
+const ENGINE_CONTEXT_SOURCE: &str =
+    include_str!("../../baml_tests/baml_src/ns_trace_context/engine_context.baml");
+
+fn launch_context(owner: &str) -> btel_types::context::Context {
+    use btel_types::context::{Context, ContextPatch, ContextValue};
+    Context::default().with_patch(&ContextPatch {
+        distinct_id: Some(owner.into()),
+        metadata: [("owner".into(), Some(ContextValue::String(owner.into())))]
+            .into_iter()
+            .collect(),
+    })
+}
+
+fn context_engine(config: bex_engine::EngineConfig) -> std::sync::Arc<bex_engine::BexEngine> {
+    use sys_native::SysOpsExt;
+    std::sync::Arc::new(
+        bex_engine::BexEngine::new_with_config(
+            baml_db::testing::compile_source(ENGINE_CONTEXT_SOURCE),
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            vec![],
+            config,
+        )
+        .unwrap(),
+    )
+}
+
+async fn check_engine_context(engine: &std::sync::Arc<bex_engine::BexEngine>, owner: Option<&str>) {
+    use bex_engine::{BexExternalValue, FunctionCallContextBuilder};
+    let value = owner.map_or(BexExternalValue::Null, |owner| {
+        BexExternalValue::String(owner.into())
+    });
+    assert_eq!(
+        engine
+            .call_function(
+                "engine_context_check",
+                vec![value],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap(),
+        BexExternalValue::Bool(true),
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn independent_engine_contexts_and_empty_defaults_in_one_process() {
+    use sys_native::SysOpsExt;
+
+    let first = context_engine(bex_engine::EngineConfig {
+        launch_context: launch_context("first"),
+        ..Default::default()
+    });
+    let second = context_engine(bex_engine::EngineConfig {
+        launch_context: launch_context("second"),
+        ..Default::default()
+    });
+    // Construct the default after explicit contexts to catch hidden initialization order.
+    let empty = std::sync::Arc::new(
+        bex_engine::BexEngine::new(
+            baml_db::testing::compile_source(ENGINE_CONTEXT_SOURCE),
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            vec![],
+        )
+        .unwrap(),
+    );
+    for _ in 0..2 {
+        tokio::join!(
+            check_engine_context(&first, Some("first")),
+            check_engine_context(&second, Some("second")),
+            check_engine_context(&empty, None),
+        );
+    }
+    for engine in [&first, &second, &empty] {
+        tokio::time::timeout(std::time::Duration::from_secs(30), engine.shutdown())
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn recorded_engines_share_one_process_launch_context() {
+    let project = tempfile::tempdir().unwrap();
+    let context = launch_context("shared");
+    let engines: Vec<_> = (0..2)
+        .map(|_| {
+            context_engine(bex_engine::EngineConfig {
+                launch_context: context.clone(),
+                recording: Some(bex_engine::TelemetryRecording::local_files(
+                    project.path(),
+                    btel_recorder::RecordingConfig::default(),
+                )),
+                ..Default::default()
+            })
+        })
+        .collect();
+    assert_ne!(
+        engines[0].telemetry_recording_id(),
+        engines[1].telemetry_recording_id()
+    );
+    for engine in &engines {
+        check_engine_context(engine, Some("shared")).await;
+        engine.record_process_exit(bex_engine::ProcessStatus::Success);
+        tokio::time::timeout(std::time::Duration::from_secs(30), engine.shutdown())
+            .await
+            .unwrap();
+        assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    }
+    let layout = SourceLayout::for_project(project.path());
+    for fresh_bytes in [u64::MAX, 0] {
+        let db = layout.root.join("query.sqlite");
+        if db.exists() {
+            std::fs::remove_file(db).unwrap();
+        }
+        let mut options = IndexOptions::default();
+        options.refresh.fresh_bytes = fresh_bytes;
+        let mut index = Index::open(layout.clone(), options).unwrap();
+        assert_eq!(
+            sql(
+                &mut index,
+                "SELECT context_distinct_id, context_metadata['owner'] FROM processes"
+            )
+            .rows,
+            vec![vec![json!("shared"), json!("shared")]],
+        );
+        let (recordings, contexts): (i64, i64) = index
+            .connection()
+            .query_row(
+                "SELECT COUNT(*), COUNT(DISTINCT initial_context_cas) FROM recording",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((recordings, contexts), (2, 1));
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn process_context_empty_legacy_and_missing_cas_in_both_ingesters() {

@@ -326,6 +326,7 @@ struct Prepared {
     program: bex_vm_types::Program,
     recording_root: PathBuf,
     recording_sources: Vec<(String, String)>,
+    launch_context: btel_types::context::Context,
     /// Whether any source would change under `baml fmt`.
     needs_format_hint: bool,
 }
@@ -338,11 +339,12 @@ struct ResolvedInvocation {
 
 impl Prepared {
     fn into_engine(self, argv: Vec<String>) -> Result<BexEngine> {
-        crate::runtime_telemetry::create_engine(
+        crate::runtime_telemetry::create_engine_with_context(
             self.program,
             argv,
             &self.recording_root,
             self.recording_sources,
+            self.launch_context,
         )
         .map_err(|e| anyhow!("failed to create engine: {e:?}"))
     }
@@ -434,13 +436,12 @@ impl RunArgs {
         anyhow::bail!("{bail_context}");
     }
 
-    fn initialize_launch_context(&self) -> Result<()> {
-        if let Some(source) = &self.context {
-            let context = load_launch_context(source)?;
-            btel_types::context::ProcessContext::initialize(context)
-                .map_err(|_| anyhow!("process launch context is already initialized"))?;
-        }
-        Ok(())
+    fn launch_context(&self) -> Result<btel_types::context::Context> {
+        self.context
+            .as_deref()
+            .map(load_launch_context)
+            .transpose()
+            .map(Option::unwrap_or_default)
     }
 
     fn validate_stdin_consumer(&self, input_source: Option<&str>, input_flag: &str) -> Result<()> {
@@ -754,7 +755,7 @@ impl RunArgs {
 
     fn execute_invocation(
         &self,
-        prepared: Prepared,
+        mut prepared: Prepared,
         invocation: ResolvedInvocation,
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
@@ -765,7 +766,7 @@ impl RunArgs {
             .as_deref()
             .map(baml_exec::load_json_source)
             .transpose()?;
-        self.initialize_launch_context()?;
+        prepared.launch_context = self.launch_context()?;
         let engine = prepared.into_engine(invocation.argv)?;
         self.dispatch_and_finish(
             engine,
@@ -923,6 +924,7 @@ impl RunArgs {
                 Ok(()) => {
                     return Ok(Prepared {
                         recording_root: session.root().to_path_buf(),
+                        launch_context: Default::default(),
                         recording_sources: crate::runtime_telemetry::session_sources(&session),
                         db: session.db,
                         package: session.package,
@@ -1001,6 +1003,7 @@ impl RunArgs {
         ));
         Ok(Prepared {
             recording_root: session.root().to_path_buf(),
+            launch_context: Default::default(),
             recording_sources: crate::runtime_telemetry::session_sources(&session),
             db: session.db,
             package: session.package,
@@ -1041,6 +1044,7 @@ impl RunArgs {
             package,
             program,
             recording_root: root,
+            launch_context: Default::default(),
             recording_sources: Vec::new(),
             needs_format_hint,
         })
@@ -1189,10 +1193,10 @@ impl RunArgs {
             package,
             program,
             recording_root,
+            launch_context: self.launch_context()?,
             recording_sources: Vec::new(),
             needs_format_hint: false,
         };
-        self.initialize_launch_context()?;
         let engine = prepared.into_engine(self.build_argv_for_expression(expr_body))?;
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
@@ -2213,32 +2217,6 @@ mod tests {
 
     #[test]
     fn launch_context_precedes_package_init() {
-        const CHILD_ENV: &str = "BAML_TEST_LAUNCH_CONTEXT_INIT";
-        if std::env::var_os(CHILD_ENV).is_none() {
-            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "run_command::tests::launch_context_precedes_package_init",
-                ])
-                .env(CHILD_ENV, "1")
-                .env("BAML_TELEMETRY", "off")
-                .spawn()
-                .unwrap();
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-            loop {
-                if let Some(status) = child.try_wait().unwrap() {
-                    assert!(status.success());
-                    return;
-                }
-                if std::time::Instant::now() >= deadline {
-                    child.kill().unwrap();
-                    child.wait().unwrap();
-                    panic!("package init test timed out");
-                }
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-        }
-
         let root = tempfile::tempdir().unwrap();
         let file = root.path().join("main.baml");
         std::fs::write(

@@ -798,6 +798,31 @@ pub fn cancelled_unhandled_throw() -> EngineError {
 // BexEngine
 // ============================================================================
 
+/// Construction options applied before package initialization.
+pub struct EngineConfig {
+    /// Immutable context inherited by package initialization and root calls.
+    /// Recorded engines in one OS process must receive the same launch context:
+    /// recordings share a process identity and queries expose one process row.
+    /// The caller owns this invariant; engines do not coordinate global state.
+    pub launch_context: btel_types::context::Context,
+    pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+    pub clock_mode: btel_clock::ClockMode,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub recording: Option<TelemetryRecording>,
+}
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            launch_context: btel_types::context::Context::default(),
+            runtime_compiler: None,
+            clock_mode: btel_settings::clock::DEFAULT_MODE,
+            #[cfg(not(target_arch = "wasm32"))]
+            recording: None,
+        }
+    }
+}
+
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
@@ -865,6 +890,7 @@ pub struct BexEngine {
     #[cfg(test)]
     completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
+    launch_context: btel_types::context::Context,
     /// A panic escaped some root call: how a host that fails because of it
     /// reports the process's end.
     root_panicked: std::sync::atomic::AtomicBool,
@@ -1579,15 +1605,7 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
-        Self::build(
-            bytecode_program,
-            sys_ops,
-            argv,
-            None,
-            btel_settings::clock::DEFAULT_MODE,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
-        )
+        Self::new_with_config(bytecode_program, sys_ops, argv, EngineConfig::default())
     }
 
     /// Construct an engine with runtime compilation enabled by an injected
@@ -1598,14 +1616,14 @@ impl BexEngine {
         argv: Vec<String>,
         runtime_compiler: Arc<dyn RuntimeCompiler>,
     ) -> Result<Self, EngineError> {
-        Self::build(
+        Self::new_with_config(
             bytecode_program,
             sys_ops,
             argv,
-            Some(runtime_compiler),
-            btel_settings::clock::DEFAULT_MODE,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
+            EngineConfig {
+                runtime_compiler: Some(runtime_compiler),
+                ..EngineConfig::default()
+            },
         )
     }
 
@@ -1617,14 +1635,15 @@ impl BexEngine {
         runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
         clock_mode: btel_clock::ClockMode,
     ) -> Result<Self, EngineError> {
-        Self::build(
+        Self::new_with_config(
             bytecode_program,
             sys_ops,
             argv,
-            runtime_compiler,
-            clock_mode,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
+            EngineConfig {
+                runtime_compiler,
+                clock_mode,
+                ..EngineConfig::default()
+            },
         )
     }
 
@@ -1637,15 +1656,20 @@ impl BexEngine {
             .map(|telemetry| telemetry.clock.reset_after_restore())
     }
 
-    fn build(
+    /// Configure launch context and telemetry before package initialization.
+    pub fn new_with_config(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
-        runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
-        clock_mode: btel_clock::ClockMode,
-        #[cfg(not(target_arch = "wasm32"))] recording: Option<TelemetryRecording>,
+        config: EngineConfig,
     ) -> Result<Self, EngineError> {
-        let launch_context = btel_types::context::ProcessContext::get();
+        let EngineConfig {
+            launch_context,
+            runtime_compiler,
+            clock_mode,
+            #[cfg(not(target_arch = "wasm32"))]
+            recording,
+        } = config;
         let auto_telemetry_level = btel_settings::mode::from_env()
             .map_err(|error| EngineError::Other(error.to_string()))?;
         raise_fd_soft_limit();
@@ -1810,6 +1834,7 @@ impl BexEngine {
                     Some(recording) => recording.start(
                         source_snapshot_id.map(|id| id.0),
                         Arc::new(heap.static_function_metadata()),
+                        &launch_context,
                     )?,
                     None => (
                         btel_processor::TelemetryRuntime::new().map_err(|error| {
@@ -2001,6 +2026,7 @@ impl BexEngine {
             #[cfg(test)]
             completed_threads: std::sync::Mutex::new(Vec::new()),
             process_euid,
+            launch_context,
             root_panicked: std::sync::atomic::AtomicBool::new(false),
             engine_id,
             program_id,
@@ -3583,7 +3609,7 @@ impl BexEngine {
         // permit's `RootHaver` is the thread (delegating to the inner VM).
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
-        vm.set_root_context(btel_types::context::ProcessContext::get().clone());
+        vm.set_root_context(self.launch_context.clone());
         vm.thread_id = self.next_bex_thread_id().0;
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
