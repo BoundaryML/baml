@@ -3,7 +3,8 @@
 //! Announcements are authoritative even when explicitly unavailable. Function
 //! completions restore the frame's entry context; future completions restore
 //! the launch context. They are fallbacks, never overrides. Running markers
-//! supply timing, not another context capture.
+//! supply timing, not another context capture. A network span has only its
+//! announcement's context.
 use std::collections::BTreeMap;
 
 use btel_reader::{
@@ -48,6 +49,15 @@ impl Contexts {
                     Some(Event::ThreadCompletion(_)) => {
                         self.select(section.thread_id, 0, 1, context);
                     }
+                    // A request's context is the sending frame's, at its
+                    // announcement; its events and completion can be read
+                    // on other threads, under other contexts.
+                    Some(Event::NetworkAnnouncement(span)) => {
+                        self.select(span.id, 0, 2, context);
+                        self.select(span.id, 1, 2, context);
+                    }
+                    Some(Event::NetworkEvent(event)) => self.unknown(event.span_id),
+                    Some(Event::NetworkCompletion(done)) => self.unknown(done.span_id),
                     _ => {}
                 }
             }

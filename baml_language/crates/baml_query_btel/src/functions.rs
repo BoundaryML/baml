@@ -2,11 +2,13 @@
 //!
 //! Identity and timing functions are pure. Value functions resolve CAS
 //! blobs lazily through the current query's context: a query that never
-//! evaluates `input_args`, `output_value` or `error_value` reads no blob. Within one query,
+//! evaluates `input_args`, `output_value`, `error_value` or
+//! `network_event_values` reads no blob. Within one query,
 //! hydration outcomes (including missing and corrupt blobs) are memoized
 //! under entry and byte limits; the next query starts empty and can find a
 //! blob that arrived in between.
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex},
     time::Instant,
@@ -16,9 +18,13 @@ use btel_reader::{
     cas::{CasOutcome, CasStore},
     evidence::ArgumentNames,
     timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
-    value::{self, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment, equality},
+    value::{
+        self, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment, Unavailable, equality,
+    },
 };
-use btel_snapshot::SnapshotId;
+use btel_snapshot::{
+    DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Limit, SnapshotId, TypeDescription,
+};
 use rusqlite::{
     Connection, Error as SqlError,
     functions::{Aggregate, Context, FunctionFlags},
@@ -128,15 +134,89 @@ impl QueryContext {
         load.outcome
     }
 
-    /// The snapshot a handle reads: its CAS blob, or the inline one.
-    fn load_handle(&self, state: &mut CacheState, handle: &Handle) -> CasOutcome {
-        match &handle.inline {
+    /// The snapshot a handle reads and the path to follow in it, or why it
+    /// is unavailable: its CAS blob or the inline one at its own path, or
+    /// for a network span's events, what `events` finds.
+    fn load_handle<'h>(&self, state: &mut CacheState, handle: &'h Handle) -> Loaded<'h> {
+        let outcome = match &handle.inline {
+            _ if handle.kind == EVENTS => return self.events(state, handle),
             Some(blob) => match btel_snapshot::decode_blob(blob, &self.cas.limits().decode) {
                 Ok(snapshot) => CasOutcome::Available(Arc::new(snapshot)),
                 Err(error) => CasOutcome::Corrupt(error),
             },
             None => self.load(state, handle.cas),
+        };
+        match outcome {
+            CasOutcome::Available(snapshot) => Ok((snapshot, Cow::Borrowed(&handle.path))),
+            outcome => Err(outcome.code()),
         }
+    }
+
+    /// A network span's events as `[{event_name, payload, timestamp}]`. A
+    /// path into one event's payload reads only that payload's blob. Any
+    /// other path reads a list built here, with the payloads the path ends
+    /// on (every one for the whole list, its own for one event) and null
+    /// for the rest, which the path never reaches.
+    fn events<'h>(&self, state: &mut CacheState, handle: &'h Handle) -> Loaded<'h> {
+        let events = handle
+            .inline
+            .as_deref()
+            .and_then(decode_events)
+            .expect("Handle::decode validated the events");
+        let mut path = handle.path.clone();
+        // A negative index counts from the end.
+        if let Some(Segment::Index(index)) = path.first_mut()
+            && *index < 0
+        {
+            *index = index.saturating_add(i64::try_from(events.len()).unwrap_or(i64::MAX));
+        }
+        let at = match path.first() {
+            Some(Segment::Index(index)) => {
+                usize::try_from(*index).ok().filter(|at| *at < events.len())
+            }
+            _ => None,
+        };
+        if let (Some(at), Some(Segment::Key(key))) = (at, path.get(1))
+            && key == "payload"
+        {
+            let rest = path.split_off(2);
+            return match events[at].payload {
+                Some(cas) => match self.load(state, cas) {
+                    CasOutcome::Available(snapshot) => Ok((snapshot, Cow::Owned(rest))),
+                    outcome => Err(outcome.code()),
+                },
+                None => Ok((
+                    Arc::new(Composer::default().finish(DecodedValue::Null)),
+                    Cow::Owned(rest),
+                )),
+            };
+        }
+        let shown = |event: usize| path.is_empty() || (path.len() == 1 && at == Some(event));
+        let mut composer = Composer::default();
+        let mut items = Vec::with_capacity(events.len());
+        for (position, event) in events.iter().enumerate() {
+            let payload = match event.payload {
+                Some(cas) if shown(position) => match self.load(state, cas) {
+                    CasOutcome::Available(snapshot) => composer.embed(&snapshot)?,
+                    outcome => return Err(outcome.code()),
+                },
+                _ => DecodedValue::Null,
+            };
+            let timestamp = event
+                .timestamp
+                .as_deref()
+                .map_or(DecodedValue::Null, |text| DecodedValue::String(text.into()));
+            items.push(composer.map(vec![
+                (
+                    "event_name",
+                    DecodedValue::String(event.name.as_str().into()),
+                ),
+                ("payload", payload),
+                ("timestamp", timestamp),
+            ])?);
+        }
+        let list = composer.list(items)?;
+        Ok((Arc::new(composer.finish(list)), Cow::Owned(path)))
     }
 
     /// Report `code` once per distinct `key` (a handle, or a handle plus an
@@ -173,20 +253,15 @@ impl QueryContext {
             return Ok((Scalar::Null, Kind::Unavailable));
         }
         let result = match self.load_handle(&mut state, &parsed) {
-            CasOutcome::Available(snapshot) => {
-                let nav = value::navigate(
-                    &snapshot,
-                    parsed.root(),
-                    parsed.names.as_ref(),
-                    &parsed.path,
-                );
+            Ok((snapshot, path)) => {
+                let nav = value::navigate(&snapshot, parsed.root(), parsed.names.as_ref(), &path);
                 if let Nav::Unavailable(reason) = nav {
                     Self::unavailable(&mut state, handle, reason.code());
                 }
                 value::to_scalar(&snapshot, nav, parsed.names.as_ref(), &self.limits.render)
             }
-            outcome => {
-                Self::unavailable(&mut state, handle, outcome.code());
+            Err(code) => {
+                Self::unavailable(&mut state, handle, code);
                 (Scalar::Null, Kind::Unavailable)
             }
         };
@@ -220,13 +295,8 @@ impl QueryContext {
             return Ok(None);
         }
         match self.load_handle(&mut state, &parsed) {
-            CasOutcome::Available(snapshot) => {
-                let nav = value::navigate(
-                    &snapshot,
-                    parsed.root(),
-                    parsed.names.as_ref(),
-                    &parsed.path,
-                );
+            Ok((snapshot, path)) => {
+                let nav = value::navigate(&snapshot, parsed.root(), parsed.names.as_ref(), &path);
                 if let Nav::Unavailable(reason) = nav {
                     Self::unavailable(&mut state, handle, reason.code());
                     return Ok(None);
@@ -238,8 +308,8 @@ impl QueryContext {
                     names: parsed.names.as_ref(),
                 })))
             }
-            outcome => {
-                Self::unavailable(&mut state, handle, outcome.code());
+            Err(code) => {
+                Self::unavailable(&mut state, handle, code);
                 Ok(None)
             }
         }
@@ -257,20 +327,17 @@ impl QueryContext {
             return Ok(parsed.pending_code().to_owned());
         }
         Ok(match self.load_handle(&mut state, &parsed) {
-            CasOutcome::Available(snapshot) => value::state(
-                &snapshot,
-                parsed.root(),
-                parsed.names.as_ref(),
-                &parsed.path,
-            )
-            .to_owned(),
-            outcome => outcome.code().to_owned(),
+            Ok((snapshot, path)) => {
+                value::state(&snapshot, parsed.root(), parsed.names.as_ref(), &path).to_owned()
+            }
+            Err(code) => code.to_owned(),
         })
     }
 }
 
 /// Unavailable code of a capture whose announcement is not indexed yet.
 const PENDING: &str = "capture_pending";
+
 /// Structured ordering and opaque-value equality are unsupported.
 const COMPARISON_UNSUPPORTED: &str = "comparison_unsupported";
 
@@ -313,6 +380,135 @@ fn comparison_result(
     }
 }
 
+/// What a handle reads: a snapshot and the path to follow in it, or the
+/// code of why it is unavailable.
+type Loaded<'h> = Result<(Arc<DecodedSnapshot>, Cow<'h, [Segment]>), &'static str>;
+
+/// A snapshot assembled in memory: values the index builds, around
+/// payload graphs copied in from their own snapshots.
+#[derive(Default)]
+struct Composer {
+    objects: Vec<DecodedObject>,
+    limited: bool,
+}
+
+impl Composer {
+    /// Reading never looks at a built container's types.
+    fn untyped() -> TypeDescription {
+        TypeDescription {
+            encoded: Box::new([]),
+            decoded: None,
+        }
+    }
+
+    fn push(&mut self, object: DecodedObject) -> Result<DecodedValue, &'static str> {
+        let id = u32::try_from(self.objects.len())
+            .map_err(|_| Unavailable::Truncated(Limit::Objects).code())?;
+        self.objects.push(object);
+        Ok(DecodedValue::Object(id))
+    }
+
+    fn map(&mut self, entries: Vec<(&str, DecodedValue)>) -> Result<DecodedValue, &'static str> {
+        let original_len = entries.len() as u64;
+        self.push(DecodedObject::Map {
+            key_type: Self::untyped(),
+            value_type: Self::untyped(),
+            entries: entries
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect(),
+            original_len,
+        })
+    }
+
+    fn list(&mut self, items: Vec<DecodedValue>) -> Result<DecodedValue, &'static str> {
+        let original_len = items.len() as u64;
+        self.push(DecodedObject::List {
+            element_type: Self::untyped(),
+            items,
+            original_len,
+        })
+    }
+
+    /// Copy a value snapshot's graph in, renumbering its objects after the
+    /// ones already here; returns its root.
+    fn embed(&mut self, snapshot: &DecodedSnapshot) -> Result<DecodedValue, &'static str> {
+        let DecodedRoot::Value(root) = &snapshot.root else {
+            return Err(Unavailable::WrongRoot.code());
+        };
+        let too_many = Unavailable::Truncated(Limit::Objects).code();
+        let offset = u32::try_from(self.objects.len()).map_err(|_| too_many)?;
+        u32::try_from(self.objects.len() + snapshot.objects.len()).map_err(|_| too_many)?;
+        let shift = |value: &DecodedValue| match value {
+            DecodedValue::Object(id) => DecodedValue::Object(id + offset),
+            DecodedValue::Enum {
+                declaration,
+                variant,
+                name,
+            } => DecodedValue::Enum {
+                declaration: declaration + offset,
+                variant: *variant,
+                name: name.clone(),
+            },
+            other => other.clone(),
+        };
+        let entries = |entries: &btel_snapshot::Entries| -> btel_snapshot::Entries {
+            entries
+                .iter()
+                .map(|(key, value)| (key.clone(), shift(value)))
+                .collect()
+        };
+        for object in &snapshot.objects {
+            self.objects.push(match object {
+                DecodedObject::List {
+                    element_type,
+                    items,
+                    original_len,
+                } => DecodedObject::List {
+                    element_type: element_type.clone(),
+                    items: items.iter().map(shift).collect(),
+                    original_len: *original_len,
+                },
+                DecodedObject::Map {
+                    key_type,
+                    value_type,
+                    entries: map,
+                    original_len,
+                } => DecodedObject::Map {
+                    key_type: key_type.clone(),
+                    value_type: value_type.clone(),
+                    entries: entries(map),
+                    original_len: *original_len,
+                },
+                DecodedObject::Instance {
+                    type_arguments,
+                    declaration,
+                    fields,
+                    original_len,
+                } => DecodedObject::Instance {
+                    type_arguments: type_arguments.clone(),
+                    declaration: declaration + offset,
+                    fields: entries(fields),
+                    original_len: *original_len,
+                },
+                DecodedObject::Cell(value) => DecodedObject::Cell(shift(value)),
+                other => other.clone(),
+            });
+        }
+        self.limited |= snapshot.limited;
+        Ok(shift(root))
+    }
+
+    fn finish(self, root: DecodedValue) -> DecodedSnapshot {
+        DecodedSnapshot {
+            id: SnapshotId::from_bytes([0; 16]),
+            limited: self.limited,
+            root: DecodedRoot::Value(root),
+            objects: self.objects,
+        }
+    }
+}
+
 /// Where the functions find the current query's context.
 pub type ContextSlot = Arc<Mutex<Option<Arc<QueryContext>>>>;
 
@@ -331,13 +527,15 @@ fn user_error(message: &str) -> SqlError {
 /// Encoded as a BLOB so it flows through views, joins and subqueries.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Handle {
-    /// 1 inputs, 2 output, 3 error, 4 inline, 5 context, 6 invalid context.
+    /// 1 inputs, 2 output, 3 error, 4 inline, 5 context, 6 invalid context,
+    /// 7 a network span's events.
     pub kind: u8,
     /// Evidence is unavailable without a CAS reference (pending inputs or
     /// unavailable/invalid context); `cas` is unused.
     pub pending: bool,
     pub cas: [u8; 16],
-    /// Kind 4: the encoded snapshot itself; `cas` is unused.
+    /// Kind 4: the encoded snapshot itself; kind 7: the encoded events
+    /// (`encode_events`). `cas` is unused.
     pub inline: Option<Vec<u8>>,
     /// Argument slot names; `None` when not recorded.
     pub names: Option<ArgumentNames>,
@@ -347,6 +545,7 @@ pub struct Handle {
 const HANDLE_MAGIC: [u8; 2] = [0xB7, 0x01];
 const PENDING_BIT: u8 = 0x80;
 const INLINE: u8 = 4;
+const EVENTS: u8 = 7;
 
 impl Handle {
     fn pending_code(&self) -> &'static str {
@@ -395,10 +594,13 @@ impl Handle {
         let rest = bytes.strip_prefix(&HANDLE_MAGIC)?;
         let (&kind, rest) = rest.split_first()?;
         let (kind, pending) = (kind & !PENDING_BIT, kind & PENDING_BIT != 0);
-        let (cas, inline, rest): (&[u8], _, _) = if kind == INLINE {
+        let (cas, inline, rest): (&[u8], _, _) = if kind == INLINE || kind == EVENTS {
             let (len, tail) = rest.split_at_checked(4)?;
             let len = u32::from_le_bytes(len.try_into().ok()?) as usize;
             let (blob, tail) = tail.split_at_checked(len)?;
+            if kind == EVENTS {
+                decode_events(blob)?;
+            }
             (&[0; 16], Some(blob.to_vec()), tail)
         } else {
             let (cas, tail) = rest.split_at_checked(16)?;
@@ -461,6 +663,80 @@ fn push_segment(out: &mut Vec<u8>, segment: &Segment) {
             out.extend_from_slice(&index.to_le_bytes());
         }
     }
+}
+
+/// One event of a network span, as an EVENTS handle carries it: the
+/// payload stays a CAS ID until a query reads it.
+#[derive(Clone, Debug, PartialEq)]
+struct Event {
+    name: String,
+    timestamp: Option<String>,
+    payload: Option<[u8; 16]>,
+}
+
+const EVENT_HAS_TIMESTAMP: u8 = 1;
+const EVENT_HAS_PAYLOAD: u8 = 1 << 1;
+
+/// Per event: the name, a flags byte, then the timestamp and payload ID
+/// the flags say are present.
+fn encode_events(events: &[Event]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let text = |out: &mut Vec<u8>, text: &str| {
+        out.extend_from_slice(&component_len(text.len()).to_le_bytes());
+        out.extend_from_slice(text.as_bytes());
+    };
+    for event in events {
+        text(&mut out, &event.name);
+        let mut flags = 0;
+        if event.timestamp.is_some() {
+            flags |= EVENT_HAS_TIMESTAMP;
+        }
+        if event.payload.is_some() {
+            flags |= EVENT_HAS_PAYLOAD;
+        }
+        out.push(flags);
+        if let Some(timestamp) = &event.timestamp {
+            text(&mut out, timestamp);
+        }
+        if let Some(payload) = &event.payload {
+            out.extend_from_slice(payload);
+        }
+    }
+    out
+}
+
+fn decode_events(mut bytes: &[u8]) -> Option<Vec<Event>> {
+    fn text(bytes: &mut &[u8]) -> Option<String> {
+        let (len, tail) = bytes.split_at_checked(4)?;
+        let len = u32::from_le_bytes(len.try_into().ok()?) as usize;
+        let (text, tail) = tail.split_at_checked(len)?;
+        *bytes = tail;
+        String::from_utf8(text.to_vec()).ok()
+    }
+    let mut events = Vec::new();
+    while !bytes.is_empty() {
+        let name = text(&mut bytes)?;
+        let (&flags, tail) = bytes.split_first()?;
+        bytes = tail;
+        let timestamp = if flags & EVENT_HAS_TIMESTAMP != 0 {
+            Some(text(&mut bytes)?)
+        } else {
+            None
+        };
+        let payload = if flags & EVENT_HAS_PAYLOAD != 0 {
+            let (payload, tail) = bytes.split_at_checked(16)?;
+            bytes = tail;
+            Some(payload.try_into().ok()?)
+        } else {
+            None
+        };
+        events.push(Event {
+            name,
+            timestamp,
+            payload,
+        });
+    }
+    Some(events)
 }
 
 fn scalar_to_sql(scalar: Scalar) -> SqlValue {
@@ -1032,6 +1308,54 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
     }
 }
 
+/// A network span's events, `(at_ticks, seq, name, timestamp, payload_cas)`
+/// rows in, one EVENTS handle out: ordered by time, then by recording
+/// order. No rows is an empty list.
+struct EventList;
+impl Aggregate<Vec<(Option<i64>, i64, Event)>, Vec<u8>> for EventList {
+    fn init(&self, _: &mut Context<'_>) -> rusqlite::Result<Vec<(Option<i64>, i64, Event)>> {
+        Ok(Vec::new())
+    }
+    fn step(
+        &self,
+        ctx: &mut Context<'_>,
+        acc: &mut Vec<(Option<i64>, i64, Event)>,
+    ) -> rusqlite::Result<()> {
+        let payload = match opt_blob(ctx, 4)? {
+            Some(cas) => Some(<[u8; 16]>::try_from(cas).map_err(|_| user_error("invalid CAS id"))?),
+            None => None,
+        };
+        acc.push((
+            opt_i64(ctx, 0)?,
+            ctx.get(1)?,
+            Event {
+                name: ctx.get(2)?,
+                timestamp: ctx.get(3)?,
+                payload,
+            },
+        ));
+        Ok(())
+    }
+    fn finalize(
+        &self,
+        _: &mut Context<'_>,
+        acc: Option<Vec<(Option<i64>, i64, Event)>>,
+    ) -> rusqlite::Result<Vec<u8>> {
+        let mut events = acc.unwrap_or_default();
+        events.sort_by_key(|(ticks, seq, _)| (*ticks, *seq));
+        let events: Vec<Event> = events.into_iter().map(|(_, _, event)| event).collect();
+        Ok(Handle {
+            kind: EVENTS,
+            pending: false,
+            cas: [0; 16],
+            inline: Some(encode_events(&events)),
+            names: None,
+            path: Vec::new(),
+        }
+        .encode())
+    }
+}
+
 fn utc_text(ns: Option<i64>) -> Option<String> {
     ns.and_then(|ns| format_unix_ns(i128::from(ns)))
 }
@@ -1066,7 +1390,8 @@ fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
         }
         Ok(inline_handle(&Inline::List(history)))
     })?;
-    conn.create_aggregate_function("__btel_usage", 6, pure, UsageSum)
+    conn.create_aggregate_function("__btel_usage", 6, pure, UsageSum)?;
+    conn.create_aggregate_function("__btel_events", 5, pure, EventList)
 }
 
 /// `<recording hex>:<prefix><id>` for an INTEGER id or an 8-byte BLOB id.

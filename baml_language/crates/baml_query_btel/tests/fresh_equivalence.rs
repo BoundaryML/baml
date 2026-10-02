@@ -39,6 +39,8 @@ const TABLES: &[(&str, &str)] = &[
     ("sysop", "rec, call_path_id"),
     ("model_usage", "rec, sequence, position"),
     ("call", "rec, call_id"),
+    ("network_span", "rec, span_id"),
+    ("network_event", "rec, span_id, seq"),
     ("profile_part", "rec, node_id"),
     ("profile_node", "process_id, node_id"),
 ];
@@ -335,6 +337,41 @@ mod crafted {
         }
     }
 
+    fn snapshot(n: u64) -> proto::SnapshotId {
+        proto::SnapshotId { low: n, high: 0 }
+    }
+
+    fn announce(id: u64, path: u32, method: &str, started: u64) -> Event {
+        Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+            id,
+            parent_id: 100,
+            call_path_id: path,
+            started_at_ticks: started,
+            method: method.into(),
+            url: "https://api.example.com/v1/messages".into(),
+            request_cas_id: Some(snapshot(id)),
+        })
+    }
+
+    fn network_event(span: u64, name: &str, at: u64, payload: Option<u64>) -> Event {
+        Event::NetworkEvent(proto::NetworkEvent {
+            span_id: span,
+            name: name.into(),
+            at_ticks: at,
+            payload_cas_id: payload.map(snapshot),
+        })
+    }
+
+    fn network_done(span: u64, at: u64, outcome: proto::InvocationOutcome) -> Event {
+        Event::NetworkCompletion(proto::NetworkCompletion {
+            span_id: span,
+            completed_at_ticks: at,
+            outcome: outcome as i32,
+            panicked: false,
+            error_cas_id: None,
+        })
+    }
+
     fn usage(node: u64, model: &str, input: u64) -> proto::ModelUsage {
         proto::ModelUsage {
             node_id: node,
@@ -357,13 +394,26 @@ mod crafted {
                 clock_epochs: vec![epoch(1)],
             }),
             spans: Some(proto::SpanBatch {
-                sections: vec![section(
-                    T2,
-                    vec![
-                        Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
-                        completion(100, T2, 2, 20),
-                    ],
-                )],
+                sections: vec![
+                    section(
+                        T2,
+                        vec![
+                            Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
+                            completion(100, T2, 2, 20),
+                        ],
+                    ),
+                    // A request's events and completion before its announcement.
+                    section(
+                        T3,
+                        vec![
+                            network_event(200, "data", 30, Some(7)),
+                            network_event(200, "connection", 25, Some(8)),
+                            network_event(0, "data", 26, None),
+                            network_done(200, 40, proto::InvocationOutcome::Ok),
+                            network_event(201, "connection", 24, None),
+                        ],
+                    ),
+                ],
             }),
             aggregates: Some(proto::AggregateBatch {
                 entries: vec![aggregate(2, 3, 30, 1), aggregate(4, 1, 7, 0)],
@@ -414,6 +464,17 @@ mod crafted {
                         T3,
                         vec![completion(101, T3, 4, 30), completion(101, T3, 4, 31)],
                     ),
+                    section(
+                        T2,
+                        vec![
+                            announce(200, 4, "GET", 22),
+                            network_event(200, "end", 30, None),
+                            network_done(200, 41, proto::InvocationOutcome::Ok),
+                            // Never completed, made from a path only it uses.
+                            announce(201, 6, "POST", 23),
+                            network_done(202, 50, proto::InvocationOutcome::Unspecified),
+                        ],
+                    ),
                 ],
             }),
             aggregates: Some(proto::AggregateBatch {
@@ -435,6 +496,7 @@ mod crafted {
                 call_paths: vec![
                     path(1, 0, None, 0, CALLER, 1),
                     path(4, 1, Some(CALLER), 2, CALLEE, 1),
+                    path(6, 1, Some(CALLER), 6, CALLEE, 1),
                 ],
                 threads: vec![
                     thread(T1, None, 0, 10),
@@ -448,11 +510,16 @@ mod crafted {
             spans: Some(proto::SpanBatch {
                 sections: vec![section(
                     T2,
-                    vec![Event::ThreadCompletion(proto::ThreadCompletion {
-                        completed_at_ticks: 95,
-                        outcome: 2,
-                        panicked: true,
-                    })],
+                    vec![
+                        Event::ThreadCompletion(proto::ThreadCompletion {
+                            completed_at_ticks: 95,
+                            outcome: 2,
+                            panicked: true,
+                        }),
+                        announce(200, 4, "POST", 22),
+                        network_event(200, "await", 41, None),
+                        network_event(201, "data", 60, Some(9)),
+                    ],
                 )],
             }),
             end: Some(proto::RecordingEnd {
@@ -510,6 +577,9 @@ fn late_and_conflicting_evidence_indexes_identically() {
         "thread_completion_conflict",
         "call_evidence_conflict",
         "aggregate_outcome_invalid",
+        "network_span_conflict",
+        "network_completion_conflict",
+        "network_evidence_invalid",
     ] {
         assert!(
             issues.iter().any(|issue| issue.contains(code)),
@@ -529,5 +599,21 @@ fn late_and_conflicting_evidence_indexes_identically() {
             .any(|row| row[4] == Value::Text("user.Callee".into())),
         "{profile:?}"
     );
+    // The fold keeps the path only a network span reads.
+    let paths = &fresh
+        .iter()
+        .find(|(table, _)| table == "call_path")
+        .unwrap()
+        .1;
+    assert!(
+        paths.iter().any(|row| row[1] == Value::Integer(6)),
+        "{paths:?}"
+    );
+    let events = &fresh
+        .iter()
+        .find(|(table, _)| table == "network_event")
+        .unwrap()
+        .1;
+    assert_eq!(events.len(), 6, "{events:?}");
     assert_same(&fresh, &incremental);
 }
