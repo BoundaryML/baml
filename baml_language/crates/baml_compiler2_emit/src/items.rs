@@ -79,37 +79,15 @@ fn runtime_fields<'a>(class: &'a ClassData<'_>) -> Vec<&'a FieldData> {
         .collect()
 }
 
-/// BEP-042: does the class define a magic `cleanup(self) -> void` finalizer?
-///
-/// This MUST stay in lockstep with the canonical
-/// `cleanup_guard::has_cleanup_shape` (which validates the AST and emits
-/// E0144): same shape — one `self` param with no default, no generics,
-/// `-> void` return, and no propagating `throws` — on the lowered HIR
-/// `Function`. `throws` is effectively-none when absent or `never`, and the
-/// return must be `void`, both read off the function's own `TypeRefStore`.
-///
-/// Only DIRECT class methods count — which is exactly what `class.methods`
-/// holds (an `implements`-block method is Impl-owned and never lands
-/// there): the AST guard injector and the `{class_fqn}.cleanup` GC
-/// resolution only cover direct methods.
+/// BEP-042: does the class define a `cleanup` finalizer? The checker
+/// decides what one is; the `{class_fqn}.cleanup` the collector resolves is
+/// that method.
 fn has_cleanup(db: &dyn baml_compiler2_mir::Db, class: &ClassData<'_>) -> bool {
-    use baml_compiler2_hir::type_ref::TypeRefKind;
-    class.methods.iter().any(|&method| {
-        let func = function_data(db, method);
-        let throws_effectively_none = func
-            .throws
-            .is_none_or(|id| matches!(func.type_refs.get(id).kind, TypeRefKind::Never));
-        let returns_void = func
-            .return_type
-            .is_some_and(|id| matches!(func.type_refs.get(id).kind, TypeRefKind::Void));
-        func.name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
-            && func.generic_params.is_empty()
-            && func.params.len() == 1
-            && func.params[0].name.as_str() == "self"
-            && !func.params[0].has_default
-            && throws_effectively_none
-            && returns_void
-    })
+    use baml_compiler2_hir_ty::cleanup::{CleanupMethod, cleanup_method};
+    class
+        .methods
+        .iter()
+        .any(|&method| cleanup_method(db, method) == Some(CleanupMethod::Finalizer))
 }
 
 /// One class's pooled `Object::Class` from its declaration: the runtime

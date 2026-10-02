@@ -1,3 +1,3 @@
-/// The type of `null`, representing the absence of a value.
+/// The unit type, whose only value is `null`. Also spelled `void`.
 class Null {
 }

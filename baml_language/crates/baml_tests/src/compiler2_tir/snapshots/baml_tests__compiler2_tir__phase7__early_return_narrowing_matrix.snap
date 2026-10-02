@@ -5,7 +5,7 @@ expression: "render_labeled_cases(&[(\"early_return_null_check_narrows_rest_of_b
 === early_return_null_check_narrows_rest_of_block ===
 function user.f(x: int | null) -> int throws never {
   { : never
-    if (x == null : bool) : void
+    if (x == null : bool) : null
       { : never
         return 0 : 0
       }
@@ -18,7 +18,7 @@ block user.f {
 === early_return_ne_null_check_narrows_rest_of_block ===
 function user.f(x: int | null) -> int | null throws never {
   { : never
-    if (x != null : bool) : void
+    if (x != null : bool) : null
       { : never
         return x : int
       }
@@ -31,11 +31,11 @@ block user.f {
 === snapshot_narrowing_patterns ===
 function user.f(a: int | null, b: string | null) -> int throws never {
   { : never
-    if (a == null : bool) : void
+    if (a == null : bool) : null
       { : never
         return 0 : 0
       }
-    if (b == null : bool) : void
+    if (b == null : bool) : null
       { : never
         return a : int
       }
@@ -51,7 +51,7 @@ block user.f {
 === early_return_string_null_check ===
 function user.f(s: string | null) -> string throws never {
   { : never
-    if (s == null : bool) : void
+    if (s == null : bool) : null
       { : never
         return "" : ""
       }

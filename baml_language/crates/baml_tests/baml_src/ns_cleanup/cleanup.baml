@@ -15,7 +15,7 @@ class CleanupResource {
     log: string[],
 
     function cleanup(self) -> void {
-        self.log.push("cleaned")
+        self.log.push("cleaned");
     }
 }
 
@@ -90,7 +90,7 @@ class CleanupThrowsNeverR {
     log: string[],
 
     function cleanup(self) -> void throws never {
-        self.log.push("cleaned")
+        self.log.push("cleaned");
     }
 }
 
@@ -110,13 +110,13 @@ class Resource {
     log: string[],
 
     function cleanup(self) -> void throws never {
-        self.log.push("cleaned")
+        self.log.push("cleaned");
     }
 }
 
 function abandon(log: string[]) -> void throws never {
     let resource = Resource { log };
-    resource.log.push("created")
+    resource.log.push("created");
 }
 
 test "collect_garbage runs unreachable cleanup before returning" {

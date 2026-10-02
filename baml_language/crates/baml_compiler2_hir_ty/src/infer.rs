@@ -58,7 +58,7 @@ use crate::{
         callable_signature, callable_takes_self, callable_throws_of, callable_user_generic_params,
         instantiate_callable_signature,
     },
-    diagnostics::ScopedTypeEscapeKind,
+    diagnostics::{ImplicitUnitForm, ScopedTypeEscapeKind, UnitContext},
     extern_loc::{
         ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef, extern_class_method,
         extern_class_row, extern_function_row, extern_interface_method, mounted_class_loc,
@@ -72,12 +72,6 @@ use crate::{
     package_interface::ResolvedValue,
     render::Spell,
 };
-
-/// The unit-type identification (ruling: interim until tuples): `void`
-/// and `null` both denote the single-value unit.
-fn is_unit(ty: &Ty) -> bool {
-    matches!(ty.kind(), InferTy::Void | InferTy::Null)
-}
 
 /// Whether an object slot initialized to `null` satisfies this type. Weak
 /// aliases and solved inference variables must be resolved by the caller
@@ -724,11 +718,20 @@ struct ProbeCheckpoint {
 #[derive(Debug, Clone)]
 struct ReturnFrame {
     expected: Option<Ty>,
-    candidates: Vec<Ty>,
+    candidates: Vec<Returned>,
     /// Depth of the scoped-binding stack when the frame opened. A binding at
     /// or past it belongs to this frame and closes before the frame's value
     /// is published, so a `return` typed by one is an escape.
     scoped_bindings_floor: usize,
+}
+
+/// A value a frame returns, with the implicit units it carries when the
+/// frame expects no type: they are judged against the frame's other values
+/// when it closes ([`InferenceContext::join_units`]).
+#[derive(Debug, Clone)]
+struct Returned {
+    ty: Ty,
+    units: Vec<UnitSite>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1074,11 +1077,12 @@ enum PendingDiag<'db> {
         expr: Option<ExprId>,
         keyword: &'static str,
     },
-    ReturnTypeMismatch {
-        stmt: Option<StmtId>,
-        expr: Option<ExprId>,
-        expected: Ty,
-        actual: Ty,
+    /// An implicit unit met a context that is not (or not yet known to be)
+    /// the unit type; judged at finish on the finalized context. See
+    /// [`InferenceContext::unit_verdict`].
+    ImplicitUnit {
+        site: UnitSite,
+        demand: UnitDemand,
     },
     /// An untyped-object property shorthand naming no in-scope value -
     /// the specialized spelling of unresolved-name, with near-matches.
@@ -1182,10 +1186,6 @@ enum PendingDiag<'db> {
         pat: PatId,
         name: baml_type::Name,
     },
-    VoidResultUsed {
-        expr: ExprId,
-    },
-
     UnknownPatternField {
         pat: PatId,
         class_name: baml_type::DeclName,
@@ -1489,6 +1489,15 @@ fn infer_body_impl<'db>(
         BodyOwnerId::Function(function) => {
             let signature = function_signature(db, function);
             let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
+            // A malformed `cleanup` is reported at its signature (E0144).
+            // Its body, run-once guard included, is written for the
+            // finalizer's unit return and owes the declared one nothing.
+            let return_ty = match crate::cleanup::cleanup_method(db, function) {
+                Some(crate::cleanup::CleanupMethod::Malformed) => Ty::error(),
+                Some(crate::cleanup::CleanupMethod::Finalizer) | None => {
+                    crate::impls::interned_ty(&signature.ret)
+                }
+            };
             (
                 function_generic_frame(db, function),
                 signature
@@ -1496,7 +1505,7 @@ fn infer_body_impl<'db>(
                     .iter()
                     .map(|param| crate::impls::interned_ty(&param.ty))
                     .collect(),
-                Some(crate::impls::interned_ty(&signature.ret)),
+                Some(return_ty),
                 // The owner checks its throw sites against the RAW written
                 // clause (holes preserved - a partial clause opens the
                 // contract), never the caller-facing surface, which for a
@@ -1613,6 +1622,7 @@ fn infer_body_impl<'db>(
                     }
                 }
             }
+            ctx.check_tag_values(arena);
             ctx.backfill_untyped_patterns(arena);
         }
     } else if let Some(expr_body) = body.expr_body() {
@@ -1633,6 +1643,60 @@ fn infer_body_impl<'db>(
 enum SolveTier {
     Ground,
     GroundSubset,
+}
+
+/// An implicit unit (a block with no final expression, an `if` with no
+/// `else`, a bare `return;`) and where it reports.
+#[derive(Debug, Clone, PartialEq)]
+struct UnitSite {
+    at: crate::diagnostics::DiagnosticLocation,
+    form: UnitSiteForm,
+}
+
+/// An [`ImplicitUnitForm`] as inference meets it, before the type expected
+/// of it is known.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum UnitSiteForm {
+    BlockWithoutTail {
+        /// The block's last statement, when it is an expression: the value
+        /// its `;` discards may be the one the author meant the block to
+        /// have.
+        last_value: Option<(StmtId, ExprId)>,
+    },
+    IfWithoutElse,
+    BareReturn,
+}
+
+/// A side of an `if` / `if let`: its branch, or its `else` (written, or the
+/// fall-through when there is none).
+#[derive(Debug, Clone, Copy)]
+enum IfSide {
+    Then,
+    Else,
+}
+
+/// What its context makes of an implicit unit. See
+/// [`InferenceContext::unit_verdict`].
+enum UnitVerdict {
+    /// The context is the unit type itself, or is already diagnosed.
+    Admitted,
+    /// Nothing is expected of it: what its value joins decides
+    /// ([`InferenceContext::join_units`]).
+    Unjudged,
+    /// The context may still solve to the unit type: judged at finish.
+    Pending(Ty),
+    /// The context rules the unit type out.
+    Refused(Ty),
+}
+
+/// What an implicit unit must agree with, judged at finish on the solved
+/// types.
+#[derive(Debug, Clone, PartialEq)]
+enum UnitDemand {
+    /// Its value flows into this type, which must be the unit type itself.
+    Expected(Ty),
+    /// Its value joins these others, which must hold nothing but `null`.
+    Joined(Ty),
 }
 
 /// Whether execution can proceed past the current point. `Maybe & Maybe`
@@ -1673,7 +1737,7 @@ enum Expectation {
     None,
     HasType(Ty),
     /// The value is not observed: a statement expression, a loop or
-    /// `defer` body, the tail of a `-> void` body. It constrains nothing,
+    /// `defer` body. It constrains nothing,
     /// and nothing typed by a block-scoped `type T = …` binding can leave
     /// a block through it.
     Discarded,
@@ -1894,6 +1958,17 @@ struct InferenceContext<'db> {
     /// variable at check time (B-1563 truthiness); decided at finish on
     /// the final type.
     pending_truthy_conditions: Vec<crate::infer::truthy::PendingCondition>,
+    /// Expressions checked where only the unit type is admitted, with the
+    /// expression that produces their value and why the position is unit.
+    /// A mismatch recorded at one of them is a value that would be dropped
+    /// silently: it reports at the producer, naming the remedy, instead of
+    /// as a bare mismatch on the whole expression.
+    unit_positions: FxHashMap<ExprId, (ExprId, UnitContext)>,
+    /// Implicit units that met no expectation, keyed by the expression whose
+    /// value they are: a block carries its tail's, and a join of nothing but
+    /// unit values carries its branches'. [`Self::join_units`] reports one
+    /// that joins any other value.
+    unjudged_units: FxHashMap<ExprId, Vec<UnitSite>>,
     diverges: Diverges,
     /// The body's file, for package-scoped lookups (the overlap oracle's
     /// alias map enumerates the owning package plus its dependency closure).
@@ -1981,6 +2056,8 @@ impl<'db> InferenceContext<'db> {
             body_root: None,
             provisional_checks: Vec::new(),
             pending_truthy_conditions: Vec::new(),
+            unit_positions: FxHashMap::default(),
+            unjudged_units: FxHashMap::default(),
             diverges: Diverges::Maybe,
             owner_file,
             overlap_aliases: std::cell::OnceCell::new(),
@@ -2008,18 +2085,11 @@ impl<'db> InferenceContext<'db> {
         self.register_property_shorthands(body);
         self.body_root = body.root_expr;
         if let Some(root) = body.root_expr {
-            match self
+            let return_ty = self
                 .return_frames
                 .last()
-                .and_then(|frame| frame.expected.clone())
-            {
-                // A void function DISCARDS its body's tail value (TIR's
-                // statement semantics; `defer { .. }; log.push(..)` as
-                // the last line of a `-> void` fn is fine) - the body
-                // still walks fully, it just isn't checked against unit.
-                Some(return_ty) if is_unit(&return_ty) => {
-                    self.infer_expr(body, root, &Expectation::Discarded);
-                }
+                .and_then(|frame| frame.expected.clone());
+            match return_ty {
                 Some(return_ty) if !return_ty.has_error() => {
                     self.check_expr(body, root, &return_ty);
                 }
@@ -2031,6 +2101,7 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+        self.check_tag_values(body);
         self.backfill_untyped_patterns(body);
     }
 
@@ -2070,16 +2141,32 @@ impl<'db> InferenceContext<'db> {
     /// Checking mode: infer with the expectation, then constrain -
     /// `Sub(actual, expected)`, discharged eagerly. Definite failures are
     /// recorded against the checked expression, never dropped.
+    ///
+    /// A block that ends in a value where the unit type is expected is
+    /// marked as a [`Self::unit_positions`] entry: the value would be
+    /// dropped silently, so its mismatch reports at the expression that
+    /// produces it and names the remedy.
     fn check_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
         let ty = self.infer_expr_with_hint(body, expr, Some(expected));
+        let tail = value_tail(body, expr);
+        if tail != expr && self.is_unit_ty(expected) {
+            self.unit_positions.insert(expr, (tail, UnitContext::Block));
+        }
         self.check_inferred(expr, ty, expected)
     }
 
     /// The checking half of [`Self::check_expr`]: relate an already inferred
     /// `ty` to `expected` at `expr`, recording the mismatch or the adapter.
     fn check_inferred(&mut self, expr: ExprId, ty: Ty, expected: &Ty) -> Ty {
+        self.check_fits(expr, &ty, expected);
+        ty
+    }
+
+    /// [`Self::check_inferred`], answering whether `ty` fits as far as is
+    /// known now.
+    fn check_fits(&mut self, expr: ExprId, ty: &Ty, expected: &Ty) -> bool {
         let saved_anchor = self.obligation_anchor.replace(expr);
-        let fits = self.sub(&ty, expected);
+        let fits = self.sub(ty, expected);
         self.obligation_anchor = saved_anchor;
         if !fits {
             self.result
@@ -2096,7 +2183,7 @@ impl<'db> InferenceContext<'db> {
                     .push((expr, expected.clone(), ty.clone()));
             }
         }
-        ty
+        fits
     }
 
     /// Supply value context without checking the outer relation. Return values
@@ -2118,18 +2205,18 @@ impl<'db> InferenceContext<'db> {
         self.record_throw(value, &thrown);
     }
 
+    /// `at` is the `return` itself, for a bare `return;` to report at.
     fn infer_return(
         &mut self,
         body: &ExprBody,
         value: Option<ExprId>,
-        stmt: Option<StmtId>,
-        expr: Option<ExprId>,
+        at: crate::diagnostics::DiagnosticLocation,
     ) {
         let (expected, floor) = match self.return_frames.last() {
             Some(frame) => (frame.expected.clone(), frame.scoped_bindings_floor),
             None => (None, 0),
         };
-        let actual = match value {
+        let returned = match value {
             Some(value) => {
                 let context = expected.as_ref().filter(|expected| !expected.has_error());
                 let expectation = match (&expected, context) {
@@ -2138,7 +2225,8 @@ impl<'db> InferenceContext<'db> {
                     (None, None) => Expectation::None,
                 };
                 let ty = self.infer_expr(body, value, &expectation);
-                match self.frame_scoped_param(&ty, floor) {
+                let units = self.take_units(value);
+                let ty = match self.frame_scoped_param(&ty, floor) {
                     // A context already diagnosed suppresses the escape too.
                     Some(_) if expected.as_ref().is_some_and(Ty::has_error) => ty,
                     // A `return` leaves every block of its frame at once, so a
@@ -2157,29 +2245,270 @@ impl<'db> InferenceContext<'db> {
                         Some(context) => self.check_inferred(value, ty, context),
                         None => ty,
                     },
-                }
+                };
+                Returned { ty, units }
             }
+            // `return;` is shorthand for `return null;`.
             None => {
-                let actual = Ty::void();
+                let site = UnitSite {
+                    at,
+                    form: UnitSiteForm::BareReturn,
+                };
+                let verdict = self.unit_verdict(expected.as_ref());
+                let (ty, unjudged) = self.settle_unit(site, verdict);
                 if let Some(expected) = &expected
-                    && !expected.has_error()
+                    && !ty.has_error()
                 {
-                    let fits = self.sub(&actual, expected);
-                    if expected.has_infer() || !fits {
-                        self.pending_diags.push(PendingDiag::ReturnTypeMismatch {
-                            stmt,
-                            expr,
-                            expected: expected.clone(),
-                            actual: actual.clone(),
-                        });
-                    }
+                    self.sub(&ty, expected);
                 }
-                actual
+                Returned {
+                    ty,
+                    units: unjudged.into_iter().collect(),
+                }
             }
         };
         if let Some(frame) = self.return_frames.last_mut() {
-            frame.candidates.push(actual);
+            frame.candidates.push(returned);
         }
+    }
+
+    /// What its context makes of an *implicit unit*: a block with no final
+    /// expression, an `if` with no `else`, or a bare `return;`. Each
+    /// evaluates to the unit value without the author writing it, so it is
+    /// admitted only where the unit type itself is expected. Subtyping alone
+    /// would be too permissive: `null <: int?`, so a forgotten value would
+    /// become a silent `null`. Where nothing is expected the form is unit as
+    /// long as nothing else joins it, which its join decides.
+    fn unit_verdict(&mut self, expected: Option<&Ty>) -> UnitVerdict {
+        let Some(expected) = expected else {
+            return UnitVerdict::Unjudged;
+        };
+        let expected = self.table.resolve_completely(expected);
+        if matches!(expected.kind(), InferTy::Error) {
+            return UnitVerdict::Admitted;
+        }
+        if may_become_unit(&expected) {
+            UnitVerdict::Pending(expected)
+        } else if self.cached_equivalent(&expected, &Ty::null()) {
+            UnitVerdict::Admitted
+        } else {
+            UnitVerdict::Refused(expected)
+        }
+    }
+
+    /// Records `verdict` for the implicit unit at `site`. Returns its type,
+    /// the error sentinel when refused so the one mistake does not report
+    /// again as a mismatch against the same context, and the site itself
+    /// when it is left to its join.
+    fn settle_unit(&mut self, site: UnitSite, verdict: UnitVerdict) -> (Ty, Option<UnitSite>) {
+        match verdict {
+            UnitVerdict::Admitted => (Ty::null(), None),
+            UnitVerdict::Unjudged => (Ty::null(), Some(site)),
+            UnitVerdict::Pending(expected) => {
+                self.pending_diags.push(PendingDiag::ImplicitUnit {
+                    site,
+                    demand: UnitDemand::Expected(expected),
+                });
+                (Ty::null(), None)
+            }
+            UnitVerdict::Refused(expected) => {
+                self.pending_diags.push(PendingDiag::ImplicitUnit {
+                    site,
+                    demand: UnitDemand::Expected(expected),
+                });
+                (Ty::error(), None)
+            }
+        }
+    }
+
+    /// [`Self::settle_unit`] for an implicit unit that is an expression: a
+    /// tail-less block or a lone `if`. One left to its join is carried as
+    /// that expression's value.
+    fn implicit_unit(&mut self, expr: ExprId, form: UnitSiteForm, verdict: UnitVerdict) -> Ty {
+        let site = UnitSite {
+            at: crate::diagnostics::DiagnosticLocation::Expr(expr),
+            form,
+        };
+        let (ty, unjudged) = self.settle_unit(site, verdict);
+        if let Some(site) = unjudged {
+            self.unjudged_units.insert(expr, vec![site]);
+        }
+        ty
+    }
+
+    /// The implicit units `expr`'s value carries, unjudged.
+    fn take_units(&mut self, expr: ExprId) -> Vec<UnitSite> {
+        self.unjudged_units.remove(&expr).unwrap_or_default()
+    }
+
+    /// Judges the implicit units among the values a join combines (the
+    /// branches of an `if`, the arms of a `match` or `catch`, a literal's
+    /// elements, a lambda's returns) that met no expectation on their way
+    /// to it. A join of nothing but unit values is itself unit, so its units
+    /// are returned to be carried on; beside any other value, each is a
+    /// silent `null` and is reported. The join's own expectation judges them
+    /// too: the branches did not see it when it was an inference variable,
+    /// held back so the first branch cannot fix it for the rest.
+    fn join_units(
+        &mut self,
+        parts: Vec<(Ty, Vec<UnitSite>)>,
+        expected: &Expectation,
+    ) -> Vec<UnitSite> {
+        let mut others = Vec::new();
+        let mut sites = Vec::new();
+        for (ty, units) in parts {
+            if units.is_empty() {
+                others.push(ty);
+            } else {
+                sites.extend(units);
+            }
+        }
+        if sites.is_empty() {
+            return sites;
+        }
+        let expected = match expected {
+            Expectation::None => None,
+            Expectation::HasType(expected) => Some(expected.clone()),
+            // Nothing reads the join, or its context is already diagnosed.
+            Expectation::Discarded | Expectation::Erroneous => return Vec::new(),
+        };
+        let others = self.join(&others);
+        let others = self.widen_fresh(&others);
+        let resolved = self.table.resolve_completely(&others);
+        let all_unit = !resolved.has_infer() && self.cached_subtype(&resolved, &Ty::null());
+        if !all_unit {
+            for site in &sites {
+                self.pending_diags.push(PendingDiag::ImplicitUnit {
+                    site: site.clone(),
+                    demand: UnitDemand::Joined(others.clone()),
+                });
+            }
+        }
+        match expected {
+            Some(expected) => {
+                for site in sites {
+                    self.pending_diags.push(PendingDiag::ImplicitUnit {
+                        site,
+                        demand: UnitDemand::Expected(expected.clone()),
+                    });
+                }
+                Vec::new()
+            }
+            None if all_unit => sites,
+            None => Vec::new(),
+        }
+    }
+
+    /// Whether `ty` is the unit type itself, as opposed to a type that
+    /// merely admits the unit value (`int?`) or one not yet solved.
+    fn is_unit_ty(&mut self, ty: &Ty) -> bool {
+        let ty = self.table.resolve_completely(ty);
+        !ty.has_infer() && !ty.has_error() && self.cached_equivalent(&ty, &Ty::null())
+    }
+
+    /// The branches of an `if` / `if let`, after its condition. `enter`
+    /// applies what the condition proves on the side it is given.
+    fn infer_if_branches(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+        expected: &Expectation,
+        enter: impl Fn(&mut Self, IfSide),
+    ) -> Ty {
+        let condition_diverges = self.diverges;
+        let branch_expectation = expected.adjust_for_branches(&mut self.table);
+        let base_flow = self.flow.clone();
+
+        enter(self, IfSide::Then);
+        self.diverges = Diverges::Maybe;
+        // With no `else`, this is the type of the whole `if`.
+        let then_ty = match else_branch {
+            Some(_) => self.infer_expr(body, then_branch, &branch_expectation),
+            None => self.infer_lone_if(body, expr, then_branch, expected),
+        };
+        let then_diverges = self.diverges;
+        let then_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+        let then_flow = (then_diverges == Diverges::Maybe).then_some(then_flow);
+
+        // The else path (written or implicit fall-through) carries the
+        // condition's false facts; the divergence-aware merge makes
+        // guard-with-early-return narrowing the ordinary rule (B-688), no
+        // special case.
+        enter(self, IfSide::Else);
+        let Some(else_branch) = else_branch else {
+            let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+            self.diverges = condition_diverges;
+            self.merge_branch_flows(base_flow, then_flow, Some(else_flow));
+            return then_ty;
+        };
+        self.diverges = Diverges::Maybe;
+        let else_ty = self.infer_expr(body, else_branch, &branch_expectation);
+        let else_diverges = self.diverges;
+        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+        let else_flow = (else_diverges == Diverges::Maybe).then_some(else_flow);
+        self.diverges = condition_diverges.or(then_diverges.and(else_diverges));
+        self.merge_branch_flows(base_flow, then_flow, else_flow);
+        let parts = vec![
+            (then_ty.clone(), self.take_units(then_branch)),
+            (else_ty.clone(), self.take_units(else_branch)),
+        ];
+        let units = self.join_units(parts, expected);
+        if !units.is_empty() {
+            self.unjudged_units.insert(expr, units);
+        }
+        // The merge point: a canonical union, never a forced equality
+        // (joins happen at generation sites).
+        self.join(&[then_ty, else_ty])
+    }
+
+    /// The type of an `if` / `if let` with no `else`, given its branch.
+    /// Where the `if` is observed it is an implicit unit, so its branch must
+    /// be unit too. A branch that produces a value anyway is the author
+    /// reading the `if` as one: that is the mistake reported, and the `if`
+    /// takes the error sentinel rather than report again wherever its `null`
+    /// then fails to fit.
+    fn infer_lone_if(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        branch: ExprId,
+        expected: &Expectation,
+    ) -> Ty {
+        let verdict = match expected {
+            Expectation::None | Expectation::HasType(_) => {
+                self.unit_verdict(expected.only_has_type())
+            }
+            // Nothing reads it (a statement), or its context is already
+            // diagnosed: the slot is typed by what it can hold, the
+            // branch's value or `null` when the branch did not run.
+            Expectation::Discarded | Expectation::Erroneous => {
+                let branch_ty = self.infer_expr(body, branch, expected);
+                return self.join(&[branch_ty, Ty::null()]);
+            }
+        };
+        if let UnitVerdict::Refused(_) = verdict {
+            // The context refused the `if`; its branch owes nothing.
+            self.infer_expr(body, branch, &Expectation::Erroneous);
+            return self.implicit_unit(expr, UnitSiteForm::IfWithoutElse, verdict);
+        }
+        let unit = Ty::null();
+        let ty = self.infer_expr(body, branch, &Expectation::HasType(unit.clone()));
+        // Discarding the branch's value is a remedy only where the `if`
+        // itself is meant to be unit, not where its value is used.
+        let context = match verdict {
+            UnitVerdict::Admitted => UnitContext::IfWithoutElse,
+            UnitVerdict::Unjudged | UnitVerdict::Pending(_) | UnitVerdict::Refused(_) => {
+                UnitContext::UsedIfWithoutElse
+            }
+        };
+        self.unit_positions
+            .insert(branch, (value_tail(body, branch), context));
+        if !self.check_fits(branch, &ty, &unit) {
+            return Ty::error();
+        }
+        self.implicit_unit(expr, UnitSiteForm::IfWithoutElse, verdict)
     }
 
     /// Opens a speculative probe: relate freely, then discard the whole
@@ -2269,15 +2598,36 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
                 let ty = match tail_expr {
-                    Some(tail) => self.infer_expr(body, *tail, expected),
-                    // A tail-less block that always diverged is never;
-                    // otherwise it is void.
-                    None if self.diverges == Diverges::Always
-                        && entry_diverges == Diverges::Maybe =>
+                    Some(tail) => {
+                        let ty = self.infer_expr(body, *tail, expected);
+                        let units = self.take_units(*tail);
+                        if !units.is_empty() {
+                            self.unjudged_units.insert(expr, units);
+                        }
+                        ty
+                    }
+                    // A tail-less block that always diverged - in its
+                    // statements, or in a `defer` it registered, which runs
+                    // before the block yields - is never; otherwise it is
+                    // an implicit unit.
+                    None if deferred_diverges
+                        || (self.diverges == Diverges::Always
+                            && entry_diverges == Diverges::Maybe) =>
                     {
                         Ty::never()
                     }
-                    None => Ty::void(),
+                    None => {
+                        let last_value = stmts.last().and_then(|&last| match body.stmts[last] {
+                            Stmt::Expr(value) => Some((last, value)),
+                            _ => None,
+                        });
+                        let verdict = self.unit_verdict(expected.only_has_type());
+                        self.implicit_unit(
+                            expr,
+                            UnitSiteForm::BlockWithoutTail { last_value },
+                            verdict,
+                        )
+                    }
                 };
                 // Defers run after the tail value is evaluated. Their writes
                 // may change outer locals before the enclosing code resumes.
@@ -2286,11 +2636,12 @@ impl<'db> InferenceContext<'db> {
                 }
                 let ty = if deferred_diverges {
                     self.diverges = Diverges::Always;
+                    self.unjudged_units.remove(&expr);
                     Ty::never()
                 } else {
                     ty
                 };
-                self.finish_scoped_type_bindings(type_scope, expr, *tail_expr, ty, expected)
+                self.finish_scoped_type_bindings(body, type_scope, expr, *tail_expr, ty, expected)
             }
             Expr::If {
                 condition,
@@ -2298,43 +2649,19 @@ impl<'db> InferenceContext<'db> {
                 else_branch,
             } => {
                 let (_, facts) = self.check_condition(body, *condition);
-                let condition_diverges = self.diverges;
-                let branch_expectation = expected.adjust_for_branches(&mut self.table);
-                let base_flow = self.flow.clone();
-
-                self.apply_facts(&facts.when_true);
-                self.diverges = Diverges::Maybe;
-                let then_ty = self.infer_expr(body, *then_branch, &branch_expectation);
-                let then_diverges = self.diverges;
-                let then_flow = std::mem::replace(&mut self.flow, base_flow.clone());
-                let then_flow = (then_diverges == Diverges::Maybe).then_some(then_flow);
-
-                // The else path (written or implicit fall-through) carries
-                // the condition's false facts; the divergence-aware merge
-                // makes guard-with-early-return narrowing the ordinary
-                // rule (B-688), no special case.
-                self.apply_facts(&facts.when_false);
-                match else_branch {
-                    Some(else_expr) => {
-                        self.diverges = Diverges::Maybe;
-                        let else_ty = self.infer_expr(body, *else_expr, &branch_expectation);
-                        let else_diverges = self.diverges;
-                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
-                        let else_flow = (else_diverges == Diverges::Maybe).then_some(else_flow);
-                        self.diverges = condition_diverges.or(then_diverges.and(else_diverges));
-                        self.merge_branch_flows(base_flow, then_flow, else_flow);
-                        // The merge point: a canonical union, never a forced
-                        // equality (joins happen at generation sites).
-                        self.join(&[then_ty, else_ty])
-                    }
-                    None => {
-                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
-                        self.diverges = condition_diverges;
-                        self.merge_branch_flows(base_flow, then_flow, Some(else_flow));
-                        // No else: the if produces no value.
-                        Ty::void()
-                    }
-                }
+                self.infer_if_branches(
+                    body,
+                    expr,
+                    *then_branch,
+                    *else_branch,
+                    expected,
+                    |this, side| {
+                        this.apply_facts(match side {
+                            IfSide::Then => &facts.when_true,
+                            IfSide::Else => &facts.when_false,
+                        });
+                    },
+                )
             }
             Expr::IfLet {
                 pattern,
@@ -2350,43 +2677,29 @@ impl<'db> InferenceContext<'db> {
                 let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
                 let scrut = self.scrutinee_demand(&scrut_ty);
                 let outcome = self.lower_pattern(body, *pattern, &scrut);
-                let condition_diverges = self.diverges;
-                let branch_expectation = expected.adjust_for_branches(&mut self.table);
-                let base_flow = self.flow.clone();
-
-                if let Some(binding) = self.narrowable_binding(body, *scrutinee) {
-                    self.flow.insert(binding, outcome.matched_ty.clone());
-                }
-                self.diverges = Diverges::Maybe;
-                let then_ty = self.infer_expr(body, *then_branch, &branch_expectation);
-                let then_diverges = self.diverges;
-                let then_flow = std::mem::replace(&mut self.flow, base_flow.clone());
-                let then_flow = (then_diverges == Diverges::Maybe).then_some(then_flow);
-
-                if outcome.consumes_matched
-                    && let Some(binding) = self.narrowable_binding(body, *scrutinee)
-                {
-                    let residual = self.subtract_narrow(&scrut, &outcome.matched_ty);
-                    self.flow.insert(binding, residual);
-                }
-                match else_branch {
-                    Some(else_expr) => {
-                        self.diverges = Diverges::Maybe;
-                        let else_ty = self.infer_expr(body, *else_expr, &branch_expectation);
-                        let else_diverges = self.diverges;
-                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
-                        let else_flow = (else_diverges == Diverges::Maybe).then_some(else_flow);
-                        self.diverges = condition_diverges.or(then_diverges.and(else_diverges));
-                        self.merge_branch_flows(base_flow, then_flow, else_flow);
-                        self.join(&[then_ty, else_ty])
-                    }
-                    None => {
-                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
-                        self.diverges = condition_diverges;
-                        self.merge_branch_flows(base_flow, then_flow, Some(else_flow));
-                        Ty::void()
-                    }
-                }
+                let binding = self.narrowable_binding(body, *scrutinee);
+                self.infer_if_branches(
+                    body,
+                    expr,
+                    *then_branch,
+                    *else_branch,
+                    expected,
+                    |this, side| {
+                        let Some(binding) = binding else {
+                            return;
+                        };
+                        match side {
+                            IfSide::Then => {
+                                this.flow.insert(binding, outcome.matched_ty.clone());
+                            }
+                            IfSide::Else if outcome.consumes_matched => {
+                                let residual = this.subtract_narrow(&scrut, &outcome.matched_ty);
+                                this.flow.insert(binding, residual);
+                            }
+                            IfSide::Else => {}
+                        }
+                    },
+                )
             }
             Expr::QualifiedPath { member, .. } => {
                 // A fully-qualified item reference used as a VALUE. Its own
@@ -2610,6 +2923,12 @@ impl<'db> InferenceContext<'db> {
                                 self.widen_fresh(&ty)
                             })
                             .collect();
+                        let parts = elements
+                            .iter()
+                            .zip(&joined)
+                            .map(|(element, ty)| (ty.clone(), self.take_units(*element)))
+                            .collect();
+                        self.join_units(parts, &Expectation::None);
                         // TS's best-common-type adoption (rustc likewise
                         // unifies vec elements; E0282 needs NO evidence):
                         // an element still carrying inference vars takes
@@ -2663,6 +2982,18 @@ impl<'db> InferenceContext<'db> {
                             (self.widen_fresh(&key_ty), self.widen_fresh(&value_ty))
                         })
                         .unzip();
+                    let key_parts = entries
+                        .iter()
+                        .zip(&keys)
+                        .map(|(entry, ty)| (ty.clone(), self.take_units(entry.key)))
+                        .collect();
+                    self.join_units(key_parts, &Expectation::None);
+                    let value_parts = entries
+                        .iter()
+                        .zip(&values)
+                        .map(|(entry, ty)| (ty.clone(), self.take_units(entry.value)))
+                        .collect();
+                    self.join_units(value_parts, &Expectation::None);
                     Ty::intern(InferTy::Map {
                         key: self.union_of(&keys),
                         value: self.union_of(&values),
@@ -2677,7 +3008,11 @@ impl<'db> InferenceContext<'db> {
                         keyword: "return",
                     });
                 }
-                self.infer_return(body, *value, None, Some(expr));
+                self.infer_return(
+                    body,
+                    *value,
+                    crate::diagnostics::DiagnosticLocation::Expr(expr),
+                );
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
@@ -2741,7 +3076,7 @@ impl<'db> InferenceContext<'db> {
             }
             Expr::Catch { base, clauses } => {
                 let clauses = clauses.clone();
-                self.infer_catch(body, *base, &clauses, expected)
+                self.infer_catch(body, expr, *base, &clauses, expected)
             }
             // The parse-recovery hole: no children in practice; the
             // generic visit stays as recovery if that ever changes.
@@ -2788,7 +3123,11 @@ impl<'db> InferenceContext<'db> {
                         keyword: "return",
                     });
                 }
-                self.infer_return(body, *value, Some(stmt), None);
+                self.infer_return(
+                    body,
+                    *value,
+                    crate::diagnostics::DiagnosticLocation::Stmt(stmt),
+                );
                 self.diverges = Diverges::Always;
             }
             Stmt::Throw { value } => {
@@ -3076,6 +3415,7 @@ impl<'db> InferenceContext<'db> {
     /// binds the frame slot from them.
     fn finish_scoped_type_bindings(
         &mut self,
+        body: &ExprBody,
         checkpoint: usize,
         block: ExprId,
         tail: Option<ExprId>,
@@ -3124,17 +3464,28 @@ impl<'db> InferenceContext<'db> {
             // Nobody reads the value, so its slot takes the top type: no
             // reader can observe the binding through it.
             //
-            // The top type rather than `void`, which would be a claim: the
+            // The top type rather than `null`, which would be a claim: the
             // block DID produce a value of some type, and MIR still lowers the
             // expression that made it. `unknown` says "something, and nobody
-            // is looking", which is what a discarded position means; `void`
-            // would say the expression yields nothing and put every later
-            // reader of this slot's type at odds with the code. Nothing is
+            // is looking", which is what a discarded position means; `null`
+            // would say the expression yields the unit value and put every
+            // later reader of this slot's type at odds with the code. Nothing is
             // erased by it either - the interior tables keep the rigid type,
             // and this fills only the discarded slot.
             Expectation::Discarded => Ty::intern(InferTy::Unknown),
             Expectation::HasType(context) => {
                 let context = self.table.resolve_completely(context);
+                // Where the unit type is expected the value is not leaving
+                // at all: it is one the author did not discard, and reports
+                // as that.
+                if let Some(tail) = tail
+                    && self.is_unit_ty(&context)
+                {
+                    self.unit_positions
+                        .insert(tail, (value_tail(body, tail), UnitContext::Block));
+                    self.check_fits(tail, &block_ty, &context);
+                    return Ty::error();
+                }
                 let context = self
                     .escaping_scoped_param(&context)
                     .is_none()
@@ -3522,14 +3873,6 @@ impl<'db> InferenceContext<'db> {
                     None => match initializer {
                         Some(init) => {
                             let init_ty = self.infer_expr(body, init, &Expectation::None);
-                            // A VOID call result has no value to bind
-                            // (void == unit interim, but the WRITTEN void
-                            // contract says "no result").
-                            let resolved = self.table.resolve_completely(&init_ty);
-                            if matches!(resolved.kind(), InferTy::Void) {
-                                self.pending_diags
-                                    .push(PendingDiag::VoidResultUsed { expr: init });
-                            }
                             self.widen_fresh(&init_ty)
                         }
                         None => Ty::error(),
@@ -3791,15 +4134,6 @@ impl<'db> InferenceContext<'db> {
             && !matches!(actual.kind(), InferTy::InferVar { .. })
         {
             self.commit_establishments_to_unknown(&actual);
-            return true;
-        }
-        // RULING (interim until tuple types): `void` and `null` are the
-        // same UNIT type - a void-returning body evaluates to null, and
-        // both spellings are mutually assignable (TIR's behavior).
-        // Identified leaf-side so renders keep the written spelling and
-        // the shared algebra is untouched; when tuples land, `void`
-        // becomes the empty tuple and this arm is deleted.
-        if is_unit(&actual) && is_unit(&expected) {
             return true;
         }
         match (actual.kind(), expected.kind()) {
@@ -4157,9 +4491,6 @@ impl<'db> InferenceContext<'db> {
     fn eq_piece(&mut self, a: &Ty, b: &Ty) -> bool {
         let a = self.table.resolve_completely(a);
         let b = self.table.resolve_completely(b);
-        if is_unit(&a) && is_unit(&b) {
-            return true;
-        }
         if !a.has_infer() && !b.has_infer() {
             return self.cached_equivalent(&a, &b);
         }
@@ -7994,22 +8325,33 @@ impl<'db> InferenceContext<'db> {
                     scoped_bindings_floor: self.scoped_type_bindings.len(),
                 });
                 let body_ty = match &ret_expectation {
-                    // A void lambda DISCARDS its body's tail value, the
-                    // same statement semantics void functions get (test
-                    // bodies are synthesized `() -> void` lambdas).
-                    Some(ret) if is_unit(ret) => {
-                        self.infer_expr(body, lambda_body, &Expectation::Discarded)
-                    }
                     Some(ret) if !ret.has_error() => self.check_expr(body, lambda_body, ret),
                     Some(_) => self.infer_expr(body, lambda_body, &Expectation::Erroneous),
                     None => self.infer_expr(body, lambda_body, &Expectation::None),
                 };
                 let mut return_frame = self.return_frames.pop().expect("pushed above");
-                return_frame.candidates.push(body_ty);
-                let joined = self.join_return_candidates(&return_frame.candidates);
+                return_frame.candidates.push(Returned {
+                    ty: body_ty,
+                    units: self.take_units(lambda_body),
+                });
+                let candidates: Vec<Ty> = return_frame
+                    .candidates
+                    .iter()
+                    .map(|returned| returned.ty.clone())
+                    .collect();
+                let joined = self.join_return_candidates(&candidates);
+                // With no expected return type, every value the lambda
+                // returns joins the others.
+                if ret_expectation.is_none() {
+                    let parts = return_frame
+                        .candidates
+                        .into_iter()
+                        .map(|returned| (returned.ty, returned.units))
+                        .collect();
+                    self.join_units(parts, &Expectation::None);
+                }
                 let inferred_ret = self.widen_fresh(&joined);
                 let ret_ty = match ret_expectation {
-                    Some(ret) if is_unit(&ret) => ret,
                     Some(ret) if !ret.has_error() => {
                         if ret.has_infer() {
                             self.sub(&inferred_ret, &ret);
@@ -10163,6 +10505,7 @@ impl<'db> InferenceContext<'db> {
     fn infer_catch(
         &mut self,
         body: &ExprBody,
+        catch_expr: ExprId,
         base: ExprId,
         clauses: &[baml_compiler2_ast::CatchClause],
         expected: &Expectation,
@@ -10324,6 +10667,19 @@ impl<'db> InferenceContext<'db> {
         for fact in &facts {
             self.record_throw(base, fact);
         }
+        let parts = std::iter::once(base)
+            .chain(
+                clauses
+                    .iter()
+                    .flat_map(|clause| clause.arms.iter().map(|&arm| body.catch_arms[arm].body)),
+            )
+            .zip(&arm_tys)
+            .map(|(value, ty)| (ty.clone(), self.take_units(value)))
+            .collect();
+        let units = self.join_units(parts, expected);
+        if !units.is_empty() {
+            self.unjudged_units.insert(catch_expr, units);
+        }
         self.join(&arm_tys)
     }
 
@@ -10481,6 +10837,28 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// A tag takes its values as they are, `null` among them. One that can
+    /// only ever be `null` is an expression written for its effect, which
+    /// the statement form (`${ f(); }`) runs without handing the tag
+    /// anything: as a value it is refused, as it is in an untagged template.
+    fn check_tag_values(&mut self, body: &ExprBody) {
+        for &value in &body.tag_values {
+            let Some(ty) = self.result.type_of_expr.get(&value).cloned() else {
+                continue;
+            };
+            let resolved = self.table.resolve_completely(&ty);
+            if resolved.has_error() || resolved.has_infer() {
+                continue;
+            }
+            if self.cached_equivalent(&resolved, &Ty::null()) {
+                self.pending_diags.push(PendingDiag::InterpolatedMaybeNull {
+                    expr: value,
+                    ty: resolved,
+                });
+            }
+        }
+    }
+
     /// BEP-049 §11: every `${expr}` in an UNTAGGED template must be
     /// non-nullable (implicit `.to_string()` on null has no sound
     /// rendering). Nested `${for}`/`${if}` segments walk recursively.
@@ -10524,7 +10902,8 @@ impl<'db> InferenceContext<'db> {
                         self.check_template_interps_strict(else_body);
                     }
                 }
-                TemplateSegment::Text(_) => {}
+                // Text, and an interpolation with no value to refuse.
+                TemplateSegment::Text(_) | TemplateSegment::Effect { .. } => {}
             }
         }
     }
@@ -11139,6 +11518,22 @@ impl<'db> InferenceContext<'db> {
                 if self.cached_subtype(actual, expected) {
                     continue;
                 }
+                // A value where only the unit type is admitted reports at
+                // the expression that produces it, with its remedy.
+                if let Some(&(tail, context)) = self.unit_positions.get(&expr)
+                    && self.cached_equivalent(expected, &Ty::null())
+                {
+                    diags.push(TirDiagnostic {
+                        error: TirTypeError::UnitExpected {
+                            context,
+                            found: self.materialize_ty(actual),
+                        },
+                        severity: DiagnosticSeverity::Error,
+                        primary: DiagnosticLocation::Expr(tail),
+                        related: Vec::new(),
+                    });
+                    continue;
+                }
                 // The for-desugar's iterability failure reads as its own
                 // message (TIR's NotIterable), not a raw interface mismatch.
                 let error = match expected.kind() {
@@ -11214,6 +11609,9 @@ impl<'db> InferenceContext<'db> {
                     related: Vec::new(),
                 });
             }
+            // One implicit unit can fail both its join and its expectation;
+            // it reports once.
+            let mut reported_units: Vec<DiagnosticLocation> = Vec::new();
             for pending in std::mem::take(&mut self.pending_diags) {
                 let mut unreachable_is_warning = false;
                 let mut related = Vec::new();
@@ -11770,9 +12168,6 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::VoidResultUsed { expr } => {
-                        (TirTypeError::VoidFunctionResultUsed, expr)
-                    }
                     PendingDiag::SelflessInstanceMember {
                         expr,
                         interface_name,
@@ -11913,29 +12308,75 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::ReturnTypeMismatch {
-                        stmt,
-                        expr,
-                        expected,
-                        actual,
-                    } => {
-                        let expected = self.finalize_ty(&expected);
-                        let actual = self.finalize_ty(&actual);
-                        if expected.has_error()
-                            || actual.has_error()
-                            || self.cached_subtype(&actual, &expected)
-                        {
+                    PendingDiag::ImplicitUnit { site, demand } => {
+                        if reported_units.contains(&site.at) {
                             continue;
                         }
-                        let primary = match (stmt, expr) {
-                            (Some(stmt), _) => DiagnosticLocation::Stmt(stmt),
-                            (None, Some(expr)) => DiagnosticLocation::Expr(expr),
-                            (None, None) => unreachable!("one anchor is always set"),
+                        // An error sentinel is a context already diagnosed.
+                        let (context, admitted) = match demand {
+                            UnitDemand::Expected(expected) => {
+                                // A variable nothing solved is not one: it
+                                // finalizes to the sentinel with no report of
+                                // its own, and it did not solve to unit.
+                                let unsolved = self.table.resolve_completely(&expected).has_infer();
+                                let expected = self.finalize_ty(&expected);
+                                let admitted = !unsolved
+                                    && (matches!(expected.kind(), InferTy::Error)
+                                        || self.cached_equivalent(&expected, &Ty::null()));
+                                (expected, admitted)
+                            }
+                            UnitDemand::Joined(others) => {
+                                let others = self.finalize_ty(&others);
+                                let admitted = self.cached_subtype(&others, &Ty::null());
+                                (others, admitted)
+                            }
                         };
+                        if admitted {
+                            continue;
+                        }
+                        reported_units.push(site.at.clone());
+                        // A context with a hole in it (`!error`) is
+                        // compatible with anything, so nothing is known of
+                        // what would fit it.
+                        let whole = !context.has_error();
+                        let (form, primary) = match site.form {
+                            UnitSiteForm::BlockWithoutTail { last_value } => {
+                                // A value of the wanted type right before
+                                // the end of the block is the likelier slip
+                                // than a missing one, and reports where its
+                                // `;` is.
+                                let discarded = last_value.filter(|(_, value)| {
+                                    whole
+                                        && result.type_of_expr.get(value).cloned().is_some_and(
+                                            |ty| {
+                                                let ty = self.finalize_ty(&ty);
+                                                !ty.has_error()
+                                                    && !matches!(ty.kind(), InferTy::Never)
+                                                    && !self.cached_subtype(&ty, &Ty::null())
+                                                    && self.cached_subtype(&ty, &context)
+                                            },
+                                        )
+                                });
+                                (
+                                    ImplicitUnitForm::BlockWithoutTail {
+                                        discards_value: discarded.is_some(),
+                                    },
+                                    discarded.map_or(site.at, |(stmt, _)| {
+                                        DiagnosticLocation::Stmt(stmt)
+                                    }),
+                                )
+                            }
+                            UnitSiteForm::IfWithoutElse => {
+                                (ImplicitUnitForm::IfWithoutElse, site.at)
+                            }
+                            UnitSiteForm::BareReturn => (ImplicitUnitForm::BareReturn, site.at),
+                        };
+                        let admits_unit = whole && self.cached_subtype(&Ty::null(), &context);
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::TypeMismatch {
-                                expected: expected.to_plain(),
-                                got: actual.to_plain(),
+                            error: TirTypeError::ImplicitUnit {
+                                form,
+                                expected: context.to_plain(),
+                                admits_unit,
                             },
                             severity: DiagnosticSeverity::Error,
                             primary,
@@ -13851,6 +14292,61 @@ fn generic_function_value_shape<'db>(
         concrete_example,
     );
     vp.source_text(&rendered_plain(&ty)).ok()
+}
+
+/// Whether an implicit unit's expected type may still solve to the unit
+/// type. Only a variable or what can reduce through one can: any other
+/// constructor has already ruled it out, whatever variables it holds.
+fn may_become_unit(ty: &Ty) -> bool {
+    if !ty.has_infer() {
+        return false;
+    }
+    match ty.kind() {
+        InferTy::InferVar { .. }
+        | InferTy::Union(..)
+        | InferTy::AssociatedTypeProjection { .. } => true,
+        InferTy::Int
+        | InferTy::Bigint
+        | InferTy::Float
+        | InferTy::String
+        | InferTy::Bool
+        | InferTy::Null
+        | InferTy::Uint8Array
+        | InferTy::Media(..)
+        | InferTy::Literal(..)
+        | InferTy::Class(..)
+        | InferTy::Interface(..)
+        | InferTy::Enum(..)
+        | InferTy::EnumVariant(..)
+        | InferTy::List(..)
+        | InferTy::Map { .. }
+        | InferTy::Function { .. }
+        | InferTy::Future(..)
+        | InferTy::RustType
+        | InferTy::Type
+        | InferTy::Resource
+        | InferTy::PromptAst
+        | InferTy::Void
+        | InferTy::TypeAlias(..)
+        | InferTy::TypeVar(..)
+        | InferTy::Unknown
+        | InferTy::Never
+        | InferTy::Error => false,
+    }
+}
+
+/// The expression that produces `expr`'s value: a block's final expression,
+/// through nested blocks. A diagnostic about that value points here rather
+/// than at the whole block.
+fn value_tail(body: &ExprBody, mut expr: ExprId) -> ExprId {
+    while let Expr::Block {
+        tail_expr: Some(tail),
+        ..
+    } = &body.exprs[expr]
+    {
+        expr = *tail;
+    }
+    expr
 }
 
 fn initializer_binding_name(body: &ExprBody, initializer: ExprId) -> Option<baml_type::Name> {

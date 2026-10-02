@@ -148,6 +148,18 @@ impl BamlClassType for PackageReflectImpl {
             ));
         }
 
+        // An output of the unit type carries no information, so there is
+        // nothing for a model to produce. `null` is data only as part of a
+        // larger type (`string?`, a field).
+        if type_value.ty.as_runtime_ty().is_unit() {
+            let diagnostic = baml_compiler_diagnostics::runtime_type::non_data_type_at_render(
+                &type_value.ty.to_string(),
+            );
+            return Err(VmRustFnError::thrown_fresh(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
         let mut visited = std::collections::HashSet::new();
         if let Some((path, non_data_ty)) =
             first_non_data_type(vm, &type_value.ty, &root, &mut visited)

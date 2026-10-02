@@ -2,6 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0096
+
+  × this body may throw through callback `handler`, but declared throws is `never`. The callback type does not say what it can throw. If `handler` is an infallible host callback, annotate it with
+  │ `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.
+    ╭─[declared_throws.baml:31:35]
+ 31 │   return (value: int) -> string { handler(value) }
+    ·                                   ───────
+    ╰────
+
   [type] E0001
 
   × mismatched types

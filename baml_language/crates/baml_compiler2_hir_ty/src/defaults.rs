@@ -359,7 +359,7 @@ fn collect_default_expr_forward_references_in_template_segments(
     for seg in segments {
         match seg {
             ast::TemplateSegment::Text(_) => {}
-            ast::TemplateSegment::Interp(e) => {
+            ast::TemplateSegment::Interp(e) | ast::TemplateSegment::Effect { block: e, .. } => {
                 collect_default_expr_forward_references(*e, body, later_params, shadowed, refs);
             }
             ast::TemplateSegment::For {

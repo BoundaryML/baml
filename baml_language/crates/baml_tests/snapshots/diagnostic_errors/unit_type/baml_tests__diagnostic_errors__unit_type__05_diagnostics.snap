@@ -1,0 +1,534 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0144
+
+  × `cleanup` on class `ReturnsValue` must have the signature `cleanup(self) -> void`; it is a reserved magic finalizer name
+    ╭─[cleanup_shape.baml:24:12]
+ 24 │   function cleanup(self) -> int { 5 }
+    ·            ───┬───
+    ·               ╰── expected `cleanup(self) -> void`
+    ╰────
+
+  [type] E0144
+
+  × `cleanup` on class `ReturnsOptional` must have the signature `cleanup(self) -> void`; it is a reserved magic finalizer name
+    ╭─[cleanup_shape.baml:28:12]
+ 28 │   function cleanup(self) -> int? {}
+    ·            ───┬───
+    ·               ╰── expected `cleanup(self) -> void`
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:15:3]
+ 15 │   side();
+    ·   ───┬──
+    ·      ╰── expected `int | null`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:19:3]
+ 19 │   side();
+    ·   ───┬──
+    ·      ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:23:3]
+ 23 │   side();
+    ·   ───┬──
+    ·      ╰── expected `unknown`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:26:37]
+ 26 │ ╭─▶ function body_generic<T>(x: T) -> T {
+ 27 │ │     side();
+ 28 │ ├─▶ }
+    · ╰──── expected `T`, but this block ends without a value
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:30:31]
+ 30 │ function body_empty() -> int? {}
+    ·                               ─┬
+    ·                                ╰── expected `int | null`, but this block ends without a value; write `null` as its final expression to produce it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:35:45]
+ 35 │ ╭─▶ function body_optional_after_unit() -> int? {
+ 36 │ │     nothing();
+ 37 │ ├─▶ }
+    · ╰──── expected `int | null`, but this block ends without a value; write `null` as its final expression to produce it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:39:39]
+ 39 │ ╭─▶ function body_int_after_unit() -> int {
+ 40 │ │     nothing();
+ 41 │ ├─▶ }
+    · ╰──── expected `int`, but this block ends without a value
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:44:19]
+ 44 │   let x: int? = { side(); };
+    ·                   ───┬──
+    ·                      ╰── expected `int | null`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:49:20]
+ 49 │   takes_optional({ side(); })
+    ·                    ───┬──
+    ·                       ╰── expected `int | null`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:53:24]
+ 53 │   let f = () -> int? { side(); };
+    ·                        ───┬──
+    ·                           ╰── expected `int | null`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:58:12]
+ 58 │   if (c) { side(); } else { 1 }
+    ·            ───┬──
+    ·               ╰── expected `int | null`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:63:12]
+ 63 │     1 => { side(); },
+    ·            ───┬──
+    ·               ╰── expected `int | null`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:71:3]
+ 71 │   if (c) { side(); }
+    ·   ─────────┬────────
+    ·            ╰── expected `int | null`, but an `if` without `else` evaluates to `null`; add an `else` branch
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:75:17]
+ 75 │   let x: int? = if (c) { side(); };
+    ·                 ─────────┬────────
+    ·                          ╰── expected `int | null`, but an `if` without `else` evaluates to `null`; add an `else` branch
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:81:17]
+ 81 │   let x: int? = if (c) { 1 };
+    ·                 ──────┬─────
+    ·                       ╰── expected `int | null`, but an `if` without `else` evaluates to `null`; add an `else` branch
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:88:12]
+ 88 │   if (c) { return; }
+    ·            ───┬───
+    ·               ╰── expected a value of type `int | null`, but a bare `return` returns `null` only where the return type is `null` itself; write `return null`
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[implicit_unit.baml:93:12]
+ 93 │   if (c) { return; }
+    ·            ───┬───
+    ·               ╰── expected a value of type `unknown`, but a bare `return` returns `null` only where the return type is `null` itself; write `return null`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[interpolation.baml:15:22]
+ 15 │   `${ if (verbose) { "Explain in detail. " } }Answer.`
+    ·                      ──────────┬──────────
+    ·                                ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `"Explain in detail. "`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[interpolation.baml:19:33]
+ 19 │   `${ if let n: string = note { n } }Answer.`
+    ·                                 ┬
+    ·                                 ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `string`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[interpolation.baml:23:24]
+ 23 │   `${ { if (verbose) { "Explain in detail. " } } }Answer.`
+    ·                        ──────────┬──────────
+    ·                                  ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `"Explain in detail. "`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[interpolation.baml:27:38]
+ 27 │   `${ if (a) { "one" } else if (b) { "two" } }Answer.`
+    ·                                      ──┬──
+    ·                                        ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `"two"`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[interpolation.baml:31:27]
+ 31 │   shout`${ if (verbose) { "Explain in detail. " } }Answer.`
+    ·                           ──────────┬──────────
+    ·                                     ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `"Explain in detail. "`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `null`; to run the expression without rendering it, end it with `;`
+    ╭─[interpolation.baml:39:5]
+ 39 │   `${ nothing() }Answer.`
+    ·     ─────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `null`; to run the expression without rendering it, end it with `;`
+    ╭─[interpolation.baml:44:10]
+ 44 │   shout`${ nothing() }Answer.`
+    ·          ─────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot interpolate a value of type `null`; to run the expression without rendering it, end it with `;`
+    ╭─[interpolation.baml:49:13]
+ 49 │   prompt: `${ nothing() }Answer: ${question}`
+    ·             ─────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[interpolation.baml:60:30]
+ 60 │   prompt: `${ if (verbose) { "Explain in detail. " } }Answer: ${question}`
+    ·                              ──────────┬──────────
+    ·                                        ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `"Explain in detail. "`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:22:33]
+ 22 │   let x = if (c) { "big" } else { side(); };
+    ·                                 ─────┬─────
+    ·                                      ╰── expected `string`, but this block ends without a value
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:27:42]
+ 27 │   let x = if let n: int = v { n } else { side(); };
+    ·                                          ───┬──
+    ·                                             ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:34:10]
+ 34 │     _ => { side(); },
+    ·          ─────┬─────
+    ·               ╰── expected `string`, but this block ends without a value
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:41:12]
+ 41 │     _ => { side(); },
+    ·            ───┬──
+    ·               ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:48:40]
+ 48 │   let x = if (a) { 1 } else { if (b) { side(); } else { side(); } };
+    ·                                        ───┬──
+    ·                                           ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:48:57]
+ 48 │   let x = if (a) { 1 } else { if (b) { side(); } else { side(); } };
+    ·                                                         ───┬──
+    ·                                                            ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:53:31]
+ 53 │   let x = if (a) { 1 } else { if (b) { side(); } };
+    ·                               ─────────┬────────
+    ·                                        ╰── expected `int`, but an `if` without `else` evaluates to `null`; add an `else` branch
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:60:18]
+ 60 │   let xs = ["a", { side(); }];
+    ·                  ─────┬─────
+    ·                       ╰── expected `string`, but this block ends without a value
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:65:28]
+ 65 │   let m = { "a": 1, "b": { side(); } };
+    ·                            ───┬──
+    ·                               ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:72:35]
+ 72 │   let f = (c: bool) -> { if (c) { return; } 5 };
+    ·                                   ───┬───
+    ·                                      ╰── expected a value of type `int`, but a bare `return` returns `null`
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:77:47]
+ 77 │   let f = (c: bool) -> { if (c) { return 5; } side(); };
+    ·                                               ───┬──
+    ·                                                  ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:84:18]
+ 84 │   let x = v ?? { side(); };
+    ·                  ───┬──
+    ·                     ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:94:56]
+ 94 │   let ys = [1, 2].map((x) -> { if (yes()) { x } else { side(); } });
+    ·                                                        ───┬──
+    ·                                                           ╰── expected `int`, but this value is discarded; remove the `;` to use it
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[joined_unit.baml:99:19]
+ 99 │   let x = pick(1, { side(); });
+    ·                   ─────┬─────
+    ·                        ╰── expected `!error`, but this block ends without a value
+    ╰────
+
+  [type] E0029
+
+  × missing value
+     ╭─[joined_unit.baml:106:37]
+ 106 │   let ys = [1, 2].filter_map((x) -> { side(); });
+     ·                                     ─────┬─────
+     ·                                          ╰── expected `!error | null`, but this block ends without a value
+     ╰────
+
+  [type] E0029
+
+  × missing value
+     ╭─[joined_unit.baml:111:13]
+ 111 │   length_of({ side(); })
+     ·             ─────┬─────
+     ·                  ╰── expected `!error[]`, but this block ends without a value
+     ╰────
+
+  [type] E0029
+
+  × missing value
+     ╭─[joined_unit.baml:115:37]
+ 115 │   let x = pick(() -> { 1 }, () -> { side(); });
+     ·                                     ───┬──
+     ·                                        ╰── expected `int`, but this value is discarded; remove the `;` to use it
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:10:3]
+ 10 │   produce()
+    ·   ────┬────
+    ·       ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:14:3]
+ 14 │   produce()
+    ·   ────┬────
+    ·       ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:19:5]
+ 19 │     produce()
+    ·     ────┬────
+    ·         ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:24:24]
+ 24 │   let f = () -> void { produce() };
+    ·                        ────┬────
+    ·                            ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:31:12]
+ 31 │     1 => { produce() },
+    ·            ────┬────
+    ·                ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:37:3]
+ 37 │   if (c) { produce() } else { produce(); }
+    ·   ────────────────────┬───────────────────
+    ·                       ╰── expected `null`, found `int | null`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:42:19]
+ 42 │   let u: void = { produce() };
+    ·                   ────┬────
+    ·                       ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:47:3]
+ 47 │   produce()
+    ·   ────┬────
+    ·       ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:53:10]
+ 53 │   return 42;
+    ·          ─┬
+    ·           ╰── expected `null`, found `42`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:57:17]
+ 57 │   let u: void = 1;
+    ·                 ┬
+    ·                 ╰── expected `null`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:64:12]
+ 64 │   if (c) { produce() }
+    ·            ────┬────
+    ·                ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `int`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:68:20]
+ 68 │   let x = if (c) { produce() };
+    ·                    ────┬────
+    ·                        ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `int`; add an `else` branch
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:73:31]
+ 73 │   let x = if let n: int = v { n };
+    ·                               ┬
+    ·                               ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `int`; add an `else` branch
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:83:3]
+ 83 │   make<T>()
+    ·   ────┬────
+    ·       ╰── expected `null`, found `T[]`; end this with `;` to discard the value
+    ╰────

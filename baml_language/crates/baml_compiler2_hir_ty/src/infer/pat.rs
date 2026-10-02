@@ -170,6 +170,12 @@ impl<'db> InferenceContext<'db> {
             }
         }
         self.diverges = entry_diverges.or(all_diverge);
+        let parts = arms
+            .iter()
+            .zip(&arm_tys)
+            .map(|(&arm, ty)| (ty.clone(), self.take_units(body.match_arms[arm].body)))
+            .collect();
+        let units = self.join_units(parts, expected);
         // An unknown-FIELD in some arm's class pattern makes that arm's
         // matrix row a lie (the bad field dropped out), so usefulness
         // verdicts are noise - same suppression as an errored pattern.
@@ -217,6 +223,9 @@ impl<'db> InferenceContext<'db> {
                 });
             self.result.non_exhaustive_matches.insert(match_expr);
             return Ty::error();
+        }
+        if !units.is_empty() {
+            self.unjudged_units.insert(match_expr, units);
         }
         self.join(&arm_tys)
     }

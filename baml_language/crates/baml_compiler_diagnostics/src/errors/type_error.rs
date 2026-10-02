@@ -100,7 +100,8 @@ pub enum TypeError<C: ErrorContext> {
         variant_name: String,
         location: C::Location,
     },
-    /// Function body has no return expression but requires a non-void return type.
+    /// A value is missing where a type other than the unit type is expected:
+    /// a function body with no final expression, most often.
     MissingReturnExpression {
         expected: C::Ty,
         location: C::Location,

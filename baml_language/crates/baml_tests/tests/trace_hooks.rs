@@ -523,7 +523,9 @@ function Demo(text: string) -> string {
 }
 
 #[test]
-fn void_hook_is_not_a_value_returning_hook() {
+fn void_hook_is_a_null_returning_hook() {
+    // `void` is the unit type `null`, which a hook returns to keep the
+    // current settings.
     assert_eq!(
         errors(
             r#"
@@ -532,8 +534,6 @@ function policy() -> void throws never { }
 function target() -> int { 1 }
 "#
         ),
-        [r#"Invalid trace hook `policy` for function `target`.
-The hook returns `void`, but must return `trace.Options` or `null`.
-help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings."#]
+        Vec::<String>::new()
     );
 }

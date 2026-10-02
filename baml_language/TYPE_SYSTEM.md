@@ -34,6 +34,12 @@ Every run-time value is of exactly one concrete type. They are the types that de
 
 As of writing, no concrete types have subtyping relationships with each other. This is because doing so would require a physical conversion-- they cannot be statically cast as their memory layouts differ. So where we could statically upcast an `int` to `baml.ops.Equals` (which accepts any implementing concrete type), we cannot statically convert an `int` to a `float`. Additionally, since the concrete types represent different things, static conversion would generally not be well-defined (e.g. `int`/`float` conversion will always be lossy and/or fallible in either direction). For this reason, it's best to require explicit conversions. To avoid this being too inconvenient, we define operators like `int + float` that do the conversions while still clearly being a computation point.
 
+#### Unit Type
+
+`null` is the unit type in BAML. It has one value which is also spelt `null`. `void` is an alias for the unit type. The unit type has the special property that functions whose return type is exactly `null` (or, equivalently, `void`) may omit a return value and just write `return;` as a shorthand for `return null;` or omit a tail expression. Similarly, blocks with no tail expression implicitly have the unit type.
+
+#### Standard Library Builtins
+
 The stdlib declares _companion carrier classes_ for the builtins: `baml.Int`, `baml.Bigint`, `baml.Float`, `baml.Bool`, `baml.String`, `baml.Null`, `baml.Uint8Array`, `baml.Array<T>`, and `baml.Map<K, V>`. A carrier is a stand-in for declaring inherent members on a builtin type (morally `implement int { ... }`, which the syntax does not support yet) and **effectively does not exist as a type**: every occurrence of the spelling denotes the builtin type itself — `baml.Int` _is_ `int`, `baml.Array<T>` _is_ `T[]` — in every position, including `Self` inside the carrier's own methods and `implements` blocks and an impl's `for` target. No value ever inhabits a nominal carrier class.
 
 Two companions are the opposite case — the class name IS the builtin type's canonical spelling: `reflect.Type` (the metatype) and `baml.future.Future<V, E>`. Each denotes its dedicated type kind; the class declaration exists to carry members and documentation. Their long-term shape is undecided (perhaps a magic-builtin-backed alias with an inherent `implement` block), but the invariant holds either way: the spelling denotes the builtin kind, and the declaration only attaches members.
@@ -449,7 +455,7 @@ A function signature in BAML includes:
 
 - Arguments (required, positional): a tuple of types
 - Kwargs (optional, by-name): an unordered mapping of parameter names to types
-- Return type: a single type. This is the only place that `void` is valid user-syntax.
+- Return type: a single type. A function that returns no information returns the unit type, conventionally spelled `void`.
 - Error type: a single type.
 
 All components of a function signature must be defined explicitly except for the error type. However, the error type must be unambiguously known:

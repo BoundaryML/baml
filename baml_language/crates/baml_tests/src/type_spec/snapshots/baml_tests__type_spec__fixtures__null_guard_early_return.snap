@@ -4,7 +4,7 @@ expression: outcome.dump
 ---
 380..381 'f': throws never
 407..492 '{\n   ...int\n}': int
-413..466 'if (a ...n    }': void
+413..466 'if (a ...n    }': null
 417..418 'a': int | null
 417..426 'a == null': bool
 417..439 'a == n...= null': bool

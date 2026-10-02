@@ -55,7 +55,7 @@ function _to_string_default<T>(value: T) -> string throws never {
 
 /// (internal) Run-once guard for a user class's magic `cleanup(self) -> void`
 /// method (BEP-042), compiled into the method's prologue as
-/// `if (baml._cleanup_begin(self)) { <body> }`.
+/// `if (!baml._cleanup_begin(self)) { return; }`.
 ///
 /// Atomically test-and-sets the receiver instance's per-instance "cleaned"
 /// latch and returns `true` only on the *first* invocation, so the body runs

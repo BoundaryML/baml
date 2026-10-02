@@ -1370,6 +1370,11 @@ fn lower_session_submission(
             locally_bound_names(node, outer_binding.as_ref().map(|(_, range)| range))
         });
         let prelude = runtime_type_binding_prelude(&active_type_bindings);
+        // Only the submission's final expression is its value. An earlier
+        // one is a statement, as it would be in a block: its value is
+        // dropped, so an `if` with no `else` there owes no unit branch.
+        let returns_value =
+            index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
         let (generated_name, step_source, commit_global, binding) = if is_type_binding {
             let Some((name, operand)) = runtime_type_binding_parts(raw) else {
                 return Err(vec![runtime_diagnostic(
@@ -1494,9 +1499,9 @@ fn lower_session_submission(
                     format!("{rewritten}\n")
                 } else if is_outer_let {
                     block_step(format!("{prelude}{rewritten}\n{generated_name}"))
-                } else if !is_statement && !has_semicolon && prelude.is_empty() {
+                } else if returns_value && prelude.is_empty() {
                     format!("let {generated_name} = ({rewritten})\n")
-                } else if !is_statement && !has_semicolon {
+                } else if returns_value {
                     block_step(format!("{prelude}{rewritten}"))
                 } else {
                     format!("let {generated_name} = {{\n{prelude}{rewritten}\nnull\n}}\n")
@@ -1508,8 +1513,6 @@ fn lower_session_submission(
         let step_start = generated.len();
         generated.push_str(&step_source);
         step_ranges.push(step_start..generated.len());
-        let returns_value =
-            index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
         if returns_value {
             result_step = Some(steps.len());
             result_name = Some(generated_name.clone());

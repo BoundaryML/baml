@@ -159,3 +159,45 @@ test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
         "E0164|field `RuntimeOuter.items` has non-data type `never`, which cannot be rendered as an LLM output schema",
     )
 }
+
+// A unit output carries no information for a model to produce, however the
+// unit type is spelled. `null` stays data inside a larger type.
+type NothingAtAll = void
+
+function ReturnsNothing(topic: string) -> void {
+    client: OutputFormatTestClient
+    prompt: `Describe ${topic}.`
+}
+
+function unit_output_error<T>() -> string {
+    {
+        GenericValue@render_prompt<T>("nothing");
+        "no error"
+    } catch (e) {
+        reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+        _ => "wrong error",
+    }
+}
+
+test "unit_output_is_rejected_under_every_spelling" {
+    let expected = "E0164|non-data type `null` cannot be rendered as an LLM output schema";
+    assert.equal(unit_output_error<void>(), expected);
+    assert.equal(unit_output_error<null>(), expected);
+    assert.equal(unit_output_error<NothingAtAll>(), expected)
+}
+
+test "unit_returning_llm_function_fails_before_network_io" {
+    let result = {
+        ReturnsNothing("nothing");
+        "no error"
+    } catch (e) {
+        reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+        _ => "wrong error",
+    };
+    assert.equal(result, "E0164|non-data type `null` cannot be rendered as an LLM output schema")
+}
+
+test "null_inside_an_output_type_still_renders" {
+    let rendered = GenericValue@render_prompt<string?>("something").text();
+    assert.contains(rendered, "null")
+}

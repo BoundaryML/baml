@@ -446,7 +446,6 @@ impl<'db> LowerCtx<'db> {
             TypeRefKind::Bool => LoweringTy::bool(),
             TypeRefKind::Null => LoweringTy::null(),
             TypeRefKind::Never => LoweringTy::never(),
-            TypeRefKind::Void => LoweringTy::void(),
             TypeRefKind::Uint8Array => LoweringTy::Uint8Array,
             TypeRefKind::Media { kind } => LoweringTy::Media(*kind),
             TypeRefKind::Unknown => LoweringTy::Unknown,

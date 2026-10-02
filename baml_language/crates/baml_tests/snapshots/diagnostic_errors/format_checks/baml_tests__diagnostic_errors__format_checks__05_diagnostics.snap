@@ -903,6 +903,33 @@ source: crates/baml_tests/src/generated_tests.rs
      ·             ───────────
      ╰────
 
+  [type] E0001
+
+  × mismatched types
+     ╭─[config_decls.baml:448:5]
+ 448 │     TestTarget()
+     ·     ──────┬─────
+     ·           ╰── expected `null`, found `string`; end this with `;` to discard the value
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[config_decls.baml:459:5]
+ 459 │     TestTarget() // 8 body trailing
+     ·     ──────┬─────
+     ·           ╰── expected `null`, found `string`; end this with `;` to discard the value
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[config_decls.baml:471:5]
+ 471 │     TestTarget() /* 8 body trailing */
+     ·     ──────┬─────
+     ·           ╰── expected `null`, found `string`; end this with `;` to discard the value
+     ╰────
+
   [hir] E0010
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)

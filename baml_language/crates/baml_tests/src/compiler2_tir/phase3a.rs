@@ -970,10 +970,10 @@ fn missing_return() {
     let file = db.file("test.baml", "function f() -> int { let x = 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
-      { : void
+      { : !error
         let x = 1 : 1 -> int
       }
-      !! 20..34: type mismatch: expected int, got void
+      !! 20..34: expected `int`, but this block ends without a value
     }
     ");
 }
@@ -984,10 +984,10 @@ fn block_ending_in_stmt() {
     let file = db.file("test.baml", "function f() -> string { let x = \"hello\"; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> string throws never {
-      { : void
+      { : !error
         let x = "hello" : "hello" -> string
       }
-      !! 23..43: type mismatch: expected string, got void
+      !! 23..43: expected `string`, but this block ends without a value
     }
     "#);
 }
@@ -1377,10 +1377,10 @@ fn float_literal_in_annotation() {
     ");
 }
 
-// ── 3A-10. if-without-else should produce Optional(T) ────────────────────
+// ── 3A-10. if-without-else is the unit value, never Optional(T) ─────────
 
 #[test]
-fn if_without_else_optional() {
+fn if_without_else_is_refused_where_optional_is_expected() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -1389,13 +1389,13 @@ fn if_without_else_optional() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int | null throws never {
       { : never
-        return : void
-          if (x : bool) : void
+        return : !error
+          if (x : bool) : !error
             { : 5
               5 : 5
             }
       }
-      !! 37..49: type mismatch: expected int | null, got void
+      !! 37..49: expected `int | null`, but an `if` without `else` evaluates to `null`; add an `else` branch
     }
     block user.f {
     }
@@ -1403,7 +1403,7 @@ fn if_without_else_optional() {
 }
 
 #[test]
-fn if_without_else_let_binding() {
+fn if_without_else_branch_cannot_produce_a_value() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -1412,15 +1412,14 @@ fn if_without_else_let_binding() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int throws never {
       { : never
-        let y = : void
-          if (x : bool) : void
+        let y = : !error
+          if (x : bool) : !error
             { : 5
               5 : 5
             }
-        return y ?? 0 : void | 0
+        return y ?? 0 : 0 | !error
       }
-      !! 37..49: cannot use return value of a void function
-      !! 58..64: type mismatch: expected int, got void | 0
+      !! 46..47: an `if` without `else` evaluates to `null`, so its branch cannot produce `5`; add an `else` branch
     }
     block user.f {
     }
@@ -1829,8 +1828,8 @@ fn void_function_basic() {
     let mut db = make_db();
     let file = db.file("test.baml", "function f() -> void { }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f() -> void throws never {
-      { : void
+    function user.f() -> null throws never {
+      { : null
       }
     }
     ");
@@ -1841,7 +1840,7 @@ fn void_function_bare_return() {
     let mut db = make_db();
     let file = db.file("test.baml", "function f() -> void { return; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f() -> void throws never {
+    function user.f() -> null throws never {
       { : never
         return
       }
@@ -1866,7 +1865,7 @@ fn non_void_lambda_bare_return_is_rejected() {
             }
         true : true
       }
-      !! 43..50: type mismatch: expected int, got void
+      !! 43..50: expected a value of type `int`, but a bare `return` returns `null`
     }
     lambda user.f {
     }
@@ -1893,7 +1892,9 @@ function f() -> bool {
     );
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("type mismatch: expected Pair<string, int>, got void"),
+        tir.contains(
+            "expected a value of type `Pair<string, int>`, but a bare `return` returns `null`"
+        ),
         "{tir}"
     );
 }
@@ -1947,17 +1948,17 @@ fn void_function_return_value_error() {
     let mut db = make_db();
     let file = db.file("test.baml", "function f() -> void { return 42; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f() -> void throws never {
+    function user.f() -> null throws never {
       { : never
         return 42 : 42
       }
-      !! 30..32: type mismatch: expected void, got 42
+      !! 30..32: type mismatch: expected null, got 42
     }
     ");
 }
 
 #[test]
-fn void_function_result_used_error() {
+fn void_function_result_is_the_unit_value() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -1967,16 +1968,15 @@ function f() -> int { let x = g(); 1 }
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.g() -> void throws never {
-      { : void
+    function user.g() -> null throws never {
+      { : null
       }
     }
     function user.f() -> int throws never {
       { : 1
-        let x = g() : void
+        let x = g() : null
         1 : 1
       }
-      !! 56..59: cannot use return value of a void function
     }
     ");
 }
@@ -1992,13 +1992,13 @@ function f() -> int { g(); 1 }
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.g() -> void throws never {
-      { : void
+    function user.g() -> null throws never {
+      { : null
       }
     }
     function user.f() -> int throws never {
       { : 1
-        g() : void
+        g() : null
         1 : 1
       }
     }
@@ -2034,8 +2034,8 @@ function main() -> void {
         "expected lambda alias checking without mismatches, got:\n{tir}"
     );
     assert!(
-        tir.contains("() -> { ... } : () -> void throws never"),
-        "expected lambdas to inherit void-returning aliased function context, got:\n{tir}"
+        tir.contains("() -> { ... } : () -> null throws never"),
+        "expected lambdas to inherit unit-returning aliased function context, got:\n{tir}"
     );
 }
 

@@ -1393,7 +1393,6 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExprKind::Bool => "bool".into(),
                 baml_compiler2_ast::TypeExprKind::Null => "null".into(),
                 baml_compiler2_ast::TypeExprKind::Never => "never".into(),
-                baml_compiler2_ast::TypeExprKind::Void => "void".into(),
                 baml_compiler2_ast::TypeExprKind::Uint8Array => "uint8array".into(),
                 baml_compiler2_ast::TypeExprKind::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
@@ -1542,7 +1541,6 @@ pub(crate) mod support {
                 K::Bool => "bool".into(),
                 K::Null => "null".into(),
                 K::Never => "never".into(),
-                K::Void => "void".into(),
                 K::Uint8Array => "uint8array".into(),
                 K::Media { kind: k } => format!("{:?}", k).to_lowercase(),
                 K::Optional { inner } => {

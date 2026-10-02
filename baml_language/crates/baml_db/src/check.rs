@@ -526,6 +526,15 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 ));
             }
         }
+        // BEP-042: `cleanup` is a reserved finalizer name, so a class's own
+        // method called `cleanup` must have the finalizer's shape (E0144).
+        for &func_loc in baml_compiler2_hir::item_data::file_functions(db, file) {
+            if baml_compiler2_hir_ty::cleanup::cleanup_method(db, func_loc)
+                == Some(baml_compiler2_hir_ty::cleanup::CleanupMethod::Malformed)
+            {
+                diagnostics.push(malformed_cleanup_diagnostic(db, file, func_loc));
+            }
+        }
         // TOP-LEVEL DECLARATION effect diagnostics: io reachable from a
         // `client`/`let` initializer, which `$init` cannot run (E0158).
         //
@@ -1587,6 +1596,37 @@ fn tir_rendered_to_diagnostic_for_file(
     tir_rendered_to_diagnostic_with_message(&vp, rendered, file.file_id(db), message)
 }
 
+/// E0144 for a class's own `cleanup` method that is not shaped as a
+/// finalizer, at the method's name.
+fn malformed_cleanup_diagnostic<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    method: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Diagnostic {
+    use baml_compiler2_hir::item_data::{
+        MethodOwner, class_data, function_source_map, method_owner,
+    };
+    let Some(MethodOwner::Class(class)) = method_owner(db, method) else {
+        unreachable!("only a class's own method is a `cleanup` finalizer")
+    };
+    let class_name = &class_data(db, class).name;
+    Diagnostic::error(
+        DiagnosticId::CleanupMagicMethodSignature,
+        format!(
+            "`cleanup` on class `{class_name}` must have the signature \
+             `cleanup(self) -> void`; it is a reserved magic finalizer name"
+        ),
+    )
+    .with_primary(
+        Span {
+            file_id: file.file_id(db),
+            range: function_source_map(db, method).name_span,
+        },
+        "expected `cleanup(self) -> void`",
+    )
+    .with_phase(DiagnosticPhase::Type)
+}
+
 fn new_tir_diagnostic(
     vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
     error: &TirTypeError,
@@ -1654,7 +1694,10 @@ fn new_tir_diagnostic(
         .with_primary_span(span)
         .with_phase(DiagnosticPhase::Type);
     }
-    if matches!(error, TirTypeError::TypeMismatch { .. }) {
+    if matches!(
+        error,
+        TirTypeError::TypeMismatch { .. } | TirTypeError::UnitExpected { .. }
+    ) {
         let base = runtime_type::mismatched_types();
         let diagnostic = if warning {
             Diagnostic::warning(base.id, base.message)
@@ -1667,7 +1710,7 @@ fn new_tir_diagnostic(
     }
     let id = tir_type_error_to_diagnostic_id(error);
     let headline = match error {
-        TirTypeError::MissingReturn { .. } => Some("missing return expression"),
+        TirTypeError::ImplicitUnit { .. } => Some("missing value"),
         _ => None,
     };
     let diagnostic = match headline {
@@ -1722,9 +1765,24 @@ fn rich_source_aware_tir_type_error_message(
         TirTypeError::NotIndexable { ty: index_ty } => DiagnosticText::new()
             .text("cannot index into type ")
             .type_expr(ty(index_ty)),
-        TirTypeError::MissingReturn { expected } => DiagnosticText::new()
-            .text("expected return value of type ")
-            .type_expr(ty(expected)),
+        TirTypeError::ImplicitUnit {
+            form,
+            expected,
+            admits_unit,
+        } => {
+            let (before, after) = form.around_expected(*admits_unit);
+            DiagnosticText::new()
+                .text(before)
+                .type_expr(ty(expected))
+                .text(after)
+        }
+        TirTypeError::UnitExpected { context, found } => {
+            let (before, after) = context.around_found();
+            DiagnosticText::new()
+                .text(before)
+                .type_expr(ty(found))
+                .text(after)
+        }
         _ => DiagnosticText::from(source_aware_tir_type_error_message(db, file, error)),
     }
 }
@@ -1795,9 +1853,6 @@ fn source_aware_tir_type_error_message(
                 ty(lhs),
                 ty(rhs)
             )
-        }
-        TirTypeError::MissingReturn { expected } => {
-            format!("missing return value of type {}", ty(expected))
         }
         TirTypeError::NonExhaustiveMatch {
             scrutinee_type,
@@ -1911,8 +1966,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::ConditionAlwaysConstant { .. }
         | TirTypeError::UncalledFunctionInCondition { .. } => DiagnosticId::ConditionAlwaysConstant,
-        TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
-        TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
+        TirTypeError::UnitExpected { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TraceOpaqueValue => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
@@ -1938,7 +1992,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::RequiredParamAfterDefault { .. }
         | TirTypeError::SelfParamDefault
         | TirTypeError::DefaultParamForwardReference { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::MissingReturn { .. } => DiagnosticId::MissingReturnExpression,
+        TirTypeError::ImplicitUnit { .. } => DiagnosticId::MissingReturnExpression,
         TirTypeError::AliasCycle { .. } => DiagnosticId::AliasCycle,
         TirTypeError::ClassCycle { .. } => DiagnosticId::ClassCycle,
         TirTypeError::NonExhaustiveMatch { .. } | TirTypeError::NonExhaustiveCatchAll { .. } => {

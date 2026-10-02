@@ -5385,7 +5385,8 @@ impl<'db> LoweringContext<'db> {
 
     /// Flatten text/interpolation segments into `(parts, value_exprs)` honoring
     /// `parts.len() == value_exprs.len() + 1`. Returns `None` if any
-    /// `${for}`/`${if}` block is present (M4e.1b handles those at runtime).
+    /// `${for}`/`${if}` block or value-less `${…}` is present (the flatten
+    /// body runs those).
     fn collect_static_tagged_segments(
         segments: &[baml_compiler2_ast::TemplateSegment],
     ) -> Option<(Vec<String>, Vec<AstExprId>)> {
@@ -5401,7 +5402,9 @@ impl<'db> LoweringContext<'db> {
                     parts.push(std::mem::take(&mut cur));
                     values.push(*e);
                 }
-                TemplateSegment::For { .. }
+                // Statements, loops and branches run in the flatten body.
+                TemplateSegment::Effect { .. }
+                | TemplateSegment::For { .. }
                 | TemplateSegment::CStyleFor { .. }
                 | TemplateSegment::If { .. } => return None,
             }
