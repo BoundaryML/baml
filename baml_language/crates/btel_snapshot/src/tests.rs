@@ -206,6 +206,25 @@ fn a_leaf_over_the_leaf_limit_is_cut_and_nothing_else_is() {
 }
 
 #[test]
+fn a_sliced_string_is_hashed_once_however_often_it_is_captured() {
+    let hashed = |text: &BexStr| match text {
+        BexStr::Slice { hash, .. } => hash[1].load(std::sync::atomic::Ordering::Acquire) != 0,
+        other => panic!("expected a slice, got {other:?}"),
+    };
+    let source = BexStr::from("a long string to take a part of: ".repeat(8));
+    let part = source.substring(4, 204);
+    assert!(!hashed(&part));
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let id = b.leaves().string(&part).unwrap();
+    // The caller's handle has the hash now, and so has the capture's.
+    assert!(hashed(&part));
+    let snapshot = b.finish(SnapshotValue::String(id), &mut Shaper::default());
+    assert!(hashed(snapshot.string(id)));
+    assert_eq!(snapshot.string(id).content_hash(), part.content_hash());
+}
+
+#[test]
 fn growth_accounts_for_replacement_overlap_and_ignores_idle_budget() {
     let pool = SnapshotPool::with_config(
         1,

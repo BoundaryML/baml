@@ -1663,3 +1663,58 @@ async fn a_long_string_is_held_until_its_upload_ends_and_the_capture_only_until_
             .any(|(path, blob)| path == "/put/1-2" && *blob == wanted)
     );
 }
+
+#[tokio::test]
+async fn a_short_part_of_a_long_string_goes_with_its_recording() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |r: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(r, &base, &[]))
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    // Room for a recording, not for what the long string retains.
+    settings.recording_reserved_bytes = 5 * 1024 * 1024;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::new(1, Limits::default());
+    let document = btel_snapshot::BexStr::from("d".repeat(8 * 1024 * 1024));
+    // One part short enough to be copied into the body, one sent from the
+    // document's own memory: each holds all of it.
+    let mut sent = Vec::new();
+    for (file, end) in files(2).into_iter().zip([1000, 3000]) {
+        let part = document.substring(0, end);
+        let mut b = pool.try_acquire().unwrap();
+        let value = b.leaves().string_value(&part);
+        let snapshot = b.finish(value, &mut btel_snapshot::Shaper::default());
+        let mut blob = Vec::new();
+        snapshot
+            .root_blob()
+            .write(&mut btel_snapshot::BlobScratch::default(), &mut blob)
+            .unwrap();
+        sent.push(blob);
+        handle
+            .try_submit(
+                file,
+                vec![snapshot],
+                vec![proposed(0, UploadKind::Recording, &[0])],
+            )
+            .unwrap();
+    }
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(handle.loss_count(), 0);
+    let uploaded: Vec<_> = uploaded_blobs(&server)
+        .await
+        .into_iter()
+        .map(|(_, blob)| blob)
+        .collect();
+    assert_eq!(uploaded, sent);
+}

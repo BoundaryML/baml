@@ -296,6 +296,8 @@ struct Reservation {
     recording: usize,
     snapshots: usize,
     captures: Option<Share>,
+    /// The strings among the blobs placed with the recording.
+    inline: Share,
     recording_window: Duration,
 }
 
@@ -318,6 +320,7 @@ impl Drop for Reservation {
         if let Some(share) = self.captures.take() {
             state.cas.give(share);
         }
+        state.cas.give(self.inline);
         state.plans -= 1;
         state.recording_window -= self.recording_window;
         self.shared.capacity.notify_all();
@@ -371,7 +374,7 @@ pub(crate) struct Candidate {
 }
 impl Candidate {
     /// How many of its bytes an upload body holds in a buffer of its own.
-    fn buffered_len(&self) -> u64 {
+    pub(crate) fn buffered_len(&self) -> u64 {
         match &self.source {
             Source::Leaf(leaf) => body::buffered_len(Some(leaf), self.encoded_len),
             Source::Kept { .. } => body::buffered_len(None, self.encoded_len),
@@ -652,7 +655,7 @@ impl BcsDeliveryHandle {
             },
         )?;
         // The file is held until its body, which copies it once, is built.
-        let mut recording = config
+        let recording = config
             .max_recording_body_bytes
             .checked_add(file.retained_bytes())
             .and_then(|v| v.checked_add(control))
@@ -664,24 +667,31 @@ impl BcsDeliveryHandle {
         // upload ends. Its whole length decides how long that may take.
         let mut bodies = Vec::new();
         let mut recording_window = Duration::ZERO;
+        // What a blob placed with the recording buffers is within the
+        // recording body, reserved above. A string among them is held like
+        // any other, and a string may hold far more than its own length (a
+        // part of a long one holds all of it): that is the CAS budget's to
+        // count, which refuses nothing.
+        let mut inline = 0;
         for target in &request.proposed_uploads {
             let window = blob_bytes(candidates, &target.candidate_indices);
-            let held = held_bytes(candidates, &target.candidate_indices);
+            let leaves = leaf_bytes(candidates, &target.candidate_indices);
             match target.kind {
                 UploadKind::Recording => {
                     recording_window = window
                         .and_then(|blobs| blobs.checked_add(file.bytes().len()))
                         .and_then(|body| config.put_window(body))
                         .ok_or(DeliveryError::Capacity)?;
-                    recording = held
-                        .and_then(|held| recording.checked_add(held))
-                        .ok_or(DeliveryError::Capacity)?;
+                    inline = leaves.ok_or(DeliveryError::Capacity)?;
                 }
                 UploadKind::CasBatch | UploadKind::CasObject => {
                     let window = window
                         .and_then(|blobs| config.put_window(blobs))
                         .ok_or(DeliveryError::Capacity)?;
-                    let held = held.ok_or(DeliveryError::Capacity)?;
+                    let held = buffered_bytes(candidates, &target.candidate_indices)
+                        .zip(leaves)
+                        .and_then(|(buffered, leaves)| buffered.checked_add(leaves))
+                        .ok_or(DeliveryError::Capacity)?;
                     bodies.push((target.client_target_id, held, window));
                 }
             }
@@ -689,6 +699,7 @@ impl BcsDeliveryHandle {
         let cas = bodies
             .iter()
             .try_fold(captures, |sum, (_, held, _)| sum.checked_add(*held))
+            .and_then(|sum| sum.checked_add(inline))
             .ok_or(DeliveryError::Capacity)?;
         let cas_window = bodies
             .iter()
@@ -747,6 +758,7 @@ impl BcsDeliveryHandle {
             recording,
             snapshots: window.owners.len(),
             captures: Some(state.cas.take(captures, cas, limit)),
+            inline: state.cas.take(inline, cas, limit),
             recording_window,
         };
         let holds = bodies
@@ -899,20 +911,24 @@ fn blob_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
     })
 }
 
-/// What a body with the blobs at `indices` holds until its upload ends: the
-/// bytes it buffers, and the strings it sends from where they are held.
-fn held_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
+/// As [`blob_bytes`], counting only what a body buffers.
+fn buffered_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
     indices.iter().try_fold(0_usize, |sum, &index| {
-        let candidate = &candidates[index as usize];
-        let leaf = match &candidate.source {
-            Source::Leaf(leaf) => leaf.retained_bytes(),
-            Source::Kept { .. } => 0,
-        };
-        usize::try_from(candidate.buffered_len())
+        usize::try_from(candidates[index as usize].buffered_len())
             .ok()?
             .checked_add(CAS_OBJECT_OVERHEAD_BYTES)?
-            .checked_add(leaf)?
             .checked_add(sum)
+    })
+}
+
+/// What the strings among the blobs at `indices` retain: a body holds them
+/// until its upload ends.
+fn leaf_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
+    indices.iter().try_fold(0_usize, |sum, &index| {
+        match &candidates[index as usize].source {
+            Source::Leaf(leaf) => sum.checked_add(leaf.retained_bytes()),
+            Source::Kept { .. } => Some(sum),
+        }
     })
 }
 
@@ -1193,20 +1209,28 @@ async fn assemble(
                 UploadKind::Recording => config.max_recording_body_bytes,
                 UploadKind::CasBatch | UploadKind::CasObject => usize::MAX,
             };
-            let mut writer = body::Writer::new(&body::Head {
+            let head = body::Head {
                 plan_id: &response.plan_id,
                 upload_id: &target.upload_id,
                 recording_file: (target.kind == UploadKind::Recording).then(|| file.bytes()),
                 limit,
-            })?;
-            for &index in &target.candidate_indices {
-                let (id, encoded_len) = heads[index as usize];
-                let source = sources[index as usize]
-                    .take()
-                    .ok_or(DeliveryError::InvalidPlan)?;
-                writer.blob(id, encoded_len, source, &owners, &mut scratch)?;
-            }
-            Ok(writer.finish())
+            };
+            let blobs = target
+                .candidate_indices
+                .iter()
+                .map(|&index| {
+                    let (id, encoded_len) = heads[index as usize];
+                    sources[index as usize]
+                        .take()
+                        .map(|source| Candidate {
+                            id,
+                            encoded_len,
+                            source,
+                        })
+                        .ok_or(DeliveryError::InvalidPlan)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            body::build(&head, blobs, &owners, &mut scratch)
         })();
         let body = match body {
             Ok(body) => body,

@@ -80,6 +80,12 @@ impl Leaves<'_> {
         if !self.limits.holds_leaf(text.len()) || self.strings.len() >= ARENA_ITEMS {
             return None;
         }
+        // A slice caches its hash in its own handle, not in what it views.
+        // Hash the caller's, so that its next capture finds the hash there
+        // and this clone starts with it.
+        if matches!(text, BexStr::Slice { .. }) {
+            text.content_hash();
+        }
         let id = StringId(u32::try_from(self.strings.len()).expect("bounded strings"));
         self.strings.push(text.clone(), self.meter);
         Some(id)

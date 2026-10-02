@@ -4,7 +4,7 @@
 //! bytes are exactly those of encoding the whole message.
 use std::sync::Arc;
 
-use btel_snapshot::{BlobScratch, CasId, Leaf, Structure};
+use btel_snapshot::{BlobScratch, Leaf, Structure};
 use bytes::Bytes;
 use prost::{
     Message,
@@ -13,9 +13,14 @@ use prost::{
 use sha2::{Digest, Sha256};
 
 use crate::{
-    delivery::{DeliveryError, Source},
+    delivery::{Candidate, DeliveryError, Source},
     proto::CloudUploadEnvelope,
 };
+
+/// Zero would be left out of the message, as the protobuf encoding of a
+/// default value: the version is written unconditionally here.
+const BLOB_VERSION: u32 = btel_settings::snapshot::BLOB_VERSION;
+const _: () = assert!(BLOB_VERSION != 0);
 
 /// A string at least this long is sent from where it is held. A shorter one
 /// is copied beside its framing, which costs less than a chunk of its own.
@@ -80,164 +85,177 @@ pub(crate) struct Head<'a> {
     pub(crate) limit: usize,
 }
 
-/// Writes one body. No allocation is made without asking first, so a length
-/// that cannot be had is an error, not an abort.
-pub(crate) struct Writer {
-    chunks: Vec<Bytes>,
-    /// Bytes written since the last chunk.
-    buffer: Vec<u8>,
-    /// The length of `chunks`.
-    sent: usize,
-    limit: usize,
+/// The lengths of one `CasObject` field of a body, in the order written:
+/// buffered before the blob's content, the content when buffered or when
+/// sent from where it is held, and the digest that follows.
+struct Piece {
+    object_len: usize,
+    blob_len: usize,
+    before: usize,
+    buffered: usize,
+    shared: usize,
+    after: usize,
 }
-impl Writer {
-    pub(crate) fn new(head: &Head<'_>) -> Result<Self, DeliveryError> {
-        let mut writer = Self {
-            chunks: Vec::new(),
-            buffer: Vec::new(),
-            sent: 0,
-            limit: head.limit,
-        };
-        // Every field before the blobs. The recording goes in by hand, so
-        // that it is copied once.
-        let start = CloudUploadEnvelope {
-            format_version: 1,
-            plan_id: head.plan_id.to_owned(),
-            upload_id: head.upload_id.to_owned(),
-            recording_file: None,
-            cas_objects: Vec::new(),
-        };
-        let recording = head
-            .recording_file
-            .map_or(0, |file| delimited_len(field::RECORDING_FILE, file.len()));
-        writer.reserve(start.encoded_len().saturating_add(recording))?;
-        start
-            .encode(&mut writer.buffer)
-            .map_err(|_| DeliveryError::Encoding)?;
-        if let Some(file) = head.recording_file {
-            writer.delimited(field::RECORDING_FILE, file.len());
-            writer.buffer.extend_from_slice(file);
-        }
-        Ok(writer)
-    }
-
-    fn len(&self) -> usize {
-        self.sent + self.buffer.len()
-    }
-
-    /// Room for `additional` more bytes in the buffer, within the limit.
-    fn reserve(&mut self, additional: usize) -> Result<(), DeliveryError> {
-        if additional > self.limit.saturating_sub(self.len()) {
-            return Err(DeliveryError::Capacity);
-        }
-        self.buffer
-            .try_reserve_exact(additional)
-            .map_err(|_| DeliveryError::Capacity)
-    }
-
-    /// The key and length of a length-delimited field.
-    fn delimited(&mut self, tag: u32, len: usize) {
-        encode_key(tag, WireType::LengthDelimited, &mut self.buffer);
-        encode_varint(len as u64, &mut self.buffer);
-    }
-
-    /// End the buffered chunk.
-    fn flush(&mut self) {
-        if !self.buffer.is_empty() {
-            self.sent += self.buffer.len();
-            self.chunks
-                .push(Bytes::from(std::mem::take(&mut self.buffer)));
-        }
-    }
-
-    /// One `CasObject`: the blob `id`, which writes `encoded_len` bytes.
-    pub(crate) fn blob(
-        &mut self,
-        id: CasId,
-        encoded_len: u64,
-        source: Source,
-        owners: &[Arc<Structure>],
-        scratch: &mut BlobScratch,
-    ) -> Result<(), DeliveryError> {
-        let version = btel_settings::snapshot::BLOB_VERSION;
-        let blob_len = usize::try_from(encoded_len).map_err(|_| DeliveryError::Capacity)?;
-        let digest_len = <Sha256 as Digest>::output_size();
-        let object_len = delimited_len(field::SNAPSHOT_ID, id.as_bytes().len())
-            .saturating_add(uint32::encoded_len(
-                field::SNAPSHOT_FORMAT_VERSION,
-                &version,
-            ))
-            .saturating_add(
-                key_len(field::BLOB)
-                    .saturating_add(encoded_len_varint(encoded_len))
-                    .saturating_add(blob_len),
-            )
-            .saturating_add(delimited_len(field::BLOB_SHA256, digest_len));
-        let total = key_len(field::CAS_OBJECTS)
-            .saturating_add(encoded_len_varint(object_len as u64))
-            .saturating_add(object_len);
-        if total > self.limit.saturating_sub(self.len()) {
-            return Err(DeliveryError::Capacity);
-        }
-        let buffered = match &source {
-            Source::Leaf(leaf) => buffered_len(Some(leaf), encoded_len),
-            Source::Kept { .. } => buffered_len(None, encoded_len),
+impl Piece {
+    fn of(candidate: &Candidate) -> Result<Self, DeliveryError> {
+        let blob_len =
+            usize::try_from(candidate.encoded_len).map_err(|_| DeliveryError::Capacity)?;
+        let header = match &candidate.source {
+            Source::Leaf(leaf) if leaf.encoded_len() != candidate.encoded_len => {
+                return Err(DeliveryError::Encoding);
+            }
+            Source::Leaf(leaf) => leaf.header().len(),
+            Source::Kept { .. } => 0,
         };
         let shared = blob_len
-            - usize::try_from(buffered).unwrap_or_else(|_| unreachable!("part of `blob_len`"));
-        self.reserve(total - shared)?;
-        self.delimited(field::CAS_OBJECTS, object_len);
-        self.delimited(field::SNAPSHOT_ID, id.as_bytes().len());
-        self.buffer.extend_from_slice(id.as_bytes());
-        uint32::encode(field::SNAPSHOT_FORMAT_VERSION, &version, &mut self.buffer);
-        self.delimited(field::BLOB, blob_len);
-        let digest = match source {
+            - usize::try_from(candidate.buffered_len())
+                .unwrap_or_else(|_| unreachable!("part of `blob_len`"));
+        let after = delimited_len(field::BLOB_SHA256, <Sha256 as Digest>::output_size());
+        let fields = delimited_len(field::SNAPSHOT_ID, candidate.id.as_bytes().len())
+            + uint32::encoded_len(field::SNAPSHOT_FORMAT_VERSION, &BLOB_VERSION)
+            + key_len(field::BLOB)
+            + encoded_len_varint(candidate.encoded_len);
+        let object_len = fields
+            .checked_add(blob_len)
+            .and_then(|len| len.checked_add(after))
+            .ok_or(DeliveryError::Capacity)?;
+        Ok(Self {
+            object_len,
+            blob_len,
+            before: key_len(field::CAS_OBJECTS)
+                + encoded_len_varint(object_len as u64)
+                + fields
+                + header,
+            buffered: blob_len - header - shared,
+            shared,
+            after,
+        })
+    }
+
+    /// The length of the whole field.
+    fn total(&self) -> usize {
+        self.before + self.buffered + self.shared + self.after
+    }
+}
+
+/// What is buffered in one piece of memory from the start of `pieces`: up to
+/// the first content sent from where it is held, or to the end.
+fn run(pieces: &[Piece]) -> usize {
+    let mut len = 0;
+    for piece in pieces {
+        len += piece.before + piece.buffered;
+        if piece.shared > 0 {
+            return len;
+        }
+        len += piece.after;
+    }
+    len
+}
+
+/// A buffer for exactly `len` bytes. A length that cannot be had is an
+/// error, not an abort.
+fn buffer(len: usize) -> Result<Vec<u8>, DeliveryError> {
+    let mut buffer = Vec::new();
+    buffer
+        .try_reserve_exact(len)
+        .map_err(|_| DeliveryError::Capacity)?;
+    Ok(buffer)
+}
+
+/// The key and length of a length-delimited field.
+fn delimited(buffer: &mut Vec<u8>, tag: u32, len: usize) {
+    encode_key(tag, WireType::LengthDelimited, buffer);
+    encode_varint(len as u64, buffer);
+}
+
+/// Write one body: `head`, then each of `blobs` as a `CasObject`. Every
+/// length is known before anything is written, so a body over its limit is
+/// refused first, and each stretch of buffered bytes is allocated once.
+pub(crate) fn build(
+    head: &Head<'_>,
+    blobs: Vec<Candidate>,
+    owners: &[Arc<Structure>],
+    scratch: &mut BlobScratch,
+) -> Result<Body, DeliveryError> {
+    // Every field before the blobs. The recording goes in by hand, so that
+    // it is copied once.
+    let start = CloudUploadEnvelope {
+        format_version: 1,
+        plan_id: head.plan_id.to_owned(),
+        upload_id: head.upload_id.to_owned(),
+        recording_file: None,
+        cas_objects: Vec::new(),
+    };
+    let head_len = start.encoded_len()
+        + head
+            .recording_file
+            .map_or(0, |file| delimited_len(field::RECORDING_FILE, file.len()));
+    let pieces = blobs.iter().map(Piece::of).collect::<Result<Vec<_>, _>>()?;
+    let len = pieces
+        .iter()
+        .try_fold(head_len, |len, piece| len.checked_add(piece.total()))
+        .filter(|len| *len <= head.limit)
+        .ok_or(DeliveryError::Capacity)?;
+    let mut chunks = Vec::new();
+    let mut buffered = buffer(head_len + run(&pieces))?;
+    start
+        .encode(&mut buffered)
+        .map_err(|_| DeliveryError::Encoding)?;
+    if let Some(file) = head.recording_file {
+        delimited(&mut buffered, field::RECORDING_FILE, file.len());
+        buffered.extend_from_slice(file);
+    }
+    for (index, (candidate, piece)) in blobs.into_iter().zip(&pieces).enumerate() {
+        delimited(&mut buffered, field::CAS_OBJECTS, piece.object_len);
+        delimited(
+            &mut buffered,
+            field::SNAPSHOT_ID,
+            candidate.id.as_bytes().len(),
+        );
+        buffered.extend_from_slice(candidate.id.as_bytes());
+        uint32::encode(field::SNAPSHOT_FORMAT_VERSION, &BLOB_VERSION, &mut buffered);
+        delimited(&mut buffered, field::BLOB, piece.blob_len);
+        let digest = match candidate.source {
             Source::Leaf(leaf) => {
-                if leaf.encoded_len() != encoded_len {
-                    return Err(DeliveryError::Encoding);
-                }
                 let digest = Sha256::new()
                     .chain_update(leaf.header())
                     .chain_update(leaf.content().as_bytes())
                     .finalize();
-                self.buffer.extend_from_slice(leaf.header());
-                if shared == 0 {
-                    self.buffer.extend_from_slice(leaf.content().as_bytes());
+                buffered.extend_from_slice(leaf.header());
+                if piece.shared == 0 {
+                    buffered.extend_from_slice(leaf.content().as_bytes());
                 } else {
                     // The string goes out from the memory that holds it,
                     // and is let go when the upload is over.
-                    self.flush();
-                    self.sent += shared;
-                    self.chunks.push(Bytes::from_owner(Content(leaf)));
+                    debug_assert_eq!(buffered.len(), buffered.capacity());
+                    chunks.push(Bytes::from(buffered));
+                    chunks.push(Bytes::from_owner(Content(leaf)));
+                    buffered = buffer(piece.after + run(&pieces[index + 1..]))?;
                 }
                 digest
             }
             Source::Kept { owner, blob } => {
-                let start = self.buffer.len();
+                let start = buffered.len();
                 owners[owner as usize]
                     .blob(blob)
-                    .write(scratch, &mut self.buffer)
+                    .write(scratch, &mut buffered)
                     .map_err(|_| DeliveryError::Encoding)?;
-                if self.buffer.len() - start != blob_len {
+                if buffered.len() - start != piece.blob_len {
                     return Err(DeliveryError::Encoding);
                 }
-                Sha256::digest(&self.buffer[start..])
+                Sha256::digest(&buffered[start..])
             }
         };
         // The digest follows the blob, as it does in the message.
-        self.reserve(delimited_len(field::BLOB_SHA256, digest_len))?;
-        self.delimited(field::BLOB_SHA256, digest_len);
-        self.buffer.extend_from_slice(&digest);
-        Ok(())
+        delimited(&mut buffered, field::BLOB_SHA256, digest.len());
+        buffered.extend_from_slice(&digest);
     }
-
-    pub(crate) fn finish(mut self) -> Body {
-        self.flush();
-        Body {
-            chunks: self.chunks,
-            len: self.sent,
-        }
+    debug_assert_eq!(buffered.len(), buffered.capacity());
+    if !buffered.is_empty() {
+        chunks.push(Bytes::from(buffered));
     }
+    debug_assert_eq!(chunks.iter().map(Bytes::len).sum::<usize>(), len);
+    Ok(Body { chunks, len })
 }
 
 #[cfg(test)]
@@ -296,34 +314,41 @@ mod tests {
         .encode_to_vec()
     }
 
-    fn build(
+    fn body_of(
         snapshot: Snapshot,
         recording_file: Option<&[u8]>,
         limit: usize,
     ) -> Result<Body, DeliveryError> {
         let Split { leaves, structure } = snapshot.split();
         let owners: Vec<_> = structure.into_iter().map(Arc::new).collect();
-        let mut writer = Writer::new(&Head {
+        let leaves = leaves.into_iter().map(|leaf| Candidate {
+            id: leaf.id(),
+            encoded_len: leaf.encoded_len(),
+            source: Source::Leaf(leaf),
+        });
+        let kept = owners
+            .iter()
+            .flat_map(|owner| owner.blobs())
+            .map(|blob| Candidate {
+                id: blob.id(),
+                encoded_len: blob.encoded_len(),
+                source: Source::Kept {
+                    owner: 0,
+                    blob: blob.index(),
+                },
+            });
+        let head = Head {
             plan_id: "plan",
             upload_id: "upload",
             recording_file,
             limit,
-        })?;
-        let mut scratch = BlobScratch::default();
-        for leaf in leaves {
-            let (id, len) = (leaf.id(), leaf.encoded_len());
-            writer.blob(id, len, Source::Leaf(leaf), &owners, &mut scratch)?;
-        }
-        let kept: Vec<_> = owners
-            .iter()
-            .flat_map(|owner| owner.blobs())
-            .map(|blob| (blob.id(), blob.encoded_len(), blob.index()))
-            .collect();
-        for (id, len, blob) in kept {
-            let source = Source::Kept { owner: 0, blob };
-            writer.blob(id, len, source, &owners, &mut scratch)?;
-        }
-        Ok(writer.finish())
+        };
+        super::build(
+            &head,
+            leaves.chain(kept).collect(),
+            &owners,
+            &mut BlobScratch::default(),
+        )
     }
 
     fn texts() -> Vec<BexStr> {
@@ -341,7 +366,7 @@ mod tests {
         let texts = texts();
         for recording_file in [None, Some(&b"recording bytes"[..]), Some(&[][..])] {
             let expected = encoded_whole(&capture(&pool, &texts), recording_file);
-            let body = build(capture(&pool, &texts), recording_file, usize::MAX).unwrap();
+            let body = body_of(capture(&pool, &texts), recording_file, usize::MAX).unwrap();
             assert_eq!(body.len(), expected.len());
             assert_eq!(body.chunks().concat(), expected);
             // Framing, the first string, framing with the short string
@@ -369,7 +394,7 @@ mod tests {
                 other => panic!("expected a heap-backed string, got {other:?}"),
             })
             .collect();
-        let body = build(capture(&pool, &texts), None, usize::MAX).unwrap();
+        let body = body_of(capture(&pool, &texts), None, usize::MAX).unwrap();
         drop(texts);
         // The capture is free once the body is written; the long strings
         // are not, and the short one was copied.
@@ -390,19 +415,20 @@ mod tests {
         let pool = SnapshotPool::new(1, Limits::default());
         let texts = texts();
         let whole = encoded_whole(&capture(&pool, &texts), None).len();
-        assert!(build(capture(&pool, &texts), None, whole).is_ok());
+        assert!(body_of(capture(&pool, &texts), None, whole).is_ok());
         assert!(matches!(
-            build(capture(&pool, &texts), None, whole - 1),
+            body_of(capture(&pool, &texts), None, whole - 1),
             Err(DeliveryError::Capacity)
         ));
         // The recording alone can be too long.
+        let head = Head {
+            plan_id: "plan",
+            upload_id: "upload",
+            recording_file: Some(&[0; 64]),
+            limit: 64,
+        };
         assert!(matches!(
-            Writer::new(&Head {
-                plan_id: "plan",
-                upload_id: "upload",
-                recording_file: Some(&[0; 64]),
-                limit: 64,
-            }),
+            super::build(&head, Vec::new(), &[], &mut BlobScratch::default()),
             Err(DeliveryError::Capacity)
         ));
         assert_eq!(pool.stats().in_use, 0);
