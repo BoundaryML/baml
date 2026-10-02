@@ -1177,13 +1177,13 @@ fn trace_contract_end_to_end() {
                 }
             }
             if mode == "medium" {
-                capture_flags(&program).await;
+                Box::pin(capture_flags(&program)).await;
                 Box::pin(scalar_values(&program)).await;
                 Box::pin(arguments_and_graphs(&program)).await;
                 call_structure(&program).await;
                 callable_shapes(&program).await;
                 exceptional_completion(&program).await;
-                unions_and_opaque_values(&program).await;
+                Box::pin(unions_and_opaque_values(&program)).await;
                 llm_policy(&program).await;
             }
         });
