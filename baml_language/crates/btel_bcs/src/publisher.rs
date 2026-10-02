@@ -529,7 +529,6 @@ mod tests {
     fn publisher(config: CloudPublisherConfig) -> (BcsDelivery, CloudPublisher) {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                allow_http: true,
                 ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
             },
             |_| {},
@@ -768,7 +767,6 @@ mod tests {
     fn oversized_recording_releases_owners_and_later_small_file_is_staged() {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                allow_http: true,
                 max_recording_body_bytes: 128,
                 ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
             },
@@ -840,7 +838,6 @@ mod tests {
         for rejection in ["body", "plans", "bytes"] {
             let delivery = BcsDelivery::new(
                 DeliveryConfig {
-                    allow_http: true,
                     max_recording_body_bytes: 512,
                     ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
                 },

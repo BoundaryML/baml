@@ -63,6 +63,5 @@ fn from_boundary_env() {
         };
         assert_eq!(delivery.prepare_base_url.as_str(), url.unwrap());
         assert_eq!(delivery.bearer_token.as_deref(), key);
-        assert!(!delivery.allow_http);
     }
 }

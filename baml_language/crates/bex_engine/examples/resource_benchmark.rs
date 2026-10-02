@@ -142,7 +142,6 @@ fn run(args: Run) -> Result<()> {
             config,
             btel_bcs::CloudPublisherConfig::default(),
             btel_bcs::delivery::DeliveryConfig {
-                allow_http: true,
                 ..btel_bcs::delivery::DeliveryConfig::new(
                     args.prepare_base_url
                         .context("--prepare-base-url required")?

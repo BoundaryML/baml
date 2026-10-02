@@ -301,7 +301,6 @@ async fn log_data_and_context_use_existing_cloud_uploads() {
                 ..CloudPublisherConfig::default()
             },
             DeliveryConfig {
-                allow_http: true,
                 max_pending_snapshots: 1,
                 max_candidates: 1,
                 max_targets: 2,

@@ -82,7 +82,6 @@ skip-integ-tests = [  ]
 
 [dev-dependencies]
 baml_tests = { workspace = true }
-bex_engine = { workspace = true, features = [ "test-support" ] }
 btel_bcs = { workspace = true }
 btel_file = { workspace = true }
 btel_recorder = { workspace = true }

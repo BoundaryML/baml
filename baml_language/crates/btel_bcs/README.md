@@ -41,6 +41,11 @@ Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint
 The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and
 rejects credentials, queries, and fragments in that base URL.
 
+Plain HTTP is accepted only for the loopback hosts `localhost`, `127.0.0.1`, and
+`[::1]`, for local development against a local data plane. Upload targets may
+use HTTP only to a loopback host and only when the base URL is itself loopback
+HTTP; an HTTPS base never sends uploads over HTTP.
+
 The runtime posts JSON to
 `/v1/recordings/{recording_id}/uploads:prepare`. Recording IDs and digests are
 lowercase hexadecimal. Snapshot IDs are the existing 16-byte XXH3-128 identities,

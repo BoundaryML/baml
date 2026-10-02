@@ -1,5 +1,4 @@
-//! Exercise the real CLI dispatch in a child process so environment changes
-//! cannot race other tests. The scoped HTTP override never reaches a shipped CLI.
+//! Drive the real CLI against a loopback mock of the Boundary publisher.
 mod common;
 
 use std::{path::Path, process::Command};
@@ -14,24 +13,19 @@ use wiremock::{
 #[path = "../../btel_bcs/tests/support/mod.rs"]
 mod cloud_protocol;
 
-const CHILD: &str = "BAML_BOUNDARY_CLI_TEST_CHILD";
 const KEY: &str = "bml_cli_test_key";
 const RECORDINGS: &str = ".baml/btel/recordings";
 
-fn run(project: &Path, base: &str, http_override: bool, telemetry: &str) {
-    let output = Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "baml_run_uploads_from_boundary_env",
-            "--nocapture",
-        ])
+fn run(project: &Path, boundary_url: &str, telemetry: &str) {
+    let output = Command::new(common::baml_cli())
+        .args(["run", "main"])
         .current_dir(project)
-        .env(CHILD, if http_override { "http" } else { "strict" })
-        .env("BOUNDARY_URL", format!("{base}/publisher"))
+        .env("BOUNDARY_URL", boundary_url)
         .env("BOUNDARY_API_KEY", KEY)
         .env("BAML_TELEMETRY", telemetry)
         .env("BAML_HOME", project.join("home"))
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("DO_NOT_TRACK", "1")
         .output()
@@ -47,20 +41,6 @@ fn run(project: &Path, base: &str, http_override: bool, telemetry: &str) {
 
 #[test]
 fn baml_run_uploads_from_boundary_env() {
-    if let Ok(mode) = std::env::var(CHILD) {
-        let run = || {
-            let code = baml_cli::run_cli(vec!["baml".into(), "run".into(), "main".into()])
-                .expect("CLI dispatch");
-            assert_eq!(i32::from(code), 0);
-        };
-        if mode == "http" {
-            bex_engine::boundary_test_support::with_http(run);
-        } else {
-            run();
-        }
-        return;
-    }
-
     let temp = tempfile::tempdir().unwrap();
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
     std::fs::create_dir(temp.path().join("home")).unwrap();
@@ -78,6 +58,7 @@ fn baml_run_uploads_from_boundary_env() {
         .block_on(async {
             let server = MockServer::start().await;
             let base = server.uri();
+            let boundary_url = format!("{base}/publisher");
             Mock::given(method("POST"))
                 .and(path_regex(
                     r"^/publisher/v1/recordings/[^/]+/uploads:prepare$",
@@ -102,7 +83,7 @@ fn baml_run_uploads_from_boundary_env() {
                 .mount(&server)
                 .await;
 
-            run(temp.path(), &server.uri(), true, "medium");
+            run(temp.path(), &boundary_url, "medium");
             let requests = server.received_requests().await.unwrap();
             let mut prepares = 0;
             let mut recordings = Vec::new();
@@ -158,11 +139,10 @@ fn baml_run_uploads_from_boundary_env() {
             }));
 
             server.reset().await;
-            run(temp.path(), &server.uri(), true, "off");
+            run(temp.path(), &boundary_url, "off");
             assert!(server.received_requests().await.unwrap().is_empty());
-            // Enabling the test-support feature alone cannot enable HTTP.
-            // A rejected delivery config must still allow BAML execution.
-            run(temp.path(), &server.uri(), false, "medium");
+            // Plain HTTP to a non-loopback host is rejected without failing BAML.
+            run(temp.path(), "http://example.invalid/publisher", "medium");
             assert!(server.received_requests().await.unwrap().is_empty());
         });
 }

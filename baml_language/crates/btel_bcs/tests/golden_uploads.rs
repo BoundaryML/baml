@@ -253,7 +253,6 @@ async fn check_case(case: &str) {
         BcsDelivery::new(
             DeliveryConfig {
                 bearer_token: Some("golden-prepare-token".into()),
-                allow_http: true,
                 max_candidates: 8,
                 max_targets: 8,
                 max_recording_body_bytes: 4096,

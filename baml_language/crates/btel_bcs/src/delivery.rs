@@ -66,7 +66,6 @@ pub struct DeliveryConfig {
     pub retry_delay: Duration,
     /// Initial attempt plus retries. Nonretryable HTTP and invalid plans drop immediately.
     pub max_attempts: u32,
-    pub allow_http: bool,
 }
 
 impl DeliveryConfig {
@@ -88,7 +87,6 @@ impl DeliveryConfig {
             request_timeout: Duration::from_secs(10),
             retry_delay: Duration::from_millis(200),
             max_attempts: 4,
-            allow_http: false,
         }
     }
     fn endpoint(&self, recording_id: &str, operation: &str) -> Result<Url, DeliveryError> {
@@ -113,7 +111,7 @@ impl DeliveryConfig {
 
     fn validate(&self) -> Result<(), DeliveryError> {
         let base = &self.prepare_base_url;
-        validate_url(base, self.allow_http).map_err(|_| DeliveryError::InvalidConfig)?;
+        validate_url(base, true).map_err(|_| DeliveryError::InvalidConfig)?;
         if base.query().is_some() || base.as_str().len() > 8192 {
             return Err(DeliveryError::InvalidConfig);
         }
@@ -846,7 +844,7 @@ async fn assemble(
             .and_then(|ms| now.checked_add(ms))
             .ok_or(DeliveryError::Expired)
     };
-    validate_response(&request, &response, config.allow_http)?;
+    validate_response(&request, &response, &config.prepare_base_url)?;
     if response.expires_at_unix_ms <= horizon(1)? {
         return Err(DeliveryError::Expired);
     }
@@ -1111,9 +1109,17 @@ mod tests {
             let config = DeliveryConfig::new(endpoint.parse().unwrap());
             assert_eq!(config.validate(), Err(DeliveryError::InvalidConfig));
         }
+        for endpoint in [
+            "http://localhost:8080",
+            "http://127.0.0.1:8080/publisher",
+            "http://[::1]:8080",
+        ] {
+            assert_eq!(
+                DeliveryConfig::new(endpoint.parse().unwrap()).validate(),
+                Ok(())
+            );
+        }
         let mut local = DeliveryConfig::new("http://localhost:8080".parse().unwrap());
-        local.allow_http = true;
-        assert_eq!(local.validate(), Ok(()));
         local.bearer_token = Some("invalid\ntoken".into());
         assert_eq!(local.validate(), Err(DeliveryError::InvalidConfig));
         let oversized = format!("https://bcs.example/{}", "x".repeat(8192));
