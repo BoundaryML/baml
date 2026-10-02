@@ -333,6 +333,7 @@ struct CallRow {
     announced_sequence: Option<i64>,
     entered: Option<i64>,
     inputs_cas: Option<[u8; 16]>,
+    type_args_cas: Option<[u8; 16]>,
     completed_sequence: Option<i64>,
     late: Option<bool>,
     exited: Option<i64>,
@@ -686,6 +687,7 @@ impl Bulk {
                                 announced_sequence: Some(saturating_sequence(sequence)),
                                 entered: tick(entry.entered_at_ticks),
                                 inputs_cas: entry.inputs_cas_id.as_ref().map(cas_id),
+                                type_args_cas: entry.type_args_cas_id.as_ref().map(cas_id),
                                 completed_sequence: None,
                                 late: None,
                                 exited: None,
@@ -712,6 +714,7 @@ impl Bulk {
                                     }
                                     row.announced_sequence = announced.announced_sequence;
                                     row.inputs_cas = announced.inputs_cas;
+                                    row.type_args_cas = announced.type_args_cas;
                                 }
                             }
                         }
@@ -834,6 +837,7 @@ impl Bulk {
                         announced_sequence: None,
                         entered,
                         inputs_cas: None,
+                        type_args_cas: None,
                         completed_sequence,
                         late: Some(late),
                         exited,
@@ -1621,10 +1625,10 @@ impl Bulk {
         insert_rows(
             tx,
             "call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
-               announced_sequence, entered_ticks, inputs_cas, completed_sequence, late,
-               exited_ticks, self_await_ticks, outcome, panicked, needs_announcement, value_cas,
-               conflict)",
-            18,
+               announced_sequence, entered_ticks, inputs_cas, type_args_cas, completed_sequence,
+               late, exited_ticks, self_await_ticks, outcome, panicked, needs_announcement,
+               value_cas, conflict)",
+            19,
             &ids,
             |b, call| {
                 let row = &self.calls[&call];
@@ -1637,6 +1641,7 @@ impl Bulk {
                 b.bind(row.announced_sequence)?;
                 b.bind(row.entered)?;
                 b.bind(row.inputs_cas.as_ref().map(<[u8; 16]>::as_slice))?;
+                b.bind(row.type_args_cas.as_ref().map(<[u8; 16]>::as_slice))?;
                 b.bind(row.completed_sequence)?;
                 b.bind(row.late)?;
                 b.bind(row.exited)?;

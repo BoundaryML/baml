@@ -1239,8 +1239,8 @@ impl<'t> Applier<'t> {
                             self.tx
                                 .prepare_cached(
                                     "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id,
-                                       announced_sequence, entered_ticks, inputs_cas)
-                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                                       announced_sequence, entered_ticks, inputs_cas, type_args_cas)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                                      ON CONFLICT (rec, call_id) DO UPDATE SET
                                        conflict = CASE WHEN conflict > 0 THEN conflict
                                          WHEN announced_sequence IS NOT NULL
@@ -1250,7 +1250,8 @@ impl<'t> Applier<'t> {
                                            OR entered_ticks IS NOT excluded.entered_ticks
                                          THEN 1 ELSE 0 END,
                                        announced_sequence = excluded.announced_sequence,
-                                       inputs_cas = excluded.inputs_cas",
+                                       inputs_cas = excluded.inputs_cas,
+                                       type_args_cas = excluded.type_args_cas",
                                 )?
                                 .execute(params![
                                     self.rec,
@@ -1260,7 +1261,8 @@ impl<'t> Applier<'t> {
                                     i64::from(entry.call_path_id),
                                     sequence_i64(sequence)?,
                                     tick(entry.entered_at_ticks),
-                                    entry.inputs_cas_id.as_ref().map(cas_id)
+                                    entry.inputs_cas_id.as_ref().map(cas_id),
+                                    entry.type_args_cas_id.as_ref().map(cas_id)
                                 ])?;
                         }
                         Some(Event::FunctionCompletion(done)) => {

@@ -2,7 +2,7 @@
 //!
 //! Identity and timing functions are pure. Value functions resolve CAS
 //! blobs lazily through the current query's context: a query that never
-//! evaluates `input_args`, `output_value`, `error_value` or
+//! evaluates `type_args`, `input_args`, `output_value`, `error_value` or
 //! `network_event_values` reads no blob. A path reads only the blobs it
 //! crosses; rendering or comparing a whole value reads every blob it reaches,
 //! within the render and comparison limits. Within one query, hydration

@@ -104,7 +104,12 @@ impl EncodedSpans {
                         self.require(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
                         leaf(&mut self.bytes, 7, &m);
                     }
-                    Event::FunctionAnnouncement(m) => leaf(&mut self.bytes, 3, &m),
+                    Event::FunctionAnnouncement(m) => {
+                        if m.type_args_cas_id.is_some() {
+                            self.require(btel_settings::encoding::TYPE_ARGS_FORMAT_MINOR);
+                        }
+                        leaf(&mut self.bytes, 3, &m);
+                    }
                     Event::NetworkCompletion(m) => {
                         self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
                         leaf(&mut self.bytes, 10, &m);
@@ -334,6 +339,10 @@ mod tests {
                 call_path_id: u32::MAX,
                 entered_at_ticks: u64::MAX,
                 inputs_cas_id: Some(proto::CasId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
+                type_args_cas_id: Some(proto::CasId {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),

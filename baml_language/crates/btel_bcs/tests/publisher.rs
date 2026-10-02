@@ -50,6 +50,7 @@ fn capture_at(
             call_path,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         },
     );
 }
@@ -414,6 +415,7 @@ async fn a_capture_spanning_plans_delivers_every_blob_once_and_ends_last() {
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         },
     );
     publisher.after_batch(1);
@@ -517,6 +519,7 @@ async fn blobs_a_sealed_file_left_queued_are_delivered_without_another_record() 
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         },
     );
     publisher.after_batch(1);
@@ -649,6 +652,7 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         };
         publisher.before_detached_span(&record);
         publisher.span(thread, &mut record);
@@ -776,6 +780,7 @@ async fn strings_sent_with_one_plan_are_let_go_while_their_capture_waits_for_the
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         },
     );
     publisher.after_batch(1);

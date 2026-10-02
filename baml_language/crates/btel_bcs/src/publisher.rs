@@ -280,10 +280,10 @@ impl CloudPublisher {
         }
     }
 
-    /// Whether `size` more may be held, with a capture's storage when `slot`:
-    /// within the budgets, or alone, however large it is.
-    fn has_room(&self, size: usize, slot: bool) -> bool {
-        (!slot || self.retained_snapshots < self.config.max_pending_snapshots)
+    /// Whether `size` more may be held, with the storages of `slots`
+    /// captures: within the budgets, or alone, however large it is.
+    fn has_room(&self, size: usize, slots: usize) -> bool {
+        self.retained_snapshots.saturating_add(slots) <= self.config.max_pending_snapshots
             && (self.retained_bytes == 0
                 || self
                     .retained_bytes
@@ -362,7 +362,7 @@ impl CloudPublisher {
             .map(Leaf::retained_bytes)
             .chain(structure.iter().map(|(_, size)| *size))
             .fold(0, usize::saturating_add);
-        if !self.has_room(size, structure.is_some()) {
+        if !self.has_room(size, usize::from(structure.is_some())) {
             self.delivery
                 .record_payload_loss(DeliveryError::Capacity, false);
             return;
@@ -640,21 +640,30 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         if self.failure.is_some() {
             return;
         }
-        if let Some(snapshot) = record.capture()
-            && snapshot
+        // What `span` will retain, in its order: the captures with a blob
+        // not offered recently.
+        let mut slots = 0;
+        let mut size = 0_usize;
+        for snapshot in record.captures() {
+            if !snapshot
                 .blobs()
                 .any(|blob| !self.already_offered(blob.id()))
-        {
-            let size = snapshot.retained_bytes();
-            self.preflight_size = Some((snapshot.root_id(), size));
+            {
+                continue;
+            }
+            let retained = snapshot.retained_bytes();
+            if slots == 0 {
+                self.preflight_size = Some((snapshot.root_id(), retained));
+            }
+            slots += 1;
             // Each blob that is one string adds a little when it leaves
             // the capture.
             let leaves = snapshot.blobs().len().saturating_mul(size_of::<Leaf>());
-            let size = size.saturating_add(leaves);
-            if !self.has_room(size, true) {
-                // Send what is held until this one may be.
-                self.send(|publisher| !publisher.has_room(size, true));
-            }
+            size = size.saturating_add(retained).saturating_add(leaves);
+        }
+        if slots > 0 && !self.has_room(size, slots) {
+            // Send what is held until these may be.
+            self.send(|publisher| !publisher.has_room(size, slots));
         }
     }
 
@@ -689,7 +698,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         if self.failure.is_none() {
             self.start_window();
             self.recording.span_reference(thread, record);
-            if let Some(snapshot) = record.take_capture() {
+            while let Some(snapshot) = record.take_capture() {
                 self.retain(snapshot);
             }
             self.seal_on_pressure();
@@ -837,6 +846,7 @@ mod tests {
                 call_path: CallPathId::ROOT,
                 entered_at: ClockInstant::from_ticks(1),
                 captured_inputs: Some(snapshot),
+                captured_type_args: None,
             },
         );
     }
@@ -882,6 +892,7 @@ mod tests {
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         };
         publisher.before_detached_span(&record);
         assert_eq!(publisher.preflight_size, Some((id, expected)));
@@ -1097,7 +1108,16 @@ mod tests {
         let function = btel_types::FunctionIdAllocator::default()
             .allocate()
             .unwrap();
-        for kind in ["log", "context", "inputs", "output"] {
+        for kind in [
+            "log",
+            "context",
+            "inputs",
+            "type arguments",
+            "output",
+            "request",
+            "event",
+            "network error",
+        ] {
             let (delivery, mut publisher) = publisher(CloudPublisherConfig::default());
             let pool = SnapshotPool::new(4, Limits::default());
             capture(&mut publisher, &pool, 1);
@@ -1127,7 +1147,41 @@ mod tests {
                     call_path: CallPathId::ROOT,
                     entered_at: ClockInstant::from_ticks(1),
                     captured_inputs: Some(snapshot),
+                    captured_type_args: None,
                 },
+                "type arguments" => SpanRecord::FunctionSpanAnnouncement {
+                    id: allocate_telemetry_id(),
+                    parent_id: thread,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(1),
+                    captured_inputs: None,
+                    captured_type_args: Some(snapshot),
+                },
+                "request" => SpanRecord::NetworkSpanAnnouncement(Box::new(
+                    btel_records::NetworkAnnouncement {
+                        id: allocate_telemetry_id(),
+                        parent_id: thread,
+                        call_path: CallPathId::ROOT,
+                        started_at: ClockInstant::from_ticks(1),
+                        method: "GET".into(),
+                        url: "https://example.test/".into(),
+                        request: Some(snapshot),
+                    },
+                )),
+                "event" => SpanRecord::NetworkEvent(Box::new(btel_records::NetworkEventRecord {
+                    span: allocate_telemetry_id(),
+                    name: btel_records::NetworkEventName::Data,
+                    at: ClockInstant::from_ticks(1),
+                    payload: Some(snapshot),
+                })),
+                "network error" => {
+                    SpanRecord::NetworkSpanCompletion(Box::new(btel_records::NetworkCompletion {
+                        span: allocate_telemetry_id(),
+                        completed_at: ClockInstant::from_ticks(2),
+                        outcome: btel_types::InvocationOutcome::Errored,
+                        error: Some(snapshot),
+                    }))
+                }
                 "output" => SpanRecord::FunctionSpanCompletionOk {
                     id: allocate_telemetry_id(),
                     parent_id: thread,
@@ -1154,6 +1208,43 @@ mod tests {
             );
             assert_eq!(publisher.retained_snapshots, 1, "{kind}");
         }
+    }
+
+    #[test]
+    fn room_is_made_for_both_captures_of_an_announcement() {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig::default());
+        let pool = SnapshotPool::new(4, Limits::default());
+        capture(&mut publisher, &pool, 1);
+        // One capture more fits, not two.
+        publisher.config.max_pending_snapshots = 2;
+        let snapshot = |value| {
+            pool.try_acquire()
+                .unwrap()
+                .finish(SnapshotValue::Int(value), &mut Shaper::default())
+        };
+        let (inputs, type_args) = (snapshot(2), snapshot(3));
+        let ids = [inputs.root_id(), type_args.root_id()];
+        let thread = allocate_telemetry_id();
+        let mut record = SpanRecord::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(inputs),
+            captured_type_args: Some(type_args),
+        };
+        publisher.before_detached_span(&record);
+        publisher.span(thread, &mut record);
+        assert_eq!(delivery.handle().loss_count(), 0);
+        assert_eq!(
+            publisher
+                .queue
+                .iter()
+                .map(|queued| queued.id)
+                .collect::<Vec<_>>(),
+            ids
+        );
+        assert_eq!(publisher.retained_snapshots, 2);
     }
 
     #[test]

@@ -106,6 +106,25 @@ const _: () = assert!(size_of::<FrameTelemetry>() == btel_settings::layout::FRAM
 const _: () =
     assert!(size_of::<Option<FrameTelemetry>>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
 
+/// The type arguments a call's frame starts with, in the callee's De Bruijn
+/// order: those the callee value carries (a bound method's receiver class
+/// and method arguments, a closure's captured ones, a generic function
+/// value's), then those the call site passes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CallTypeArgs<'a> {
+    pub carried: &'a [bex_vm_types::RealizedTy],
+    pub passed: &'a [bex_vm_types::RealizedTy],
+}
+
+impl<'a> CallTypeArgs<'a> {
+    fn is_empty(&self) -> bool {
+        self.carried.is_empty() && self.passed.is_empty()
+    }
+    fn iter(&self) -> impl Iterator<Item = &'a bex_vm_types::RealizedTy> {
+        self.carried.iter().chain(self.passed)
+    }
+}
+
 /// Invocation-local tracing controls resolved by the call boundary.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TraceConfig {
@@ -263,6 +282,32 @@ impl TelemetryState {
             #[cfg(test)]
             span_records: Vec::new(),
         }
+    }
+
+    /// A generic call's type arguments as `map<string, Type>`, keyed by the
+    /// names the compiler gave the frame's slots. A slot without a name is
+    /// left out rather than given an invented key; nothing is recorded when
+    /// no slot has one.
+    #[cold]
+    fn capture_type_args(
+        &mut self,
+        function: &Function,
+        type_args: CallTypeArgs<'_>,
+    ) -> Option<btel_snapshot::Snapshot> {
+        let mut named: Vec<(&str, &bex_vm_types::RealizedTy)> =
+            Vec::with_capacity(function.type_param_names.len());
+        for (name, ty) in function.type_param_names.iter().zip(type_args.iter()) {
+            // A frame can bind a name twice (a lambda inside a block that
+            // rebinds it); the later slot is the one its body sees.
+            match named.iter_mut().find(|(seen, _)| *seen == name.as_str()) {
+                Some(slot) => slot.1 = ty,
+                None => named.push((name, ty)),
+            }
+        }
+        if named.is_empty() {
+            return None;
+        }
+        self.capture(snapshot::Input::TypeArgs(&named))
     }
 
     #[cold]
@@ -559,6 +604,7 @@ impl TelemetryState {
                 caller_is_observed,
                 args,
                 None,
+                CallTypeArgs::default(),
                 register,
             )
         }
@@ -581,6 +627,7 @@ impl TelemetryState {
         caller_is_observed: bool,
         args: &[Value],
         trace: Option<TraceConfig>,
+        type_args: CallTypeArgs<'_>,
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> Option<FrameTelemetry> {
         if function.telemetry_function_id.is_none()
@@ -667,7 +714,12 @@ impl TelemetryState {
         let captured_inputs = (mode == InvocationMode::Span && capture_inputs)
             .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
             .flatten();
-        if captured_inputs.is_some() {
+        // Types are not user data: a span records them whether or not it
+        // captures its arguments.
+        let captured_type_args = (mode == InvocationMode::Span && !type_args.is_empty())
+            .then(|| self.capture_type_args(function, type_args))
+            .flatten();
+        if captured_inputs.is_some() || captured_type_args.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
@@ -686,6 +738,7 @@ impl TelemetryState {
                 call_path,
                 entered_at,
                 captured_inputs,
+                captured_type_args,
             });
             Some(id)
         } else {
@@ -1476,6 +1529,7 @@ mod tests {
                 false,
                 &[Value::int(7)],
                 trace,
+                CallTypeArgs::default(),
                 |_, _| (None, function.telemetry_function_id.unwrap()),
             )
         }
@@ -2166,6 +2220,7 @@ mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
@@ -2176,6 +2231,88 @@ mod tests {
             body_meta,
             runtime_package: HeapPtr::null(),
         }
+    }
+
+    /// Records of one generic call made with `type_args`: its announced
+    /// type arguments, and whether its completion depends on the
+    /// announcement.
+    fn type_args_of(
+        function: &Function,
+        inputs: bool,
+        type_args: CallTypeArgs<'_>,
+    ) -> (Option<serde_json::Value>, bool) {
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        let trace = TraceConfig {
+            mode: Some(InvocationMode::Span),
+            inputs: Some(inputs),
+            ..TraceConfig::default()
+        };
+        // SAFETY: no heap values; the registration hook dereferences nothing.
+        let frame = unsafe {
+            state.enter_bytecode_with_trace(
+                function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[],
+                Some(trace),
+                type_args,
+                |_, _| (None, function.telemetry_function_id.unwrap()),
+            )
+        }
+        .unwrap();
+        unsafe {
+            state.complete_invocation(frame, function, InvocationOutcome::Ok, None);
+        }
+        let announced = state.span_records().iter().find_map(|record| match record {
+            SpanRecord::FunctionSpanAnnouncement {
+                captured_type_args, ..
+            } => Some(shape(captured_type_args.as_ref())),
+            _ => None,
+        });
+        let completed = state.span_records().last().unwrap().completion().unwrap();
+        (announced.unwrap(), completed.requires_announcement)
+    }
+
+    #[test]
+    fn a_generic_call_records_its_type_args_by_name_whether_or_not_inputs_are() {
+        let mut generic = function(FunctionKind::Bytecode, None);
+        // A method of `Box<T>`: the class's parameter rides on the receiver,
+        // the method's own is passed by the call.
+        generic.type_param_names = vec!["T".into(), "U".into()];
+        let carried = [bex_vm_types::RealizedTy::int()];
+        let passed = [bex_vm_types::RealizedTy::string()];
+        let both = CallTypeArgs {
+            carried: &carried,
+            passed: &passed,
+        };
+        for inputs in [false, true] {
+            assert_eq!(
+                type_args_of(&generic, inputs, both),
+                (
+                    Some(serde_json::json!({"T": "type: int", "U": "type: string"})),
+                    true
+                ),
+                "inputs captured: {inputs}"
+            );
+        }
+        // Without type arguments nothing is recorded, and the completion
+        // does not wait for an announcement.
+        let plain = function(FunctionKind::Bytecode, None);
+        assert_eq!(
+            type_args_of(&plain, false, CallTypeArgs::default()),
+            (None, false)
+        );
+        // A slot the compiler did not name is left out, never given a key.
+        let mut partial = generic;
+        partial.type_param_names.truncate(1);
+        assert_eq!(
+            type_args_of(&partial, false, both),
+            (Some(serde_json::json!({"T": "type: int"})), true)
+        );
+        partial.type_param_names.clear();
+        assert_eq!(type_args_of(&partial, false, both), (None, false));
     }
 
     #[test]

@@ -151,6 +151,7 @@ fn announce(inputs: Option<[u8; 16]>) -> Event {
             low: u64::from_le_bytes(b[..8].try_into().unwrap()),
             high: u64::from_le_bytes(b[8..].try_into().unwrap()),
         }),
+        type_args_cas_id: None,
     })
 }
 

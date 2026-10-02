@@ -166,6 +166,10 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         call_path: CallPathId,
         entered_at: ClockInstant,
         captured_inputs: Option<InputCapture>,
+        /// A generic call's type arguments, `map<string, Type>` keyed by
+        /// type-parameter name. Recorded with the span, whether or not its
+        /// inputs are; `None` for a call without type arguments.
+        captured_type_args: Option<InputCapture>,
     },
     /// Completion variants specialize outcome, reentry and announcement dependency.
     /// This is an in-process dispatch choice; Rust discriminants are not wire IDs.
@@ -680,6 +684,22 @@ mod layout_tests {
         assert_eq!(size_of::<TimingRecord>(), 32);
         assert_eq!(size_of::<Box<RaiseStack>>(), 8);
         assert_eq!(size_of::<Option<ThreadName>>(), 8);
+    }
+
+    #[test]
+    fn an_announcement_gives_up_its_inputs_then_its_type_args() {
+        let id = btel_types::allocate_telemetry_id();
+        let mut record = SpanRecord::<u8, u8>::FunctionSpanAnnouncement {
+            id,
+            parent_id: id,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(1),
+            captured_type_args: Some(2),
+        };
+        assert_eq!(record.take_capture(), Some(1));
+        assert_eq!(record.take_capture(), Some(2));
+        assert_eq!(record.take_capture(), None);
     }
 }
 
@@ -1224,20 +1244,26 @@ impl<I, V> SpanRecord<I, V> {
     }
 }
 
-/// The slot holding the capture a record owns, borrowed as `$record` is:
-/// `$borrow` repeats that borrow for a slot behind a box. Every variant is
-/// listed, so a new one must say whether it carries one.
-macro_rules! capture_slot {
+/// The slots holding the captures a record owns, in the order
+/// `take_capture` hands them over, borrowed as `$record` is: `$borrow`
+/// repeats that borrow for a slot behind a box. Every variant is listed, so
+/// a new one must say what it carries. Only an announcement holds two: its
+/// inputs, then its type arguments.
+macro_rules! capture_slots {
     ($record:expr, $($borrow:tt)+) => {
         match $record {
-            Self::Log { captured_data, .. } => Some(captured_data),
-            Self::ContextSelected { captured_context } => Some(captured_context),
+            Self::Log { captured_data, .. } => [Some(captured_data), None],
+            Self::ContextSelected { captured_context } => [Some(captured_context), None],
             Self::FunctionSpanAnnouncement {
-                captured_inputs, ..
-            } => Some(captured_inputs),
-            Self::NetworkSpanAnnouncement(announcement) => Some($($borrow)+ announcement.request),
-            Self::NetworkEvent(event) => Some($($borrow)+ event.payload),
-            Self::NetworkSpanCompletion(completion) => Some($($borrow)+ completion.error),
+                captured_inputs,
+                captured_type_args,
+                ..
+            } => [Some(captured_inputs), Some(captured_type_args)],
+            Self::NetworkSpanAnnouncement(announcement) => {
+                [Some($($borrow)+ announcement.request), None]
+            }
+            Self::NetworkEvent(event) => [Some($($borrow)+ event.payload), None],
+            Self::NetworkSpanCompletion(completion) => [Some($($borrow)+ completion.error), None],
             Self::FunctionSpanCompletionOk { captured_value, .. }
             | Self::FunctionSpanCompletionOkNeedsAnnouncement { captured_value, .. }
             | Self::FunctionSpanCompletionOkReentry { captured_value, .. }
@@ -1269,7 +1295,7 @@ macro_rules! capture_slot {
             }
             | Self::LateFunctionSpanCompletionPanicked { captured_value, .. }
             | Self::LateFunctionSpanCompletionPanickedReentry { captured_value, .. } => {
-                Some(captured_value)
+                [Some(captured_value), None]
             }
             Self::ThreadSelected { .. }
             | Self::ContextCleared
@@ -1283,19 +1309,27 @@ macro_rules! capture_slot {
             | Self::ErrorRaised { .. }
             | Self::ErrorRaisedAndEnded { .. }
             | Self::ErrorRaiseFrameCompleted { .. }
-            | Self::ErrorUnwindEnded { .. } => None,
+            | Self::ErrorUnwindEnded { .. } => [None, None],
         }
     };
 }
 
 impl<C> SpanRecord<C, C> {
-    /// The capture this record owns.
-    pub fn capture(&self) -> Option<&C> {
-        capture_slot!(self, &).and_then(Option::as_ref)
+    /// The captures this record owns, in the order `take_capture` hands
+    /// them over.
+    pub fn captures(&self) -> impl Iterator<Item = &C> {
+        capture_slots!(self, &)
+            .into_iter()
+            .flatten()
+            .filter_map(Option::as_ref)
     }
 
-    /// Transfer the exclusive capture owner; record destruction handles everything else.
+    /// Transfer the exclusive capture owners, one per call until none is
+    /// left; record destruction handles everything else.
     pub fn take_capture(&mut self) -> Option<C> {
-        capture_slot!(self, &mut).and_then(Option::take)
+        capture_slots!(self, &mut)
+            .into_iter()
+            .flatten()
+            .find_map(Option::take)
     }
 }

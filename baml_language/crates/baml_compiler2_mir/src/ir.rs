@@ -150,6 +150,11 @@ pub struct RuntimeSignature {
     pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
+    /// The name of each type-argument slot in the callee frame, in slot
+    /// order: an owner's type parameters (an interface method's `Self`
+    /// first), then the function's own. A lambda's frame is the enclosing
+    /// one. Synthetic effect parameters have no slot and are not listed.
+    pub type_param_names: Vec<String>,
     /// Interface bounds, parallel to the callee frame's De Bruijn generic
     /// parameter slots. Kept as executable metadata (not display text) so
     /// reflection and runtime specialization can check them.

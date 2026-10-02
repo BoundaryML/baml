@@ -17,6 +17,9 @@ pub(super) enum Input<'a> {
     FunctionArgs(&'a [Value]),
     /// Built from Rust values; no heap is involved.
     Network(&'a NetworkPayload<'a>),
+    /// A generic call's type arguments by parameter name: `map<string, Type>`.
+    /// Types hold no heap values.
+    TypeArgs(&'a [(&'a str, &'a bex_vm_types::RealizedTy)]),
 }
 #[derive(Default)]
 pub(super) struct Scratch {
@@ -128,6 +131,7 @@ impl Scratch {
             Input::Value(value) => SnapshotRoot::Value(self.add(&mut b.leaves(), value, 0)),
             // Built from Rust values: nothing is queued.
             Input::Network(payload) => SnapshotRoot::Value(network(&mut b, payload)),
+            Input::TypeArgs(args) => SnapshotRoot::Value(type_args(&mut b, args)),
         };
         while let Some((slot, ptr, depth)) = self.work.pop() {
             // SAFETY: inherited heap permit, never relinquished during traversal.
@@ -270,6 +274,13 @@ fn network(b: &mut Builder, payload: &NetworkPayload<'_>) -> SnapshotValue {
         }
     }
 }
+fn type_args(b: &mut Builder, args: &[(&str, &bex_vm_types::RealizedTy)]) -> SnapshotValue {
+    let fields = args
+        .iter()
+        .map(|(name, ty)| (*name, SnapshotValue::Type(b.leaves().ty(owned_type(ty)))))
+        .collect::<Vec<_>>();
+    map(b, OwnedType::Type, &fields)
+}
 fn text(leaves: &mut Leaves<'_>, text: &str) -> SnapshotValue {
     if text.len() > btel_settings::network::BODY_CAPTURE_MAX_BYTES {
         return SnapshotValue::Truncated(Limit::Bytes);
@@ -364,8 +375,9 @@ fn media(
 fn describe(kind: Description) -> SnapshotObject {
     SnapshotObject::Descriptive { kind, name: None }
 }
-/// A network snapshot as JSON, to compare shapes in tests: bytes become an
-/// array of numbers, a truncated value names its limit.
+/// A network or type-argument snapshot as JSON, to compare shapes in tests:
+/// bytes become an array of numbers, a truncated value names its limit, a
+/// type is `"type: <type>"`.
 #[cfg(test)]
 pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Value {
     match value {
@@ -373,6 +385,7 @@ pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Val
         SnapshotValue::Int(value) => value.into(),
         SnapshotValue::String(id) => snapshot.string(id).as_str().into(),
         SnapshotValue::Truncated(limit) => format!("truncated: {limit:?}").into(),
+        SnapshotValue::Type(id) => format!("type: {}", snapshot.ty(id)).into(),
         SnapshotValue::Object(id) => match snapshot.object(id) {
             SnapshotObject::Map { entries, .. } => snapshot
                 .entries(*entries)

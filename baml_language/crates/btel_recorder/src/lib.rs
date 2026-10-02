@@ -379,6 +379,7 @@ impl ConversionBuffer {
                 call_path,
                 entered_at,
                 captured_inputs,
+                captured_type_args,
             } => {
                 self.event(
                     thread,
@@ -388,6 +389,7 @@ impl ConversionBuffer {
                         call_path_id: call_path.get(),
                         entered_at_ticks: entered_at.get(),
                         inputs_cas_id: captured_inputs.as_ref().map(cas_id),
+                        type_args_cas_id: captured_type_args.as_ref().map(cas_id),
                     }),
                 );
             }

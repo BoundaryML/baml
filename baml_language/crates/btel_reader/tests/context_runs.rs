@@ -86,6 +86,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
             call_path,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: None,
+            captured_type_args: None,
         });
     }
     producer.seal();
@@ -99,6 +100,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         call_path,
         entered_at: ClockInstant::from_ticks(2),
         captured_inputs: None,
+        captured_type_args: None,
     });
     producer.seal();
     processor.process_available();
@@ -111,6 +113,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         call_path,
         entered_at: ClockInstant::from_ticks(2),
         captured_inputs: None,
+        captured_type_args: None,
     });
     producer.write_span(SpanRecord::ContextCleared);
     producer.write_span(SpanRecord::FunctionSpanAnnouncement {
@@ -119,6 +122,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         call_path,
         entered_at: ClockInstant::from_ticks(3),
         captured_inputs: None,
+        captured_type_args: None,
     });
     producer.seal();
     processor.process_available();
