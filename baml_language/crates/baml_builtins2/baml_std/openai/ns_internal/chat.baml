@@ -64,6 +64,8 @@ function _azure_reject(detail: string) -> ai.errors.InvalidRequest {
 /// family by being it or by starting with it plus "-", so "gpt-5" covers
 /// "gpt-5-mini" and "gpt-5-2025-08-07" but not "gpt-5.6-luna". A fine-tune
 /// (`ft:<base model>:<org>:<suffix>:<id>`) is judged by its base model.
+/// Each family is also matched with an "openai." prefix, the model id Bedrock
+/// gives an OpenAI model ("openai.gpt-5.5").
 ///
 /// `chat-latest` is a moving alias that points at an old model today.
 function _rejects_cache_breakpoint(model: string) -> bool throws never {
@@ -90,8 +92,10 @@ function _rejects_cache_breakpoint(model: string) -> bool throws never {
         "chat-latest",
     ];
     for (let family in families) {
-        if (name == family || name.starts_with(`${family}-`)) {
-            return true;
+        for (let id in [family, `openai.${family}`]) {
+            if (name == id || name.starts_with(`${id}-`)) {
+                return true;
+            }
         }
     }
     false

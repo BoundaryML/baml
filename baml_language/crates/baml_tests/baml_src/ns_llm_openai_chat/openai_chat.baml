@@ -1603,6 +1603,9 @@ function chat_cache_default_by_model() -> string {
         "chat-latest",
         "ft:gpt-4.1-mini-2025-04-14:acme:support:abc123",
         "ft:gpt-5.6-luna:acme:support:abc123",
+        // Bedrock's ids for OpenAI models
+        "openai.gpt-5.5",
+        "openai.gpt-5.6-luna",
     ];
     let out: string[] = [];
     for (let model in models) {
@@ -1618,7 +1621,7 @@ function chat_cache_default_by_model() -> string {
 test "chat_cache_default_by_model" {
     assert.equal(
         chat_cache_default_by_model(),
-        "gpt-5.6-luna=true gpt-6-sol=true gpt-6.1-sol=true some-future-model=true gpt-5.5=false gpt-5.5-pro-2026-04-23=false gpt-5-mini=false gpt-5=false gpt-4o-mini-2024-07-18=false gpt-4.1=false gpt-4-turbo=false gpt-3.5-turbo=false o4-mini=false o3=false chat-latest=false ft:gpt-4.1-mini-2025-04-14:acme:support:abc123=false ft:gpt-5.6-luna:acme:support:abc123=true",
+        "gpt-5.6-luna=true gpt-6-sol=true gpt-6.1-sol=true some-future-model=true gpt-5.5=false gpt-5.5-pro-2026-04-23=false gpt-5-mini=false gpt-5=false gpt-4o-mini-2024-07-18=false gpt-4.1=false gpt-4-turbo=false gpt-3.5-turbo=false o4-mini=false o3=false chat-latest=false ft:gpt-4.1-mini-2025-04-14:acme:support:abc123=false ft:gpt-5.6-luna:acme:support:abc123=true openai.gpt-5.5=false openai.gpt-5.6-luna=true",
     )
 }
 
