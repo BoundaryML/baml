@@ -73,8 +73,14 @@ mod conversion;
 mod function_call_context;
 mod future;
 pub use future::LeakedFuture;
+#[cfg(not(target_arch = "wasm32"))]
+mod host_instrumentation;
 mod inbound_config;
 mod invocation;
+#[cfg(not(target_arch = "wasm32"))]
+pub use btel_snapshot::host::HostValue as HostCapture;
+#[cfg(not(target_arch = "wasm32"))]
+pub use host_instrumentation::{HostCallSite, HostDefinition, HostInvocation};
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]
 mod telemetry;
@@ -476,6 +482,18 @@ impl RootCallWork {
         cancel: TaskCancel,
         reservation: Option<&bex_vm_types::trace::ReservedSpanData>,
     ) -> Result<Self, EngineError> {
+        Self::register_with_cancellation_check(engine, call_id, cancel, reservation, true)
+    }
+
+    /// Host bodies can legitimately run cleanup inside a cancelled environment.
+    /// Track their real cancellation authority without suppressing that body.
+    fn register_with_cancellation_check(
+        engine: Arc<BexEngine>,
+        call_id: CallId,
+        cancel: TaskCancel,
+        reservation: Option<&bex_vm_types::trace::ReservedSpanData>,
+        reject_cancelled: bool,
+    ) -> Result<Self, EngineError> {
         let lifecycle = engine
             .lifecycle
             .lock()
@@ -495,7 +513,7 @@ impl RootCallWork {
             Some(_) => return Err(EngineError::DuplicateCallId { call_id }),
             None => {}
         }
-        if cancel.is_cancelled() {
+        if reject_cancelled && cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
         // Admission commits reservation attachment and execution ownership
@@ -822,6 +840,10 @@ pub struct BexEngine {
     root_panicked: std::sync::atomic::AtomicBool,
     engine_id: EngineId,
     invocation_clock: invocation::InvocationClock,
+    #[cfg(not(target_arch = "wasm32"))]
+    host_definitions: std::sync::Mutex<
+        HashMap<host_instrumentation::HostDefinitionKey, Arc<btel_types::FunctionMetadata>>,
+    >,
     program_id: ProgramId,
     source_snapshot_id: Option<bex_events::ids::SourceSnapshotId>,
     /// Allocates logical thread identities for structured logs.
@@ -833,6 +855,8 @@ pub struct BexEngine {
     trace_scope: btel_types::RecordingId,
     /// Shared telemetry resources; absent for `BAML_TELEMETRY=off`.
     telemetry: Option<EngineTelemetry>,
+    #[cfg(not(target_arch = "wasm32"))]
+    host_call_sites: Mutex<HashMap<HostCallSite, u32>>,
     /// Frozen global variables shared across every post-`$init` VM.
     ///
     /// Populated once during `$init` and immutable thereafter; cloning is a
@@ -1955,6 +1979,10 @@ impl BexEngine {
             root_panicked: std::sync::atomic::AtomicBool::new(false),
             engine_id,
             invocation_clock: invocation::InvocationClock::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            host_definitions: Mutex::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            host_call_sites: Mutex::default(),
             program_id,
             source_snapshot_id,
             next_thread_id: AtomicU64::new(1),
@@ -2021,16 +2049,42 @@ impl BexEngine {
     pub async fn program_metadata(&self) -> ProgramMetadata {
         let inactive = self.heap_permit_manager.new_permit(()).await;
         let active = inactive.acquire().await;
+        let function_table = self.heap.function_metadata_snapshot(active.proof());
+        #[cfg(not(target_arch = "wasm32"))]
+        let function_table = {
+            let mut function_table = function_table;
+            function_table.functions.extend(
+                self.host_definitions
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .values()
+                    .map(|metadata| (**metadata).clone()),
+            );
+            function_table
+                .functions
+                .sort_unstable_by_key(|metadata| metadata.function_id);
+            function_table
+        };
         ProgramMetadata {
             program_id: self.program_id,
             source_snapshot_id: self.source_snapshot_id,
-            function_table: self.heap.function_metadata_snapshot(active.proof()),
+            function_table,
         }
     }
 
     /// Copy registered function metadata under a heap permit. Unregistered or
     /// collected dynamic functions return None; IDs are never reused.
     pub async fn function_metadata(&self, id: FunctionId) -> Option<btel_types::FunctionMetadata> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(metadata) = self
+            .host_definitions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .find(|metadata| metadata.function_id == id)
+        {
+            return Some((**metadata).clone());
+        }
         let inactive = self.heap_permit_manager.new_permit(()).await;
         let active = inactive.acquire().await;
         self.heap.function_metadata(active.proof(), id)

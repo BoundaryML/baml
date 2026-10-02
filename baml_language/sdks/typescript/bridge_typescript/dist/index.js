@@ -117,4 +117,5 @@ export async function callFunction(rt, functionName, kwargs, baml) {
 // Register runtime shutdown on process exit (single registration; see exit_hook.ts).
 installShutdownOnExit();
 export { current as _currentInvocation, Invocation as _Invocation, invoke as _invoke, invokeAsync as _invokeAsync, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, withInvocation as _withInvocation } from './invocation.js';
+export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
 //# sourceMappingURL=index.js.map

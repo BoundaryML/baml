@@ -341,3 +341,11 @@ def shutdown_runtime(timeout: typing.Optional[builtins.float] = None) -> None:
     work does, as Python's own exit waits for non-daemon threads. Either way,
     Ctrl+C ends it with `KeyboardInterrupt`.
     """
+
+
+class _HostExecution:
+    def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
+
+def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
+
+def _validate_host_options(options: typing.Optional[BamlPyHandle]) -> tuple[builtins.bool, builtins.bool, builtins.bool]: ...

@@ -177,6 +177,9 @@ pub fn to_source_code_with_metadata(
         let is_root = dir.is_empty();
 
         let mut content = render_index_ts(body, &kids, is_root, config.runtime_package);
+        if dir == &["vendor", "trace"] && config.runtime_package == "@boundaryml/baml-bridge" {
+            content.push_str("\nimport { _instrument } from \"@boundaryml/baml-bridge\";\nexport { TraceUsageError } from \"@boundaryml/baml-bridge\";\nexport const instrument: {\n  <F extends (...args: any[]) => any>(body: F): F;\n  <F extends (...args: any[]) => any>(options: Options | null | undefined, body: F, display?: { readonly name?: string }): F;\n} = _instrument;\n");
+        }
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()

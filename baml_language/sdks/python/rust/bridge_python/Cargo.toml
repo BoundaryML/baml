@@ -25,6 +25,8 @@ ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-cryp
 # normal feature lets `cargo test --all-features` disable libpython linking.
 
 [dependencies]
+btel_types = { workspace = true }
+btel_snapshot = { workspace = true }
 baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }

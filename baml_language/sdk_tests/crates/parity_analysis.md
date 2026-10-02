@@ -2,24 +2,24 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 858. IDs with complete required parity: 155. Required gaps: 4847.
+Distinct exact test IDs: 877. IDs with complete required parity: 165. Required gaps: 4901.
 
 ## Python-baselined parity
 
-Parity is the share of the 404 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 420 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 404 / 404 | 100.0% |
-| typescript_node | 167 / 404 | 41.3% |
-| typescript_web_chromium | 160 / 404 | 39.6% |
-| typescript_web_cloudflare_workers | 160 / 404 | 39.6% |
-| cpp | 130 / 404 | 32.2% |
-| csharp | 0 / 404 | 0.0% |
-| rust | 229 / 404 | 56.7% |
-| go | 13 / 404 | 3.2% |
-| java | 299 / 404 | 74.0% |
-| swift | 184 / 404 | 45.5% |
+| python_pydantic2 | 420 / 420 | 100.0% |
+| typescript_node | 176 / 420 | 41.9% |
+| typescript_web_chromium | 160 / 420 | 38.1% |
+| typescript_web_cloudflare_workers | 160 / 420 | 38.1% |
+| cpp | 130 / 420 | 31.0% |
+| csharp | 0 / 420 | 0.0% |
+| rust | 229 / 420 | 54.5% |
+| go | 13 / 420 | 3.1% |
+| java | 299 / 420 | 71.2% |
+| swift | 184 / 420 | 43.8% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -48,6 +48,7 @@ Parity is the share of the 404 test IDs declared in `python_pydantic2` that are 
 | function_calls/async_callback_reenters_async_baml_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python loop/ContextVar and Node AsyncLocalStorage assertions |
 | function_calls/async_callback_reenters_sync_baml_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | sync callback re-entry differs between Python and Node |
 | function_calls/async_entry_sync_callback_inherits_application_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/async_host_runs_in_calling_task_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python asyncio task and event-loop identity |
 | function_calls/async_reentry_preserves_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/baml_closure_decodes_multiple_args_and_structured_return_values | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
 | function_calls/baml_closure_is_a_native_callable_with_host_language_arguments | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
@@ -131,11 +132,13 @@ Parity is the share of the 404 test IDs declared in `python_pydantic2` that are 
 | function_calls/concurrent_calls_isolate_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/concurrent_calls_keep_callback_results_independent | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/concurrent_calls_share_callback_without_sharing_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
+| function_calls/concurrent_host_invocations_isolate_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/concurrent_invocations_isolate_context | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/concurrent_reservation_attaches_once | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/configuration_snapshot_is_not_live | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cooperative_abort_allows_callback_cleanup_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/cooperative_abort_cleans_up_retained_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/coroutine_entry_uses_execution_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python coroutine creation versus first execution |
 | function_calls/current_context_returns_detached_snapshot | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/deadline_reentry_does_not_reset_budget | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/dropping_started_future_cancels_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
@@ -276,6 +279,7 @@ Parity is the share of the 404 test IDs declared in `python_pydantic2` that are 
 | function_calls/go_codegen_person_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/hello_world_returns_literal | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/hidden_mode_does_not_inherit | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/host_baml_cancellation_remains_live_after_exit | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_callable_cancellation_while_dispatched | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_class_argument | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_closed_union_containers_and_nominal_arms | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -349,13 +353,28 @@ Parity is the share of the 404 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_throwing_callable_round_trips_original_host_exception | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | all |  |
+| function_calls/host_callback_cleanup_retains_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_callback_reentry_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_cancellation_waits_for_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python task cancellation and asynchronous finally cleanup |
+| function_calls/host_capture_avoids_getters_and_proxies_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS getters, Proxy traps, and custom thenables |
+| function_calls/host_capture_preserves_application_values | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_child_outlives_parent | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_context_inherits_and_restores | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_current_exposes_generated_cancel_token | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_errors_preserve_identity_and_restore_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_preserves_call_shape_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS receivers, variadic arguments, and native Promise results |
+| function_calls/host_rejects_unsupported_configuration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers unsupported Python generator/decorator shapes |
+| function_calls/host_rejects_unsupported_configuration_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS generator and marker configuration rejection |
 | function_calls/host_supplied_json_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
+| function_calls/host_thread_context_handoff_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python ContextVar handoff to a thread pool |
 | function_calls/instance_method_cancellation_returns_exact_context_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_media_receiver_default_and_ownership_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_optional_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_throw_preserves_current_go_error_contract | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_methods_on_classes_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_never_method_has_error_only_signature_and_returns_panic | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/instrument_decorator_forms_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python decorator forms |
+| function_calls/instrument_preserves_sync_execution_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python signatures and positional argument binding |
 | function_calls/invalid_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/invalid_function_arguments_surface_baml_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/invalid_timeout_rejected | y | y | y | y | - | - | y | - | y | - | all |  |

@@ -596,13 +596,16 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _watchInvocationCancellation, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
+const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
+export { _HostExecution }
+export { HostExecution }
 export { BamlAudio }
 export { BamlHandle }
 export { BamlImage }
 export { BamlPdf }
 export { BamlRuntime }
 export { BamlVideo }
+export { _beginHostInvocation }
 export { _discardHostCallArgs }
 export { _finishHostCallExecution }
 export { _getHostCallOrigin }
@@ -617,6 +620,7 @@ export { _seedGenericMediaHandle }
 export { _seedHeapHandle }
 export { _startHostCallExecution }
 export { _traceSelection }
+export { _validateHostOptions }
 export { _watchInvocationCancellation }
 export { cancelFunctionCall }
 export { completeHostCall }

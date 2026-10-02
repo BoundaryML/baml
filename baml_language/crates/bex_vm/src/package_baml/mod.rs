@@ -46,7 +46,8 @@ pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
 mod spawn;
 pub use spawn::{
-    SpawnLaunch, alloc_projected_cancel_token, cancel_token_members, plan_body, spawn_launch,
+    SpawnLaunch, alloc_projected_cancel_token, cancel_token_members, plan_body,
+    projected_cancel_token_data, spawn_launch,
 };
 mod stack_trace;
 mod string;

@@ -16,6 +16,8 @@ pub use bex::{Bex, BexRunResult};
 // playground runtimes): the blessed seam stays this crate rather than a
 // direct `bex_engine`/`bex_vm_types` dependency.
 pub use bex_engine::BexCallResult;
+#[cfg(not(target_arch = "wasm32"))]
+pub use bex_engine::HostCapture;
 #[cfg(target_arch = "wasm32")]
 pub use bex_engine::configure_workerd_runtime;
 pub use bex_engine::{
@@ -25,6 +27,8 @@ pub use bex_engine::{
     logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
     register_inbound_union_ambiguity_policy,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use bex_engine::{HostCallSite, HostDefinition, HostInvocation};
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
     HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
