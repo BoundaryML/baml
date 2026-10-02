@@ -83,9 +83,10 @@ A PUT is given `request_timeout` (10 s) plus its body's length at
 `min_upload_bytes_per_second` (1 MiB/s): a large body is not lost for taking
 long, only for uploading slower than that. A body's retry window is every
 attempt at that timeout and the delays between them: 40.6 s for a small body,
-about 73 s for 8 MiB, about 69 minutes for 1 GiB. Recording bodies upload one
-at a time, and so do CAS bodies, so BCS must issue each URL a lifetime that
-covers the windows of everything admitted to its lane before it. A URL that
+about 73 s for 8 MiB, about 69 minutes for 1 GiB. Recordings upload one at a
+time and CAS bodies `max_cas_uploads` (2) at a time, each when its turn comes,
+so BCS must issue each URL a lifetime that covers the windows of every body of
+its kind admitted before it, counted as if they went one by one. A URL that
 does not is refused before anything is sent to it. The prepare request does
 not carry blob lengths, only `size_class: LARGE` for a blob uploaded on its
 own.
@@ -168,14 +169,21 @@ headroom in the minimum VM pool. No network I/O runs on the processor.
 Admission waits occur only after recycling.
 
 Delivery separately limits pending captures, plans, recording bytes, and CAS
-bytes; a capture spanning plans counts once per plan. It releases capture-slot
-reservations after serialization releases the captures, not after their PUTs
-finish. Immutable upload bodies remain byte-budgeted until
-delivery completes. Delivery admission waits for temporary plan, byte, or
-owner-slot saturation. Failure, closure, and released capacity wake waiting
-submitters. A group whose recording can never fit fails before waiting; one
-whose captures and CAS bodies exceed the whole CAS reservation waits until no
-other group holds any of it, then is admitted alone.
+bytes; a capture spanning plans counts once per plan. A plan is pending until
+its recording is uploaded. Its captures, and the storage slots they hold, are
+given back sooner, once its upload bodies are built. Each CAS body is uploaded
+on its own, whatever becomes of the plan it came with, and holds its part of
+the CAS reservation (what it buffers, and the strings it sends from where they
+are held) until its upload ends. So one long upload keeps neither later plans
+nor other bodies waiting.
+
+Delivery admission waits for temporary plan, byte, or owner-slot saturation.
+Failure, closure, and released capacity wake waiting submitters. A group whose
+recording can never fit fails before waiting. One whose captures and CAS
+bodies total more than the whole CAS reservation is never refused: it is
+admitted beside the reservation, one such group at a time, so the most held is
+the reservation and one group. Groups that fit are admitted meanwhile; only
+another oversize group waits.
 Callers must recycle input chunks before entering admission.
 
 Cloud processing moves one chunk into reusable owned storage and recycles its

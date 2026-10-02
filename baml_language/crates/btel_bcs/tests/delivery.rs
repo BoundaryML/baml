@@ -1119,8 +1119,11 @@ async fn a_blob_larger_than_every_byte_limit_uploads_whole() {
     );
 }
 
-#[tokio::test]
-async fn a_plan_over_the_cas_reservation_waits_to_go_alone() {
+/// A server that takes every upload but those to `held`, which it answers
+/// with 503 until released. The notifier fires when a held upload arrives.
+async fn holding(
+    held: &'static [&'static str],
+) -> (MockServer, Arc<tokio::sync::Notify>, Arc<AtomicBool>) {
     let server = MockServer::start().await;
     let base = server.uri();
     Mock::given(method("POST"))
@@ -1134,52 +1137,98 @@ async fn a_plan_over_the_cas_reservation_waits_to_go_alone() {
     let release = Arc::new(AtomicBool::new(false));
     let released = release.clone();
     Mock::given(method("PUT"))
-        .respond_with(move |_: &Request| {
+        .respond_with(move |request: &Request| {
+            if !held.contains(&request.url.path()) || released.load(Ordering::Acquire) {
+                return ResponseTemplate::new(200);
+            }
             observed.notify_one();
-            ResponseTemplate::new(if released.load(Ordering::Acquire) {
-                200
-            } else {
-                503
-            })
+            ResponseTemplate::new(503)
         })
         .mount(&server)
         .await;
+    (server, entered, release)
+}
+
+/// The paths of the uploads the server has answered.
+async fn upload_paths(server: &MockServer) -> Vec<String> {
+    server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == "PUT")
+        .map(|request| request.url.path().to_owned())
+        .collect()
+}
+
+fn object(pool: &SnapshotPool, large_capture: bool) -> (Vec<Snapshot>, Vec<ProposedUploadTarget>) {
+    let snapshot = if large_capture {
+        large(pool)
+    } else {
+        scalar(pool, 1)
+    };
+    let targets = vec![
+        proposed(0, UploadKind::Recording, &[]),
+        proposed(1, UploadKind::CasObject, &[0]),
+    ];
+    (vec![snapshot], targets)
+}
+
+#[tokio::test]
+async fn a_plan_over_the_cas_reservation_holds_up_only_another_such_plan() {
+    let (server, entered, release) = holding(&["/put/1-1"]).await;
     let mut settings = config(&server);
-    settings.max_attempts = 100;
+    settings.max_attempts = 1000;
     settings.retry_delay = Duration::from_millis(10);
-    // Room for the small capture's plan, not for the large one's.
+    // Room for a small capture's plan, not for a large one's.
     settings.cas_reserved_bytes = 32 * 1024;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
     let pool = SnapshotPool::new(2, Limits::default());
-    let mut files = files(2).into_iter();
+    // A storage that held a large capture keeps its capacity, and is
+    // charged for it: the small capture takes a storage of its own.
+    let small = SnapshotPool::new(1, Limits::default());
+    let mut files = files(4).into_iter();
+    // Nothing else is held: the large plan goes at once, beside the budget.
+    let (snapshots, targets) = object(&pool, true);
     handle
-        .try_submit(
-            files.next().unwrap(),
-            vec![scalar(&pool, 1)],
-            vec![
-                proposed(0, UploadKind::Recording, &[]),
-                proposed(1, UploadKind::CasObject, &[0]),
-            ],
-        )
+        .try_submit(files.next().unwrap(), snapshots, targets)
         .unwrap();
     tokio::time::timeout(Duration::from_secs(2), entered.notified())
         .await
         .unwrap();
-    let second = files.next().unwrap();
-    let snapshot = large(&pool);
-    let producer = handle.clone();
-    let mut waiting = tokio::task::spawn_blocking(move || {
-        producer.try_submit(
-            second,
-            vec![snapshot],
-            vec![
-                proposed(0, UploadKind::Recording, &[]),
-                proposed(1, UploadKind::CasObject, &[0]),
-            ],
+    // While its upload is held back, plans that fit come and go: one with a
+    // capture, and one with none.
+    let (snapshots, targets) = object(&small, false);
+    handle
+        .try_submit(files.next().unwrap(), snapshots, targets)
+        .unwrap();
+    handle
+        .try_submit(
+            files.next().unwrap(),
+            vec![],
+            vec![proposed(0, UploadKind::Recording, &[])],
         )
-    });
-    // While the first plan holds part of the reservation, the large one waits.
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !upload_paths(&server)
+            .await
+            .iter()
+            .any(|path| path == "/put/3-0")
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let paths = upload_paths(&server).await;
+    assert!(paths.iter().any(|path| path == "/put/2-1"));
+    // A second large plan waits for the first.
+    let (snapshots, targets) = object(&pool, true);
+    let last = files.next().unwrap();
+    let producer = handle.clone();
+    let mut waiting =
+        tokio::task::spawn_blocking(move || producer.try_submit(last, snapshots, targets));
     assert!(
         tokio::time::timeout(Duration::from_millis(50), &mut waiting)
             .await
@@ -1195,21 +1244,97 @@ async fn a_plan_over_the_cas_reservation_waits_to_go_alone() {
         Ok(())
     );
     assert_eq!(finish(delivery).await, Ok(()));
-    assert_eq!(pool.stats().in_use, 0);
-    // The first plan's upload was retried while it was held back.
-    let mut paths: Vec<_> = uploaded_blobs(&server)
+    assert_eq!(pool.stats().in_use + small.stats().in_use, 0);
+    let paths = upload_paths(&server).await;
+    for expected in ["/put/1-1", "/put/2-1", "/put/4-1"] {
+        assert!(paths.iter().any(|path| path == expected), "{expected}");
+    }
+}
+
+#[tokio::test]
+async fn a_long_cas_upload_does_not_keep_its_plan_pending() {
+    let (server, entered, release) = holding(&["/put/1-1"]).await;
+    let mut settings = config(&server);
+    settings.max_attempts = 1000;
+    settings.retry_delay = Duration::from_millis(10);
+    // The next plan is admitted only when this one is no longer pending.
+    settings.max_pending_plans = 1;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut files = files(2).into_iter();
+    let (snapshots, targets) = object(&pool, false);
+    handle
+        .try_submit(files.next().unwrap(), snapshots, targets)
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), entered.notified())
         .await
-        .into_iter()
-        .map(|(path, blob)| (path, blob.len() > 64 * 1024))
-        .collect();
-    paths.dedup();
+        .unwrap();
+    let second = files.next().unwrap();
+    let producer = handle.clone();
+    let waiting = tokio::task::spawn_blocking(move || {
+        producer.try_submit(
+            second,
+            vec![],
+            vec![proposed(0, UploadKind::Recording, &[])],
+        )
+    });
+    // The first plan's recording is uploaded; its blob is not.
     assert_eq!(
-        paths,
-        [
-            ("/put/1-1".to_owned(), false),
-            ("/put/2-1".to_owned(), true)
-        ]
+        tokio::time::timeout(Duration::from_secs(2), waiting)
+            .await
+            .unwrap()
+            .unwrap(),
+        Ok(())
     );
+    assert!(!release.load(Ordering::Acquire));
+    release.store(true, Ordering::Release);
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(handle.loss_count(), 0);
+}
+
+#[tokio::test]
+async fn cas_bodies_upload_side_by_side_up_to_the_slot_count() {
+    for slots in [1, 2] {
+        let (server, entered, release) = holding(&["/put/1-1"]).await;
+        let mut settings = config(&server);
+        settings.max_attempts = 1000;
+        settings.retry_delay = Duration::from_millis(10);
+        settings.max_cas_uploads = slots;
+        let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+        let pool = SnapshotPool::new(2, Limits::default());
+        delivery
+            .handle()
+            .try_submit(
+                files(1).pop().unwrap(),
+                vec![scalar(&pool, 1), scalar(&pool, 2)],
+                vec![
+                    proposed(0, UploadKind::Recording, &[]),
+                    proposed(1, UploadKind::CasObject, &[0]),
+                    proposed(2, UploadKind::CasObject, &[1]),
+                ],
+            )
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), entered.notified())
+            .await
+            .unwrap();
+        // The first blob's upload is held back. With a second slot the
+        // other goes meanwhile; with one it waits its turn.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let passed = upload_paths(&server)
+            .await
+            .iter()
+            .any(|path| path == "/put/1-2");
+        assert_eq!(passed, slots == 2);
+        release.store(true, Ordering::Release);
+        assert_eq!(finish(delivery).await, Ok(()));
+        assert!(
+            upload_paths(&server)
+                .await
+                .iter()
+                .any(|path| path == "/put/1-2")
+        );
+    }
 }
 
 #[tokio::test]
