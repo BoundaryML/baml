@@ -244,10 +244,14 @@ pub struct RunArgs {
     )]
     pub expression: Option<String>,
 
-    /// Immutable launch context as inline JSON, @file, or - for stdin.
+    /// Set process launch context from JSON.
     ///
-    /// Accepts distinct_id (string or null) and metadata (a map of scalar values).
-    #[arg(long, value_name = "JSON|@FILE|-", help_heading = "Target options")]
+    /// Accepts `distinct_id` (string or null) and `metadata` (a map whose values
+    /// are strings, integers, floats, or booleans).
+    ///
+    /// Use `--context @file` to read JSON from a file or `--context -` for
+    /// standard input.
+    #[arg(long, value_name = "SOURCE", help_heading = "Target options")]
     pub context: Option<String>,
 
     /// Load one standalone source file instead of discovering a project.

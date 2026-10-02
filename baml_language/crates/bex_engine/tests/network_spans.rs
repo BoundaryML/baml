@@ -215,9 +215,11 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
             };
             if minor {
                 assert_ne!(id, 0);
-                assert_eq!(
-                    file.header.as_ref().unwrap().format_minor,
-                    btel_settings::encoding::NETWORK_FORMAT_MINOR
+                // Other additive features, such as process launch context, can
+                // require a newer minor than network spans alone.
+                assert!(
+                    file.header.as_ref().unwrap().format_minor
+                        >= btel_settings::encoding::NETWORK_FORMAT_MINOR
                 );
             }
         }
