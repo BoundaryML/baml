@@ -1362,11 +1362,12 @@ fn model_requests_are_priced_from_their_responses() {
             None,
         )
     };
+    // Opus 5.5 at Bedrock's regional rate: 1.1x the Anthropic price.
     let bedrock = |model| {
         priced(
             model,
             [Some(900), Some(30), Some(200), Some(100), None],
-            None,
+            Some(0.005_214),
         )
     };
     assert_eq!(
