@@ -1484,7 +1484,7 @@ function _chat_cached_input() -> ai.ModelTurnInput {
     }
 }
 
-function chat_cache_delimiter_is_a_breakpoint_on_the_part_before() -> string {
+function chat_cache_delimiter_is_a_breakpoint_on_the_part_before() -> json[] {
     root.llm_mock.mock_json_serve(
         [
             root.llm_mock.MockResponse.ok(_chat_ok_body()),
@@ -1494,36 +1494,50 @@ function chat_cache_delimiter_is_a_breakpoint_on_the_part_before() -> string {
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
             let _ = cl.invoke(_chat_cached_input());
-            let openai_messages = baml.json.stringify(
-                baml.json.path<json>(mock.last_request().json(), ".messages"),
-            );
+            let openai_messages = baml.json.path<json>(mock.last_request().json(), ".messages");
             let azure = openai.AzureClient.new(
                 model = "gpt-deployment",
                 api_key = "k",
                 base_url = mock.base_url(),
             );
             let _ = azure.invoke(_chat_cached_input());
-            let azure_messages = baml.json.stringify(
-                baml.json.path<json>(mock.last_request().json(), ".messages"),
-            );
+            let azure_messages = baml.json.path<json>(mock.last_request().json(), ".messages");
             // A generic OpenAI-compatible server is not known to take the
             // field: the delimiters are dropped, and the all-text messages
             // collapse to bare strings exactly as they would without them.
             let generic = openai.GenericClient.new(model = "qwen3", base_url = mock.base_url());
             let _ = generic.invoke(_chat_cached_input());
-            let generic_messages = baml.json.stringify(
-                baml.json.path<json>(mock.last_request().json(), ".messages"),
-            );
-            [openai_messages, (azure_messages == openai_messages).to_string(), generic_messages].join("\n")
+            let generic_messages = baml.json.path<json>(mock.last_request().json(), ".messages");
+            [openai_messages, azure_messages, generic_messages]
         },
     )
 }
 
 test "chat_cache_delimiter_is_a_breakpoint_on_the_part_before" {
-    assert.equal(
-        chat_cache_delimiter_is_a_breakpoint_on_the_part_before(),
-        `[{"role":"system","content":[{"type":"text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]},{"role":"user","content":[{"type":"text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"text","text":"hi"}]}]\ntrue\n[{"role":"system","content":"Follow the rules."},{"role":"user","content":"Stable. hi"}]`,
-    )
+    let got = chat_cache_delimiter_is_a_breakpoint_on_the_part_before();
+    let marked: json = [
+        {
+            "role": "system",
+            "content": [
+                { "type": "text", "text": "Follow the rules.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "text", "text": "hi" },
+            ],
+        },
+    ];
+    // openai.ChatClient, and openai.AzureClient the same
+    assert.equal(got[0], marked);
+    assert.equal(got[1], marked);
+    let collapsed: json = [
+        { "role": "system", "content": "Follow the rules." },
+        { "role": "user", "content": "Stable. hi" },
+    ];
+    assert.equal(got[2], collapsed)
 }
 
 // `args` is sent AS WRITTEN, which includes a null nested inside it. The
@@ -1538,7 +1552,14 @@ function ChatCacheArgs(args: json) -> string {
     prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache(args)} Variable.`
 }
 
-function _chat_cache_args(args: json) -> string {
+class ChatCacheArgsRequest {
+    system: json,
+    stable: json,
+    // whether the reserved parking key reached the wire
+    parked: bool,
+}
+
+function _chat_cache_args(args: json) -> ChatCacheArgsRequest {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -1554,28 +1575,34 @@ function _chat_cache_args(args: json) -> string {
             );
             let raw = mock.last_request().body;
             let body = mock.last_request().json();
-            [
-                baml.json.stringify(baml.json.path<json>(body, ".messages[0].content")),
-                baml.json.stringify(baml.json.path<json>(body, ".messages[1].content[0]")),
-                // the reserved parking key never reaches the wire
-                `parked=${raw.includes("__baml_directives")}`,
-            ].join("|")
+            ChatCacheArgsRequest {
+                system: baml.json.path<json>(body, ".messages[0].content"),
+                stable: baml.json.path<json>(body, ".messages[1].content[0]"),
+                parked: raw.includes("__baml_directives"),
+            }
         },
     )
 }
 
-function chat_cache_delimiter_args_as_written() -> string {
-    [
-        _chat_cache_args(baml.json.parse(`{"mode":"explicit","ttl":null}`)),
-        _chat_cache_args(null),
-    ].join("\n")
-}
-
 test "chat_cache_delimiter_args_as_written" {
-    assert.equal(
-        chat_cache_delimiter_args_as_written(),
-        `[{"type":"text","text":"Rules."}]|{"type":"text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit","ttl":null}}|parked=false\n[{"type":"text","text":"Rules."}]|{"type":"text","text":"Stable. Variable."}|parked=false`,
-    )
+    let rules: json = [{ "type": "text", "text": "Rules." }];
+
+    let args: json = { "mode": "explicit", "ttl": null };
+    let explicit = _chat_cache_args(args);
+    assert.equal(explicit.system, rules);
+    let marked: json = {
+        "type": "text",
+        "text": "Stable.",
+        "prompt_cache_breakpoint": { "mode": "explicit", "ttl": null },
+    };
+    assert.equal(explicit.stable, marked);
+    assert.equal(explicit.parked, false);
+
+    let nulled = _chat_cache_args(null);
+    assert.equal(nulled.system, rules);
+    let unmarked: json = { "type": "text", "text": "Stable. Variable." };
+    assert.equal(nulled.stable, unmarked);
+    assert.equal(nulled.parked, false)
 }
 
 // `${cache()}` takes the client's default: `{"mode": "explicit"}`, the one value
@@ -1584,7 +1611,7 @@ test "chat_cache_delimiter_args_as_written" {
 // nothing. The list names the OLD families; a model it does not know is
 // treated as new. Azure's `model` is a deployment name, which says nothing
 // about the model behind it, so it has no default either.
-function chat_cache_default_by_model() -> string {
+function chat_cache_default_by_model() -> map<string, json> {
     let models = [
         "gpt-5.6-luna",
         "gpt-6-sol",
@@ -1607,22 +1634,40 @@ function chat_cache_default_by_model() -> string {
         "openai.gpt-5.5",
         "openai.gpt-5.6-luna",
     ];
-    let out: string[] = [];
+    let out: map<string, json> = {};
     for (let model in models) {
         let chat: ai.Client = openai.ChatClient.new(model = model, api_key = "k");
         let responses: ai.Client = openai.ResponsesClient.new(model = model, api_key = "k");
         // the two clients share one list
         assert.equal(chat.default_cache_args(), responses.default_cache_args());
-        out.push(`${model}=${chat.default_cache_args() != null}`);
+        let _ = out.set(model, chat.default_cache_args());
     }
-    out.join(" ")
+    out
 }
 
 test "chat_cache_default_by_model" {
-    assert.equal(
-        chat_cache_default_by_model(),
-        "gpt-5.6-luna=true gpt-6-sol=true gpt-6.1-sol=true some-future-model=true gpt-5.5=false gpt-5.5-pro-2026-04-23=false gpt-5-mini=false gpt-5=false gpt-4o-mini-2024-07-18=false gpt-4.1=false gpt-4-turbo=false gpt-3.5-turbo=false o4-mini=false o3=false chat-latest=false ft:gpt-4.1-mini-2025-04-14:acme:support:abc123=false ft:gpt-5.6-luna:acme:support:abc123=true openai.gpt-5.5=false openai.gpt-5.6-luna=true",
-    )
+    let expected: map<string, json> = {
+        "gpt-5.6-luna": { "mode": "explicit" },
+        "gpt-6-sol": { "mode": "explicit" },
+        "gpt-6.1-sol": { "mode": "explicit" },
+        "some-future-model": { "mode": "explicit" },
+        "gpt-5.5": null,
+        "gpt-5.5-pro-2026-04-23": null,
+        "gpt-5-mini": null,
+        "gpt-5": null,
+        "gpt-4o-mini-2024-07-18": null,
+        "gpt-4.1": null,
+        "gpt-4-turbo": null,
+        "gpt-3.5-turbo": null,
+        "o4-mini": null,
+        "o3": null,
+        "chat-latest": null,
+        "ft:gpt-4.1-mini-2025-04-14:acme:support:abc123": null,
+        "ft:gpt-5.6-luna:acme:support:abc123": { "mode": "explicit" },
+        "openai.gpt-5.5": null,
+        "openai.gpt-5.6-luna": { "mode": "explicit" },
+    };
+    assert.equal(chat_cache_default_by_model(), expected)
 }
 
 function ChatCacheDefault(question: string) -> string {
@@ -1630,7 +1675,7 @@ function ChatCacheDefault(question: string) -> string {
     prompt: `${role("system")}Follow the rules.${cache()}${role("user")}${question}`
 }
 
-function _chat_default_system(cl: ai.Client) -> string {
+function _chat_default_system(cl: ai.Client) -> json {
     let spec = ChatCacheDefault@spec("hi");
     let request = cl.render(
         ai.ModelTurnInput {
@@ -1640,12 +1685,14 @@ function _chat_default_system(cl: ai.Client) -> string {
             output_type: spec.output_type(),
         },
     );
-    baml.json.stringify(baml.json.path<json>(baml.json.parse(request.body), ".messages[0].content"))
+    baml.json.path<json>(baml.json.parse(request.body), ".messages[0].content")
 }
 
 test "chat_cache_default_args" {
-    let marked = `[{"type":"text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]`;
-    let unmarked = `[{"type":"text","text":"Follow the rules."}]`;
+    let marked: json = [
+        { "type": "text", "text": "Follow the rules.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+    ];
+    let unmarked: json = [{ "type": "text", "text": "Follow the rules." }];
     assert.equal(_chat_default_system(openai.ChatClient.new(model = "gpt-5.6-luna", api_key = "k")), marked);
     assert.equal(_chat_default_system(openai.ChatClient.new(model = "gpt-5.5", api_key = "k")), unmarked);
     let azure = openai.AzureClient.new(
@@ -1664,7 +1711,7 @@ function ChatRoleMetadata(question: string) -> string {
     prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
 }
 
-function chat_role_metadata_is_not_forwarded() -> string {
+function chat_role_metadata_is_not_forwarded() -> json {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -1683,16 +1730,18 @@ function chat_role_metadata_is_not_forwarded() -> string {
                     output_type: spec.output_type(),
                 },
             );
-            baml.json.stringify(baml.json.path<json>(mock.last_request().json(), ".messages"))
+            baml.json.path<json>(mock.last_request().json(), ".messages")
         },
     )
 }
 
 test "chat_role_metadata_is_not_forwarded" {
-    assert.equal(
-        chat_role_metadata_is_not_forwarded(),
-        `[{"role":"system","content":[{"type":"text","text":"Follow the rules."}]},{"role":"user","content":[{"type":"text","text":"hi"}]},{"role":"user","content":"more"}]`,
-    )
+    let expected: json = [
+        { "role": "system", "content": [{ "type": "text", "text": "Follow the rules." }] },
+        { "role": "user", "content": [{ "type": "text", "text": "hi" }] },
+        { "role": "user", "content": "more" },
+    ];
+    assert.equal(chat_role_metadata_is_not_forwarded(), expected)
 }
 
 // Ollama's OpenAI-compatible endpoint cannot read an image URL ("Base64 encoded

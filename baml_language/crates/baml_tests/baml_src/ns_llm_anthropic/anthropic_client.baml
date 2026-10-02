@@ -373,7 +373,7 @@ test "anthropic_params_and_passthrough" {
 
 // A `${cache(args)}` puts `cache_control: args` on the block before it, and a
 // message without one stays clean.
-function anthropic_cache_control_placement() -> string {
+function anthropic_cache_control_placement() -> json {
     let canned = anth_canned_text("ok", "end_turn");
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
@@ -384,68 +384,68 @@ function anthropic_cache_control_placement() -> string {
                 base_url = mock.base_url(),
             );
             let _ = ai.Agent.new(client = cl).run(AnthMockCached@spec("hi"));
-            let body = mock.last_request().json();
-            [
-                `system_cc=${baml.json.path_or<string>(body, ".system[0].cache_control.type", "-")}`,
-                `user_cc=${baml.json.path_or<string>(body, ".messages[0].content[0].cache_control.type", "-")}`,
-            ].join("|")
+            mock.last_request().json()
         },
     )
 }
 
 test "anthropic_cache_control_placement" {
-    let got = anthropic_cache_control_placement();
-    assert.contains(got, "system_cc=ephemeral|");
-    assert.contains(got, "user_cc=-")
+    let body = anthropic_cache_control_placement();
+    let system: json = [{ "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } }];
+    assert.equal(baml.json.path<json>(body, ".system"), system);
+    let user: json = [{ "type": "text", "text": "hi" }];
+    assert.equal(baml.json.path<json>(body, ".messages[0].content"), user)
 }
 
 // One delimiter is ONE breakpoint, on the block before it, however many blocks
 // the message has; `ttl` reaches the wire; the text after it is its own block,
 // trimmed where it faced the delimiter.
-function anthropic_cache_delimiter_mid_turn() -> string {
+test "anthropic_cache_delimiter_mid_turn" {
     let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
     let body = anth_render_body(cl, AnthCachedMidTurn@spec(picture, "Describe it."), ai.Journal { log: [] });
-    [
-        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[0]")),
-        baml.json.path<string>(body, ".messages[0].content[1].type"),
-        baml.json.path_or<string>(body, ".messages[0].content[1].cache_control.type", "-"),
-        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[2]")),
-        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[3]")),
-    ].join("\n")
+    let content = baml.json.path<json[]>(body, ".messages[0].content");
+    assert.equal(content.length(), 4);
+    let before: json = { "type": "text", "text": "Before." };
+    assert.equal(content[0], before);
+    // the picture is its own block, and carries no breakpoint
+    assert.equal(baml.json.path<string>(content[1], ".type"), "image");
+    assert.equal(baml.json.path_or<json>(content[1], ".cache_control", null), null);
+    let after: json = {
+        "type": "text",
+        "text": "After.",
+        "cache_control": { "type": "ephemeral", "ttl": "1h" },
+    };
+    assert.equal(content[2], after);
+    let question: json = { "type": "text", "text": "Describe it." };
+    assert.equal(content[3], question)
 }
 
-test "anthropic_cache_delimiter_mid_turn" {
-    assert.equal(
-        anthropic_cache_delimiter_mid_turn(),
-        `{"type":"text","text":"Before."}\nimage\n-\n{"type":"text","text":"After.","cache_control":{"type":"ephemeral","ttl":"1h"}}\n{"type":"text","text":"Describe it."}`,
-    )
-}
-
-function _anth_cache_args(args: json) -> string {
+function _anth_cache_args(args: json) -> json {
     let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
-    let body = anth_render_body(cl, AnthCacheArgs@spec(args), ai.Journal { log: [] });
-    [
-        baml.json.stringify(baml.json.path<json>(body, ".system")),
-        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[0]")),
-    ].join("\n")
+    anth_render_body(cl, AnthCacheArgs@spec(args), ai.Journal { log: [] })
 }
 
 // A non-null `args` is the value of `cache_control`, as written: not checked,
 // not merged with the default, a nested null kept. A delimiter with nothing
 // before it in its message sets nothing.
-function anthropic_cache_delimiter_args_as_written() -> string {
-    [
-        _anth_cache_args(baml.json.parse(`{"ttl":"1h","type":"ephemeral","extra":{"keep":null}}`)),
-        _anth_cache_args(baml.json.parse(`"1h"`)),
-    ].join("\n")
-}
-
 test "anthropic_cache_delimiter_args_as_written" {
-    assert.equal(
-        anthropic_cache_delimiter_args_as_written(),
-        `[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":{"ttl":"1h","type":"ephemeral","extra":{"keep":null}}}\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":"1h"}`,
-    )
+    let rules: json = [{ "type": "text", "text": "Rules." }];
+
+    let object_args: json = { "ttl": "1h", "type": "ephemeral", "extra": { "keep": null } };
+    let with_object = _anth_cache_args(object_args);
+    assert.equal(baml.json.path<json>(with_object, ".system"), rules);
+    let stable_object: json = {
+        "type": "text",
+        "text": "Stable.",
+        "cache_control": { "ttl": "1h", "type": "ephemeral", "extra": { "keep": null } },
+    };
+    assert.equal(baml.json.path<json>(with_object, ".messages[0].content[0]"), stable_object);
+
+    let with_string = _anth_cache_args("1h");
+    assert.equal(baml.json.path<json>(with_string, ".system"), rules);
+    let stable_string: json = { "type": "text", "text": "Stable.", "cache_control": "1h" };
+    assert.equal(baml.json.path<json>(with_string, ".messages[0].content[0]"), stable_string)
 }
 
 // `${cache()}` takes the client's default, `{"type": "ephemeral"}`: one
@@ -475,28 +475,31 @@ function AnthCacheNamed(question: string) -> string {
     `
 }
 
-function anthropic_cache_default_args() -> string {
-    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
-    let body = anth_render_body(cl, AnthCacheDefault@spec("Variable."), ai.Journal { log: [] });
-    let named = anth_render_body(cl, AnthCacheNamed@spec("hi"), ai.Journal { log: [] });
-    [
-        baml.json.stringify(cl.default_cache_args()),
-        baml.json.stringify(baml.json.path<json>(body, ".system")),
-        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content")),
-        // null `args` is the default too
-        _anth_cache_args(null),
-        baml.json.stringify(baml.json.path<json>(named, ".system[0].cache_control")),
-    ].join("\n")
-}
-
 test "anthropic_cache_default_args" {
-    assert.equal(
-        anthropic_cache_default_args(),
-        `{"type":"ephemeral"}\n[{"type":"text","text":"Follow the rules.","cache_control":{"type":"ephemeral"}}]\n[{"type":"text","text":"Stable.","cache_control":{"type":"ephemeral"}},{"type":"text","text":"Variable."}]\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":{"type":"ephemeral"}}\n{"type":"ephemeral","ttl":"1h"}`,
-    )
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let ephemeral: json = { "type": "ephemeral" };
+    assert.equal(cl.default_cache_args(), ephemeral);
+
+    let body = anth_render_body(cl, AnthCacheDefault@spec("Variable."), ai.Journal { log: [] });
+    let system: json = [{ "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } }];
+    assert.equal(baml.json.path<json>(body, ".system"), system);
+    let user: json = [
+        { "type": "text", "text": "Stable.", "cache_control": { "type": "ephemeral" } },
+        { "type": "text", "text": "Variable." },
+    ];
+    assert.equal(baml.json.path<json>(body, ".messages[0].content"), user);
+
+    // null `args` is the default too
+    let nulled = _anth_cache_args(null);
+    let stable: json = { "type": "text", "text": "Stable.", "cache_control": { "type": "ephemeral" } };
+    assert.equal(baml.json.path<json>(nulled, ".messages[0].content[0]"), stable);
+
+    let named = anth_render_body(cl, AnthCacheNamed@spec("hi"), ai.Journal { log: [] });
+    let with_ttl: json = { "type": "ephemeral", "ttl": "1h" };
+    assert.equal(baml.json.path<json>(named, ".system[0].cache_control"), with_ttl)
 }
 
-function anthropic_role_metadata_is_not_a_cache_channel() -> string {
+function anthropic_role_metadata_is_not_a_cache_channel() -> bool {
     let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let spec = AnthRoleMetadata@spec("hi");
     let journal = ai.Journal {
@@ -512,11 +515,11 @@ function anthropic_role_metadata_is_not_a_cache_channel() -> string {
             toolbox: spec.tools(),
             output_type: spec.output_type(),
         },
-    ).body.includes("cache_control").to_string()
+    ).body.includes("cache_control")
 }
 
 test "anthropic_role_metadata_is_not_a_cache_channel" {
-    assert.equal(anthropic_role_metadata_is_not_a_cache_channel(), "false")
+    assert.equal(anthropic_role_metadata_is_not_a_cache_channel(), false)
 }
 
 // BUG 7.1: an assistant-first prompt with no system content used to send

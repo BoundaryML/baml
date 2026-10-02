@@ -889,38 +889,32 @@ function _vertex_cached_body(model: string, default_args: bool = false) -> strin
     google.internal.vertex_render(cl, input).body
 }
 
-function vertex_cache_delimiter() -> string {
-    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5"));
-    let gemini = _vertex_cached_body("gemini-2.5-flash");
-    [
-        baml.json.stringify(baml.json.path<json>(claude, ".system")),
-        (gemini.includes("cache_control") || gemini.includes("ephemeral")).to_string(),
-    ].join("|")
-}
-
 test "vertex_cache_delimiter" {
-    assert.equal(
-        vertex_cache_delimiter(),
-        `[{"type":"text","text":"Follow the rules.","cache_control":{"type":"ephemeral","ttl":"1h"}}]|false`,
-    )
+    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5"));
+    let system: json = [
+        {
+            "type": "text",
+            "text": "Follow the rules.",
+            "cache_control": { "type": "ephemeral", "ttl": "1h" },
+        },
+    ];
+    assert.equal(baml.json.path<json>(claude, ".system"), system);
+    let gemini = _vertex_cached_body("gemini-2.5-flash");
+    assert.is_true(!gemini.includes("cache_control"));
+    assert.is_true(!gemini.includes("ephemeral"))
 }
 
 // `${cache()}` on a Claude model is the Anthropic default, the same marker
 // `anthropic.Client` sends; on a Gemini model there is no default.
-function vertex_cache_default_args() -> string {
-    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5", default_args = true));
-    let gemini = _vertex_cached_body("gemini-2.5-flash", default_args = true);
-    [
-        baml.json.stringify(baml.json.path<json>(claude, ".system")),
-        (gemini.includes("cache_control") || gemini.includes("ephemeral")).to_string(),
-    ].join("|")
-}
-
 test "vertex_cache_default_args" {
-    assert.equal(
-        vertex_cache_default_args(),
-        `[{"type":"text","text":"Follow the rules.","cache_control":{"type":"ephemeral"}}]|false`,
-    )
+    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5", default_args = true));
+    let system: json = [
+        { "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } },
+    ];
+    assert.equal(baml.json.path<json>(claude, ".system"), system);
+    let gemini = _vertex_cached_body("gemini-2.5-flash", default_args = true);
+    assert.is_true(!gemini.includes("cache_control"));
+    assert.is_true(!gemini.includes("ephemeral"))
 }
 
 // …and a caller who wants it back puts it in `request_body`, which merges

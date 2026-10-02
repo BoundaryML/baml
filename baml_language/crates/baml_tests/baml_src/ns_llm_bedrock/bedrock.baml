@@ -866,24 +866,22 @@ function BedrockCacheArgs(args: json) -> string {
     `
 }
 
-function _cache_args_block(args: json) -> string {
+function _cache_args_block(args: json) -> json {
     let body = _cached_body(BedrockCacheArgs@spec(args));
-    baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]"))
-}
-
-function bedrock_cache_delimiter_args_as_written() -> string {
-    [
-        _cache_args_block(baml.json.parse(`{"ttl":"1h","type":"default","extra":{"keep":null}}`)),
-        _cache_args_block(baml.json.parse(`{}`)),
-        _cache_args_block(baml.json.parse(`"1h"`)),
-    ].join("|")
+    baml.json.path<json>(body, ".messages[0].content[1]")
 }
 
 test "bedrock_cache_delimiter_args_as_written" {
-    assert.equal(
-        bedrock_cache_delimiter_args_as_written(),
-        `{"cachePoint":{"ttl":"1h","type":"default","extra":{"keep":null}}}|{"cachePoint":{}}|{"cachePoint":"1h"}`,
-    )
+    let object_args: json = { "ttl": "1h", "type": "default", "extra": { "keep": null } };
+    let object_block: json = { "cachePoint": { "ttl": "1h", "type": "default", "extra": { "keep": null } } };
+    assert.equal(_cache_args_block(object_args), object_block);
+
+    let empty_args: json = {};
+    let empty_block: json = { "cachePoint": {} };
+    assert.equal(_cache_args_block(empty_args), empty_block);
+
+    let string_block: json = { "cachePoint": "1h" };
+    assert.equal(_cache_args_block("1h"), string_block)
 }
 
 // Where a delimiter produces NO block: before any content of its message, and
@@ -911,21 +909,16 @@ function BedrockCacheTwice(name: string) -> string {
     `
 }
 
-function bedrock_cache_delimiter_dropped() -> string {
-    let leading = _cached_body(BedrockCacheLeading@spec("Ada"));
-    let twice = _cached_body(BedrockCacheTwice@spec("Ada"));
-    [
-        baml.json.stringify(baml.json.path<json>(leading, ".system")),
-        baml.json.stringify(baml.json.path<json>(leading, ".messages[0].content")),
-        baml.json.stringify(baml.json.path<json>(twice, ".messages[0].content")),
-    ].join("\n")
-}
-
 test "bedrock_cache_delimiter_dropped" {
-    assert.equal(
-        bedrock_cache_delimiter_dropped(),
-        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]`,
-    )
+    let leading = _cached_body(BedrockCacheLeading@spec("Ada"));
+    let system: json = [{ "text": "You greet people." }];
+    assert.equal(baml.json.path<json>(leading, ".system"), system);
+    let user: json = [{ "text": "Greet Ada." }];
+    assert.equal(baml.json.path<json>(leading, ".messages[0].content"), user);
+
+    let twice = _cached_body(BedrockCacheTwice@spec("Ada"));
+    let once: json = [{ "text": "Stable." }, { "cachePoint": { "type": "default" } }, { "text": "Greet Ada." }];
+    assert.equal(baml.json.path<json>(twice, ".messages[0].content"), once)
 }
 
 // `${cache()}` (and null `args`, which is the same thing) takes the client's
@@ -943,10 +936,10 @@ function BedrockCacheDefault(name: string) -> string {
     `
 }
 
-function _default_cache_content(model: string) -> string {
+function _default_cache_content(model: string) -> json {
     let cl = aws.BedrockClient.new(model = model, region = "us-east-1");
     let body = _body(cl, _turn_input(BedrockCacheDefault@spec("Ada"), _empty_journal(), _no_tools()));
-    baml.json.stringify(baml.json.path<json>(body, ".messages[0].content"))
+    baml.json.path<json>(body, ".messages[0].content")
 }
 
 function bedrock_cache_default_by_model() -> json[] {
@@ -981,28 +974,22 @@ test "bedrock_cache_default_by_model" {
 }
 
 test "bedrock_cache_default_args" {
-    let marked = `[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]`;
-    let unmarked = `[{"text":"Stable.\\n\\nGreet Ada."}]`;
+    let marked: json = [{ "text": "Stable." }, { "cachePoint": { "type": "default" } }, { "text": "Greet Ada." }];
+    let unmarked: json = [{ "text": "Stable.\n\nGreet Ada." }];
     assert.equal(_default_cache_content("us.anthropic.claude-haiku-4-5-20251001-v1:0"), marked);
     assert.equal(_default_cache_content("us.amazon.nova-lite-v1:0"), marked);
     assert.equal(_default_cache_content("us.meta.llama3-3-70b-instruct-v1:0"), unmarked);
     // null `args` is the default
-    assert.equal(
-        baml.json.stringify(
-            baml.json.path<json>(_cached_body(BedrockCacheArgs@spec(null)), ".messages[0].content"),
-        ),
-        `[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Variable."}]`,
-    );
+    let nulled: json = [{ "text": "Stable." }, { "cachePoint": { "type": "default" } }, { "text": "Variable." }];
+    assert.equal(baml.json.path<json>(_cached_body(BedrockCacheArgs@spec(null)), ".messages[0].content"), nulled);
     // explicit args are sent as written to a model the default skips
     let llama = aws.BedrockClient.new(model = "us.meta.llama3-3-70b-instruct-v1:0", region = "us-east-1");
     let explicit = _body(
         llama,
         _turn_input(BedrockCacheArgs@spec(baml.json.parse(`{"type":"default"}`)), _empty_journal(), _no_tools()),
     );
-    assert.equal(
-        baml.json.stringify(baml.json.path<json>(explicit, ".messages[0].content[1]")),
-        `{"cachePoint":{"type":"default"}}`,
-    )
+    let checkpoint: json = { "cachePoint": { "type": "default" } };
+    assert.equal(baml.json.path<json>(explicit, ".messages[0].content[1]"), checkpoint)
 }
 
 // A system-only prompt folds its system blocks into the leading user message;

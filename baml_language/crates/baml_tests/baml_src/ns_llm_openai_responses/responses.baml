@@ -451,23 +451,41 @@ function OaiCached(picture: image, question: string) -> string {
     prompt: `${role("system")}Follow the rules.${cache({ "mode": "explicit" })}${role("user")}Look at ${picture} closely.${cache({ "mode": "explicit", "ttl": null })} ${question}`
 }
 
-function _oai_render_input(cl: openai.ResponsesClient, spec: ai.FunctionSpec<string>) -> string {
+function _oai_render_input(cl: openai.ResponsesClient, spec: ai.FunctionSpec<string>) -> json {
     let empty = ai.tools.Toolbox.new([]);
     let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
-    baml.json.stringify(baml.json.path<json>(baml.json.parse(req.body), ".input"))
-}
-
-function oai_cache_delimiter_is_a_breakpoint_on_the_part_before() -> string {
-    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
-    let picture = baml.media.Image.from_url("https://example.com/p.png", "image/png");
-    _oai_render_input(cl, OaiCached@spec(picture, "Describe it."))
+    baml.json.path<json>(baml.json.parse(req.body), ".input")
 }
 
 test "oai_cache_delimiter_is_a_breakpoint_on_the_part_before" {
-    assert.equal(
-        oai_cache_delimiter_is_a_breakpoint_on_the_part_before(),
-        `[{"role":"system","content":[{"type":"input_text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]},{"role":"user","content":[{"type":"input_text","text":"Look at"},{"type":"input_image","image_url":"https://example.com/p.png","detail":"auto"},{"type":"input_text","text":"closely.","prompt_cache_breakpoint":{"mode":"explicit","ttl":null}},{"type":"input_text","text":"Describe it."}]}]`,
-    )
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let picture = baml.media.Image.from_url("https://example.com/p.png", "image/png");
+    let expected: json = [
+        {
+            "role": "system",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Follow the rules.",
+                    "prompt_cache_breakpoint": { "mode": "explicit" },
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Look at" },
+                { "type": "input_image", "image_url": "https://example.com/p.png", "detail": "auto" },
+                {
+                    "type": "input_text",
+                    "text": "closely.",
+                    "prompt_cache_breakpoint": { "mode": "explicit", "ttl": null },
+                },
+                { "type": "input_text", "text": "Describe it." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCached@spec(picture, "Describe it.")), expected)
 }
 
 // A delimiter with nothing before it in its message sends no breakpoint, and
@@ -478,19 +496,40 @@ function OaiCacheEdges(args: json) -> string {
     prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache({ "mode": "explicit" })}${cache(args)} Variable.`
 }
 
-function oai_cache_delimiter_edges() -> string {
-    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
-    [
-        _oai_render_input(cl, OaiCacheEdges@spec(baml.json.parse(`{"mode":"explicit","later":true}`))),
-        _oai_render_input(cl, OaiCacheEdges@spec(null)),
-    ].join("\n")
-}
-
 test "oai_cache_delimiter_edges" {
-    assert.equal(
-        oai_cache_delimiter_edges(),
-        `[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit","later":true}},{"type":"input_text","text":"Variable."}]}]\n[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"input_text","text":"Variable."}]}]`,
-    )
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let rules: json = { "role": "system", "content": [{ "type": "input_text", "text": "Rules." }] };
+
+    // two in a row: one breakpoint, the later one's args
+    let later_args: json = { "mode": "explicit", "later": true };
+    let later: json = [
+        rules,
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Stable.",
+                    "prompt_cache_breakpoint": { "mode": "explicit", "later": true },
+                },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCacheEdges@spec(later_args)), later);
+
+    // null args with no default: the first delimiter's breakpoint stands
+    let first: json = [
+        rules,
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCacheEdges@spec(null)), first)
 }
 
 // `${cache()}` takes the client's default: `{"mode": "explicit"}` on GPT-5.6 and
@@ -502,36 +541,57 @@ function OaiCacheDefault(question: string) -> string {
     prompt: `${role("system")}Follow the rules.${cache()}${role("user")}Stable.${cache()} ${question}`
 }
 
-function oai_cache_default_args() -> string {
+test "oai_cache_default_args" {
     let current = openai.ResponsesClient.new(model = "gpt-5.6-luna", api_key = "test-key");
     let earlier = openai.ResponsesClient.new(model = "gpt-5.5", api_key = "test-key");
-    [
-        _oai_render_input(current, OaiCacheDefault@spec("Variable.")),
-        _oai_render_input(earlier, OaiCacheDefault@spec("Variable.")),
-        // null `args` is the default
-        _oai_render_input(current, OaiCacheEdges@spec(null)),
-    ].join("\n")
-}
-
-test "oai_cache_default_args" {
-    assert.equal(
-        oai_cache_default_args(),
-        `[{"role":"system","content":[{"type":"input_text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"input_text","text":"Variable."}]}]\n[{"role":"system","content":[{"type":"input_text","text":"Follow the rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable. Variable."}]}]\n[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"input_text","text":"Variable."}]}]`,
-    )
+    let marked: json = [
+        {
+            "role": "system",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Follow the rules.",
+                    "prompt_cache_breakpoint": { "mode": "explicit" },
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(current, OaiCacheDefault@spec("Variable.")), marked);
+    let unmarked: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Follow the rules." }] },
+        { "role": "user", "content": [{ "type": "input_text", "text": "Stable. Variable." }] },
+    ];
+    assert.equal(_oai_render_input(earlier, OaiCacheDefault@spec("Variable.")), unmarked);
+    // null `args` is the default
+    let nulled: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Rules." }] },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(current, OaiCacheEdges@spec(null)), nulled)
 }
 
 // Role metadata is not forwarded onto a content part any more: a key there no
 // longer reaches the endpoint, where an unknown one is rejected.
-function oai_role_metadata_is_not_forwarded() -> string {
-    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
-    _oai_render_input(cl, OaiMetaEcho@spec("Say pong."))
-}
-
 test "oai_role_metadata_is_not_forwarded" {
-    assert.equal(
-        oai_role_metadata_is_not_forwarded(),
-        `[{"role":"system","content":[{"type":"input_text","text":"Follow the rules."}]},{"role":"user","content":[{"type":"input_text","text":"Say pong."}]}]`,
-    )
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let expected: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Follow the rules." }] },
+        { "role": "user", "content": [{ "type": "input_text", "text": "Say pong." }] },
+    ];
+    assert.equal(_oai_render_input(cl, OaiMetaEcho@spec("Say pong.")), expected)
 }
 
 // ─── response parsing ────────────────────────────────────────────────────────
