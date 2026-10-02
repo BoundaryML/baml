@@ -8,14 +8,20 @@ use crate::{
     thread::TaskCancel,
 };
 
-/// Retained cancellation inputs and absolute deadline for callback/re-entry,
-/// independent of the parent's waiter or active-call registration.
+/// The inheritable execution environment, not an active invocation or span.
+///
+/// Context and ancestry are fixed at capture. Cancellation sources remain
+/// live and carry the original absolute deadline. Descendants need no lookup
+/// of a parent's call ID, and retention owns no waiter, VM, recording producer
+/// or execution-completion guard. Local mode/capture requests and reservations
+/// deliberately remain on the particular invocation that received them.
 #[derive(Clone)]
 pub struct InheritedInvocationState {
     pub(crate) engine_id: bex_events::ids::EngineId,
     pub(crate) cancellation: TaskCancel,
     pub(crate) context: btel_types::context::Context,
-    pub(crate) telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
+    /// Parent IDs, call path and clock epoch only; never a recording producer.
+    pub(crate) ancestry: Option<bex_vm::telemetry::ThreadSpawnContext>,
     pub(crate) host_environment: u64,
 }
 
