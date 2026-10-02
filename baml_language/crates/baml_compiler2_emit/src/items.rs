@@ -250,14 +250,21 @@ pub(crate) fn build_alias_object<'db>(
 
 /// Build the runtime [`InterfaceDef`](bex_vm_types::types::InterfaceDef) signature
 /// — generic-param bounds, `requires`, associated-type bounds, fields, and method
-/// signatures — for one interface, from its item-tree declaration.
+/// signatures — for one interface.
 ///
-/// Type expressions are lowered in the interface's own scope (so its generic
-/// params resolve to `TypeVar`s) and narrowed to runtime types via
-/// [`baml_type::lower_to_runtime`] — the faithful converter that preserves type
-/// vars for reflection, NOT the value-erasing `convert_tir_ty_for_runtime`. Bound
-/// and `requires` targets become [`baml_type::RuntimeInterface`] (via
-/// `RuntimeInterface::new`, which canonicalizes associated-binding order).
+/// The declaration is described by what the checker resolved for it, not
+/// lowered a second time here: method signatures come from
+/// `function_signature`, fields from `resolve_interface_fields`, declared
+/// parameter bounds from `interface_declared_param_bounds`, and associated
+/// bounds from `interface_assoc_bound`. Only the direct `requires` targets
+/// are lowered in place, in the interface's own scope: the checker has no
+/// single lowered form of that list to read.
+///
+/// Each type is narrowed to a runtime type via [`baml_type::lower_to_runtime`]
+/// — the faithful converter that preserves type vars for reflection, NOT the
+/// value-erasing `convert_tir_ty_for_runtime`. Bound and `requires` targets
+/// become [`baml_type::RuntimeInterface`] (via `RuntimeInterface::new`, which
+/// canonicalizes associated-binding order).
 pub(crate) fn build_interface_def(
     db: &dyn baml_compiler2_mir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
@@ -267,7 +274,6 @@ pub(crate) fn build_interface_def(
     resolved: &RuntimeLowering<'_>,
     anchor: &mut PackageRefs<'_, '_>,
 ) -> bex_vm_types::types::InterfaceDef {
-    use baml_compiler2_hir::item_data::FunctionParamData;
     use baml_compiler2_mir::RuntimeTy;
     type RuntimeInterface = baml_type::RuntimeInterface<DeclName>;
     use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
@@ -281,177 +287,129 @@ pub(crate) fn build_interface_def(
         errors: RuntimeTy,
     }
 
-    let file = iface_loc.file(db);
     let iface_wire = resolved.wire(iface_tn);
     let interface = interface_data(db, iface_loc);
-    let generics = &interface.generic_params;
-    let interface_frame_params = baml_compiler2_hir_ty::lower::interface_frame(db, iface_loc);
-    // The interface scope's own param env: `Self` (slot 0) bounded by the
-    // interface itself plus declared param bounds - the single env every
-    // interface-scoped lowering shares (associated types are not slots), so
-    // `Self.Item` projections resolve here exactly as in signature lowering.
-    let decl_ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
-        .with_frame(interface_frame_params.clone())
-        .with_bounds(baml_compiler2_hir_ty::lower::interface_scope_bounds(
-            db, iface_loc,
-        ));
 
-    // Lower a type ref in `ctx` and narrow to a runtime type. Diagnostics are
-    // not collected: emit only runs on a checked program, so the declaration
-    // is already validated. `lower_to_runtime` rejects only the
-    // error-recovery sentinels, which a checked program cannot contain, so a
-    // failure means a compiler bug and must not be papered over by dropping
-    // the entry (that would renumber positional arguments).
-    let lower_rt = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
-                    store: &TypeRefStore,
-                    id: TypeRefId|
-     -> RuntimeTy {
-        let ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
-        baml_type::lower_to_runtime(&ty, resolved.aliases).unwrap_or_else(|e| {
+    // Narrow a checked type to a runtime type. `lower_to_runtime` rejects
+    // only the error-recovery sentinels, which a checked program cannot
+    // contain (emit only runs on one), so a failure means a compiler bug and
+    // must not be papered over by dropping the entry (that would renumber
+    // positional arguments).
+    let to_runtime = |ty: &baml_type::Ty| -> RuntimeTy {
+        baml_type::lower_to_runtime(ty, resolved.aliases).unwrap_or_else(|e| {
             unreachable!("interface `{iface_wire}` declares a non-runtime type: {e:?}")
         })
     };
-    // Lower an interface bound / `requires` target / associated-type bound.
-    // These are constraint heads: hir keeps written pins only (no eager
-    // default realization). A target that is not an interface was rejected
-    // upstream (E0145 / E0133) and yields `None`.
-    let lower_iface = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
-                       store: &TypeRefStore,
-                       id: TypeRefId|
-     -> Option<RuntimeInterface> {
-        // ConstraintHead, per the contract above: the default (existential)
-        // position eagerly realizes omitted associated defaults and fills
-        // the rest with Error sentinels — a bound like `type A extends
-        // Iface` with unpinned associated types would panic `to_runtime`.
-        let lowered = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref_at(
-            store,
-            id,
-            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-        ));
-        let baml_type::Ty::Interface(qtn, args, assoc) = lowered else {
-            return None;
-        };
-        let to_runtime = |t: &baml_type::Ty| {
-            baml_type::lower_to_runtime(t, resolved.aliases).unwrap_or_else(|e| {
-                unreachable!("interface `{iface_wire}` declares a non-runtime constraint: {e:?}")
-            })
-        };
-        let generics = args.iter().map(to_runtime).collect();
-        let associated_types = assoc
-            .iter()
-            .map(|(n, t)| (n.clone(), to_runtime(t)))
-            .collect();
-        Some(RuntimeInterface::new(qtn, generics, associated_types))
-    };
-    // A method's runtime signature: Required params -> positional `args`,
-    // optional (defaulted) params -> `kwargs`; the `self` receiver is
-    // dropped; absent return/throws lower to `Void`.
-    let build_method = |ctx: &baml_compiler2_hir_ty::lower::LowerCtx<'_>,
-                        store: &TypeRefStore,
-                        name: &Name,
-                        params: &[FunctionParamData],
-                        return_type: Option<TypeRefId>,
-                        throws: Option<TypeRefId>|
-     -> NamedMethod {
-        // An untyped parameter is a syntax-level error, so it cannot reach
-        // emit; the top type keeps the positional layout intact if one did.
-        let unannotated = || RuntimeTy::Unknown;
-        let void = || RuntimeTy::Void;
-        let mut args = Vec::new();
-        let mut kwargs = Vec::new();
-        for p in params {
-            if p.name.as_str() == "self" {
-                continue;
-            }
-            let ty = p
-                .type_ref
-                .map_or_else(unannotated, |id| lower_rt(ctx, store, id));
-            if p.has_default {
-                kwargs.push((p.name.clone(), ty));
-            } else {
-                args.push(ty);
-            }
-        }
-        NamedMethod {
-            name: name.clone(),
-            args,
-            kwargs,
-            returns: return_type.map_or_else(void, |id| lower_rt(ctx, store, id)),
-            errors: throws.map_or_else(void, |id| lower_rt(ctx, store, id)),
-        }
+    let to_runtime_interface = |constraint: &baml_type::Interface| {
+        RuntimeInterface::new(
+            constraint.name.clone(),
+            constraint.generics.iter().map(to_runtime).collect(),
+            constraint
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), to_runtime(ty)))
+                .collect(),
+        )
     };
 
     // `T extends A & B` is a conjunction; every conjunct that resolves to an
     // interface is emitted so the runtime enforces all of them.
-    let store = &interface.type_refs;
-    let args: Vec<(Name, Vec<RuntimeInterface>)> = generics
+    let declared_params = baml_compiler2_hir_ty::lower::interface_declared_params(db, iface_loc);
+    let param_bounds =
+        baml_compiler2_hir_ty::interfaces::interface_declared_param_bounds(db, iface_loc);
+    let args: Vec<(Name, Vec<RuntimeInterface>)> = interface
+        .generic_params
         .iter()
-        .map(|declared| {
-            let bounds = declared
-                .bounds
-                .iter()
-                .filter_map(|&id| lower_iface(&decl_ctx, store, id))
-                .collect();
+        .zip(&declared_params)
+        .map(|(declared, param)| {
+            let bounds = param_bounds
+                .get(param)
+                .map(|bounds| bounds.iter().map(to_runtime_interface).collect())
+                .unwrap_or_default();
             (declared.name.clone(), bounds)
         })
         .collect();
+    // The `requires` targets are constraint heads: hir keeps written pins
+    // only (no eager default realization — the default (existential) position
+    // would fill unpinned associated types with Error sentinels and panic
+    // `to_runtime`). A target that is not an interface was rejected upstream
+    // (E0145 / E0133) and is skipped. Lowered in the interface scope's own
+    // param env — `Self` (slot 0) bounded by the interface itself plus the
+    // declared param bounds — the env every interface-scoped lowering shares.
+    let requires_ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, iface_loc.file(db))
+        .with_frame(baml_compiler2_hir_ty::lower::interface_frame(db, iface_loc))
+        .with_bounds(baml_compiler2_hir_ty::lower::interface_scope_bounds(
+            db, iface_loc,
+        ));
     let requires: Vec<RuntimeInterface> = interface
         .requires
         .iter()
-        .filter_map(|&id| lower_iface(&decl_ctx, store, id))
+        .filter_map(|&id| {
+            baml_compiler2_hir_ty::lower::reject_holes(&requires_ctx.lower_type_ref_at(
+                &interface.type_refs,
+                id,
+                baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+            ))
+            .as_interface()
+            .map(|constraint| to_runtime_interface(&constraint))
+        })
         .collect();
     let assoc: Vec<(Name, RuntimeInterface)> = interface
         .associated_types
         .iter()
         .filter_map(|at| {
-            at.bound
-                .and_then(|id| lower_iface(&decl_ctx, store, id))
-                .map(|ri| (at.name.clone(), ri))
+            baml_compiler2_hir_ty::lower::interface_assoc_bound(db, iface_loc, at.name.clone())
+                .0
+                .as_ref()
+                .and_then(baml_type::Ty::as_interface)
+                .map(|bound| (at.name.clone(), to_runtime_interface(&bound)))
         })
         .collect();
     // This list is the interface's field *index space*: `RuntimeImplRule::field_links`
-    // is baked parallel to it, so every declared field keeps its slot. A field always
-    // carries a type — an untyped one is a syntax-level error that cannot reach emit.
-    let fields: Vec<(Name, RuntimeTy)> = interface
-        .fields
-        .iter()
-        .map(|f| (f.name.clone(), lower_rt(&decl_ctx, store, f.type_ref)))
+    // is baked parallel to it, so every declared field keeps its slot.
+    let fields: Vec<(Name, RuntimeTy)> =
+        baml_compiler2_hir_ty::interfaces::resolve_interface_fields(db, iface_loc)
+            .fields
+            .iter()
+            .map(|(name, ty)| (name.clone(), to_runtime(ty)))
+            .collect();
+    // A method's runtime signature, read off `function_signature` — the one
+    // signature road for required and default methods alike: required params
+    // -> positional `args`, defaulted params -> `kwargs`; the `self` receiver
+    // is dropped. Required methods come first, then defaults, each group in
+    // declaration order.
+    let build_method = |method: baml_compiler2_hir::loc::FunctionLoc<'_>| {
+        let signature = baml_compiler2_hir_ty::lower::function_signature(db, method);
+        let mut args = Vec::new();
+        let mut kwargs = Vec::new();
+        for param in &signature.params {
+            if param.name.as_str() == "self" {
+                continue;
+            }
+            let ty = to_runtime(&param.ty);
+            if param.has_default {
+                kwargs.push((param.name.clone(), ty));
+            } else {
+                args.push(ty);
+            }
+        }
+        NamedMethod {
+            name: function_data(db, method).name.clone(),
+            args,
+            kwargs,
+            returns: to_runtime(&signature.ret),
+            errors: to_runtime(&signature.throws),
+        }
+    };
+    let (required, defaults): (Vec<_>, Vec<_>) =
+        interface.methods.iter().copied().partition(|&method| {
+            baml_compiler2_hir::item_data::is_required_interface_method(db, method)
+        });
+    let methods: Vec<NamedMethod> = required
+        .into_iter()
+        .chain(defaults)
+        .map(build_method)
         .collect();
-    let mut methods: Vec<NamedMethod> = interface
-        .required_methods
-        .iter()
-        .map(|m| {
-            let mut scope = interface_frame_params.clone();
-            let own_names: Vec<Name> = m.generic_params.iter().map(|p| p.name.clone()).collect();
-            ParamTy::extend_frame(&mut scope, &own_names);
-            let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
-                .with_frame(scope)
-                .with_bounds(baml_compiler2_hir_ty::lower::interface_scope_bounds(
-                    db, iface_loc,
-                ));
-            build_method(&ctx, store, &m.name, &m.params, m.return_type, m.throws)
-        })
-        .collect();
-    methods.extend(interface.default_methods.iter().map(|&loc| {
-        let f = function_data(db, loc);
-        // The method's full frame and bounds (its own params plus the
-        // interface scope's, `function_generic_bounds`' interface arm).
-        let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, loc.file(db))
-            .with_frame(baml_compiler2_hir_ty::lower::function_generic_frame(
-                db, loc,
-            ))
-            .with_bounds(baml_compiler2_hir_ty::lower::function_generic_bounds(
-                db, loc,
-            ));
-        build_method(
-            &ctx,
-            &f.type_refs,
-            &f.name,
-            &f.params,
-            f.return_type,
-            f.throws,
-        )
-    }));
 
     // Everything lowered at the compiler's head; anchored once, here, through
     // the caller's lane.

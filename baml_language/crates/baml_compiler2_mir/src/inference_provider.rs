@@ -1,10 +1,9 @@
 //! MIR borrows the body's and parameter defaults' `hir_ty` inference results
-//! directly. Both roots share the metadata keys used by lowering.
+//! directly, one per arena.
 
 use baml_compiler2_hir::{
     body::BodyOwnerId,
     loc::{FunctionLoc, LetLoc},
-    semantic_index::ExprMetadataScope,
 };
 use baml_compiler2_hir_ty::infer::infer_body;
 pub(crate) use baml_compiler2_hir_ty::infer::{
@@ -34,11 +33,22 @@ impl<'db> InferenceTables<'db> {
         }
     }
 
-    /// The results `scope` reads: a body's own, or its parameter defaults'.
-    pub(crate) fn for_scope(&self, scope: ExprMetadataScope) -> Option<&'db InferenceResult<'db>> {
-        match scope {
-            ExprMetadataScope::Body(_) => Some(self.body),
-            ExprMetadataScope::ParameterDefault(_) => self.defaults,
+    /// The results `root` was typed in.
+    pub(crate) fn of(&self, root: InferenceRoot) -> Option<&'db InferenceResult<'db>> {
+        match root {
+            InferenceRoot::Body => Some(self.body),
+            InferenceRoot::ParameterDefaults => self.defaults,
         }
     }
+}
+
+/// Which of an owner's two arenas is being lowered, and so which inference
+/// result types its expressions. The metadata scope cannot say: a lambda
+/// keeps a scope of its own wherever it is written, so one inside a
+/// parameter default is keyed like any other lambda and typed with the
+/// defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InferenceRoot {
+    Body,
+    ParameterDefaults,
 }

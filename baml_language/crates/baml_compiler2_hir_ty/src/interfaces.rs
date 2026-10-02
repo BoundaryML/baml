@@ -190,6 +190,11 @@ pub(crate) fn append_params(parent: &[ParamTy], names: &[Name]) -> Vec<ParamTy> 
 /// keyed by the declared `ParamTy`s — TIR's `interface_generic_param_bounds`.
 /// Only interface-shaped bounds contribute; lowering errors are the
 /// declaration's own diagnostics, dropped here.
+///
+/// A bound may project through another parameter's (`U extends Foo<T.Item>`)
+/// or through `Self`'s (`U extends Foo<Self.Out>`), so each is lowered in the
+/// interface's scope: the projection's qualifying interface is found among
+/// the bounds the scope declares.
 pub fn interface_declared_param_bounds(
     db: &dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
@@ -197,7 +202,9 @@ pub fn interface_declared_param_bounds(
     let data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
     let frame = crate::lower::interface_frame(db, iface_loc);
     let declared = crate::lower::interface_declared_params(db, iface_loc);
-    let ctx = crate::lower::lower_ctx_for_file(db, iface_loc.file(db)).with_frame(frame);
+    let ctx = crate::lower::lower_ctx_for_file(db, iface_loc.file(db))
+        .with_frame(frame)
+        .with_bounds(crate::lower::interface_scope_bounds(db, iface_loc));
     let mut bounds = TypeVarBoundsMap::default();
     for (param, declared) in declared.iter().zip(data.generic_params.iter()) {
         let constraints: Vec<_> = declared

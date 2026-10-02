@@ -262,33 +262,20 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     MethodKind::Static
                 };
 
-                // Same elaboration as free functions (see the free-function
-                // path). The method's own `generic_params` are its user +
-                // synthetic effect params; the enclosing class's params join
-                // only the lowering scope, not the method's declared generics.
-                let sig = baml_compiler2_hir::item_data::elaborated_function_data(db, method_loc);
-                // Emitted generics are the method's *user* params only; effect
-                // params (see the free-function path) join only the lowering
-                // scope.
-                let method_own_generics: Vec<Name> = sig.user_generic_params.clone();
-                // Generics in scope inside the method body: the class's TypeVars
-                // first, then the method's own user + synthetic effect params.
-                let method_scope_generics =
-                    baml_compiler2_hir_ty::lower::function_generic_frame(db, method_loc);
-                // Empty bounds match the prior raw-AST lowering (see the
-                // free-function path).
-                let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, source_file)
-                    .with_frame(method_scope_generics.clone())
-                    .with_self_ty(Some(baml_compiler2_hir_ty::lower::class_self_ty(
-                        db, class_loc,
-                    )));
-                let type_refs = &sig.type_refs;
-                let lower = |id| {
-                    let tir_ty = baml_compiler2_hir_ty::lower::reject_holes(
-                        &ctx.lower_type_ref(type_refs, id),
-                    );
-                    convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases, lang)
+                // The checker's own signature (see the free-function path):
+                // parameter and return types are read from it, not lowered
+                // again here.
+                let signature = baml_compiler2_hir_ty::lower::function_signature(db, method_loc);
+                let to_codegen = |ty: &TirTy| {
+                    convert_tir_to_codegen_ty(spelling, ty, alias_map, recursive_aliases, lang)
                 };
+                // Emitted generics are the method's *user* params only; effect
+                // params (see the free-function path) are part of the
+                // signature's frame, not of the SDK surface.
+                let method_own_generics: Vec<Name> =
+                    baml_compiler2_hir::item_data::elaborated_function_data(db, method_loc)
+                        .user_generic_params
+                        .clone();
                 let method_defaults =
                     baml_compiler2_hir::signature::function_parameter_defaults(db, method_loc);
 
@@ -304,7 +291,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         || method.name.as_str().ends_with("@stream")
                         || method.name.as_str().ends_with("@build_request");
 
-                let arguments: Vec<cg::FunctionArgument> = sig
+                let arguments: Vec<cg::FunctionArgument> = signature
                     .params
                     .iter()
                     .enumerate()
@@ -313,7 +300,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         !(strips_injected_client && param.name.as_str() == "client")
                     })
                     .map(|(index, param)| {
-                        let ty = lower(param.type_ref);
+                        let ty = to_codegen(&param.ty);
                         cg::FunctionArgument {
                             injected: strips_injected_client
                                 && param.name.as_str() == "on_event"
@@ -329,7 +316,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     })
                     .collect();
 
-                let return_type = sig.return_type.map_or(cg::Ty::Void, lower);
+                let return_type = to_codegen(&signature.ret);
 
                 let cg_method = cg::Function {
                     name: method.name.clone(),
@@ -490,37 +477,29 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // bodies, etc.) are valid too. `FunctionOrigin::Internal` is
             // already filtered above.
 
-            // Source the signature from the *elaborated* HIR data, not the raw
-            // item tree: elaboration mints a synthetic effect param for every
-            // callback parameter that omits a `throws` clause and rewrites that
-            // parameter's `throws` to the fresh param. Both must reach the
-            // codegen type — the inferred outer `throws` (from `callable_throws`)
-            // references the effect param, so a raw lowering would leave it a
-            // dangling, undeclared typevar and collapse the callback's own
-            // `throws` to `Never`.
-            let sig = baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc);
-            // Effect params (minted for a callback whose `throws` is inferred)
-            // join only the lowering *scope*, so the callback and the inferred
-            // outer `throws` resolve to real typevars instead of dangling /
-            // `Never`. They are inferred from the callback, not user-bound, so
+            // The signature is the checker's own (`function_signature`, the one
+            // signature road), read rather than lowered again here. It is the
+            // *elaborated* signature: elaboration mints a synthetic effect param
+            // for every callback parameter that omits a `throws` clause and
+            // rewrites that parameter's `throws` to the fresh param. Both must
+            // reach the codegen type — the inferred outer `throws` (from
+            // `callable_throws`) references the effect param, so a raw lowering
+            // would leave it a dangling, undeclared typevar and collapse the
+            // callback's own `throws` to `Never`.
+            let signature = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
+            let to_codegen = |ty: &TirTy| {
+                convert_tir_to_codegen_ty(spelling, ty, alias_map, recursive_aliases, lang)
+            };
+            // Effect params are inferred from the callback, not user-bound, so
             // they are NOT emitted as user-facing generics: an SDK that binds
             // generics by name (e.g. Python's `_types=`) must not see them — a
             // consumer that needs the throws type recovers it from the callback
             // parameter (the Rust SDK, via each callback's associated error
             // type).
-            let scope_generics = baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc);
-            let func_generic_params: Vec<Name> = sig.user_generic_params.clone();
-            // Empty bounds match the prior raw-AST lowering: this path resolves
-            // only in-scope typevars (incl. the effect params), not associated
-            // projections that would need interface bounds.
-            let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, source_file)
-                .with_frame(scope_generics.clone());
-            let type_refs = &sig.type_refs;
-            let lower = |id| {
-                let tir_ty =
-                    baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(type_refs, id));
-                convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases, lang)
-            };
+            let func_generic_params: Vec<Name> =
+                baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc)
+                    .user_generic_params
+                    .clone();
             let func_defaults =
                 baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
             // The compiler injects a `client: ai.Client? = null` override onto
@@ -539,13 +518,13 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 baml_compiler2_hir::item_data::function_llm_meta(db, func_loc).is_some()
                     || func.name.as_str().ends_with("@stream")
                     || func.name.as_str().ends_with("@build_request");
-            let arguments: Vec<cg::FunctionArgument> = sig
+            let arguments: Vec<cg::FunctionArgument> = signature
                 .params
                 .iter()
                 .enumerate()
                 .filter(|(_, param)| !(strips_injected_client && param.name.as_str() == "client"))
                 .map(|(index, param)| {
-                    let ty = lower(param.type_ref);
+                    let ty = to_codegen(&param.ty);
                     cg::FunctionArgument {
                         injected: strips_injected_client
                             && param.name.as_str() == "on_event"
@@ -561,7 +540,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 })
                 .collect();
 
-            let return_type = sig.return_type.map_or(cg::Ty::Void, lower);
+            let return_type = to_codegen(&signature.ret);
 
             let cg_func = cg::Function {
                 name: func.name.clone(),
