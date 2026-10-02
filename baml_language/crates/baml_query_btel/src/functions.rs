@@ -534,7 +534,7 @@ pub struct Handle {
     /// unavailable/invalid context); `cas` is unused.
     pub pending: bool,
     pub cas: [u8; 16],
-    /// Kind 4: the encoded snapshot itself; kind 5: the encoded events
+    /// Kind 4: the encoded snapshot itself; kind 7: the encoded events
     /// (`encode_events`). `cas` is unused.
     pub inline: Option<Vec<u8>>,
     /// Argument slot names; `None` when not recorded.
