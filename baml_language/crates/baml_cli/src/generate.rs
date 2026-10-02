@@ -516,8 +516,24 @@ impl GenerateArgs {
                             edition: "2024".to_string(),
                         },
                     );
+                    let skipped_user_declarations = generated
+                        .warnings
+                        .iter()
+                        .filter(|warning| is_explicit_user_rust_declaration(warning))
+                        .count();
                     for warning in &generated.warnings {
                         reporter.warning(format!("skipped `{}`: {}", warning.fqn, warning.reason));
+                    }
+                    if skipped_user_declarations > 0 {
+                        let symbol = if skipped_user_declarations == 1 {
+                            "symbol"
+                        } else {
+                            "symbols"
+                        };
+                        return Ok(reporter.fatal(format!(
+                            "Rust generator `{}` skipped {skipped_user_declarations} user-declared {symbol}; refusing to write a partial client",
+                            generator.name
+                        )));
                     }
                     generated
                         .files
@@ -625,6 +641,11 @@ impl GenerateArgs {
         reporter.finish("Finished", format!("generated {total_files} file(s)"));
         Ok(crate::ExitCode::Success)
     }
+}
+
+fn is_explicit_user_rust_declaration(warning: &sdkgen_rust::SkipWarning) -> bool {
+    warning.fqn.split('.').next() == Some(baml_type::RESERVED_USER_PACKAGE)
+        && !warning.fqn.contains(['$', '@'])
 }
 
 fn build_embedded_baml_toml(project_root: &Path) -> Result<String> {
@@ -949,8 +970,31 @@ mod tests {
     use super::{
         AddGeneratorArgs, Diagnostic, Generator, GeneratorDef, OutputType,
         add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
-        generation_presentation, is_valid_go_import_path, parse_add_output_type,
+        generation_presentation, is_explicit_user_rust_declaration, is_valid_go_import_path,
+        parse_add_output_type,
     };
+
+    #[test]
+    fn rust_skip_failures_only_include_explicit_user_declarations() {
+        let warning = |fqn: &str| sdkgen_rust::SkipWarning {
+            fqn: fqn.to_string(),
+            reason: "unsupported".to_string(),
+        };
+
+        assert!(is_explicit_user_rust_declaration(&warning("user.Route")));
+        assert!(is_explicit_user_rust_declaration(&warning(
+            "user.Widget.snap"
+        )));
+        assert!(!is_explicit_user_rust_declaration(&warning(
+            "baml.media.Image"
+        )));
+        assert!(!is_explicit_user_rust_declaration(&warning(
+            "user.Route$stream"
+        )));
+        assert!(!is_explicit_user_rust_declaration(&warning(
+            "user.Query@stream"
+        )));
+    }
 
     #[test]
     fn identifier_rename_presentation_respects_normal_verbose_and_quiet_modes() {
