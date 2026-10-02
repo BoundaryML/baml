@@ -572,13 +572,13 @@ fn decode_args<'py>(
 /// Encode `value` as an `InboundValue` protobuf using
 /// `baml_bridge.proto._set_inbound_value`, then serialize to bytes.
 fn encode_result_inbound(py: Python<'_>, call_id: u32, value: Py<PyAny>) -> PyResult<Vec<u8>> {
-    if let Some(owner) = bridge_cffi::host_instrumentation::callback(call_id) {
+    let observation = bridge_cffi::host_instrumentation::callback(call_id).map(|owner| {
         let outcome = btel_types::InvocationOutcome::Ok;
         let capture = owner
             .wants_value(outcome)
             .then(|| crate::host_capture::capture(value.bind(py)));
-        owner.observe(outcome, capture);
-    }
+        (owner, capture)
+    });
 
     let inbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_inbound_pb2")?;
     let proto = PyModule::import(py, "baml_bridge.proto")?;
@@ -603,6 +603,9 @@ fn encode_result_inbound(py: Python<'_>, call_id: u32, value: Py<PyAny>) -> PyRe
 
     if encoded.is_err() {
         rollback_failed_encode(&registered, &cloned_handles);
+    } else if let Some((owner, capture)) = observation {
+        // Encoding failures are observed by the existing dispatch error path.
+        owner.observe(btel_types::InvocationOutcome::Ok, capture);
     }
     encoded
 }
