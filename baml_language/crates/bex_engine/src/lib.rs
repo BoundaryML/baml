@@ -82,6 +82,8 @@ mod thread;
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]
 pub use telemetry::TelemetryRecording;
+#[cfg(all(not(target_arch = "wasm32"), feature = "test-support"))]
+pub use telemetry::boundary_test_support;
 mod telemetry_state;
 pub mod trace_heap;
 mod trace_value_encode;
