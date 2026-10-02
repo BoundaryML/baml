@@ -19,6 +19,9 @@ class ScriptedStreamClient {
     fail_after_delta: bool,
     cancel_before_delta: bool,
     unsafe_before_delta: bool,
+    timeout_open_attempts: int,
+    timeout_pull_attempts: int,
+    timeout_after_delta: bool,
     attempts: int,
     probe: StreamProbe,
 
@@ -60,6 +63,17 @@ class ScriptedStreamClient {
                     raw_body: null,
                 }
             }
+            if (attempt <= self.timeout_open_attempts) {
+                throw baml.errors.Timeout { message: `${self.client_id} open timed out`, duration_ms: 10 }
+            }
+            if (attempt <= self.timeout_open_attempts + self.timeout_pull_attempts) {
+                let probe = self.probe;
+                let client_id = self.client_id;
+                return ai.stream.TurnStream.from_event_source(() -> {
+                    probe.events.push(`pull-timeout:${client_id}:${attempt}`);
+                    throw baml.errors.Timeout { message: `${client_id} first event timed out`, duration_ms: 10 }
+                });
+            }
             if (attempt <= self.fail_open_attempts + self.fail_pull_attempts) {
                 let probe = self.probe;
                 let client_id = self.client_id;
@@ -80,6 +94,21 @@ class ScriptedStreamClient {
             if (self.unsafe_before_delta) {
                 return ai.stream.TurnStream.from_event_source(() -> {
                     throw ai.errors.StepBudgetExceeded { steps: 1 }
+                });
+            }
+            if (self.timeout_after_delta) {
+                let cursor = 0;
+                let probe = self.probe;
+                let client_id = self.client_id;
+                let prefix = self.chunks.at(0) ?? "prefix";
+                return ai.stream.TurnStream.from_event_source(() -> {
+                    if (cursor == 0) {
+                        cursor += 1;
+                        ai.stream.TextDelta { text: prefix }
+                    } else {
+                        probe.events.push(`partial-timeout:${client_id}:${attempt}`);
+                        throw baml.errors.Timeout { message: `${client_id} stalled after first delta`, duration_ms: 10 }
+                    }
                 });
             }
             if (self.fail_after_delta) {
@@ -180,6 +209,9 @@ function scripted_client(
     fail_after_delta: bool = false,
     cancel_before_delta: bool = false,
     unsafe_before_delta: bool = false,
+    timeout_open_attempts: int = 0,
+    timeout_pull_attempts: int = 0,
+    timeout_after_delta: bool = false,
 ) -> ScriptedStreamClient {
     ScriptedStreamClient {
         client_id: client_id,
@@ -189,6 +221,9 @@ function scripted_client(
         fail_after_delta: fail_after_delta,
         cancel_before_delta: cancel_before_delta,
         unsafe_before_delta: unsafe_before_delta,
+        timeout_open_attempts: timeout_open_attempts,
+        timeout_pull_attempts: timeout_pull_attempts,
+        timeout_after_delta: timeout_after_delta,
         attempts: 0,
         probe: probe,
     }
@@ -216,6 +251,7 @@ function failure_name(error: unknown) -> string {
             `StreamingUnsupported:${unsupported.client_id}`
         },
         let cancelled: baml.panics.Cancelled => `Cancelled:${cancelled.message}`,
+        let timeout: baml.errors.Timeout => `Timeout:${timeout.message}`,
         _ => `other:${error.to_string()}`,
     }
 }
@@ -332,6 +368,83 @@ test "fallback_stream_does_not_advance_after_delta" {
     assert.equal(
         fallback_stream_does_not_advance_after_delta_case(),
         "prefix|NetworkFailure:failed after first delta|open:first:1,partial-fail:first:1",
+    )
+}
+
+// A member's own deadline before the first delta is a failed attempt, like a
+// safe transport failure. After a visible delta it stays terminal, like every
+// other failure, because replaying would duplicate the prefix.
+function retry_stream_retries_timeout_before_first_delta_case() -> string {
+    let probe = StreamProbe { events: [] };
+    let inner = scripted_client("slow-open", ["ok"], probe, timeout_open_attempts = 1);
+    let retry = ai.clients.Retry.new(
+        inner,
+        max_attempts = 2,
+        backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+    );
+    `${drain_streaming(retry)}|${probe.events.join(",")}`
+}
+
+test "retry_stream_retries_timeout_before_first_delta" {
+    assert.equal(
+        retry_stream_retries_timeout_before_first_delta_case(),
+        "ok|open:slow-open:1,open:slow-open:2",
+    )
+}
+
+function fallback_stream_advances_on_timeout_before_first_delta_case() -> string {
+    let probe = StreamProbe { events: [] };
+    let first = scripted_client("first", ["unused"], probe, timeout_pull_attempts = 100);
+    let second = scripted_client("second", ["winner"], probe);
+    let fallback = ai.clients.Fallback { members: [first, second] };
+    `${drain_streaming(fallback)}|${probe.events.join(",")}`
+}
+
+test "fallback_stream_advances_on_timeout_before_first_delta" {
+    assert.equal(
+        fallback_stream_advances_on_timeout_before_first_delta_case(),
+        "winner|open:first:1,pull-timeout:first:1,open:second:1",
+    )
+}
+
+function fallback_stream_keeps_last_member_timeout_case() -> string {
+    let probe = StreamProbe { events: [] };
+    let first = scripted_client("first", ["unused"], probe, timeout_open_attempts = 100);
+    let second = scripted_client("second", ["unused"], probe, timeout_pull_attempts = 100);
+    let fallback = ai.clients.Fallback { members: [first, second] };
+    let outcome = drain_streaming(fallback) catch_all (e) {
+        _ => failure_name(e),
+    };
+    `${outcome}|${probe.events.join(",")}`
+}
+
+test "fallback_stream_keeps_last_member_timeout" {
+    assert.equal(
+        fallback_stream_keeps_last_member_timeout_case(),
+        "Timeout:second first event timed out|open:first:1,open:second:1,pull-timeout:second:1",
+    )
+}
+
+function fallback_stream_timeout_after_delta_is_terminal_case() -> string {
+    let probe = StreamProbe { events: [] };
+    let first = scripted_client("first", ["prefix"], probe, timeout_after_delta = true);
+    let second = scripted_client("second", ["must-not-open"], probe);
+    let fallback = ai.clients.Fallback { members: [first, second] };
+    let stream = fallback.invoke_stream(composite_input());
+    let first_delta = match (stream.next()) {
+        let batch: string[] => batch.join(""),
+        let done: ai.stream.Done => "done",
+    };
+    let outcome = stream.next() catch_all (e) {
+        _ => failure_name(e),
+    };
+    `${first_delta}|${outcome.to_string()}|${probe.events.join(",")}`
+}
+
+test "fallback_stream_timeout_after_delta_is_terminal" {
+    assert.equal(
+        fallback_stream_timeout_after_delta_is_terminal_case(),
+        "prefix|Timeout:first stalled after first delta|open:first:1,partial-timeout:first:1",
     )
 }
 
