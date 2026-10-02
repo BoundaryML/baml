@@ -32,6 +32,25 @@ impl InheritedInvocationState {
         &self.context
     }
 
+    /// Concrete generated token payload observing this retained environment.
+    /// Its private authority never grants cancellation of inherited sources.
+    pub fn cancellation_projection(&self) -> bex_external_types::BexExternalValue {
+        let payload = bex_vm::package_baml::projected_cancel_token_data(
+            self.cancellation.own().clone(),
+            vec![bex_vm_types::cancellation::CancellationSource::Observer(
+                std::sync::Arc::new(self.cancellation.clone()),
+            )],
+        );
+        bex_external_types::BexExternalValue::instance(
+            "baml.spawn.CancelToken",
+            [(
+                "_handle",
+                bex_external_types::BexExternalValue::RustData(payload),
+            )]
+            .into(),
+        )
+    }
+
     /// Observe effective cancellation without granting cancellation authority.
     pub fn is_cancelled(&self) -> bool {
         self.cancellation.is_cancelled()
@@ -42,12 +61,16 @@ impl InheritedInvocationState {
     }
 }
 
-/// Engine-owned immutable callback frame and its concrete token projection.
+/// Transient callback dispatch capture and its concrete cancellation projection.
+/// Only dispatch retains the optional physical execution owner. Exporting the
+/// inherited state into a language carrier never retains that owner.
 #[derive(Clone)]
 pub struct InvocationCapture {
     pub runtime: std::sync::Arc<crate::BexEngine>,
     pub state: InheritedInvocationState,
     pub cancel: Option<bex_external_types::BexExternalValue>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub host: Option<std::sync::Arc<crate::host_instrumentation::CallbackHostInvocation>>,
 }
 
 impl InvocationCapture {

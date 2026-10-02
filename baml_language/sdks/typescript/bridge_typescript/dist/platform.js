@@ -6,14 +6,36 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { AsyncResource, AsyncLocalStorage } from 'node:async_hooks';
-import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame } from './native.js';
-import { Invocation } from './invocation.js';
-const invocationFrames = new AsyncLocalStorage();
-export function getCurrentInvocation() { return invocationFrames.getStore(); }
-export function runWithInvocation(active, body) { return invocationFrames.run(active, body); }
-export function currentInvocationState() {
-    const key = invocationFrames.getStore()?.state.key;
+import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame, _hostCaptureRequested, _recordHostCallResult } from './native.js';
+import { ExecutionContext } from './execution_context.js';
+import { capture, failureOutcome, diagnostic } from './host_capture.js';
+const executionContexts = new AsyncLocalStorage();
+export function getCurrentExecutionContext() { return executionContexts.getStore(); }
+export function runWithExecutionContext(active, body) { return executionContexts.run(active, body); }
+export function currentExecutionState() {
+    const key = executionContexts.getStore()?.state.key;
     return key === undefined ? undefined : ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString();
+}
+const hostAdoptions = new AsyncLocalStorage();
+export function consumeHostAdoption(identity) {
+    const permit = hostAdoptions.getStore();
+    if (!permit || permit.identity !== identity || permit.consumed)
+        return false;
+    permit.consumed = true;
+    return true;
+}
+export function observeHostCallbackResult(callId, error, value) {
+    const execution = activeHostExecutions.get(callId);
+    if (!execution)
+        return;
+    try {
+        const outcome = error ? failureOutcome(value) : 'ok';
+        const copied = _hostCaptureRequested(execution.lease, outcome) ? capture(value) : undefined;
+        _recordHostCallResult(execution.lease, outcome, copied);
+    }
+    catch {
+        diagnostic('host callback trace completion failed');
+    }
 }
 const callbackContexts = new Map();
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */
@@ -30,7 +52,7 @@ export function captureCallbackContext(callId) {
 // This also owns the callback/arguments and causal context through real exit.
 const activeHostExecutions = new Map();
 /** Each execution owns a child context through Promise settlement/cleanup. */
-export function runHostCallback(callId, args, callback, lease) {
+export function runHostCallback(callId, args, callback, lease, markerIdentity) {
     if (!lease) {
         _discardHostCallArgs(args);
         return;
@@ -55,8 +77,8 @@ export function runHostCallback(callId, args, callback, lease) {
         };
         try {
             const [state, cancel] = _hostInvocationFrame(lease);
-            const frame = new Invocation(state, cancel);
-            const completion = resource.runInAsyncScope(() => invocationFrames.run(frame, callback));
+            const frame = new ExecutionContext(state, cancel);
+            const completion = resource.runInAsyncScope(() => executionContexts.run(frame, () => hostAdoptions.run({ identity: markerIdentity, consumed: false }, callback)));
             if (completion) {
                 execution.completion = completion.finally(finish);
                 return execution.completion;

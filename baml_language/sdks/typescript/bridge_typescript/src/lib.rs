@@ -5,6 +5,14 @@
 
 mod errors;
 pub mod handle;
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "napi-rs registration wrappers are disabled in Rust unit-test builds"
+    )
+)]
+mod host_instrumentation;
 pub mod host_value;
 #[cfg_attr(
     test,

@@ -14,6 +14,21 @@ pub struct BexRunResult {
 /// Core runtime API: call functions and introspect parameters.
 #[async_trait]
 pub trait Bex: Send + Sync {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn begin_host_invocation(
+        self: Arc<Self>,
+        definition: &crate::HostDefinition,
+        inherited: Option<&crate::InheritedInvocationState>,
+        options: &crate::TraceOptionsData,
+        caller: &crate::HostCallSite,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        let _ = (definition, inherited, options, caller, inputs);
+        Err(RuntimeError::Other(
+            "runtime does not support host instrumentation".into(),
+        ))
+    }
+
     /// Nanoseconds in this runtime's fixed monotonic invocation clock domain.
     fn invocation_clock_ns(&self) -> Result<u64, RuntimeError>;
     /// Freeze relative controls before argument binding or adapter queueing.
@@ -82,6 +97,19 @@ pub trait Bex: Send + Sync {
 
 #[async_trait]
 impl Bex for BexEngine {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn begin_host_invocation(
+        self: Arc<Self>,
+        definition: &crate::HostDefinition,
+        inherited: Option<&crate::InheritedInvocationState>,
+        options: &crate::TraceOptionsData,
+        caller: &crate::HostCallSite,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        BexEngine::begin_host_invocation(&self, definition, inherited, options, caller, inputs)
+            .map_err(RuntimeError::from)
+    }
+
     fn invocation_clock_ns(&self) -> Result<u64, RuntimeError> {
         BexEngine::invocation_clock_ns(self).map_err(RuntimeError::from)
     }

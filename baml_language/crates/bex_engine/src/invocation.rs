@@ -723,11 +723,15 @@ mod tests {
         // frame that execution installs before any callback can capture it.
         engine.record_invocation_frame(active.prepared.host_call_id, &active.prepared.thread);
         let spawner = Arc::new(crate::InvocationSpawner {
-            runtime: Arc::clone(&engine),
-            cancel: None,
-            inherited: engine
-                .invocation_state(active.prepared.host_call_id)
-                .unwrap(),
+            capture: crate::InvocationCapture {
+                runtime: Arc::clone(&engine),
+                cancel: None,
+                state: engine
+                    .invocation_state(active.prepared.host_call_id)
+                    .unwrap(),
+                #[cfg(not(target_arch = "wasm32"))]
+                host: None,
+            },
         });
         drop(active);
         tokio::time::advance(std::time::Duration::from_secs(5)).await;

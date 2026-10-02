@@ -3,13 +3,14 @@
 use std::sync::Arc;
 
 use btel_types::{FunctionId, FunctionMetadata, FunctionMetadataTable};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::proto::{self, function_definition::Resolution};
 
 #[derive(Default)]
 pub(crate) struct FunctionDefinitions {
     table: Option<Arc<FunctionMetadataTable>>,
+    host: FxHashMap<FunctionId, FunctionMetadata>,
     // Functions whose metadata this recording already published.
     published: FxHashSet<FunctionId>,
 }
@@ -17,6 +18,12 @@ pub(crate) struct FunctionDefinitions {
 impl FunctionDefinitions {
     pub(crate) fn set_table(&mut self, table: Arc<FunctionMetadataTable>) {
         self.table = Some(table);
+    }
+
+    pub(crate) fn register_host(&mut self, metadata: &FunctionMetadata) {
+        self.host
+            .entry(metadata.function_id)
+            .or_insert_with(|| metadata.clone());
     }
 
     /// The definition to publish for a newly referenced function, if any.
@@ -27,7 +34,11 @@ impl FunctionDefinitions {
         if self.published.contains(&function) {
             return None;
         }
-        match self.table.as_ref().and_then(|table| table.get(function)) {
+        match self
+            .host
+            .get(&function)
+            .or_else(|| self.table.as_ref().and_then(|table| table.get(function)))
+        {
             Some(metadata) => {
                 self.published.insert(function);
                 Some(Resolution::Metadata(convert(metadata)))

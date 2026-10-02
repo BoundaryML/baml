@@ -368,3 +368,8 @@ function call_with_typed_throws_propagating(
 ) -> string throws ValidationError {
     callback(x)
 }
+
+// Marker defaults are resolved against this explicit callback-call patch.
+function call_configured_callback(callback: (int) -> int, x: int, options: trace.Options) -> int {
+    callback(x, $trace = options)
+}

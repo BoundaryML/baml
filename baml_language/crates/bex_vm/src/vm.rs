@@ -405,6 +405,7 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            pending_host_trace: None,
             entry_trace: None,
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
@@ -1631,6 +1632,7 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
+    pending_host_trace: Option<CallTrace>,
     entry_trace: Option<crate::telemetry::TraceConfig>,
     root_context: Context,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
@@ -2188,6 +2190,7 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            pending_host_trace: None,
             entry_trace: None,
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
@@ -6091,7 +6094,9 @@ impl BexVm {
         &mut self,
         closure_ptr: HeapPtr,
         user_args: Vec<Value>,
+        trace: Option<CallTrace>,
     ) -> VmExecState {
+        self.pending_host_trace = trace;
         // Read arity + return/throws types out of the closure, then drop the
         // borrow before allocating (a TLAB allocation may move/collect heap
         // objects).
@@ -6162,6 +6167,22 @@ impl BexVm {
                 Value::object(ret_ty_ptr),
                 Value::object(throws_ty_ptr),
             ],
+        }
+    }
+
+    pub fn take_host_call_options(&mut self) -> bex_vm_types::trace::HostCallOptions {
+        let Some(trace) = self.pending_host_trace.take() else {
+            return bex_vm_types::trace::HostCallOptions::default();
+        };
+        bex_vm_types::trace::HostCallOptions {
+            options: bex_vm_types::trace::TraceOptionsData {
+                mode: trace.telemetry.mode,
+                inputs: trace.telemetry.inputs,
+                output: trace.telemetry.output,
+                error: trace.telemetry.error,
+                context: trace.context,
+            },
+            reserved_id: trace.telemetry.reserved_id,
         }
     }
 
@@ -6252,13 +6273,8 @@ impl BexVm {
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
         if matches!(callee_object, Object::HostClosure(_)) {
-            if trace.is_some() {
-                return Err(
-                    self.trace_attachment_error("$trace is not supported on host functions")
-                );
-            }
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
-            let state = self.host_closure_call_sysop(callee_ptr, user_args);
+            let state = self.host_closure_call_sysop(callee_ptr, user_args, trace);
             return Ok(Some(state));
         }
 
@@ -8865,15 +8881,11 @@ impl BexVm {
                         let obj = self.get_object(callee_ptr);
 
                         if let Object::HostClosure(host_closure) = obj {
-                            if self.pending_call_trace.is_some() {
-                                return Err(self.trace_attachment_error(
-                                    "$trace is not supported on host functions",
-                                ));
-                            }
                             // Host-callable dispatch via a single-yield sys-op. See
                             // `Instruction::CallIndirect` / `host_closure_call_sysop`
                             // for the args-layout rationale.
                             let arity = host_closure.arity;
+                            let trace = self.pending_call_trace.take();
                             let _popped_callee = self.stack.ensure_pop();
                             let arity = match Self::recorded_call_layout(function, self.cur_pc) {
                                 Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
@@ -8900,7 +8912,7 @@ impl BexVm {
                                 .drain(StackIndex::from_raw(args_offset)..)
                                 .collect();
 
-                            let state = self.host_closure_call_sysop(callee_ptr, user_args);
+                            let state = self.host_closure_call_sysop(callee_ptr, user_args, trace);
                             return Ok(Some(state));
                         } else if let Object::BoundMethod(bm) = obj {
                             let func_obj = unsafe { bm.function.get() };

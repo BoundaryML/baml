@@ -1,14 +1,33 @@
 import type { BamlPanic } from './errors.js';
 import { AsyncResource, AsyncLocalStorage } from 'node:async_hooks';
-import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame } from './native.js';
+import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame, _hostCaptureRequested, _recordHostCallResult } from './native.js';
 
-import { Invocation } from './invocation.js';
-const invocationFrames = new AsyncLocalStorage<Invocation>();
-export function getCurrentInvocation(): Invocation | undefined { return invocationFrames.getStore(); }
-export function runWithInvocation<T>(active: Invocation, body: () => T): T { return invocationFrames.run(active, body); }
-export function currentInvocationState(): string | undefined {
-    const key = invocationFrames.getStore()?.state.key;
+import { ExecutionContext } from './execution_context.js';
+import { capture, failureOutcome, diagnostic } from './host_capture.js';
+const executionContexts = new AsyncLocalStorage<ExecutionContext>();
+export function getCurrentExecutionContext(): ExecutionContext | undefined { return executionContexts.getStore(); }
+export function runWithExecutionContext<T>(active: ExecutionContext, body: () => T): T { return executionContexts.run(active, body); }
+export function currentExecutionState(): string | undefined {
+    const key = executionContexts.getStore()?.state.key;
     return key === undefined ? undefined : ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString();
+}
+
+const hostAdoptions = new AsyncLocalStorage<{ identity?: object; consumed: boolean }>();
+export function consumeHostAdoption(identity: object): boolean {
+    const permit = hostAdoptions.getStore();
+    if (!permit || permit.identity !== identity || permit.consumed) return false;
+    permit.consumed = true;
+    return true;
+}
+
+export function observeHostCallbackResult(callId: number, error: boolean, value: unknown): void {
+    const execution = activeHostExecutions.get(callId);
+    if (!execution) return;
+    try {
+        const outcome = error ? failureOutcome(value) : 'ok';
+        const copied = _hostCaptureRequested(execution.lease, outcome) ? capture(value) : undefined;
+        _recordHostCallResult(execution.lease, outcome, copied);
+    } catch { diagnostic('host callback trace completion failed'); }
 }
 
 const callbackContexts = new Map<string, AsyncResource>();
@@ -36,7 +55,7 @@ const activeHostExecutions = new Map<number, {
 
 /** Each execution owns a child context through Promise settlement/cleanup. */
 export function runHostCallback(
-    callId: number, args: Buffer, callback: () => void | Promise<void>, lease?: object,
+    callId: number, args: Buffer, callback: () => void | Promise<void>, lease?: object, markerIdentity?: object,
 ): void | Promise<void> {
     if (!lease) { _discardHostCallArgs(args); return; }
     const origin = _startHostCallExecution(lease);
@@ -58,8 +77,8 @@ export function runHostCallback(
         };
         try {
             const [state, cancel] = _hostInvocationFrame(lease);
-            const frame = new Invocation(state, cancel);
-            const completion = resource.runInAsyncScope(() => invocationFrames.run(frame, callback));
+            const frame = new ExecutionContext(state, cancel);
+            const completion = resource.runInAsyncScope(() => executionContexts.run(frame, () => hostAdoptions.run({ identity: markerIdentity, consumed: false }, callback)));
             if (completion) {
                 execution.completion = completion.finally(finish);
                 return execution.completion;

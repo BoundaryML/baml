@@ -6,39 +6,8 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 // Private implementation. Generated SDK facades provide concrete stdlib types.
-import { _invocationContext, _watchInvocationCancellation, _isInvocationCancelled, cancelFunctionCall } from './native.js';
-import { decodeOutboundValue, invokeTarget } from './proto.js';
-import { getCurrentInvocation, runWithInvocation } from './platform.js';
-export class Invocation {
-    state;
-    cancel;
-    signal;
-    // Both JS and native owners live exactly as long as this captured frame.
-    watcher;
-    notify;
-    constructor(state, cancel) {
-        this.state = state;
-        this.cancel = decodeOutboundValue(cancel);
-        const controller = new AbortController();
-        this.signal = controller.signal;
-        this.notify = () => controller.abort();
-        this.watcher = _watchInvocationCancellation(state, this.notify);
-        if (_isInvocationCancelled(state))
-            this.notify();
-    }
-    run(body) { return runWithInvocation(this, body); }
-}
-export function current() { return getCurrentInvocation() ?? null; }
-export function currentContext() { return decodeOutboundValue(_invocationContext(current()?.state)); }
-export async function currentContextAsync() { return currentContext(); }
-export function withInvocation(body) {
-    return (...args) => {
-        const active = current();
-        if (!active)
-            throw new Error('withInvocation must be called by the BAML host dispatcher');
-        return body(active, ...args);
-    };
-}
+import { cancelFunctionCall } from './native.js';
+import { invokeTarget } from './proto.js';
 export function invoke(target, args, options) {
     return invokeTarget(target, args, options, false);
 }

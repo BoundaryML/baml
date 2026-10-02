@@ -74,6 +74,18 @@ pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<Cancellation
     Some(state.sources().collect())
 }
 
+/// The same native payload used by generated `CancelToken` instances, for host
+/// frames that need a projection without creating a VM invocation.
+pub fn projected_cancel_token_data(
+    own: CancellationToken,
+    inputs: Vec<CancellationSource>,
+) -> Arc<dyn std::any::Any + Send + Sync> {
+    Arc::new(CancelTokenState {
+        own,
+        inputs: inputs.into_boxed_slice(),
+    })
+}
+
 /// A concrete generated token observing the effective task, including its
 /// deadline. Its own authority cancels that task, never its input sources.
 pub fn alloc_projected_cancel_token(

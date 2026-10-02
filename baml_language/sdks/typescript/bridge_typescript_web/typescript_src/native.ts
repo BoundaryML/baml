@@ -449,7 +449,8 @@ export function registerHostValueReleaseCallback(callback: (key: HandleKey) => v
   hostRelease = callback;
   registerWebHostValueReleaseCallback((key: bigint) => hostRelease?.(keyFromBigint(key)));
 }
-export function registerHostCallable(callback: (callId: number, args: Uint8Array, execution?: object) => void): HandleKey {
+export function registerHostCallable(callback: (callId: number, args: Uint8Array, execution?: object) => void, marker?: BamlHandle): HandleKey {
+    if (marker) throw new TypeError("host instrumentation is not supported in Web");
     return keyFromBigint(registerWebHostCallable((bytes: Uint8Array) => {
         const wire = baml_bridge.cffi.v1.HostInvocation.decode(bytes);
         const execution = { state: new BamlHandle(keyFromBigint(BigInt(wire.effectiveState.toString())), 19), cancel: baml_bridge.cffi.v1.BamlOutboundValue.encode(wire.cancel!).finish(), cancelled: false };

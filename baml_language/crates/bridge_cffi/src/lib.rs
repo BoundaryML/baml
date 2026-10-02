@@ -560,3 +560,6 @@ mod generated_metadata_tests {
         assert!(wrong_toolchain_type.contains("123"));
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host_instrumentation;

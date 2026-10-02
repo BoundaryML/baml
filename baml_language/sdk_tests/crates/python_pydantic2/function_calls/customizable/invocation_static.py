@@ -2,7 +2,7 @@
 
 from typing_extensions import assert_type
 
-from baml_sdk import BamlOptions, OptBox, hello_world, invocation, optional_args_probe, trace
+from baml_sdk import BamlOptions, OptBox, hello_world, optional_args_probe, trace
 from baml_sdk import host_callable_tests as baml
 from baml_sdk.baml.spawn import CancelToken
 
@@ -30,7 +30,7 @@ baml.call_callback_with_optional_args_all_unset(ordinary_callback, 5, _baml=opti
 
 async def async_surfaces() -> None:
     assert_type(await add.call_async(4, _baml=options), int)
-    active = invocation.current()
+    active = trace.current_cancel_token()
     if active is not None:
-        assert_type(active.cancel, CancelToken)
-        active.cancel.cancel()
+        assert_type(active, CancelToken)
+        active.cancel()

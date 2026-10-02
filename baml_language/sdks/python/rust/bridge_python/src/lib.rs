@@ -5,6 +5,7 @@
 
 mod callback_dispatch;
 mod errors;
+mod host_capture;
 pub mod host_value;
 mod invocation;
 mod media;
@@ -79,6 +80,10 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<py_handle::BamlPyHandle>()?;
     m.add_wrapped(wrap_pyfunction!(invocation::_trace_selection))?;
     m.add_wrapped(wrap_pyfunction!(invocation::_invocation_context))?;
+    m.add_class::<invocation::_HostExecution>()?;
+    m.add_wrapped(wrap_pyfunction!(invocation::_validate_host_options))?;
+    m.add_wrapped(wrap_pyfunction!(invocation::_begin_host_invocation))?;
+    m.add_wrapped(wrap_pyfunction!(invocation::_define_host_marker))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_heap_handle))?;

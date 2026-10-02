@@ -27,7 +27,7 @@
 use std::{
     collections::HashMap,
     sync::{
-        RwLock,
+        Arc, RwLock,
         atomic::{AtomicU32, Ordering},
     },
 };
@@ -132,6 +132,7 @@ struct InflightCall {
     // Includes the owning invocation context and original argument/callable
     // owners. Wire host keys are borrowed and cannot keep those owners alive.
     resources: Option<Box<dyn Send + Sync>>,
+    capture: Option<Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 static TABLE: Lazy<RwLock<HashMap<u32, InflightCall>>> = Lazy::new(|| RwLock::new(HashMap::new()));
@@ -190,6 +191,17 @@ pub fn insert_with_resources(
     completion: CompletionHandle,
     resources: Box<dyn Send + Sync>,
 ) -> bool {
+    insert_with_capture(call_id, origin, completion, resources, None)
+}
+
+#[must_use]
+pub fn insert_with_capture(
+    call_id: u32,
+    origin: CallId,
+    completion: CompletionHandle,
+    resources: Box<dyn Send + Sync>,
+    capture: Option<Arc<dyn std::any::Any + Send + Sync>>,
+) -> bool {
     let mut table = TABLE.write().unwrap();
     let collision = call_id == 0 || table.contains_key(&call_id);
     if collision {
@@ -216,9 +228,14 @@ pub fn insert_with_resources(
             execution: None,
             abi_execution: false,
             resources: Some(resources),
+            capture,
         },
     );
     true
+}
+
+pub fn execution_capture(call_id: u32) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+    TABLE.read().unwrap().get(&call_id)?.capture.clone()
 }
 
 /// Read the issuing SDK call while a dispatch is still in flight. Bridges use
@@ -322,7 +339,7 @@ pub fn finish_execution(call_id: u32) -> bool {
         } else {
             None
         };
-        let resources = call.resources.take();
+        let resources = (call.resources.take(), call.capture.take());
         let hook = call.on_cancel.take();
         let removed = if call.completion.is_none() {
             table.remove(&call_id)
@@ -540,6 +557,28 @@ mod tests {
         assert_eq!(execution_origin(call_id), None);
         assert!(!finish_execution(call_id));
         assert!(!contains(call_id));
+    }
+
+    #[test]
+    fn callback_owner_survives_retired_waiter_and_drops_outside_lock_at_exit() {
+        let (_result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let call_id = next_call_id();
+        let exits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        assert!(insert_with_capture(
+            call_id,
+            CallId(123),
+            completion,
+            Box::new(()),
+            Some(Arc::new(ExitProbe(exits.clone())))
+        ));
+        let execution = retain_execution(call_id).unwrap();
+        assert!(start_execution(call_id).is_some());
+        drop(InflightGuard::new(call_id));
+        assert!(execution_capture(call_id).is_some());
+        assert_eq!(exits.load(Ordering::SeqCst), 0);
+        drop(execution);
+        assert!(execution_capture(call_id).is_none());
+        assert_eq!(exits.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

@@ -148,7 +148,12 @@ impl io::IoNamespaceHost for NativeSysOps {
             });
         };
         let mut frame = bridge_ctypes::OwnedHostInvocation(
-            match bridge_ctypes::build_host_invocation(capture, host_arc.key, call_id, encoded) {
+            match bridge_ctypes::build_host_invocation(
+                Arc::clone(&capture),
+                host_arc.key,
+                call_id,
+                encoded,
+            ) {
                 Ok(envelope) => envelope,
                 Err(error) => {
                     return SysOpOutput::err(VmInternalError::BridgeFailure {
@@ -167,11 +172,12 @@ impl io::IoNamespaceHost for NativeSysOps {
         // already-failed call) and must NOT build an `InflightGuard` (its drop
         // would evict the other call's entry). `result` already carries the
         // collision error, so the `match result` below returns it.
-        let guard = if host_dispatch::insert_with_resources(
+        let guard = if host_dispatch::insert_with_capture(
             call_id,
             origin_call_id,
             completion,
             Box::new((ctx.clone(), host_arc, positional, optional)),
+            Some(capture),
         ) {
             // The sysop future owns result delivery. If cancelled, its guard
             // retires the waiter; a bridge execution lease independently keeps

@@ -304,7 +304,7 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
 
 def new_function_call() -> builtins.int: ...
 
-def register_host_callable(callable: typing.Any) -> builtins.int:
+def register_host_callable(callable: typing.Any, marker: typing.Optional[BamlPyHandle] = None) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
 
@@ -341,3 +341,13 @@ def shutdown_runtime(timeout: typing.Optional[builtins.float] = None) -> None:
     work does, as Python's own exit waits for non-daemon threads. Either way,
     Ctrl+C ends it with `KeyboardInterrupt`.
     """
+
+
+class _HostExecution:
+    def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
+
+def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
+
+def _validate_host_options(options: typing.Optional[BamlPyHandle]) -> tuple[builtins.bool, builtins.bool, builtins.bool]: ...
+
+def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> BamlPyHandle: ...

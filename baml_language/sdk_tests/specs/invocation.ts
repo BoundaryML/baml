@@ -10,9 +10,12 @@
 import assert from "node:assert/strict";
 import { BamlAbortError, BamlCancelledError } from "@boundaryml/baml-bridge";
 import {
-  type BamlOptions, OptBox, hello_world, hello_world_async, invocation, invoke,
+  type BamlOptions, OptBox, hello_world, hello_world_async,
   optional_args_probe, optional_args_probe_async, trace,
 } from "./baml_sdk/index.js";
+import { invoke } from "./baml_sdk/experimental.js";
+// Private carrier access is for execution-context conformance only.
+import { _currentExecutionContext as currentExecutionContext, _withExecutionContext as withExecutionContext } from "@boundaryml/baml-bridge";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
 import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 
@@ -129,11 +132,11 @@ export async function composite_token_observes_every_source() {
 export async function child_cancellation_does_not_cancel_input() {
   const upstream = CancelToken.new();
   const callback = (value: number) => {
-    const active = invocation.current();
+    const active = currentExecutionContext();
     assert.ok(active);
-    active.cancel.cancel();
+    active.run(() => trace.current_cancel_token()!).cancel();
     // Exact token operations remain serviceable under ambient cancellation.
-    assert.equal(active.cancel.is_cancelled(), true);
+    assert.equal(active.run(() => trace.current_cancel_token()!).is_cancelled(), true);
     assert.equal(upstream.is_cancelled(), false);
     return value;
   };
@@ -171,34 +174,34 @@ export async function concurrent_reservation_attaches_once() {
 
 // invocation_callbacks
 export async function callback_frame_and_reentry() {
-  assert.equal(invocation.current(), null);
+  assert.equal(trace.current_cancel_token(), null);
   const upstream = CancelToken.new();
-  const frames: NonNullable<ReturnType<typeof invocation.current>>[] = [];
+  const frames: NonNullable<ReturnType<typeof currentExecutionContext>>[] = [];
   const leaf = async (value: number) => {
-    const active = invocation.current();
+    const active = currentExecutionContext();
     assert.ok(active);
-    assert.equal(active.cancel.is_cancelled(), false);
+    assert.equal(active.run(() => trace.current_cancel_token()!).is_cancelled(), false);
     // Re-entry has a fresh execution identity; wrapper identity is unspecified.
     return value + 1;
   };
   const callback = async (value: number) => {
-    const active = invocation.current();
+    const active = currentExecutionContext();
     assert.ok(active);
     frames.push(active);
     await Promise.resolve();
-    assert.ok(invocation.current());
-    assert.equal(invocation.current()!.cancel.is_cancelled(), false);
+    assert.ok(trace.current_cancel_token());
+    assert.equal(trace.current_cancel_token()!.is_cancelled(), false);
     return await baml.call_int_callback_async(leaf, value, { $baml: {} });
   };
   assert.equal(await baml.call_int_callback_async(callback, 6, { $baml: { cancel: upstream } }), 7);
-  assert.equal(invocation.current(), null);
+  assert.equal(trace.current_cancel_token(), null);
   assert.equal(upstream.is_cancelled(), false);
-  // Node ambient carrier; Web must port this through withInvocation + run.
+  // Node ambient carrier; Web must port this through the private execution carrier.
 }
 
 export async function null_controls_preserve_inherited_context() {
   const callback = async (value: number) => await baml.call_int_callback_async(
-    () => trace.currentContext().metadata.request as number,
+    () => trace.current_context().metadata.request as number,
     value,
     { $baml: { trace: null, cancel: null, timeoutMs: null } },
   );
@@ -215,7 +218,7 @@ export async function configuration_snapshot_is_not_live() {
   const callback = async (value: number) => {
     opts.trace = trace.context({ metadata: { request: 99 } });
     await Promise.resolve();
-    assert.equal(trace.currentContext().metadata.request, 7);
+    assert.equal(trace.current_context().metadata.request, 7);
     return value;
   };
   assert.equal(await baml.call_int_callback_async(callback, 1, { $baml: opts }), 1);
@@ -233,7 +236,7 @@ export async function live_token_cancels_after_admission() {
   const exited = new Promise<void>(resolve => { markExited = resolve; });
   const cleanupGate = new Promise<void>(resolve => { releaseCleanup = resolve; });
   const callback = async (value: number) => {
-    const active = invocation.current();
+    const active = currentExecutionContext();
     assert.ok(active);
     markStarted();
     try {
@@ -265,13 +268,13 @@ export async function retained_effective_token_stays_live_after_callback() {
   const source = CancelToken.new();
   const retained: CancelToken[] = [];
   const callback = (value: number) => {
-    const active = invocation.current();
+    const active = currentExecutionContext();
     assert.ok(active);
-    retained.push(active.cancel);
+    retained.push(active.run(() => trace.current_cancel_token()!));
     return value;
   };
   assert.equal(await baml.call_int_callback_async(callback, 1, { $baml: { cancel: source } }), 1);
-  assert.equal(invocation.current(), null);
+  assert.equal(trace.current_cancel_token(), null);
   source.cancel();
   assert.equal(retained[0]!.is_cancelled(), true);
   // Keeping the token does not restore the frame or callback completion ID.
@@ -297,7 +300,7 @@ export function sync_callback_entry_rejected_typescript_only() {
 }
 
 export async function explicit_callback_carrier_typescript_only() {
-  const callback = invocation.withInvocation(async (active, value: number) => {
+  const callback = withExecutionContext(async (active, value: number) => {
     await Promise.resolve();
     return await active.run(() => hello_world_async({ $baml: {} })).then(() => value);
   });

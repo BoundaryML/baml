@@ -267,8 +267,18 @@ static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Arc<DispatchTsfn>>> =
 /// The `Function` is converted into a `ThreadsafeFunction` so it can outlive
 /// the napi call scope and be invoked from any thread (the engine's tokio
 /// runtime calls into this entry point from a worker thread).
-#[napi(ts_args_type = "callable: (callId: number, argsBytes: Buffer, execution: object) => void")]
-pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi::Result<HandleKey> {
+#[napi(
+    ts_args_type = "callable: (callId: number, argsBytes: Buffer, execution: object) => void, marker?: BamlHandle"
+)]
+pub fn register_host_callable(
+    callable: Function<'_, DispatchArgs, ()>,
+    marker: Option<&crate::handle::BamlHandle>,
+) -> napi::Result<HandleKey> {
+    let descriptor = bridge_cffi::host_instrumentation::registration_marker(
+        marker.map_or(0, crate::handle::BamlHandle::key_u64),
+        "typescript",
+    )
+    .map_err(crate::errors::bridge_error_to_napi)?;
     let tsfn: DispatchTsfn = callable
         .build_threadsafe_function()
         .callee_handled::<false>()
@@ -277,6 +287,7 @@ pub fn register_host_callable(callable: Function<'_, DispatchArgs, ()>) -> napi:
         .max_queue_size::<DISPATCH_QUEUE_SIZE>()
         .build()?;
     let key = REGISTRY.insert(Arc::new(tsfn));
+    bex_project::HostValueArc::register_annotation(key, descriptor);
     Ok(HandleKey::from_u64(key))
 }
 
@@ -308,6 +319,7 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
 /// engine-driven release path ([`host_release_callback`]) and the encoder's
 /// rollback path ([`release_host_callable`]).
 fn drop_registry_entry(host_value_key: u64) {
+    bex_project::HostValueArc::discard_annotation(host_value_key);
     let popped: Option<Arc<DispatchTsfn>> = match REGISTRY.lock() {
         Ok(mut t) => t.remove(&host_value_key),
         Err(e) => {
@@ -641,4 +653,41 @@ fn send_dispatch_error_tsfn_status(call_id: u32, status: Status) {
             },
         ),
     );
+}
+
+#[napi(
+    js_name = "_hostCaptureRequested",
+    ts_args_type = "execution: object, outcome: string"
+)]
+pub fn host_capture_requested(execution: &External<HostExecutionLease>, outcome: String) -> bool {
+    let id = execution.0.lock().unwrap().call_id;
+    let outcome = if outcome == "ok" {
+        btel_types::InvocationOutcome::Ok
+    } else {
+        btel_types::InvocationOutcome::Errored
+    };
+    bridge_cffi::host_instrumentation::callback(id).is_some_and(|owner| owner.wants_value(outcome))
+}
+
+#[napi(
+    js_name = "_recordHostCallResult",
+    ts_args_type = "execution: object, outcome: string, value?: string"
+)]
+pub fn record_host_call_result(
+    execution: &External<HostExecutionLease>,
+    outcome: String,
+    value: Option<String>,
+) {
+    let id = execution.0.lock().unwrap().call_id;
+    let outcome = match outcome.as_str() {
+        "ok" => btel_types::InvocationOutcome::Ok,
+        "cancelled" => btel_types::InvocationOutcome::Cancelled,
+        _ => btel_types::InvocationOutcome::Errored,
+    };
+    if let Some(owner) = bridge_cffi::host_instrumentation::callback(id) {
+        let value = value
+            .filter(|_| owner.wants_value(outcome))
+            .map(|value| crate::host_instrumentation::capture(&value));
+        owner.observe(outcome, value);
+    }
 }
