@@ -53,7 +53,8 @@ content within the authorized organization, not merely an existing S3 object.
 Each surviving target is an ordinary HTTP PUT containing a
 `btel.cloud.v1.CloudUploadEnvelope` from `proto/cloud.proto`, format version 1.
 It embeds the exact recording bytes and the canonical CAS v3 blobs. The blob
-SHA-256 is an integrity check separate from the snapshot identity.
+SHA-256 is an integrity check separate from the snapshot identity. The body is
+sent with a fixed `Content-Length`, never chunk-encoded.
 
 Snapshot/hash format v3 keeps BEP-075's attribute-free type representation and
 numbers each blob's objects in first-reference order, so a blob has exactly one
@@ -135,8 +136,8 @@ and a capture with nothing new to offer is released at once. A window seals at
 a record boundary when it reaches the recording-byte target, 16 queued blobs,
 or 4 MiB of retained capture storage. A single capture may exceed a soft
 target. Each sealed file takes the head of the queue: at most one plan's worth
-of blobs, cut short where their bytes pass a quarter of delivery's CAS
-reservation, and always at least one blob. While 16 or more blobs still wait,
+of blobs, cut short where the bytes their upload bodies buffer pass a quarter
+of delivery's CAS reservation, and always at least one blob. While 16 or more blobs still wait,
 or more than one file takes, further files are sealed to carry them, and at
 the end the last file takes what remains. The non-sliding timer starts at the
 first event, using `RecordingConfig::flush_interval_duration`; idle expiry and
@@ -144,14 +145,18 @@ explicit shutdown also seal pending data.
 
 Nothing is refused for its size. A blob is uploaded however large it is: the
 only size a capture is cut for is `btel_settings::snapshot::MAX_LEAF_BYTES`,
-when it is made. Upload bodies are built in memory, so a blob costs its
-capture and twice its length while its body is encoded.
+when it is made. An upload body is written field by field, so a blob is
+buffered once, beside its capture. A blob that is one string of 2 KiB or more
+is not buffered at all: its content is sent from the memory that already holds
+it, and that string is let go when its upload ends. The window cut and the
+CAS reservation count only what is buffered.
 
 Sealed windows are staged until processor input chunks have been recycled.
 The queue and staged windows together retain at most 32 captures and 8 MiB of
 capture storage by default. A blob that is one string holds its own content:
-it is let go as soon as the server reports it stored or its upload body is
-built, whatever becomes of the rest of its capture. The rest of a capture is
+it is let go as soon as the server reports it stored, or else when its upload
+ends (a short one, once it has been copied into its body), whatever becomes of
+the rest of its capture. The rest of a capture is
 held until the last blob written from it leaves, and a capture that is one
 string is not held at all.
 Before a capture that does not fit, the publisher sends what it holds,

@@ -387,10 +387,11 @@ impl CloudPublisher {
     }
 
     /// How many of the queue's blobs the next file takes: a plan's worth,
-    /// cut short where their bytes pass a quarter of delivery's CAS
-    /// reservation, which a blob is charged against twice over while its
-    /// body is built, and again in its capture. The first blob always goes,
-    /// whatever its size.
+    /// cut short where the bytes their bodies buffer pass a quarter of
+    /// delivery's CAS reservation, which such a blob is charged against in
+    /// its body and again in its capture. A string sent from where it is
+    /// held buffers next to nothing, so any number of those go together. The
+    /// first blob always goes, whatever its size.
     fn window_len(&self) -> usize {
         let config = self.delivery.config();
         let limit = (config.cas_reserved_bytes / 4) as u64;
@@ -400,7 +401,11 @@ impl CloudPublisher {
             .take(config.max_candidates)
             .enumerate()
             .take_while(|(index, queued)| {
-                bytes = bytes.saturating_add(queued.encoded_len);
+                let leaf = match &queued.held {
+                    Held::Leaf(leaf) => Some(leaf),
+                    Held::Kept { .. } => None,
+                };
+                bytes = bytes.saturating_add(crate::body::buffered_len(leaf, queued.encoded_len));
                 *index == 0 || bytes <= limit
             })
             .count()
@@ -1148,7 +1153,7 @@ mod tests {
     }
 
     #[test]
-    fn a_window_is_cut_by_bytes_and_always_takes_a_blob() {
+    fn a_window_is_cut_by_the_bytes_its_bodies_buffer_and_always_takes_a_blob() {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
                 allow_http: true,
@@ -1167,9 +1172,29 @@ mod tests {
         )
         .unwrap();
         let pool = SnapshotPool::new(2, Limits::default());
-        let snapshot = cut_strings(&pool, &[600, 600, 3000, 100, 100]);
+        // Two long strings, then byte arrays, each a blob of its own.
+        let mut b = pool.try_acquire().unwrap();
+        let ty = b.leaves().ty(btel_snapshot::OwnedType::unknown());
+        let mut values: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|letter| {
+                b.leaves()
+                    .string_value(&letter.repeat(10_000).as_str().into())
+            })
+            .collect();
+        for (fill, length) in [600, 600, 3000, 100].into_iter().enumerate() {
+            let bytes = b.bytes(&vec![u8::try_from(fill).unwrap(); length]);
+            values.push(SnapshotValue::Object(b.leaves().object(bytes).unwrap()));
+        }
+        let list = b.list(ty, values.into_iter(), |_, value| value);
+        let list = b.leaves().object(list).unwrap();
+        let mut shaper = Shaper::new(ShapePolicy::Split {
+            unit_bytes: 1 << 20,
+            leaf_bytes: 64,
+        });
+        let snapshot = b.finish(SnapshotValue::Object(list), &mut shaper);
         let lengths: Vec<_> = snapshot.blobs().map(|blob| blob.encoded_len()).collect();
-        assert_eq!(lengths.len(), 6);
+        assert_eq!(lengths.len(), 7);
         offer(&mut publisher, snapshot);
         assert!(publisher.staged.is_empty());
         let mut windows = Vec::new();
@@ -1183,13 +1208,16 @@ mod tests {
                     .collect::<Vec<_>>(),
             );
         }
-        // Two blobs that do not fit together, one too large for any window,
-        // and the rest in one.
+        // The strings are sent from where they are held, so both go with
+        // the first array, far past the limit in length. Then arrays that do
+        // not fit together, one too large for any window, and the rest.
         assert_eq!(
             windows.iter().map(Vec::len).collect::<Vec<_>>(),
-            [1, 1, 1, 3]
+            [3, 1, 1, 2]
         );
         assert_eq!(windows.concat(), lengths);
+        assert!(windows[0][..2].iter().all(|length| *length > 10_000));
+        assert!(windows[0][2] + windows[1][0] > 1024);
         assert!(windows[2][0] > 1024);
         assert!(windows[3].iter().sum::<u64>() <= 1024);
         assert!(publisher.owners.is_empty());

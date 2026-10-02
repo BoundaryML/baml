@@ -11,15 +11,14 @@ use btel_recorder::SealedFile;
 use btel_snapshot::{BlobIndex, BlobScratch, CasId, Leaf, Snapshot, Split, Structure};
 use bytes::Bytes;
 use futures::FutureExt;
-use prost::Message;
 use reqwest::{Client, StatusCode, Url};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, mpsc, watch};
 
 use crate::{
+    body::{self, Body},
     liveness::{Heartbeat, HeartbeatError},
     plan::{validate_proposal, validate_response, validate_url},
-    proto::{CasObject, CloudUploadEnvelope},
     wire::{
         CasCandidate, CasSizeClass, Disposition, PrepareUploadsRequest, PrepareUploadsResponse,
         ProducerState, ProposedUploadTarget, RecordingDescriptor, UploadKind, UploadTarget,
@@ -282,6 +281,15 @@ pub(crate) struct Candidate {
     pub encoded_len: u64,
     pub source: Source,
 }
+impl Candidate {
+    /// How many of its bytes an upload body holds in a buffer of its own.
+    fn buffered_len(&self) -> u64 {
+        match &self.source {
+            Source::Leaf(leaf) => body::buffered_len(Some(leaf), self.encoded_len),
+            Source::Kept { .. } => body::buffered_len(None, self.encoded_len),
+        }
+    }
+}
 
 /// A file's candidates and the captures some of them are written from. A
 /// string blob holds its own content and is let go on its own. Several
@@ -518,8 +526,8 @@ impl BcsDeliveryHandle {
             state: None,
         };
         validate_proposal(&request)?;
-        // Envelopes coexist with their encoded body during prost encoding. Response
-        // JSON allocations and parsed strings are bounded conservatively as control bytes.
+        // Response JSON allocations and parsed strings are bounded
+        // conservatively as control bytes.
         let control = config
             .max_response_bytes
             .checked_mul(64)
@@ -558,16 +566,17 @@ impl BcsDeliveryHandle {
                     .ok_or(DeliveryError::Capacity)
             },
         )?;
+        // The file is held until its body, which copies it once, is built.
         let recording = config
             .max_recording_body_bytes
-            .checked_mul(2)
-            .and_then(|v| v.checked_add(file.retained_bytes()))
+            .checked_add(file.retained_bytes())
             .and_then(|v| v.checked_add(control))
             .and_then(|v| v.checked_add(proposal_bytes))
             .and_then(|v| v.checked_add(metadata_bytes))
             .ok_or(DeliveryError::Capacity)?;
-        // A CAS body is as long as its blobs, and coexists with its envelope
-        // while that is encoded. Each body may hold its lane for its window.
+        // A CAS body buffers its blobs once, all but the strings it sends
+        // from where they are held. Each body may hold its lane for its
+        // window, which its whole length decides.
         let mut bodies = 0_usize;
         let mut recording_window = Duration::ZERO;
         let mut cas_window = Duration::ZERO;
@@ -582,7 +591,9 @@ impl BcsDeliveryHandle {
                 }
                 UploadKind::CasBatch | UploadKind::CasObject => {
                     let blobs = blobs.ok_or(DeliveryError::Capacity)?;
-                    bodies = bodies.checked_add(blobs).ok_or(DeliveryError::Capacity)?;
+                    bodies = buffered_bytes(candidates, &target.candidate_indices)
+                        .and_then(|buffered| bodies.checked_add(buffered))
+                        .ok_or(DeliveryError::Capacity)?;
                     cas_window = config
                         .put_window(blobs)
                         .and_then(|held| cas_window.checked_add(held))
@@ -591,8 +602,7 @@ impl BcsDeliveryHandle {
             }
         }
         let cas = bodies
-            .checked_mul(2)
-            .and_then(|v| v.checked_add(retained))
+            .checked_add(retained)
             .ok_or(DeliveryError::Capacity)?;
         if recording > config.recording_reserved_bytes {
             return Err(DeliveryError::Capacity);
@@ -788,6 +798,16 @@ fn blob_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
     })
 }
 
+/// As [`blob_bytes`], counting only what a body buffers.
+fn buffered_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
+    indices.iter().try_fold(0_usize, |sum, &index| {
+        usize::try_from(candidates[index as usize].buffered_len())
+            .ok()?
+            .checked_add(CAS_OBJECT_OVERHEAD_BYTES)?
+            .checked_add(sum)
+    })
+}
+
 struct LimitedWriter {
     bytes: Vec<u8>,
     limit: usize,
@@ -799,15 +819,6 @@ impl LimitedWriter {
             bytes: Vec::new(),
             limit,
         }
-    }
-    /// For exactly `len` bytes, allocated at once. A length that cannot be
-    /// allocated is a loss, not an abort.
-    fn exact(len: usize) -> Result<Self, DeliveryError> {
-        let mut bytes = Vec::new();
-        bytes
-            .try_reserve_exact(len)
-            .map_err(|_| DeliveryError::Capacity)?;
-        Ok(Self { bytes, limit: len })
     }
 }
 
@@ -922,7 +933,7 @@ async fn put(
     client: &Client,
     config: &DeliveryConfig,
     target: UploadTarget,
-    body: Bytes,
+    body: Body,
     plan_expiry: u64,
 ) -> Result<(), DeliveryError> {
     let expiry = plan_expiry.min(target.expires_at_unix_ms);
@@ -938,6 +949,11 @@ async fn put(
     headers.entry(reqwest::header::CONTENT_TYPE).or_insert(
         reqwest::header::HeaderValue::from_static("application/x-protobuf"),
     );
+    // The body goes out in chunks of known total length, not chunk-encoded.
+    headers.insert(
+        reqwest::header::CONTENT_LENGTH,
+        reqwest::header::HeaderValue::from(body.len() as u64),
+    );
     for attempt in 0..config.max_attempts {
         let remaining = expiry
             .checked_sub(now_ms()?)
@@ -951,7 +967,11 @@ async fn put(
                     .min(Duration::from_millis(remaining)),
             )
             .headers(headers.clone())
-            .body(body.clone());
+            .body(reqwest::Body::wrap_stream(futures::stream::iter(
+                body.chunks()
+                    .into_iter()
+                    .map(Ok::<Bytes, std::convert::Infallible>),
+            )));
         match request.send().await {
             Ok(response) if response.status().is_success() => return Ok(()),
             Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
@@ -974,9 +994,9 @@ async fn put(
 }
 
 struct Prepared {
-    recording: Option<(UploadTarget, Bytes)>,
+    recording: Option<(UploadTarget, Body)>,
     recording_sequence: u64,
-    cas: Vec<(UploadTarget, Bytes)>,
+    cas: Vec<(UploadTarget, Body)>,
     expiry: u64,
     reservation: Reservation,
 }
@@ -1027,8 +1047,8 @@ async fn assemble(
     let Window {
         owners, candidates, ..
     } = window;
-    // A candidate serializes at most once; an available one never does, and
-    // a string the server has is let go here.
+    // A candidate goes into at most one body; an available one into none,
+    // and a string the server has is let go here.
     let mut sources: Vec<Option<Source>> = Vec::with_capacity(candidates.len());
     let mut heads = Vec::with_capacity(candidates.len());
     for candidate in candidates {
@@ -1058,54 +1078,20 @@ async fn assemble(
                 UploadKind::Recording => config.max_recording_body_bytes,
                 UploadKind::CasBatch | UploadKind::CasObject => usize::MAX,
             };
-            let mut envelope = CloudUploadEnvelope {
-                format_version: 1,
-                plan_id: response.plan_id.clone(),
-                upload_id: target.upload_id.clone(),
-                recording_file: (target.kind == UploadKind::Recording)
-                    .then(|| file.bytes().to_vec()),
-                cas_objects: Vec::new(),
-            };
-            if envelope.encoded_len() > limit {
-                return Err(DeliveryError::Capacity);
-            }
+            let mut writer = body::Writer::new(&body::Head {
+                plan_id: &response.plan_id,
+                upload_id: &target.upload_id,
+                recording_file: (target.kind == UploadKind::Recording).then(|| file.bytes()),
+                limit,
+            })?;
             for &index in &target.candidate_indices {
                 let (id, encoded_len) = heads[index as usize];
                 let source = sources[index as usize]
                     .take()
                     .ok_or(DeliveryError::InvalidPlan)?;
-                let len = usize::try_from(encoded_len)
-                    .ok()
-                    .filter(|&len| len <= limit - envelope.encoded_len())
-                    .ok_or(DeliveryError::Capacity)?;
-                let mut writer = LimitedWriter::exact(len)?;
-                // A string is let go as soon as its blob is written.
-                match source {
-                    Source::Leaf(leaf) => leaf.write(&mut writer),
-                    Source::Kept { owner, blob } => owners[owner as usize]
-                        .blob(blob)
-                        .write(&mut scratch, &mut writer),
-                }
-                .map_err(|_| DeliveryError::Encoding)?;
-                let object = CasObject {
-                    snapshot_id: id.as_bytes().to_vec(),
-                    snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
-                    blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
-                    blob: writer.bytes,
-                };
-                envelope.cas_objects.push(object);
-                if envelope.encoded_len() > limit {
-                    return Err(DeliveryError::Capacity);
-                }
+                writer.blob(id, encoded_len, source, &owners, &mut scratch)?;
             }
-            let mut body = Vec::new();
-            body.try_reserve_exact(envelope.encoded_len())
-                .map_err(|_| DeliveryError::Capacity)?;
-            envelope
-                .encode(&mut body)
-                .map_err(|_| DeliveryError::Encoding)?;
-            drop(envelope);
-            Ok(Bytes::from(body))
+            Ok(writer.finish())
         })();
         let body = match body {
             Ok(body) => body,
@@ -1125,7 +1111,8 @@ async fn assemble(
             cas.push((target, body));
         }
     }
-    // Every candidate was serialized or skipped: the captures can go.
+    // Every candidate is in a body or skipped: the captures can go. A long
+    // string stays with the body that sends it.
     drop(sources);
     drop(owners);
     let recording_sequence = file.sequence().get();

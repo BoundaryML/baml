@@ -1452,7 +1452,7 @@ async fn an_upload_url_must_outlive_the_window_of_its_body() {
 }
 
 #[tokio::test]
-async fn a_string_blob_is_let_go_before_the_uploads_and_the_capture_after_assembly() {
+async fn a_long_string_is_held_until_its_upload_ends_and_the_capture_only_until_assembly() {
     let server = MockServer::start().await;
     let base = server.uri();
     // The server has the first string already.
@@ -1482,7 +1482,7 @@ async fn a_string_blob_is_let_go_before_the_uploads_and_the_capture_after_assemb
     settings.retry_delay = Duration::from_millis(10);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let pool = SnapshotPool::new(1, Limits::default());
-    let texts = ["a", "b"].map(|letter| btel_snapshot::BexStr::from(letter.repeat(200)));
+    let texts = ["a", "b"].map(|letter| btel_snapshot::BexStr::from(letter.repeat(10_000)));
     let backing = texts.each_ref().map(|text| match text {
         btel_snapshot::BexStr::Flat(flat) => Arc::downgrade(flat),
         other => panic!("expected a heap-backed string, got {other:?}"),
@@ -1500,6 +1500,13 @@ async fn a_string_blob_is_let_go_before_the_uploads_and_the_capture_after_assemb
     let snapshot = b.finish(SnapshotValue::Object(list), &mut shaper);
     drop(texts);
     assert_eq!(snapshot.blobs().len(), 3);
+    let mut wanted = Vec::new();
+    snapshot
+        .blobs()
+        .nth(1)
+        .unwrap()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut wanted)
+        .unwrap();
     delivery
         .handle()
         .try_submit(
@@ -1517,11 +1524,17 @@ async fn a_string_blob_is_let_go_before_the_uploads_and_the_capture_after_assemb
         .await
         .unwrap();
     assert!(backing[0].upgrade().is_none(), "the server had it");
-    assert!(backing[1].upgrade().is_none(), "its blob was written");
+    assert!(backing[1].upgrade().is_some(), "its body sends it");
     assert_eq!(pool.stats().in_use, 0, "nothing more is written from it");
     release.store(true, Ordering::Release);
     assert_eq!(finish(delivery).await, Ok(()));
+    assert!(backing[1].upgrade().is_none(), "its upload is over");
     let uploaded = uploaded_blobs(&server).await;
-    assert!(uploaded.iter().any(|(path, _)| path == "/put/1-2"));
     assert!(uploaded.iter().all(|(path, _)| path != "/put/1-1"));
+    // Sent in pieces, received as the blob it is.
+    assert!(
+        uploaded
+            .iter()
+            .any(|(path, blob)| path == "/put/1-2" && *blob == wanted)
+    );
 }

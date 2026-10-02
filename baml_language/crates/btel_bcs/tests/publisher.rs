@@ -506,8 +506,8 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
     let delivery = BcsDelivery::new(
         DeliveryConfig {
             allow_http: true,
-            // Less than one of the blobs below: every window is cut to one
-            // of them, and its plan is admitted alone.
+            // Less than the strings of any capture below: every plan that
+            // carries them is admitted alone.
             cas_reserved_bytes: 16 * 1024,
             ..DeliveryConfig::new(server.uri().parse().unwrap())
         },
@@ -588,11 +588,15 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
         }
     }
     assert_eq!(uploaded, expected);
-    // Every blob but a root is larger than a window, and a root does not
-    // fit beside one: each plan carries a single blob.
-    for request in prepare_requests(&requests) {
-        assert!(request.candidates.len() <= 1, "a window is cut by bytes");
-    }
+    // A string is sent from where it is held, so its length cuts no
+    // window: each capture went whole, in a plan of its own.
+    let mut plans: Vec<_> = prepare_requests(&requests)
+        .iter()
+        .map(|request| request.candidates.len())
+        .filter(|candidates| *candidates > 0)
+        .collect();
+    plans.sort_unstable();
+    assert_eq!(plans, [1, 3, 3, 3]);
 }
 
 #[tokio::test]
