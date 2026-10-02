@@ -4013,6 +4013,7 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::Class(..)
                 | Tir2Ty::Enum(..)
                 | Tir2Ty::EnumVariant(..)
+                | Tir2Ty::TypeAlias(..)
                 | Tir2Ty::Unknown
                 | Tir2Ty::Function { .. }
                 | Tir2Ty::Int

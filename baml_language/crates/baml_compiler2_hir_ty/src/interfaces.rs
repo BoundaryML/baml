@@ -2037,6 +2037,7 @@ fn determine_interface<'db>(
         }
         Ty::Class(..)
         | Ty::Enum(..)
+        | Ty::TypeAlias(..)
         | Ty::List(..)
         | Ty::Map { .. }
         | Ty::Int
@@ -2089,7 +2090,6 @@ fn determine_interface<'db>(
             )
         }
         Ty::Error => Determination::Poisoned,
-        Ty::TypeAlias(..) => Determination::Poisoned,
         _ => match explicit {
             Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
                 subject: base.clone(),

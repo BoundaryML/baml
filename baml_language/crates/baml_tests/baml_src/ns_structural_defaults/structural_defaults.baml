@@ -126,6 +126,23 @@ test "json_failures_remain_runtime_failures" {
     assert.equal(result.value, 99)
 }
 
+type RecursiveValues = int | RecursiveValues[]
+
+function render_recursive(value: RecursiveValues) -> string throws never {
+    value.to_string()
+}
+
+test "recursive_alias_methods_keep_interface_frames" {
+    let record = Record { value: 7 };
+    let json = record.to_json();
+    let expected = string.from(json);
+    assert.equal(record.to_json().to_string(), expected)
+    assert.equal(json.to_string(), expected)
+    let render = json.to_string;
+    assert.equal(render(), expected)
+    assert.equal(render_recursive([1, [2]]), "[1, [2]]")
+}
+
 interface HasItem {
     type Item
 }
