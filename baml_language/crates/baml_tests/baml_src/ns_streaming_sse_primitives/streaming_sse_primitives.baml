@@ -1,16 +1,16 @@
-// Layer 1: Raw SSE primitive tests — the HTTP SSE layer (`baml.http.fetch_sse`,
+// Layer 1: Raw SSE primitive tests — the HTTP SSE layer (`baml.http.send_sse`,
 // `SseStream.next()`, `SseStream.close()`) directly, without the LLM accumulator
 // or SAP parsing.
 //
 // Each test hosts its own `baml.http.Server` (bound to "127.0.0.1:0") and points
-// `fetch_sse` at `server.addr`. Each case is a top-level `function` (needed to
+// `send_sse` at `server.addr`. Each case is a top-level `function` (needed to
 // work around the test-block local-boxing VM bug) plus a `test` block asserting
 // on its result.
 //
 // `sse.next()` returns a JSON array string of `{"event","data","id"}` objects
 // (or null when the stream is done).
 //
-// A non-2xx status makes `fetch_sse` throw `baml.errors.Io` with message
+// A non-2xx status makes `send_sse` throw `baml.errors.Io` with message
 // "SSE request failed with status {status}: {body}".
 
 // Shape of one serialized SSE event as emitted by `sse.next()`.
@@ -26,11 +26,11 @@ function sse_fetch_and_next_returns_events_fn() -> bool {
     let sse_body = "event: message\ndata: hello\n\nevent: message\ndata: world\n\n";
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -53,11 +53,11 @@ function sse_next_returns_null_when_done_fn() -> bool {
     let sse_body = "event: message\ndata: only-one\n\n";
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -83,11 +83,11 @@ function sse_close_does_not_hang_fn() -> bool {
     let sse_body = "event: message\ndata: hello\n\n";
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -103,23 +103,23 @@ test "sse_close_does_not_hang" {
     assert.is_true(sse_close_does_not_hang_fn())
 }
 
-// A 500 response makes fetch_sse throw a catchable Io whose message mentions
+// A 500 response makes send_sse throw a catchable Io whose message mentions
 // the status code.
 function sse_fetch_error_on_bad_status_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(500, { }, "Internal Server Error".to_utf8())
         })
     };
     let ok = {
-        let sse = baml.http.fetch_sse(baml.http.Request {
+        let sse = baml.http.send_sse(baml.http.Request {
             method: "GET",
             url: "http://" + server.addr + "/sse",
             headers: { },
             body: "",
         });
-        baml.sys.panic("expected fetch_sse on a 500 response to throw")
+        baml.sys.panic("expected send_sse on a 500 response to throw")
     } catch (e) {
         let err: baml.errors.Io => {
             // Error should mention the status code.
@@ -138,11 +138,11 @@ test "sse_fetch_error_on_bad_status" {
 // ─── HTTP behavior ───────────────────────────────────────────────────────────
 
 // The handler only serves the SSE body when the request arrives as a POST with
-// the exact body; anything else gets a 404, which makes fetch_sse throw.
+// the exact body; anything else gets a 404, which makes send_sse throw.
 function sse_post_with_body_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             if (req.method == "POST" && req.body == "my-request-body") {
                 baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: ok\n\n".to_utf8())
             } else {
@@ -150,7 +150,7 @@ function sse_post_with_body_fn() -> bool {
             }
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "POST",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -173,7 +173,7 @@ test "sse_post_with_body" {
 function sse_custom_headers_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             if (req.headers.get("authorization") == "Bearer test-token-123") {
                 baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: authed\n\n".to_utf8())
             } else {
@@ -183,7 +183,7 @@ function sse_custom_headers_fn() -> bool {
     };
     let headers: map<string, string> = { };
     headers["authorization"] = "Bearer test-token-123";
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: headers,
@@ -205,11 +205,11 @@ test "sse_custom_headers" {
 function sse_empty_stream_returns_null_fn() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, "".to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -230,11 +230,11 @@ test "sse_empty_stream_returns_null" {
 function sse_next_after_close_returns_null_fn() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: hello\n\n".to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -258,11 +258,11 @@ test "sse_next_after_close_returns_null" {
 function sse_event_fields_in_json_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, "id: 42\nevent: custom\ndata: payload\n\n".to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -287,11 +287,11 @@ test "sse_event_fields_in_json" {
 function sse_event_id_null_when_not_set_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, "data: no-id\n\n".to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },
@@ -317,18 +317,18 @@ test "sse_event_id_null_when_not_set" {
 function sse_http_4xx_error_fn() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(403, { }, "Forbidden".to_utf8())
         })
     };
     let ok = {
-        let sse = baml.http.fetch_sse(baml.http.Request {
+        let sse = baml.http.send_sse(baml.http.Request {
             method: "GET",
             url: "http://" + server.addr + "/sse",
             headers: { },
             body: "",
         });
-        baml.sys.panic("expected fetch_sse on a 403 response to throw")
+        baml.sys.panic("expected send_sse on a 403 response to throw")
     } catch (e) {
         let err: baml.errors.Io => {
             // Error should mention the status code.
@@ -352,11 +352,11 @@ function sse_large_event_payload_fn() -> bool {
     let sse_body = "data: " + large_data + "\n\n";
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "content-type": "text/event-stream" }, sse_body.to_utf8())
         })
     };
-    let sse = baml.http.fetch_sse(baml.http.Request {
+    let sse = baml.http.send_sse(baml.http.Request {
         method: "GET",
         url: "http://" + server.addr + "/sse",
         headers: { },

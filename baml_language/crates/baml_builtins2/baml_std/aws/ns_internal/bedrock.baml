@@ -21,7 +21,7 @@
 //
 // Streaming goes through ConverseStream (`/converse-stream`). Its
 // binary `application/vnd.amazon.eventstream` frames are decoded natively by
-// `baml.http.fetch_sse`, which surfaces each frame as an SSE event named by its
+// `baml.http.send_sse`, which surfaces each frame as an SSE event named by its
 // `:event-type` header, so the decoder below only sees JSON payloads.
 
 // ---------------------------------------------------------------------------
@@ -1393,7 +1393,9 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
 // ---------------------------------------------------------------------------
 
 function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let request = sign(client, build_request(client, input, preview = false));
+    let request = ai.LlmTimeoutOptions._resolve(client.timeout)._apply(
+        sign(client, build_request(client, input, preview = false)),
+    );
     let sent = ai.wire.send_as_with_wire<ConverseResponse>(
         request,
         "aws-bedrock",
@@ -1412,7 +1414,7 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
 // ---------------------------------------------------------------------------
 // 11. Streaming: ConverseStream
 //
-// `baml.http.fetch_sse` decodes the binary event stream and hands over one SSE
+// `baml.http.send_sse` decodes the binary event stream and hands over one SSE
 // event per frame: `event` is the `:event-type` header and `data` the JSON
 // payload. A modeled exception frame arrives as `exception:<type>` and an
 // unmodeled error as `error:<code>` (see `StreamDecoder` in sys_types/src/sse.rs;
@@ -1630,6 +1632,12 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
             let event: ContentBlockDeltaEvent => {
                 if let text: string = event.delta?.text {
                     out.push(ai.stream.TextDelta { text: text });
+                } else if (
+                    (event.delta?.toolUse?.input ?? "") != ""
+                        || (event.delta?.reasoningContent?.text ?? "") != ""
+                ) {
+                    // Tool input and reasoning are content with no TextDelta.
+                    out.push(ai.stream.ContentSeen {});
                 }
                 null
             },
@@ -1667,7 +1675,7 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
     out
 }
 
-/// (internal) `fetch_sse` fails a non-2xx status itself ("SSE request failed
+/// (internal) `send_sse` fails a non-2xx status itself ("SSE request failed
 /// with status 403: …"). Route the status through the classifier the
 /// non-streaming path uses, so a 4xx is never a retry-safe NetworkFailure.
 function _stream_open_failure(error: baml.errors.Io | baml.errors.Timeout) -> never {
@@ -1707,10 +1715,11 @@ function invoke_stream(
     client: root.BedrockClient,
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
-    let request = sign(client, build_request(client, input, preview = false, stream = true));
+    let limits = ai.LlmTimeoutOptions._resolve(client.timeout);
+    let request = limits._apply(sign(client, build_request(client, input, preview = false, stream = true)));
     let started = baml.time.Instant.now();
     let span = ai.wire.request_span();
-    let sse = baml.http.fetch_sse(request, $trace = span) catch (e) {
+    let sse = baml.http.send_sse(request, $trace = span) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
     };
@@ -1727,6 +1736,8 @@ function invoke_stream(
         require_terminal = "aws-bedrock",
         model = client.model,
         usage_target = trace._usage_target_of(span.id()),
+        timeouts = limits,
+        dispatched = started,
     );
     let call = ai.events.LLMCall {
         client_name: client.id(),

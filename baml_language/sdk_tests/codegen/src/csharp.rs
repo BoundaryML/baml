@@ -617,8 +617,8 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
                 " FetchAsync(",
                 " Send(",
                 " SendAsync(",
-                " FetchSse(",
-                " FetchSseAsync(",
+                " SendSse(",
+                " SendSseAsync(",
             ],
         ),
         (

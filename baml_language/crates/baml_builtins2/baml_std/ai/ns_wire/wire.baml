@@ -106,17 +106,10 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
 
 /// Send, classify non-2xx via `ai.errors.classify_http`, decode the body as T.
 /// T = json-shaped envelope class; unknown fields are ignored by the decoder.
-/// A null or non-positive timeout preserves the transport's unbounded default.
-function send_as<T>(
-    req: baml.http.Request,
-    provider: string,
-    request_timeout_ms: int? = null,
-) -> T {
-    let timeout = match (request_timeout_ms) {
-        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
-        null => null,
-    };
-    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+/// The request runs under its own `timeout` and `connect_timeout` (see
+/// `baml.http.Request`); a client puts its `ai.LlmTimeoutOptions` there.
+function send_as<T>(req: baml.http.Request, provider: string) -> T {
+    let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,
@@ -174,15 +167,10 @@ function send_as_with_wire<T>(
     provider: string,
     client_name: string,
     capture_wire: bool = true,
-    request_timeout_ms: int? = null,
 ) -> SentAs<T> {
     let started = baml.time.Instant.now();
-    let timeout = match (request_timeout_ms) {
-        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
-        null => null,
-    };
     let span = request_span();
-    let resp = baml.http.send(req, timeout = timeout, $trace = span) catch_all (e) {
+    let resp = baml.http.send(req, $trace = span) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,

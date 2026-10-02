@@ -1040,7 +1040,8 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
         let err: bex_vm_types::errors::VmRustFnError = bex_vm_types::errors::VmBamlError::Timeout {
             message: "timed out".into(),
-            duration_ms: Some(30_000),
+            duration: Some(std::time::Duration::from_secs(30)),
+            timeout_type: "timeout".into(),
         }
         .into();
         assert!(validate_sys_op_error(op, &err).is_ok());
@@ -1144,7 +1145,8 @@ mod tests {
             },
             VmBamlError::Timeout {
                 message: "t".into(),
-                duration_ms: Some(1_000),
+                duration: Some(std::time::Duration::from_secs(1)),
+                timeout_type: "timeout".into(),
             },
             VmBamlError::Unsupported {
                 message: "u".into(),

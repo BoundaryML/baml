@@ -64,14 +64,14 @@ class ScriptedStreamClient {
                 }
             }
             if (attempt <= self.timeout_open_attempts) {
-                throw baml.errors.Timeout { message: `${self.client_id} open timed out`, duration_ms: 10 }
+                throw baml.errors.Timeout { message: `${self.client_id} open timed out`, duration: baml.time.Duration.from_milliseconds(10), timeout_type: "timeout" }
             }
             if (attempt <= self.timeout_open_attempts + self.timeout_pull_attempts) {
                 let probe = self.probe;
                 let client_id = self.client_id;
                 return ai.stream.TurnStream.from_event_source(() -> {
                     probe.events.push(`pull-timeout:${client_id}:${attempt}`);
-                    throw baml.errors.Timeout { message: `${client_id} first event timed out`, duration_ms: 10 }
+                    throw baml.errors.Timeout { message: `${client_id} first event timed out`, duration: baml.time.Duration.from_milliseconds(10), timeout_type: "timeout" }
                 });
             }
             if (attempt <= self.fail_open_attempts + self.fail_pull_attempts) {
@@ -107,7 +107,7 @@ class ScriptedStreamClient {
                         ai.stream.TextDelta { text: prefix }
                     } else {
                         probe.events.push(`partial-timeout:${client_id}:${attempt}`);
-                        throw baml.errors.Timeout { message: `${client_id} stalled after first delta`, duration_ms: 10 }
+                        throw baml.errors.Timeout { message: `${client_id} stalled after first delta`, duration: baml.time.Duration.from_milliseconds(10), timeout_type: "timeout" }
                     }
                 });
             }

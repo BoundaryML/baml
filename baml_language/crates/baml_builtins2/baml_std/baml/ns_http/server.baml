@@ -40,7 +40,7 @@ class Server {
     /// dropped, not when a serve ends.
     ///
     /// # Parameters
-    /// - `handler`: Turns each incoming `Request` into a `Response`.
+    /// - `handler`: Turns each incoming `ServerRequest` into a `Response`.
     /// - `websocket`: Handles WebSocket upgrade requests (see `WsAccept`). Returning a
     ///   `Response` refuses the upgrade and serves that response; returning a `WsAccept`
     ///   completes the handshake and runs it with the connected socket. The default
@@ -76,8 +76,8 @@ class Server {
     ///   `baml.panics.Cancelled` panic and any in-flight connections are dropped.
     function serve(
         self,
-        handler: (req: Request) -> Response throws never,
-        websocket: (req: Request) -> Response | WsAccept throws never = reject_websocket,
+        handler: (req: ServerRequest) -> Response throws never,
+        websocket: (req: ServerRequest) -> Response | WsAccept throws never = reject_websocket,
         tls_config: TlsConfig? = null,
         allow_http1: bool = true,
         allow_http2: bool = true,
@@ -102,8 +102,8 @@ class Server {
 
     function _serve(
         self,
-        handler: (req: Request) -> Response throws never,
-        websocket: (req: Request) -> Response | WsAccept throws never,
+        handler: (req: ServerRequest) -> Response throws never,
+        websocket: (req: ServerRequest) -> Response | WsAccept throws never,
         tls_config: TlsConfig?,
         allow_http1: bool,
         allow_http2: bool,
@@ -153,7 +153,7 @@ type WsAccept = (socket: root.ws.WebSocket) -> void throws never;
 /// RFC 6455 §4.1 fails the client handshake on any status other than `101`; the
 /// status here says specifically that this server implements no WebSocket
 /// endpoint, rather than blaming the request.
-function reject_websocket(req: Request) -> Response throws never {
+function reject_websocket(req: ServerRequest) -> Response throws never {
     Response.new(501, {}, "websocket upgrade is not supported".to_utf8())
 }
 

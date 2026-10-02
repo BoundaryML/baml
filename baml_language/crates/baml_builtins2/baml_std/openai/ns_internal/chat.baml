@@ -1377,15 +1377,10 @@ function _chat_send(
     client_name: string,
     capture_wire: bool = true,
     audio_mime: string = "audio/wav",
-    request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
     let started = baml.time.Instant.now();
     let span = ai.wire.request_span();
-    let response = baml.http.send(
-        request,
-        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-        $trace = span,
-    ) catch_all (e) {
+    let response = baml.http.send(request, $trace = span) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,
@@ -1465,16 +1460,16 @@ function chat_invoke(
     params: ChatParams,
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
-    request_timeout_ms: int? = null,
+    timeouts: ai.LlmTimeoutOptions? = null,
 ) -> ai.ModelTurn {
-    let request = chat_render(compat, params, input, false);
+    let limits = timeouts ?? ai.LlmTimeoutOptions._resolve(null);
+    let request = limits._apply(chat_render(compat, params, input, false));
     _chat_send(
         request,
         compat.provider,
         chat_client_id(compat, params),
         capture_wire = capture_wire,
         audio_mime = _chat_audio_output_mime(params.request_body),
-        request_timeout_ms = request_timeout_ms,
     )
 }
 
@@ -1594,10 +1589,19 @@ class ChatStreamDecoder {
                                 }
                             }
                             let deltas: CcToolCall[] = choice.delta?.tool_calls ?? [];
+                            // Reasoning and tool-input fragments are content
+                            // with no TextDelta of their own.
+                            let other_content = (choice.delta?.reasoning_content ?? "") != "";
                             let position = 0;
                             for (let call in deltas) {
+                                if ((call.fn?.arguments ?? "") != "") {
+                                    other_content = true;
+                                }
                                 self._absorb_call(call, position);
                                 position += 1;
+                            }
+                            if (other_content) {
+                                out.push(ai.stream.ContentSeen {});
                             }
                             if let reason: string = choice.finish_reason {
                                 out.push(
@@ -1648,7 +1652,7 @@ class ChatStreamDecoder {
     }
 }
 
-/// (internal) `baml.http.fetch_sse` reports a non-2xx as `baml.errors.Io` whose message
+/// (internal) `baml.http.send_sse` reports a non-2xx as `baml.errors.Io` whose message
 /// embeds the status and body: "SSE request failed with status 400: {…}". The
 /// status is the only thing standing between a 400 and a retry-safe
 /// NetworkFailure that a Retry wrapper would happily replay, so it is recovered
@@ -1689,19 +1693,14 @@ function chat_invoke_stream(
     params: ChatParams,
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
-    request_timeout_ms: int? = null,
-    time_to_first_token_timeout_ms: int? = null,
+    timeouts: ai.LlmTimeoutOptions? = null,
 ) -> ai.stream.TurnStream {
-    let request = chat_render(compat, params, input, true);
+    let limits = timeouts ?? ai.LlmTimeoutOptions._resolve(null);
+    let request = limits._apply(chat_render(compat, params, input, true));
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
     let started = baml.time.Instant.now();
     let span = ai.wire.request_span();
-    let sse = baml.http.fetch_sse(
-        request,
-        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-        first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
-        $trace = span,
-    ) catch_all (e) {
+    let sse = baml.http.send_sse(request, $trace = span) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };
     // Chat completions has an explicit terminator — the literal `data: [DONE]`
@@ -1719,6 +1718,8 @@ function chat_invoke_stream(
         require_terminal = compat.provider,
         model = params.model,
         usage_target = trace._usage_target_of(span.id()),
+        timeouts = limits,
+        dispatched = started,
     );
     let call = ai.events.LLMCall {
         client_name: chat_client_id(compat, params),

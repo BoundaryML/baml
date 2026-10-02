@@ -30,6 +30,11 @@ class OllamaClient {
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect, first-token and
+    // stream-token limits. Null is the default: 5 minutes total, 10 seconds
+    // to connect. Browser/Wasm does not enforce the transport limits.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
@@ -47,6 +52,7 @@ class OllamaClient {
         stop: string[]? = null,
         seed: int? = null,
         capture_wire: bool = true,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
     ) -> OllamaClient {
         OllamaClient {
             model: model,
@@ -61,6 +67,7 @@ class OllamaClient {
             stop: stop,
             seed: seed,
             capture_wire: capture_wire,
+            timeout: timeout,
         }
     }
 
@@ -129,6 +136,7 @@ class OllamaClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
+                timeouts = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
@@ -142,6 +150,7 @@ class OllamaClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
+                timeouts = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }

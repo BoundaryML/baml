@@ -61,6 +61,10 @@ function make_backlog(n: int) -> ai.stream.TurnStream {
         _wire_call: null,
         _call_started: null,
         _ttft_from: null,
+        _first_token_timeout: null,
+        _stream_token_timeout: null,
+        _content_deltas: 0,
+        _token_waited: baml.time.Duration.from_nanoseconds(0),
         _capture_sse: false,
         _usage_target: 0,
     }

@@ -11,7 +11,7 @@ import {
   _fetch,
   _fetch_async,
   _send_async,
-  fetch_sse_async,
+  send_sse_async,
 } from "./baml_sdk/baml/http/index.js";
 import { get_async } from "./baml_sdk/baml/env/index.js";
 import { isTestRuntime } from "./test_runtime.js";
@@ -33,7 +33,7 @@ describe.runIf(isWebRuntime)("Web fetch sysops", () => {
       }),
     );
 
-    const response = await _fetch_async("https://example.test/fetch", 0n);
+    const response = await _fetch_async("https://example.test/fetch", 0n, 0n);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(response.status_code).toBe(201);
@@ -60,7 +60,7 @@ describe.runIf(isWebRuntime)("Web fetch sysops", () => {
       body: "payload",
     });
 
-    const response = await _send_async(request, 0n);
+    const response = await _send_async(request, 0n, 0n);
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [, init] = fetchMock.mock.calls[0];
@@ -76,7 +76,7 @@ describe.runIf(isWebRuntime)("Web fetch sysops", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(
       new Error("network unavailable"),
     );
-    await expect(_fetch_async("https://example.test/io", 0n)).rejects.toThrow(
+    await expect(_fetch_async("https://example.test/io", 0n, 0n)).rejects.toThrow(
       /network unavailable|Io/i,
     );
 
@@ -89,7 +89,7 @@ describe.runIf(isWebRuntime)("Web fetch sysops", () => {
         })) as typeof globalThis.fetch,
     );
     await expect(
-      _fetch_async("https://example.test/timeout", 1_000_000n),
+      _fetch_async("https://example.test/timeout", 1_000_000n, 0n),
     ).rejects.toThrow(/timeout/i);
   });
 });
@@ -129,7 +129,7 @@ describe.runIf(isWebRuntime)("Web capability boundary", () => {
       headers: {},
       body: "",
     });
-    await expect(fetch_sse_async(request)).rejects.toThrow();
+    await expect(send_sse_async(request)).rejects.toThrow();
     await expect(get_async("SHOULD_NOT_BE_VISIBLE")).rejects.toThrow();
   });
 });

@@ -671,7 +671,7 @@ async fn streamed_usage_keeps_the_cache_split() {
     assert_eq!(
         usage.rows,
         vec![vec![
-            json!("baml.http.fetch_sse"),
+            json!("baml.http.send_sse"),
             json!("user.Stream"),
             json!("claude-opus-5-5"),
             json!(1),

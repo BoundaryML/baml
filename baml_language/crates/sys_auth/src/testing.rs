@@ -107,6 +107,7 @@ impl RuntimeIo for StubIo {
         &self,
         _request: sys_types::generated::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
     ) -> Pin<Box<dyn Future<Output = Result<HttpResponseHandle, RuntimeIoError>> + Send + '_>> {
         self.calls.http.fetch_add(1, Ordering::SeqCst);
         let status_code = self.http_status;

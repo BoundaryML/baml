@@ -1791,15 +1791,24 @@ pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::Con
 /// [`ErrorClass`] discriminant. The result is identical for every VM sharing a
 /// `packages` index, so it is resolved once and shared (`Arc`) across spawns
 /// rather than re-resolved per [`BexVm::new`].
+///
+/// One extra entry follows the error classes, at [`DURATION_CLASS_PTR_INDEX`]:
+/// `baml.time.Duration`, which `baml.errors.Timeout.duration` is an instance of.
 pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     ErrorClass::ALL
         .iter()
-        .map(|ec| {
-            crate::package_load::lookup_type_by_fqn(packages, ec.fqn())
-                .unwrap_or_else(|| panic!("error class {:?} not in packages", ec.fqn()))
+        .map(ErrorClass::fqn)
+        .chain(std::iter::once("baml.time.Duration"))
+        .map(|fqn| {
+            crate::package_load::lookup_type_by_fqn(packages, fqn)
+                .unwrap_or_else(|| panic!("error class {fqn:?} not in packages"))
         })
         .collect()
 }
+
+/// Where `baml.time.Duration` sits in the error class table: right after the
+/// last [`ErrorClass`].
+const DURATION_CLASS_PTR_INDEX: usize = ErrorClass::ALL.len();
 
 /// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
 /// [`PanicClass`] discriminant. Shared across spawns like
@@ -4916,16 +4925,23 @@ impl BexVm {
                 ErrorClass::Io,
                 vec![Value::object(self.alloc_string(message))],
             ),
+            // Field order matches the `Timeout` class in
+            // `ns_errors/errors.baml`: message, duration, timeout_type.
             VmBamlError::Timeout {
                 message,
-                duration_ms,
-            } => (
-                ErrorClass::Timeout,
-                vec![
-                    Value::object(self.alloc_string(message)),
-                    duration_ms.map_or(Value::NULL, Value::int),
-                ],
-            ),
+                duration,
+                timeout_type,
+            } => {
+                let duration = duration.map_or(Value::NULL, |d| self.alloc_duration(d));
+                (
+                    ErrorClass::Timeout,
+                    vec![
+                        Value::object(self.alloc_string(message)),
+                        duration,
+                        Value::object(self.alloc_string(timeout_type)),
+                    ],
+                )
+            }
             VmBamlError::Unsupported { message } => (
                 ErrorClass::Unsupported,
                 vec![Value::object(self.alloc_string(message))],
@@ -4982,6 +4998,28 @@ impl BexVm {
             }
         };
         self.alloc_error_value(class, fields)
+    }
+
+    /// A `baml.time.Duration` instance (`{ _nanoseconds: bigint }`), or null
+    /// when the class is not loaded (bare test VMs).
+    fn alloc_duration(&mut self, duration: std::time::Duration) -> Value {
+        let Some(class_ptr) = self
+            .error_class_ptrs
+            .get(DURATION_CLASS_PTR_INDEX)
+            .copied()
+            .filter(|ptr| !ptr.is_null())
+        else {
+            return Value::NULL;
+        };
+        // A `u128` nanosecond count is far below the bigint size limit.
+        let nanos = Value::object(self.tlab.alloc(Object::Bigint(std::sync::Arc::new(
+            num_bigint::BigInt::from(duration.as_nanos()),
+        ))));
+        Value::object(self.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Box::new([]),
+            vec![nanos],
+        ))))
     }
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {

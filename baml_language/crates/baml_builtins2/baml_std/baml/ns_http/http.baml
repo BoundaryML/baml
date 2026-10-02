@@ -1,11 +1,84 @@
-/// An HTTP request — outgoing (built for `baml.http.send`/`fetch_sse`) or
-/// incoming (passed to an `http.Server` handler).
+/// An outgoing HTTP request, sent with `baml.http.send` or `baml.http.send_sse`.
 ///
-/// For an incoming server request: `url` is the request-target as received
-/// (origin-form, e.g. `/path?q=1`, on HTTP/1; the authority lives in the `host`
-/// header), `body` is the bytes decoded lossily as UTF-8 (non-UTF-8 bytes become
-/// U+FFFD), and a header sent multiple times has its values joined with `, `.
+/// Build one as a literal, or with `Request.from_url` and the `set_*` methods:
+/// ```baml
+/// let req = baml.http.Request.from_url("https://api.example.com/items")
+///     .set_method("POST")
+///     .set_headers({ "content-type": "application/json" })
+///     .set_body("{}")
+///     .set_timeout(baml.time.Duration.from_seconds(10));
+/// let resp = baml.http.send(req);
+/// ```
+///
+/// An `http.Server` handler receives a `ServerRequest`, not this class.
 class Request {
+    method: string,
+    url: string,
+    headers: map<string, string>,
+    body: string,
+    /// End-to-end limit for the whole exchange: connecting, sending the
+    /// request, waiting for response headers and reading the body. `null` is
+    /// the default of 5 minutes; a zero or negative duration is no limit.
+    timeout: root.time.Duration?,
+    /// Limit for establishing the connection (TCP and TLS). `null` is the
+    /// default of 10 seconds; a zero or negative duration is no limit.
+    connect_timeout: root.time.Duration?,
+
+    /// A request for `url` with no method, headers or body. Set the method with
+    /// `set_method` before sending: a request with no method is rejected with
+    /// `InvalidArgument`.
+    function from_url(url: string) -> Request throws never {
+        Request {
+            method: "",
+            url: url,
+            headers: {},
+            body: "",
+            timeout: null,
+            connect_timeout: null,
+        }
+    }
+
+    /// Sets the HTTP method, e.g. `"GET"` or `"POST"`. Mutates and returns `self`.
+    function set_method(self, method: string) -> Request throws never {
+        self.method = method;
+        self
+    }
+
+    /// Replaces all headers with `headers`. Mutates and returns `self`.
+    function set_headers(self, headers: map<string, string>) -> Request throws never {
+        self.headers = headers;
+        self
+    }
+
+    /// Sets the request body. Mutates and returns `self`.
+    function set_body(self, body: string) -> Request throws never {
+        self.body = body;
+        self
+    }
+
+    /// Sets the end-to-end limit (see `timeout`). Mutates and returns `self`.
+    function set_timeout(self, timeout: root.time.Duration?) -> Request throws never {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Sets the connection limit (see `connect_timeout`). Mutates and returns `self`.
+    function set_connect_timeout(
+        self,
+        connect_timeout: root.time.Duration?,
+    ) -> Request throws never {
+        self.connect_timeout = connect_timeout;
+        self
+    }
+}
+
+/// An incoming HTTP request, passed to an `http.Server` handler.
+///
+/// `url` is the request-target as received (origin-form, e.g. `/path?q=1`, on
+/// HTTP/1; the authority lives in the `host` header), `body` is the bytes
+/// decoded lossily as UTF-8 (non-UTF-8 bytes become U+FFFD), and a header sent
+/// multiple times has its values joined with `, `.
+class ServerRequest {
     method: string,
     url: string,
     headers: map<string, string>,
@@ -99,10 +172,10 @@ class Response {
     }
 }
 
-/// A Server-Sent Events (SSE) stream. Created by `baml.http.fetch_sse`.
+/// A Server-Sent Events (SSE) stream. Created by `baml.http.send_sse`.
 class SseStream {
     url: string,
-    /// Status code of the opening response. `fetch_sse` throws on non-2xx,
+    /// Status code of the opening response. `send_sse` throws on non-2xx,
     /// so this is always a success status.
     status_code: int,
     /// Response headers at connection open — the provider request id
@@ -122,84 +195,112 @@ class SseStream {
     }
 }
 
-/// (internal) Converts an optional timeout into the nanosecond count carried across the
-/// sys-op boundary. `null` (no deadline) becomes `0n`, which the native layer
-/// treats as unbounded. Modeled on Rust's `Option<Duration>`.
-function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
-    match (timeout) {
-        null => 0n,
-        let t: root.time.Duration => t.to_nanoseconds(),
-    }
+/// (internal) The limit a request runs under, as the nanosecond count carried
+/// across the sys-op boundary: `timeout`, else `default` when it is null. The
+/// native layer treats zero or negative as no limit.
+function _timeout_nanos(
+    timeout: root.time.Duration?,
+    default: root.time.Duration,
+) -> bigint throws never {
+    (timeout ?? default).to_nanoseconds()
+}
+
+/// (internal) The end-to-end limit used when neither the `timeout` argument nor
+/// `Request.timeout` is set.
+function _default_timeout() -> root.time.Duration throws never {
+    root.time.Duration.from_seconds(300)
+}
+
+/// (internal) The connection limit used when `Request.connect_timeout` is not set.
+function _default_connect_timeout() -> root.time.Duration throws never {
+    root.time.Duration.from_seconds(10)
 }
 
 /// Sends a GET request to `url` and returns the response.
 ///
-/// `timeout` is the total deadline for the request (connection + response
-/// headers + body). `null` (the default) imposes no deadline. On expiry this
-/// throws `baml.errors.Timeout`.
+/// `timeout` is the end-to-end limit for the request: connecting, waiting for
+/// response headers and reading the body. `null` (the default) is 5 minutes; a
+/// zero or negative duration is no limit. Connecting is also limited to 10
+/// seconds; use `send` with a `Request` to change that. On expiry this throws
+/// `baml.errors.Timeout`, whose `timeout_type` is `"timeout"` or
+/// `"connect_timeout"`.
 function fetch(
     url: string,
     timeout: root.time.Duration? = null,
 ) -> Response throws root.errors.Io | root.errors.Timeout {
     // Thin wrapper resolving the default: `$rust_io_function` sys-ops don't fill
     // omitted args, so `fetch` forwards to the all-required `_fetch` sys-op.
-    _fetch(url, _timeout_nanos(timeout))
+    _fetch(url, _timeout_nanos(timeout, _default_timeout()), _default_connect_timeout().to_nanoseconds())
 }
 
 function _fetch(
     url: string,
     timeout_nanos: bigint,
+    connect_timeout_nanos: bigint,
 ) -> Response throws root.errors.Io | root.errors.Timeout {
     $rust_io_function
 }
 
 /// Sends an HTTP request and returns the response.
 ///
-/// `timeout` is the total deadline for the request, as in `fetch`. `null` (the
-/// default) imposes no deadline.
+/// The request runs under `request.timeout` (end to end, 5 minutes when null)
+/// and `request.connect_timeout` (10 seconds when null). The `timeout`
+/// argument, when given, overrides `request.timeout`. A zero or negative
+/// duration is no limit.
 ///
 /// # Throws
 ///
 /// - `InvalidArgument` if `request.method` is not a valid HTTP method.
 /// - `Io` if the request cannot be sent or the response cannot be read.
-/// - `Timeout` if `timeout` elapses first.
+/// - `Timeout` if a limit elapses first. Its `timeout_type` is `"timeout"` or
+///   `"connect_timeout"`, the name of the field that set the limit.
 function send(
     request: Request,
     timeout: root.time.Duration? = null,
 ) -> Response throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _send(request, _timeout_nanos(timeout))
+    _send(
+        request,
+        _timeout_nanos(timeout ?? request.timeout, _default_timeout()),
+        _timeout_nanos(request.connect_timeout, _default_connect_timeout()),
+    )
 }
 
 function _send(
     request: Request,
     timeout_nanos: bigint,
+    connect_timeout_nanos: bigint,
 ) -> Response throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }
 
 /// Sends an HTTP request and returns a Server-Sent Events stream for streaming responses.
 ///
-/// On native transports, `timeout` covers the request and streaming body.
-/// `first_event_timeout` starts after open and ends on the first parsed event.
-/// Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+/// The limits are the ones `send` applies: `request.timeout` (overridden by the
+/// `timeout` argument) covers opening the stream and reading all of it, and
+/// `request.connect_timeout` covers connecting. `SseStream.next()` throws
+/// `Timeout` once the end-to-end limit elapses. Browser/Wasm does not enforce
+/// these limits.
 ///
 /// # Throws
 ///
 /// - `InvalidArgument` if `request.method` is not a valid HTTP method.
 /// - `Io` if the request cannot be sent or the stream cannot be opened.
-/// - `Timeout` if `timeout` or `first_event_timeout` elapses first.
-function fetch_sse(
+/// - `Timeout` if a limit elapses first.
+function send_sse(
     request: Request,
     timeout: root.time.Duration? = null,
-    first_event_timeout: root.time.Duration? = null,
 ) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _fetch_sse(request, _timeout_nanos(timeout), _timeout_nanos(first_event_timeout))
+    _send_sse(
+        request,
+        _timeout_nanos(timeout ?? request.timeout, _default_timeout()),
+        _timeout_nanos(request.connect_timeout, _default_connect_timeout()),
+    )
 }
 
-function _fetch_sse(
+function _send_sse(
     request: Request,
     timeout_nanos: bigint,
-    first_event_timeout_nanos: bigint,
+    connect_timeout_nanos: bigint,
 ) -> SseStream throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }

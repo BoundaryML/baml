@@ -298,8 +298,10 @@ class CloudflareVisionClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             {
-                let request = self.build_request(input, preview = false);
-                let response = ai.wire.send_as<CloudflareResponse>(request, self.id(), request_timeout_ms = 60000);
+                let request = self.build_request(input, preview = false).set_timeout(
+                    baml.time.Duration.from_seconds(60),
+                );
+                let response = ai.wire.send_as<CloudflareResponse>(request, self.id());
                 self.to_turn(response)
             } catch_all (error) {
                 _ => throw ai.errors.normalize(error),

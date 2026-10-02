@@ -102,10 +102,20 @@ class TurnMeta {
 class TurnDone {
 }
 
+/// Non-empty content that is not assistant text: a reasoning or tool-input
+/// delta, or a complete tool-call or file part. There is nothing to deliver to
+/// the caller, but the model is producing output, which is what
+/// `first_token_timeout` and `stream_token_timeout` measure. A decoder yields
+/// it for every content-bearing event that produces no TextDelta; events that
+/// carry no content (`message_start`, `response.created`, pings, usage-only
+/// frames, empty deltas) yield nothing.
+class ContentSeen {
+}
+
 /// One provider-agnostic event decoded from an SSE batch: a piece of
-/// assistant text, the turn metadata that arrived alongside it, or the
-/// provider's end-of-turn marker.
-type Event = TextDelta | TurnMeta | TurnDone;
+/// assistant text, content that is not text, the turn metadata that arrived
+/// alongside it, or the provider's end-of-turn marker.
+type Event = TextDelta | ContentSeen | TurnMeta | TurnDone;
 
 /// The single end-of-stream marker returned by both raw turn streams and typed
 /// function streams. A nominal sentinel is required because null may itself be
@@ -169,6 +179,20 @@ class TurnStream {
     // TTFT base: stamped when the SSE response opened (legacy TTFT semantics);
     // falls back to _call_started when a provider did not set it.
     _ttft_from: baml.time.Instant?,
+    // The two token deadlines of a wire-backed stream (see
+    // `root.LlmTimeoutOptions`); null is not enforced. `_first_token_timeout`
+    // applies until the first non-empty content delta is delivered, and
+    // `_stream_token_timeout` between content deltas after it: the two never
+    // run at the same time.
+    _first_token_timeout: baml.time.Duration?,
+    _stream_token_timeout: baml.time.Duration?,
+    // How many non-empty content deltas have been delivered.
+    _content_deltas: int,
+    // How long this stream has waited on the provider since the attempt was
+    // dispatched (before the first content delta) or since the last content
+    // delta (after it). Only time spent waiting for the provider is added, so
+    // a caller that is slow between pulls is not charged.
+    _token_waited: baml.time.Duration,
     _capture_sse: bool,
     // Where this stream's token usage is recorded: the span or thread that
     // opened it, not whoever pulls it. 0 records nothing (scripted streams,
@@ -193,13 +217,38 @@ class TurnStream {
     /// `model` is the model the request names; the stream's token usage is
     /// recorded under it, against `usage_target` (the request's span, from
     /// `trace._usage_target_of`), else against the caller's span.
+    ///
+    /// `timeouts` supplies the two token deadlines, which this stream enforces:
+    /// `next()` throws `baml.errors.Timeout` with `timeout_type`
+    /// `"first_token_timeout"` when no non-empty content delta arrives in
+    /// time, and `"stream_token_timeout"` when the gap between two of them is
+    /// too long. Content is a non-empty `TextDelta` or a `ContentSeen`.
+    /// `dispatched` is when the request attempt was sent (before connecting),
+    /// which is where the first-token clock starts; it defaults to now. If the
+    /// first-token deadline has already passed, the stream is closed and this
+    /// throws that `Timeout`. `timeouts.timeout` and `timeouts.connect_timeout`
+    /// are the transport's and are not read here.
     function from_sse(
         sse: baml.http.SseStream,
         decode: (string) -> Event[] throws root.errors.InvokeError,
         require_terminal: string? = null,
         model: string? = null,
         usage_target: int? = null,
+        timeouts: root.LlmTimeoutOptions? = null,
+        dispatched: baml.time.Instant? = null,
     ) -> TurnStream {
+        let first_token_timeout = _token_limit(timeouts?.first_token_timeout);
+        // Everything since dispatch was spent waiting on the provider.
+        let waited = match (dispatched) {
+            let at: baml.time.Instant => at.elapsed(),
+            null => baml.time.Duration.from_nanoseconds(0),
+        };
+        if let limit: baml.time.Duration = first_token_timeout {
+            if (waited.to_nanoseconds() >= limit.to_nanoseconds()) {
+                sse.close();
+                throw _token_timeout_error(limit, "first_token_timeout")
+            }
+        }
         TurnStream {
             _event_source: null,
             _sse: sse,
@@ -223,6 +272,10 @@ class TurnStream {
             _wire_call: null,
             _call_started: null,
             _ttft_from: null,
+            _first_token_timeout: first_token_timeout,
+            _stream_token_timeout: _token_limit(timeouts?.stream_token_timeout),
+            _content_deltas: 0,
+            _token_waited: waited,
             _capture_sse: false,
             _usage_target: usage_target ?? trace._usage_target(),
             _usage_model: model,
@@ -257,6 +310,10 @@ class TurnStream {
             _wire_call: null,
             _call_started: null,
             _ttft_from: null,
+            _first_token_timeout: null,
+            _stream_token_timeout: null,
+            _content_deltas: 0,
+            _token_waited: baml.time.Duration.from_nanoseconds(0),
             _capture_sse: false,
             _usage_target: 0,
             _usage_model: null,
@@ -292,6 +349,10 @@ class TurnStream {
             _wire_call: null,
             _call_started: null,
             _ttft_from: null,
+            _first_token_timeout: null,
+            _stream_token_timeout: null,
+            _content_deltas: 0,
+            _token_waited: baml.time.Duration.from_nanoseconds(0),
             _capture_sse: false,
             _usage_target: 0,
             _usage_model: null,
@@ -306,6 +367,62 @@ class TurnStream {
                     call.timing.ttft_ms = base.elapsed().to_milliseconds();
                 }
             }
+        }
+    }
+
+    /// (internal) A non-empty content delta was delivered: the first-token
+    /// deadline is met, and the stream-token clock starts over.
+    function _saw_content(self) -> void {
+        self._content_deltas += 1;
+        self._token_waited = baml.time.Duration.from_nanoseconds(0);
+    }
+
+    /// (internal) One wire pull, bounded by whichever token deadline is
+    /// running: `first_token_timeout` until the first content delta, then
+    /// `stream_token_timeout`. The clock only runs here, while waiting on the
+    /// provider. A batch with no content in it does not reset it, so the next
+    /// pull gets what is left of the same budget.
+    ///
+    /// The transport's own `Timeout` (the request's end-to-end limit) is
+    /// carried out of the timed body as a value so it is never mistaken for
+    /// the token deadline, then rethrown unchanged.
+    function _pull(self, sse: baml.http.SseStream) -> string? {
+        let timeout_type = if (self._content_deltas > 0) {
+            "stream_token_timeout"
+        } else {
+            "first_token_timeout"
+        };
+        let active = if (self._content_deltas > 0) {
+            self._stream_token_timeout
+        } else {
+            self._first_token_timeout
+        };
+        match (active) {
+            null => sse.next(),
+            let limit: baml.time.Duration => {
+                let remaining = limit.sub(self._token_waited);
+                if (remaining.to_nanoseconds() <= 0n) {
+                    self._finish();
+                    throw _token_timeout_error(limit, timeout_type)
+                }
+                let pull_started = baml.time.Instant.now();
+                let pulled = baml.future.with_timeout(remaining, () -> {
+                    sse.next() catch (e) {
+                        let transport: baml.errors.Timeout => transport,
+                    }
+                }) catch (e) {
+                    baml.errors.Timeout => {
+                        self._finish();
+                        throw _token_timeout_error(limit, timeout_type)
+                    },
+                };
+                self._token_waited = self._token_waited.add(pull_started.elapsed());
+                match (pulled) {
+                    let transport: baml.errors.Timeout => throw transport,
+                    let batch: string => batch,
+                    null => null,
+                }
+            },
         }
     }
 
@@ -404,8 +521,15 @@ class TurnStream {
                 match (e) {
                     let d: TextDelta => {
                         self._stamp_first_delta();
+                        if (d.text != "") {
+                            self._saw_content();
+                        }
                         self._text = `${self._text}${d.text}`;
                         ready.push(d.text);
+                        null
+                    },
+                    let seen: ContentSeen => {
+                        self._saw_content();
                         null
                     },
                     let m: TurnMeta => {
@@ -464,7 +588,7 @@ class TurnStream {
             }
             match (self._sse) {
                 let sse: baml.http.SseStream => {
-                    match (sse.next()) {
+                    match (self._pull(sse)) {
                         null => {
                             // end of connection. On a strict stream with no
                             // TurnDone decoded this is a truncated turn, and
@@ -554,6 +678,39 @@ class TurnStream {
             usage: usage,
             calls: self._calls,
         }
+    }
+}
+
+/// (internal) A configured token deadline, or null when there is none: a zero
+/// or negative duration means no limit.
+function _token_limit(limit: baml.time.Duration?) -> baml.time.Duration? {
+    match (limit) {
+        null => null,
+        let configured: baml.time.Duration => {
+            if (configured.to_nanoseconds() > 0n) {
+                configured
+            } else {
+                null
+            }
+        },
+    }
+}
+
+/// (internal) The error for an elapsed token deadline. `timeout_type` is the
+/// `LlmTimeoutOptions` field that set it.
+function _token_timeout_error(
+    limit: baml.time.Duration,
+    timeout_type: string,
+) -> baml.errors.Timeout {
+    let waiting_for = if (timeout_type == "first_token_timeout") {
+        "the first content from the model"
+    } else {
+        "more content from the model"
+    };
+    baml.errors.Timeout {
+        message: `no ${waiting_for} within ${limit.to_milliseconds()}ms (${timeout_type})`,
+        duration: limit,
+        timeout_type: timeout_type,
     }
 }
 

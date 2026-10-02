@@ -219,6 +219,7 @@ enum BuiltinProjection {
 fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
     match name.to_string().as_str() {
         "baml.http.Request"
+        | "baml.http.ServerRequest"
         | "baml.glob.ScanOptions"
         | "baml.fs.DirEntry"
         | "baml.fs.MkdirOptions"

@@ -56,7 +56,7 @@ fn timed_response_client(name: &str, model: &str, base_url: &str) -> String {
         name,
         model,
         base_url,
-        &format!("request_timeout_ms = {MEMBER_TIMEOUT_MS},"),
+        &format!("timeout = baml.time.Duration.from_milliseconds({MEMBER_TIMEOUT_MS}),"),
     )
 }
 
@@ -386,7 +386,7 @@ async fn fallback_moves_past_member_request_timeout() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("backup".to_string().into())),
-        "the stalled member's request_timeout_ms must hand the call to the next member"
+        "the stalled member's timeout must hand the call to the next member"
     );
     assert_eq!(request_count(&stalled).await, 1);
     assert_eq!(request_count(&backup).await, 1);

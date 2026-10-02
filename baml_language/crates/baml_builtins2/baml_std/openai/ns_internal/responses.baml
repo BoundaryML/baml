@@ -1016,14 +1016,8 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
 
 /// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = render(c, input);
-    let sent = ai.wire.send_as_with_wire<OaResponse>(
-        req,
-        "openai",
-        c.id(),
-        capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
-    );
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
+    let sent = ai.wire.send_as_with_wire<OaResponse>(req, "openai", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], _usage_target: sent.usage_target, model: c.model }
 }
@@ -1157,7 +1151,20 @@ function _stream_events(
             if let delta: string = event.delta {
                 let key = _event_key(event);
                 let _ = state.call_arguments.set(key, (state.call_arguments.get(key) ?? "") + delta);
+                if (delta != "") {
+                    out.push(ai.stream.ContentSeen {});
+                }
             };
+            null
+        },
+        // Reasoning and refusal text: content with no TextDelta.
+        "response.reasoning_summary_text.delta"
+            | "response.reasoning_text.delta"
+            | "response.refusal.delta" =>
+        {
+            if ((event.delta ?? "") != "") {
+                out.push(ai.stream.ContentSeen {});
+            }
             null
         },
         "response.function_call_arguments.done" => {
@@ -1209,7 +1216,7 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
     out
 }
 
-/// (internal) A failure opening the SSE connection. `baml.http.fetch_sse` reports a non-2xx
+/// (internal) A failure opening the SSE connection. `baml.http.send_sse` reports a non-2xx
 /// status as an Io error whose message carries the status and body, so the
 /// status is recovered and classified exactly like ai.wire.send_as does — a 401
 /// or 429 on the streaming path must NOT be reported as a retry-safe transport
@@ -1254,15 +1261,11 @@ function _stream_open_failure(error: unknown) -> never {
 /// The streaming entry point: the same request as `invoke` with `stream: true`,
 /// wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    let req = _request(c, input, true, preview = false);
+    let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
+    let req = limits._apply(_request(c, input, true, preview = false));
     let started = baml.time.Instant.now();
     let span = ai.wire.request_span();
-    let sse = baml.http.fetch_sse(
-        req,
-        timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
-        first_event_timeout = baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
-        $trace = span,
-    ) catch_all (e) {
+    let sse = baml.http.send_sse(req, $trace = span) catch_all (e) {
         _ => _stream_open_failure(e),
     };
     let state = OaStreamState.new();
@@ -1282,6 +1285,8 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         require_terminal = "openai",
         model = c.model,
         usage_target = trace._usage_target_of(span.id()),
+        timeouts = limits,
+        dispatched = started,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

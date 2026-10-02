@@ -324,6 +324,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         call_id: CallId,
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let state = self.0.clone();
@@ -356,6 +357,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             call_id,
             request,
             timeout_nanos,
+            connect_timeout_nanos,
             ctx,
         );
 
@@ -488,6 +490,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         call_id: CallId,
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let req = owned::http::Request {
@@ -495,27 +498,36 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             url,
             headers: indexmap::IndexMap::new(),
             body: String::new(),
+            timeout: None,
+            connect_timeout: None,
         };
-        self._send(heap, call_id, req, timeout_nanos, ctx)
+        self._send(
+            heap,
+            call_id,
+            req,
+            timeout_nanos,
+            connect_timeout_nanos,
+            ctx,
+        )
     }
 
-    fn _fetch_sse(
+    fn _send_sse(
         &self,
         heap: &Arc<BexHeap>,
         call_id: CallId,
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
-        first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         // Delegate to native implementation — playground doesn't need SSE logging yet.
-        <sys_native::NativeSysOps as io::IoNamespaceHttp>::_fetch_sse(
+        <sys_native::NativeSysOps as io::IoNamespaceHttp>::_send_sse(
             &sys_native::NativeSysOps::default(),
             heap,
             call_id,
             request,
             timeout_nanos,
-            first_event_timeout_nanos,
+            connect_timeout_nanos,
             ctx,
         )
     }

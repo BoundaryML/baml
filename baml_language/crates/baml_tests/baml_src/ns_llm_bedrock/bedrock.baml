@@ -21,7 +21,7 @@
 //   * STREAMING runs `invoke_stream` / `ai.stream.from_spec`
 //     against `root.llm_mock.mock_eventstream_serve`, which serves real binary
 //     `application/vnd.amazon.eventstream` frames (CRCs and all), so the native
-//     frame decoder behind `baml.http.fetch_sse` is exercised end to end.
+//     frame decoder behind `baml.http.send_sse` is exercised end to end.
 //
 // Corpus rules (ns_llm_mock/README.md §4): every case body is a top-level
 // function, `test` blocks only assert, cross-namespace references are
