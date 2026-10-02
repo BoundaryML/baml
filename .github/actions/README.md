@@ -83,10 +83,15 @@ Sets up the BAML Language Rust toolchain with caching and optional WASM support.
     workspace: 'baml_language'                   # Optional, default: 'baml_language'
 ```
 
-Also exports the build fingerprint (see `export-build-fingerprint`).
+Also exports the build fingerprint (see `export-build-fingerprint`), so use it only for release builds and the jobs that verify them. Test jobs install Rust through `setup-mise` and stay unstamped.
 
 ### export-build-fingerprint
-Exports `BAML_GIT_SHA`, the checked-out commit that `baml_artifact` stamps into every compiler and bridge build. Canary builds only load artifacts from the same commit and refuse to compile without one, so every job that builds BAML Rust without `setup-rust` must run this after checkout. Steps that build in their own container (`cross`, maturin) must also forward `BAML_GIT_SHA` into it.
+Exports `BAML_GIT_SHA`, the checked-out commit, which `baml_artifact` stamps into the compiler and bridge as their build fingerprint. Canary runtimes only load artifacts carrying their own fingerprint, so everything a release ships must be stamped with the same commit.
+
+Run it only in release builds, and in jobs that build code to run against released binaries:
+
+- Every job that builds BAML Rust for a release without `setup-rust` must run this after checkout. Steps that build in their own container (`cross`, maturin) must also forward `BAML_GIT_SHA` into it. The release workflow's fingerprint gate (`tools/release-fingerprints`) fails before any publisher runs if a shipped binary is missing the commit.
+- Test jobs must not run it. Without `BAML_GIT_SHA` a build is unstamped: `baml_artifact` does not read the checkout's `HEAD`, and every unstamped build carries the same fixed fingerprint. Unstamped builds load each other's artifacts and never a release's. Stamping a test build would recompile `baml_artifact` and every crate downstream of it on each new commit, missing the cargo and sccache caches.
 
 ```yaml
 - uses: ./.github/actions/export-build-fingerprint

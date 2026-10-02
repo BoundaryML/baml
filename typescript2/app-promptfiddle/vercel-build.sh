@@ -61,8 +61,8 @@ echo "Generating proto types..."
 pnpm --filter @b/pkg-proto run generate
 
 echo "Building bridge_wasm..."
-# Canary builds of baml_artifact refuse to compile without the commit they are
-# built from. Vercel may not provide Git metadata, so pass the deployed commit.
+# baml_artifact only stamps a build with its commit when BAML_GIT_SHA is set,
+# so pass the deployed commit.
 if [[ -n "${VERCEL_GIT_COMMIT_SHA:-}" ]]; then
     export BAML_GIT_SHA="$VERCEL_GIT_COMMIT_SHA"
 fi
