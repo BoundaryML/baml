@@ -31,6 +31,7 @@ use serde::Serialize;
 use crate::{Error, store};
 
 mod bulk;
+mod context;
 mod profile;
 
 #[derive(Clone, Debug)]
@@ -163,6 +164,7 @@ pub fn refresh(
     conn: &mut Connection,
     layout: &SourceLayout,
     options: &RefreshOptions,
+    cas: &btel_reader::cas::CasStore,
 ) -> Result<RefreshMetrics, Error> {
     let started = Instant::now();
     let mut metrics = RefreshMetrics::default();
@@ -170,7 +172,7 @@ pub fn refresh(
         store::WriterLock::acquire(&store::lock_path(layout), options.lock_timeout)?;
     metrics.lock_wait_ms = ms(waited);
     conn.pragma_update(None, "cache_size", store::REFRESH_CACHE_KIB)?;
-    let result = refresh_locked(conn, layout, options, &mut metrics);
+    let result = refresh_locked(conn, layout, options, cas, &mut metrics);
     // Shrinking the cache releases the pages the refresh held.
     conn.pragma_update(None, "cache_size", store::QUERY_CACHE_KIB)?;
     result?;
@@ -182,6 +184,7 @@ fn refresh_locked(
     conn: &mut Connection,
     layout: &SourceLayout,
     options: &RefreshOptions,
+    cas: &btel_reader::cas::CasStore,
     metrics: &mut RefreshMetrics,
 ) -> Result<(), Error> {
     metrics.schema_rebuilt = store::ensure_schema(conn)?;
@@ -216,6 +219,14 @@ fn refresh_locked(
         )?;
     }
     profile::rebuild_pending(conn)?;
+    context::resolve(
+        conn,
+        cas,
+        options,
+        metrics.files_applied > 0
+            || metrics.recordings_rebuilt > 0
+            || metrics.recordings_removed > 0,
+    )?;
     Ok(())
 }
 
@@ -1006,6 +1017,9 @@ impl<'t> Applier<'t> {
     }
 
     fn apply(&mut self, sequence: u64, file: &proto::RecordingFile) -> Result<(), Error> {
+        let mut contexts = context::Contexts::default();
+        contexts.apply(file);
+        contexts.write(self.tx, self.rec)?;
         let mut ticks_out_of_range = false;
         let mut tick = |value: u64| {
             let converted = quantity(value);

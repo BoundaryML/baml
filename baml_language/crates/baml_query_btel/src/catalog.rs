@@ -267,8 +267,8 @@ pub const SPANS: Relation = Relation {
             "error_value",
             "the baml.errors.Context of a failed span: error_value['error'], error_value['stack_trace'], error_value['cause']",
         ),
-        col("context_distinct_id", "text", "not recorded yet: always NULL"),
-        value("context_metadata", "not recorded yet: always an empty map"),
+        col("context_distinct_id", "text", "entry-time identity; NULL when absent or unavailable"),
+        value("context_metadata", "entry-time metadata; explicit empty context is an empty map, unknown context is unavailable"),
         value(
             "temporary_projections",
             "model usage of calls made directly in this span: model_name, model_calls (model turns), input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost (dollars; NULL for an unpriced model). NULL without model calls",
@@ -301,8 +301,8 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   IIF(c.outcome = 1, __btel_ref(2, c.value_cas, NULL, 0), NULL) AS output_value,
   IIF(c.outcome IN (2, 3), __btel_ref(3, c.value_cas, NULL, 0), NULL) AS error_value,
-  NULL AS context_distinct_id,
-  __btel_empty_map() AS context_metadata,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
      u.cache_write_tokens, u.reasoning_tokens)
    FROM main.model_usage u WHERE u.rec = c.rec AND u.node_id = c.call_id) AS temporary_projections,
@@ -312,6 +312,8 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   c.rec AS __parent_span_id_rec, c.parent_id AS __parent_span_id_key
 FROM main.call c
 JOIN main.recording r ON r.rec = c.rec
+JOIN main.event_context ec ON ec.rec = c.rec AND ec.node_id = c.call_id AND ec.slot = 0
+LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path p ON p.rec = c.rec AND p.call_path_id = c.call_path_id
 LEFT JOIN main.function_def f ON f.rec = c.rec AND f.function_id = p.callee_function_id
 LEFT JOIN main.thread t ON t.rec = c.rec AND t.thread_id = c.thread_id
@@ -345,8 +347,8 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   NULL AS input_args,
   NULL AS output_value,
   NULL AS error_value,
-  NULL AS context_distinct_id,
-  __btel_empty_map() AS context_metadata,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
      u.cache_write_tokens, u.reasoning_tokens)
    FROM main.model_usage u WHERE u.rec = t.rec AND u.node_id = t.thread_id) AS temporary_projections,
@@ -356,6 +358,8 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   t.rec AS __parent_span_id_rec, t.parent_id AS __parent_span_id_key
 FROM main.thread t
 JOIN main.recording r ON r.rec = t.rec
+JOIN main.event_context ec ON ec.rec = t.rec AND ec.node_id = t.thread_id AND ec.slot = 0
+LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call_path_id
 LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_function_id
 LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
@@ -381,9 +385,12 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
         col(
             "context_distinct_id",
             "text",
-            "not recorded yet: always NULL",
+            "announcement-time identity; NULL when absent or unavailable",
         ),
-        value("context_metadata", "not recorded yet: always an empty map"),
+        value(
+            "context_metadata",
+            "announcement-time metadata; unavailable without an announcement",
+        ),
         col(
             "is_complete",
             "integer",
@@ -403,14 +410,16 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     e.multiplier, e.shift) AS start_time,
   __btel_ref(1, c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
-  NULL AS context_distinct_id,
-  __btel_empty_map() AS context_metadata,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   c.outcome IS NOT NULL AS is_complete,
   c.rec AS __span_id_rec, c.call_id AS __span_id_key,
   c.rec AS __future_id_rec, c.thread_id AS __future_id_key,
   c.rec AS __parent_span_id_rec, c.parent_id AS __parent_span_id_key
 FROM main.call c
 JOIN main.recording r ON r.rec = c.rec
+JOIN main.event_context ec ON ec.rec = c.rec AND ec.node_id = c.call_id AND ec.slot = 1
+LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path p ON p.rec = c.rec AND p.call_path_id = c.call_path_id
 LEFT JOIN main.function_def f ON f.rec = c.rec AND f.function_id = p.callee_function_id
 LEFT JOIN main.thread t ON t.rec = c.rec AND t.thread_id = c.thread_id
@@ -429,14 +438,16 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_utc(COALESCE(t.ran_ticks, t.started_ticks), IIF(e.conflict = 0, e.utc_ticks, NULL),
     e.utc_unix_ns, e.multiplier, e.shift) AS start_time,
   NULL AS input_args,
-  NULL AS context_distinct_id,
-  __btel_empty_map() AS context_metadata,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   t.outcome IS NOT NULL AS is_complete,
   t.rec AS __span_id_rec, t.thread_id AS __span_id_key,
   t.rec AS __future_id_rec, COALESCE(pt.thread_id, pc.thread_id) AS __future_id_key,
   t.rec AS __parent_span_id_rec, t.parent_id AS __parent_span_id_key
 FROM main.thread t
 JOIN main.recording r ON r.rec = t.rec
+JOIN main.event_context ec ON ec.rec = t.rec AND ec.node_id = t.thread_id AND ec.slot = 1
+LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call_path_id
 LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_function_id
 LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id

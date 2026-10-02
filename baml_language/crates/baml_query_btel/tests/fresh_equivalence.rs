@@ -27,6 +27,8 @@ const TABLES: &[(&str, &str)] = &[
         "rec, sequence",
     ),
     ("rejected", "rec, sequence"),
+    ("event_context", "rec, node_id, slot"),
+    ("context_snapshot", "cas"),
     ("function_def", "rec, function_id"),
     ("function_param", "rec, function_id, position"),
     ("call_path", "rec, call_path_id"),

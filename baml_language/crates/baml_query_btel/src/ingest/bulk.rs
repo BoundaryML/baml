@@ -346,6 +346,7 @@ struct CallRow {
 /// One recording's facts, merged in memory.
 #[derive(Default)]
 pub(super) struct Bulk {
+    contexts: super::context::Contexts,
     functions: FxHashMap<u64, FunctionRow>,
     paths: Table<u32, PathRow>,
     threads: Table<u64, ThreadRow>,
@@ -497,6 +498,7 @@ impl Bulk {
 
     /// Fold one file, like `Applier::apply`.
     pub(super) fn apply(&mut self, sequence: u64, file: &proto::RecordingFile) {
+        self.contexts.apply(file);
         let mut ticks_out_of_range = false;
         let mut tick = |value: u64| {
             let converted = quantity(value);
@@ -914,6 +916,7 @@ impl Bulk {
         self.report_call_conflicts();
         self.resolve_entries();
         let nodes = self.resolve_nodes();
+        self.contexts.write(tx, rec)?;
         self.write_process(tx, rec)?;
         self.write_functions(tx, rec)?;
         let mut paths: Vec<u32> = if complete {
