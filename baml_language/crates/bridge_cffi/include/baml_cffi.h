@@ -578,7 +578,7 @@ struct BamlBuffer initialize_runtime_from_blob_with_metadata(const uint8_t *byte
 
 /* ABI revision 3 requires every invocation operation below. */
 #define BAML_API_V1_MIN_SIZE \
-  (offsetof(BamlApiV1, register_host_cancel_callback) + sizeof(((BamlApiV1 *)0)->register_host_cancel_callback))
+  (offsetof(BamlApiV1, invocation_context) + sizeof(((BamlApiV1 *)0)->invocation_context))
 
 /*
  * Validate the complete revision-3 table while permitting appended fields.

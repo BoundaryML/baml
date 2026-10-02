@@ -96,5 +96,7 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, release_function_call);
   PRINT_OFFSET(BamlApiV1, register_host_dispatch_v2);
   PRINT_OFFSET(BamlApiV1, register_host_cancel_callback);
+  PRINT_OFFSET(BamlApiV1, trace_selection);
+  PRINT_OFFSET(BamlApiV1, invocation_context);
   return 0;
 }
