@@ -44,6 +44,16 @@ These rows describe what happens when a call returns, throws, or terminates.
 
 The partial error assertions live in [`test_errors.rb`][errors]. Python's replay namespace test also checks async siblings; Ruby covers only sync bindings under the Ruby-only `test_replay_server_sync_namespace_bindings` name.
 
+## Static typing
+
+The nextest `sdk_test_ruby_sorbet::bridge_tests::static_consumer` gate checks the actual app-local generated SDK source with Sorbet **0.6.13506**, pinned in a separate [test bundle][static-gemfile]. Every generated Ruby file, including bytecode and model declarations, uses `# typed: strict` and is included in the check. No SDK functions or models are recreated in test RBIs.
+
+The positive consumers check string arguments and returns, `Person` construction and field reads, class round trips, arrays, nullable fields and enums. A fresh generator fixture also checks self-references, cross-namespace references to later classes/enums, and maps. Four separate negative consumers require exact source locations and codes: wrong function argument and struct-field input (`7002`), wrong return assignment and field-result assignment (`7007`). Clean baselines run first; missing or extra diagnostics fail the gate, including when those signatures become `T.untyped`.
+
+The [boundary RBI][static-bridge] describes only the dynamic bridge entry points, error readers and Sorbet's runtime signature helper. The bridge's decoded return remains dynamic; this gate proves generated declarations and consumer checking, not the bridge implementation or the runtime's adherence to BAML return types. The existing real-engine and replay tests cover runtime behavior separately. Recursive class loading and exact type/field registration have a separate runtime regression test; this does not add cyclic-object encoding support.
+
+The pinned checker runs on x86_64/arm64 macOS and x86_64/aarch64 glibc Linux. Windows, 32-bit Linux and musl hosts explicitly ignore the static test because no compatible binary is supplied; their runtime tests still run. Setup installs the checker under `target/ruby-sorbet-static-bundle` only on supported hosts, and installation failures there fail setup. The runtime Gemfile and its platform lock entries are unchanged.
+
 ## Value kinds
 
 Encode means Ruby → BAML; decode means BAML → Ruby. Protocol tests exercise protobuf encoding and decoding without the engine. The generated-package tests make real calls.
@@ -89,3 +99,5 @@ Encode means Ruby → BAML; decode means BAML → Ruby. Protocol tests exercise 
 [streaming]: ../../../sdk_tests/crates/ruby_sorbet/llm_functions/customizable/test_streaming_e2e.rb
 [protocol]: ../../../sdk_tests/crates/ruby_sorbet/test/protocol_test.rb
 [bridge-call]: ../../../sdk_tests/crates/ruby_sorbet/test/bridge_call_test.rb
+[static-gemfile]: ../../../sdk_tests/crates/ruby_sorbet/test/static/Gemfile
+[static-bridge]: ../../../sdk_tests/crates/ruby_sorbet/test/static/bridge.rbi

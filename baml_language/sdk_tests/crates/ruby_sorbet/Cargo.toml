@@ -6,6 +6,9 @@ publish = false
 
 [dev-dependencies]
 sdk_test_harness_runner = { path = "../../harness_runner" }
+sdkgen_ruby_sorbet = { workspace = true }
+baml_sdkgen_types = { workspace = true }
+tempfile = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

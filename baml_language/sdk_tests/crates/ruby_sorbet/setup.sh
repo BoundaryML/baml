@@ -47,6 +47,26 @@ c++ -std=c++17 -Wall -Wextra -Werror \
   -o "$FIXTURE_DIR/libbaml_ruby_thread_callback.$LIB_EXT"
 printf 'not a dynamic library\n' > "$FIXTURE_DIR/not-a-library"
 
+# The pinned checker has no Windows, 32-bit Linux or musl binary. Keep its
+# bundle separate so those hosts can still install and run the runtime suite.
+case "$(uname -s):$(uname -m)" in
+  Darwin:x86_64|Darwin:arm64) STATIC_SUPPORTED=1 ;;
+  Linux:x86_64|Linux:aarch64)
+    if getconf GNU_LIBC_VERSION >/dev/null 2>&1; then STATIC_SUPPORTED=1; else STATIC_SUPPORTED=0; fi
+    ;;
+  *) STATIC_SUPPORTED=0 ;;
+esac
+if [[ "$STATIC_SUPPORTED" == 1 ]]; then
+  (
+    export BUNDLE_GEMFILE="$TEST_ROOT/test/static/Gemfile"
+    export BUNDLE_PATH="$TARGET_DIR/ruby-sorbet-static-bundle"
+    export BUNDLE_FROZEN=true
+    ruby -S bundle install --jobs 4 --retry 3
+  )
+else
+  echo "Sorbet static gate unavailable: checker 0.6.13506 requires x86_64/arm64 macOS or x86_64/aarch64 glibc Linux; runtime tests still run."
+fi
+
 export BUNDLE_GEMFILE="$TEST_ROOT/Gemfile"
 export BUNDLE_PATH="$TARGET_DIR/ruby-bundle"
 ruby -S bundle install --jobs 4 --retry 3

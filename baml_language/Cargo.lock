@@ -6714,7 +6714,10 @@ dependencies = [
 name = "sdk_test_ruby_sorbet"
 version = "0.1.0"
 dependencies = [
+ "baml_sdkgen_types",
  "sdk_test_harness_runner",
+ "sdkgen_ruby_sorbet",
+ "tempfile",
 ]
 
 [[package]]

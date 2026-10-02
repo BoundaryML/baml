@@ -47,6 +47,8 @@ if ($LASTEXITCODE -ne 0) { throw "thread-callback fixture compilation failed" }
 $invalidLibrary = Join-Path $fixtureDir "not-a-library"
 [IO.File]::WriteAllText($invalidLibrary, "not a dynamic library`n")
 
+Write-Host "Sorbet static gate unavailable: checker 0.6.13506 has no Windows binary; runtime tests still run."
+
 $env:BUNDLE_GEMFILE = Join-Path $testRoot "Gemfile"
 $env:BUNDLE_PATH = Join-Path $targetDir "ruby-bundle"
 & ruby -S bundle install --jobs 4 --retry 3

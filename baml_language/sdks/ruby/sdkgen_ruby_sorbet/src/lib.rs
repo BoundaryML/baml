@@ -77,8 +77,9 @@ pub fn to_source_code_with_bytecode_and_skipped(
     let mut skipped = BTreeSet::new();
     let mut namespaces: BTreeMap<String, String> = BTreeMap::new();
     let mut root = String::from(
-        "# frozen_string_literal: true\nrequire \"baml/bridge\"\nrequire \"sorbet-runtime\"\nrequire_relative \"baml_sdk/bytecode\"\nmodule BamlSdk\n  def self.initialize!\n    Baml::Bridge.initialize!(BYTECODE)\n  end\nend\n",
+        "# typed: strict\n# frozen_string_literal: true\nrequire \"baml/bridge\"\nrequire \"sorbet-runtime\"\nrequire_relative \"baml_sdk/bytecode\"\nmodule BamlSdk\n  extend T::Sig\n  sig { returns(NilClass) }\n  def self.initialize!\n    Baml::Bridge.initialize!(BYTECODE)\n  end\nend\n",
     );
+    let mut shells = String::new();
     let mut methods = Vec::new();
     let mut registry = String::new();
     let mut names = NameTable::default();
@@ -130,8 +131,13 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 )
                 .unwrap();
                 names.claim(&module, &constant(name.name().as_str()), &name.to_string())?;
-                writeln!(root, "class {} < T::Struct; end", qualified(name)).unwrap();
-                writeln!(body, "class {}", constant(name.name().as_str())).unwrap();
+                writeln!(
+                    shells,
+                    "{module}.const_set(:{}, Class.new(T::Struct))",
+                    constant(name.name().as_str())
+                )
+                .unwrap();
+                writeln!(body, "class {} < T::Struct", constant(name.name().as_str())).unwrap();
                 for p in &c.properties {
                     let field = identifier(p.name.as_str(), naming);
                     names.claim(
@@ -158,8 +164,18 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 )
                 .unwrap();
                 names.claim(&module, &constant(name.name().as_str()), &name.to_string())?;
-                writeln!(root, "class {} < T::Enum; end", qualified(name)).unwrap();
-                writeln!(body, "class {}\n  enums do", constant(name.name().as_str())).unwrap();
+                writeln!(
+                    shells,
+                    "{module}.const_set(:{}, Class.new(T::Enum))",
+                    constant(name.name().as_str())
+                )
+                .unwrap();
+                writeln!(
+                    body,
+                    "class {} < T::Enum\n  enums do",
+                    constant(name.name().as_str())
+                )
+                .unwrap();
                 for v in &e.variants {
                     names.claim(
                         &qualified(name),
@@ -230,7 +246,10 @@ pub fn to_source_code_with_bytecode_and_skipped(
             }
         }
     }
-    // Define all namespace modules before the type shells above.
+    // Runtime shells preserve forward/recursive references. Create them dynamically
+    // so Sorbet sees each T::Struct/T::Enum declaration once, with all its fields;
+    // a normal empty T::Struct declaration synthesizes a zero-argument constructor.
+    // Define namespace modules before creating the shells.
     let mut modules = BTreeSet::new();
     for module in namespaces.keys() {
         let parts: Vec<_> = module.split("::").collect();
@@ -242,8 +261,8 @@ pub fn to_source_code_with_bytecode_and_skipped(
     for module in modules {
         writeln!(declarations, "module {module}; end").unwrap();
     }
-    let position = root.find("class ").unwrap_or(root.len());
-    root.insert_str(position, &declarations);
+    root.push_str(&declarations);
+    root.push_str(&shells);
     let mut files = HashMap::new();
     for (module, body) in namespaces {
         let path = format!(
@@ -260,7 +279,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
         });
         files.insert(
             PathBuf::from(&path),
-            format!("# frozen_string_literal: true\nmodule {module}\n  extend T::Sig\n{body}end\n"),
+            format!("# typed: strict\n# frozen_string_literal: true\nmodule {module}\n  extend T::Sig\n{body}end\n"),
         );
         writeln!(
             root,
@@ -275,7 +294,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
     }
     files.insert(PathBuf::from("baml_sdk.rb"), root);
     let bytes = baml_sdkgen_types::embedded_bytecode_base64(bytecode);
-    files.insert(PathBuf::from("baml_sdk/bytecode.rb"), format!("# frozen_string_literal: true\nmodule BamlSdk\n  BYTECODE = \"{bytes}\".b.freeze\nend\n"));
+    files.insert(PathBuf::from("baml_sdk/bytecode.rb"), format!("# typed: strict\n# frozen_string_literal: true\nmodule BamlSdk\n  BYTECODE = T.let(\"{bytes}\".b.freeze, String)\nend\n"));
     Ok((files, skipped.into_iter().collect()))
 }
 
@@ -605,7 +624,7 @@ mod tests {
         assert_eq!(
             first[&PathBuf::from("baml_sdk/bytecode.rb")],
             format!(
-                "# frozen_string_literal: true\nmodule BamlSdk\n  BYTECODE = \"{embedded}\".b.freeze\nend\n"
+                "# typed: strict\n# frozen_string_literal: true\nmodule BamlSdk\n  BYTECODE = T.let(\"{embedded}\".b.freeze, String)\nend\n"
             )
         );
         assert!(embedded.is_ascii() && !embedded.contains(['\n', '\r']));

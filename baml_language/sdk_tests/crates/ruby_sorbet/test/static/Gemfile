@@ -1,0 +1,4 @@
+source "https://rubygems.org"
+
+# Separate from the runtime bundle: Sorbet has no Windows or 32-bit Linux binary.
+gem "sorbet-static", "= 0.6.13506", require: false
