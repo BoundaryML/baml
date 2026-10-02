@@ -234,6 +234,115 @@ enum Selection {
 }
 
 impl<'db> InferenceContext<'db> {
+    /// Search bounds without solving them. A structure demand must not
+    /// commit sibling variables merely because they share a bound with it.
+    fn has_structure_operator(
+        &mut self,
+        ty: &Ty,
+        visiting: &mut rustc_hash::FxHashSet<baml_type::interned::InferVar>,
+    ) -> bool {
+        let ty = self.table.resolve_completely(ty);
+        let InferTy::InferVar { var, .. } = ty.kind() else {
+            return false;
+        };
+        let root = self
+            .table
+            .unsolved_root_var(*var)
+            .expect("resolve_completely leaves only unsolved variables");
+        if !visiting.insert(root) {
+            return false;
+        }
+        if self.obligations.iter().any(|obligation| {
+            let Obligation::Operator { out, .. } = obligation else {
+                return false;
+            };
+            let out = self.table.resolve_completely(out);
+            matches!(out.kind(), InferTy::InferVar { var, .. }
+                if self.table.unsolved_root_var(*var) == Some(root))
+        }) {
+            return true;
+        }
+        let bounds = self.table.var_bounds(root);
+        bounds
+            .lowers
+            .iter()
+            .chain(&bounds.uppers)
+            .any(|bound| self.has_structure_operator(&bound.ty, visiting))
+    }
+
+    /// A structure demand can depend on pending arithmetic, e.g.
+    /// `(values.reduce((a, b) -> { a + b }, 0) * 1.0).round()`.
+    /// Resolve only that operator's dependencies from their current bounds;
+    /// unrelated obligations must keep waiting for the finish fixpoint.
+    /// Leave the obligation registered so finish still reports failures.
+    pub(super) fn resolve_structure_operand(
+        &mut self,
+        ty: &Ty,
+        visiting: &mut rustc_hash::FxHashSet<baml_type::interned::InferVar>,
+    ) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        let InferTy::InferVar { var, .. } = resolved.kind() else {
+            return resolved;
+        };
+        let var = self
+            .table
+            .unsolved_root_var(*var)
+            .expect("resolve_completely leaves only unsolved variables");
+        if !visiting.insert(var) {
+            return resolved;
+        }
+        let bounds = self.table.var_bounds(var);
+        // Generic passthrough calls may put one or more bounded variables
+        // between the receiver and its producer. Demand those dependencies
+        // before committing their aliases; the root guard breaks cycles
+        // such as a reduce accumulator bounded by its own callback output.
+        for bound in bounds.lowers.iter().chain(&bounds.uppers) {
+            if self.has_structure_operator(&bound.ty, &mut rustc_hash::FxHashSet::default()) {
+                self.resolve_structure_operand(&bound.ty, visiting);
+            }
+        }
+        let bounds = self.table.var_bounds(var);
+        self.try_solve_bounded_var(var, &bounds);
+        let resolved = self.table.resolve_completely(&resolved);
+        let InferTy::InferVar { var, .. } = resolved.kind() else {
+            return resolved;
+        };
+        // Solving can alias the demanded variable to an operator output
+        // without grounding either. Compare union-find roots, not the
+        // original InferVar spellings, and keep following the producer.
+        let root = self
+            .table
+            .unsolved_root_var(*var)
+            .expect("resolve_completely leaves only unsolved variables");
+        let operator = self.obligations.iter().find_map(|obligation| {
+            let Obligation::Operator {
+                interface,
+                lhs,
+                rhs,
+                out,
+                ..
+            } = obligation
+            else {
+                return None;
+            };
+            let out = self.table.resolve_completely(out);
+            let InferTy::InferVar { var, .. } = out.kind() else {
+                return None;
+            };
+            (self.table.unsolved_root_var(*var) == Some(root))
+                .then(|| (*interface, lhs.clone(), rhs.clone()))
+        });
+        if let Some((interface, lhs, rhs)) = operator {
+            let lhs = self.resolve_structure_operand(&lhs, visiting);
+            let rhs = rhs.map(|rhs| self.resolve_structure_operand(&rhs, visiting));
+            if !lhs.has_infer() && !rhs.as_ref().is_some_and(Ty::has_infer) {
+                let result = self.dispatch_operator(interface, &lhs, rhs.as_ref());
+                let _ = self.table.unify(&resolved, &result);
+            }
+        }
+        self.table.resolve_completely(&resolved)
+    }
+
     pub(super) fn register_obligation(&mut self, obligation: Obligation) {
         self.obligations.push(Pending {
             obligation,
