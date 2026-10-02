@@ -49,6 +49,9 @@ pub struct FlatStr {
 /// Deferred concatenation node.
 pub struct ConcatNode {
     pub(crate) total_len: u64,
+    /// Number of Unicode codepoints, summed from the children at construction
+    /// (each O(1)), so `char_count` needs no recursive walk of a deep rope.
+    pub(crate) char_count: u64,
     pub(crate) state: Mutex<ConcatState>,
 }
 
@@ -113,20 +116,15 @@ impl BexStr {
         }
     }
 
-    /// Number of Unicode codepoints. O(1) for all variants except
-    /// unflattened Concat (O(depth) tree walk).
+    /// Number of Unicode codepoints. O(1) for all variants: a Concat caches
+    /// its count at construction, so this never walks (or recurses into) the
+    /// rope, however deep repeated appends have made it.
     pub fn char_count(&self) -> usize {
         match self {
             BexStr::Inline { len, data } => bytecount::num_chars(&data[..*len as usize]),
             BexStr::Flat(f) => f.char_count as usize,
             BexStr::Slice { char_count, .. } => *char_count as usize,
-            BexStr::Concat(c) => {
-                let guard = c.state.lock().unwrap();
-                match &*guard {
-                    ConcatState::Flattened(f) => f.char_count as usize,
-                    ConcatState::Deferred { left, right } => left.char_count() + right.char_count(),
-                }
-            }
+            BexStr::Concat(c) => c.char_count as usize,
         }
     }
 
@@ -338,8 +336,10 @@ impl BexStr {
             };
         }
 
+        let char_count = (left.char_count() + right.char_count()) as u64;
         BexStr::Concat(Arc::new(ConcatNode {
             total_len: total_len as u64,
+            char_count,
             state: Mutex::new(ConcatState::Deferred { left, right }),
         }))
     }
@@ -460,10 +460,9 @@ impl ConcatNode {
             }
         }
 
-        let char_count = bytecount::num_chars(&buf) as u64;
         let flat = Arc::new(FlatStr {
             hash: [const { AtomicU64::new(0) }; 2],
-            char_count,
+            char_count: self.char_count,
             data: buf.into_boxed_slice(),
         });
         *guard = ConcatState::Flattened(flat.clone());
