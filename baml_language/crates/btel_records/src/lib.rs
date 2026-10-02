@@ -166,6 +166,10 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         call_path: CallPathId,
         entered_at: ClockInstant,
         captured_inputs: Option<InputCapture>,
+        /// A generic call's type arguments, `map<string, Type>` keyed by
+        /// type-parameter name. Recorded with the span, whether or not its
+        /// inputs are; `None` for a call without type arguments.
+        captured_type_args: Option<InputCapture>,
     },
     /// Completion variants specialize outcome, reentry and announcement dependency.
     /// This is an in-process dispatch choice; Rust discriminants are not wire IDs.
@@ -680,6 +684,22 @@ mod layout_tests {
         assert_eq!(size_of::<TimingRecord>(), 32);
         assert_eq!(size_of::<Box<RaiseStack>>(), 8);
         assert_eq!(size_of::<Option<ThreadName>>(), 8);
+    }
+
+    #[test]
+    fn an_announcement_gives_up_its_inputs_then_its_type_args() {
+        let id = btel_types::allocate_telemetry_id();
+        let mut record = SpanRecord::<u8, u8>::FunctionSpanAnnouncement {
+            id,
+            parent_id: id,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(1),
+            captured_type_args: Some(2),
+        };
+        assert_eq!(record.take_capture(), Some(1));
+        assert_eq!(record.take_capture(), Some(2));
+        assert_eq!(record.take_capture(), None);
     }
 }
 
@@ -1225,14 +1245,18 @@ impl<I, V> SpanRecord<I, V> {
 }
 
 impl<C> SpanRecord<C, C> {
-    /// Transfer the exclusive capture owner; record destruction handles everything else.
+    /// Transfer the exclusive capture owners, one per call until none is
+    /// left; record destruction handles everything else. Only an
+    /// announcement holds two: its inputs, then its type arguments.
     pub fn take_capture(&mut self) -> Option<C> {
         match self {
             Self::Log { captured_data, .. } => captured_data.take(),
             Self::ContextSelected { captured_context } => captured_context.take(),
             Self::FunctionSpanAnnouncement {
-                captured_inputs, ..
-            } => captured_inputs.take(),
+                captured_inputs,
+                captured_type_args,
+                ..
+            } => captured_inputs.take().or_else(|| captured_type_args.take()),
             Self::NetworkSpanAnnouncement(announcement) => announcement.request.take(),
             Self::NetworkEvent(event) => event.payload.take(),
             Self::NetworkSpanCompletion(completion) => completion.error.take(),

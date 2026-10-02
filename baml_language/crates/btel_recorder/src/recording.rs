@@ -402,10 +402,10 @@ impl RecordingBuilder {
     }
     pub fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
         self.span_reference(thread, record);
-        if let Some(snapshot) = record.take_capture()
-            && let Some(snapshot) = self.captures.retain(snapshot)
-        {
-            self.pending_captures.push(snapshot);
+        while let Some(snapshot) = record.take_capture() {
+            if let Some(snapshot) = self.captures.retain(snapshot) {
+                self.pending_captures.push(snapshot);
+            }
         }
     }
     /// Begin a non-sliding flush interval at the first event in the open file.

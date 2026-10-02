@@ -457,6 +457,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         call_path: path,
         entered_at: ClockInstant::from_ticks(4),
         captured_inputs: Some(snapshot()),
+        captured_type_args: None,
     };
     producer.write_span(announcement(thread));
     producer.write_span(SpanRecord::ThreadSelected { thread_id: child });
