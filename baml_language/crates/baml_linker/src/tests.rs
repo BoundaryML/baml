@@ -714,19 +714,20 @@ fn packages_without_lets_may_reach_each_other() {
     assert_eq!(order, Ok(vec![3, 0]));
 }
 
-/// Two packages may share a name (names live on edges); the order among
-/// packages free to initialize is by name, then by position, so every link
-/// of one set orders them the same way.
+/// The order among packages free to initialize is their position in the
+/// set, so every link of one set orders them the same way. A package's label
+/// takes no part, whether two packages share one or it would sort another
+/// way.
 #[test]
-fn init_order_breaks_a_tie_between_same_named_packages_by_position() {
+fn init_order_among_free_packages_is_by_position_whatever_they_are_called() {
     let set = [
         with_lets("user", &[]),
         with_lets("lib", &[]),
         with_lets("lib", &[]),
-        with_lets("lib", &[]),
+        with_lets("app", &[]),
     ];
     for _ in 0..32 {
-        assert_eq!(init_order_of(&set), Ok(vec![1, 2, 3, 0]));
+        assert_eq!(init_order_of(&set), Ok(vec![0, 1, 2, 3]));
     }
 }
 
@@ -749,12 +750,13 @@ fn an_init_cycle_is_refused_naming_both_packages() {
 }
 
 #[test]
-fn init_order_is_topological_with_alphabetical_ties() {
-    // `a` depends on `c`; `b` is independent. In-degree-zero packages sort
-    // by name (b, c), then `a` is released.
+fn init_order_is_topological_with_ties_by_position() {
+    // `a` depends on `c`; `z` is independent. The packages free to
+    // initialize go in set order (`z`, then `c` — not by label), then `a`
+    // is released.
     let record = interface_record(b"iface");
     let empty = CompilationUnit::default();
-    let tails: Vec<InitTail> = ["a", "b", "c"]
+    let tails: Vec<InitTail> = ["a", "z", "c"]
         .into_iter()
         .map(|name| InitTail {
             objects: vec![func(&format!("{name}.$init"), vec![Instruction::Return])],
@@ -767,7 +769,7 @@ fn init_order_is_topological_with_alphabetical_ties() {
         .collect();
     let mut packages = vec![
         package("a", vec![("c", 2)], &empty, &record),
-        package("b", vec![], &empty, &record),
+        package("z", vec![], &empty, &record),
         package("c", vec![], &empty, &record),
     ];
     for (package, tail) in packages.iter_mut().zip(&tails) {
@@ -782,7 +784,7 @@ fn init_order_is_topological_with_alphabetical_ties() {
     // Placement is set order; only the execution order is topological.
     assert_eq!(
         function_names(&program),
-        vec!["a.$init", "b.$init", "c.$init"]
+        vec!["a.$init", "z.$init", "c.$init"]
     );
 }
 

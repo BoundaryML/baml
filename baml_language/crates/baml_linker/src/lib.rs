@@ -49,7 +49,7 @@
 //! — so a package's objects are one contiguous range and its position in the
 //! set is its position in the image. Init parts EXECUTE in package
 //! initialization order — each package with `let`s after every package with
-//! `let`s it reaches, ties by name then position — which
+//! `let`s it reaches, ties by position in the set — which
 //! `Program::init_order` records as package ordinals; placement
 //! does not encode it. A generic-function VALUE (`foo<int>` as data) is
 //! emitted once per unit and interned here by `(base function's absolute
