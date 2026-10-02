@@ -30,7 +30,7 @@ impl BamlRuntime {
         // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
         // singleton; we don't keep our own copy.
         match bridge_cffi::initialize_runtime(&root_path, files) {
-            Ok(_bex) => Ok(BamlRuntime {}),
+            Ok(()) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }
@@ -48,7 +48,7 @@ impl BamlRuntime {
             Either::B(bytes) => bytes.as_ref(),
         };
         match bridge_cffi::initialize_runtime_from_blob(bytecode, embedded_baml_toml.as_deref()) {
-            Ok(_bex) => Ok(BamlRuntime {}),
+            Ok(()) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }

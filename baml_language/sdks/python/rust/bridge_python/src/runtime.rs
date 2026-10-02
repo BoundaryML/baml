@@ -44,7 +44,7 @@ impl BamlRuntime {
         // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
         // singleton; we don't keep our own copy.
         match bridge_cffi::initialize_runtime(&root_path, files) {
-            Ok(_bex) => Ok(BamlRuntime),
+            Ok(()) => Ok(BamlRuntime),
             // Handle-returning site: can't hand back envelope bytes, so an
             // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
             Err(e) => Err(bridge_error_to_sdk_panic(e)),
@@ -65,7 +65,7 @@ impl BamlRuntime {
         embedded_baml_toml: Option<String>,
     ) -> PyResult<Self> {
         match bridge_cffi::initialize_runtime_from_blob(&bytecode, embedded_baml_toml.as_deref()) {
-            Ok(_bex) => Ok(BamlRuntime),
+            Ok(()) => Ok(BamlRuntime),
             Err(e) => Err(crate::errors::bridge_error_to_initialization_error(e)),
         }
     }

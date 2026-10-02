@@ -152,10 +152,12 @@ pub fn initialize_runtime_from_blob_with_sys_ops(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     sys_ops: sys_ops::SysOps,
-) -> Result<Arc<dyn Bex>, BridgeError> {
-    let runtime = prepare_runtime_from_blob(bytecode, embedded_baml_toml, sys_ops)?.build()?;
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+) -> Result<(), BridgeError> {
+    platform::stage_runtime(prepare_runtime_from_blob(
+        bytecode,
+        embedded_baml_toml,
+        sys_ops,
+    )?)
 }
 
 fn prepare_runtime_from_blob(
@@ -307,10 +309,8 @@ pub fn initialize_runtime_from_files_with_sys_ops(
     root_path: &str,
     src_files: HashMap<String, String>,
     sys_ops: sys_ops::SysOps,
-) -> Result<Arc<dyn Bex>, BridgeError> {
-    let runtime = prepare_runtime_from_files(root_path, src_files, sys_ops)?.build()?;
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+) -> Result<(), BridgeError> {
+    platform::stage_runtime(prepare_runtime_from_files(root_path, src_files, sys_ops)?)
 }
 
 fn prepare_runtime_from_files(
@@ -395,7 +395,7 @@ pub async fn shutdown_runtime(grace: Option<std::time::Duration>) -> Result<(), 
 pub fn initialize_runtime_from_blob(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
-) -> Result<Arc<dyn Bex>, BridgeError> {
+) -> Result<(), BridgeError> {
     use sys_native::SysOpsExt as _;
 
     initialize_runtime_from_blob_with_sys_ops(

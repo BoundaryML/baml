@@ -52,7 +52,7 @@ pub fn stage_runtime_from_files_with_sys_ops(
     )?)
 }
 
-fn stage_runtime(runtime: PreparedRuntime) -> Result<(), BridgeError> {
+pub(crate) fn stage_runtime(runtime: PreparedRuntime) -> Result<(), BridgeError> {
     if WORKERD.get() {
         replace_state(RuntimeState::Pending(Box::new(runtime)))
     } else {
