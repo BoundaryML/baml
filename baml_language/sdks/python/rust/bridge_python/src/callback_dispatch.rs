@@ -22,8 +22,26 @@ pub(crate) struct Dispatch {
 }
 
 pub(crate) enum SyncMessage {
-    Dispatch(Dispatch),
+    Dispatch(QueuedDispatch),
     Finished(Vec<u8>),
+}
+
+/// Own arguments until the synchronous caller takes responsibility for decoding
+/// them. Interruptions can discard both a received message and the whole queue.
+pub(crate) struct QueuedDispatch(Option<Dispatch>);
+
+impl QueuedDispatch {
+    pub(crate) fn into_inner(mut self) -> Dispatch {
+        self.0.take().expect("queued dispatch already consumed")
+    }
+}
+
+impl Drop for QueuedDispatch {
+    fn drop(&mut self) {
+        if let Some(dispatch) = self.0.take() {
+            host_value::discard_host_call_args(&dispatch.args);
+        }
+    }
 }
 
 enum Environment {
@@ -122,10 +140,10 @@ pub(crate) fn route(dispatch: Dispatch) {
     match &*environment {
         Environment::Sync(sender) => {
             let call_id = dispatch.call_id;
-            if let Err(mpsc::SendError(SyncMessage::Dispatch(dispatch))) =
-                sender.send(SyncMessage::Dispatch(dispatch))
+            if sender
+                .send(SyncMessage::Dispatch(QueuedDispatch(Some(dispatch))))
+                .is_err()
             {
-                host_value::discard_host_call_args(&dispatch.args);
                 host_value::send_dispatch_bridge_failure(
                     call_id,
                     "originating Python caller stopped servicing callbacks".to_owned(),

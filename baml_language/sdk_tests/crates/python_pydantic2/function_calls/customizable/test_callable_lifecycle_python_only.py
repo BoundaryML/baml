@@ -316,11 +316,11 @@ async def test_cancelling_call_delivers_cancellation_and_allows_callback_cleanup
         await asyncio.gather(task, return_exceptions=True)
 
 
-# SDK_PARITY_LINT(skip): Python callback task and event loop ownership
 @pytest.mark.skipif(
     sys.version_info < (3, 11), reason="TaskGroup requires Python 3.11+"
 )
 @pytest.mark.asyncio
+# SDK_PARITY_LINT(skip): Python callback task and event loop ownership
 async def test_taskgroup_failure_cancels_sibling_baml_call_and_preserves_error_python_only():
     loop = asyncio.get_running_loop()
     entered, exited = asyncio.Event(), asyncio.Event()

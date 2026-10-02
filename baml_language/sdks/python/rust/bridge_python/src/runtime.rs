@@ -176,7 +176,9 @@ impl BamlRuntime {
                 return Err(error);
             }
             match message {
-                Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
+                Ok(SyncMessage::Dispatch(dispatch)) => {
+                    crate::host_value::dispatch_sync(dispatch.into_inner());
+                }
                 Ok(SyncMessage::Finished(bytes)) => return Ok(bytes),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
