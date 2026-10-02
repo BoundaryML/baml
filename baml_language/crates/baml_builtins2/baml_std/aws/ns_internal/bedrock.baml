@@ -1462,7 +1462,12 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
         null => null,
         let reported: ConverseUsage => {
             ai.events.Usage {
-                input_tokens: reported.inputTokens ?? 0,
+                // inputTokens excludes both cache counts.
+                input_tokens: ai.internal.total_input_tokens(
+                    reported.inputTokens,
+                    reported.cacheReadInputTokens,
+                    reported.cacheWriteInputTokens,
+                ) ?? 0,
                 output_tokens: reported.outputTokens ?? 0,
                 cached_input_tokens: reported.cacheReadInputTokens,
                 // Converse reports no separate reasoning-token count; the
@@ -1745,7 +1750,11 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
                 out.push(
                     ai.stream.TurnMeta {
                         stop_reason: null,
-                        input_tokens: event.usage?.inputTokens,
+                        input_tokens: ai.internal.total_input_tokens(
+                            event.usage?.inputTokens,
+                            event.usage?.cacheReadInputTokens,
+                            event.usage?.cacheWriteInputTokens,
+                        ),
                         output_tokens: event.usage?.outputTokens,
                         cached_input_tokens: event.usage?.cacheReadInputTokens,
                         cache_write_input_tokens: event.usage?.cacheWriteInputTokens,

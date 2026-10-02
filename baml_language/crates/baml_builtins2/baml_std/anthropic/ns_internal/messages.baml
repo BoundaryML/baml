@@ -879,7 +879,12 @@ function parse(resp: Response) -> ai.ModelTurn {
     let usage: ai.events.Usage? = match (resp.usage) {
         let u: Usage => {
             ai.events.Usage {
-                input_tokens: u.input_tokens ?? 0,
+                // Anthropic's input_tokens excludes both cache counts.
+                input_tokens: ai.internal.total_input_tokens(
+                    u.input_tokens,
+                    u.cache_read_input_tokens,
+                    u.cache_creation_input_tokens,
+                ) ?? 0,
                 output_tokens: u.output_tokens ?? 0,
                 // Cache READS are the cached-input tokens. Cache WRITES
                 // (cache_creation_input_tokens) are billed above the normal
@@ -935,7 +940,11 @@ function _anth_stream_meta(
 ) -> ai.stream.TurnMeta {
     ai.stream.TurnMeta {
         stop_reason: stop,
-        input_tokens: usage?.input_tokens,
+        input_tokens: ai.internal.total_input_tokens(
+            usage?.input_tokens,
+            usage?.cache_read_input_tokens,
+            usage?.cache_creation_input_tokens,
+        ),
         output_tokens: usage?.output_tokens,
         cached_input_tokens: usage?.cache_read_input_tokens,
         cache_write_input_tokens: usage?.cache_creation_input_tokens,
