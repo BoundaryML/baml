@@ -534,6 +534,13 @@ mod tests {
         .await
         .admit()
         .unwrap();
+        assert!(matches!(
+            engine.invocation_state(active.prepared.host_call_id),
+            Err(EngineError::FunctionCallNotFound { .. })
+        ));
+        // This fixture captures without driving execute(), so publish the
+        // frame that execution installs before any callback can capture it.
+        engine.record_invocation_frame(active.prepared.host_call_id, &active.prepared.thread);
         let spawner = Arc::new(crate::InvocationSpawner {
             runtime: Arc::clone(&engine),
             cancel: None,

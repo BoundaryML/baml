@@ -2,25 +2,24 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 780. IDs with complete required parity: 142. Required gaps: 4401.
-
+Distinct exact test IDs: 783. IDs with complete required parity: 144. Required gaps: 4407.
 
 ## Python-baselined parity
 
-Parity is the share of the 358 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 360 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 358 / 358 | 100.0% |
-| typescript_node | 130 / 358 | 36.3% |
-| typescript_web_chromium | 123 / 358 | 34.4% |
-| typescript_web_cloudflare_workers | 123 / 358 | 34.4% |
-| cpp | 130 / 358 | 36.3% |
-| csharp | 0 / 358 | 0.0% |
-| rust | 216 / 358 | 60.3% |
-| go | 13 / 358 | 3.6% |
-| java | 288 / 358 | 80.4% |
-| swift | 181 / 358 | 50.6% |
+| python_pydantic2 | 360 / 360 | 100.0% |
+| typescript_node | 131 / 360 | 36.4% |
+| typescript_web_chromium | 124 / 360 | 34.4% |
+| typescript_web_cloudflare_workers | 124 / 360 | 34.4% |
+| cpp | 130 / 360 | 36.1% |
+| csharp | 0 / 360 | 0.0% |
+| rust | 216 / 360 | 60.0% |
+| go | 13 / 360 | 3.6% |
+| java | 288 / 360 | 80.0% |
+| swift | 181 / 360 | 50.3% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -96,6 +95,9 @@ Parity is the share of the 358 test IDs declared in `python_pydantic2` that are 
 | function_calls/cancellation_surfaces_sync_pre_aborted_cancellation_as_abort_error | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_sync_call_returns_none | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/cancellation_sync_cancel_via_call_context | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/cancelled_waiter_does_not_end_host_execution | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/cancelled_waiter_keeps_host_context_through_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python task unwinding and ContextVar semantics |
+| function_calls/cancelled_waiter_keeps_host_resource_until_promise_exit_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node AsyncResource destruction and AsyncLocalStorage |
 | function_calls/cancelled_waiter_stays_cancelled_when_callback_returns_late | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancelling_call_delivers_cancellation_and_allows_callback_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
 | function_calls/canonical_json_class_union_uses_declared_field_codecs | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -804,4 +806,3 @@ Parity is the share of the 358 test IDs declared in `python_pydantic2` that are 
 | type_shapes/unions_union_is_a_plain_std_variant | - | - | - | - | y | - | - | - | - | - | all |  |
 | type_shapes/void_no_op | y | y | y | y | y | - | y | - | y | y | all |  |
 | unsupported_only/compile_unsupported_only_package_compiles | - | - | - | - | - | - | - | y | - | - | all |  |
-
