@@ -1,7 +1,8 @@
 import type { ReleaseMetric, WeeklyCliMetrics } from './report.js';
 
 const width = 1440;
-const height = 980;
+const releaseLegendColumns = 5;
+const releaseLegendRowHeight = 24;
 const colors = ['#6d5dfc', '#00a98f', '#f59e0b', '#ef5da8', '#3b82f6'];
 
 function compactDate(date: string): string {
@@ -28,8 +29,14 @@ function axisLabel(value: number): string {
   return Math.round(value).toString();
 }
 
-function panel(x: number, y: number, title: string, content: string): string {
-  return `<g><rect x="${x}" y="${y}" width="660" height="350" rx="20" fill="#ffffff" stroke="#e3e6ef"/><text class="panel-title" x="${x + 28}" y="${y + 42}">${title}</text>${content}</g>`;
+function panel(
+  x: number,
+  y: number,
+  title: string,
+  content: string,
+  height = 350,
+): string {
+  return `<g><rect x="${x}" y="${y}" width="660" height="${height}" rx="20" fill="#ffffff" stroke="#e3e6ef"/><text class="panel-title" x="${x + 28}" y="${y + 42}">${title}</text>${content}</g>`;
 }
 
 function grid(x: number, y: number, max: number): string {
@@ -138,8 +145,16 @@ function releaseShare(release: ReleaseMetric, week: WeeklyCliMetrics): string {
   return `${((release.users / week.distinctUsers) * 100).toFixed(1)}%`;
 }
 
+function releaseLegendExtraHeight(releaseCount: number): number {
+  return (
+    Math.max(0, Math.ceil(releaseCount / releaseLegendColumns) - 1) *
+    releaseLegendRowHeight
+  );
+}
+
 function releaseMix(weeks: WeeklyCliMetrics[], x: number, y: number): string {
   const releases = releaseOrder(weeks);
+  const extraHeight = releaseLegendExtraHeight(releases.length);
   const color = new Map(
     releases.map((release, index) => [
       release,
@@ -148,14 +163,18 @@ function releaseMix(weeks: WeeklyCliMetrics[], x: number, y: number): string {
   );
   const legend = releases
     .map((release, index) => {
-      const legendX = x + 28 + index * 108;
-      return `<rect x="${legendX}" y="${y + 60}" width="12" height="12" rx="3" fill="${color.get(release)}"/><text class="legend" x="${legendX + 19}" y="${y + 71}">${release}</text>`;
+      const legendX = x + 28 + (index % releaseLegendColumns) * 120;
+      const legendY =
+        y +
+        60 +
+        Math.floor(index / releaseLegendColumns) * releaseLegendRowHeight;
+      return `<rect x="${legendX}" y="${legendY}" width="12" height="12" rx="3" fill="${color.get(release)}"/><text class="legend" x="${legendX + 19}" y="${legendY + 11}">${release}</text>`;
     })
     .join('');
   const rows = weeks
     .map((week, weekIndex) => {
       let segmentX = x + 105;
-      const rowY = y + 105 + weekIndex * 54;
+      const rowY = y + 105 + extraHeight + weekIndex * 54;
       const segments = releases
         .map((releaseName) => {
           const release = week.releases.find(
@@ -181,11 +200,13 @@ export function renderSlackChartsSvg(weeks: WeeklyCliMetrics[]): string {
   const first = weeks[0];
   const last = weeks.at(-1);
   if (!first || !last) throw new Error('No metrics are available');
+  const extraHeight = releaseLegendExtraHeight(releaseOrder(weeks).length);
+  const height = 980 + extraHeight;
   const dateRange = `${compactDate(first.period.start)}–${compactDate(previousDate(last.period.end))}`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><style>text{font-family:"DejaVu Sans",Arial,sans-serif;fill:#172033}.title{font-size:38px;font-weight:700}.subtitle{font-size:18px;fill:#687086}.panel-title{font-size:23px;font-weight:700}.grid{stroke:#e8eaf1;stroke-width:1}.axis,.week,.legend{font-size:15px;fill:#687086}.value{font-size:15px;font-weight:700}.note{font-size:16px;fill:#713f12}</style><rect width="100%" height="100%" fill="#f4f5fa"/><text class="title" x="50" y="58">PLG CLI metrics · four closed weeks</text><text class="subtitle" x="50" y="92">${dateRange} · production, non-robot CLI activity · America/Los_Angeles</text>${panel(
     50,
     125,
     'CLI invocations',
     bars(weeks, 50, 125, (week) => week.invocations, '#3b82f6'),
-  )}${panel(730, 125, 'Distinct users', usersBars(weeks, 730, 125))}${panel(50, 495, 'Retention', retentionLine(weeks, 50, 495))}${panel(730, 495, 'Users by active release', releaseMix(weeks, 730, 495))}<rect x="50" y="870" width="1340" height="68" rx="16" fill="#fffbeb" stroke="#f59e0b"/><text class="note" x="75" y="899"><tspan font-weight="700">Panic and segfault metrics unavailable.</tspan><tspan x="75" dy="24">The CLI emits invocation starts but no completion or crash events.</tspan></text></svg>`;
+  )}${panel(730, 125, 'Distinct users', usersBars(weeks, 730, 125))}${panel(50, 495, 'Retention', retentionLine(weeks, 50, 495))}${panel(730, 495, 'Users by active release', releaseMix(weeks, 730, 495), 350 + extraHeight)}<rect x="50" y="${870 + extraHeight}" width="1340" height="68" rx="16" fill="#fffbeb" stroke="#f59e0b"/><text class="note" x="75" y="${899 + extraHeight}"><tspan font-weight="700">Panic and segfault metrics unavailable.</tspan><tspan x="75" dy="24">The CLI emits invocation starts but no completion or crash events.</tspan></text></svg>`;
 }
