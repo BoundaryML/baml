@@ -316,7 +316,7 @@ class ConverseRequest {
 //     with that name in a Converse request body (the tool schema lives under
 //     `inputSchema.json`, itself already opaque), so a flat key test is
 //     enough;
-//   * `cachePoint` — a checkpoint authored in `ai.Role.metadata`, promised
+//   * `cachePoint` — a checkpoint authored in a role marker's metadata, promised
 //     verbatim by `_cache_point`.
 //
 // A `null` value is dropped before the key is even consulted, so a null blob
@@ -627,8 +627,8 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 /// `cachePoint` block itself:
 ///
 ///   * an object is sent verbatim as the `cachePoint` member, so
-///     `${ai.Role { name: "system", metadata: { "cache_point": { "type":
-///     "default", "ttl": "1h" } } }}` reaches the wire as written;
+///     `${role("system", metadata = { "cache_point": { "type": "default",
+///     "ttl": "1h" } })}` reaches the wire as written;
 ///   * `true` is shorthand for `{"type": "default"}`;
 ///   * `false` or `null` asks for no checkpoint.
 ///

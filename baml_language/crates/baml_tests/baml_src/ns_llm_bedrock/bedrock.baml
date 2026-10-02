@@ -727,16 +727,14 @@ test "bedrock_tool_result_status_gating" {
 //
 // The engine emits `{"cachePoint":{"type":"default"}}`; sys_llm dropped the
 // feature entirely (research G4). Restored here as a per-message `cache_point`
-// key in `ai.Role.metadata`.
+// key in a role marker's metadata.
 
-// `role(...)` builds a metadata-less marker, so the checkpoint is authored by
-// interpolating the typed marker class directly. `true` is shorthand for the
-// default checkpoint.
+// `true` is shorthand for the default checkpoint.
 function BedrockCachedSystem(question: string) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
-        ${ai.Role { name: "system", metadata: { "cache_point": true } }}Be terse.
-        ${ai.Role { name: "user", metadata: { "cache_point": true } }}${question}
+        ${role("system", metadata = { "cache_point": true })}Be terse.
+        ${role("user", metadata = { "cache_point": true })}${question}
     `
 }
 
@@ -744,8 +742,8 @@ function BedrockCachedSystem(question: string) -> string {
 function BedrockCachedVerbatim(question: string) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
-        ${ai.Role { name: "system", metadata: { "cache_point": { "type": "default", "ttl": "1h" } } }}Be terse.
-        ${ai.Role { name: "user", metadata: { "cache_point": false } }}${question}
+        ${role("system", metadata = { "cache_point": { "type": "default", "ttl": "1h" } })}Be terse.
+        ${role("user", metadata = { "cache_point": false })}${question}
     `
 }
 
@@ -754,14 +752,14 @@ function BedrockCachedVerbatim(question: string) -> string {
 function BedrockCachedSystemOnly() -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
-        ${ai.Role { name: "system", metadata: { "cache_point": { "type": "default", "ttl": "1h" } } }}Be terse.
+        ${role("system", metadata = { "cache_point": { "type": "default", "ttl": "1h" } })}Be terse.
     `
 }
 
 function BedrockCachedBadValue(question: string) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
-        ${ai.Role { name: "system", metadata: { "cache_point": "ephemeral" } }}Be terse.
+        ${role("system", metadata = { "cache_point": "ephemeral" })}Be terse.
         ${role("user")}${question}
     `
 }
