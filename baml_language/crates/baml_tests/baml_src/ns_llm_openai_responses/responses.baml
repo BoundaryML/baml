@@ -48,11 +48,10 @@ function OaiSystemLook(pic: image) -> string {
     `
 }
 
-// `role(...)` builds a metadata-less marker, so a per-message directive is
-// authored by interpolating the typed marker class directly.
+// A per-message directive, authored on the role marker.
 function OaiMetaEcho(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${ai.Role { name: "system", metadata: { "cache_hint": "ephemeral" } }}Follow the rules.${role("user")}${question}`
+    prompt: `${role("system", metadata = { "cache_hint": "ephemeral" })}Follow the rules.${role("user")}${question}`
 }
 
 // ─── canned provider bodies ──────────────────────────────────────────────────
