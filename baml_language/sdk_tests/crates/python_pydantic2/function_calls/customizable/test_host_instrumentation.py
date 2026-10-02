@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from baml_sdk import host_callable_tests as baml
-from baml_sdk import invocation, trace
-from baml_sdk import invocation_context as context_baml
+from baml_sdk import trace
+from baml_sdk import execution_context_tests as context_baml
 from baml_sdk.baml.spawn import CancelToken
 
 
@@ -33,7 +33,7 @@ def test_instrument_decorator_forms_python_only():
         return 4
 
     assert (bare(), factory(), null_options(), configured()) == (1, 2, 3, 4)
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 # SDK_PARITY_LINT(skip): covers Python signatures and positional argument binding
@@ -54,7 +54,7 @@ def test_instrument_preserves_sync_execution_python_only():
     )
     with pytest.raises(TypeError):
         work(first=1)
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 def test_host_context_inherits_and_restores():
@@ -101,7 +101,7 @@ async def test_host_callback_reentry_context():
         assert trace.current_context().metadata == {"phase": "host"}
 
     await parent()
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_host_callback_cleanup_retains_context():
@@ -114,7 +114,7 @@ async def test_host_callback_cleanup_retains_context():
 
     @trace.instrument
     async def callback(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
         entered.set()
         try:
@@ -124,7 +124,7 @@ async def test_host_callback_cleanup_retains_context():
             try:
                 await release.wait()
                 assert trace.current_context().metadata == {"request": 7}
-                assert active.cancel.is_cancelled() is True
+                assert active.is_cancelled() is True
             except Exception as error:
                 failures.append(error)
                 raise
@@ -146,7 +146,7 @@ async def test_host_callback_cleanup_retains_context():
             await pending
         await asyncio.wait_for(cleaning.wait(), 5)
         assert exited.is_set() is False
-        assert invocation.current() is None
+        assert trace.current_cancel_token() is None
     finally:
         release.set()
     await asyncio.wait_for(exited.wait(), 5)
@@ -161,16 +161,16 @@ async def test_host_baml_cancellation_remains_live_after_exit():
     @trace.instrument
     async def work():
         nonlocal retained
-        retained = invocation.current()
+        retained = trace.current_cancel_token()
         assert retained is not None
-        assert retained.cancel.is_cancelled() is False
+        assert retained.is_cancelled() is False
         await context_baml.current_context_async(_baml={"cancel": source})
 
     with pytest.raises(asyncio.CancelledError):
         await work()
     assert retained is not None
-    assert retained.cancel.is_cancelled() is True
-    assert invocation.current() is None
+    assert retained.is_cancelled() is True
+    assert trace.current_cancel_token() is None
 
 
 # SDK_PARITY_LINT(skip): covers Python asyncio task and event-loop identity
@@ -204,7 +204,7 @@ async def test_coroutine_entry_uses_execution_context_python_only():
         return await coroutine
 
     coroutine = create()
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert await consume(coroutine) == {"phase": "consumer"}
 
 
@@ -227,7 +227,7 @@ async def test_concurrent_host_invocations_isolate_context():
     finally:
         release.set()
     assert await asyncio.gather(*tasks) == [{"request": 0}, {"request": 1}]
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_host_child_outlives_parent():
@@ -243,7 +243,7 @@ async def test_host_child_outlives_parent():
         return asyncio.create_task(child())
 
     task = await parent()
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     release.set()
     assert await task == {"request": 7}
 
@@ -279,7 +279,7 @@ def test_host_errors_preserve_identity_and_restore_context():
         assert trace.current_context().metadata == {"phase": "parent"}
 
     parent()
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 # SDK_PARITY_LINT(skip): covers Python task cancellation and asynchronous finally cleanup
@@ -312,7 +312,7 @@ async def test_host_cancellation_waits_for_cleanup_python_only():
     with pytest.raises(asyncio.CancelledError):
         await task
     assert exited.is_set()
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 # SDK_PARITY_LINT(skip): covers unsupported Python generator/decorator shapes
@@ -359,20 +359,20 @@ def test_host_capture_preserves_application_values():
     with pytest.raises(ValueError) as caught:
         work(failure)
     assert caught.value is failure
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 def test_host_current_exposes_generated_cancel_token():
     @trace.instrument
     def work():
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        assert active.cancel.is_cancelled() is False
-        active.cancel.cancel()
-        assert active.cancel.is_cancelled() is True
+        assert active.is_cancelled() is False
+        active.cancel()
+        assert active.is_cancelled() is True
 
     work()
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_callback_marker_context_precedence():
@@ -403,7 +403,7 @@ async def test_callback_marker_context_precedence():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_callback_marker_adopts_sync_body():
@@ -418,7 +418,7 @@ async def test_callback_marker_adopts_sync_body():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_callback_marker_defaults_override_inherited_context():
@@ -437,7 +437,7 @@ async def test_callback_marker_defaults_override_inherited_context():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_callback_marker_adopts_once_during_recursion():
@@ -459,7 +459,7 @@ async def test_callback_marker_adopts_once_during_recursion():
         == 1
     )
     assert stages == ["call", "marker"]
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_callback_marker_only_outer_wrapper_adopts():
@@ -481,7 +481,7 @@ async def test_callback_marker_only_outer_wrapper_adopts():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_callback_marker_concurrent_reuse_and_later_direct_call():
@@ -511,7 +511,7 @@ async def test_callback_marker_concurrent_reuse_and_later_direct_call():
         release.set()
     assert await asyncio.gather(*pending) == [0, 1]
     assert await callback(2) == 2
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_callback_third_party_wrapper_is_not_adopted():
@@ -534,7 +534,7 @@ async def test_callback_third_party_wrapper_is_not_adopted():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 async def test_unmarked_callback_explicit_context_and_reentry():
@@ -553,7 +553,7 @@ async def test_unmarked_callback_explicit_context_and_reentry():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 # SDK_PARITY_LINT(skip): covers Python bound method identity via its exact SDK function
@@ -570,7 +570,7 @@ async def test_callback_bound_method_adoption_python_only():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
 
 
 # SDK_PARITY_LINT(skip): covers Python synchronous BAML entry and inline callback dispatch
@@ -586,4 +586,4 @@ def test_callback_marker_sync_entry_python_only():
         )
         == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None

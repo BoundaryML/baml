@@ -6,10 +6,10 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import type { BamlPanic } from './errors.js';
-import { Invocation } from './invocation.js';
-export declare function getCurrentInvocation(): Invocation | undefined;
-export declare function runWithInvocation<T>(active: Invocation, body: () => T): T;
-export declare function currentInvocationState(): string | undefined;
+import { ExecutionContext } from './execution_context.js';
+export declare function getCurrentExecutionContext(): ExecutionContext | undefined;
+export declare function runWithExecutionContext<T>(active: ExecutionContext, body: () => T): T;
+export declare function currentExecutionState(): string | undefined;
 export declare function consumeHostAdoption(identity: object): boolean;
 export declare function observeHostCallbackResult(callId: number, error: boolean, value: unknown): void;
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */

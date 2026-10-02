@@ -10,14 +10,14 @@ import contextvars
 import pytest
 
 from baml_sdk import host_callable_tests as baml
-from baml_sdk import invocation, trace
-from baml_sdk import invocation_context as context_baml
+from baml_sdk import trace
+from baml_sdk import execution_context_tests as context_baml
 from baml_sdk.baml.spawn import CancelToken
 
 
 async def test_callback_captures_internal_baml_context():
     def callback(value):
-        assert invocation.current() is not None
+        assert trace.current_cancel_token() is not None
         current = trace.current_context()
         assert current.distinct_id == "internal-id"
         assert current.metadata == {"phase": "internal", "keep": 7}
@@ -31,7 +31,7 @@ async def test_callback_captures_internal_baml_context():
             metadata={"phase": "root", "keep": 7, "remove": 9},
         )},
     ) == 7
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert trace.current_context().metadata == {}
 
 
@@ -74,7 +74,7 @@ async def test_concurrent_invocations_isolate_context():
     finally:
         release.set()
     assert await asyncio.gather(*pending) == [0, 1]
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert trace.current_context().metadata == {}
 
 
@@ -88,7 +88,7 @@ async def test_retained_context_survives_parent_completion():
     assert await baml.call_int_callback_async(
         callback, 1, _baml={"trace": trace.hidden().context(metadata={"request": 7})}
     ) == 1
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert captured[0].run(trace.current_context).metadata == {"request": 7}
 
     def child_callback(value):
@@ -99,7 +99,7 @@ async def test_retained_context_survives_parent_completion():
     # Task creation is the native carrier handoff; the parent has already exited.
     child = captured[0].run(asyncio.create_task, baml.call_int_callback_async(child_callback, 7))
     assert await child == 7
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert trace.current_context().metadata == {}
 
 
@@ -139,7 +139,7 @@ async def test_cancelled_waiter_preserves_callback_context():
             cleanup_started.set()
             try:
                 assert trace.current_context().metadata == {"request": 7}
-                assert invocation.current().cancel.is_cancelled()
+                assert trace.current_cancel_token().is_cancelled()
                 await release.wait()
                 assert trace.current_context().metadata == {"request": 7}
             except Exception as error:
@@ -162,7 +162,7 @@ async def test_cancelled_waiter_preserves_callback_context():
             await pending
         await asyncio.wait_for(cleanup_started.wait(), 5)
         assert not exited.is_set()
-        assert invocation.current() is None
+        assert trace.current_cancel_token() is None
         assert trace.current_context().metadata == {}
     finally:
         release.set()

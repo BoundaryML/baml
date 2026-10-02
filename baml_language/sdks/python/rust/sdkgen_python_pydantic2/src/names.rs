@@ -225,15 +225,7 @@ impl PythonNames {
                 })
                 .collect();
             let reserved = if parent.is_empty() {
-                vec![
-                    "invocation",
-                    "_invocation_types",
-                    "trace",
-                    "BamlOptions",
-                    "Invocation",
-                    "invoke",
-                    "invoke_async",
-                ]
+                vec!["_invocation_types", "trace", "experimental", "BamlOptions"]
             } else {
                 vec![]
             };
@@ -281,15 +273,7 @@ impl PythonNames {
 
             let mut used = HashSet::new();
             let reserved = if leaf.segments.is_empty() {
-                vec![
-                    "_BamlOptions",
-                    "BamlOptions",
-                    "Invocation",
-                    "invocation",
-                    "invoke",
-                    "invoke_async",
-                    "trace",
-                ]
+                vec!["_BamlOptions", "BamlOptions", "trace", "experimental"]
             } else {
                 vec!["_BamlOptions"]
             };

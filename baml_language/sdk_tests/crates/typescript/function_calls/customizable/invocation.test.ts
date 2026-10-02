@@ -1,8 +1,11 @@
 /** BEP-81 public invocation contracts. Shared names mirror Python. */
 import { describe, expect, it } from 'vitest';
 import { BamlAbortError } from '@boundaryml/baml-bridge';
-import { hello_world, hello_world_async, optional_args_probe, optional_args_probe_async, OptBox, trace, invocation, invoke, invokeAsync, type BamlOptions } from './baml_sdk/index.js';
+import { hello_world, hello_world_async, optional_args_probe, optional_args_probe_async, OptBox, trace, type BamlOptions } from './baml_sdk/index.js';
 import { CancelToken } from './baml_sdk/baml/spawn/index.js';
+import { invoke, invokeAsync } from "./baml_sdk/experimental.js";
+// Private carrier access is for execution-context conformance only.
+import { _currentExecutionContext as currentExecutionContext, _withExecutionContext as withExecutionContext } from "@boundaryml/baml-bridge";
 import * as baml from './baml_sdk/host_callable_tests/index.js';
 import { isTestRuntime } from './test_runtime.js';
 
@@ -115,9 +118,9 @@ describe('invocation_lifecycle', () => {
     const source = CancelToken.new();
     try {
       await baml.call_int_callback_async(value => {
-        const active = invocation.current()!;
-        active.cancel.cancel();
-        expect(active.cancel.is_cancelled()).toBe(true);
+        const token = trace.current_cancel_token()!;
+        token.cancel();
+        expect(token.is_cancelled()).toBe(true);
         expect(source.is_cancelled()).toBe(false);
         return value;
       }, 1, { $baml: { cancel: source } });
@@ -149,19 +152,19 @@ describe('invocation_lifecycle', () => {
   it('retained_effective_token_stays_live_after_callback', async () => {
     for (const retainFrame of [false, true]) {
       const source = CancelToken.new();
-      let captured: ReturnType<typeof invocation.current>;
-      await baml.call_int_callback_async(value => { captured = invocation.current(); return value; }, 1, { $baml: { cancel: source } });
-      expect(invocation.current()).toBe(null);
-      const token = retainFrame ? undefined : captured!.cancel;
+      let captured: ReturnType<typeof currentExecutionContext>;
+      await baml.call_int_callback_async(value => { captured = currentExecutionContext(); return value; }, 1, { $baml: { cancel: source } });
+      expect(trace.current_cancel_token()).toBe(null);
+      const token = retainFrame ? undefined : captured!.run(() => trace.current_cancel_token()!);
       source.cancel();
-      expect((token ?? captured!.cancel).is_cancelled()).toBe(true);
-      expect(captured!.cancel).toBe(captured!.cancel);
+      expect((token ?? captured!.run(() => trace.current_cancel_token()!)).is_cancelled()).toBe(true);
+      expect(captured!.run(() => trace.current_cancel_token()!)).toBe(captured!.run(() => trace.current_cancel_token()!));
       await new Promise<void>(resolve => captured!.signal.aborted ? resolve() : captured!.signal.addEventListener('abort', () => resolve(), { once: true }));
     }
   });
   it('deadline_reentry_does_not_reset_budget', async () => {
     let nested!: Promise<number>;
-    const callback = invocation.withInvocation(async (active, value: number) => {
+    const callback = withExecutionContext(async (active, value: number) => {
       await new Promise(resolve => setTimeout(resolve, 40));
       nested = active.run(() => baml.call_int_callback_async(asyncCallback(async inner => {
         await new Promise(resolve => setTimeout(resolve, 500)); return inner;
@@ -175,23 +178,23 @@ describe('invocation_lifecycle', () => {
 
 describe('invocation_callbacks', () => {
   it('callback_frame_and_reentry', async () => {
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
     const token = CancelToken.new();
-    const callback = invocation.withInvocation(async (active, value: number) => {
-      expect(active.cancel.is_cancelled()).toBe(false);
+    const callback = withExecutionContext(async (active, value: number) => {
+      expect(active.run(() => trace.current_cancel_token()!).is_cancelled()).toBe(false);
       await Promise.resolve();
-      return await active.run(() => baml.call_int_callback_async(inner => { expect(invocation.current()).not.toBe(null); return inner + 1; }, value, { $baml: {} }));
+      return await active.run(() => baml.call_int_callback_async(inner => { expect(trace.current_cancel_token()).not.toBe(null); return inner + 1; }, value, { $baml: {} }));
     });
     expect(await baml.call_int_callback_async(callback as unknown as (value: number) => number, 6, { $baml: { cancel: token } })).toBe(7);
-    expect(invocation.current()).toBe(null); expect(token.is_cancelled()).toBe(false);
+    expect(trace.current_cancel_token()).toBe(null); expect(token.is_cancelled()).toBe(false);
   });
   it('null_controls_preserve_inherited_context', async () => {
-    const callback = invocation.withInvocation(async (active, value: number) => active.run(() => baml.call_int_callback_async(() => trace.current_context().metadata.request as number, value, { $baml: { trace: null, cancel: null, timeoutMs: null } })));
+    const callback = withExecutionContext(async (active, value: number) => active.run(() => baml.call_int_callback_async(() => trace.current_context().metadata.request as number, value, { $baml: { trace: null, cancel: null, timeoutMs: null } })));
     expect(await baml.call_int_callback_async(callback as unknown as (value: number) => number, 1, { $baml: { trace: trace.hidden().context({ metadata: { request: 7 } }) } })).toBe(7);
   });
   it('configuration_snapshot_is_not_live', async () => {
     const options = { trace: trace.context({ metadata: { request: 7 } }) };
-    const callback = invocation.withInvocation(async (active, value: number) => {
+    const callback = withExecutionContext(async (active, value: number) => {
       options.trace = trace.context({ metadata: { request: 99 } });
       await Promise.resolve();
       expect(active.run(() => trace.current_context().metadata.request)).toBe(7);
@@ -203,7 +206,7 @@ describe('invocation_callbacks', () => {
   it('layered_callback_context_restores_after_returned_callable', async () => {
     for (const leafThrows of [false, true]) {
       const original = new Error('leaf failed');
-      const leaf = invocation.withInvocation(async (active, value: number) => {
+      const leaf = withExecutionContext(async (active, value: number) => {
         expect(trace.current_context().metadata).toEqual({ request: 'C', keep: 7 });
         await Promise.resolve();
         expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'C', keep: 7 });
@@ -211,11 +214,11 @@ describe('invocation_callbacks', () => {
         return value + 1;
       });
       const forward = await baml.make_callback_forwarder_async(leaf as unknown as (value: number) => number, { $baml: { trace: trace.context({ metadata: { request: 'factory' } }) } });
-      const overridden = invocation.withInvocation(async (active, value: number) => {
+      const overridden = withExecutionContext(async (active, value: number) => {
         try { return await forward.callAsync(value); }
         finally { expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'C', keep: 7 }); }
       });
-      const inherited = invocation.withInvocation(async (active, value: number) => {
+      const inherited = withExecutionContext(async (active, value: number) => {
         let result: number;
         try { result = await baml.call_int_callback_async(overridden as unknown as (value: number) => number, value, { $baml: { trace: trace.context({ metadata: { request: 'C' } }) } }); }
         catch (error) { expect(leafThrows).toBe(true); expect(error).toBe(original); result = value + 1; }
@@ -223,13 +226,13 @@ describe('invocation_callbacks', () => {
         expect(await active.run(() => baml.call_int_callback_async(v => { expect(trace.current_context().metadata).toEqual({ request: 'A', keep: 7 }); return v; }, value))).toBe(value);
         return result;
       });
-      const outer = invocation.withInvocation(async (active, value: number) => {
+      const outer = withExecutionContext(async (active, value: number) => {
         const result = await baml.call_int_callback_async(inherited as unknown as (value: number) => number, value);
         expect(active.run(() => trace.current_context().metadata)).toEqual({ request: 'A', keep: 7 });
         return result;
       });
       expect(await baml.call_int_callback_async(outer as unknown as (value: number) => number, 6, { $baml: { trace: trace.hidden().context({ metadata: { request: 'A', keep: 7 } }) } })).toBe(7);
-      expect(invocation.current()).toBe(null); expect(trace.current_context().metadata).toEqual({});
+      expect(trace.current_cancel_token()).toBe(null); expect(trace.current_context().metadata).toEqual({});
     }
   });
 });
@@ -239,9 +242,9 @@ describe.runIf(isTestRuntime('node'))('invocation_typescript_only', () => {
   // SDK_PARITY_LINT(skip): Node async carrier, native signals, and entry-time snapshots are specific to TypeScript
   it('async_callback_preserves_ambient_frame_typescript_only', async () => {
     expect(await baml.call_int_callback_async(asyncCallback(async value => {
-      const active = invocation.current();
+      const active = currentExecutionContext();
       await Promise.resolve();
-      expect(invocation.current()).toBe(active);
+      expect(currentExecutionContext()).toBe(active);
       expect(trace.current_context().metadata).toEqual({ request: 'A' });
       return value;
     }), 1, { $baml: { trace: trace.context({ metadata: { request: 'A' } }) } })).toBe(1);
@@ -264,10 +267,10 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
     let entered!: () => void; const started = new Promise<void>(resolve => { entered = resolve; });
     let finished!: () => void; const exited = new Promise<void>(resolve => { finished = resolve; });
     const body = asyncCallback(async value => {
-      const active = invocation.current()!;
+      const active = currentExecutionContext()!;
       entered();
       await new Promise<void>(resolve => active.signal.aborted ? resolve() : active.signal.addEventListener('abort', () => resolve(), { once: true }));
-      expect(active.cancel.is_cancelled()).toBe(true);
+      expect(active.run(() => trace.current_cancel_token()!).is_cancelled()).toBe(true);
       finished(); return value;
     });
     const pending = baml.call_int_callback_async(body, 1, { $baml: { cancel: token, signal: source.signal } });
@@ -295,8 +298,8 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
         const childMetadata = { request: 'C', keep: 7, child: 1 };
         const visited: number[] = [];
         const assertLayer = (depth: number) => {
-          expect(invocation.current()).not.toBe(null);
-          expect(invocation.current()!.cancel.is_cancelled()).toBe(false);
+          expect(trace.current_cancel_token()).not.toBe(null);
+          expect(trace.current_cancel_token()!.is_cancelled()).toBe(false);
           expect(local.getStore()).toBe('application');
           const context = trace.current_context();
           expect(context.metadata).toEqual(depth >= 2 ? rootMetadata : childMetadata);
@@ -309,10 +312,10 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
           if (modes & (1 << depth)) return asyncCallback(async () => { before(); await Promise.resolve(); assertLayer(depth); const value = await child(); await Promise.resolve(); return after(value); });
           return (() => { before(); return child().then(after); }) as unknown as (value: number) => number;
         };
-        expect(invocation.current()).toBe(null);
+        expect(trace.current_cancel_token()).toBe(null);
         expect(await local.run('application', () => baml.call_int_callback_async(callbackFor(3), 3, { $baml: { trace: trace.hidden().context({ distinct_id: 'root-id', metadata: rootMetadata }) } }))).toBe(7);
         expect(visited).toEqual([3, 2, 1, 0]); expect(local.getStore()).toBeUndefined();
-        expect(invocation.current()).toBe(null); expect(trace.current_context().metadata).toEqual({}); expect(trace.current_context().distinct_id).toBe(null);
+        expect(trace.current_cancel_token()).toBe(null); expect(trace.current_context().metadata).toEqual({}); expect(trace.current_context().distinct_id).toBe(null);
       }
     }
   });

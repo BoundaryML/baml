@@ -28,7 +28,7 @@ import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
 import { hostMarker } from './host_marker.js';
-import { handleExitPanic, runHostCallback, currentInvocationState, observeHostCallbackResult } from './platform.js';
+import { handleExitPanic, runHostCallback, currentExecutionState, observeHostCallbackResult } from './platform.js';
 import {
     registerHostOpaque,
     releaseHostOpaque,
@@ -523,7 +523,7 @@ function snapshotInvocation(options: InvocationOptions | null | undefined, callI
     for (const key of Object.keys(snapshot)) {
         if (!['trace', 'cancel', 'timeoutMs', 'signal'].includes(key)) throw new TypeError(`unknown $baml option ${JSON.stringify(key)}`);
     }
-    const wire: baml_bridge.cffi.v1.IInvocationOptions = { inheritedState: currentInvocationState(), hostEnvironment: callId.toString() };
+    const wire: baml_bridge.cffi.v1.IInvocationOptions = { inheritedState: currentExecutionState(), hostEnvironment: callId.toString() };
     if (snapshot.timeoutMs != null) {
         if (!Number.isInteger(snapshot.timeoutMs) || snapshot.timeoutMs < 0 || snapshot.timeoutMs > 2147483647) throw new TypeError('timeoutMs must be an integer from 0 through 2147483647');
         const deadline = BigInt(invocationClockNs(callId.toString())) + BigInt(snapshot.timeoutMs) * 1000000n;

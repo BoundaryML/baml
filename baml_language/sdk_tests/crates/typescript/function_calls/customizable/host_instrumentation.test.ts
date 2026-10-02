@@ -1,8 +1,10 @@
 /** Shared host contracts mirror test_host_instrumentation.py by test name. */
 import { describe, expect, it } from 'vitest';
-import { invocation, trace } from './baml_sdk/index.js';
+import { trace } from './baml_sdk/index.js';
+// Private carrier access is for execution-context conformance only.
+import { _currentExecutionContext as currentExecutionContext } from "@boundaryml/baml-bridge";
 import * as baml from './baml_sdk/host_callable_tests/index.js';
-import * as contextBaml from './baml_sdk/invocation_context/index.js';
+import * as contextBaml from './baml_sdk/execution_context_tests/index.js';
 import { isTestRuntime } from './test_runtime.js';
 import { CancelToken } from './baml_sdk/baml/spawn/index.js';
 import { BamlAbortError } from '@boundaryml/baml-bridge';
@@ -44,7 +46,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
       expect(trace.current_context().metadata).toEqual({ phase: 'host' });
     });
     await parent();
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('host_callback_cleanup_retains_context', async () => {
@@ -60,7 +62,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     let done = false;
     const failures: unknown[] = [];
     const callback = instrument(async (value: number) => {
-      const active = invocation.current()!;
+      const active = currentExecutionContext()!;
       markEntered();
       try {
         await new Promise<void>(resolve => active.signal.aborted ? resolve()
@@ -68,7 +70,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
         markCleaning();
         await release;
         expect(trace.current_context().metadata).toEqual({ request: 7 });
-        expect(active.cancel.is_cancelled()).toBe(true);
+        expect(active.run(() => trace.current_cancel_token()!).is_cancelled()).toBe(true);
         return value;
       } catch (error) { failures.push(error); throw error; }
       finally { done = true; markExited(); }
@@ -80,7 +82,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
       await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
       await cleaning;
       expect(done).toBe(false);
-      expect(invocation.current()).toBe(null);
+      expect(trace.current_cancel_token()).toBe(null);
     } finally { unblock(); }
     await exited;
     expect(failures).toEqual([]);
@@ -89,15 +91,15 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
   it('host_baml_cancellation_remains_live_after_exit', async () => {
     const source = CancelToken.new();
     source.cancel();
-    let retained: ReturnType<typeof invocation.current> = null;
+    let retained: ReturnType<typeof trace.current_cancel_token> = null;
     const work = instrument(async () => {
-      retained = invocation.current();
-      expect(retained!.cancel.is_cancelled()).toBe(false);
+      retained = trace.current_cancel_token();
+      expect(retained!.is_cancelled()).toBe(false);
       await contextBaml.current_context_async({ $baml: { cancel: source } });
     });
     await expect(work()).rejects.toBeInstanceOf(BamlAbortError);
-    expect(retained!.cancel.is_cancelled()).toBe(true);
-    expect(invocation.current()).toBe(null);
+    expect(retained!.is_cancelled()).toBe(true);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('concurrent_host_invocations_isolate_context', async () => {
@@ -116,22 +118,22 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     });
     try { await ready; } finally { unblock(); }
     expect(await Promise.all(pending)).toEqual([{ request: 0 }, { request: 1 }]);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('host_child_outlives_parent', async () => {
     let unblock!: () => void;
     const release = new Promise<void>(resolve => { unblock = resolve; });
-    let retained: ReturnType<typeof invocation.current> = null;
+    let retained: ReturnType<typeof currentExecutionContext> = null;
     const parent = instrument(trace.context({ metadata: { request: 7 } }), () => {
-      retained = invocation.current();
+      retained = currentExecutionContext();
     });
     const child = instrument(async () => {
       await release;
       return (await contextBaml.current_context_async()).metadata;
     });
     parent();
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
     const pending = retained!.run(child);
     unblock();
     expect(await pending).toEqual({ request: 7 });
@@ -146,7 +148,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
       expect(trace.current_context().metadata).toEqual({ phase: 'parent' });
     });
     parent();
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('host_capture_preserves_application_values', () => {
@@ -166,18 +168,18 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     expect(work('x'.repeat(100_000))).toBe(result);
     try { work(failure); throw new Error('expected application failure'); }
     catch (error) { expect(error).toBe(failure); }
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('host_current_exposes_generated_cancel_token', () => {
     const work = instrument(() => {
-      const active = invocation.current()!;
-      expect(active.cancel.is_cancelled()).toBe(false);
-      active.cancel.cancel();
-      expect(active.cancel.is_cancelled()).toBe(true);
+      const token = trace.current_cancel_token()!;
+      expect(token.is_cancelled()).toBe(false);
+      token.cancel();
+      expect(token.is_cancelled()).toBe(true);
     });
     work();
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   // SDK_PARITY_LINT(skip): covers JS receivers, variadic arguments, and native Promise results
@@ -199,7 +201,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     const rejects = instrument(async () => { throw failure; });
     try { await rejects(); throw new Error('expected application failure'); }
     catch (error) { expect(error).toBe(failure); }
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   // SDK_PARITY_LINT(skip): covers JS getters, Proxy traps, and custom thenables
@@ -222,7 +224,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     try { throwing(); throw new Error('expected application failure'); }
     catch (error) { expect(error).toBe(failure); }
     expect(prototypeInspections).toBe(0);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   // SDK_PARITY_LINT(skip): covers JS generator and marker configuration rejection
@@ -243,7 +245,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     expect(await baml.call_configured_callback_async(callback as unknown as (value: number) => number, 7,
       trace.context({ distinct_id: 'call', metadata: { stage: 'call', remove: null } }),
       { $baml: { trace: trace.context({ distinct_id: 'caller', metadata: { stage: 'caller', caller: true } }) } })).toBe(7);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('callback_marker_adopts_sync_body', async () => {
@@ -252,7 +254,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
       return value;
     });
     expect(await baml.call_configured_callback_async(callback, 7, trace.context({ metadata: { stage: 'call' } }))).toBe(7);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('callback_marker_defaults_override_inherited_context', async () => {
@@ -262,7 +264,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     });
     expect(await baml.call_int_callback_async(callback as unknown as (value: number) => number, 7,
       { $baml: { trace: trace.context({ metadata: { stage: 'caller', keep: 1 } }) } })).toBe(7);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('callback_marker_adopts_once_during_recursion', async () => {
@@ -279,7 +281,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     expect(await baml.call_configured_callback_async(callback as unknown as (value: number) => number, 1,
       trace.context({ metadata: { stage: 'call' } }))).toBe(1);
     expect(stages).toEqual(['call', 'marker']);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('callback_marker_only_outer_wrapper_adopts', async () => {
@@ -290,7 +292,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     const outer = instrument(trace.context({ metadata: { stage: 'outer', outer: true } }), inner);
     expect(await baml.call_configured_callback_async(outer as unknown as (value: number) => number, 7,
       trace.context({ metadata: { stage: 'call', call: true } }))).toBe(7);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('callback_marker_concurrent_reuse_and_later_direct_call', async () => {
@@ -308,7 +310,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     try { await ready; } finally { unblock(); }
     expect(await Promise.all(pending)).toEqual([0, 1]);
     expect(await callback(2)).toBe(2);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('callback_third_party_wrapper_is_not_adopted', async () => {
@@ -323,7 +325,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     Object.assign(thirdParty, marked);
     expect(await baml.call_configured_callback_async(thirdParty as unknown as (value: number) => number, 7,
       trace.context({ metadata: { stage: 'call' } }))).toBe(7);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 
   it('unmarked_callback_explicit_context_and_reentry', async () => {
@@ -336,6 +338,6 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     };
     expect(await baml.call_configured_callback_async(callback as unknown as (value: number) => number, 7,
       trace.context({ metadata: { stage: 'call' } }))).toBe(7);
-    expect(invocation.current()).toBe(null);
+    expect(trace.current_cancel_token()).toBe(null);
   });
 });

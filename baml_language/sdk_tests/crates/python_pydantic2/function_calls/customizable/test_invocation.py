@@ -8,21 +8,20 @@ from itertools import product
 
 import pytest
 from baml_bridge import BamlCancelledError
+from baml_bridge._execution_context import current as current_execution_context
 
 from baml_sdk import (
     BamlOptions,
     OptBox,
     hello_world,
     hello_world_async,
-    invocation,
-    invoke,
-    invoke_async,
     optional_args_probe,
     optional_args_probe_async,
     trace,
 )
 from baml_sdk import host_callable_tests as baml
 from baml_sdk.baml.spawn import CancelToken
+from baml_sdk.experimental import invoke, invoke_async
 
 
 # invocation_options: the four forms, empty controls, and omission.
@@ -177,11 +176,11 @@ async def test_child_cancellation_does_not_cancel_input():
     upstream = CancelToken.new()
 
     def callback(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        active.cancel.cancel()
+        active.cancel()
         # Exact token operations remain serviceable under ambient cancellation.
-        assert active.cancel.is_cancelled()
+        assert active.is_cancelled()
         assert not upstream.is_cancelled()
         return value
 
@@ -221,32 +220,32 @@ async def test_concurrent_reservation_attaches_once():
 
 # invocation_callbacks: state visible to ordinary, uninstrumented callbacks.
 async def test_callback_frame_and_reentry():
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     upstream = CancelToken.new()
     frames = []
 
     async def leaf(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        assert not active.cancel.is_cancelled()
+        assert not active.is_cancelled()
         # Re-entry has a fresh execution identity; wrapper identity is unspecified.
         return value + 1
 
     async def callback(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
         frames.append(active)
         await asyncio.sleep(0)
-        assert invocation.current() is not None
-        resumed = invocation.current()
+        assert trace.current_cancel_token() is not None
+        resumed = trace.current_cancel_token()
         assert resumed is not None
-        assert not resumed.cancel.is_cancelled()
+        assert not resumed.is_cancelled()
         return await baml.call_int_callback_async(leaf, value, _baml={})
 
     assert (
         await baml.call_int_callback_async(callback, 6, _baml={"cancel": upstream}) == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert not upstream.is_cancelled()
 
 
@@ -296,9 +295,9 @@ def test_layered_callback_context_inheritance_and_restoration_python_only(
     visited = []
 
     def assert_layer(depth):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        assert not active.cancel.is_cancelled()
+        assert not active.is_cancelled()
         assert host_request.get() == "application"
         current = trace.current_context()
         assert current.metadata == (root_metadata if depth >= 2 else child_metadata)
@@ -341,7 +340,7 @@ def test_layered_callback_context_inheritance_and_restoration_python_only(
         return result
 
     try:
-        assert invocation.current() is None
+        assert trace.current_cancel_token() is None
         assert trace.current_context().metadata == {}
         assert trace.current_context().distinct_id is None
         callback = async_callback if async_callbacks[0] else sync_callback
@@ -352,7 +351,7 @@ def test_layered_callback_context_inheritance_and_restoration_python_only(
             result = baml.call_int_callback(callback, 3, _baml=controls)
         assert result == 7
         assert visited == [3, 2, 1, 0]
-        assert invocation.current() is None
+        assert trace.current_cancel_token() is None
         assert trace.current_context().metadata == {}
         assert trace.current_context().distinct_id is None
         assert host_request.get() == "application"
@@ -366,7 +365,7 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
     sibling_requests = []
 
     async def leaf(value):
-        assert invocation.current() is not None
+        assert trace.current_cancel_token() is not None
         assert trace.current_context().metadata == {"request": "C", "keep": 7}
         await asyncio.sleep(0)
         assert trace.current_context().metadata == {"request": "C", "keep": 7}
@@ -380,16 +379,16 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
     )
 
     async def overridden(value):
-        assert invocation.current() is not None
+        assert trace.current_cancel_token() is not None
         assert trace.current_context().metadata == {"request": "C", "keep": 7}
         try:
             return await forward.call_async(value)
         finally:
-            assert invocation.current() is not None
+            assert trace.current_cancel_token() is not None
             assert trace.current_context().metadata == {"request": "C", "keep": 7}
 
     async def sibling(value):
-        assert invocation.current() is not None
+        assert trace.current_cancel_token() is not None
         sibling_requests.append(trace.current_context().metadata.copy())
         return value
 
@@ -404,7 +403,7 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
             assert error is original
             result = value + 1
         finally:
-            assert invocation.current() is not None
+            assert trace.current_cancel_token() is not None
             assert trace.current_context().metadata == {"request": "A", "keep": 7}
         # A later sibling inherits A, never the earlier child's C override.
         assert await baml.call_int_callback_async(sibling, value) == value
@@ -412,7 +411,7 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
         return result
 
     async def outer(value):
-        assert invocation.current() is not None
+        assert trace.current_cancel_token() is not None
         assert trace.current_context().metadata == {"request": "A", "keep": 7}
         result = await baml.call_int_callback_async(inherited, value)
         assert trace.current_context().metadata == {"request": "A", "keep": 7}
@@ -421,7 +420,7 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
     assert await baml.call_int_callback_async(
         outer, 6, _baml={"trace": trace.hidden().context(metadata={"request": "A", "keep": 7})}
     ) == 7
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert trace.current_context().metadata == {}
 
 
@@ -485,15 +484,15 @@ async def test_retained_effective_token_stays_live_after_callback():
     retained = []
 
     def callback(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        retained.append(active.cancel)
+        retained.append(active)
         return value
 
     assert (
         await baml.call_int_callback_async(callback, 1, _baml={"cancel": source}) == 1
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     source.cancel()
     assert retained[0].is_cancelled()
     # Keeping the token does not restore the frame or callback completion ID.
@@ -504,11 +503,11 @@ async def test_retained_invocation_resolves_token_after_callback():
     retained = []
 
     def callback(value):
-        retained.append(invocation.current())
+        retained.append(current_execution_context())
         return value
 
     assert await baml.call_int_callback_async(callback, 1, _baml={"cancel": source}) == 1
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     source.cancel()
     active = retained[0]
     assert active is not None
@@ -575,7 +574,7 @@ async def test_deadline_reentry_does_not_reset_budget():
 
 
 async def test_dynamic_call_async_accepts_controls():
-    from baml_sdk import invoke_async
+    from baml_sdk.experimental import invoke_async
 
     assert await invoke_async("user.optional_args_probe", {"arg0": 1}, _baml={}) == [1, 5, 99]
     add = baml.make_adder(3)

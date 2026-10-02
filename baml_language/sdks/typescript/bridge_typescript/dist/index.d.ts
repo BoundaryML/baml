@@ -43,7 +43,8 @@ export declare class FunctionResult {
 }
 export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): FunctionResult;
 export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): Promise<FunctionResult>;
-export { current as _currentInvocation, Invocation as _Invocation, invoke as _invoke, invokeAsync as _invokeAsync, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, withInvocation as _withInvocation } from './invocation.js';
+export { current as _currentExecutionContext, ExecutionContext as _ExecutionContext, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, currentCancelToken as _currentCancelToken, withExecutionContext as _withExecutionContext } from './execution_context.js';
+export { invoke as _invoke, invokeAsync as _invokeAsync } from './invocation.js';
 export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
 import type { InvocationOptions } from './invocation.js';
 //# sourceMappingURL=index.d.ts.map

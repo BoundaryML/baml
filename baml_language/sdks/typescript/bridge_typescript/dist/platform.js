@@ -7,13 +7,13 @@
  */
 import { AsyncResource, AsyncLocalStorage } from 'node:async_hooks';
 import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame, _hostCaptureRequested, _recordHostCallResult } from './native.js';
-import { Invocation } from './invocation.js';
+import { ExecutionContext } from './execution_context.js';
 import { capture, failureOutcome, diagnostic } from './host_capture.js';
-const invocationFrames = new AsyncLocalStorage();
-export function getCurrentInvocation() { return invocationFrames.getStore(); }
-export function runWithInvocation(active, body) { return invocationFrames.run(active, body); }
-export function currentInvocationState() {
-    const key = invocationFrames.getStore()?.state.key;
+const executionContexts = new AsyncLocalStorage();
+export function getCurrentExecutionContext() { return executionContexts.getStore(); }
+export function runWithExecutionContext(active, body) { return executionContexts.run(active, body); }
+export function currentExecutionState() {
+    const key = executionContexts.getStore()?.state.key;
     return key === undefined ? undefined : ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString();
 }
 const hostAdoptions = new AsyncLocalStorage();
@@ -77,8 +77,8 @@ export function runHostCallback(callId, args, callback, lease, markerIdentity) {
         };
         try {
             const [state, cancel] = _hostInvocationFrame(lease);
-            const frame = new Invocation(state, cancel);
-            const completion = resource.runInAsyncScope(() => invocationFrames.run(frame, () => hostAdoptions.run({ identity: markerIdentity, consumed: false }, callback)));
+            const frame = new ExecutionContext(state, cancel);
+            const completion = resource.runInAsyncScope(() => executionContexts.run(frame, () => hostAdoptions.run({ identity: markerIdentity, consumed: false }, callback)));
             if (completion) {
                 execution.completion = completion.finally(finish);
                 return execution.completion;

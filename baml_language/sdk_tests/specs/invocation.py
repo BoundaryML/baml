@@ -34,14 +34,13 @@ from baml_sdk import (
     OptBox,
     hello_world,
     hello_world_async,
-    invocation,
-    invoke,
     optional_args_probe,
     optional_args_probe_async,
     trace,
 )
 from baml_sdk import host_callable_tests as baml
 from baml_sdk.baml.spawn import CancelToken
+from baml_sdk.experimental import invoke
 
 
 # invocation_options: the four forms, empty controls, and omission.
@@ -184,11 +183,11 @@ async def child_cancellation_does_not_cancel_input():
     upstream = CancelToken.new()
 
     def callback(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        active.cancel.cancel()
+        active.cancel()
         # Exact token operations remain serviceable under ambient cancellation.
-        assert active.cancel.is_cancelled()
+        assert active.is_cancelled()
         assert not upstream.is_cancelled()
         return value
 
@@ -228,30 +227,30 @@ async def concurrent_reservation_attaches_once():
 
 # invocation_callbacks: state visible to ordinary, uninstrumented callbacks.
 async def callback_frame_and_reentry():
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     upstream = CancelToken.new()
     frames = []
 
     async def leaf(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        assert not active.cancel.is_cancelled()
+        assert not active.is_cancelled()
         # Re-entry has a fresh execution identity; wrapper identity is unspecified.
         return value + 1
 
     async def callback(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
         frames.append(active)
         await asyncio.sleep(0)
-        assert invocation.current() is not None
-        assert not invocation.current().cancel.is_cancelled()
+        assert trace.current_cancel_token() is not None
+        assert not trace.current_cancel_token().is_cancelled()
         return await baml.call_int_callback_async(leaf, value, _baml={})
 
     assert (
         await baml.call_int_callback_async(callback, 6, _baml={"cancel": upstream}) == 7
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     assert not upstream.is_cancelled()
 
 
@@ -326,15 +325,15 @@ async def retained_effective_token_stays_live_after_callback():
     retained = []
 
     def callback(value):
-        active = invocation.current()
+        active = trace.current_cancel_token()
         assert active is not None
-        retained.append(active.cancel)
+        retained.append(active)
         return value
 
     assert (
         await baml.call_int_callback_async(callback, 1, _baml={"cancel": source}) == 1
     )
-    assert invocation.current() is None
+    assert trace.current_cancel_token() is None
     source.cancel()
     assert retained[0].is_cancelled()
     # Keeping the token does not restore the frame or callback completion ID.

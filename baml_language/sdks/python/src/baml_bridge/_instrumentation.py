@@ -9,8 +9,7 @@ import logging
 import sys
 import threading
 
-from ._dispatch import _current_invocation
-from ._invocation import _Invocation
+from ._execution_context import _current_execution_context, _ExecutionContext
 from .baml_py import (
     _begin_host_invocation,
     _define_host_marker,
@@ -44,7 +43,7 @@ def _options_handle(options):
 
 
 def _enter(definition, options, caller, inputs):
-    active = _current_invocation.get()
+    active = _current_execution_context.get()
     try:
         execution, state, cancel = _begin_host_invocation(
             definition,
@@ -53,7 +52,7 @@ def _enter(definition, options, caller, inputs):
             caller,
             inputs,
         )
-        return execution, _current_invocation.set(_Invocation((state, cancel)))
+        return execution, _current_execution_context.set(_ExecutionContext((state, cancel)))
     except TypeError as error:
         raise TraceUsageError("invalid host execution context") from error
     except Exception:
@@ -96,7 +95,7 @@ def _exit(execution, token, outcome, value):
                 _diagnostic("host trace completion failed")
     finally:
         if token is not None:
-            _current_invocation.reset(token)
+            _current_execution_context.reset(token)
 
 
 def _exception_capture(error):

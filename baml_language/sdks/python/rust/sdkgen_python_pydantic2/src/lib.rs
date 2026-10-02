@@ -330,7 +330,7 @@ fn to_source_code_internal(
         };
         content.push_str(&render_leaf_body(body, &callable_child_names));
         if dir == &["vendor".to_string(), "trace".to_string()] {
-            content.push_str("\n# Host inspection reads the dispatch frame without another invocation.\nfrom baml_bridge._invocation import current_context as current_context\nfrom baml_bridge._instrumentation import instrument as instrument, TraceUsageError as TraceUsageError\n\nasync def current_context_async():\n    return current_context()\n");
+            content.push_str("\n# Host inspection reads the dispatch frame without another invocation.\nfrom baml_bridge._execution_context import current_context as current_context, current_cancel_token as current_cancel_token\nfrom baml_bridge._instrumentation import instrument as instrument, TraceUsageError as TraceUsageError\n\nasync def current_context_async():\n    return current_context()\n");
         }
         content.push_str(&render_interface_tokens(
             interface_tokens
@@ -344,7 +344,7 @@ fn to_source_code_internal(
             content.push_str(
                 "\n# BEP-066 host reflection surface.\nfrom . import reflect as reflect\n",
             );
-            content.push_str("\n__all__ = list(globals().get(\"__all__\", [])) + [\"BamlOptions\", \"invocation\", \"invoke\", \"invoke_async\", \"trace\"]\n");
+            content.push_str("\n__all__ = list(globals().get(\"__all__\", [])) + [\"BamlOptions\", \"experimental\", \"trace\"]\n");
         }
         out.insert(init_py_path(dir), content);
 
@@ -362,6 +362,7 @@ fn to_source_code_internal(
         let callable_child_bodies = callable_child_bodies(dir, &callable_child_names, &bodies);
         pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
         if dir == &["vendor".to_string(), "trace".to_string()] {
+            pyi_content.push_str("\nfrom ...baml.spawn import CancelToken as _CancelToken\n\ndef current_cancel_token() -> typing.Optional[_CancelToken]: ...\n");
             pyi_content.push_str("\nfrom baml_bridge._instrumentation import TraceUsageError as TraceUsageError\n\n_HostP = typing_extensions.ParamSpec(\"_HostP\")\n_HostR = typing.TypeVar(\"_HostR\")\n\n@typing.overload\ndef instrument(function_or_options: typing.Callable[_HostP, _HostR], *, name: typing.Optional[str] = ...) -> typing.Callable[_HostP, _HostR]: ...\n@typing.overload\ndef instrument(function_or_options: typing.Optional[Options] = ..., *, name: typing.Optional[str] = ...) -> typing.Callable[[typing.Callable[_HostP, _HostR]], typing.Callable[_HostP, _HostR]]: ...\n");
         }
         pyi_content.push_str(&render_interface_tokens(
@@ -387,12 +388,12 @@ fn to_source_code_internal(
         include_str!("invocation_types.pyi").into(),
     );
     out.insert(
-        PathBuf::from("invocation.py"),
-        include_str!("invocation_facade.py").into(),
+        PathBuf::from("experimental/__init__.py"),
+        include_str!("experimental_facade.py").into(),
     );
     out.insert(
-        PathBuf::from("invocation.pyi"),
-        include_str!("invocation_facade.pyi").into(),
+        PathBuf::from("experimental/__init__.pyi"),
+        include_str!("experimental_facade.pyi").into(),
     );
 
     // `_inlinedbaml.py` lives at the SDK root so the root init can
@@ -615,9 +616,9 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
     }
     out.push_str("})\n\n");
     out.push_str("def __getattr__(name):\n");
-    out.push_str("    if name == \"invocation\" and __name__ == \"baml_sdk\":\n");
+    out.push_str("    if name == \"experimental\" and __name__ == \"baml_sdk\":\n");
     out.push_str("        import importlib\n");
-    out.push_str("        return importlib.import_module(\".invocation\", __name__)\n");
+    out.push_str("        return importlib.import_module(\".experimental\", __name__)\n");
     out.push_str("    if name == \"trace\" and __name__ == \"baml_sdk\":\n");
     out.push_str("        import importlib\n");
     out.push_str("        return importlib.import_module(\".vendor.trace\", __name__)\n");
@@ -654,9 +655,6 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("    return FILES\n\n");
     out.push_str("set_type_map(_TYPE_MAP)\n");
     out.push_str("from ._invocation_types import BamlOptions as BamlOptions\n");
-    out.push_str(
-        "from baml_bridge._invocation import invoke as invoke, invoke_async as invoke_async\n",
-    );
     if !top_children.is_empty() {
         append_lazy_children_block(&mut out, top_children);
     }
@@ -678,8 +676,7 @@ fn render_root_init_pyi(
         out.push_str(runtime_reexports);
     }
     out.push_str("\nfrom ._invocation_types import BamlOptions as BamlOptions\n");
-    out.push_str("from . import invocation as invocation\n");
-    out.push_str("from .invocation import invoke as invoke, invoke_async as invoke_async\n");
+    out.push_str("from . import experimental as experimental\n");
     out.push_str("from .vendor import trace as trace\n");
     out.push_str("\ndef get_baml_source_files() -> dict[str, str]: ...\n");
     if !top_children.is_empty() {
@@ -958,9 +955,11 @@ mod tests {
         assert!(root.contains("    \"baml\",\n"));
         assert!(root.contains("def __getattr__(name):\n"));
         assert!(!root.contains("from . import baml\n"));
-        // Public invocation facades exist even without application symbols.
+        // Experimental dynamic calls exist even without application symbols.
         assert!(root.contains("BamlOptions"));
-        assert!(out.contains_key(&PathBuf::from("invocation.py")));
+        assert!(out.contains_key(&PathBuf::from("experimental/__init__.py")));
+        assert!(!out.contains_key(&PathBuf::from("invocation.py")));
+        assert!(!root.contains("invoke as invoke"));
 
         // The `.pyi` sibling drops the runtime wiring but keeps the
         // explicit `from . import <child>` cascade so pyright can

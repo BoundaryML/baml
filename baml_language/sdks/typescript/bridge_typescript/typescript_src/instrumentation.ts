@@ -3,7 +3,7 @@
 import * as util from 'node:util';
 import { createHash } from 'node:crypto';
 import { BamlHandle, _defineHostMarker, _beginHostInvocation, _validateHostOptions, type HostCallSite } from './native.js';
-import { current, Invocation } from './invocation.js';
+import { current, ExecutionContext } from './execution_context.js';
 import { getTypeMap } from './typemap.js';
 import { capture, failureOutcome, diagnostic } from './host_capture.js';
 import { registerHostMarker } from './host_marker.js';
@@ -67,11 +67,11 @@ export function instrument<F extends Body>(optionsOrBody: unknown, body?: F, dis
     const wrapped = function (this: unknown, ...args: unknown[]): unknown {
         if (consumeHostAdoption(marker.identity)) return Reflect.apply(target, this, args);
         let execution: ReturnType<typeof _beginHostInvocation>[0] | undefined;
-        let active: Invocation;
+        let active: ExecutionContext;
         try {
             const entered = _beginHostInvocation(definition, current()?.state, options, callerSite(), requests[0] ? capture(args) : undefined);
             execution = entered[0];
-            active = new Invocation(entered[1], entered[2]);
+            active = new ExecutionContext(entered[1], entered[2]);
         } catch (error) {
             execution?.abandon();
             const code = typeof error === 'object' && error !== null && !util.types.isProxy(error)
