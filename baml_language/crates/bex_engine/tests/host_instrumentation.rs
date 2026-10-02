@@ -351,3 +351,205 @@ async fn host_definitions_and_call_sites_are_structural_across_modes() {
         );
     }
 }
+
+#[allow(unsafe_code)]
+extern "C" fn callback_dispatch(request: *const u8, length: usize) {
+    use bridge_ctypes::{OwnedHostInvocation, baml_bridge::cffi::HostInvocation};
+    use prost::Message;
+    // SAFETY: the native trampoline owns this slice until dispatch returns.
+    let bytes = unsafe { std::slice::from_raw_parts(request, length) };
+    let frame = OwnedHostInvocation(HostInvocation::decode(bytes).unwrap());
+    let id = frame.0.callback_id;
+    let execution = sys_native::host_dispatch::retain_execution(id).unwrap();
+    assert!(sys_native::host_dispatch::start_execution(id).is_some());
+    let capture = sys_native::host_dispatch::execution_capture(id)
+        .unwrap()
+        .downcast::<bex_engine::InvocationCapture>()
+        .unwrap_or_else(|_| panic!("typed capture"));
+    CALLBACK_CONTEXTS
+        .lock()
+        .unwrap()
+        .push(capture.state.clone());
+    let host = capture.host.as_ref().unwrap();
+    assert!(
+        host.wants_value(InvocationOutcome::Ok),
+        "marker true survives explicit false"
+    );
+    assert!(host.wants_value(InvocationOutcome::Errored));
+    host.observe(InvocationOutcome::Ok, Some(bex_engine::HostCapture::Int(7)));
+    sys_native::host_dispatch::complete_with_value(id, BexExternalValue::Int(7));
+    drop(capture);
+    drop(execution);
+}
+
+static CALLBACK_CONTEXTS: std::sync::Mutex<Vec<bex_engine::InheritedInvocationState>> =
+    std::sync::Mutex::new(Vec::new());
+
+#[tokio::test]
+async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
+    use bex_resource_types::{HostValueArc, HostValueKind};
+    use bex_vm_types::trace::{HostMarker, TraceOptionsData};
+    sys_native::host_dispatch::set_dispatch_v2(callback_dispatch);
+    let program = common::compile_for_engine(
+        r#"
+        function explicit_span(callback: (int) -> int) -> int {
+            callback(7, $trace = trace.span(inputs = false, output = false, error = false).context(
+                metadata = { "stage": "call", "remove": null }
+            ))
+        }
+        function explicit_hidden(callback: (int) -> int) -> int {
+            callback(7, $trace = trace.hidden().context(metadata = { "stage": "hidden" }))
+        }
+        function explicit_timing(callback: (int) -> int) -> int {
+            callback(7, $trace = trace.timing().context(metadata = { "stage": "timing" }))
+        }
+        function marker_default(callback: (int) -> int) -> int {
+            callback(7, $trace = trace.context(metadata = { "stage": "default" }))
+        }
+        function reserved(callback: (int) -> int) -> trace.ReservedSpan {
+            let reservation = trace.span(output = false).context(metadata = { "stage": "reserved" }).reserve();
+            callback(7, $trace = reservation);
+            reservation
+        }
+    "#,
+    );
+    let directory = tempfile::tempdir().unwrap();
+    let recording =
+        TelemetryRecording::local_files_in(directory.path(), RecordingConfig::default());
+    let scope = recording.id();
+    let engine = Arc::new(
+        BexEngine::new_with_telemetry_recording(
+            program,
+            Arc::new(sys_ops::SysOps::native()),
+            vec![],
+            None,
+            btel_clock::ClockMode::Monotonic,
+            recording,
+        )
+        .unwrap(),
+    );
+    HostValueArc::register_annotation(
+        7000,
+        Arc::new(HostMarker {
+            definition: definition(),
+            options: TraceOptionsData {
+                mode: Some(InvocationMode::Hidden),
+                inputs: Some(true),
+                output: Some(true),
+                error: Some(true),
+                context: Some(Arc::new(ContextPatch {
+                    metadata: [
+                        ("stage".into(), Some(ContextValue::String("marker".into()))),
+                        ("remove".into(), Some(ContextValue::Int(2))),
+                    ]
+                    .into(),
+                    ..Default::default()
+                })),
+            },
+        }),
+    );
+    let callback = HostValueArc::intern(7000, HostValueKind::Callable);
+    let mut reserved_id = None;
+    for name in [
+        "explicit_span",
+        "explicit_hidden",
+        "explicit_timing",
+        "marker_default",
+        "reserved",
+    ] {
+        let value = engine
+            .call_function(
+                name,
+                vec![BexExternalValue::HostValue(callback.clone())],
+                FunctionCallContextBuilder::new(CallId::next())
+                    .with_trace_options(TraceOptionsData {
+                        mode: Some(InvocationMode::Hidden),
+                        context: Some(Arc::new(ContextPatch {
+                            metadata: [
+                                ("stage".into(), Some(ContextValue::String("caller".into()))),
+                                ("keep".into(), Some(ContextValue::Int(1))),
+                            ]
+                            .into(),
+                            ..Default::default()
+                        })),
+                        ..Default::default()
+                    })
+                    .build(),
+                true,
+            )
+            .await
+            .unwrap();
+        if name == "reserved" {
+            let BexExternalValue::Instance { mut fields, .. } = value else {
+                panic!("reservation must be a generated class: {value:?}")
+            };
+            let BexExternalValue::RustData(data) = fields.shift_remove("_handle").unwrap() else {
+                panic!("reservation must contain native data")
+            };
+            reserved_id = data
+                .downcast_ref::<bex_vm_types::trace::ReservedSpanData>()
+                .unwrap()
+                .id
+                .local_in(scope);
+        } else {
+            assert_eq!(value, BexExternalValue::Int(7));
+        }
+    }
+    let contexts = std::mem::take(&mut *CALLBACK_CONTEXTS.lock().unwrap());
+    for (index, stage) in ["call", "hidden", "timing", "default", "reserved"]
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(
+            contexts[index].trace_context().metadata()["stage"],
+            ContextValue::String(stage.into())
+        );
+        assert_eq!(
+            contexts[index].trace_context().metadata()["keep"],
+            ContextValue::Int(1)
+        );
+    }
+    assert!(
+        !contexts[0]
+            .trace_context()
+            .metadata()
+            .contains_key("remove")
+    );
+    tokio::time::timeout(Duration::from_secs(5), engine.shutdown())
+        .await
+        .unwrap();
+    // Retained contexts above must own no running invocation or producer.
+    if let Some(path) = engine.telemetry_recording_directory() {
+        assert_eq!(engine.telemetry_result(), Some(Ok(())));
+        let mut entries = vec![];
+        let mut completions = vec![];
+        for file in btel_file::read_directory(path).unwrap().files {
+            for section in file.spans.unwrap().sections {
+                for event in section.events {
+                    match event.event.unwrap() {
+                        proto::span_event::Event::FunctionAnnouncement(entry) => {
+                            entries.push(entry);
+                        }
+                        proto::span_event::Event::FunctionCompletion(done) => {
+                            completions.push(done);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            entries.len(),
+            2,
+            "Hidden/Timing emit no callback span; explicit Span and reservation do"
+        );
+        assert_eq!(completions.len(), 2);
+        assert!(entries.iter().all(|entry| entry.inputs_cas_id.is_some()));
+        assert!(completions.iter().all(|done| done.value_cas_id.is_some()));
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.id == reserved_id.unwrap().get())
+        );
+    }
+}

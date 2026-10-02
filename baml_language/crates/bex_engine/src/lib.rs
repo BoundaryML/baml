@@ -80,7 +80,9 @@ mod invocation;
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_snapshot::host::HostValue as HostCapture;
 #[cfg(not(target_arch = "wasm32"))]
-pub use host_instrumentation::{HostCallSite, HostDefinition, HostInvocation};
+pub use host_instrumentation::{
+    CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation,
+};
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]
 mod telemetry;
@@ -5809,8 +5811,12 @@ impl BexEngine {
                                     },
                                 ));
                             }
+                            let host_handle = self.vm_arg_to_bex_value(args[0]);
+                            let host_value = bex_heap::BexValue::from(&host_handle)
+                                .as_owned_with_package_handles(self.heap(), thread.proof())
+                                .map_err(|error| EngineError::Other(error.to_string()))?;
                             vec![
-                                self.vm_arg_to_bex_value(args[0]),
+                                host_value,
                                 self.convert_host_call_args_pack(
                                     args[1],
                                     &params,
@@ -5874,13 +5880,78 @@ impl BexEngine {
                                 Err(error) => SysOpResult::Ready(Err(error)),
                             }
                         } else {
-                            let invocation = InheritedInvocationState {
+                            let mut invocation = InheritedInvocationState {
                                 engine_id: self.engine_id,
                                 cancellation: thread.vm_thread_cancel().clone(),
                                 context: thread.vm.current_context().clone(),
                                 ancestry: thread.vm.invocation_ancestry(),
                                 host_environment: thread.host_environment,
                             };
+                            let host_options = (operation == SysOp::BamlHostCallHostValue)
+                                .then(|| thread.vm.take_host_call_options());
+                            #[cfg(not(target_arch = "wasm32"))]
+                            let host =
+                                if let (Some(call), Some(BexExternalValue::HostValue(value))) =
+                                    (&host_options, bex_args.first())
+                                {
+                                    if let Some(marker) =
+                                        value.annotation::<bex_vm_types::trace::HostMarker>()
+                                    {
+                                        let options =
+                                            host_instrumentation::resolve_callback_options(
+                                                &marker.options,
+                                                call,
+                                            );
+                                        let inputs = (options.inputs == Some(true)).then(|| {
+                                            host_instrumentation::capture_callback_inputs(
+                                                &bex_args[1],
+                                            )
+                                        });
+                                        let execution = self.begin_host_with_reservation(
+                                            &marker.definition,
+                                            Some(&invocation),
+                                            &options,
+                                            &HostCallSite {
+                                                source_file: "<baml>".into(),
+                                                line: 0,
+                                            },
+                                            inputs.as_ref(),
+                                            call.reserved_id,
+                                        );
+                                        match execution {
+                                            Ok(execution) => {
+                                                invocation = execution.inherited_state();
+                                                Some(Arc::new(CallbackHostInvocation::new(
+                                                    execution,
+                                                )))
+                                            }
+                                            Err(error) => {
+                                                // Tracing failure cannot replace the application body.
+                                                host_instrumentation::callback_entry_failed(&error);
+                                                if let Some(patch) = &options.context {
+                                                    invocation.context =
+                                                        invocation.context.with_patch(patch);
+                                                }
+                                                invocation.cancellation =
+                                                    invocation.cancellation.child([]);
+                                                None
+                                            }
+                                        }
+                                    } else {
+                                        if let Some(patch) = &call.options.context {
+                                            invocation.context =
+                                                invocation.context.with_patch(patch);
+                                        }
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
+                            #[cfg(target_arch = "wasm32")]
+                            if let Some(patch) = host_options.and_then(|call| call.options.context)
+                            {
+                                invocation.context = invocation.context.with_patch(&patch);
+                            }
                             let cancel_projection = if operation == SysOp::BamlHostCallHostValue {
                                 let state = invocation.cancellation.clone();
                                 let projection = bex_vm::package_baml::alloc_projected_cancel_token(
@@ -5915,8 +5986,13 @@ impl BexEngine {
                                 &runtime_type_overlay,
                                 call_id,
                                 &op_cancel,
-                                invocation,
-                                cancel_projection,
+                                InvocationCapture {
+                                    runtime: Arc::clone(self),
+                                    state: invocation,
+                                    cancel: cancel_projection,
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    host,
+                                },
                                 thread.proof(),
                                 runtime_schema_overlay.as_ref(),
                                 network
@@ -6368,8 +6444,7 @@ impl BexEngine {
         runtime_type_overlay: &RuntimeTypeOverlay,
         call_id: CallId,
         cancel: &CancellationToken,
-        invocation: InheritedInvocationState,
-        cancel_projection: Option<BexExternalValue>,
+        invocation: InvocationCapture,
         permit: bex_heap::PermitProof<'_>,
         runtime_schema: Option<&RuntimeSchemaOverlay>,
         network: Option<sys_types::network::NetworkContext>,
@@ -6399,9 +6474,7 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let spawner = Arc::new(InvocationSpawner {
-            runtime: Arc::clone(self),
-            inherited: invocation,
-            cancel: cancel_projection,
+            capture: invocation,
         });
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), spawner);
         ctx.network = network;
@@ -7361,19 +7434,13 @@ impl sys_types::VmSpawner for BexEngine {
 
 /// Sys-op callbacks retain invocation state even after their BAML waiter exits.
 struct InvocationSpawner {
-    runtime: Arc<BexEngine>,
-    inherited: InheritedInvocationState,
-    cancel: Option<BexExternalValue>,
+    capture: InvocationCapture,
 }
 
 #[async_trait]
 impl sys_types::VmSpawner for InvocationSpawner {
     fn capture_invocation(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        Some(Arc::new(InvocationCapture {
-            runtime: self.runtime.clone(),
-            state: self.inherited.clone(),
-            cancel: self.cancel.clone(),
-        }))
+        Some(Arc::new(self.capture.clone()))
     }
     async fn spawn_with_function(
         self: Arc<Self>,
@@ -7381,13 +7448,14 @@ impl sys_types::VmSpawner for InvocationSpawner {
         args: Vec<BexExternalValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
-        self.runtime
+        self.capture
+            .runtime
             .call_function(
                 &function_name,
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
-                    .with_inherited_state(self.inherited.clone())
+                    .with_inherited_state(self.capture.state.clone())
                     .build(),
                 true,
             )
@@ -7401,13 +7469,14 @@ impl sys_types::VmSpawner for InvocationSpawner {
         args: Vec<BexExternalValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
-        self.runtime
+        self.capture
+            .runtime
             .call_callable(
                 callable,
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
-                    .with_inherited_state(self.inherited.clone())
+                    .with_inherited_state(self.capture.state.clone())
                     .build(),
                 true,
             )

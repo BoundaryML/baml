@@ -35,6 +35,7 @@ impl TelemetryState {
         caller_pc: u32,
         mode: InvocationMode,
         captured_inputs: Option<btel_snapshot::Snapshot>,
+        reserved_id: Option<btel_types::TelemetryId>,
     ) -> Option<FrameTelemetry> {
         if mode == InvocationMode::Hidden {
             return None;
@@ -52,7 +53,8 @@ impl TelemetryState {
             edge: CallPathEdge::Synchronous,
         });
         let entered_at = self.clock.read();
-        let span_id = (mode == InvocationMode::Span).then(allocate_telemetry_id);
+        let span_id = (mode == InvocationMode::Span)
+            .then(|| reserved_id.unwrap_or_else(allocate_telemetry_id));
         let mut flags = 0;
         if let Some(id) = span_id {
             flags |= SPAN;

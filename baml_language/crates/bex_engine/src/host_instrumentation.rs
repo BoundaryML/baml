@@ -2,46 +2,13 @@
 use std::sync::Arc;
 
 use bex_vm::telemetry::{FrameTelemetry, TelemetryState};
+pub(crate) use bex_vm_types::trace::HostDefinitionKey;
+pub use bex_vm_types::trace::{HostCallSite, HostDefinition};
 use btel_types::{FunctionMetadata, InvocationMode, InvocationOutcome};
 
 use crate::{
     BexEngine, CallId, EngineError, InheritedInvocationState, RootCallWork, thread::TaskCancel,
 };
-
-/// Lexical definition and wrapper site, independent of request data and object
-/// addresses. Adapters must distinguish explicitly stacked wrapper sites.
-#[derive(Clone, Debug)]
-pub struct HostDefinition {
-    pub language: String,
-    pub module: String,
-    pub qualified_name: String,
-    pub source_file: String,
-    pub definition_line: u32,
-    pub wrapper_line: u32,
-    pub display_name: String,
-}
-
-pub(crate) type HostDefinitionKey = (String, String, String, String, u32, u32);
-
-impl HostDefinition {
-    pub(crate) fn key(&self) -> HostDefinitionKey {
-        (
-            self.language.clone(),
-            self.module.clone(),
-            self.qualified_name.clone(),
-            self.source_file.clone(),
-            self.definition_line,
-            self.wrapper_line,
-        )
-    }
-}
-
-/// A native source coordinate, interned independently of display names.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct HostCallSite {
-    pub source_file: String,
-    pub line: u32,
-}
 
 /// Owns actual host work. The SDK separately retains `inherited_state()` in
 /// its language carrier; that copy owns neither this guard nor the producer.
@@ -63,6 +30,18 @@ impl BexEngine {
         options: &bex_vm_types::trace::TraceOptionsData,
         caller: &HostCallSite,
         inputs: Option<&btel_snapshot::host::HostValue>,
+    ) -> Result<HostInvocation, EngineError> {
+        self.begin_host_with_reservation(definition, inherited, options, caller, inputs, None)
+    }
+
+    pub(crate) fn begin_host_with_reservation(
+        self: &Arc<Self>,
+        definition: &HostDefinition,
+        inherited: Option<&InheritedInvocationState>,
+        options: &bex_vm_types::trace::TraceOptionsData,
+        caller: &HostCallSite,
+        inputs: Option<&btel_snapshot::host::HostValue>,
+        reserved_id: Option<btel_types::TelemetryId>,
     ) -> Result<HostInvocation, EngineError> {
         if inherited.is_some_and(|state| state.engine_id != self.engine_id) {
             return Err(EngineError::TypeMismatch {
@@ -173,6 +152,7 @@ impl BexEngine {
                 caller_pc,
                 options.mode.unwrap_or(InvocationMode::Span),
                 captured_inputs,
+                reserved_id,
             )
         });
         let state = InheritedInvocationState {
@@ -241,5 +221,178 @@ impl Drop for HostInvocation {
             telemetry.abandon_host();
         }
         let _ = &self.registration;
+    }
+}
+
+/// Only queued/running dispatch owns this object. Inherited state never does.
+pub struct CallbackHostInvocation {
+    inner: std::sync::Mutex<Option<CallbackExecution>>,
+}
+
+struct CallbackExecution {
+    invocation: HostInvocation,
+    outcome: Option<InvocationOutcome>,
+    value: Option<btel_snapshot::host::HostValue>,
+}
+
+impl CallbackHostInvocation {
+    pub(crate) fn new(invocation: HostInvocation) -> Self {
+        Self {
+            inner: std::sync::Mutex::new(Some(CallbackExecution {
+                invocation,
+                outcome: None,
+                value: None,
+            })),
+        }
+    }
+
+    pub fn wants_value(&self, outcome: InvocationOutcome) -> bool {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|execution| execution.invocation.wants_value(outcome))
+    }
+
+    pub fn observe(
+        &self,
+        outcome: InvocationOutcome,
+        value: Option<btel_snapshot::host::HostValue>,
+    ) {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(execution) = inner.as_mut()
+            && execution.outcome.is_none()
+        {
+            execution.outcome = Some(outcome);
+            execution.value = value;
+        }
+    }
+}
+
+impl Drop for CallbackHostInvocation {
+    fn drop(&mut self) {
+        if let Some(CallbackExecution {
+            invocation,
+            outcome: Some(outcome),
+            value,
+        }) = self
+            .inner
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            invocation.finish_with_value(outcome, value.as_ref());
+        }
+        // Without a body outcome, abandon recording rather than fabricate success.
+    }
+}
+
+pub(crate) fn resolve_callback_options(
+    marker: &bex_vm_types::trace::TraceOptionsData,
+    call: &bex_vm_types::trace::HostCallOptions,
+) -> bex_vm_types::trace::TraceOptionsData {
+    let mut context = marker.context.as_deref().cloned().unwrap_or_default();
+    if let Some(patch) = &call.options.context {
+        context.compose((**patch).clone());
+    }
+    let request = |declared: Option<bool>, explicit: Option<bool>| {
+        if declared == Some(true) || explicit == Some(true) {
+            Some(true)
+        } else {
+            explicit.or(declared)
+        }
+    };
+    bex_vm_types::trace::TraceOptionsData {
+        mode: if call.reserved_id.is_some() {
+            Some(InvocationMode::Span)
+        } else {
+            call.options
+                .mode
+                .or(marker.mode)
+                .or(Some(InvocationMode::Span))
+        },
+        inputs: request(marker.inputs, call.options.inputs),
+        output: request(marker.output, call.options.output),
+        error: request(marker.error, call.options.error),
+        context: Some(Arc::new(context)),
+    }
+}
+
+pub(crate) fn capture_callback_inputs(
+    value: &crate::BexExternalValue,
+) -> btel_snapshot::host::HostValue {
+    use btel_snapshot::{
+        Limit,
+        host::{HostValue as H, MAX_BYTES, MAX_DEPTH, MAX_VALUES},
+    };
+
+    use crate::BexExternalValue as V;
+    fn copy(value: &V, depth: usize, nodes: &mut usize, bytes: &mut usize) -> H {
+        if depth > MAX_DEPTH {
+            return H::Truncated(Limit::Depth);
+        }
+        if *nodes == 0 {
+            return H::Truncated(Limit::Values);
+        }
+        *nodes -= 1;
+        match value {
+            V::Null => H::Null,
+            V::Bool(v) => H::Bool(*v),
+            V::Int(v) => H::Int(*v),
+            V::Float(v) => H::Float(*v),
+            V::String(v) => {
+                if v.len() > *bytes {
+                    H::Truncated(Limit::Bytes)
+                } else {
+                    *bytes -= v.len();
+                    H::String(v.as_str().to_owned())
+                }
+            }
+            V::Union { value, .. } => copy(value, depth + 1, nodes, bytes),
+            V::Array { items, .. } => {
+                if items.len() > *nodes {
+                    return H::Truncated(Limit::Values);
+                }
+                let mut values = Vec::new();
+                for value in items {
+                    if *nodes == 0 {
+                        return H::Truncated(Limit::Values);
+                    }
+                    values.push(copy(value, depth + 1, nodes, bytes));
+                }
+                H::List(values)
+            }
+            V::Map { entries, .. } => {
+                if entries.len() > *nodes {
+                    return H::Truncated(Limit::Values);
+                }
+                let mut values = Vec::new();
+                for (key, value) in entries {
+                    if *nodes == 0 {
+                        return H::Truncated(Limit::Values);
+                    }
+                    if key.len() > *bytes {
+                        return H::Truncated(Limit::Bytes);
+                    }
+                    *bytes -= key.len();
+                    values.push((key.clone(), copy(value, depth + 1, nodes, bytes)));
+                }
+                H::Map(values)
+            }
+            _ => H::Unavailable,
+        }
+    }
+    let mut nodes = MAX_VALUES;
+    let mut bytes = MAX_BYTES;
+    copy(value, 0, &mut nodes, &mut bytes)
+}
+
+pub(crate) fn callback_entry_failed(error: &EngineError) {
+    static DIAGNOSTICS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    if DIAGNOSTICS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 8 {
+        tracing::warn!(%error, "host trace entry failed");
     }
 }

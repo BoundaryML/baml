@@ -2,10 +2,12 @@
 // only after synchronous exit or native Promise settlement.
 import * as util from 'node:util';
 import { createHash } from 'node:crypto';
-import { BamlHandle, _beginHostInvocation, _validateHostOptions, type HostCallSite } from './native.js';
+import { BamlHandle, _defineHostMarker, _beginHostInvocation, _validateHostOptions, type HostCallSite } from './native.js';
 import { current, Invocation } from './invocation.js';
 import { getTypeMap } from './typemap.js';
-import { BamlAbortError } from './errors.js';
+import { capture, failureOutcome, diagnostic } from './host_capture.js';
+import { registerHostMarker } from './host_marker.js';
+import { consumeHostAdoption } from './platform.js';
 
 export class TraceUsageError extends TypeError {}
 type Body = (this: any, ...args: any[]) => any;
@@ -13,7 +15,6 @@ type Display = { readonly name?: string };
 type Site = HostCallSite & { column: number };
 const nativeThen = Promise.prototype.then;
 const nativeSpecies = Object.getOwnPropertyDescriptor(Promise, Symbol.species)?.get;
-const abortErrorPrototype = BamlAbortError.prototype;
 
 function callerSite(): Site {
     // Unlike Error.stack, this does not call a user Error.prepareStackTrace.
@@ -22,71 +23,6 @@ function callerSite(): Site {
     }> }).getCallSites;
     const site = getSites?.()[2];
     return { sourceFile: site?.scriptName ?? '<native>', line: site?.lineNumber ?? 0, column: site?.columnNumber ?? 0 };
-}
-
-let diagnostics = 0;
-function diagnostic(message: string): void {
-    if (diagnostics++ < 8) {
-        try { console.warn(message); } catch { /* Logging cannot replace host exit. */ }
-    }
-}
-
-type Observation = [string, unknown?];
-function capture(value: unknown): string {
-    let remaining = 512;
-    let bytes = 64 * 1024;
-    const active = new Set<object>();
-    const text = (value: string): boolean => {
-        const size = Buffer.byteLength(value);
-        if (size > bytes) return false;
-        bytes -= size;
-        return true;
-    };
-    const copy = (value: unknown, depth: number): Observation => {
-        if (depth > 8) return ['depth'];
-        if (remaining-- <= 0) return ['values'];
-        if (value === null) return ['null'];
-        if (typeof value === 'boolean') return ['bool', value];
-        if (typeof value === 'number') return Number.isFinite(value) ? ['number', value] : ['unavailable'];
-        if (typeof value === 'string') return text(value) ? ['string', value] : ['bytes'];
-        if (typeof value !== 'object' || util.types.isProxy(value) || active.has(value)) return ['unavailable'];
-        const prototype = Object.getPrototypeOf(value);
-        if (prototype !== Object.prototype && prototype !== Array.prototype && prototype !== null) return ['unavailable'];
-        active.add(value);
-        try {
-            if (Array.isArray(value)) {
-                const length = Object.getOwnPropertyDescriptor(value, 'length')!.value as number;
-                if (length > remaining) return ['values'];
-                const values: Observation[] = [];
-                for (let index = 0; index < length; index++) {
-                    if (remaining <= 0) return ['values'];
-                    const field = Object.getOwnPropertyDescriptor(value, String(index));
-                    values.push(field && 'value' in field ? copy(field.value, depth + 1) : ['unavailable']);
-                }
-                return ['list', values];
-            }
-            const entries: Array<[string, Observation]> = [];
-            let scanned = 0;
-            for (const key in value) {
-                if (scanned++ >= 512) return ['values'];
-                const field = Object.getOwnPropertyDescriptor(value, key);
-                if (!field) continue;
-                if (remaining <= 0) return ['values'];
-                if (!text(key)) return ['bytes'];
-                entries.push([key, 'value' in field ? copy(field.value, depth + 1) : ['unavailable']]);
-            }
-            return ['map', entries];
-        } finally { active.delete(value); }
-    };
-    // Only fresh copied tuples reach JSON.stringify, never application values.
-    const copied = copy(value, 0);
-    const protect = (value: unknown): void => {
-        if (!Array.isArray(value)) return;
-        Object.defineProperty(value, 'toJSON', { value: undefined });
-        for (let index = 0; index < value.length; index++) protect(value[index]);
-    };
-    protect(copied);
-    return JSON.stringify(copied);
 }
 
 function optionsHandle(options: unknown): BamlHandle | undefined {
@@ -127,7 +63,9 @@ export function instrument<F extends Body>(optionsOrBody: unknown, body?: F, dis
         sourceFile: site.sourceFile, definitionLine: site.line,
         wrapperLine: site.line, displayName: display?.name ?? name ?? '<anonymous>',
     };
-    return function (this: unknown, ...args: unknown[]): unknown {
+    const marker = { handle: _defineHostMarker(definition, options), identity: {} };
+    const wrapped = function (this: unknown, ...args: unknown[]): unknown {
+        if (consumeHostAdoption(marker.identity)) return Reflect.apply(target, this, args);
         let execution: ReturnType<typeof _beginHostInvocation>[0] | undefined;
         let active: Invocation;
         try {
@@ -144,17 +82,6 @@ export function instrument<F extends Body>(optionsOrBody: unknown, body?: F, dis
             diagnostic('host trace entry failed');
             return Reflect.apply(target, this, args);
         }
-        const failureOutcome = (error: unknown): 'error' | 'cancelled' => {
-            try {
-                let value = error;
-                for (let depth = 0; depth < 32 && typeof value === 'object' && value !== null; depth++) {
-                    if (util.types.isProxy(value)) return 'error';
-                    if (value === abortErrorPrototype) return 'cancelled';
-                    value = Object.getPrototypeOf(value);
-                }
-                return 'error';
-            } catch { return 'error'; }
-        };
         const finish = (outcome: 'ok' | 'error' | 'cancelled', value: unknown): void => {
             try { execution!.finish(outcome, requests[outcome === 'ok' ? 1 : 2] ? capture(value) : undefined); }
             catch { diagnostic('host trace completion failed'); }
@@ -191,4 +118,6 @@ export function instrument<F extends Body>(optionsOrBody: unknown, body?: F, dis
             return result;
         });
     } as F;
+    registerHostMarker(wrapped, marker);
+    return wrapped;
 }

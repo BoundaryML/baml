@@ -465,7 +465,9 @@ def _set_inbound_value(
         and not isinstance(value, type)
         and not _is_pydantic_model(value)
     ):
-        key = register_host_callable(value)
+        from ._host_marker import marker_for
+
+        key = register_host_callable(value, marker_for(value))
         # Record the key so the encode path can release it if a later
         # kwarg fails to encode (the call never reaches the engine, so the
         # engine would never decode — and never release — this key).

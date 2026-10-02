@@ -141,3 +141,31 @@ pub fn _begin_host_invocation(
         cancel,
     ))
 }
+
+#[gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (definition, options=None))]
+pub fn _define_host_marker(
+    definition: (String, String, String, u32, u32, String),
+    options: Option<&BamlPyHandle>,
+) -> PyResult<BamlPyHandle> {
+    let (module, qualified_name, source_file, definition_line, wrapper_line, display_name) =
+        definition;
+    let key = bridge_cffi::host_instrumentation::define_marker(
+        bex_project::HostDefinition {
+            language: "python".into(),
+            module,
+            qualified_name,
+            source_file,
+            definition_line,
+            wrapper_line,
+            display_name,
+        },
+        options.map_or(0, |handle| handle.handle_key),
+    )
+    .map_err(host_error)?;
+    Ok(BamlPyHandle::new(
+        key,
+        BamlHandleType::UntaggedRustData as u64,
+    ))
+}

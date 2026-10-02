@@ -21,7 +21,7 @@ export function captureCallbackContext(_callId: bigint): () => void {
   return () => {};
 }
 
-export function runHostCallback(callId: number, args: Uint8Array, callback: () => void | Promise<void>, execution?: object): void | Promise<void> {
+export function runHostCallback(callId: number, args: Uint8Array, callback: () => void | Promise<void>, execution?: object, _markerIdentity?: object): void | Promise<void> {
   // Internal Web I/O has no inherited application frame.
   if (!execution) return callback();
   if (_startHostCallExecution(execution) === null) {
@@ -39,3 +39,6 @@ export function runHostCallback(callId: number, args: Uint8Array, callback: () =
 export function handleExitPanic(_code: number, fallbackPanic: BamlPanic): never {
   throw fallbackPanic;
 }
+
+export function consumeHostAdoption(_identity: object): boolean { return false; }
+export function observeHostCallbackResult(_callId: number, _error: boolean, _value: unknown): void {}

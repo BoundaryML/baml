@@ -27,7 +27,8 @@ import type { InvocationOptions, InvokeOptions } from './invocation.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
-import { handleExitPanic, runHostCallback, currentInvocationState } from './platform.js';
+import { hostMarker } from './host_marker.js';
+import { handleExitPanic, runHostCallback, currentInvocationState, observeHostCallbackResult } from './platform.js';
 import {
     registerHostOpaque,
     releaseHostOpaque,
@@ -338,7 +339,7 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // side decodes this into `BexExternalValue::HostValue` and binds it
         // to an `Object::HostClosure`; BAML invocations land back in
         // `hostCallableDispatch` below via the ThreadsafeFunction.
-        const key = registerHostCallable(makeHostCallableDispatch(value as (...args: unknown[]) => unknown));
+        const key = registerHostCallable(makeHostCallableDispatch(value as (...args: unknown[]) => unknown), hostMarker(value as Function)?.handle);
         // Remember the key so a later encode failure can release it.
         ctx.registered.push(key);
         iv.handle = { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE };
@@ -1116,7 +1117,7 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
 export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown) {
     return (callId: number, argsBytes: Buffer, execution?: object): void => {
         try {
-            const completion = runHostCallback(callId, argsBytes, () => dispatchHostCallable(userFn, callId, argsBytes), execution);
+            const completion = runHostCallback(callId, argsBytes, () => dispatchHostCallable(userFn, callId, argsBytes), execution, hostMarker(userFn)?.identity);
             if (completion) {
                 void completion.catch((error) => completeHostCallLastResort(callId, error));
             }
@@ -1151,6 +1152,7 @@ function dispatchHostCallable(userFn: (...args: unknown[]) => unknown, callId: n
         try {
             result = userFn(...args);
         } catch (err) {
+            observeHostCallbackResult(callId, true, err);
             sendHostCallableError(callId, err);
             return;
         }
@@ -1166,10 +1168,11 @@ function dispatchHostCallable(userFn: (...args: unknown[]) => unknown, callId: n
             // exactly once. The handlers only call the defended send*
             // helpers (they can't throw synchronously).
             return Promise.resolve(result).then(
-                (resolved) => sendHostCallableResult(callId, resolved),
-                (err) => sendHostCallableError(callId, err)
+                (resolved) => { observeHostCallbackResult(callId, false, resolved); sendHostCallableResult(callId, resolved); },
+                (err) => { observeHostCallbackResult(callId, true, err); sendHostCallableError(callId, err); }
             );
         } else {
+            observeHostCallbackResult(callId, false, result);
             sendHostCallableResult(callId, result);
         }
     } catch (err) {

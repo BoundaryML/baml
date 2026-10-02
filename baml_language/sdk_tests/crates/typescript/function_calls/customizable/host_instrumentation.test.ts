@@ -231,4 +231,111 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     expect(() => instrument(trace.span().reserve() as unknown as trace.Options, () => 1)).toThrow(TypeError);
     expect(() => instrument(trace.options(), () => 1, { name: '' })).toThrow(TypeError);
   });
+
+  it('callback_marker_context_precedence', async () => {
+    const callback = instrument(trace.context({ distinct_id: 'marker', metadata: { stage: 'marker', keep: 1, remove: 2 } }), async (value: number) => {
+      const expected = { stage: 'call', keep: 1, caller: true };
+      expect(trace.current_context().distinct_id).toBe('call');
+      expect(trace.current_context().metadata).toEqual(expected);
+      expect((await contextBaml.current_context_async()).metadata).toEqual(expected);
+      return value;
+    });
+    expect(await baml.call_configured_callback_async(callback as unknown as (value: number) => number, 7,
+      trace.context({ distinct_id: 'call', metadata: { stage: 'call', remove: null } }),
+      { $baml: { trace: trace.context({ distinct_id: 'caller', metadata: { stage: 'caller', caller: true } }) } })).toBe(7);
+    expect(invocation.current()).toBe(null);
+  });
+
+  it('callback_marker_adopts_sync_body', async () => {
+    const callback = instrument(trace.context({ metadata: { stage: 'marker' } }), (value: number) => {
+      expect(trace.current_context().metadata).toEqual({ stage: 'call' });
+      return value;
+    });
+    expect(await baml.call_configured_callback_async(callback, 7, trace.context({ metadata: { stage: 'call' } }))).toBe(7);
+    expect(invocation.current()).toBe(null);
+  });
+
+  it('callback_marker_defaults_override_inherited_context', async () => {
+    const callback = instrument(trace.context({ metadata: { stage: 'marker' } }), async (value: number) => {
+      expect(trace.current_context().metadata).toEqual({ stage: 'marker', keep: 1 });
+      return value;
+    });
+    expect(await baml.call_int_callback_async(callback as unknown as (value: number) => number, 7,
+      { $baml: { trace: trace.context({ metadata: { stage: 'caller', keep: 1 } }) } })).toBe(7);
+    expect(invocation.current()).toBe(null);
+  });
+
+  it('callback_marker_adopts_once_during_recursion', async () => {
+    const stages: unknown[] = [];
+    const callback = instrument(trace.context({ metadata: { stage: 'marker' } }), async (value: number): Promise<number> => {
+      stages.push(trace.current_context().metadata.stage);
+      if (value) {
+        const child = await callback(value - 1);
+        expect(trace.current_context().metadata.stage).toBe('call');
+        return child + 1;
+      }
+      return 0;
+    });
+    expect(await baml.call_configured_callback_async(callback as unknown as (value: number) => number, 1,
+      trace.context({ metadata: { stage: 'call' } }))).toBe(1);
+    expect(stages).toEqual(['call', 'marker']);
+    expect(invocation.current()).toBe(null);
+  });
+
+  it('callback_marker_only_outer_wrapper_adopts', async () => {
+    const inner = instrument(trace.context({ metadata: { stage: 'inner' } }), async (value: number) => {
+      expect(trace.current_context().metadata).toEqual({ stage: 'inner', outer: true, call: true });
+      return value;
+    });
+    const outer = instrument(trace.context({ metadata: { stage: 'outer', outer: true } }), inner);
+    expect(await baml.call_configured_callback_async(outer as unknown as (value: number) => number, 7,
+      trace.context({ metadata: { stage: 'call', call: true } }))).toBe(7);
+    expect(invocation.current()).toBe(null);
+  });
+
+  it('callback_marker_concurrent_reuse_and_later_direct_call', async () => {
+    let markReady!: () => void, unblock!: () => void;
+    const ready = new Promise<void>(resolve => { markReady = resolve; });
+    const release = new Promise<void>(resolve => { unblock = resolve; });
+    let entered = 0;
+    const callback = instrument(trace.context({ metadata: { stage: 'marker' } }), async (value: number) => {
+      if (value < 2) { if (++entered === 2) markReady(); await release; }
+      expect(trace.current_context().metadata).toEqual({ stage: value === 2 ? 'marker' : value });
+      return value;
+    });
+    const pending = [0, 1].map(index => baml.call_configured_callback_async(callback as unknown as (value: number) => number,
+      index, trace.context({ metadata: { stage: index } })));
+    try { await ready; } finally { unblock(); }
+    expect(await Promise.all(pending)).toEqual([0, 1]);
+    expect(await callback(2)).toBe(2);
+    expect(invocation.current()).toBe(null);
+  });
+
+  it('callback_third_party_wrapper_is_not_adopted', async () => {
+    const marked = instrument(trace.context({ metadata: { stage: 'marker' } }), async (value: number) => {
+      expect(trace.current_context().metadata).toEqual({ stage: 'marker' });
+      return value;
+    });
+    const thirdParty = async (value: number) => {
+      expect(trace.current_context().metadata).toEqual({ stage: 'call' });
+      return marked(value);
+    };
+    Object.assign(thirdParty, marked);
+    expect(await baml.call_configured_callback_async(thirdParty as unknown as (value: number) => number, 7,
+      trace.context({ metadata: { stage: 'call' } }))).toBe(7);
+    expect(invocation.current()).toBe(null);
+  });
+
+  it('unmarked_callback_explicit_context_and_reentry', async () => {
+    const callback = async (value: number) => {
+      expect(trace.current_context().metadata).toEqual({ stage: 'call' });
+      const child = await contextBaml.current_context_async({ $baml: { trace: trace.context({ metadata: { stage: 'child' } }) } });
+      expect(child.metadata).toEqual({ stage: 'child' });
+      expect(trace.current_context().metadata).toEqual({ stage: 'call' });
+      return value;
+    };
+    expect(await baml.call_configured_callback_async(callback as unknown as (value: number) => number, 7,
+      trace.context({ metadata: { stage: 'call' } }))).toBe(7);
+    expect(invocation.current()).toBe(null);
+  });
 });

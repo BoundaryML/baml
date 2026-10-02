@@ -9,105 +9,21 @@
 // only after synchronous exit or native Promise settlement.
 import * as util from 'node:util';
 import { createHash } from 'node:crypto';
-import { BamlHandle, _beginHostInvocation, _validateHostOptions } from './native.js';
+import { BamlHandle, _defineHostMarker, _beginHostInvocation, _validateHostOptions } from './native.js';
 import { current, Invocation } from './invocation.js';
 import { getTypeMap } from './typemap.js';
-import { BamlAbortError } from './errors.js';
+import { capture, failureOutcome, diagnostic } from './host_capture.js';
+import { registerHostMarker } from './host_marker.js';
+import { consumeHostAdoption } from './platform.js';
 export class TraceUsageError extends TypeError {
 }
 const nativeThen = Promise.prototype.then;
 const nativeSpecies = Object.getOwnPropertyDescriptor(Promise, Symbol.species)?.get;
-const abortErrorPrototype = BamlAbortError.prototype;
 function callerSite() {
     // Unlike Error.stack, this does not call a user Error.prepareStackTrace.
     const getSites = util.getCallSites;
     const site = getSites?.()[2];
     return { sourceFile: site?.scriptName ?? '<native>', line: site?.lineNumber ?? 0, column: site?.columnNumber ?? 0 };
-}
-let diagnostics = 0;
-function diagnostic(message) {
-    if (diagnostics++ < 8) {
-        try {
-            console.warn(message);
-        }
-        catch { /* Logging cannot replace host exit. */ }
-    }
-}
-function capture(value) {
-    let remaining = 512;
-    let bytes = 64 * 1024;
-    const active = new Set();
-    const text = (value) => {
-        const size = Buffer.byteLength(value);
-        if (size > bytes)
-            return false;
-        bytes -= size;
-        return true;
-    };
-    const copy = (value, depth) => {
-        if (depth > 8)
-            return ['depth'];
-        if (remaining-- <= 0)
-            return ['values'];
-        if (value === null)
-            return ['null'];
-        if (typeof value === 'boolean')
-            return ['bool', value];
-        if (typeof value === 'number')
-            return Number.isFinite(value) ? ['number', value] : ['unavailable'];
-        if (typeof value === 'string')
-            return text(value) ? ['string', value] : ['bytes'];
-        if (typeof value !== 'object' || util.types.isProxy(value) || active.has(value))
-            return ['unavailable'];
-        const prototype = Object.getPrototypeOf(value);
-        if (prototype !== Object.prototype && prototype !== Array.prototype && prototype !== null)
-            return ['unavailable'];
-        active.add(value);
-        try {
-            if (Array.isArray(value)) {
-                const length = Object.getOwnPropertyDescriptor(value, 'length').value;
-                if (length > remaining)
-                    return ['values'];
-                const values = [];
-                for (let index = 0; index < length; index++) {
-                    if (remaining <= 0)
-                        return ['values'];
-                    const field = Object.getOwnPropertyDescriptor(value, String(index));
-                    values.push(field && 'value' in field ? copy(field.value, depth + 1) : ['unavailable']);
-                }
-                return ['list', values];
-            }
-            const entries = [];
-            let scanned = 0;
-            for (const key in value) {
-                if (scanned++ >= 512)
-                    return ['values'];
-                const field = Object.getOwnPropertyDescriptor(value, key);
-                if (!field)
-                    continue;
-                if (remaining <= 0)
-                    return ['values'];
-                if (!text(key))
-                    return ['bytes'];
-                entries.push([key, 'value' in field ? copy(field.value, depth + 1) : ['unavailable']]);
-            }
-            return ['map', entries];
-        }
-        finally {
-            active.delete(value);
-        }
-    };
-    // Only fresh copied tuples reach JSON.stringify, never application values.
-    const copied = copy(value, 0);
-    const protect = (value) => {
-        if (!Array.isArray(value))
-            return;
-        Object.defineProperty(value, 'toJSON', { value: undefined });
-        for (let index = 0; index < value.length; index++)
-            protect(value[index]);
-    };
-    protect(copied);
-    return JSON.stringify(copied);
 }
 function optionsHandle(options) {
     if (options === null || options === undefined)
@@ -150,7 +66,10 @@ export function instrument(optionsOrBody, body, display) {
         sourceFile: site.sourceFile, definitionLine: site.line,
         wrapperLine: site.line, displayName: display?.name ?? name ?? '<anonymous>',
     };
-    return function (...args) {
+    const marker = { handle: _defineHostMarker(definition, options), identity: {} };
+    const wrapped = function (...args) {
+        if (consumeHostAdoption(marker.identity))
+            return Reflect.apply(target, this, args);
         let execution;
         let active;
         try {
@@ -168,22 +87,6 @@ export function instrument(optionsOrBody, body, display) {
             diagnostic('host trace entry failed');
             return Reflect.apply(target, this, args);
         }
-        const failureOutcome = (error) => {
-            try {
-                let value = error;
-                for (let depth = 0; depth < 32 && typeof value === 'object' && value !== null; depth++) {
-                    if (util.types.isProxy(value))
-                        return 'error';
-                    if (value === abortErrorPrototype)
-                        return 'cancelled';
-                    value = Object.getPrototypeOf(value);
-                }
-                return 'error';
-            }
-            catch {
-                return 'error';
-            }
-        };
         const finish = (outcome, value) => {
             try {
                 execution.finish(outcome, requests[outcome === 'ok' ? 1 : 2] ? capture(value) : undefined);
@@ -231,5 +134,7 @@ export function instrument(optionsOrBody, body, display) {
             return result;
         });
     };
+    registerHostMarker(wrapped, marker);
+    return wrapped;
 }
 //# sourceMappingURL=instrumentation.js.map

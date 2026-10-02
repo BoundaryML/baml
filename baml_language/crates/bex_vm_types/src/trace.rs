@@ -159,3 +159,50 @@ mod tests {
         );
     }
 }
+
+/// Lexical definition and wrapper site, independent of request data and object
+/// addresses. Adapters must distinguish explicitly stacked wrapper sites.
+#[derive(Clone, Debug)]
+pub struct HostDefinition {
+    pub language: String,
+    pub module: String,
+    pub qualified_name: String,
+    pub source_file: String,
+    pub definition_line: u32,
+    pub wrapper_line: u32,
+    pub display_name: String,
+}
+
+pub type HostDefinitionKey = (String, String, String, String, u32, u32);
+
+impl HostDefinition {
+    pub fn key(&self) -> HostDefinitionKey {
+        (
+            self.language.clone(),
+            self.module.clone(),
+            self.qualified_name.clone(),
+            self.source_file.clone(),
+            self.definition_line,
+            self.wrapper_line,
+        )
+    }
+}
+
+/// A native source coordinate, interned independently of display names.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct HostCallSite {
+    pub source_file: String,
+    pub line: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct HostMarker {
+    pub definition: HostDefinition,
+    pub options: TraceOptionsData,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct HostCallOptions {
+    pub options: TraceOptionsData,
+    pub reserved_id: Option<TelemetryId>,
+}

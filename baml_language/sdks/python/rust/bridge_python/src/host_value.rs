@@ -72,8 +72,19 @@ static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Py<PyAny>>> =
 /// callable appears as a kwarg.
 #[gen_stub_pyfunction]
 #[pyfunction]
-pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
-    REGISTRY.insert(callable)
+#[pyo3(signature = (callable, marker=None))]
+pub fn register_host_callable(
+    callable: Py<PyAny>,
+    marker: Option<&crate::py_handle::BamlPyHandle>,
+) -> PyResult<u64> {
+    let descriptor = bridge_cffi::host_instrumentation::registration_marker(
+        marker.map_or(0, |handle| handle.handle_key),
+        "python",
+    )
+    .map_err(crate::errors::bridge_error_to_sdk_panic)?;
+    let key = REGISTRY.insert(callable);
+    bex_project::HostValueArc::register_annotation(key, descriptor);
+    Ok(key)
 }
 
 /// Insert an arbitrary host Python object into the registry and return its key.
@@ -94,6 +105,7 @@ fn register_host_opaque(value: Py<PyAny>) -> u64 {
 /// the encoder's rollback path ([`release_host_callable`]). Dropping the
 /// `Py<PyAny>` requires the GIL.
 fn drop_registry_entry(host_value_key: u64) {
+    bex_project::HostValueArc::discard_annotation(host_value_key);
     let popped: Option<Py<PyAny>> = match REGISTRY.lock() {
         Ok(mut t) => t.remove(&host_value_key),
         Err(e) => {
@@ -369,7 +381,7 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
                 .call1((value.bind(py),))?
                 .extract()?;
             if !is_coroutine {
-                return encode_result_inbound(py, value).map(Some);
+                return encode_result_inbound(py, call_id, value).map(Some);
             }
             let context = PyModule::import(py, "contextvars")?
                 .getattr("copy_context")?
@@ -388,7 +400,7 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
                             .bind(py)
                             .call_method1("run", (runner, call_id, value.bind(py)))?
                             .unbind();
-                        encode_result_inbound(py, value)
+                        encode_result_inbound(py, call_id, value)
                     });
                     complete_dispatch_result(call_id, result);
                 })
@@ -525,7 +537,7 @@ pub fn _discard_host_call_args(args: Vec<u8>) {
 #[pyfunction]
 pub fn _complete_host_call_success(py: Python<'_>, call_id: u32, value: Py<PyAny>) {
     catch_dispatch_panic(call_id, || {
-        complete_dispatch_result(call_id, encode_result_inbound(py, value));
+        complete_dispatch_result(call_id, encode_result_inbound(py, call_id, value));
     });
 }
 
@@ -559,7 +571,15 @@ fn decode_args<'py>(
 
 /// Encode `value` as an `InboundValue` protobuf using
 /// `baml_bridge.proto._set_inbound_value`, then serialize to bytes.
-fn encode_result_inbound(py: Python<'_>, value: Py<PyAny>) -> PyResult<Vec<u8>> {
+fn encode_result_inbound(py: Python<'_>, call_id: u32, value: Py<PyAny>) -> PyResult<Vec<u8>> {
+    if let Some(owner) = bridge_cffi::host_instrumentation::callback(call_id) {
+        let outcome = btel_types::InvocationOutcome::Ok;
+        let capture = owner
+            .wants_value(outcome)
+            .then(|| crate::host_capture::capture(value.bind(py)));
+        owner.observe(outcome, capture);
+    }
+
     let inbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_inbound_pb2")?;
     let proto = PyModule::import(py, "baml_bridge.proto")?;
     let holder = inbound_pb2.getattr("InboundValue")?.call0()?;
@@ -770,6 +790,27 @@ fn try_encode_baml_error_throw(py: Python<'_>, py_err: &pyo3::PyErr) -> PyResult
 ///   opaque `baml.errors.HostCallable` Instance carrying the four
 ///   metadata fields.
 fn send_dispatch_error_from_pyerr(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr) {
+    if let Some(owner) = bridge_cffi::host_instrumentation::callback(call_id) {
+        let cancelled = PyModule::import(py, "asyncio")
+            .and_then(|module| module.getattr("CancelledError"))
+            .is_ok_and(|kind| py_err.matches(py, kind).unwrap_or(false));
+        let outcome = if cancelled {
+            btel_types::InvocationOutcome::Cancelled
+        } else {
+            btel_types::InvocationOutcome::Errored
+        };
+        let capture = if owner.wants_value(outcome) {
+            PyModule::import(py, "baml_bridge._instrumentation")
+                .and_then(|module| module.getattr("_exception_capture"))
+                .and_then(|capture| capture.call1((py_err.value(py),)))
+                .ok()
+                .map(|value| crate::host_capture::capture(&value))
+        } else {
+            None
+        };
+        owner.observe(outcome, capture);
+    }
+
     if let Ok(Some(bytes)) = try_encode_baml_error_throw(py, py_err) {
         complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
         return;

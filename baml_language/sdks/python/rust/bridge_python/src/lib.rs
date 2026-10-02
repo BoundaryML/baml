@@ -83,6 +83,7 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<invocation::_HostExecution>()?;
     m.add_wrapped(wrap_pyfunction!(invocation::_validate_host_options))?;
     m.add_wrapped(wrap_pyfunction!(invocation::_begin_host_invocation))?;
+    m.add_wrapped(wrap_pyfunction!(invocation::_define_host_marker))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_heap_handle))?;

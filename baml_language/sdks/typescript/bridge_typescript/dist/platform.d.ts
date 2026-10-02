@@ -10,10 +10,12 @@ import { Invocation } from './invocation.js';
 export declare function getCurrentInvocation(): Invocation | undefined;
 export declare function runWithInvocation<T>(active: Invocation, body: () => T): T;
 export declare function currentInvocationState(): string | undefined;
+export declare function consumeHostAdoption(identity: object): boolean;
+export declare function observeHostCallbackResult(callId: number, error: boolean, value: unknown): void;
 /** Capture the SDK entry, rather than the lifetime of a registered callable. */
 export declare function captureCallbackContext(callId: bigint): () => void;
 /** Each execution owns a child context through Promise settlement/cleanup. */
-export declare function runHostCallback(callId: number, args: Buffer, callback: () => void | Promise<void>, lease?: object): void | Promise<void>;
+export declare function runHostCallback(callId: number, args: Buffer, callback: () => void | Promise<void>, lease?: object, markerIdentity?: object): void | Promise<void>;
 export declare const supportsSyncStreamPulls = true;
 export declare function handleExitPanic(code: number, _fallbackPanic: BamlPanic): never;
 //# sourceMappingURL=platform.d.ts.map

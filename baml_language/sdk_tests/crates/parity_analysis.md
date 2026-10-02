@@ -2,24 +2,25 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 877. IDs with complete required parity: 165. Required gaps: 4901.
+Distinct exact test IDs: 887. IDs with complete required parity: 167. Required gaps: 4949.
+
 
 ## Python-baselined parity
 
-Parity is the share of the 420 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 430 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 420 / 420 | 100.0% |
-| typescript_node | 176 / 420 | 41.9% |
-| typescript_web_chromium | 160 / 420 | 38.1% |
-| typescript_web_cloudflare_workers | 160 / 420 | 38.1% |
-| cpp | 130 / 420 | 31.0% |
-| csharp | 0 / 420 | 0.0% |
-| rust | 229 / 420 | 54.5% |
-| go | 13 / 420 | 3.1% |
-| java | 299 / 420 | 71.2% |
-| swift | 184 / 420 | 43.8% |
+| python_pydantic2 | 430 / 430 | 100.0% |
+| typescript_node | 184 / 430 | 42.8% |
+| typescript_web_chromium | 160 / 430 | 37.2% |
+| typescript_web_cloudflare_workers | 160 / 430 | 37.2% |
+| cpp | 130 / 430 | 30.2% |
+| csharp | 0 / 430 | 0.0% |
+| rust | 229 / 430 | 53.3% |
+| go | 13 / 430 | 3.0% |
+| java | 299 / 430 | 69.5% |
+| swift | 184 / 430 | 42.8% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -65,14 +66,23 @@ Parity is the share of the 420 test IDs declared in `python_pydantic2` that are 
 | function_calls/boolean_timeout_rejected_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
 | function_calls/callable_entry_invokes_callback | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callable_entry_waits_for_callback_completion | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callback_bound_method_adoption_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python bound method identity via its exact SDK function |
 | function_calls/callback_captures_internal_baml_context | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callback_frame_and_reentry | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callback_frame_is_installed_and_restored | - | - | - | - | - | - | y | - | - | - | all |  |
+| function_calls/callback_marker_adopts_once_during_recursion | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_adopts_sync_body | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_concurrent_reuse_and_later_direct_call | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_context_precedence | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_defaults_override_inherited_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_only_outer_wrapper_adopts | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/callback_marker_sync_entry_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python synchronous BAML entry and inline callback dispatch |
 | function_calls/callback_reenters_baml | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callback_reuse_across_event_loop_turns_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/callback_reuse_after_previous_application_loop_is_closed_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
 | function_calls/callback_suppresses_task_cancellation_and_returns_late_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback suppression of cancellation and late results |
 | function_calls/callback_task_cancelled_before_first_execution_completes_call_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python task factory cancellation before callback execution |
+| function_calls/callback_third_party_wrapper_is_not_adopted | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/callback_throws_caught_and_replaced_makes_the_function_infallible | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific inferred callback error unions |
 | function_calls/callback_throws_caught_then_rethrown_value_is_the_replacement_union | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific inferred callback error unions |
 | function_calls/callback_throws_rethrown_carries_the_effect_param_into_the_error_union | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific inferred callback error unions |
@@ -532,6 +542,7 @@ Parity is the share of the 420 test IDs declared in `python_pydantic2` that are 
 | function_calls/unhandled_spawn_error_uses_host_default | - | - | - | - | y | - | - | y | y | y | cpp, go, java, swift | requires subprocess-level SDK harness support |
 | function_calls/union_throws_preserves_concrete_class_identity | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/unknown_control_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/unmarked_callback_explicit_context_and_reentry | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/unpolled_future_starts_nothing_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
 | function_calls/unset_and_none_differ_in_one_call | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/user_panic_surfaces_as_go_error_without_panicking | - | - | - | - | - | - | - | y | - | - | all |  |

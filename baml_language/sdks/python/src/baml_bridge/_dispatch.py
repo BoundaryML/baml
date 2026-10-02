@@ -22,20 +22,26 @@ _current_invocation = ContextVar("baml_invocation", default=None)
 
 def _invoke_with_frame(callback, args, frame):
     from ._invocation import _Invocation
+    from ._host_marker import _adoption, marker_for
 
+    permit = [marker_for(callback), False]
     frame = _Invocation(frame)
     token = _current_invocation.set(frame)
+    adoption_token = _adoption.set(permit)
     try:
         result = _invoke_host_callable(callback, args)
     finally:
+        _adoption.reset(adoption_token)
         _current_invocation.reset(token)
     if asyncio.iscoroutine(result):
 
         async def run():
             token = _current_invocation.set(frame)
+            adoption_token = _adoption.set(permit)
             try:
                 return await result
             finally:
+                _adoption.reset(adoption_token)
                 _current_invocation.reset(token)
 
         return run()

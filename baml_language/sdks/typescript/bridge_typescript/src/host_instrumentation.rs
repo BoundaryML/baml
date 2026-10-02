@@ -132,7 +132,7 @@ pub fn begin_host_invocation(
 
 // The adapter supplies a bounded tagged tree of copied data, never a JS object
 // that native conversion would inspect through getters or serializers.
-fn capture(wire: &str) -> HostValue {
+pub(crate) fn capture(wire: &str) -> HostValue {
     if wire.len() > btel_snapshot::host::MAX_BYTES * 8 {
         return HostValue::Truncated(btel_snapshot::Limit::Bytes);
     }
@@ -209,4 +209,28 @@ fn copy(value: &serde_json::Value, depth: usize, remaining: &mut usize) -> HostV
         "bytes" => HostValue::Truncated(btel_snapshot::Limit::Bytes),
         _ => HostValue::Unavailable,
     }
+}
+
+#[napi(js_name = "_defineHostMarker")]
+pub fn define_host_marker(
+    definition: HostDefinition,
+    options: Option<&BamlHandle>,
+) -> napi::Result<BamlHandle> {
+    let key = bridge_cffi::host_instrumentation::define_marker(
+        bex_project::HostDefinition {
+            language: "typescript".into(),
+            module: definition.module,
+            qualified_name: definition.qualified_name,
+            source_file: definition.source_file,
+            definition_line: definition.definition_line,
+            wrapper_line: definition.wrapper_line,
+            display_name: definition.display_name,
+        },
+        options.map_or(0, BamlHandle::key_u64),
+    )
+    .map_err(host_error)?;
+    Ok(BamlHandle::from_parts(
+        key,
+        BamlHandleType::UntaggedRustData as i32,
+    ))
 }

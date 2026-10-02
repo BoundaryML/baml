@@ -373,3 +373,217 @@ def test_host_current_exposes_generated_cancel_token():
 
     work()
     assert invocation.current() is None
+
+
+async def test_callback_marker_context_precedence():
+    @trace.instrument(
+        trace.context(
+            distinct_id="marker", metadata={"stage": "marker", "keep": 1, "remove": 2}
+        )
+    )
+    async def callback(value):
+        expected = {"stage": "call", "keep": 1, "caller": True}
+        assert trace.current_context().distinct_id == "call"
+        assert trace.current_context().metadata == expected
+        assert (await context_baml.current_context_async()).metadata == expected
+        return value
+
+    assert (
+        await baml.call_configured_callback_async(
+            callback,
+            7,
+            trace.context(
+                distinct_id="call", metadata={"stage": "call", "remove": None}
+            ),
+            _baml={
+                "trace": trace.context(
+                    distinct_id="caller", metadata={"stage": "caller", "caller": True}
+                )
+            },
+        )
+        == 7
+    )
+    assert invocation.current() is None
+
+
+async def test_callback_marker_adopts_sync_body():
+    @trace.instrument(trace.context(metadata={"stage": "marker"}))
+    def callback(value):
+        assert trace.current_context().metadata == {"stage": "call"}
+        return value
+
+    assert (
+        await baml.call_configured_callback_async(
+            callback, 7, trace.context(metadata={"stage": "call"})
+        )
+        == 7
+    )
+    assert invocation.current() is None
+
+
+async def test_callback_marker_defaults_override_inherited_context():
+    @trace.instrument(trace.context(metadata={"stage": "marker"}))
+    async def callback(value):
+        assert trace.current_context().metadata == {"stage": "marker", "keep": 1}
+        return value
+
+    assert (
+        await baml.call_int_callback_async(
+            callback,
+            7,
+            _baml={
+                "trace": trace.context(metadata={"stage": "caller", "keep": 1}),
+            },
+        )
+        == 7
+    )
+    assert invocation.current() is None
+
+
+async def test_callback_marker_adopts_once_during_recursion():
+    stages = []
+
+    @trace.instrument(trace.context(metadata={"stage": "marker"}))
+    async def callback(value):
+        stages.append(trace.current_context().metadata["stage"])
+        if value:
+            child = await callback(value - 1)
+            assert trace.current_context().metadata["stage"] == "call"
+            return child + 1
+        return 0
+
+    assert (
+        await baml.call_configured_callback_async(
+            callback, 1, trace.context(metadata={"stage": "call"})
+        )
+        == 1
+    )
+    assert stages == ["call", "marker"]
+    assert invocation.current() is None
+
+
+async def test_callback_marker_only_outer_wrapper_adopts():
+    @trace.instrument(trace.context(metadata={"stage": "inner"}))
+    async def inner(value):
+        assert trace.current_context().metadata == {
+            "stage": "inner",
+            "outer": True,
+            "call": True,
+        }
+        return value
+
+    outer = trace.instrument(trace.context(metadata={"stage": "outer", "outer": True}))(
+        inner
+    )
+    assert (
+        await baml.call_configured_callback_async(
+            outer, 7, trace.context(metadata={"stage": "call", "call": True})
+        )
+        == 7
+    )
+    assert invocation.current() is None
+
+
+async def test_callback_marker_concurrent_reuse_and_later_direct_call():
+    ready = [asyncio.Event(), asyncio.Event()]
+    release = asyncio.Event()
+
+    @trace.instrument(trace.context(metadata={"stage": "marker"}))
+    async def callback(value):
+        if value < 2:
+            ready[value].set()
+            await release.wait()
+        expected = "marker" if value == 2 else value
+        assert trace.current_context().metadata == {"stage": expected}
+        return value
+
+    pending = [
+        asyncio.create_task(
+            baml.call_configured_callback_async(
+                callback, index, trace.context(metadata={"stage": index})
+            )
+        )
+        for index in range(2)
+    ]
+    try:
+        await asyncio.wait_for(asyncio.gather(*(event.wait() for event in ready)), 5)
+    finally:
+        release.set()
+    assert await asyncio.gather(*pending) == [0, 1]
+    assert await callback(2) == 2
+    assert invocation.current() is None
+
+
+async def test_callback_third_party_wrapper_is_not_adopted():
+    @trace.instrument(trace.context(metadata={"stage": "marker"}))
+    async def marked(value):
+        assert trace.current_context().metadata == {"stage": "marker"}
+        return value
+
+    # SDK identity must not follow __wrapped__ or copied marker attributes.
+    import functools
+
+    @functools.wraps(marked)
+    async def third_party(value):
+        assert trace.current_context().metadata == {"stage": "call"}
+        return await marked(value)
+
+    assert (
+        await baml.call_configured_callback_async(
+            third_party, 7, trace.context(metadata={"stage": "call"})
+        )
+        == 7
+    )
+    assert invocation.current() is None
+
+
+async def test_unmarked_callback_explicit_context_and_reentry():
+    async def callback(value):
+        assert trace.current_context().metadata == {"stage": "call"}
+        child = await context_baml.current_context_async(
+            _baml={"trace": trace.context(metadata={"stage": "child"})}
+        )
+        assert child.metadata == {"stage": "child"}
+        assert trace.current_context().metadata == {"stage": "call"}
+        return value
+
+    assert (
+        await baml.call_configured_callback_async(
+            callback, 7, trace.context(metadata={"stage": "call"})
+        )
+        == 7
+    )
+    assert invocation.current() is None
+
+
+# SDK_PARITY_LINT(skip): covers Python bound method identity via its exact SDK function
+async def test_callback_bound_method_adoption_python_only():
+    class Service:
+        @trace.instrument(trace.context(metadata={"stage": "marker"}))
+        async def callback(self, value):
+            assert trace.current_context().metadata == {"stage": "call"}
+            return value
+
+    assert (
+        await baml.call_configured_callback_async(
+            Service().callback, 7, trace.context(metadata={"stage": "call"})
+        )
+        == 7
+    )
+    assert invocation.current() is None
+
+
+# SDK_PARITY_LINT(skip): covers Python synchronous BAML entry and inline callback dispatch
+def test_callback_marker_sync_entry_python_only():
+    @trace.instrument(trace.context(metadata={"stage": "marker"}))
+    def callback(value):
+        assert trace.current_context().metadata == {"stage": "call"}
+        return value
+
+    assert (
+        baml.call_configured_callback(
+            callback, 7, trace.context(metadata={"stage": "call"})
+        )
+        == 7
+    )
+    assert invocation.current() is None

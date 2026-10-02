@@ -133,6 +133,8 @@ export declare class BamlVideo {
 
 export declare function _beginHostInvocation(definition: HostDefinition, inherited: BamlHandle | undefined | null, options: BamlHandle | undefined | null, caller: HostCallSite, inputs?: string | undefined | null): [_HostExecution, BamlHandle, Buffer]
 
+export declare function _defineHostMarker(definition: HostDefinition, options?: BamlHandle | undefined | null): BamlHandle
+
 export declare function _discardHostCallArgs(args: Buffer): void
 
 /** Close execution ownership only when the callback/Promise actually exits. */
@@ -148,6 +150,8 @@ export declare function _getHostCallOrigin(callId: number): string | null
  */
 export declare function _handleRefcount(key: HandleKey): number | null
 
+export declare function _hostCaptureRequested(execution: object, outcome: string): boolean
+
 export declare function _hostInvocationFrame(execution: object): [BamlHandle, Buffer]
 
 export declare function _invocationContext(handle?: BamlHandle | undefined | null): Buffer
@@ -159,6 +163,8 @@ export declare function _isInvocationCancelled(handle: BamlHandle): boolean
  * row counts once however many owners it has).
  */
 export declare function _liveHandleCount(): number
+
+export declare function _recordHostCallResult(execution: object, outcome: string, value?: string): void
 
 /** Release one owned wire reference that never reached a host wrapper. */
 export declare function _releaseWireHandle(key: HandleKey): void
@@ -281,7 +287,7 @@ export declare function newFunctionCall(): string
  * the napi call scope and be invoked from any thread (the engine's tokio
  * runtime calls into this entry point from a worker thread).
  */
-export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer, execution: object) => void): HandleKey
+export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer, execution: object) => void, marker?: BamlHandle): HandleKey
 
 /**
  * Install the TS-side release callback. First-call-wins; subsequent

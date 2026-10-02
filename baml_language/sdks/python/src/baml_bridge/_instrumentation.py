@@ -11,7 +11,13 @@ import threading
 
 from ._dispatch import _current_invocation
 from ._invocation import _Invocation
-from .baml_py import _begin_host_invocation, _validate_host_options, BamlPyHandle
+from .baml_py import (
+    _begin_host_invocation,
+    _define_host_marker,
+    _validate_host_options,
+    BamlPyHandle,
+)
+from ._host_marker import consume_adoption, register_marker
 from .typemap import get_type_map
 
 
@@ -137,6 +143,7 @@ def instrument(function_or_options=None, *, name=None):
             wrapper_line,
             name if name is not None else original.__qualname__,
         )
+        marker = _define_host_marker(definition, options)
         signature = inspect.signature(function)
         parameters = list(signature.parameters)
         receiver = (
@@ -164,6 +171,8 @@ def instrument(function_or_options=None, *, name=None):
 
             @functools.wraps(function)
             async def asynchronous(*args, **kwargs):
+                if consume_adoption(marker):
+                    return await function(*args, **kwargs)
                 execution, token = _enter(
                     definition, options, _caller_site(), inputs(args, kwargs)
                 )
@@ -182,10 +191,13 @@ def instrument(function_or_options=None, *, name=None):
                 finally:
                     _exit(execution, token, outcome, result)
 
+            register_marker(asynchronous, marker)
             return asynchronous
 
         @functools.wraps(function)
         def synchronous(*args, **kwargs):
+            if consume_adoption(marker):
+                return function(*args, **kwargs)
             execution, token = _enter(
                 definition, options, _caller_site(), inputs(args, kwargs)
             )
@@ -204,6 +216,7 @@ def instrument(function_or_options=None, *, name=None):
             finally:
                 _exit(execution, token, outcome, result)
 
+        register_marker(synchronous, marker)
         return synchronous
 
     return decorate(function_or_options) if direct else decorate

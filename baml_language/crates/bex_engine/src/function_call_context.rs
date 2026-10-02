@@ -61,12 +61,16 @@ impl InheritedInvocationState {
     }
 }
 
-/// Engine-owned immutable callback frame and its concrete token projection.
+/// Transient callback dispatch capture and its concrete cancellation projection.
+/// Only dispatch retains the optional physical execution owner. Exporting the
+/// inherited state into a language carrier never retains that owner.
 #[derive(Clone)]
 pub struct InvocationCapture {
     pub runtime: std::sync::Arc<crate::BexEngine>,
     pub state: InheritedInvocationState,
     pub cancel: Option<bex_external_types::BexExternalValue>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub host: Option<std::sync::Arc<crate::host_instrumentation::CallbackHostInvocation>>,
 }
 
 impl InvocationCapture {

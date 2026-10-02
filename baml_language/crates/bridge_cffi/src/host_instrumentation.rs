@@ -66,3 +66,53 @@ pub fn begin(
     ));
     Ok((execution, key))
 }
+
+/// A marker retains immutable declaration data only, not a runtime or parent.
+pub fn define_marker(definition: HostDefinition, options_key: u64) -> Result<u64, BridgeError> {
+    let marker = bex_project::HostMarker {
+        definition,
+        options: options(options_key)?,
+    };
+    Ok(HANDLE_TABLE.insert(
+        CffiHandleTableEntry::try_from(bex_project::BexExternalValue::RustData(Arc::new(marker)))
+            .expect("RustData is a handle-table value"),
+    ))
+}
+
+pub fn registration_marker(
+    key: u64,
+    language: &str,
+) -> Result<Arc<bex_project::HostMarker>, BridgeError> {
+    if key == 0 {
+        return Ok(Arc::new(bex_project::HostMarker {
+            definition: HostDefinition {
+                language: language.into(),
+                module: "<host>".into(),
+                qualified_name: "<unmarked-callback>".into(),
+                source_file: "<native>".into(),
+                definition_line: 0,
+                wrapper_line: 0,
+                display_name: "<callback>".into(),
+            },
+            options: TraceOptionsData::default(),
+        }));
+    }
+    let entry = HANDLE_TABLE
+        .resolve(key)
+        .ok_or_else(|| invalid("host marker is no longer live"))?;
+    let CffiHandleTableEntry::RustData(data) = &*entry else {
+        return Err(invalid("expected a host marker"));
+    };
+    Arc::clone(&data.0)
+        .downcast::<bex_project::HostMarker>()
+        .map_err(|_| invalid("expected a host marker"))
+}
+
+pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>> {
+    let capture = sys_native::host_dispatch::execution_capture(call_id)?;
+    capture
+        .downcast::<bex_project::InvocationCapture>()
+        .ok()?
+        .host
+        .clone()
+}
