@@ -250,15 +250,10 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
                     {
                         broadcast_run_patch(&state.broadcast_tx, &patch);
                     }
-                    // `INPUT_REQUEST_TIMEOUT_SECS` is a hard-coded
-                    // constant (300s); the `i64::try_from` cannot fail in
-                    // practice, but stays as a `Some` so a future bump to
-                    // a much larger timeout surfaces the overflow loudly.
-                    let duration_ms = i64::try_from(INPUT_REQUEST_TIMEOUT.as_millis())
-                        .expect("INPUT_REQUEST_TIMEOUT must fit in i64 ms");
                     Err(VmRustFnError::from(VmBamlError::Timeout {
                         message: "No response to baml.io.input()".into(),
-                        duration_ms: Some(duration_ms),
+                        duration: Some(INPUT_REQUEST_TIMEOUT),
+                        timeout_type: "timeout".into(),
                     }))
                 }
             }

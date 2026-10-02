@@ -162,7 +162,7 @@ function sse_events(body: string) -> string[]              // split a recorded b
 `last_request()` surface as the JSON mock, so a streaming test can still assert
 on the request that opened the stream.
 
-Reading raw SSE in a test: `baml.http.fetch_sse(req)` then `stream.next()`, which
+Reading raw SSE in a test: `baml.http.send_sse(req)` then `stream.next()`, which
 returns **a JSON array string of `{"event","data","id"}` objects per batch** (not
 one event), or null at end of stream — see
 `../ns_streaming_sse_primitives/streaming_sse_primitives.baml:9-11`.

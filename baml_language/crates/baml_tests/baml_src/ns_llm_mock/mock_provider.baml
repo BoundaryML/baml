@@ -125,7 +125,7 @@ class MockJsonServer {
             ?? baml.sys.panic("mock_json_serve: no request was captured")
     }
 
-    function handle(self, req: baml.http.Request) -> baml.http.Response {
+    function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
         let _ = self.requests.push(MockRequest {
             method: req.method,
             url: req.url,
@@ -237,7 +237,7 @@ class MockSseServer {
             ?? baml.sys.panic("mock_sse_serve: no request was captured")
     }
 
-    function handle(self, req: baml.http.Request) -> baml.http.Response {
+    function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
         let _ = self.requests.push(MockRequest {
             method: req.method,
             url: req.url,
@@ -497,7 +497,7 @@ function mock_sse_streams_events() -> string {
             root.llm_mock.sse_data(`{"type":"response.output_text.delta","delta":"hi"}`),
         ],
         (mock: MockSseServer) -> {
-            let stream = baml.http.fetch_sse(baml.http.Request {
+            let stream = baml.http.send_sse(baml.http.Request {
                 method: "POST",
                 url: mock.base_url() + "/v1/messages",
                 headers: { },

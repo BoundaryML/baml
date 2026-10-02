@@ -107,7 +107,7 @@ impl WebHttp {
             "body".to_string() => BexExternalValue::Uint8Array(request.body.into_bytes()),
             "timeoutNanos".to_string() => BexExternalValue::Bigint(timeout_nanos.clone()),
         });
-        let duration_ms = timeout_duration_ms(timeout_nanos);
+        let duration = timeout_duration(timeout_nanos);
         map_output(
             self.host.call_registered_callable(
                 operation,
@@ -115,7 +115,7 @@ impl WebHttp {
                 &[request_value],
                 &IndexMap::new(),
             ),
-            move |value| parse_fetch_result(value, duration_ms),
+            move |value| parse_fetch_result(value, duration),
         )
     }
 }
@@ -297,6 +297,7 @@ impl IoNamespaceHttp for WebHttp {
         _call_id: CallId,
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.send(
@@ -306,6 +307,8 @@ impl IoNamespaceHttp for WebHttp {
                 url,
                 headers: IndexMap::new(),
                 body: String::new(),
+                timeout: None,
+                connect_timeout: None,
             },
             timeout_nanos.as_ref(),
         )
@@ -317,18 +320,19 @@ impl IoNamespaceHttp for WebHttp {
         _call_id: CallId,
         request: io::owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.send(SysOp::BamlHttpSend, request, timeout_nanos.as_ref())
     }
 
-    fn _fetch_sse(
+    fn _send_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
-        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         host_unavailable("http")
@@ -547,7 +551,7 @@ impl IoNamespaceFs for WebFs {
 
 fn parse_fetch_result(
     value: BexExternalValue,
-    duration_ms: Option<i64>,
+    duration: Option<std::time::Duration>,
 ) -> Result<io::owned::http::Response, VmRustFnError> {
     let mut result = expect_map(value, "fetch result")?;
     match take_string(&mut result, "kind", "fetch result")?.as_str() {
@@ -574,7 +578,8 @@ fn parse_fetch_result(
         .into()),
         "timeout" => Err(VmBamlError::Timeout {
             message: take_string(&mut result, "message", "fetch timeout")?,
-            duration_ms,
+            duration,
+            timeout_type: "timeout".to_string(),
         }
         .into()),
         kind => Err(bridge_failure(format!(
@@ -706,13 +711,13 @@ fn take_bytes(
     }
 }
 
-fn timeout_duration_ms(timeout_nanos: &num_bigint::BigInt) -> Option<i64> {
-    if timeout_nanos.sign() == num_bigint::Sign::NoSign {
+fn timeout_duration(timeout_nanos: &num_bigint::BigInt) -> Option<std::time::Duration> {
+    if timeout_nanos.sign() != num_bigint::Sign::Plus {
         return None;
     }
-    ((timeout_nanos + num_bigint::BigInt::from(999_999_u64))
-        / num_bigint::BigInt::from(1_000_000_u64))
-    .to_i64()
+    Some(std::time::Duration::from_nanos(
+        timeout_nanos.to_u64().unwrap_or(u64::MAX),
+    ))
 }
 
 fn map(entries: IndexMap<String, BexExternalValue>) -> BexExternalValue {

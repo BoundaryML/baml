@@ -334,7 +334,7 @@ The client translates the prompt, sends the request, and returns the model's tex
 - **Keep your prompt and return type.** `input.prompt(...)` renders the system instructions, output schema, user text, and image. BAML parses the returned text into `Receipt`.
 - **Translate the image.** `build_request` preserves message roles and puts the image in Cloudflare's separate field. During a call, `resolve_media` reads files or downloads URLs and produces base64 data.
 - **Preview without I/O.** `render` requires a base64 image and redacts the token. It does not read image files or fetch URLs.
-- **Handle HTTP failures.** `send_as` checks the status, decodes the JSON envelope, and applies a 60-second request timeout. `to_turn` checks the envelope's `success` field before returning text.
+- **Handle HTTP failures.** `send_as` checks the status and decodes the JSON envelope; the request carries a 60-second timeout. `to_turn` checks the envelope's `success` field before returning text.
 
 This example supports one image per call, system and user messages, and non-streaming text responses. It rejects tools, conversation history, and extra images. It does not record usage or call traces. The request and response handling is tested with fixtures; a live Cloudflare model call requires your account and token.
 

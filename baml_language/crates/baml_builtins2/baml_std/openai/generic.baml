@@ -18,10 +18,11 @@ class GenericClient {
     // configuration error as no base_url at all.
     base_url: ai.Credential?,
     api_key: ai.Credential?,
-    // Native request deadline; TTFT begins only after a streaming response opens.
-    // Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
-    request_timeout_ms: int?,
-    time_to_first_token_timeout_ms: int?,
+    // The deadlines of one request attempt: a Duration is the end-to-end
+    // total; ai.LlmTimeoutOptions also sets the connect, first-token and
+    // stream-token limits. Null is the default: 5 minutes total, 10 seconds
+    // to connect. Browser/Wasm does not enforce the transport limits.
+    timeout: baml.time.Duration | ai.LlmTimeoutOptions | null,
 
     request_body: baml.json.json?,
     headers: map<string, string>?,
@@ -44,8 +45,7 @@ class GenericClient {
         model: string,
         base_url: ai.Credential? = null,
         api_key: ai.Credential? = null,
-        request_timeout_ms: int? = null,
-        time_to_first_token_timeout_ms: int? = null,
+        timeout: baml.time.Duration | ai.LlmTimeoutOptions | null = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -60,8 +60,7 @@ class GenericClient {
             model: model,
             base_url: base_url,
             api_key: api_key,
-            request_timeout_ms: request_timeout_ms,
-            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
+            timeout: timeout,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -150,7 +149,7 @@ class GenericClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                request_timeout_ms = self.request_timeout_ms,
+                timeout_options = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
@@ -164,8 +163,7 @@ class GenericClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                request_timeout_ms = self.request_timeout_ms,
-                time_to_first_token_timeout_ms = self.time_to_first_token_timeout_ms,
+                timeout_options = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }

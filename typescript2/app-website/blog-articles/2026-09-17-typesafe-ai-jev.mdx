@@ -282,7 +282,7 @@ function RouteWithTimeout(message: string) -> Team {
     client: typesafeai.Client.new(
         model = "jev-latest",
         api_key = env.TYPESAFE_API_KEY,
-        request_timeout_ms = 10000,
+        timeout = baml.time.Duration.from_seconds(10),
         capture_wire = true,
     )
     prompt: `${message}`

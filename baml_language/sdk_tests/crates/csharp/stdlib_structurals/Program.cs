@@ -71,6 +71,8 @@ var request = new Request
         ["x-nul"] = "a\0b",
     },
     Body = "payload\0雪",
+    Timeout = null,
+    ConnectTimeout = null,
 };
 Request requestResult = await UserFunctions.EchoRequestAsync(request);
 Require(

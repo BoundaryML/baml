@@ -673,17 +673,17 @@ async fn sse_background_task(
 }
 
 impl IoNamespaceHttp for WasmHttp {
-    // `timeout_nanos` is accepted for parity with the native ops but not yet
-    // honored: the browser `fetch` backend behind reqwest's wasm client has no
-    // straightforward per-request timeout hook. A `null` BAML timeout (the
-    // default) is unbounded regardless, so omitting it only affects explicit
-    // deadlines on the playground/wasm path.
+    // `timeout_nanos` and `connect_timeout_nanos` are accepted for parity with
+    // the native ops but not yet honored: the browser `fetch` backend behind
+    // reqwest's wasm client has no straightforward per-request timeout hook, so
+    // requests on the playground/wasm path run without the `baml.http` limits.
     fn _fetch(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         let req = io::owned::http::Request {
@@ -691,6 +691,8 @@ impl IoNamespaceHttp for WasmHttp {
             url,
             headers: indexmap::IndexMap::new(),
             body: String::new(),
+            timeout: None,
+            connect_timeout: None,
         };
         self.do_send(call_id, req)
     }
@@ -701,18 +703,19 @@ impl IoNamespaceHttp for WasmHttp {
         call_id: CallId,
         request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.do_send(call_id, request)
     }
 
-    fn _fetch_sse(
+    fn _send_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
-        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::async_op(SendFuture(async move {

@@ -220,7 +220,7 @@ async fn serve_then_fetch_then_cancel_does_not_hang() {
         function main() -> int {
             let server = baml.http.Server.bind("127.0.0.1:0");
             let task = spawn {
-                server.serve((req: baml.http.Request) -> baml.http.Response {
+                server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
                     baml.http.Response.new(503, { }, "down".to_utf8())
                 })
             };

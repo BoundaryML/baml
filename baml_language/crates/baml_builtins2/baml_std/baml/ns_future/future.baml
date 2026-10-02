@@ -283,7 +283,8 @@ function any<T, Err>(
 ///
 /// # Throws
 ///
-/// - `baml.errors.Timeout` if `limit` elapses first.
+/// - `baml.errors.Timeout` if `limit` elapses first, with `duration` set to
+///   `limit` and `timeout_type` set to `"limit"`.
 /// - whatever `body` throws.
 ///
 /// # Panics
@@ -312,13 +313,10 @@ function with_timeout<T, E>(
             if (!token.is_cancelled()) {
                 throw e;
             }
-            let limit_ms = limit.to_milliseconds();
-            let reported = limit_ms.to_int() catch (conversion) {
-                baml.errors.InvalidArgument => null,
-            };
             throw baml.errors.Timeout {
-                message: `operation timed out after ${limit_ms}ms`,
-                duration_ms: reported,
+                message: `operation timed out after ${limit.to_milliseconds()}ms`,
+                duration: limit,
+                timeout_type: "limit",
             }
         },
     }

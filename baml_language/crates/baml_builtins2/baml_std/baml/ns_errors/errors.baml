@@ -17,7 +17,12 @@ class Io {
 /// An operation exceeded its time limit.
 class Timeout {
     message: string,
-    duration_ms: int?,
+    /// The limit that elapsed, when it is known.
+    duration: root.time.Duration?,
+    /// Which deadline fired: the name of the field or argument that set it.
+    /// `baml.http` reports `"timeout"` or `"connect_timeout"`; an LLM client
+    /// also reports `"first_token_timeout"` or `"stream_token_timeout"`.
+    timeout_type: string,
 }
 
 /// The requested operation is not supported in this context.

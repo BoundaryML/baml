@@ -64,8 +64,8 @@ type Retryable = root.errors.Failure | baml.errors.Timeout;
 
 /// (internal) The safety gate shared by Retry and Fallback, streaming or not.
 /// A typed failure passes only when replaying it is safe. A `baml.errors.Timeout`
-/// always passes: a member raises it for its own deadline (`request_timeout_ms`,
-/// `time_to_first_token_timeout_ms`, or a `baml.future.with_timeout` it applies
+/// always passes: a member raises it for its own deadline (any of the four in
+/// its `ai.LlmTimeoutOptions`, or a `baml.future.with_timeout` it applies
 /// itself), which is a failed attempt like a transport failure, and legacy
 /// clients retried and failed over on it too. A caller's deadline never reaches
 /// this gate: it cancels the members, and every wrapper re-throws
