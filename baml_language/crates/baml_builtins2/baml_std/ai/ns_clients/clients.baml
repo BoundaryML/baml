@@ -171,6 +171,33 @@ function _failed_leg_call(client_name: string?, f: Retryable) -> root.events.LLM
     }
 }
 
+/// One `Retry` attempt, as a span of its own: `attempt` counts from 1 and
+/// `client` is the member's `id()`. Run with `$trace = _attempt_trace()`, which
+/// captures only those inputs (`body` is recorded as an opaque closure), never
+/// the client, the prompt or an error's body. The attempt's requests are
+/// network spans under it, and each attempt's span ends before the next starts.
+function retry_attempt<T, E>(attempt: int, client: string, body: () -> T throws E) -> T throws E {
+    body()
+}
+
+/// One `Fallback` member try, as a span of its own: `member` is the member's
+/// index in `members`, from 0, and `client` its `id()`. Captured like
+/// `retry_attempt`.
+function fallback_attempt<T, E>(member: int, client: string, body: () -> T throws E) -> T throws E {
+    body()
+}
+
+/// (internal) The tracing options of an attempt span: its inputs only.
+function _attempt_trace() -> trace.Options throws never {
+    trace.span(inputs = true, output = false, error = false)
+}
+
+/// (internal) An attempt that failed and may be tried again: kept apart from
+/// the turn it would have returned.
+class RetryCause {
+    cause: Retryable,
+}
+
 class Retry {
     inner: root.Client,
     max_attempts: int,
@@ -197,22 +224,40 @@ class Retry {
         remaining: int,
         failed: root.events.LLMCall[],
     ) -> root.ModelTurn {
-        self.inner.invoke(input) catch_all (e) {
+        let attempt = self.max_attempts - remaining + 1;
+        let inner = self.inner;
+        // The attempt's span ends here, before the backoff and the next
+        // attempt, so attempts are siblings.
+        let result: root.ModelTurn | RetryCause = retry_attempt(
+            attempt,
+            inner.id(),
+            () -> root.ModelTurn {
+                inner.invoke(input)
+            },
+            $trace = _attempt_trace(),
+        ) catch_all (e) {
             let cause: Retryable => {
                 if (remaining > 1 && self._wants_retry(cause)) {
-                    failed.push(_failed_leg_call(self.inner.id(), cause));
-                    let attempt = self.max_attempts - remaining + 1;
-                    let _ = baml.sys.sleep(
-                        baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, cause)),
-                    ) catch_all (se) {
-                        _ => null,
-                    };
-                    self._attempt(input, remaining - 1, failed)
+                    RetryCause { cause: cause }
                 } else {
                     throw e
                 }
             },
             _ => throw e, // untyped failures are never retried
+        };
+        match (result) {
+            let turn: root.ModelTurn => turn,
+            let retry: RetryCause => {
+                failed.push(_failed_leg_call(self.inner.id(), retry.cause));
+                let _ = baml.sys.sleep(
+                    baml.time.Duration.from_milliseconds(
+                        self.backoff.delay_ms(attempt, retry.cause),
+                    ),
+                ) catch_all (se) {
+                    _ => null,
+                };
+                self._attempt(input, remaining - 1, failed)
+            },
         }
     }
 
@@ -255,9 +300,20 @@ class Retry {
     implements root.stream.StreamingClient {
         function invoke_stream(self, input: root.ModelTurnInput) -> root.stream.TurnStream {
             let remaining = self.max_attempts;
+            // Each open is an attempt span. It ends when the stream is open;
+            // the request's network span stays open while the stream is read.
             let open = () -> root.stream.TurnStream {
                 match (self.inner) {
-                    let streaming: root.stream.StreamingClient => streaming.invoke_stream(input),
+                    let streaming: root.stream.StreamingClient => {
+                        retry_attempt(
+                            self.max_attempts - remaining + 1,
+                            self.inner.id(),
+                            () -> root.stream.TurnStream {
+                                streaming.invoke_stream(input)
+                            },
+                            $trace = _attempt_trace(),
+                        )
+                    },
                     let member: root.Client => {
                         throw root.errors.StreamingUnsupported { client_id: member.id() }
                     },
@@ -428,16 +484,30 @@ class Fallback {
     ) -> root.ModelTurn {
         match (self.members.at(index)) {
             let c: root.Client => {
-                c.invoke(input) catch_all (e) {
+                // The try's span ends here, before the next member's.
+                let result: root.ModelTurn | RetryCause = fallback_attempt(
+                    index,
+                    c.id(),
+                    () -> root.ModelTurn {
+                        c.invoke(input)
+                    },
+                    $trace = _attempt_trace(),
+                ) catch_all (e) {
                     let cause: Retryable => {
                         if (index + 1 < self.members.length() && _may_try_again(cause)) {
-                            failed.push(_failed_leg_call(c.id(), cause));
-                            self._try(input, index + 1, failed)
+                            RetryCause { cause: cause }
                         } else {
                             throw e
                         }
                     },
                     _ => throw e,
+                };
+                match (result) {
+                    let turn: root.ModelTurn => turn,
+                    let retry: RetryCause => {
+                        failed.push(_failed_leg_call(c.id(), retry.cause));
+                        self._try(input, index + 1, failed)
+                    },
                 }
             },
             null => {
@@ -496,9 +566,24 @@ class Fallback {
     implements root.stream.StreamingClient {
         function invoke_stream(self, input: root.ModelTurnInput) -> root.stream.TurnStream {
             let index = 0;
+            // Each open is a member try span, as for Retry.
             let open = () -> root.stream.TurnStream {
                 match (self.members.at(index)) {
-                    let streaming: root.stream.StreamingClient => streaming.invoke_stream(input),
+                    let streaming: root.stream.StreamingClient => {
+                        let member_id = if let member: root.Client = self.members.at(index) {
+                            member.id()
+                        } else {
+                            "fallback"
+                        };
+                        fallback_attempt(
+                            index,
+                            member_id,
+                            () -> root.stream.TurnStream {
+                                streaming.invoke_stream(input)
+                            },
+                            $trace = _attempt_trace(),
+                        )
+                    },
                     let member: root.Client => {
                         throw root.errors.StreamingUnsupported { client_id: member.id() }
                     },
