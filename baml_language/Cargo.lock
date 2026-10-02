@@ -1126,6 +1126,7 @@ dependencies = [
  "btel_reader",
  "btel_recorder",
  "btel_snapshot",
+ "btel_types",
  "fs2",
  "prost",
  "rusqlite",

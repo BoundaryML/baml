@@ -141,7 +141,8 @@ impl Index {
         if self.source_missing {
             return Ok(RefreshMetrics::default());
         }
-        ingest::refresh(&mut self.conn, &self.layout, &self.options.refresh)
+        let cas = CasStore::new(self.layout.cas.clone(), self.options.cas);
+        ingest::refresh(&mut self.conn, &self.layout, &self.options.refresh, &cas)
     }
 
     fn ensure_views(&mut self) -> Result<(), Error> {

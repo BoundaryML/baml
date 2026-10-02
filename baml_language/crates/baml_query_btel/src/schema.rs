@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 13;
+pub const SCHEMA_VERSION: i64 = 15;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -66,6 +66,30 @@ CREATE TABLE recording (
   folded INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 CREATE INDEX recording_by_process ON recording (process_id);
+
+-- Identity is resolved once per snapshot. State 0 retries changed files on refresh,
+-- 1 is resolved (including a null identity), 2 is invalid context data.
+CREATE TABLE context_snapshot (
+  cas BLOB PRIMARY KEY,
+  state INTEGER NOT NULL DEFAULT 0,
+  distinct_id TEXT,
+  failed_stamp BLOB
+) STRICT, WITHOUT ROWID;
+CREATE INDEX context_by_identity ON context_snapshot (distinct_id);
+CREATE INDEX context_pending ON context_snapshot (state) WHERE state = 0;
+
+-- Slot 0 is entry-time span context; slot 1 is announcement-time context.
+-- State: 0 unavailable, 1 explicitly empty, 2 snapshot, 3 invalid marker.
+CREATE TABLE event_context (
+  rec INTEGER NOT NULL,
+  node_id BLOB NOT NULL,
+  slot INTEGER NOT NULL,
+  priority INTEGER NOT NULL,
+  state INTEGER NOT NULL,
+  cas BLOB,
+  PRIMARY KEY (rec, node_id, slot)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX event_context_by_cas ON event_context (cas);
 
 -- One row per applied file. Facts, totals and this ledger commit together.
 CREATE TABLE ledger (
@@ -358,6 +382,7 @@ CREATE INDEX issue_by_rec ON issue (rec);
 
 /// Every fact table keyed by `rec`, for per-recording rebuilds.
 pub const FACT_TABLES: &[&str] = &[
+    "event_context",
     "ledger",
     "rejected",
     "function_def",
@@ -375,6 +400,8 @@ pub const FACT_TABLES: &[&str] = &[
 ];
 
 pub const ALL_TABLES: &[&str] = &[
+    "context_snapshot",
+    "event_context",
     "meta",
     "recording",
     "ledger",

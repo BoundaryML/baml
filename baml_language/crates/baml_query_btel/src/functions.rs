@@ -169,7 +169,7 @@ impl QueryContext {
         let parsed =
             Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
         if parsed.pending {
-            Self::unavailable(&mut state, handle, PENDING);
+            Self::unavailable(&mut state, handle, parsed.pending_code());
             return Ok((Scalar::Null, Kind::Unavailable));
         }
         let result = match self.load_handle(&mut state, &parsed) {
@@ -216,7 +216,7 @@ impl QueryContext {
         let parsed =
             Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
         if parsed.pending {
-            Self::unavailable(&mut state, handle, PENDING);
+            Self::unavailable(&mut state, handle, parsed.pending_code());
             return Ok(None);
         }
         match self.load_handle(&mut state, &parsed) {
@@ -254,7 +254,7 @@ impl QueryContext {
         let parsed =
             Handle::decode(handle).ok_or_else(|| user_error("invalid BAML value handle"))?;
         if parsed.pending {
-            return Ok(PENDING.to_owned());
+            return Ok(parsed.pending_code().to_owned());
         }
         Ok(match self.load_handle(&mut state, &parsed) {
             CasOutcome::Available(snapshot) => value::state(
@@ -331,10 +331,10 @@ fn user_error(message: &str) -> SqlError {
 /// Encoded as a BLOB so it flows through views, joins and subqueries.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Handle {
-    /// 1 inputs, 2 output, 3 error, 4 inline (a value built by the index).
+    /// 1 inputs, 2 output, 3 error, 4 inline, 5 context, 6 invalid context.
     pub kind: u8,
-    /// The capture is expected but its evidence is not indexed yet (inputs
-    /// of a completion whose announcement has not arrived); `cas` is unused.
+    /// Evidence is unavailable without a CAS reference (pending inputs or
+    /// unavailable/invalid context); `cas` is unused.
     pub pending: bool,
     pub cas: [u8; 16],
     /// Kind 4: the encoded snapshot itself; `cas` is unused.
@@ -349,6 +349,14 @@ const PENDING_BIT: u8 = 0x80;
 const INLINE: u8 = 4;
 
 impl Handle {
+    fn pending_code(&self) -> &'static str {
+        match self.kind {
+            5 => "context_unavailable",
+            6 => "context_invalid",
+            _ => PENDING,
+        }
+    }
+
     fn root(&self) -> Root {
         if self.kind == 1 {
             Root::Arguments
@@ -566,6 +574,25 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
     // Value functions read files, so they are not deterministic across queries.
     let io = FunctionFlags::SQLITE_UTF8;
 
+    conn.create_scalar_function("__btel_context_metadata", 3, pure, |ctx| {
+        if opt_i64(ctx, 0)? == Some(1) {
+            return Ok(inline_handle(&Inline::Map(Vec::new())));
+        }
+        let invalid = opt_i64(ctx, 0)? == Some(3) || opt_i64(ctx, 2)? == Some(2);
+        let cas = if invalid { None } else { opt_blob(ctx, 1)? };
+        Ok(Handle {
+            kind: if invalid { 6 } else { 5 },
+            pending: cas.is_none(),
+            cas: cas
+                .unwrap_or(&[0; 16])
+                .try_into()
+                .map_err(|_| user_error("invalid context CAS id"))?,
+            inline: None,
+            names: None,
+            path: vec![Segment::Key("metadata".into())],
+        }
+        .encode())
+    })?;
     conn.create_scalar_function("__btel_u64", 1, pure, |ctx| {
         Ok(opt_blob(ctx, 0)?
             .and_then(u64_from_blob)
