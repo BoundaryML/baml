@@ -4445,6 +4445,7 @@ impl BexVm {
                     false,
                     args,
                     Some(trace),
+                    CallTypeArgs::default(),
                     |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
                 )
             })
@@ -4553,6 +4554,7 @@ impl BexVm {
                     false,
                     args,
                     Some(trace),
+                    CallTypeArgs::default(),
                     |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
                 )
             })
