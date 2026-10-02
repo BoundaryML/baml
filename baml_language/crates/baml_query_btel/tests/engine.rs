@@ -1156,3 +1156,164 @@ async fn count_over_a_value_skips_missing_keys() {
     );
     assert_eq!(not_null.rows, vec![vec![json!(0)]]);
 }
+
+const GENERICS: &str = r#"
+class Resume {
+    name: string
+}
+class Box<T> {
+    value: T
+    function map<U>(self, f: (T) -> U throws never) -> Box<U> {
+        Box<U> { value: f(self.value) }
+    }
+}
+interface Holder<T> {
+    function get(self) -> T throws never
+    function get_or<D>(self, fallback: D) -> T throws never {
+        self.get()
+    }
+}
+class IntHolder {
+    value: int
+    implements Holder<int> {
+        function get(self) -> int { self.value }
+    }
+}
+function Pick<T>(x: T) -> T { x }
+function Plain(n: int) -> int { n }
+function Wrap<T>(x: T) -> int {
+    let f = (y: int) -> int { y + 1 };
+    f(1)
+}
+function Through<H extends Holder<int>>(h: H) -> int { h.get_or("x") }
+function main(n: int) -> int {
+    let a = Pick(n);
+    let r = Pick(Resume { name: "ann" });
+    let b = Box<int> { value: n }.map((v: int) -> string { "s" });
+    let h = IntHolder { value: 3 };
+    let c = h.get_or(true);
+    let d = Through(h);
+    let w = Wrap("x");
+    let child = spawn { Plain(n) };
+    a + Plain(n) + c + d + w + (await child)
+}
+"#;
+
+/// Each generic call's span records its type arguments by type-parameter
+/// name, as each kind of frame holds them. Non-generic calls and futures
+/// record none, and a query that doesn't read the column loads no blob.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn generic_calls_record_their_type_args_by_name() {
+    let project = tempfile::tempdir().unwrap();
+    let results = record_program(
+        project.path(),
+        GENERICS,
+        &[
+            "Pick",
+            "Plain",
+            "map",
+            "get_or",
+            "Through",
+            "Wrap",
+            "<lambda(Wrap, 0)>",
+        ],
+        &[("main", 2)],
+    )
+    .await;
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    let mut index = index(project.path());
+    let ty = |name: &str| json!({ "$type": name });
+    let expected = vec![
+        // A lambda's frame is its enclosing function's.
+        vec![
+            json!(".<lambda(Wrap, 0)>"),
+            json!({"T": ty("string")}),
+            ty("string"),
+        ],
+        // A method of a generic class: the class's parameter, then its own.
+        vec![
+            json!("user.Box.map"),
+            json!({"T": ty("int"), "U": ty("string")}),
+            ty("int"),
+        ],
+        // An interface's default method adopted by IntHolder: its Self, the
+        // interface's parameter, then its own. Called directly, then through
+        // virtual dispatch on Through's H.
+        vec![
+            json!("user.Holder.get_or"),
+            json!({"Self": ty("IntHolder"), "T": ty("int"), "D": ty("bool")}),
+            ty("int"),
+        ],
+        vec![
+            json!("user.Holder.get_or"),
+            json!({"Self": ty("IntHolder"), "T": ty("int"), "D": ty("string")}),
+            ty("int"),
+        ],
+        vec![json!("user.Pick"), json!({"T": ty("int")}), ty("int")],
+        vec![json!("user.Pick"), json!({"T": ty("Resume")}), ty("Resume")],
+        vec![json!("user.Plain"), Json::Null, Json::Null],
+        vec![json!("user.Plain"), Json::Null, Json::Null],
+        vec![
+            json!("user.Through"),
+            json!({"H": ty("IntHolder")}),
+            Json::Null,
+        ],
+        vec![json!("user.Wrap"), json!({"T": ty("string")}), ty("string")],
+    ];
+    for relation in ["spans", "span_announcements"] {
+        let calls = sql(
+            &mut index,
+            &format!(
+                "SELECT span_name, type_args, type_args['T'] FROM {relation}
+                 WHERE span_type = 'function' ORDER BY span_name, start_time"
+            ),
+        );
+        assert_eq!(calls.rows, expected, "{relation}");
+        assert_eq!(calls.columns[1].column_type, "baml_value");
+        let futures = sql(
+            &mut index,
+            &format!(
+                "SELECT COUNT(*), COUNT(type_args) FROM {relation} WHERE span_type = 'future'"
+            ),
+        );
+        assert_eq!(futures.rows, vec![vec![json!(2), json!(0)]], "{relation}");
+    }
+
+    let loads = |index: &mut baml_query_btel::Index, text: &str| {
+        sql(index, text).outcome.query.values.cas_loads
+    };
+    assert_eq!(
+        loads(
+            &mut index,
+            "SELECT span_name, COUNT(type_args) FROM spans GROUP BY span_name"
+        ),
+        0
+    );
+    let inputs = loads(&mut index, "SELECT input_args FROM spans");
+    let types = loads(&mut index, "SELECT type_args FROM spans");
+    assert!(types > 0);
+    assert_eq!(
+        loads(&mut index, "SELECT input_args, type_args FROM spans"),
+        inputs + types,
+        "reading the inputs loads none of the type arguments' blobs"
+    );
+}
+
+/// `ai.Agent.run<Out>`, which runs an LLM function's call, names its frame's
+/// one slot, so its span would record the output type the call asked for.
+#[test]
+fn the_agent_runner_names_its_output_type() {
+    let program = baml_db::testing::compile_source(GENERICS);
+    let names: Vec<&[String]> = program
+        .objects
+        .0
+        .iter()
+        .filter_map(|object| match object {
+            bex_vm_types::Object::Function(f) if f.name == "ai.<(ai.Agent as ai.Runner)>.run" => {
+                Some(f.type_param_names.as_slice())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, [["Out"]]);
+}

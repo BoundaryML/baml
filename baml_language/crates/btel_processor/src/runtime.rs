@@ -224,11 +224,12 @@ impl TelemetryRuntime {
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
-        // A producer can own a value capture while acquiring its context capture.
+        // A producer can own a function's input and type-argument captures
+        // while acquiring its context capture.
         let snapshot_slots = config
             .max_producers
             .get()
-            .checked_mul(2)
+            .checked_mul(3)
             .and_then(|slots| slots.checked_add(btel_settings::snapshot::MIN_SNAPSHOT_SLOTS))
             .ok_or_else(|| std::io::Error::other("snapshot slot count overflow"))?;
         let snapshots =
@@ -722,6 +723,7 @@ mod tests {
                     .unwrap()
                     .finish_args(0, btel_snapshot::Range::empty()),
             ),
+            captured_type_args: None,
         }
     }
 
@@ -799,6 +801,7 @@ mod tests {
                 call_path: btel_types::CallPathId::ROOT,
                 entered_at: btel_types::ClockInstant::from_ticks(1),
                 captured_inputs: None,
+                captured_type_args: None,
             },
         );
         std::thread::scope(|scope| {
@@ -876,6 +879,7 @@ mod tests {
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: None,
+            captured_type_args: None,
         };
         {
             let _poll = runtime.enter();
@@ -1067,6 +1071,7 @@ mod tests {
                             .unwrap()
                             .finish_args(0, btel_snapshot::Range::empty()),
                     ),
+                    captured_type_args: None,
                 },
             );
             drop(nested);

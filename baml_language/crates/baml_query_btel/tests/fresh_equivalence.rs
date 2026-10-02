@@ -64,9 +64,15 @@ function main(n: int) -> int {
     let d = Deferred(n) catch (e) { Failure => 4 };
     let child = spawn { Middle(n) };
     let e = (await child) catch (x) { Failure => 5 };
-    a + b + c + d + e
+    let f = Pick(Box { value: n }).map((v) -> string { "v" }).value;
+    a + b + c + d + e + Pick(f.length())
 }
 function crash(n: int) -> int { Middle(n) }
+class Box<T> {
+    value T
+    function map<U>(self, f: (T) -> U throws never) -> Box<U> { Box { value: f(self.value) } }
+}
+function Pick<T>(x: T) -> T { x }
 "#;
 
 fn small_files() -> RecordingConfig {
@@ -98,8 +104,14 @@ async fn record_corpus(project: &Path) {
         .await
         .expect("shutdown");
     let calls: Vec<(&str, i64)> = (0..24).map(|n| ("main", n)).chain([("crash", 1)]).collect();
-    let results =
-        record_program_with(project, ERRORS, &["Middle", "Recur"], &calls, small_files()).await;
+    let results = record_program_with(
+        project,
+        ERRORS,
+        &["Middle", "Recur", "Pick", "map"],
+        &calls,
+        small_files(),
+    )
+    .await;
     assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 24);
 }
 
@@ -189,7 +201,15 @@ async fn fresh_and_incremental_indexes_are_identical() {
     let mut incremental = Index::for_project(&incremental_project, options).unwrap();
     let metrics = incremental.refresh().unwrap();
     assert_eq!(metrics.transactions, metrics.files_applied);
-    assert_same(&dump(&fresh), &dump(&incremental));
+    let fresh = dump(&fresh);
+    // Pick<T> and Box<T>.map<U> recorded their type arguments.
+    let calls = &fresh.iter().find(|(table, _)| table == "call").unwrap().1;
+    assert_eq!(
+        calls.iter().filter(|row| row[9] != Value::Null).count(),
+        24 * 3,
+        "type_args_cas"
+    );
+    assert_same(&fresh, &dump(&incremental));
 }
 
 mod crafted {
@@ -451,12 +471,14 @@ mod crafted {
                                 outcome: 1,
                                 ..Default::default()
                             }),
+                            // Late: its completion was in the first file.
                             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                                 id: 100,
                                 parent_id: T2,
                                 call_path_id: 2,
                                 entered_at_ticks: 21,
                                 inputs_cas_id: None,
+                                type_args_cas_id: Some(proto::SnapshotId { low: 3, high: 4 }),
                             }),
                         ],
                     ),
@@ -615,5 +637,19 @@ fn late_and_conflicting_evidence_indexes_identically() {
         .unwrap()
         .1;
     assert_eq!(events.len(), 6, "{events:?}");
+    // The late announcement gives its call the type arguments.
+    let type_args: Vec<i64> = fresh
+        .iter()
+        .find(|(table, _)| table == "call")
+        .unwrap()
+        .1
+        .iter()
+        .filter(|row| row[9] != Value::Null)
+        .map(|row| match &row[1] {
+            Value::Blob(id) => i64::from_be_bytes(id[..].try_into().unwrap()),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(type_args, vec![100]);
     assert_same(&fresh, &incremental);
 }

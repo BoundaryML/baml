@@ -8,7 +8,7 @@
 //! recordings, the pair `trace.SpanId` holds. Profiler nodes are 16 hex
 //! digits hashed from the function names on their path, so the same node
 //! has the same ID in every process. Timestamps are RFC 3339 UTC; durations are nanoseconds, NULL
-//! when the clock evidence cannot support them. `input_args`,
+//! when the clock evidence cannot support them. `type_args`, `input_args`,
 //! `output_value`, `network_event_values`, `error_value`, `context_metadata`,
 //! `status_history` and `temporary_projections` are BAML values: navigate
 //! them with `['key']` and `[index]`.
@@ -218,6 +218,8 @@ FROM main.profile_node n",
 
 const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), or cancel_error (cancelled, or unwound by baml.sys.exit)";
 
+const TYPE_ARGS_DOC: &str = "the type arguments a generic function was called with, by type-parameter name: type_args['T'] is {\"$type\": \"Resume\"}. A method's include its class's (Box<int>.map<string>: {T: int, U: string}), an interface method's its Self, a lambda's its enclosing function's. NULL for a non-generic function, a future or a network span";
+
 const NETWORK_EVENTS_DOC: &str = "[{event_name, payload, timestamp}] in time order. connection: {status, headers}. data: a whole body, or one server-sent event as {event, data, id}; null when bodies are not recorded. end (the stream ended on the wire), await (the program finished reading), close (it closed the stream early) and drop: null. Other names are other protocols' events. network_event_values[0]['payload'] reads only that payload. NULL for functions and futures";
 
 pub const SPANS: Relation = Relation {
@@ -260,6 +262,7 @@ pub const SPANS: Relation = Relation {
         ),
         col("end_time", "text", "RFC 3339 UTC"),
         col("duration", "integer", "nanoseconds, start_time to end_time"),
+        value("type_args", TYPE_ARGS_DOC),
         value(
             "input_args",
             "captured arguments by name or position: input_args['customer'], input_args[0]; for a network span the request, {request: {method, url, headers, body}}; NULL for futures",
@@ -348,6 +351,8 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     e.multiplier, e.shift) AS end_time,
   __btel_duration(c.entered_ticks, c.exited_ticks, e.multiplier, e.shift, s.status,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+  __btel_ref(2, c.type_args_cas, NULL,
+    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
   __btel_ref(1, c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   IIF(c.outcome = 1, __btel_ref(2, c.value_cas, NULL, 0), NULL) AS output_value,
@@ -405,6 +410,7 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
     e.multiplier, e.shift) AS end_time,
   __btel_duration(COALESCE(t.ran_ticks, t.started_ticks), t.completed_ticks, e.multiplier,
     e.shift, s.status, IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+  NULL AS type_args,
   NULL AS input_args,
   NULL AS output_value,
   NULL AS network_event_values,
@@ -452,6 +458,7 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
     e.multiplier, e.shift) AS end_time,
   __btel_duration(n.started_ticks, n.completed_ticks, e.multiplier, e.shift, s.status,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+  NULL AS type_args,
   -- The request is due while only the completion is indexed.
   __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
   NULL AS output_value,
@@ -526,6 +533,7 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
         col("profiler_node_id", "text", "as in spans"),
         col("parent_span_id", "text", "as in spans"),
         col("start_time", "text", "RFC 3339 UTC"),
+        value("type_args", "as in spans"),
         value("input_args", "as in spans"),
         value(
             "network_event_values",
@@ -557,6 +565,8 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   __btel_pubid(r.recording_id, c.parent_id) AS parent_span_id,
   __btel_utc(c.entered_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
+  __btel_ref(2, c.type_args_cas, NULL,
+    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
   __btel_ref(1, c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   NULL AS network_event_values,
@@ -587,6 +597,7 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_pubid(r.recording_id, t.parent_id) AS parent_span_id,
   __btel_utc(COALESCE(t.ran_ticks, t.started_ticks), IIF(e.conflict = 0, e.utc_ticks, NULL),
     e.utc_unix_ns, e.multiplier, e.shift) AS start_time,
+  NULL AS type_args,
   NULL AS input_args,
   NULL AS network_event_values,
   cx.distinct_id AS context_distinct_id,
@@ -615,6 +626,7 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_pubid(r.recording_id, n.parent_id) AS parent_span_id,
   __btel_utc(n.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
+  NULL AS type_args,
   __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
   (SELECT __btel_events(v.at_ticks, v.seq, v.name, __btel_utc(v.at_ticks,
        IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns, e.multiplier, e.shift),

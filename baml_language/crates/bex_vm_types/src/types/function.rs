@@ -221,6 +221,13 @@ pub struct Function {
     /// `(box: #0) -> #0.Item`.
     pub display_type_params: Vec<String>,
 
+    /// The name of each type-argument slot in a call's frame
+    /// (`frame.type_args`), in slot order: an owner's type parameters (an
+    /// interface method's `Self` first), then the function's own; a lambda's
+    /// are its enclosing frame's. Telemetry records a call's type arguments
+    /// by these names.
+    pub type_param_names: Vec<String>,
+
     /// Interface bounds for each De Bruijn type-argument slot.  Unlike
     /// `display_type_params`, this is executable metadata: the VM substitutes
     /// the actual call-frame types and rejects a failing bound before entering

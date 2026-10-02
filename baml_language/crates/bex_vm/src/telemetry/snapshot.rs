@@ -16,6 +16,9 @@ pub(super) enum Input<'a> {
     FunctionArgs(&'a [Value]),
     /// Built from Rust values; no heap is involved.
     Network(&'a NetworkPayload<'a>),
+    /// A generic call's type arguments by parameter name: `map<string, Type>`.
+    /// Types hold no heap values.
+    TypeArgs(&'a [(&'a str, &'a bex_vm_types::RealizedTy)]),
 }
 #[derive(Default)]
 pub(super) struct Scratch {
@@ -122,8 +125,10 @@ impl Scratch {
     /// SAFETY: source values are live under the caller's heap permit throughout.
     /// No collection, VM allocation, user code, future polling or I/O occurs here.
     pub(super) unsafe fn capture(&mut self, mut b: Builder, input: Input<'_>) -> Snapshot {
-        if let Input::Network(payload) = input {
-            return network(b, payload);
+        match input {
+            Input::Network(payload) => return network(b, payload),
+            Input::TypeArgs(args) => return type_args(b, args),
+            Input::Value(_) | Input::FunctionArgs(_) => {}
         }
         self.seen.clear();
         self.rust_seen.clear();
@@ -274,7 +279,9 @@ impl Scratch {
         match input {
             Input::Value(_) => b.finish_value(value_root),
             Input::FunctionArgs(args) => b.finish_args(args.len(), args_range),
-            Input::Network(_) => unreachable!("network payloads are built above"),
+            Input::Network(_) | Input::TypeArgs(_) => {
+                unreachable!("network payloads and type arguments are built above")
+            }
         }
     }
 }
@@ -322,6 +329,14 @@ fn network(mut b: Builder, payload: &NetworkPayload<'_>) -> Snapshot {
             map(&mut b, OwnedType::Unknown, &fields)
         }
     };
+    b.finish_value(root)
+}
+fn type_args(mut b: Builder, args: &[(&str, &bex_vm_types::RealizedTy)]) -> Snapshot {
+    let fields = args
+        .iter()
+        .map(|(name, ty)| (*name, SnapshotValue::Type(b.push_type(owned_type(ty)))))
+        .collect::<Vec<_>>();
+    let root = map(&mut b, OwnedType::Type, &fields);
     b.finish_value(root)
 }
 fn text(b: &mut Builder, text: &str) -> SnapshotValue {
@@ -426,8 +441,9 @@ fn declaration(
 fn describe(kind: Description) -> SnapshotObject {
     SnapshotObject::Descriptive { kind, name: None }
 }
-/// A network snapshot as JSON, to compare shapes in tests: bytes become an
-/// array of numbers, a truncated value names its limit.
+/// A network or type-argument snapshot as JSON, to compare shapes in tests:
+/// bytes become an array of numbers, a truncated value names its limit, a
+/// type is `"type: <type>"`.
 #[cfg(test)]
 pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Value {
     match value {
@@ -435,6 +451,7 @@ pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Val
         SnapshotValue::Int(value) => value.into(),
         SnapshotValue::String(id) => snapshot.string(id).as_str().into(),
         SnapshotValue::Truncated(limit) => format!("truncated: {limit:?}").into(),
+        SnapshotValue::Type(id) => format!("type: {}", snapshot.ty(id)).into(),
         SnapshotValue::Object(id) => match snapshot.object(id) {
             SnapshotObject::Map { entries, .. } => snapshot
                 .entries(*entries)

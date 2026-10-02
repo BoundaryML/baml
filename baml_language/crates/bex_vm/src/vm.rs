@@ -21,7 +21,10 @@ use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
 use crate::{
-    telemetry::{ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome, TelemetryState},
+    telemetry::{
+        CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome,
+        TelemetryState,
+    },
     vec_ext::{CopyVecExt, VecExt},
 };
 
@@ -405,6 +408,7 @@ pub(crate) mod tests {
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
+            pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             telemetry: Some(TelemetryState::new_root(
@@ -446,6 +450,7 @@ pub(crate) mod tests {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "int".to_string(),
@@ -1628,6 +1633,10 @@ pub struct BexVm {
     root_context: Context,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
+    /// Set by a call that passes type arguments, for its callee's entry
+    /// only: telemetry records the frame's type arguments before the call's
+    /// writeback appends `pending_call_type_args` to the new frame.
+    pending_call_passes_type_args: bool,
 
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
@@ -2180,6 +2189,7 @@ impl BexVm {
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
+            pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             telemetry,
@@ -4191,13 +4201,18 @@ impl BexVm {
                     };
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                        telemetry.enter_bytecode(
+                        telemetry.enter_bytecode_with_trace(
                             function_ref,
                             function_identity,
                             None,
                             0,
                             false,
                             args,
+                            None,
+                            CallTypeArgs {
+                                carried: &effective_type_args,
+                                passed: &[],
+                            },
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -4367,6 +4382,7 @@ impl BexVm {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type,
@@ -4449,6 +4465,7 @@ impl BexVm {
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            type_param_names: Vec::new(),
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type,
@@ -6126,6 +6143,7 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         let trace = self.pending_call_trace.take();
+        let passes_type_args = std::mem::take(&mut self.pending_call_passes_type_args);
         // Record the caller's call-site PC before descending. Once a callee
         // frame is pushed, this (now-outer) frame is no longer the innermost, so
         // its live PC must be persisted into `faulting_pc` for correct unwinding
@@ -6422,6 +6440,14 @@ impl BexVm {
                     let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
                     let args = &self.stack.0
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
+                    let type_args = CallTypeArgs {
+                        carried: initial_type_args,
+                        passed: if passes_type_args {
+                            &self.pending_call_type_args
+                        } else {
+                            &[]
+                        },
+                    };
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
                         telemetry.enter_bytecode_with_trace(
@@ -6432,6 +6458,7 @@ impl BexVm {
                             caller_is_observed,
                             args,
                             trace.as_ref().map(|trace| trace.telemetry),
+                            type_args,
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -6550,6 +6577,7 @@ impl BexVm {
             options.type_values.to_vec(),
         );
         let frames_before = self.frames.len();
+        self.pending_call_passes_type_args = !options.type_args.is_empty();
         let result = self.execute_call_from_locals_offset(
             callee_ptr,
             locals_offset,

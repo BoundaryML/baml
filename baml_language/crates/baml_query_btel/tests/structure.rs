@@ -239,6 +239,7 @@ fn context_evidence_is_section_local_and_announcement_wins_in_both_ingesters() {
             call_path_id: 3,
             entered_at_ticks: 10,
             inputs_cas_id: None,
+            type_args_cas_id: None,
         })
     };
     let completion = |id, late| {
@@ -724,6 +725,7 @@ fn model_usage_is_priced_on_the_span_that_made_the_call() {
                     call_path_id: 3,
                     entered_at_ticks: 10,
                     inputs_cas_id: None,
+                    type_args_cas_id: None,
                 }),
                 Event::FunctionCompletion(proto::FunctionCompletion {
                     id: call,

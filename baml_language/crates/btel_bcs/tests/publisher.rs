@@ -50,6 +50,7 @@ fn capture_at(
             call_path,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         },
     );
 }

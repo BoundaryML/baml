@@ -366,26 +366,39 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         if self.failure.is_some() {
             return;
         }
-        let snapshot = match record {
+        // In the order `span` retains them: an announcement's inputs, then
+        // its type arguments.
+        let snapshots = match record {
             SpanRecord::FunctionSpanAnnouncement {
-                captured_inputs, ..
-            } => captured_inputs.as_ref(),
-            _ => record
-                .completion()
-                .and_then(|completion| completion.captured_value),
+                captured_inputs,
+                captured_type_args,
+                ..
+            } => [captured_inputs.as_ref(), captured_type_args.as_ref()],
+            _ => [
+                record
+                    .completion()
+                    .and_then(|completion| completion.captured_value),
+                None,
+            ],
         };
-        if let Some(snapshot) = snapshot {
-            if !self.already_offered(snapshot.id()) {
-                let size = snapshot.retained_bytes();
-                self.preflight_size = Some((snapshot.id(), size));
-                if self.retained_snapshots >= self.config.max_pending_snapshots
-                    || size.is_some_and(|bytes| {
-                        self.retained_bytes.saturating_add(bytes) > self.config.max_retained_bytes
-                    })
-                {
-                    self.service(Instant::now(), Seal::Now);
-                }
+        let mut count = 0;
+        let mut bytes = 0usize;
+        for snapshot in snapshots.into_iter().flatten() {
+            if self.already_offered(snapshot.id()) {
+                continue;
             }
+            let size = snapshot.retained_bytes();
+            if count == 0 {
+                self.preflight_size = Some((snapshot.id(), size));
+            }
+            count += 1;
+            bytes = bytes.saturating_add(size.unwrap_or(0));
+        }
+        if count > 0
+            && (self.retained_snapshots.saturating_add(count) > self.config.max_pending_snapshots
+                || self.retained_bytes.saturating_add(bytes) > self.config.max_retained_bytes)
+        {
+            self.service(Instant::now(), Seal::Now);
         }
     }
 
@@ -420,7 +433,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
         if self.failure.is_none() {
             self.start_window();
             self.recording.span_reference(thread, record);
-            if let Some(snapshot) = record.take_capture() {
+            while let Some(snapshot) = record.take_capture() {
                 self.retain(snapshot);
             }
             self.seal_on_pressure();
@@ -558,6 +571,7 @@ mod tests {
                 call_path: CallPathId::ROOT,
                 entered_at: ClockInstant::from_ticks(1),
                 captured_inputs: Some(snapshot),
+                captured_type_args: None,
             },
         );
     }
@@ -579,6 +593,7 @@ mod tests {
             call_path: CallPathId::ROOT,
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: Some(snapshot),
+            captured_type_args: None,
         };
         publisher.before_detached_span(&record);
         assert_eq!(publisher.preflight_size, Some((id, Some(expected))));
