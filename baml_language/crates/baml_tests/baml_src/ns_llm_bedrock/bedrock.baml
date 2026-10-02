@@ -949,7 +949,7 @@ function _default_cache_content(model: string) -> string {
     baml.json.stringify(baml.json.path<json>(body, ".messages[0].content"))
 }
 
-function bedrock_cache_default_by_model() -> string {
+function bedrock_cache_default_by_model() -> json[] {
     let models = [
         "anthropic.claude-3-5-haiku-20241022-v1:0",
         "global.anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -959,19 +959,25 @@ function bedrock_cache_default_by_model() -> string {
         "mistral.mistral-large-2402-v1:0",
         "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123",
     ];
-    let out: string[] = [];
+    let out: json[] = [];
     for (let model in models) {
         let cl = aws.BedrockClient.new(model = model, region = "us-east-1");
-        out.push(baml.json.stringify(cl.default_cache_args()));
+        out.push(cl.default_cache_args());
     }
-    out.join(" ")
+    out
 }
 
 test "bedrock_cache_default_by_model" {
-    assert.equal(
-        bedrock_cache_default_by_model(),
-        `{"type":"default"} {"type":"default"} {"type":"default"} {"type":"default"} null null null`,
-    )
+    let expected: json[] = [
+        { "type": "default" },
+        { "type": "default" },
+        { "type": "default" },
+        { "type": "default" },
+        null,
+        null,
+        null,
+    ];
+    assert.equal(bedrock_cache_default_by_model(), expected)
 }
 
 test "bedrock_cache_default_args" {

@@ -18,7 +18,12 @@
 
 function AnthMockAsk(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("system")}Follow the rules.${role("user")}${question}`
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${role("user")}
+      ${question}
+    `
 }
 
 // The SYSTEM message ends in a cache delimiter, which puts `cache_control` on
@@ -26,39 +31,69 @@ function AnthMockAsk(question: string) -> string {
 // `system_cc=ephemeral`, `user_cc=-`).
 function AnthMockCached(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("system")}Follow the rules.${cache({ "type": "ephemeral" })}${role("user")}${question}`
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache({ "type": "ephemeral" })}
+      ${role("user")}
+      ${question}
+    `
 }
 
 // A stable prefix and a variable suffix inside one user turn, after a picture,
 // with a TTL.
 function AnthCachedMidTurn(picture: image, question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Before. ${picture} After.${cache({ "type": "ephemeral", "ttl": "1h" })} ${question}`
+    prompt: `
+      ${role("user")}
+      Before. ${picture} After.
+      ${cache({ "type": "ephemeral", "ttl": "1h" })}
+      ${question}
+    `
 }
 
 // `args` as written, and the positions that send no breakpoint.
 function AnthCacheArgs(args: json) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("system")}${cache({ "type": "ephemeral" })}Rules.${role("user")}Stable.${cache(args)} Variable.`
+    prompt: `
+      ${role("system")}
+      ${cache({ "type": "ephemeral" })}
+      Rules.
+      ${role("user")}
+      Stable.
+      ${cache(args)}
+      Variable.
+    `
 }
 
 // Role metadata is not a cache channel: a `cache_control` key there is not sent.
 function AnthRoleMetadata(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
+    prompt: `
+      ${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}
+      Follow the rules.
+      ${role("user")}
+      ${question}
+    `
 }
 
 // An assistant-first prompt with NO system content: the shape that used to
 // produce an API-rejected request whose first message was not `user`.
 function AnthAssistantFirst() -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("assistant")}I already said hello.`
+    prompt: `
+      ${role("assistant")}
+      I already said hello.
+    `
 }
 
 // An ordinary single-user-message prompt, for journal-only assertions.
 function AnthMockPlain() -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Hello.`
+    prompt: `
+      ${role("user")}
+      Hello.
+    `
 }
 
 function anth_weather(city: string) -> string {
@@ -69,19 +104,28 @@ function anth_weather(city: string) -> string {
 function AnthMockTools(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
     tools: [anth_weather]
-    prompt: `${role("user")}${question}`
+    prompt: `
+      ${role("user")}
+      ${question}
+    `
 }
 
 // A leading literal keeps the media part at a known index: the rendered parts
 // are ["Look at", <media>].
 function AnthMockVision(picture: image) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Look at ${picture}`
+    prompt: `
+      ${role("user")}
+      Look at ${picture}
+    `
 }
 
 function AnthMockListen(clip: audio) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Listen to ${clip}`
+    prompt: `
+      ${role("user")}
+      Listen to ${clip}
+    `
 }
 
 // ─── shared helpers ──────────────────────────────────────────────────────────
@@ -409,12 +453,26 @@ test "anthropic_cache_delimiter_args_as_written" {
 // `${cache(args = ...)}` is `${cache(...)}` spelled by name.
 function AnthCacheDefault(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}Stable.${cache()} ${question}`
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache()}
+      ${role("user")}
+      Stable.
+      ${cache()}
+      ${question}
+    `
 }
 
 function AnthCacheNamed(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${role("system")}Follow the rules.${cache(args = { "type": "ephemeral", "ttl": "1h" })}${role("user")}${question}`
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache(args = { "type": "ephemeral", "ttl": "1h" })}
+      ${role("user")}
+      ${question}
+    `
 }
 
 function anthropic_cache_default_args() -> string {
@@ -1291,7 +1349,10 @@ test "anthropic_reasoning_tokens" {
 
 function AnthLiveAsk(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Reply with exactly one word. ${question}`
+    prompt: `
+      ${role("user")}
+      Reply with exactly one word. ${question}
+    `
 }
 
 function anth_live_temperature(city: string) -> string {
@@ -1302,7 +1363,10 @@ function anth_live_temperature(city: string) -> string {
 function AnthLiveTools(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
     tools: [anth_live_temperature]
-    prompt: `${role("user")}${question} Call the tool, then answer with the number.`
+    prompt: `
+      ${role("user")}
+      ${question} Call the tool, then answer with the number.
+    `
 }
 
 function anth_live_answers() -> bool {
