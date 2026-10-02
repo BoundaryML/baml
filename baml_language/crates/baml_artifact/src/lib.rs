@@ -86,7 +86,7 @@ const UNSTAMPED_DEV_FINGERPRINT: &str = "unstamped-dev-build";
 
 /// Identity of the build that encodes and accepts artifacts: the Git commit a
 /// release build was stamped with. An unstamped build carries the fixed
-/// [`UNSTAMPED_DEV_FINGERPRINT`] on a channel that enforces the fingerprint
+/// `UNSTAMPED_DEV_FINGERPRINT` on a channel that enforces the fingerprint
 /// (see [`ENFORCE_BUILD_FINGERPRINT`]), and the canonical BAML version on one
 /// that does not, e.g. a stable build from a source archive.
 pub const BUILD_FINGERPRINT: &str = if !BUILD_COMMIT.is_empty() {
