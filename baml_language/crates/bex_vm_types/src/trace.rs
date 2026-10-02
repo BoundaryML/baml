@@ -18,6 +18,11 @@ impl SpanId {
     pub fn new(scope: RecordingId, local: TelemetryId) -> Self {
         Self { scope, local }
     }
+
+    /// Return the recording-local ID only when it belongs to `scope`.
+    pub fn local_in(&self, scope: RecordingId) -> Option<TelemetryId> {
+        (self.scope == scope).then_some(self.local)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
