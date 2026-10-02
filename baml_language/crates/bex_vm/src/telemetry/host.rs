@@ -68,6 +68,7 @@ impl TelemetryState {
                 call_path,
                 entered_at,
                 captured_inputs,
+                captured_type_args: None,
             });
         }
         self.thread.active_call_path = call_path;
