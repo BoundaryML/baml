@@ -75,9 +75,19 @@ modes are rejected rather than guessed; BCS must agree to this policy. Envelope
 and blob integrity still require server-side validation.
 
 PUT success is the delivery acknowledgement, not proof of server ingestion or
-query availability. Retries reuse the same body and URL. BCS must issue URLs
-whose lifetimes cover the bounded retry window. Expiration drops that payload;
-it does not stop later delivery.
+query availability. Retries reuse the same body and URL. Expiration drops that
+payload; it does not stop later delivery.
+
+A PUT is given `request_timeout` (10 s) plus its body's length at
+`min_upload_bytes_per_second` (1 MiB/s): a large body is not lost for taking
+long, only for uploading slower than that. A body's retry window is every
+attempt at that timeout and the delays between them: 40.6 s for a small body,
+about 73 s for 8 MiB, about 69 minutes for 1 GiB. Recording bodies upload one
+at a time, and so do CAS bodies, so BCS must issue each URL a lifetime that
+covers the windows of everything admitted to its lane before it. A URL that
+does not is refused before anything is sent to it. The prepare request does
+not carry blob lengths, only `size_class: LARGE` for a blob uploaded on its
+own.
 
 ## Scope
 

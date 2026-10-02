@@ -1353,3 +1353,100 @@ async fn required_content_type_is_sent_once_and_short_recording_url_uses_actual_
     assert_eq!(values[0], "application/vnd.btel.protobuf");
     assert_eq!(put.headers["x-amz-content-sha256"], "UNSIGNED-PAYLOAD");
 }
+
+/// A plan with one file and one 64 KiB blob uploaded on its own, against a
+/// server that takes `delay` to accept the blob and lets its URL live for
+/// `lifetime`.
+async fn large_upload(
+    delay: Duration,
+    lifetime: Duration,
+    min_upload_bytes_per_second: usize,
+) -> (Result<(), DeliveryError>, Vec<String>) {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            let mut plan = response(request, &base, &[]);
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+            let expiry = u64::try_from((now + lifetime).as_millis()).unwrap();
+            for target in &mut plan.uploads {
+                if target.kind == UploadKind::CasObject {
+                    target.expires_at_unix_ms = expiry;
+                }
+            }
+            ResponseTemplate::new(200).set_body_json(plan)
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/put/1-0"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/put/1-1"))
+        .respond_with(ResponseTemplate::new(200).set_delay(delay))
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.request_timeout = Duration::from_millis(100);
+    settings.min_upload_bytes_per_second = min_upload_bytes_per_second;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let pool = SnapshotPool::new(1, Limits::default());
+    delivery
+        .handle()
+        .try_submit(
+            files(1).pop().unwrap(),
+            vec![large(&pool)],
+            vec![
+                proposed(0, UploadKind::Recording, &[]),
+                proposed(1, UploadKind::CasObject, &[0]),
+            ],
+        )
+        .unwrap();
+    let result = finish(delivery).await;
+    assert_eq!(pool.stats().in_use, 0);
+    let puts = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == "PUT")
+        .map(|request| request.url.path().to_owned())
+        .collect();
+    (result, puts)
+}
+
+#[tokio::test]
+async fn a_slow_upload_is_given_time_for_its_body_and_no_more() {
+    let hour = Duration::from_secs(3600);
+    let slow = Duration::from_millis(500);
+    // 64 KiB at 64 KiB a second: a second on top of the request timeout.
+    let (result, puts) = large_upload(slow, hour, 64 * 1024).await;
+    assert_eq!(result, Ok(()));
+    assert_eq!(puts.len(), 2);
+    // At a rate that gives the body no time of its own, each attempt at the
+    // blob times out; the recording still arrives.
+    let (result, puts) = large_upload(slow, hour, usize::MAX).await;
+    assert_eq!(result, Err(DeliveryError::Http));
+    assert_eq!(
+        puts.iter().filter(|path| *path == "/put/1-1").count(),
+        2,
+        "one attempt and one retry"
+    );
+    assert!(puts.contains(&"/put/1-0".to_owned()));
+}
+
+#[tokio::test]
+async fn an_upload_url_must_outlive_the_window_of_its_body() {
+    let minute = Duration::from_secs(60);
+    // Two attempts of 64 KiB at 1 KiB a second can hold the lane for over
+    // two minutes: the URL is refused before anything is sent to it.
+    let (result, puts) = large_upload(Duration::ZERO, minute, 1024).await;
+    assert_eq!(result, Err(DeliveryError::Expired));
+    assert_eq!(puts, ["/put/1-0"]);
+    // At a megabyte a second the same URL lives long enough.
+    let (result, puts) = large_upload(Duration::ZERO, minute, 1 << 20).await;
+    assert_eq!(result, Ok(()));
+    assert_eq!(puts.len(), 2);
+}

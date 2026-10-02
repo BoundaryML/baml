@@ -66,7 +66,13 @@ pub struct DeliveryConfig {
     pub max_candidates: usize,
     pub max_targets: usize,
     pub max_recording_body_bytes: usize,
+    /// Time for one request, before its body's share: see
+    /// [`Self::min_upload_bytes_per_second`].
     pub request_timeout: Duration,
+    /// The slowest upload a PUT waits for. A PUT is given `request_timeout`
+    /// plus its body's length at this rate, so a large body is not lost for
+    /// taking long, only for stalling. Upload URLs must live as long.
+    pub min_upload_bytes_per_second: usize,
     pub retry_delay: Duration,
     /// Initial attempt plus retries. Nonretryable HTTP and invalid plans drop immediately.
     pub max_attempts: u32,
@@ -89,6 +95,7 @@ impl DeliveryConfig {
             max_targets: 33,
             max_recording_body_bytes: 8 * 1024 * 1024,
             request_timeout: Duration::from_secs(10),
+            min_upload_bytes_per_second: 1024 * 1024,
             retry_delay: Duration::from_millis(200),
             max_attempts: 4,
             allow_http: false,
@@ -103,15 +110,30 @@ impl DeliveryConfig {
         Ok(url)
     }
 
-    fn retry_window(&self) -> Result<Duration, DeliveryError> {
-        self.request_timeout
+    /// The time one PUT of `body_bytes` is given.
+    fn put_timeout(&self, body_bytes: usize) -> Duration {
+        let millis = (body_bytes as u128).saturating_mul(1000)
+            / (self.min_upload_bytes_per_second as u128).max(1);
+        self.request_timeout.saturating_add(Duration::from_millis(
+            u64::try_from(millis).unwrap_or(u64::MAX),
+        ))
+    }
+
+    /// The longest a body of `body_bytes` holds its lane: every attempt at
+    /// its full timeout, and the delays between them.
+    fn put_window(&self, body_bytes: usize) -> Option<Duration> {
+        self.put_timeout(body_bytes)
             .checked_mul(self.max_attempts)
             .and_then(|v| {
                 self.retry_delay
-                    .checked_mul(self.max_attempts - 1)
+                    .checked_mul(self.max_attempts.checked_sub(1)?)
                     .and_then(|delay| v.checked_add(delay))
             })
-            .ok_or(DeliveryError::InvalidConfig)
+    }
+
+    /// The window of a request without a body to speak of.
+    fn retry_window(&self) -> Result<Duration, DeliveryError> {
+        self.put_window(0).ok_or(DeliveryError::InvalidConfig)
     }
 
     fn validate(&self) -> Result<(), DeliveryError> {
@@ -126,6 +148,7 @@ impl DeliveryConfig {
         }
         if self.max_attempts == 0
             || self.request_timeout.is_zero()
+            || self.min_upload_bytes_per_second == 0
             || self.max_pending_plans == 0
             || self.max_pending_plans > 32
             || self.max_pending_snapshots == 0
@@ -156,7 +179,9 @@ struct State {
     cas_bytes: usize,
     snapshots: usize,
     plans: usize,
-    cas_targets: usize,
+    /// The longest the admitted, unfinished bodies can hold each upload lane.
+    recording_window: Duration,
+    cas_window: Duration,
     last_file: Option<([u8; 16], u64)>,
     finished: bool,
 }
@@ -214,7 +239,8 @@ struct Reservation {
     recording: usize,
     cas: usize,
     snapshots: usize,
-    cas_targets: usize,
+    recording_window: Duration,
+    cas_window: Duration,
 }
 
 impl Reservation {
@@ -232,7 +258,8 @@ impl Drop for Reservation {
         state.cas_bytes -= self.cas;
         state.snapshots -= self.snapshots;
         state.plans -= 1;
-        state.cas_targets -= self.cas_targets;
+        state.recording_window -= self.recording_window;
+        state.cas_window -= self.cas_window;
         self.shared.capacity.notify_all();
     }
 }
@@ -461,11 +488,6 @@ impl BcsDeliveryHandle {
             state: None,
         };
         validate_proposal(&request)?;
-        let cas_targets = request
-            .proposed_uploads
-            .iter()
-            .filter(|p| p.kind != UploadKind::Recording)
-            .count();
         // Envelopes coexist with their encoded body during prost encoding. Response
         // JSON allocations and parsed strings are bounded conservatively as control bytes.
         let control = config
@@ -515,19 +537,29 @@ impl BcsDeliveryHandle {
             .and_then(|v| v.checked_add(metadata_bytes))
             .ok_or(DeliveryError::Capacity)?;
         // A CAS body is as long as its blobs, and coexists with its envelope
-        // while that is encoded.
-        let bodies = request
-            .proposed_uploads
-            .iter()
-            .filter(|p| p.kind != UploadKind::Recording)
-            .flat_map(|p| &p.candidate_indices)
-            .try_fold(0_usize, |sum, &index| {
-                usize::try_from(candidates[index as usize].encoded_len)
-                    .ok()
-                    .and_then(|len| len.checked_add(CAS_OBJECT_OVERHEAD_BYTES))
-                    .and_then(|len| sum.checked_add(len))
-            })
-            .ok_or(DeliveryError::Capacity)?;
+        // while that is encoded. Each body may hold its lane for its window.
+        let mut bodies = 0_usize;
+        let mut recording_window = Duration::ZERO;
+        let mut cas_window = Duration::ZERO;
+        for target in &request.proposed_uploads {
+            let blobs = blob_bytes(candidates, &target.candidate_indices);
+            match target.kind {
+                UploadKind::Recording => {
+                    recording_window = blobs
+                        .and_then(|blobs| blobs.checked_add(file.bytes().len()))
+                        .and_then(|body| config.put_window(body))
+                        .ok_or(DeliveryError::Capacity)?;
+                }
+                UploadKind::CasBatch | UploadKind::CasObject => {
+                    let blobs = blobs.ok_or(DeliveryError::Capacity)?;
+                    bodies = bodies.checked_add(blobs).ok_or(DeliveryError::Capacity)?;
+                    cas_window = config
+                        .put_window(blobs)
+                        .and_then(|held| cas_window.checked_add(held))
+                        .ok_or(DeliveryError::Capacity)?;
+                }
+            }
+        }
         let cas = bodies
             .checked_mul(2)
             .and_then(|v| v.checked_add(retained))
@@ -577,14 +609,16 @@ impl BcsDeliveryHandle {
         state.cas_bytes += cas;
         state.snapshots += window.owners.len();
         state.plans += 1;
-        state.cas_targets += cas_targets;
+        state.recording_window += recording_window;
+        state.cas_window += cas_window;
         state.last_file = Some(identity);
         let reservation = Reservation {
             shared: self.shared.clone(),
             recording,
             cas,
             snapshots: window.owners.len(),
-            cas_targets,
+            recording_window,
+            cas_window,
         };
         let work = Work {
             file,
@@ -712,6 +746,17 @@ impl Drop for BcsDelivery {
 /// identity, version, digest and lengths, and the envelope's plan and upload
 /// identifiers.
 const CAS_OBJECT_OVERHEAD_BYTES: usize = 512;
+
+/// The most the blobs at `indices` add to an upload body. `None` when that
+/// does not fit a `usize`.
+fn blob_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
+    indices.iter().try_fold(0_usize, |sum, &index| {
+        usize::try_from(candidates[index as usize].encoded_len)
+            .ok()?
+            .checked_add(CAS_OBJECT_OVERHEAD_BYTES)?
+            .checked_add(sum)
+    })
+}
 
 struct LimitedWriter {
     bytes: Vec<u8>,
@@ -870,7 +915,11 @@ async fn put(
             .ok_or(DeliveryError::Expired)?;
         let request = client
             .put(&target.presigned_put_url)
-            .timeout(config.request_timeout.min(Duration::from_millis(remaining)))
+            .timeout(
+                config
+                    .put_timeout(body.len())
+                    .min(Duration::from_millis(remaining)),
+            )
             .headers(headers.clone())
             .body(body.clone());
         match request.send().await {
@@ -914,30 +963,36 @@ async fn assemble(
         mut reservation,
     } = work;
     let response = prepare(client, config, &request, &reservation.shared.heartbeat).await?;
-    let retry_window = config.retry_window()?;
     let now = now_ms()?;
-    let horizon = |windows: usize| {
-        u32::try_from(windows)
+    // When a lane that may be held for `held` is certainly free.
+    let after = |held: Duration| {
+        u64::try_from(held.as_millis())
             .ok()
-            .and_then(|n| retry_window.checked_mul(n.max(1)))
-            .and_then(|d| u64::try_from(d.as_millis()).ok())
             .and_then(|ms| now.checked_add(ms))
             .ok_or(DeliveryError::Expired)
     };
     validate_response(&request, &response, config.allow_http)?;
-    if response.expires_at_unix_ms <= horizon(1)? {
+    if response.expires_at_unix_ms <= after(config.retry_window()?)? {
         return Err(DeliveryError::Expired);
     }
-    let actual_cas = response
+    // What the server already has is not uploaded, and holds no lane.
+    let cas_window = response
         .uploads
         .iter()
         .filter(|u| u.kind != UploadKind::Recording)
-        .count();
+        .try_fold(Duration::ZERO, |sum, upload| {
+            blob_bytes(&window.candidates, &upload.candidate_indices)
+                .and_then(|blobs| config.put_window(blobs))
+                .and_then(|held| sum.checked_add(held))
+        })
+        .ok_or(DeliveryError::Capacity)?
+        .min(reservation.cas_window);
+    // A URL must outlive everything admitted to its lane, this plan included.
     let (recording_horizon, cas_horizon) = {
         let mut state = reservation.shared.state.lock().unwrap();
-        state.cas_targets -= reservation.cas_targets - actual_cas;
-        reservation.cas_targets = actual_cas;
-        (horizon(state.plans)?, horizon(state.cas_targets)?)
+        state.cas_window -= reservation.cas_window.saturating_sub(cas_window);
+        reservation.cas_window = cas_window;
+        (after(state.recording_window)?, after(state.cas_window)?)
     };
     // A candidate serializes at most once; an available one never does.
     let mut taken = vec![false; window.candidates.len()];
@@ -1212,6 +1267,33 @@ mod tests {
             DeliveryConfig::new(oversized.parse().unwrap()).validate(),
             Err(DeliveryError::InvalidConfig)
         );
+    }
+
+    #[test]
+    fn a_put_is_given_time_for_its_body_at_the_slowest_rate_waited_for() {
+        let config = DeliveryConfig::new("https://bcs.example".parse().unwrap());
+        assert_eq!(config.min_upload_bytes_per_second, 1 << 20);
+        assert_eq!(config.put_timeout(0), Duration::from_secs(10));
+        assert_eq!(config.put_timeout(8 << 20), Duration::from_secs(18));
+        assert_eq!(config.put_timeout(1 << 30), Duration::from_secs(10 + 1024));
+        // Four attempts and the three delays between them.
+        assert_eq!(config.retry_window(), Ok(Duration::from_millis(40_600)));
+        assert_eq!(
+            config.put_window(8 << 20),
+            Some(Duration::from_millis(4 * 18_000 + 600))
+        );
+        // A time too long to count saturates; it does not wrap.
+        let slow = DeliveryConfig {
+            min_upload_bytes_per_second: 1,
+            ..config.clone()
+        };
+        assert_eq!(slow.put_timeout(3), Duration::from_secs(13));
+        assert!(slow.put_timeout(usize::MAX) >= Duration::from_millis(u64::MAX));
+        let stalled = DeliveryConfig {
+            min_upload_bytes_per_second: 0,
+            ..config
+        };
+        assert_eq!(stalled.validate(), Err(DeliveryError::InvalidConfig));
     }
 
     #[test]
