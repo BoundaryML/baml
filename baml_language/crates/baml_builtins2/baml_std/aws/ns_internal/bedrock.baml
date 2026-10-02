@@ -192,10 +192,6 @@ class ContentBlock {
         ContentBlock { ..._empty_content_block(), toolResult: tool_result }
     }
 
-    function of_cache_point() -> ContentBlock {
-        ContentBlock.of_cache_delimiter(_default_cache_point())
-    }
-
     /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
     function of_cache_delimiter(args: baml.json.json) -> ContentBlock {
         ContentBlock { ..._empty_content_block(), cachePoint: args }
@@ -629,9 +625,12 @@ function _lower_blocks(blocks: ai.content.Block[], preview: bool = false) -> Con
 
 /// (internal) System content is text-only; a media part in a system message is rejected
 /// rather than silently dropped (`build_request/bedrock.rs:174-176`).
-function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
+function _prompt_system(
+    message: ai.PromptMessage,
+    default_cache_args: baml.json.json,
+) -> SystemContentBlock[] {
     let blocks: SystemContentBlock[] = [];
-    for (let part in ai.wire.prompt_parts(message)) {
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
         match (part) {
             let text: string => {
                 // Blank text is dropped here too: Converse rejects an empty
@@ -665,9 +664,10 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 ///     and a `cachePoint` that leads a message is a ValidationException.
 ///   * The last block is already a `cachePoint`: two in a row mark the same
 ///     prefix, and each one counts against the four a request may carry.
-///   * `cache(null)`: there is no value to embed, and a null member is dropped
+///   * Null `args`: there is no value to embed, and a null member is dropped
 ///     from the body, which would leave an empty block behind.
-///     (`ai.wire.prompt_parts` already removes these; this is the backstop.)
+///     (`ai.wire.prompt_parts` has already given a `${cache()}` the client's
+///     default, or removed it when there is none; this is the backstop.)
 function _takes_cache_point(
     previous: baml.json.json?,
     lowered: int,
@@ -684,9 +684,13 @@ function _takes_cache_point(
 /// becomes a `cachePoint` block at the position it was written, with `args`
 /// embedded as written, and the text on either side of it is trimmed where it
 /// faces the checkpoint (`ai.wire.prompt_parts`).
-function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> ContentBlock[] {
+function _prompt_content(
+    message: ai.PromptMessage,
+    default_cache_args: baml.json.json,
+    preview: bool = false,
+) -> ContentBlock[] {
     let content: ContentBlock[] = [];
-    for (let part in ai.wire.prompt_parts(message)) {
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
         match (part) {
             let text: string => {
                 let block = ai.content.Text { text: text };
@@ -715,27 +719,6 @@ function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> Co
     content
 }
 
-/// (internal) The per-message metadata key that requests a Bedrock prompt-caching
-/// checkpoint after the message's content.
-///
-/// The engine emits `{"cachePoint":{"type":"default"}}` whenever a message
-/// carries `cache_control` metadata
-/// (`engine/.../aws_client.rs:123-155`). BAML's neutral spelling of that is a
-/// `ai.PromptMessage.metadata` entry, and Bedrock's own name for the feature
-/// is a cache *point*, so the key is `cache_point` — any non-null value
-/// (`true` is the idiomatic one) turns the checkpoint on.
-///
-/// NOTE: `ai.internal.make_role` currently builds every role marker with empty
-/// metadata, so nothing populates this yet from the prompt DSL. Until that
-/// lands, use the client's `cache_system_prompt` / `cache_tools` options,
-/// which do not depend on per-message metadata.
-function _wants_cache_point(metadata: map<string, baml.json.json>) -> bool {
-    match (metadata.get("cache_point")) {
-        null => false,
-        _ => true,
-    }
-}
-
 /// (internal) The Converse conversation roles are `user` and `assistant` only. `system`
 /// is hoisted out above; every other authored role (including the role-less
 /// default and `tool`) becomes `user`, matching the native Anthropic client and
@@ -758,27 +741,25 @@ function _conversation_role(role: string) -> string {
 /// demoting would silently move authored instructions into the conversation.
 /// The native Anthropic client (`messages.baml:308-337`) merges for the same
 /// reason.
-function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPrompt {
+function _lower_prompt(
+    prompt: ai.Prompt,
+    default_cache_args: baml.json.json,
+    preview: bool = false,
+) -> BedrockPrompt {
     let system: SystemContentBlock[] = [];
     let messages: Message[] = [];
     for (let message in prompt.messages()) {
         if (message.role == "system") {
-            for (let block in _prompt_system(message)) {
+            for (let block in _prompt_system(message, default_cache_args)) {
                 system.push(block);
-            }
-            if (_wants_cache_point(message.metadata)) {
-                system.push(SystemContentBlock.of_cache_point());
             }
             null
         } else {
-            let content = _prompt_content(message, preview = preview);
+            let content = _prompt_content(message, default_cache_args, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
             if (content.length() > 0) {
-                if (_wants_cache_point(message.metadata)) {
-                    content.push(ContentBlock.of_cache_point());
-                }
                 messages.push(Message { role: _conversation_role(message.role), content: content });
             }
             null
@@ -812,6 +793,20 @@ class PendingMessage {
 /// omits the field; the result's text still carries the error message, so only
 /// the flag is lost.
 function _supports_tool_result_status(model: string) -> bool {
+    let id = model.to_lower_case();
+    id.includes("anthropic.claude") || id.includes("amazon.nova")
+}
+
+/// (internal) Whether a `${cache()}` sends a `cachePoint` to this model. Converse
+/// accepts a checkpoint for Anthropic Claude and Amazon Nova, and answers 403
+/// ("You invoked an unsupported model or your request did not allow prompt
+/// caching") for the other families it serves — Llama, Mistral, DeepSeek and
+/// gpt-oss were checked. So the default is given only to what is known to
+/// take one, by the same substring test as `_supports_tool_result_status`. An
+/// unrecognized id (an application inference profile ARN, a custom model)
+/// gets none; its author writes `${cache({ "type": "default" })}`, which is
+/// always sent.
+function _supports_cache_point(model: string) -> bool {
     let id = model.to_lower_case();
     id.includes("anthropic.claude") || id.includes("amazon.nova")
 }
@@ -857,9 +852,6 @@ function _lower_journal(
             let user: ai.events.UserMessage => {
                 let content = _lower_blocks(user.content, preview = preview);
                 if (content.length() > 0) {
-                    if (_wants_cache_point(user.metadata)) {
-                        content.push(ContentBlock.of_cache_point());
-                    }
                     pending.push(
                         PendingMessage {
                             message: Message { role: "user", content: content },
@@ -1084,7 +1076,11 @@ function converse_request(
     input: ai.ModelTurnInput,
     preview: bool = false,
 ) -> ConverseRequest {
-    let prompt = _lower_prompt(input.prompt(ai.internal.build_output_format(input.output_type)), preview = preview);
+    let prompt = _lower_prompt(
+        input.prompt(ai.internal.build_output_format(input.output_type)),
+        client.default_cache_args(),
+        preview = preview,
+    );
     let system = prompt.system;
     if (client.cache_system_prompt && system.length() > 0) {
         system.push(SystemContentBlock.of_cache_point());

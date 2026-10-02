@@ -37,8 +37,9 @@ function check_BedrockHaiku45() -> void {
     )
 }
 
-// A prompt with a stable prefix, a `${cache(...)}` after it, and a question
-// that changes. The nonce makes the prefix new to the provider on each run, so
+// A prompt with a stable prefix, a `${cache()}` after it, and a question
+// that changes. The delimiter carries no args, so the client that sends the
+// request supplies its own default marker. The nonce makes the prefix new to the provider on each run, so
 // the first call has to write the cache.
 function CachedReference(nonce: string, reference: string, question: string) -> string {
     client: "openai/gpt-4o-mini"
@@ -46,7 +47,7 @@ function CachedReference(nonce: string, reference: string, question: string) -> 
         ${role("user")}
         Reference document ${nonce}.
         ${reference}
-        ${cache({ "type": "default" })}
+        ${cache()}
         ${question}
     `
 }

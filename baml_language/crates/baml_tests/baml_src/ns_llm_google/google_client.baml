@@ -855,6 +855,68 @@ test "vertex_claude_raw_predict" {
     assert.contains(got, "|vertex-2023-10-16|absent|8192|user")
 }
 
+// Claude on Vertex is the Anthropic Messages body, so a `${cache(args)}` in the
+// prompt is `cache_control: args` on the block before it there too. The same
+// client aimed at a Gemini model has no cache marker and sends nothing for it.
+function VertexCached(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache({ "type": "ephemeral", "ttl": "1h" })}${role("user")}${question}`
+}
+
+function VertexCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}${question}`
+}
+
+function _vertex_cached_body(model: string, default_args: bool = false) -> string {
+    let spec = if (default_args) {
+        VertexCacheDefault@spec("Say pong.")
+    } else {
+        VertexCached@spec("Say pong.")
+    };
+    let input = ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: ai.Journal { log: [] },
+        toolbox: ai.tools.Toolbox.new([]),
+        output_type: reflect.Type.of<string>(),
+    };
+    let cl = google.VertexClient.new(
+        model = model,
+        project_id = "my-project",
+        location = "us-east5",
+        api_key = "express-key",
+    );
+    google.internal.vertex_render(cl, input).body
+}
+
+test "vertex_cache_delimiter" {
+    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5"));
+    let system: json = [
+        {
+            "type": "text",
+            "text": "Follow the rules.",
+            "cache_control": { "type": "ephemeral", "ttl": "1h" },
+        },
+    ];
+    assert.equal(baml.json.path<json>(claude, ".system"), system);
+    let gemini = _vertex_cached_body("gemini-2.5-flash");
+    assert.is_true(!gemini.includes("cache_control"));
+    assert.is_true(!gemini.includes("ephemeral"))
+}
+
+// `${cache()}` on a Claude model is the Anthropic default, the same marker
+// `anthropic.Client` sends; on a Gemini model there is no default.
+test "vertex_cache_default_args" {
+    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5", default_args = true));
+    let system: json = [
+        { "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } },
+    ];
+    assert.equal(baml.json.path<json>(claude, ".system"), system);
+    let gemini = _vertex_cached_body("gemini-2.5-flash", default_args = true);
+    assert.is_true(!gemini.includes("cache_control"));
+    assert.is_true(!gemini.includes("ephemeral"))
+}
+
 // …and a caller who wants it back puts it in `request_body`, which merges
 // after the Vertex constants.
 function vertex_claude_model_override() -> string {

@@ -443,27 +443,155 @@ test "oai_tool_schema_keeps_nulls" {
     assert.contains(got, `"tool_choice":"auto"`)
 }
 
-// ai.PromptMessage.metadata is forwarded verbatim onto the LAST content item of
-// the message it was authored on (the engine's content-part placement); a
-// message with no directives stays clean.
-function oai_message_metadata_on_content_part() -> string {
-    let spec = OaiMetaEcho@spec("Say pong.");
-    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
-    let empty = ai.tools.Toolbox.new([]);
-    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
-    let body = baml.json.parse(req.body);
-    [
-        `system_role=${baml.json.path_or<string>(body, ".input[0].role", "-")}`,
-        `system_hint=${baml.json.path_or<string>(body, ".input[0].content[0].cache_hint", "-")}`,
-        `user_hint=${baml.json.path_or<string>(body, ".input[1].content[0].cache_hint", "-")}`,
-    ].join("|")
+// A `${cache(args)}` in the prompt is `prompt_cache_breakpoint: args` on the
+// content part BEFORE the delimiter, wherever in the message that is; a part
+// with no delimiter after it stays clean.
+function OaiCached(picture: image, question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache({ "mode": "explicit" })}${role("user")}Look at ${picture} closely.${cache({ "mode": "explicit", "ttl": null })} ${question}`
 }
 
-test "oai_message_metadata_on_content_part" {
-    assert.equal(
-        oai_message_metadata_on_content_part(),
-        "system_role=system|system_hint=ephemeral|user_hint=-",
-    )
+function _oai_render_input(cl: openai.ResponsesClient, spec: ai.FunctionSpec<string>) -> json {
+    let empty = ai.tools.Toolbox.new([]);
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
+    baml.json.path<json>(baml.json.parse(req.body), ".input")
+}
+
+test "oai_cache_delimiter_is_a_breakpoint_on_the_part_before" {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let picture = baml.media.Image.from_url("https://example.com/p.png", "image/png");
+    let expected: json = [
+        {
+            "role": "system",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Follow the rules.",
+                    "prompt_cache_breakpoint": { "mode": "explicit" },
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Look at" },
+                { "type": "input_image", "image_url": "https://example.com/p.png", "detail": "auto" },
+                {
+                    "type": "input_text",
+                    "text": "closely.",
+                    "prompt_cache_breakpoint": { "mode": "explicit", "ttl": null },
+                },
+                { "type": "input_text", "text": "Describe it." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCached@spec(picture, "Describe it.")), expected)
+}
+
+// A delimiter with nothing before it in its message sends no breakpoint, and
+// neither does one with null `args` on a model that has no default (this one
+// is GPT-5.5 or earlier); two in a row leave one, the later one's `args`.
+function OaiCacheEdges(args: json) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache({ "mode": "explicit" })}${cache(args)} Variable.`
+}
+
+test "oai_cache_delimiter_edges" {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let rules: json = { "role": "system", "content": [{ "type": "input_text", "text": "Rules." }] };
+
+    // two in a row: one breakpoint, the later one's args
+    let later_args: json = { "mode": "explicit", "later": true };
+    let later: json = [
+        rules,
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Stable.",
+                    "prompt_cache_breakpoint": { "mode": "explicit", "later": true },
+                },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCacheEdges@spec(later_args)), later);
+
+    // null args with no default: the first delimiter's breakpoint stands
+    let first: json = [
+        rules,
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCacheEdges@spec(null)), first)
+}
+
+// `${cache()}` takes the client's default: `{"mode": "explicit"}` on GPT-5.6 and
+// later, and nothing on an earlier model, which answers 400 to the field. (The
+// model list itself is asserted in `chat_cache_default_by_model`; both clients
+// read it.)
+function OaiCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}Stable.${cache()} ${question}`
+}
+
+test "oai_cache_default_args" {
+    let current = openai.ResponsesClient.new(model = "gpt-5.6-luna", api_key = "test-key");
+    let earlier = openai.ResponsesClient.new(model = "gpt-5.5", api_key = "test-key");
+    let marked: json = [
+        {
+            "role": "system",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Follow the rules.",
+                    "prompt_cache_breakpoint": { "mode": "explicit" },
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(current, OaiCacheDefault@spec("Variable.")), marked);
+    let unmarked: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Follow the rules." }] },
+        { "role": "user", "content": [{ "type": "input_text", "text": "Stable. Variable." }] },
+    ];
+    assert.equal(_oai_render_input(earlier, OaiCacheDefault@spec("Variable.")), unmarked);
+    // null `args` is the default
+    let nulled: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Rules." }] },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(current, OaiCacheEdges@spec(null)), nulled)
+}
+
+// Role metadata is not forwarded onto a content part any more: a key there no
+// longer reaches the endpoint, where an unknown one is rejected.
+test "oai_role_metadata_is_not_forwarded" {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let expected: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Follow the rules." }] },
+        { "role": "user", "content": [{ "type": "input_text", "text": "Say pong." }] },
+    ];
+    assert.equal(_oai_render_input(cl, OaiMetaEcho@spec("Say pong.")), expected)
 }
 
 // ─── response parsing ────────────────────────────────────────────────────────

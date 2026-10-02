@@ -11,8 +11,8 @@
 // Wire modelling follows PLAN §1.5: the request, the response envelope and the
 // SSE chunks are all real BAML classes. `baml.json.json` appears exactly three
 // times — the `request_body` passthrough, a tool's `parameters` schema (which is
-// arbitrary JSON Schema by definition), and the per-message directives carried
-// verbatim from `ai.PromptMessage.metadata` onto a content part.
+// arbitrary JSON Schema by definition), and the `args` of a `${cache(args)}`
+// in the prompt, carried as written onto a content part.
 //
 // One language constraint shapes the request/response classes: `function` is a
 // keyword, so it cannot be a BAML field name, and the chat-completions wire
@@ -47,6 +47,71 @@ function _reject(provider: string, detail: string) -> ai.errors.InvalidRequest {
 /// `ChatCompat` exists to name the provider.
 function _azure_reject(detail: string) -> ai.errors.InvalidRequest {
     _reject("azure", detail)
+}
+
+// ---------------------------------------------------------------------------
+// The default cache breakpoint. Shared by the Chat Completions and Responses
+// clients: the field and the models that take it are the same on both APIs.
+
+/// (internal) Whether `model` rejects `prompt_cache_breakpoint`. OpenAI added
+/// the field with GPT-5.6; every earlier model answers 400
+/// ("prompt_cache_breakpoint is not supported on this model") on both Chat
+/// Completions and Responses, and caches implicitly whatever the request says.
+///
+/// The list is the OLD families, because that set is closed and the new one
+/// is not: a model this does not recognize is treated as one that takes the
+/// field, so a new family works without a change here. A model matches a
+/// family by being it or by starting with it plus "-", so "gpt-5" covers
+/// "gpt-5-mini" and "gpt-5-2025-08-07" but not "gpt-5.6-luna". A fine-tune
+/// (`ft:<base model>:<org>:<suffix>:<id>`) is judged by its base model.
+/// Each family is also matched with an "openai." prefix, the model id Bedrock
+/// gives an OpenAI model ("openai.gpt-5.5").
+///
+/// `chat-latest` is a moving alias that points at an old model today.
+function _rejects_cache_breakpoint(model: string) -> bool throws never {
+    let name = model;
+    if (name.starts_with("ft:")) {
+        name = name.split(":").at(1) ?? name;
+    }
+    let families = [
+        "gpt-3.5-turbo",
+        "gpt-4",
+        "gpt-4o",
+        "gpt-4.1",
+        "gpt-4.5",
+        "gpt-5",
+        "gpt-5.1",
+        "gpt-5.2",
+        "gpt-5.3",
+        "gpt-5.4",
+        "gpt-5.5",
+        "o1",
+        "o3",
+        "o4",
+        "chatgpt-4o",
+        "chat-latest",
+    ];
+    for (let family in families) {
+        for (let id in [family, `openai.${family}`]) {
+            if (name == id || name.starts_with(`${id}-`)) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// The `prompt_cache_breakpoint` a `${cache()}` sends to `model`:
+/// `{"mode": "explicit"}`, the only value the field takes, or null for a model
+/// that rejects the field (GPT-5.5 and earlier), where a `${cache()}` sends
+/// nothing. The value marks one position; it is not the request-level
+/// `prompt_cache_options.mode`, so the request stays in OpenAI's implicit mode.
+function default_cache_breakpoint(model: string) -> baml.json.json throws never {
+    if (_rejects_cache_breakpoint(model)) {
+        null
+    } else {
+        { "mode": "explicit" }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +172,15 @@ class ChatCompat {
     // Query parameters the endpoint itself requires (Azure `api-version`).
     // User query params are merged over these.
     compat_query: map<string, string>,
+    // Send a `${cache(args)}` in the prompt as `prompt_cache_breakpoint` on
+    // the content part before it. OpenAI and Azure OpenAI document the field;
+    // other OpenAI-compatible servers do not, so everywhere else the delimiter
+    // is dropped and the request is the one the prompt would produce without it.
+    cache_breakpoints: bool,
+    // What a `${cache()}` written with no args sends as the breakpoint: the
+    // wrapper's `default_cache_args()`. Null sends nothing for it. Read only
+    // when `cache_breakpoints` is set.
+    default_cache_args: baml.json.json,
 
     /// Every field defaults to the plain-OpenAI shape; a wrapper overrides the
     /// handful that differ.
@@ -124,6 +198,8 @@ class ChatCompat {
         default_max_tokens: int? = null,
         default_role: string = "user",
         compat_query: map<string, string>? = null,
+        cache_breakpoints: bool = false,
+        default_cache_args: baml.json.json = null,
     ) -> ChatCompat {
         let empty: map<string, string> = {};
         ChatCompat {
@@ -140,6 +216,8 @@ class ChatCompat {
             default_max_tokens: default_max_tokens,
             default_role: default_role,
             compat_query: compat_query ?? empty,
+            cache_breakpoints: cache_breakpoints,
+            default_cache_args: default_cache_args,
         }
     }
 }
@@ -234,26 +312,20 @@ class ChatFilePart {
     file: ChatFileData,
 }
 
-/// A content part carrying the per-message provider directives authored on
-/// `${ai.Role { name: …, metadata: { … } }}`. Chat completions places
-/// such directives ON A CONTENT PART (`prompt_cache_breakpoint` for OpenAI,
-/// OpenRouter's Anthropic-style `cache_control`), while the authored directive
-/// lives on the MESSAGE — so, exactly as the Anthropic client does, the metadata
-/// attaches to the message's LAST part and everything up to and including it is
-/// the cached prefix.
+/// A content part carrying extra keys beside its own, which is how a
+/// `${cache(args)}` in the prompt reaches the wire: chat completions places a
+/// cache breakpoint ON A CONTENT PART (`prompt_cache_breakpoint`), while the
+/// delimiter sits BETWEEN parts — so the breakpoint goes on the part before the
+/// delimiter, and everything up to and including that part is the cached
+/// prefix (`_chat_apply_cache_delimiter`).
 ///
-/// The keys are forwarded VERBATIM: this file does not maintain an allow-list of
-/// which directives an OpenAI-compatible endpoint understands, and "verbatim"
-/// includes an explicitly authored `null`.
-///
-/// Getting that last part right is why `to_json` PARKS the directives under
-/// `_chat_directives_key()` rather than splatting them onto the part: the body
-/// then goes through `_chat_prune_nulls`, whose job is to drop the CLIENT's
-/// unset options, and it would take an authored `{"cache_control": null}` with
-/// them. The parked key is opaque to that pass and `_chat_apply_directives`
-/// splices it back onto the part immediately afterwards, so the key never
-/// reaches the wire. (The sibling Responses client gets the same result by
-/// applying its directives to the serialized body after its own prune.)
+/// `args` is sent AS WRITTEN, including a `null` nested inside it. That is why
+/// `to_json` PARKS the extra keys under `_chat_directives_key()` rather than
+/// splatting them onto the part: the body then goes through
+/// `_chat_prune_nulls`, whose job is to drop the CLIENT's unset options, and it
+/// would take an authored `{"ttl": null}` with them. The parked key is opaque
+/// to that pass and `_chat_apply_directives` splices it back onto the part
+/// immediately afterwards, so the key never reaches the wire.
 class ChatExtraPart {
     part: ChatContentPart,
     extra: map<string, baml.json.json>,
@@ -278,7 +350,7 @@ class ChatExtraPart {
     }
 }
 
-/// (internal) The reserved key `ChatExtraPart` parks per-message directives under between
+/// (internal) The reserved key `ChatExtraPart` parks its extra keys under between
 /// serialization and `_chat_apply_directives`. It exists only inside that
 /// window; nothing with this key is ever sent.
 function _chat_directives_key() -> string {
@@ -647,24 +719,67 @@ function _chat_lower_blocks(
     parts
 }
 
-/// (internal) Attach a message's authored `metadata` to its LAST content part (see
-/// ChatExtraPart). A message that lowered to no parts has nowhere to put the
-/// directive, and an empty metadata map is the common case, so both are no-ops.
-function _chat_apply_metadata(
+/// (internal) Put a `${cache(args)}` on the wire: `prompt_cache_breakpoint: args` on
+/// the LAST part lowered so far (see ChatExtraPart). Nothing is sent when no
+/// part precedes the delimiter in its message, or when `args` is null (a
+/// `${cache()}` with no default, which `ai.wire.prompt_parts` removes). A second
+/// delimiter with no part in between replaces the first.
+function _chat_apply_cache_delimiter(
     parts: ChatContentPart[],
-    metadata: map<string, baml.json.json>,
+    delimiter: ai.CacheDelimiter,
 ) -> void {
-    if (metadata.keys().length() == 0) {
+    if (delimiter.args == null) {
         return;
     }
     if let last: ChatContentPart = parts.pop() {
-        parts.push(ChatExtraPart { part: last, extra: metadata });
+        let extra: map<string, baml.json.json> = {};
+        let _ = extra.set("prompt_cache_breakpoint", delimiter.args);
+        let inner = match (last) {
+            let marked: ChatExtraPart => marked.part,
+            _ => last,
+        };
+        parts.push(ChatExtraPart { part: inner, extra: extra });
     }
+}
+
+/// (internal) One prompt message as content parts. With `compat.cache_breakpoints` a
+/// `${cache(args)}` becomes a breakpoint on the part before it, with the text on
+/// either side trimmed where it faces the delimiter (`ai.wire.prompt_parts`);
+/// without, the
+/// delimiter is dropped and the text around it is one part again
+/// (`ai.wire.prompt_blocks`), so the request is the one the prompt would
+/// produce without it.
+function _chat_prompt_parts(
+    message: ai.PromptMessage,
+    compat: ChatCompat,
+    preview: bool = false,
+) -> ChatContentPart[] {
+    if (!compat.cache_breakpoints) {
+        return _chat_lower_blocks(ai.wire.prompt_blocks(message), compat, preview = preview);
+    }
+    let parts: ChatContentPart[] = [];
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = compat.default_cache_args)) {
+        match (part) {
+            let text: string => {
+                parts.push(ChatTextPart { type: "text", text: text });
+                null
+            },
+            let delimiter: ai.CacheDelimiter => {
+                _chat_apply_cache_delimiter(parts, delimiter);
+                null
+            },
+            let media: ai.MediaPart => {
+                parts.push(_chat_media_part(media, compat, preview = preview));
+                null
+            },
+        };
+    }
+    parts
 }
 
 /// (internal) Every part is text — the precondition for `collapse_text_content`. A
 /// `ChatExtraPart` never qualifies even when it wraps text: collapsing to a bare
-/// string would drop the directive it carries.
+/// string would drop the cache breakpoint it carries.
 function _chat_all_text(parts: ChatContentPart[]) -> bool {
     let all = true;
     for (let part in parts) {
@@ -701,8 +816,9 @@ function _chat_content(parts: ChatContentPart[], collapse: bool) -> ChatMessageC
 /// message takes the compat's default role; an authored `tool` role becomes user
 /// content, because a wire `tool` message must answer a specific `tool_call_id`
 /// and only the journal path has one. Adjacent same-role messages merge, as both
-/// prior implementations did. A message's authored `metadata` rides on its last
-/// content part (see `ChatExtraPart`).
+/// prior implementations did. A `${cache(args)}` in a message becomes a
+/// breakpoint on the part before it, when the endpoint takes one
+/// (`_chat_prompt_parts`).
 function chat_lower_prompt(
     prompt: ai.Prompt,
     compat: ChatCompat,
@@ -715,11 +831,10 @@ function chat_lower_prompt(
             "tool" => "user",
             _ => message.role,
         };
-        let parts = _chat_lower_blocks(ai.wire.prompt_blocks(message), compat, preview = preview);
-        // Placement happens BEFORE the adjacent-same-role merge, so a directive
-        // stays on the part it was authored after even when this message is
+        // Breakpoints are placed BEFORE the adjacent-same-role merge, so one
+        // stays on the part it was written after even when this message is
         // folded into the previous one.
-        _chat_apply_metadata(parts, message.metadata);
+        let parts = _chat_prompt_parts(message, compat, preview = preview);
         let merged = false;
         if let last: ChatPromptMessage = lowered.at(lowered.length() - 1) {
             if (last.role == role) {
@@ -762,7 +877,7 @@ function chat_lower_prompt(
 /// A journal turn's text always collapses to a bare string (`_chat_content`
 /// with `collapse = true`): a text-only turn was always sent that way, and a
 /// bare string is the one content shape every compatible server accepts. A
-/// turn carrying media, or a user turn carrying `metadata`, is a part list.
+/// turn carrying media is a part list.
 function chat_lower_journal(
     j: ai.Journal,
     compat: ChatCompat,
@@ -773,7 +888,6 @@ function chat_lower_journal(
         match (event) {
             let user: ai.events.UserMessage => {
                 let parts = _chat_lower_blocks(user.content, compat, preview = preview);
-                _chat_apply_metadata(parts, user.metadata);
                 out.push(
                     ChatMessage {
                         role: "user",

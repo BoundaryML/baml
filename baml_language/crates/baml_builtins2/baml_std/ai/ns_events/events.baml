@@ -12,8 +12,7 @@ class RunStarted {
 /// client lowers the turn at its position in the journal.
 class UserMessage {
     content: root.content.Block[],
-    /// Per-message provider directives, carried verbatim like
-    /// `root.PromptMessage.metadata` (Anthropic `cache_control`, for example).
+    /// Merged verbatim into inference requests' `message` objects.
     metadata: map<string, baml.json.json>,
 
     function new(text: string) -> UserMessage {

@@ -466,11 +466,13 @@ pub(crate) fn synthesize_llm_spec_body(
         }
     };
     // `cache(...)` is prompt-local in the same way: a bare call lowers to
-    // `ai.internal.make_cache`.
-    let prompt_local_callees: Vec<(ExprId, &[&str])> = ctx
+    // `ai.internal.make_cache`. Its one parameter is defaulted (`cache()` asks
+    // the rendering client for its default), and a defaulted parameter must be
+    // passed by name, so the positional `cache(x)` is labelled `args = x`.
+    let prompt_local_callees: Vec<(ExprId, ExprId, &[&str])> = ctx
         .exprs
         .iter()
-        .filter_map(|(_, expr)| {
+        .filter_map(|(call, expr)| {
             let Expr::Call { callee, .. } = expr else {
                 return None;
             };
@@ -485,11 +487,18 @@ pub(crate) fn synthesize_llm_spec_body(
                 "cache" => &["ai", "internal", "make_cache"],
                 _ => return None,
             };
-            Some((*callee, target))
+            Some((call, *callee, target))
         })
         .collect();
-    for (callee, target) in prompt_local_callees {
+    for (call, callee, target) in prompt_local_callees {
         ctx.exprs[callee] = Expr::Path(target.iter().map(Name::new).collect());
+        if target.last() == Some(&"make_cache")
+            && let Expr::Call { args, .. } = &mut ctx.exprs[call]
+            && let [only] = args.as_mut_slice()
+            && only.label.is_none()
+        {
+            only.label = Some(Name::new("args"));
+        }
     }
 
     let prev_synth = std::mem::replace(&mut ctx.synthesizing, true);
