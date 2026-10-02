@@ -218,7 +218,7 @@ class TurnStream {
     /// recorded under it, against `usage_target` (the request's span, from
     /// `trace._usage_target_of`), else against the caller's span.
     ///
-    /// `timeouts` supplies the two token deadlines, which this stream enforces:
+    /// `timeout_options` supplies the two token deadlines, which this stream enforces:
     /// `next()` throws `baml.errors.Timeout` with `timeout_type`
     /// `"first_token_timeout"` when no non-empty content delta arrives in
     /// time, and `"stream_token_timeout"` when the gap between two of them is
@@ -226,7 +226,7 @@ class TurnStream {
     /// `dispatched` is when the request attempt was sent (before connecting),
     /// which is where the first-token clock starts; it defaults to now. If the
     /// first-token deadline has already passed, the stream is closed and this
-    /// throws that `Timeout`. `timeouts.timeout` and `timeouts.connect_timeout`
+    /// throws that `Timeout`. `timeout_options.timeout` and `timeout_options.connect_timeout`
     /// are the transport's and are not read here.
     function from_sse(
         sse: baml.http.SseStream,
@@ -234,10 +234,10 @@ class TurnStream {
         require_terminal: string? = null,
         model: string? = null,
         usage_target: int? = null,
-        timeouts: root.LlmTimeoutOptions? = null,
+        timeout_options: root.LlmTimeoutOptions? = null,
         dispatched: baml.time.Instant? = null,
     ) -> TurnStream {
-        let first_token_timeout = _token_limit(timeouts?.first_token_timeout);
+        let first_token_timeout = _token_limit(timeout_options?.first_token_timeout);
         // Everything since dispatch was spent waiting on the provider.
         let waited = match (dispatched) {
             let at: baml.time.Instant => at.elapsed(),
@@ -273,7 +273,7 @@ class TurnStream {
             _call_started: null,
             _ttft_from: null,
             _first_token_timeout: first_token_timeout,
-            _stream_token_timeout: _token_limit(timeouts?.stream_token_timeout),
+            _stream_token_timeout: _token_limit(timeout_options?.stream_token_timeout),
             _content_deltas: 0,
             _token_waited: waited,
             _capture_sse: false,

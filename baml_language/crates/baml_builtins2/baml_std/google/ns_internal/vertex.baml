@@ -424,7 +424,7 @@ function vertex_invoke_stream(
             require_terminal = "vertex",
             model = c.model,
             usage_target = trace._usage_target_of(span.id()),
-            timeouts = limits,
+            timeout_options = limits,
             dispatched = started,
         )
     } else {
@@ -438,7 +438,7 @@ function vertex_invoke_stream(
             require_terminal = "vertex",
             model = c.model,
             usage_target = trace._usage_target_of(span.id()),
-            timeouts = limits,
+            timeout_options = limits,
             dispatched = started,
         )
     };

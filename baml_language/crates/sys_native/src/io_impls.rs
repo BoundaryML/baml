@@ -1421,7 +1421,7 @@ fn process_timeout_error(label: &str, timeout_ms: Option<i64>) -> VmBamlError {
         duration: Some(std::time::Duration::from_millis(
             u64::try_from(duration_ms).unwrap_or(0),
         )),
-        timeout_type: "timeout_ms".to_string(),
+        timeout_type: "timeout".to_string(),
     }
 }
 
@@ -1711,7 +1711,7 @@ async fn run_process(
                 return Err(VmRustFnError::from(VmBamlError::Timeout {
                     message: format!("Command '{label}' timed out after {ms}ms"),
                     duration: Some(duration),
-                    timeout_type: "timeout_ms".to_string(),
+                    timeout_type: "timeout".to_string(),
                 }));
             }
         }
@@ -1988,7 +1988,7 @@ type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>
 /// Convert a `Duration._nanoseconds` value (carried as a bigint across the
 /// sys-op boundary) into an operation timeout. Zero or negative disables it
 /// (`None` — block indefinitely, matching Rust's `Option<Duration>` socket
-/// timeouts); a value too large for `u64` nanoseconds (~584 years) clamps to the
+/// timeout_options); a value too large for `u64` nanoseconds (~584 years) clamps to the
 /// maximum. Shared by the net sys-ops and the HTTP server, so it lives here
 /// (always compiled) rather than behind the `bundle-http` feature.
 pub(crate) fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<std::time::Duration> {
@@ -2602,16 +2602,16 @@ impl io::IoClassHttpResponse for NativeSysOps {
 pub(crate) fn http_transport_error(
     context: &str,
     e: &reqwest::Error,
-    timeouts: HttpTimeouts,
+    timeout_options: HttpTimeoutOptions,
 ) -> VmBamlError {
     if e.is_timeout() {
         // reqwest doesn't say which of its deadlines elapsed. Only the connect
         // deadline fails inside the connector, so a timeout that is also a
         // connect error is that one; anything else is the total.
-        let (timeout_type, duration) = if e.is_connect() && timeouts.connect.is_some() {
-            ("connect_timeout", timeouts.connect)
+        let (timeout_type, duration) = if e.is_connect() && timeout_options.connect.is_some() {
+            ("connect_timeout", timeout_options.connect)
         } else {
-            ("timeout", timeouts.total)
+            ("timeout", timeout_options.total)
         };
         VmBamlError::Timeout {
             message: format!("{context}: {e}"),
@@ -2644,13 +2644,13 @@ fn http_method(method: &str) -> Result<reqwest::Method, VmBamlError> {
 /// `connect` is `Request.connect_timeout`. `None` is no limit.
 #[cfg(feature = "bundle-http")]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct HttpTimeouts {
+pub(crate) struct HttpTimeoutOptions {
     pub(crate) total: Option<std::time::Duration>,
     pub(crate) connect: Option<std::time::Duration>,
 }
 
 #[cfg(feature = "bundle-http")]
-impl HttpTimeouts {
+impl HttpTimeoutOptions {
     /// Both deadlines cross the sys-op boundary as bigint nanos; `0n`/negative
     /// means no limit (`timeout_from_nanos` returns `None`).
     fn from_nanos(
@@ -2689,7 +2689,7 @@ impl HttpTimeouts {
 fn build_io_http_response(
     response: reqwest::Response,
     url: String,
-    timeouts: HttpTimeouts,
+    timeout_options: HttpTimeoutOptions,
 ) -> owned::http::Response {
     let status = i64::from(response.status().as_u16());
     let headers: indexmap::IndexMap<String, String> = response
@@ -2701,7 +2701,7 @@ fn build_io_http_response(
         status_code: status,
         headers,
         url,
-        _body: crate::http_server::HttpBody::client(response, timeouts),
+        _body: crate::http_server::HttpBody::client(response, timeout_options),
     }
 }
 
@@ -2925,15 +2925,16 @@ impl io::IoNamespaceHttp for NativeSysOps {
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
-            let timeouts = HttpTimeouts::from_nanos(&timeout_nanos, &connect_timeout_nanos);
-            let client = timeouts.client()?;
-            let response = timeouts
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
+            let response = timeout_options
                 .apply(client.get(&url))
                 .send()
                 .await
-                .map_err(|e| http_transport_error("HTTP fetch failed", &e, timeouts))?;
+                .map_err(|e| http_transport_error("HTTP fetch failed", &e, timeout_options))?;
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url, timeouts))
+            Ok(build_io_http_response(response, final_url, timeout_options))
         })
     }
 
@@ -2967,8 +2968,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let method = http_method(&request.method)?;
 
             crate::ensure_rustls_crypto_provider();
-            let timeouts = HttpTimeouts::from_nanos(&timeout_nanos, &connect_timeout_nanos);
-            let client = timeouts.client()?;
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
             let mut builder = client.request(method, &request.url);
 
             for (k, v) in &request.headers {
@@ -2979,13 +2981,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body);
             }
 
-            let response = timeouts
+            let response = timeout_options
                 .apply(builder)
                 .send()
                 .await
-                .map_err(|e| http_transport_error("HTTP send failed", &e, timeouts))?;
+                .map_err(|e| http_transport_error("HTTP send failed", &e, timeout_options))?;
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url, timeouts))
+            Ok(build_io_http_response(response, final_url, timeout_options))
         })
     }
 
@@ -3027,8 +3029,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let method = http_method(&request.method)?;
 
             crate::ensure_rustls_crypto_provider();
-            let timeouts = HttpTimeouts::from_nanos(&timeout_nanos, &connect_timeout_nanos);
-            let client = timeouts.client()?;
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
             let mut builder = client.request(method, &request.url);
 
             for (key, value) in &request.headers {
@@ -3039,11 +3042,10 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = timeouts
-                .apply(builder)
-                .send()
-                .await
-                .map_err(|e| http_transport_error("SSE connection failed", &e, timeouts))?;
+            let response =
+                timeout_options.apply(builder).send().await.map_err(|e| {
+                    http_transport_error("SSE connection failed", &e, timeout_options)
+                })?;
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
@@ -3053,7 +3055,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                         return Err(VmRustFnError::from(http_transport_error(
                             "SSE error response body failed",
                             &error,
-                            timeouts,
+                            timeout_options,
                         )));
                     }
                     Err(_) => "<could not read body>".to_string(),
@@ -3152,8 +3154,11 @@ impl io::IoNamespaceHttp for NativeSysOps {
                         }
                         Err(e) => {
                             let mut buf = buf_clone.lock().await;
-                            buf.error =
-                                Some(http_transport_error("SSE stream failed", &e, timeouts));
+                            buf.error = Some(http_transport_error(
+                                "SSE stream failed",
+                                &e,
+                                timeout_options,
+                            ));
                             buf.done = true;
                             notify_clone.notify_waiters();
                             guard.completed = true;

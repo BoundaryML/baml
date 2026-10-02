@@ -1792,7 +1792,7 @@ pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::Con
 /// `packages` index, so it is resolved once and shared (`Arc`) across spawns
 /// rather than re-resolved per [`BexVm::new`].
 ///
-/// One extra entry follows the error classes, at [`DURATION_CLASS_PTR_INDEX`]:
+/// One extra entry follows the error classes, at `DURATION_CLASS_PTR_INDEX`:
 /// `baml.time.Duration`, which `baml.errors.Timeout.duration` is an instance of.
 pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     ErrorClass::ALL

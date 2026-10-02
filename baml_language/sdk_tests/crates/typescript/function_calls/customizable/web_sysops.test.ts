@@ -58,6 +58,8 @@ describe.runIf(isWebRuntime)("Web fetch sysops", () => {
         "x-web-test": "send",
       },
       body: "payload",
+      timeout: null,
+      connect_timeout: null,
     });
 
     const response = await _send_async(request, 0n, 0n);
@@ -113,7 +115,7 @@ describe.runIf(isTestRuntime("web"))("Browser filesystem capability boundary", (
 describe.runIf(isWebRuntime)("Web capability boundary", () => {
   it("web_sysops_rejects_sync_http_before_dispatching_fetch", { timeout: 2_000 }, () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
-    expect(() => _fetch("https://example.test/sync", 0n)).toThrow(/callFunctionSync|async API/i);
+    expect(() => _fetch("https://example.test/sync", 0n, 0n)).toThrow(/callFunctionSync|async API/i);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -128,6 +130,8 @@ describe.runIf(isWebRuntime)("Web capability boundary", () => {
       url: "https://example.test/sse",
       headers: {},
       body: "",
+      timeout: null,
+      connect_timeout: null,
     });
     await expect(send_sse_async(request)).rejects.toThrow();
     await expect(get_async("SHOULD_NOT_BE_VISIBLE")).rejects.toThrow();

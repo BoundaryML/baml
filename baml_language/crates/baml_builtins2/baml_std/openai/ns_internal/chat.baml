@@ -1460,9 +1460,9 @@ function chat_invoke(
     params: ChatParams,
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
-    timeouts: ai.LlmTimeoutOptions? = null,
+    timeout_options: ai.LlmTimeoutOptions? = null,
 ) -> ai.ModelTurn {
-    let limits = timeouts ?? ai.LlmTimeoutOptions._resolve(null);
+    let limits = timeout_options ?? ai.LlmTimeoutOptions._resolve(null);
     let request = limits._apply(chat_render(compat, params, input, false));
     _chat_send(
         request,
@@ -1693,9 +1693,9 @@ function chat_invoke_stream(
     params: ChatParams,
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
-    timeouts: ai.LlmTimeoutOptions? = null,
+    timeout_options: ai.LlmTimeoutOptions? = null,
 ) -> ai.stream.TurnStream {
-    let limits = timeouts ?? ai.LlmTimeoutOptions._resolve(null);
+    let limits = timeout_options ?? ai.LlmTimeoutOptions._resolve(null);
     let request = limits._apply(chat_render(compat, params, input, true));
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
     let started = baml.time.Instant.now();
@@ -1718,7 +1718,7 @@ function chat_invoke_stream(
         require_terminal = compat.provider,
         model = params.model,
         usage_target = trace._usage_target_of(span.id()),
-        timeouts = limits,
+        timeout_options = limits,
         dispatched = started,
     );
     let call = ai.events.LLMCall {

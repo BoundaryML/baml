@@ -82,7 +82,7 @@ pub(crate) enum HttpBody {
     /// deadlines its request runs under (they keep running while it is read).
     Client(
         tokio::sync::Mutex<Option<reqwest::Response>>,
-        crate::io_impls::HttpTimeouts,
+        crate::io_impls::HttpTimeoutOptions,
     ),
     /// A fully-buffered body.
     Bytes(Bytes),
@@ -106,11 +106,11 @@ impl HttpBody {
     /// Wrap a freshly received client response.
     pub(crate) fn client(
         response: reqwest::Response,
-        timeouts: crate::io_impls::HttpTimeouts,
+        timeout_options: crate::io_impls::HttpTimeoutOptions,
     ) -> Arc<dyn Any + Send + Sync> {
         Arc::new(HttpBody::Client(
             tokio::sync::Mutex::new(Some(response)),
-            timeouts,
+            timeout_options,
         ))
     }
 
@@ -118,13 +118,13 @@ impl HttpBody {
     pub(crate) async fn read_bytes(&self) -> Result<Bytes, VmBamlError> {
         match self {
             HttpBody::Bytes(b) => Ok(b.clone()),
-            HttpBody::Client(slot, timeouts) => {
+            HttpBody::Client(slot, timeout_options) => {
                 let resp = Self::take_client(slot)?;
                 resp.bytes().await.map_err(|e| {
                     crate::io_impls::http_transport_error(
                         "failed to read response body",
                         &e,
-                        *timeouts,
+                        *timeout_options,
                     )
                 })
             }
@@ -184,13 +184,13 @@ impl HttpBody {
             HttpBody::Bytes(b) => String::from_utf8(b.to_vec()).map_err(|e| VmBamlError::Io {
                 message: format!("Invalid UTF-8 in response body: {e}"),
             }),
-            HttpBody::Client(slot, timeouts) => {
+            HttpBody::Client(slot, timeout_options) => {
                 let resp = Self::take_client(slot)?;
                 resp.text().await.map_err(|e| {
                     crate::io_impls::http_transport_error(
                         "failed to read response body",
                         &e,
-                        *timeouts,
+                        *timeout_options,
                     )
                 })
             }

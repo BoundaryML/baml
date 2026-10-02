@@ -1736,7 +1736,7 @@ function invoke_stream(
         require_terminal = "aws-bedrock",
         model = client.model,
         usage_target = trace._usage_target_of(span.id()),
-        timeouts = limits,
+        timeout_options = limits,
         dispatched = started,
     );
     let call = ai.events.LLMCall {

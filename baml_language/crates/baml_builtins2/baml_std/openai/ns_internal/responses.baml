@@ -1285,7 +1285,7 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         require_terminal = "openai",
         model = c.model,
         usage_target = trace._usage_target_of(span.id()),
-        timeouts = limits,
+        timeout_options = limits,
         dispatched = started,
     );
     let call = ai.events.LLMCall {

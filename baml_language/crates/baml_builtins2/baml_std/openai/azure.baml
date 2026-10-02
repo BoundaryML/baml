@@ -229,7 +229,7 @@ class AzureClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                timeouts = ai.LlmTimeoutOptions._resolve(self.timeout),
+                timeout_options = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
@@ -243,7 +243,7 @@ class AzureClient {
                 self.params(),
                 input,
                 capture_wire = self.capture_wire,
-                timeouts = ai.LlmTimeoutOptions._resolve(self.timeout),
+                timeout_options = ai.LlmTimeoutOptions._resolve(self.timeout),
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
