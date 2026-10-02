@@ -18,6 +18,7 @@ macro_rules! index {
 }
 index!(ObjectId);
 index!(StringId);
+index!(LabelId);
 index!(BigintId);
 index!(TypeId);
 index!(NameId);
@@ -99,6 +100,11 @@ pub enum Limit {
 
 /// Copyable values carry only snapshot-local indexes, never owning Rust handles
 /// or VM pointers. String/bigint indexes are storage references, not object IDs.
+///
+/// Text is held two ways. A [`StringId`] is content: a string value, or a
+/// media value's base64 text, which a large one leaves to a blob of its own.
+/// A [`LabelId`] is a name: an enum variant, a function, a MIME type, a URL
+/// or a path, always written where it is used.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SnapshotValue {
     Null,
@@ -113,7 +119,7 @@ pub enum SnapshotValue {
     Enum {
         declaration: ObjectId,
         variant: u32,
-        name: StringId,
+        name: LabelId,
     },
     Truncated(Limit),
 }
@@ -174,13 +180,13 @@ pub enum SnapshotObject {
     NonSnapshotableValue {},
     Descriptive {
         kind: Description,
-        name: Option<StringId>,
+        name: Option<LabelId>,
     },
     /// A media value: its kind and where its content comes from. Its bytes
     /// are captured, as base64 text, only when the value holds them.
     Media {
         kind: MediaKind,
-        mime_type: Option<StringId>,
+        mime_type: Option<LabelId>,
         source: MediaSource,
     },
     Truncated(Limit),
@@ -220,11 +226,11 @@ impl SnapshotObject {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaSource {
     Url {
-        url: StringId,
+        url: LabelId,
         data: Option<StringId>,
     },
     File {
-        path: StringId,
+        path: LabelId,
         data: Option<StringId>,
     },
     Base64 {
@@ -281,7 +287,10 @@ pub(crate) struct Graph {
     pub(crate) entries: Arena<MapEntry>,
     /// `uint8array` content.
     pub(crate) bytes: Arena<u8>,
+    /// Content: string values and media text.
     pub(crate) strings: Arena<BexStr>,
+    /// Names, written where they are used.
+    pub(crate) labels: Arena<BexStr>,
     pub(crate) bigints: Arena<Bigint>,
     pub(crate) types: Arena<Type>,
     /// The names of the declarations among the objects.
@@ -297,6 +306,7 @@ impl Graph {
             entries,
             bytes,
             strings,
+            labels,
             bigints,
             types,
             names,
@@ -306,6 +316,7 @@ impl Graph {
         entries.clear();
         bytes.clear();
         strings.clear();
+        labels.clear();
         bigints.clear();
         types.clear();
         names.clear();
@@ -317,6 +328,7 @@ impl Graph {
             entries,
             bytes,
             strings,
+            labels,
             bigints,
             types,
             names,
@@ -327,6 +339,7 @@ impl Graph {
             entries.capacity_bytes(),
             bytes.capacity_bytes(),
             strings.capacity_bytes(),
+            labels.capacity_bytes(),
             bigints.capacity_bytes(),
             types.capacity_bytes(),
             names.capacity_bytes(),

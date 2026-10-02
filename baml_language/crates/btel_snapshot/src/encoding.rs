@@ -33,16 +33,16 @@ use borsh::BorshSerialize;
 pub use btel_settings::snapshot::{BLOB_MAGIC, BLOB_VERSION};
 use num_bigint::BigInt;
 
+#[cfg(debug_assertions)]
+use crate::walk::Length;
 use crate::{
-    BexStr, Blob,
+    BexStr, Blob, CasId,
     graph::{BigintId, Graph, ObjectId, OwnedType, StringId},
     hash::{Digest, TypeLeaf},
-    shape::{BlobIndex, Home, Shape, UNNUMBERED},
-    tags,
+    shape::{BlobIndex, HEADER_BYTES, Home, Shape, UNNUMBERED},
+    tags::{self, RootTag, ValueTag},
     walk::{self, Reference, Resolver, Visitor},
 };
-#[cfg(debug_assertions)]
-use crate::{shape::HEADER_BYTES, walk::Length};
 
 fn size(w: &mut impl Write, n: usize) -> io::Result<()> {
     u32::try_from(n)
@@ -57,6 +57,33 @@ fn original_len(w: &mut impl Write, n: usize) -> io::Result<()> {
 fn string(w: &mut impl Write, value: &BexStr) -> io::Result<()> {
     size(w, value.len())?;
     w.write_all(value.as_bytes())
+}
+
+/// What a blob that is one string writes before the string: the header, no
+/// children, no objects, and a root value that is a string of some length.
+pub(crate) const STRING_BLOB_HEADER_BYTES: usize = 8 + 4 + 16 + 4 + 4 + 1 + 1 + 4;
+const _: () = assert!(STRING_BLOB_HEADER_BYTES as u64 == HEADER_BYTES + 4 + 4 + 1 + 1 + 4);
+
+/// The bytes of the blob `id` that is one string of `len` bytes, up to the
+/// string itself.
+pub(crate) fn string_blob_header(id: CasId, len: u32) -> [u8; STRING_BLOB_HEADER_BYTES] {
+    let mut header = [0; STRING_BLOB_HEADER_BYTES];
+    let mut rest: &mut [u8] = &mut header;
+    let mut put = |bytes: &[u8]| {
+        let (to, after) = std::mem::take(&mut rest).split_at_mut(bytes.len());
+        to.copy_from_slice(bytes);
+        rest = after;
+    };
+    put(&BLOB_MAGIC);
+    put(&BLOB_VERSION.to_le_bytes());
+    put(id.as_bytes());
+    // No children and no objects.
+    put(&0_u32.to_le_bytes());
+    put(&0_u32.to_le_bytes());
+    put(&[RootTag::Value as u8, ValueTag::String as u8]);
+    put(&len.to_le_bytes());
+    debug_assert!(rest.is_empty(), "the header is exactly this long");
+    header
 }
 
 /// Reusable maps from a capture's objects and blobs to their numbers in the
@@ -193,6 +220,19 @@ impl Resolver for Stored<'_> {
     }
     fn bigint(&mut self, id: BigintId) -> Option<u32> {
         self.shape.bigint_home(id).map(|blob| self.slot(blob))
+    }
+    fn content_len(&mut self, s: &Graph, id: StringId) -> usize {
+        match self.shape.string_home(id) {
+            // The blob is the string and what is written before it.
+            Some(blob) => {
+                let blob = &self.shape.blobs[blob.0 as usize];
+                usize::try_from(blob.encoded_len)
+                    .expect("a captured string fits memory")
+                    .checked_sub(STRING_BLOB_HEADER_BYTES)
+                    .unwrap_or_else(|| unreachable!("a string blob has its header"))
+            }
+            None => s.strings[id.0 as usize].len(),
+        }
     }
 }
 

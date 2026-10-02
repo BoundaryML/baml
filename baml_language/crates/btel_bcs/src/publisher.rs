@@ -7,11 +7,11 @@ use std::{
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingError, RecordingId, SealedFile};
 use btel_records::SpanRecord;
-use btel_snapshot::{BlobIndex, CasId, Snapshot};
+use btel_snapshot::{BlobIndex, CasId, Leaf, Snapshot, Split, Structure};
 use btel_types::TelemetryId;
 
 use crate::{
-    delivery::{BcsDeliveryHandle, Candidate, DeliveryError, Window},
+    delivery::{BcsDeliveryHandle, Candidate, DeliveryError, Source, Window},
     metadata::MetadataJournal,
     wire::{ProposedUploadTarget, UploadKind},
 };
@@ -58,11 +58,13 @@ impl Default for CloudPublisherConfig {
 ///
 /// Candidates are blobs. A capture's blobs join a queue, children first, and
 /// each sealed file takes the queue's head, so one capture may span several
-/// files and plans. The capture is held until its last blob leaves. The queue
-/// and staged files share capture count/byte budgets. A capture is never
-/// refused for its size: before one that does not fit, what is held is sent,
-/// waiting on delivery's admission, and one larger than the byte budget is
-/// then held alone. A record can seal
+/// files and plans. A blob that is one string holds its own content and is
+/// let go on its own; the rest of the capture is held until the last blob
+/// written from it leaves, and a capture that is one string is not held at
+/// all. The queue and staged files share capture count/byte budgets. A
+/// capture is never refused for its size: before one that does not fit, what
+/// is held is sent, waiting on delivery's admission, and one larger than the
+/// byte budget is then held alone. A record can seal
 /// a file but cannot deliver it until input chunks are recycled. Staging is
 /// additionally bounded by delivery's plan and recording-byte limits. Neither
 /// sealing nor staging releases a capture; only delivery or terminal cleanup
@@ -84,18 +86,19 @@ pub struct CloudPublisher {
     /// Blob IDs queued or staged, whatever `offered` retains.
     inflight: HashSet<CasId>,
     metadata: MetadataJournal,
-    /// Captures with blobs still queued, oldest first; `first_owner` numbers
-    /// the front.
+    /// Captures that queued blobs are written from, oldest first;
+    /// `first_owner` numbers the front.
     owners: VecDeque<Owner>,
     first_owner: u64,
     next_owner: u64,
     /// Blobs waiting for a file, oldest first. A capture's blobs are
     /// contiguous, so captures complete in order.
     queue: VecDeque<Queued>,
-    /// Retained memory of the captures in `owners`.
+    /// Retained memory of the captures in `owners` and of the queued strings.
     queued_bytes: usize,
     staged: Vec<PendingFile>,
-    /// Captures held anywhere in this publisher, and their retained memory.
+    /// Captures held anywhere in this publisher, and the retained memory of
+    /// those and of the strings held.
     retained_snapshots: usize,
     retained_bytes: usize,
     staged_recording_bytes: usize,
@@ -104,19 +107,26 @@ pub struct CloudPublisher {
     delivery: BcsDeliveryHandle,
 }
 
-/// A capture with blobs still queued.
+/// A capture that blobs still queued are written from.
 struct Owner {
-    snapshot: Arc<Snapshot>,
+    structure: Arc<Structure>,
     size: usize,
     queued: u32,
 }
 
 /// A blob waiting for a file.
 struct Queued {
-    owner: u64,
-    blob: BlobIndex,
     id: CasId,
     encoded_len: u64,
+    held: Held,
+}
+
+/// Where a queued blob's bytes come from.
+enum Held {
+    /// A string blob, which holds its own content.
+    Leaf(Leaf),
+    /// A blob written from the capture numbered `owner`.
+    Kept { owner: u64, blob: BlobIndex },
 }
 
 struct PendingFile {
@@ -268,11 +278,11 @@ impl CloudPublisher {
         }
     }
 
-    /// Whether a capture retaining `size` may be held: within both budgets,
-    /// or alone, however large it is.
-    fn has_room(&self, size: usize) -> bool {
-        self.retained_snapshots < self.config.max_pending_snapshots
-            && (self.retained_snapshots == 0
+    /// Whether `size` more may be held, with a capture's storage when `slot`:
+    /// within the budgets, or alone, however large it is.
+    fn has_room(&self, size: usize, slot: bool) -> bool {
+        (!slot || self.retained_snapshots < self.config.max_pending_snapshots)
+            && (self.retained_bytes == 0
                 || self
                     .retained_bytes
                     .checked_add(size)
@@ -284,7 +294,7 @@ impl CloudPublisher {
     /// admission is the wait.
     fn make_room(&mut self, size: usize) {
         self.service(Instant::now(), Seal::Now);
-        while self.failure.is_none() && !self.has_room(size) && !self.queue.is_empty() {
+        while self.failure.is_none() && !self.has_room(size, true) && !self.queue.is_empty() {
             let waiting = self.queue.len();
             self.service(Instant::now(), Seal::Drain);
             if self.queue.len() == waiting {
@@ -294,45 +304,81 @@ impl CloudPublisher {
     }
 
     /// Queue the capture's blobs that were not offered recently, whatever
-    /// their size. A capture is lost only when it has no room and arrived
-    /// without the chance to make any (`before_detached_span`).
+    /// their size, and let go of the rest at once. A capture is lost only
+    /// when it has no room and arrived without the chance to make any
+    /// (`before_detached_span`).
     fn retain(&mut self, snapshot: Snapshot) {
         let preflight = self.preflight_size.take();
-        if self.failure.is_some() {
+        if self.failure.is_some()
+            || !snapshot
+                .blobs()
+                .any(|blob| !self.already_offered(blob.id()))
+        {
             return;
         }
-        let blobs: Vec<_> = snapshot
-            .blobs()
-            .filter(|blob| !self.already_offered(blob.id()))
-            .map(|blob| (blob.index(), blob.id(), blob.encoded_len()))
-            .collect();
-        if blobs.is_empty() {
-            return;
-        }
-        let size = match preflight {
+        let whole = match preflight {
             Some((id, size)) if id == snapshot.root_id() => size,
             Some(_) | None => snapshot.retained_bytes(),
         };
-        if !self.has_room(size) {
+        let Split { leaves, structure } = snapshot.split();
+        // What the strings took with them is no longer the capture's.
+        let given = leaves
+            .iter()
+            .map(|leaf| leaf.retained_bytes() - size_of::<Leaf>())
+            .fold(0, usize::saturating_add);
+        let leaves: Vec<_> = leaves
+            .into_iter()
+            .filter(|leaf| !self.already_offered(leaf.id()))
+            .collect();
+        let kept: Vec<_> = structure
+            .iter()
+            .flat_map(Structure::blobs)
+            .filter(|blob| !self.already_offered(blob.id()))
+            .map(|blob| (blob.index(), blob.id(), blob.encoded_len()))
+            .collect();
+        // A capture with nothing left to write is let go too.
+        let structure = structure
+            .filter(|_| !kept.is_empty())
+            .map(|structure| (structure, whole.saturating_sub(given)));
+        let size = leaves
+            .iter()
+            .map(Leaf::retained_bytes)
+            .chain(structure.iter().map(|(_, size)| *size))
+            .fold(0, usize::saturating_add);
+        if !self.has_room(size, structure.is_some()) {
             self.delivery
                 .record_payload_loss(DeliveryError::Capacity, false);
             return;
         }
-        let owner = self.next_owner;
-        self.next_owner += 1;
-        self.owners.push_back(Owner {
-            snapshot: Arc::new(snapshot),
-            size,
-            queued: u32::try_from(blobs.len()).expect("bounded blob count"),
-        });
-        for (blob, id, encoded_len) in blobs {
+        for leaf in leaves {
+            let (id, bytes) = (leaf.id(), leaf.retained_bytes());
             self.remember(id);
             self.inflight.insert(id);
             self.queue.push_back(Queued {
-                owner,
-                blob,
+                id,
+                encoded_len: leaf.encoded_len(),
+                held: Held::Leaf(leaf),
+            });
+            self.retained_bytes += bytes;
+            self.queued_bytes += bytes;
+        }
+        let Some((structure, size)) = structure else {
+            return;
+        };
+        let owner = self.next_owner;
+        self.next_owner += 1;
+        self.owners.push_back(Owner {
+            structure: Arc::new(structure),
+            size,
+            queued: u32::try_from(kept.len()).expect("bounded blob count"),
+        });
+        for (blob, id, encoded_len) in kept {
+            self.remember(id);
+            self.inflight.insert(id);
+            self.queue.push_back(Queued {
                 id,
                 encoded_len,
+                held: Held::Kept { owner, blob },
             });
         }
         self.retained_snapshots += 1;
@@ -368,30 +414,39 @@ impl CloudPublisher {
             let Some(queued) = self.queue.pop_front() else {
                 unreachable!("a window is no longer than the queue")
             };
-            let at = usize::try_from(queued.owner - self.first_owner).expect("owner in queue");
-            let owner_index = match current {
-                Some((owner, index)) if owner == queued.owner => index,
-                Some(_) | None => {
-                    let owner = &self.owners[at];
-                    window.owners.push(Arc::clone(&owner.snapshot));
-                    window.sizes.push(owner.size);
-                    window.releases.push(false);
-                    let index = u32::try_from(window.owners.len() - 1).expect("bounded owners");
-                    current = Some((queued.owner, index));
-                    index
+            let source = match queued.held {
+                Held::Leaf(leaf) => {
+                    self.queued_bytes -= leaf.retained_bytes();
+                    Source::Leaf(leaf)
+                }
+                Held::Kept { owner, blob } => {
+                    let at = usize::try_from(owner - self.first_owner).expect("owner in queue");
+                    let index = match current {
+                        Some((held, index)) if held == owner => index,
+                        Some(_) | None => {
+                            let held = &self.owners[at];
+                            window.owners.push(Arc::clone(&held.structure));
+                            window.sizes.push(held.size);
+                            window.releases.push(false);
+                            let index =
+                                u32::try_from(window.owners.len() - 1).expect("bounded owners");
+                            current = Some((owner, index));
+                            index
+                        }
+                    };
+                    let held = &mut self.owners[at];
+                    held.queued -= 1;
+                    if held.queued == 0 {
+                        window.releases[index as usize] = true;
+                    }
+                    Source::Kept { owner: index, blob }
                 }
             };
             window.candidates.push(Candidate {
-                owner: owner_index,
-                blob: queued.blob,
                 id: queued.id,
                 encoded_len: queued.encoded_len,
+                source,
             });
-            let owner = &mut self.owners[at];
-            owner.queued -= 1;
-            if owner.queued == 0 {
-                window.releases[owner_index as usize] = true;
-            }
         }
         // Captures complete in queue order.
         while self.owners.front().is_some_and(|owner| owner.queued == 0) {
@@ -406,6 +461,10 @@ impl CloudPublisher {
     fn release_window(&mut self, window: &Window) {
         for candidate in &window.candidates {
             self.inflight.remove(&candidate.id);
+            match &candidate.source {
+                Source::Leaf(leaf) => self.retained_bytes -= leaf.retained_bytes(),
+                Source::Kept { .. } => {}
+            }
         }
         for (index, size) in window.sizes.iter().enumerate() {
             if window.releases[index] {
@@ -563,7 +622,11 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
             {
                 let size = snapshot.retained_bytes();
                 self.preflight_size = Some((snapshot.root_id(), size));
-                if !self.has_room(size) {
+                // Each blob that is one string adds a little when it leaves
+                // the capture.
+                let leaves = snapshot.blobs().len().saturating_mul(size_of::<Leaf>());
+                let size = size.saturating_add(leaves);
+                if !self.has_room(size, true) {
                     self.make_room(size);
                 }
             }
@@ -924,8 +987,15 @@ mod tests {
         let mut delivered = Vec::new();
         for file in &publisher.staged {
             assert_eq!(file.window.candidates.len(), max);
-            assert_eq!(file.window.owners.len(), 1);
-            assert!(!file.window.releases[0], "the capture is still queued");
+            // Strings hold themselves: these files hold no capture, which
+            // waits with its root.
+            assert!(file.window.owners.is_empty());
+            assert!(
+                file.window
+                    .candidates
+                    .iter()
+                    .all(|candidate| matches!(candidate.source, Source::Leaf(_)))
+            );
             delivered.extend(file.window.candidates.iter().map(|c| c.id));
         }
         publisher.finish();
@@ -969,7 +1039,68 @@ mod tests {
         );
         assert_eq!(publisher.queue.len(), 6);
         assert_eq!(publisher.owners.len(), 2);
-        assert_eq!(publisher.owners[1].queued, 2);
+        assert!(matches!(publisher.queue[4].held, Held::Leaf(_)));
+        assert!(matches!(publisher.queue[5].held, Held::Kept { .. }));
+        assert_eq!(publisher.owners[1].queued, 1);
+    }
+
+    #[test]
+    fn a_string_blob_is_let_go_alone_and_a_string_capture_holds_no_storage() {
+        let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
+        let pool = SnapshotPool::new(2, Limits::default());
+        // A capture that is one string: nothing of it is held but the string.
+        let mut b = pool.try_acquire().unwrap();
+        let output = b
+            .leaves()
+            .string_value(&"output".repeat(1000).as_str().into());
+        offer(&mut publisher, b.finish(output, &mut Shaper::default()));
+        assert_eq!(pool.stats().in_use, 0);
+        assert_eq!(publisher.queue.len(), 1);
+        assert!(publisher.owners.is_empty());
+        assert_eq!(publisher.retained_snapshots, 0);
+        assert!(publisher.retained_bytes > 6000);
+        let window = publisher.take_window();
+        publisher.release_window(&window);
+        assert_eq!(publisher.retained_bytes, 0);
+        drop(window);
+
+        // A list of three strings: each is let go when its own blob is.
+        let texts = ["a", "b", "c"].map(|letter| btel_snapshot::BexStr::from(letter.repeat(200)));
+        let backing = texts.each_ref().map(|text| match text {
+            btel_snapshot::BexStr::Flat(flat) => Arc::downgrade(flat),
+            other => panic!("expected a heap-backed string, got {other:?}"),
+        });
+        let mut b = pool.try_acquire().unwrap();
+        let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+        let list = b.list(element_type, texts.iter(), |leaves, text| {
+            leaves.string_value(text)
+        });
+        let list = b.leaves().object(list).unwrap();
+        let mut shaper = Shaper::new(ShapePolicy::Split {
+            unit_bytes: 1 << 20,
+            leaf_bytes: 64,
+        });
+        offer(
+            &mut publisher,
+            b.finish(SnapshotValue::Object(list), &mut shaper),
+        );
+        drop(texts);
+        let held = publisher.retained_bytes;
+        let mut window = publisher.take_window();
+        assert_eq!(window.candidates.len(), 4);
+        assert_eq!(window.owners.len(), 1);
+        publisher.release_window(&window);
+        assert_eq!(publisher.retained_bytes, 0);
+        assert!(held > 600);
+        for backing in &backing {
+            assert!(backing.upgrade().is_some());
+            drop(window.candidates.remove(0));
+            assert!(backing.upgrade().is_none());
+        }
+        // The root is still written from the capture.
+        assert_eq!(pool.stats().in_use, 1);
+        drop(window);
+        assert_eq!(pool.stats().in_use, 0);
     }
 
     /// A list of strings of these lengths, each in a blob of its own.
@@ -1409,10 +1540,12 @@ mod tests {
         let candidates: Vec<_> = [5_u8, 12, 8, 100, 15]
             .into_iter()
             .map(|encoded_len| Candidate {
-                owner: 0,
-                blob: snapshot.root_blob().index(),
                 id: CasId::from_bytes([encoded_len; 16]),
                 encoded_len: u64::from(encoded_len),
+                source: Source::Kept {
+                    owner: 0,
+                    blob: snapshot.root_blob().index(),
+                },
             })
             .collect();
         let targets = propose(&candidates, &config);

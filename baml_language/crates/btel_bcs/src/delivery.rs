@@ -8,7 +8,7 @@ use std::{
 };
 
 use btel_recorder::SealedFile;
-use btel_snapshot::{BlobIndex, BlobScratch, CasId, Snapshot};
+use btel_snapshot::{BlobIndex, BlobScratch, CasId, Leaf, Snapshot, Split, Structure};
 use bytes::Bytes;
 use futures::FutureExt;
 use prost::Message;
@@ -264,21 +264,31 @@ impl Drop for Reservation {
     }
 }
 
-/// One blob offered with a file: which capture holds it, and where.
-#[derive(Clone, Debug)]
-pub(crate) struct Candidate {
-    /// Index into the window's owners.
-    pub owner: u32,
-    pub blob: BlobIndex,
-    pub id: CasId,
-    pub encoded_len: u64,
+/// Where a candidate's bytes come from.
+pub(crate) enum Source {
+    /// A string blob, which holds its own content.
+    Leaf(Leaf),
+    /// A blob written from one of the window's captures.
+    Kept {
+        /// Index into the window's owners.
+        owner: u32,
+        blob: BlobIndex,
+    },
 }
 
-/// A file's candidates and the captures that hold them. Several windows may
-/// hold one capture; it is freed with the last.
+/// One blob offered with a file.
+pub(crate) struct Candidate {
+    pub id: CasId,
+    pub encoded_len: u64,
+    pub source: Source,
+}
+
+/// A file's candidates and the captures some of them are written from. A
+/// string blob holds its own content and is let go on its own. Several
+/// windows may hold one capture; it is freed with the last.
 #[derive(Default)]
 pub(crate) struct Window {
-    pub(crate) owners: Vec<Arc<Snapshot>>,
+    pub(crate) owners: Vec<Arc<Structure>>,
     /// Each owner's retained memory, accounted once by the publisher.
     pub(crate) sizes: Vec<usize>,
     /// Per owner: whether this window holds the last of its queued blobs.
@@ -291,18 +301,31 @@ impl Window {
     fn whole(snapshots: Vec<Snapshot>) -> Result<Self, DeliveryError> {
         let mut window = Self::default();
         for snapshot in snapshots {
+            let Split { leaves, structure } = snapshot.split();
+            window
+                .candidates
+                .extend(leaves.into_iter().map(|leaf| Candidate {
+                    id: leaf.id(),
+                    encoded_len: leaf.encoded_len(),
+                    source: Source::Leaf(leaf),
+                }));
+            let Some(structure) = structure else {
+                continue;
+            };
             let owner = u32::try_from(window.owners.len()).map_err(|_| DeliveryError::Capacity)?;
-            for blob in snapshot.blobs() {
-                window.candidates.push(Candidate {
-                    owner,
-                    blob: blob.index(),
+            window
+                .candidates
+                .extend(structure.blobs().map(|blob| Candidate {
                     id: blob.id(),
                     encoded_len: blob.encoded_len(),
-                });
-            }
-            window.sizes.push(snapshot.retained_bytes());
+                    source: Source::Kept {
+                        owner,
+                        blob: blob.index(),
+                    },
+                }));
+            window.sizes.push(structure.retained_bytes());
             window.releases.push(true);
-            window.owners.push(Arc::new(snapshot));
+            window.owners.push(Arc::new(structure));
         }
         Ok(window)
     }
@@ -431,9 +454,10 @@ impl BcsDeliveryHandle {
         let config = &self.shared.config;
         let candidates = &window.candidates;
         if window.sizes.len() != window.owners.len()
-            || candidates
-                .iter()
-                .any(|c| c.owner as usize >= window.owners.len())
+            || candidates.iter().any(|candidate| match candidate.source {
+                Source::Leaf(_) => false,
+                Source::Kept { owner, .. } => owner as usize >= window.owners.len(),
+            })
         {
             return Err(DeliveryError::InvalidPlan);
         }
@@ -451,7 +475,7 @@ impl BcsDeliveryHandle {
         let mut retained = window
             .owners
             .capacity()
-            .checked_mul(std::mem::size_of::<Arc<Snapshot>>())
+            .checked_mul(std::mem::size_of::<Arc<Structure>>())
             .and_then(|v| {
                 candidates
                     .capacity()
@@ -459,8 +483,14 @@ impl BcsDeliveryHandle {
                     .and_then(|c| v.checked_add(c))
             })
             .ok_or(DeliveryError::Capacity)?;
-        for size in &window.sizes {
-            retained = retained.checked_add(*size).ok_or(DeliveryError::Capacity)?;
+        let leaves = candidates
+            .iter()
+            .filter_map(|candidate| match &candidate.source {
+                Source::Leaf(leaf) => Some(leaf.retained_bytes()),
+                Source::Kept { .. } => None,
+            });
+        for size in window.sizes.iter().copied().chain(leaves) {
+            retained = retained.checked_add(size).ok_or(DeliveryError::Capacity)?;
         }
         for (index, candidate) in candidates.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| DeliveryError::Capacity)?;
@@ -994,11 +1024,20 @@ async fn assemble(
         reservation.cas_window = cas_window;
         (after(state.recording_window)?, after(state.cas_window)?)
     };
-    // A candidate serializes at most once; an available one never does.
-    let mut taken = vec![false; window.candidates.len()];
+    let Window {
+        owners, candidates, ..
+    } = window;
+    // A candidate serializes at most once; an available one never does, and
+    // a string the server has is let go here.
+    let mut sources: Vec<Option<Source>> = Vec::with_capacity(candidates.len());
+    let mut heads = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        heads.push((candidate.id, candidate.encoded_len));
+        sources.push(Some(candidate.source));
+    }
     for disposition in &response.cas {
         if matches!(disposition.disposition, Disposition::AlreadyAvailable {}) {
-            taken[disposition.candidate_index as usize] = true;
+            sources[disposition.candidate_index as usize] = None;
         }
     }
     let mut scratch = BlobScratch::default();
@@ -1031,21 +1070,25 @@ async fn assemble(
                 return Err(DeliveryError::Capacity);
             }
             for &index in &target.candidate_indices {
-                let candidate = &window.candidates[index as usize];
-                if std::mem::replace(&mut taken[index as usize], true) {
-                    return Err(DeliveryError::InvalidPlan);
-                }
-                let len = usize::try_from(candidate.encoded_len)
+                let (id, encoded_len) = heads[index as usize];
+                let source = sources[index as usize]
+                    .take()
+                    .ok_or(DeliveryError::InvalidPlan)?;
+                let len = usize::try_from(encoded_len)
                     .ok()
                     .filter(|&len| len <= limit - envelope.encoded_len())
                     .ok_or(DeliveryError::Capacity)?;
                 let mut writer = LimitedWriter::exact(len)?;
-                window.owners[candidate.owner as usize]
-                    .blob(candidate.blob)
-                    .write(&mut scratch, &mut writer)
-                    .map_err(|_| DeliveryError::Encoding)?;
+                // A string is let go as soon as its blob is written.
+                match source {
+                    Source::Leaf(leaf) => leaf.write(&mut writer),
+                    Source::Kept { owner, blob } => owners[owner as usize]
+                        .blob(blob)
+                        .write(&mut scratch, &mut writer),
+                }
+                .map_err(|_| DeliveryError::Encoding)?;
                 let object = CasObject {
-                    snapshot_id: candidate.id.as_bytes().to_vec(),
+                    snapshot_id: id.as_bytes().to_vec(),
                     snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                     blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
                     blob: writer.bytes,
@@ -1071,7 +1114,7 @@ async fn assemble(
                     .shared
                     .lose(error, !target.candidate_indices.is_empty());
                 for &index in &target.candidate_indices {
-                    taken[index as usize] = true;
+                    sources[index as usize] = None;
                 }
                 continue;
             }
@@ -1083,7 +1126,8 @@ async fn assemble(
         }
     }
     // Every candidate was serialized or skipped: the captures can go.
-    drop(window);
+    drop(sources);
+    drop(owners);
     let recording_sequence = file.sequence().get();
     drop(file);
     reservation.release_snapshot_slots();

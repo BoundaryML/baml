@@ -16,8 +16,8 @@ use num_bigint::BigInt;
 
 use crate::{
     graph::{
-        BigintId, Graph, MapEntry, MediaSource, ObjectId, OwnedType, Range, SnapshotObject,
-        SnapshotRoot, SnapshotValue, StringId, TypeId,
+        BigintId, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType, Range,
+        SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
     },
     hash::{self, Absorb, Counter, Digest, Hasher, TypeLeaf},
     tags::{self, MediaSourceTag, ObjectTag, RootTag, ValueTag},
@@ -46,6 +46,12 @@ pub(crate) trait Resolver {
     fn string(&mut self, id: StringId) -> Option<u32>;
     /// As [`Self::string`], for a bigint.
     fn bigint(&mut self, id: BigintId) -> Option<u32>;
+    /// The length of the text a media object holds as content. A resolver
+    /// that knows the blob a string was stored in answers from that blob, so
+    /// the object can be written after its capture gave the string up.
+    fn content_len(&mut self, s: &Graph, id: StringId) -> usize {
+        s.strings[id.0 as usize].len()
+    }
 }
 
 /// Receives a blob's content piece by piece.
@@ -194,9 +200,9 @@ fn value<V: Visitor, R: Resolver>(
     }
 }
 
-/// A string written in place, never in another blob.
-fn text<V: Visitor>(v: &mut V, s: &Graph, id: StringId) -> Result<(), V::Error> {
-    v.string(&s.strings[id.0 as usize])
+/// A name, written in place.
+fn text<V: Visitor>(v: &mut V, s: &Graph, id: LabelId) -> Result<(), V::Error> {
+    v.string(&s.labels[id.0 as usize])
 }
 
 fn ty<V: Visitor>(v: &mut V, s: &Graph, id: TypeId) -> Result<(), V::Error> {
@@ -213,7 +219,7 @@ fn payload<V: Visitor, R: Resolver>(
     s: &Graph,
     data: StringId,
 ) -> Result<(), V::Error> {
-    v.length(s.strings[data.0 as usize].len())?;
+    v.length(r.content_len(s, data))?;
     value(v, r, s, SnapshotValue::String(data), Place::Nested)
 }
 

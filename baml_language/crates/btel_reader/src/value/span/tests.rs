@@ -192,10 +192,10 @@ fn album(b: &mut Builder, content: &str) -> V {
     let data = b.leaves().string(&content.into()).unwrap();
     let url = b
         .leaves()
-        .string(&"https://example.test/cat.png".into())
+        .label(&"https://example.test/cat.png".into())
         .unwrap();
     let media = |b: &mut Builder, source| {
-        let mime_type = b.leaves().string(&"image/png".into());
+        let mime_type = b.leaves().label(&"image/png".into());
         object(
             b,
             O::Media {

@@ -1450,3 +1450,78 @@ async fn an_upload_url_must_outlive_the_window_of_its_body() {
     assert_eq!(result, Ok(()));
     assert_eq!(puts.len(), 2);
 }
+
+#[tokio::test]
+async fn a_string_blob_is_let_go_before_the_uploads_and_the_capture_after_assembly() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    // The server has the first string already.
+    Mock::given(method("POST"))
+        .respond_with(move |r: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(r, &base, &[0]))
+        })
+        .mount(&server)
+        .await;
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let observed = entered.clone();
+    let release = Arc::new(AtomicBool::new(false));
+    let released = release.clone();
+    Mock::given(method("PUT"))
+        .respond_with(move |_: &Request| {
+            observed.notify_one();
+            ResponseTemplate::new(if released.load(Ordering::Acquire) {
+                200
+            } else {
+                503
+            })
+        })
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.max_attempts = 1000;
+    settings.retry_delay = Duration::from_millis(10);
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let pool = SnapshotPool::new(1, Limits::default());
+    let texts = ["a", "b"].map(|letter| btel_snapshot::BexStr::from(letter.repeat(200)));
+    let backing = texts.each_ref().map(|text| match text {
+        btel_snapshot::BexStr::Flat(flat) => Arc::downgrade(flat),
+        other => panic!("expected a heap-backed string, got {other:?}"),
+    });
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let list = b.list(element_type, texts.iter(), |leaves, text| {
+        leaves.string_value(text)
+    });
+    let list = b.leaves().object(list).unwrap();
+    let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 64,
+    });
+    let snapshot = b.finish(SnapshotValue::Object(list), &mut shaper);
+    drop(texts);
+    assert_eq!(snapshot.blobs().len(), 3);
+    delivery
+        .handle()
+        .try_submit(
+            files(1).pop().unwrap(),
+            vec![snapshot],
+            vec![
+                proposed(0, UploadKind::Recording, &[2]),
+                proposed(1, UploadKind::CasObject, &[0]),
+                proposed(2, UploadKind::CasObject, &[1]),
+            ],
+        )
+        .unwrap();
+    // The first upload is under way and held back: every body is built.
+    tokio::time::timeout(Duration::from_secs(2), entered.notified())
+        .await
+        .unwrap();
+    assert!(backing[0].upgrade().is_none(), "the server had it");
+    assert!(backing[1].upgrade().is_none(), "its blob was written");
+    assert_eq!(pool.stats().in_use, 0, "nothing more is written from it");
+    release.store(true, Ordering::Release);
+    assert_eq!(finish(delivery).await, Ok(()));
+    let uploaded = uploaded_blobs(&server).await;
+    assert!(uploaded.iter().any(|(path, _)| path == "/put/1-2"));
+    assert!(uploaded.iter().all(|(path, _)| path != "/put/1-1"));
+}

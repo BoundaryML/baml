@@ -8,8 +8,8 @@ use num_bigint::BigInt;
 use crate::{
     CasId,
     graph::{
-        BigintId, MapEntry, NameId, ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot,
-        SnapshotValue, StringId, TypeId, Uint8ArrayData,
+        BigintId, LabelId, MapEntry, NameId, ObjectId, OwnedType, Range, SnapshotObject,
+        SnapshotRoot, SnapshotValue, StringId, TypeId, Uint8ArrayData,
     },
     pool::Lease,
     shape::{BlobEntry, BlobIndex},
@@ -33,6 +33,7 @@ impl std::fmt::Debug for Snapshot {
             .field("entries", &&*graph.entries)
             .field("bytes", &&*graph.bytes)
             .field("strings", &&*graph.strings)
+            .field("labels", &&*graph.labels)
             .field("bigints", &&*graph.bigints)
             .field("types", &&*graph.types)
             .field("names", &&*graph.names)
@@ -162,6 +163,10 @@ impl Snapshot {
     pub fn string(&self, id: StringId) -> &BexStr {
         &self.0.graph.strings[id.0 as usize]
     }
+    /// A name: an enum variant, a function, a MIME type, a URL or a path.
+    pub fn label(&self, id: LabelId) -> &BexStr {
+        &self.0.graph.labels[id.0 as usize]
+    }
     pub fn bigint(&self, id: BigintId) -> &Arc<BigInt> {
         &self.0.graph.bigints[id.0 as usize].value
     }
@@ -193,7 +198,7 @@ impl Snapshot {
             shared_bytes: 0,
             limited: false,
         };
-        for text in graph.strings.iter() {
+        for text in graph.strings.iter().chain(graph.labels.iter()) {
             match text {
                 BexStr::Inline { .. } => stats.copied_bytes += text.len(),
                 BexStr::Flat(_) | BexStr::Slice { .. } | BexStr::Concat(_) => {

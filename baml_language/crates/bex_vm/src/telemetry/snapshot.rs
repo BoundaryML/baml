@@ -64,7 +64,7 @@ impl Scratch {
                 let Object::Enum(enm) = (unsafe { v.enm.get() }) else {
                     unreachable!("variant enum")
                 };
-                match leaves.string(&enm.variants[v.index].name.as_str().into()) {
+                match leaves.label(&enm.variants[v.index].name.as_str().into()) {
                     Some(name) => SnapshotValue::Enum {
                         declaration,
                         variant: u32::try_from(v.index).expect("enum variant index"),
@@ -165,7 +165,7 @@ impl Scratch {
                 }
                 Object::Function(f) => SnapshotObject::Descriptive {
                     kind: Description::Function,
-                    name: b.leaves().string(&f.name.as_str().into()),
+                    name: b.leaves().label(&f.name.as_str().into()),
                 },
                 Object::Closure(_) => describe(Description::Closure),
                 Object::BoundMethod(_) => describe(Description::BoundMethod),
@@ -205,7 +205,7 @@ fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
 /// nothing. A part past the byte limit truncates the whole object.
 fn media(leaves: &mut Leaves<'_>, value: &MediaValue) -> SnapshotObject {
     let Ok(mime_type) = value.read_mime_type(|mime| {
-        mime.map(|mime| leaves.string(&mime.into()).ok_or(()))
+        mime.map(|mime| leaves.label(&mime.into()).ok_or(()))
             .transpose()
     }) else {
         return SnapshotObject::Truncated(Limit::Bytes);
@@ -217,11 +217,11 @@ fn media(leaves: &mut Leaves<'_>, value: &MediaValue) -> SnapshotObject {
         };
         Some(match content {
             MediaContent::Url { url, base64_data } => MediaSource::Url {
-                url: leaves.string(&url.as_str().into())?,
+                url: leaves.label(&url.as_str().into())?,
                 data: loaded(leaves, base64_data.as_ref())?,
             },
             MediaContent::File { file, base64_data } => MediaSource::File {
-                path: leaves.string(&file.as_str().into())?,
+                path: leaves.label(&file.as_str().into())?,
                 data: loaded(leaves, base64_data.as_ref())?,
             },
             MediaContent::Base64 { base64_data } => MediaSource::Base64 {
@@ -407,7 +407,7 @@ mod tests {
                 source,
             } => (
                 *kind,
-                mime_type.map(|id| snapshot.string(id).as_str()),
+                mime_type.map(|id| snapshot.label(id).as_str()),
                 *source,
             ),
             other => panic!("expected media, got {other:?}"),
@@ -417,7 +417,7 @@ mod tests {
         };
         assert_eq!((kind, mime_type), (baml_type::MediaKind::Image, None));
         assert_eq!(
-            snapshot.string(path).as_str(),
+            snapshot.label(path).as_str(),
             "/nonexistent/telemetry-must-not-read.png"
         );
         let (kind, mime_type, MediaSource::Url { url, data: None }) = media(roots[1]) else {
@@ -428,7 +428,7 @@ mod tests {
             (baml_type::MediaKind::Pdf, Some("application/pdf"))
         );
         assert_eq!(
-            snapshot.string(url).as_str(),
+            snapshot.label(url).as_str(),
             "https://example.test/report.pdf"
         );
         let (kind, mime_type, MediaSource::Base64 { data }) = media(roots[2]) else {
@@ -718,7 +718,7 @@ mod tests {
             panic!()
         };
         assert_eq!(index, 1);
-        assert_eq!(snapshot.string(name).as_str(), "Green");
+        assert_eq!(snapshot.label(name).as_str(), "Green");
         assert!(matches!(
             snapshot.object(declaration),
             Obj::Declaration { is_enum: true, .. }

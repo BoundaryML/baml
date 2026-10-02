@@ -24,6 +24,7 @@ mod memory;
 mod pool;
 mod shape;
 mod snapshot;
+mod split;
 mod tags;
 mod walk;
 
@@ -35,8 +36,8 @@ pub use decode::{
 };
 pub use encoding::{BLOB_MAGIC, BLOB_VERSION, BlobScratch};
 pub use graph::{
-    BigintId, Description, FunctionArgs, Limit, MapEntry, MediaSource, NameId, ObjectId, OwnedType,
-    Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId, TypeIdentity,
+    BigintId, Description, FunctionArgs, LabelId, Limit, MapEntry, MediaSource, NameId, ObjectId,
+    OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId, TypeIdentity,
     Uint8ArrayData,
 };
 pub use hash::CasId;
@@ -45,6 +46,7 @@ pub use shape::{BlobIndex, REFERENCE_WEIGHT, ShapePolicy, Shaper};
 #[cfg(any(test, feature = "stats"))]
 pub use snapshot::CaptureStats;
 pub use snapshot::{Blob, Snapshot};
+pub use split::{Kept, Leaf, Split, Structure};
 
 #[cfg(test)]
 mod tests;

@@ -25,6 +25,7 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     let declaration = b.leaves().object(declaration).unwrap();
     let ty = b.leaves().ty(RealizedTy::Int);
     let text = b.leaves().string(&"value".into()).unwrap();
+    let label = b.leaves().label(&"value".into()).unwrap();
     let field = |_: &mut Leaves<'_>, ()| ("field".into(), V::Int(7));
     let list = b.list(ty, [false, true].into_iter(), |_, flag| V::Bool(flag));
     let map = b.map(ty, ty, std::iter::once(()), field);
@@ -63,7 +64,7 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     {
         let described = O::Descriptive {
             kind,
-            name: (index % 2 == 0).then_some(text),
+            name: (index % 2 == 0).then_some(label),
         };
         objects.push(b.leaves().object(described).unwrap());
     }
@@ -78,7 +79,7 @@ fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
         V::Enum {
             declaration,
             variant: 2,
-            name: text,
+            name: label,
         },
     ];
     for integer in [-123, 0, 123] {
@@ -250,12 +251,12 @@ fn media_graph(pool: &SnapshotPool) -> Snapshot {
     use btel_snapshot::MediaSource;
     let mut b = pool.try_acquire().unwrap();
     let ty = b.leaves().ty(RealizedTy::Unknown);
-    let mime = b.leaves().string(&"image/png".into()).unwrap();
+    let mime = b.leaves().label(&"image/png".into()).unwrap();
     let url = b
         .leaves()
-        .string(&"https://example.test/a.png".into())
+        .label(&"https://example.test/a.png".into())
         .unwrap();
-    let path = b.leaves().string(&"/data/b.png".into()).unwrap();
+    let path = b.leaves().label(&"/data/b.png".into()).unwrap();
     let short = b.leaves().string(&"iVBORw==".into()).unwrap();
     let long = b
         .leaves()

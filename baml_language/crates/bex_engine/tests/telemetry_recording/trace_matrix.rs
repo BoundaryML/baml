@@ -735,7 +735,7 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
             Value::Enum {
                 declaration: b.leaves().object(named).unwrap(),
                 variant: 1,
-                name: b.leaves().string(&"Second".into()).unwrap(),
+                name: b.leaves().label(&"Second".into()).unwrap(),
             }
         }
         "aliases" => {

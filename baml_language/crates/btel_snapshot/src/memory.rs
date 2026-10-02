@@ -20,6 +20,7 @@ impl Snapshot {
         let leaves = graph
             .strings
             .iter()
+            .chain(graph.labels.iter())
             .map(string_bytes)
             .chain(graph.entries.iter().map(|entry| string_bytes(&entry.key)))
             .chain(graph.bigints.iter().map(|bigint| {
@@ -47,6 +48,7 @@ impl Snapshot {
             + size_of_val(&*graph.entries)
             + size_of_val(&*graph.bytes)
             + size_of_val(&*graph.strings)
+            + size_of_val(&*graph.labels)
             + size_of_val(&*graph.bigints)
             + size_of_val(&*graph.types)
             + size_of_val(&*graph.names)

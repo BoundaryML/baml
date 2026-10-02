@@ -594,3 +594,122 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
         assert!(request.candidates.len() <= 1, "a window is cut by bytes");
     }
 }
+
+#[tokio::test]
+async fn strings_sent_with_one_plan_are_let_go_while_their_capture_waits_for_the_next() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    let server = MockServer::start().await;
+    let base = server.uri();
+    // The server has the first sixteen blobs of every plan.
+    let skips: Vec<u32> = (0..16).collect();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(support::response(request, &base, &skips))
+        })
+        .mount(&server)
+        .await;
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let observed = entered.clone();
+    let release = Arc::new(AtomicBool::new(false));
+    let released = release.clone();
+    Mock::given(method("PUT"))
+        .respond_with(move |_: &Request| {
+            observed.notify_one();
+            ResponseTemplate::new(if released.load(Ordering::Acquire) {
+                200
+            } else {
+                503
+            })
+        })
+        .mount(&server)
+        .await;
+    let delivery = BcsDelivery::new(
+        DeliveryConfig {
+            allow_http: true,
+            // Many short attempts: the upload is retried until released, and
+            // its URL outlives them all.
+            max_attempts: 1000,
+            request_timeout: Duration::from_millis(200),
+            retry_delay: Duration::from_millis(10),
+            ..DeliveryConfig::new(server.uri().parse().unwrap())
+        },
+        |_| {},
+    )
+    .unwrap();
+    let plan = delivery.handle();
+    let mut publisher = CloudPublisher::new(
+        RecordingId::generate(),
+        RecordingConfig {
+            flush_interval_duration: Duration::from_secs(60),
+            ..RecordingConfig::default()
+        },
+        CloudPublisherConfig::default(),
+        delivery.handle(),
+    )
+    .unwrap();
+    let pool = SnapshotPool::new(1, Limits::default());
+    // Forty strings, each a blob of its own, and the list that names them:
+    // more than the thirty-two blobs one plan takes.
+    let texts: Vec<_> = (0..40)
+        .map(|index| btel_snapshot::BexStr::from(format!("{index}-{}", "x".repeat(200))))
+        .collect();
+    let backing: Vec<_> = texts
+        .iter()
+        .map(|text| match text {
+            btel_snapshot::BexStr::Flat(flat) => Arc::downgrade(flat),
+            other => panic!("expected a heap-backed string, got {other:?}"),
+        })
+        .collect();
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let list = b.list(element_type, texts.iter(), |leaves, text| {
+        leaves.string_value(text)
+    });
+    let list = b.leaves().object(list).unwrap();
+    let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 64,
+    });
+    let snapshot = b.finish(SnapshotValue::Object(list), &mut shaper);
+    drop(texts);
+    assert_eq!(snapshot.blobs().len(), 41);
+    publisher.before_batch(1);
+    publisher.before_span_chunk(1);
+    let thread = allocate_telemetry_id();
+    publisher.span(
+        thread,
+        &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: CallPathId::ROOT,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(snapshot),
+        },
+    );
+    publisher.after_batch(1);
+    // The first plan is assembled and its upload is held back. The second
+    // has not been sealed: the capture waits with eight strings and its root.
+    tokio::time::timeout(Duration::from_secs(2), entered.notified())
+        .await
+        .unwrap();
+    let alive = |range: std::ops::Range<usize>| {
+        backing[range]
+            .iter()
+            .filter(|backing| backing.upgrade().is_some())
+            .count()
+    };
+    assert_eq!(alive(0..16), 0, "the server had these");
+    assert_eq!(alive(16..32), 0, "their blobs were written");
+    assert_eq!(alive(32..40), 8, "these wait for the next file");
+    assert_eq!(pool.stats().in_use, 1, "the root is still to be written");
+    assert_eq!(plan.loss_count(), 0);
+    release.store(true, Ordering::Release);
+    publisher.finish();
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(alive(0..40), 0);
+    assert_eq!(pool.stats().in_use, 0);
+}

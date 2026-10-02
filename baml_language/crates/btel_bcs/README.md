@@ -149,7 +149,11 @@ capture and twice its length while its body is encoded.
 
 Sealed windows are staged until processor input chunks have been recycled.
 The queue and staged windows together retain at most 32 captures and 8 MiB of
-capture storage by default; a capture is held until its last blob leaves.
+capture storage by default. A blob that is one string holds its own content:
+it is let go as soon as the server reports it stored or its upload body is
+built, whatever becomes of the rest of its capture. The rest of a capture is
+held until the last blob written from it leaves, and a capture that is one
+string is not held at all.
 Before a capture that does not fit, the publisher sends what it holds,
 waiting on delivery's admission, and a capture larger than the whole byte
 budget is then held alone.

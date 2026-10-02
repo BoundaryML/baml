@@ -466,7 +466,7 @@ fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
         let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.{long}")));
         let declaration = b.declaration(&name, TypeTag::from_i64(7), true);
         let declaration = b.leaves().object(declaration).unwrap();
-        let name = b.leaves().string(&long.as_str().into()).unwrap();
+        let name = b.leaves().label(&long.as_str().into()).unwrap();
         let function = object(
             b,
             O::Descriptive {
@@ -474,7 +474,7 @@ fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
                 name: Some(name),
             },
         );
-        let value = V::String(name);
+        let value = b.leaves().string_value(&long.as_str().into());
         let variant = V::Enum {
             declaration,
             variant: 0,
@@ -598,7 +598,7 @@ fn argument_slots_name_cut_values_and_scratch_is_clean_between_captures() {
 }
 
 fn media(b: &mut Builder, source: crate::MediaSource) -> V {
-    let mime_type = b.leaves().string(&"image/png".into());
+    let mime_type = b.leaves().label(&"image/png".into());
     object(
         b,
         O::Media {
@@ -617,7 +617,7 @@ fn media_content_past_the_leaf_size_is_one_blob_its_media_objects_name() {
         let data = b.leaves().string(&content.as_str().into()).unwrap();
         let url = b
             .leaves()
-            .string(&"https://example.test/cat.png".into())
+            .label(&"https://example.test/cat.png".into())
             .unwrap();
         let inline = media(b, crate::MediaSource::Base64 { data });
         let fetched = media(

@@ -81,9 +81,9 @@ fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let bytes = b.bytes(&[1, 2, 3]);
     let bytes = b.leaves().object(bytes).unwrap();
     let big = b.leaves().bigint(&Arc::new(BigInt::from(-1) << 100));
-    let variant = b.leaves().string(&"Active".into()).unwrap();
+    let variant = b.leaves().label(&"Active".into()).unwrap();
     let ty_value = b.leaves().ty(int_type());
-    let name = b.leaves().string(&"user.Extract".into()).unwrap();
+    let name = b.leaves().label(&"user.Extract".into()).unwrap();
     let function = b
         .leaves()
         .object(O::Descriptive {
@@ -595,13 +595,13 @@ fn references_to_other_blobs_follow_first_use_and_never_replace_a_root() {
 fn media_round_trips_each_source_with_its_content() {
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let string = |b: &mut crate::Builder, text: &str| b.leaves().string(&text.into()).unwrap();
-    let (mime, url, path, data) = (
-        string(&mut b, "image/png"),
-        string(&mut b, "https://example.test/a.png"),
-        string(&mut b, "/data/b.wav"),
-        string(&mut b, "UklGRg=="),
+    let label = |b: &mut crate::Builder, text: &str| b.leaves().label(&text.into()).unwrap();
+    let (mime, url, path) = (
+        label(&mut b, "image/png"),
+        label(&mut b, "https://example.test/a.png"),
+        label(&mut b, "/data/b.wav"),
     );
+    let data = b.leaves().string(&"UklGRg==".into()).unwrap();
     let sources = [
         (Some(mime), crate::MediaSource::Url { url, data: None }),
         (

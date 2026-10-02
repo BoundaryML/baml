@@ -6,8 +6,8 @@
 //! content. A container's items are written in one run, by an operation that
 //! takes the items' source and converts each: [`Builder::list`],
 //! [`Builder::map`], [`Builder::instance`], [`Builder::arguments`]. The
-//! conversion is handed [`Leaves`], which holds strings, bigints, types and
-//! identities but cannot start another container.
+//! conversion is handed [`Leaves`], which holds strings, names, bigints,
+//! types and identities but cannot start another container.
 //!
 //! Limits are applied here, not by the caller, and what they cut shows in the
 //! capture: a container records how long its source was, and a value that
@@ -22,7 +22,7 @@ use crate::{
     Shaper, Snapshot, SnapshotPool,
     arena::{Arena, Meter},
     graph::{
-        Bigint, FunctionArgs, Graph, Limit, MapEntry, NameId, ObjectId, OwnedType, Range,
+        Bigint, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId, ObjectId, OwnedType, Range,
         SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type, TypeId, Uint8ArrayData,
     },
     hash::{self, Absorb as _},
@@ -37,11 +37,12 @@ const ARENA_ITEMS: usize = u32::MAX as usize - 1;
 /// A capture being built.
 pub struct Builder(Lease);
 
-/// What converting one value needs: the capture's strings, bigints, types and
-/// object identities.
+/// What converting one value needs: the capture's strings, names, bigints,
+/// types and object identities.
 pub struct Leaves<'b> {
     objects: &'b mut Arena<SnapshotObject>,
     strings: &'b mut Arena<BexStr>,
+    labels: &'b mut Arena<BexStr>,
     bigints: &'b mut Arena<Bigint>,
     types: &'b mut Arena<Type>,
     meter: &'b Meter,
@@ -62,8 +63,19 @@ impl Leaves<'_> {
     pub fn limits(&self) -> Limits {
         self.limits
     }
-    /// Hold a string by handle, for an object that names it. `None` when it
-    /// is over the leaf limit, or no more strings can be numbered.
+    /// Hold a name by handle: an enum variant, a function, a MIME type, a URL
+    /// or a path. It is written wherever it is used. `None` when it is over
+    /// the leaf limit, or no more names can be numbered.
+    pub fn label(&mut self, text: &BexStr) -> Option<LabelId> {
+        if !self.limits.holds_leaf(text.len()) || self.labels.len() >= ARENA_ITEMS {
+            return None;
+        }
+        let id = LabelId(u32::try_from(self.labels.len()).expect("bounded labels"));
+        self.labels.push(text.clone(), self.meter);
+        Some(id)
+    }
+    /// Hold content by handle: a string value, or a media value's text. `None`
+    /// when it is over the leaf limit, or no more strings can be numbered.
     pub fn string(&mut self, text: &BexStr) -> Option<StringId> {
         if !self.limits.holds_leaf(text.len()) || self.strings.len() >= ARENA_ITEMS {
             return None;
@@ -160,6 +172,7 @@ impl Builder {
             entries,
             bytes: _,
             strings,
+            labels,
             bigints,
             types,
             names: _,
@@ -168,6 +181,7 @@ impl Builder {
             leaves: Leaves {
                 objects,
                 strings,
+                labels,
                 bigints,
                 types,
                 meter,
