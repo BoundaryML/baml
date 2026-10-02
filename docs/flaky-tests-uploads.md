@@ -6,11 +6,11 @@ so intermittent failures are tracked per test rather than per red job.
 ## Setup
 
 Uploads are gated on the `TRUNK_ORG_TOKEN` repository secret, passed to each
-test step as the `run-tests` action's `token` input — never as an env, so the
-test command that runs PR-authored code never sees it. With no token the action
-skips the upload, which is what keeps fork PRs out. The org slug
-(`boundaryml`) and the collection short IDs are hard-coded in the workflows,
-each next to a link to that collection in the web app.
+test step as the `run-and-upload-tests` action's `token` input — never as an
+env, so the test command that runs PR-authored code never sees it. With no
+token the action skips the upload, which is what keeps fork PRs out. The org
+slug (`boundaryml`) and the collection short IDs are hard-coded in the
+workflows, each next to a link to that collection in the web app.
 
 ## Collections
 
@@ -30,11 +30,11 @@ collections restarts their flake history.
 
 ## How a job wires up
 
-Each test step is the `run-tests` action, which runs the tests, enriches the
-report, and uploads it in one step. That step fails when the tests do, and a
-failure skips the rest of the job as any failing step would. With quarantining
-off the step's outcome is the tests' own; with it on, Trunk clears failures it
-owns and the step passes when every failure is quarantined.
+Each test step is the `run-and-upload-tests` action, which runs the tests,
+enriches the report, and uploads it in one step. That step fails when the tests
+do, and a failure skips the rest of the job as any failing step would. With
+quarantining off the step's outcome is the tests' own; with it on, Trunk clears
+failures it owns and the step passes when every failure is quarantined.
 
 The tests run inside the action rather than in a step of their own because a
 failed step cannot be overridden by a later one: a separate test step would
@@ -42,7 +42,7 @@ fail the job before Trunk could clear a quarantined failure.
 
 ```yaml
 - name: "Run tests"
-  uses: ./.github/actions/run-tests
+  uses: ./.github/actions/run-and-upload-tests
   with:
     run: cargo nextest run --profile ci -p my_crate
     working-directory: baml_language

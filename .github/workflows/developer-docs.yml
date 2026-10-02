@@ -97,7 +97,7 @@ jobs:
         run: pnpm --filter app-developer-docs lint
         working-directory: typescript2
       - name: Test
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: pnpm --filter app-developer-docs test:ci
           working-directory: typescript2

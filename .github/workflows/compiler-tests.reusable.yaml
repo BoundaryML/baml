@@ -100,7 +100,7 @@ jobs:
       # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
       - name: "Run compiler, CLI, and snapshot tests"
         if: inputs.run-compiler-tests
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
           working-directory: baml_language

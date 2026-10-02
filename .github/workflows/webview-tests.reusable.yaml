@@ -118,7 +118,7 @@ jobs:
         working-directory: typescript2
 
       - name: "Run unit tests"
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: pnpm --filter app-vscode-webview test:unit:run
           working-directory: typescript2
@@ -178,7 +178,7 @@ jobs:
         working-directory: typescript2/app-vscode-webview
 
       - name: "Run browser tests"
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: pnpm --filter app-vscode-webview test:browser:run
           working-directory: typescript2

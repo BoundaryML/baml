@@ -128,7 +128,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
           working-directory: baml_language
@@ -244,7 +244,7 @@ jobs:
       - name: "Run tests with nextest"
         # The runtime corpus moved from the excluded baml_tests package into
         # baml_cli; keep its existing ownership in the snapshot job.
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
           working-directory: baml_language
@@ -468,7 +468,7 @@ jobs:
       # CLI binary e2e tests run separately after disk cleanup below.
       # Must precede the `cargo clean` below, which takes target/nextest/ too.
       - name: "Run tests"
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus)'
           working-directory: baml_language
@@ -495,7 +495,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Run CLI binary e2e tests (windows)"
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo nextest run --profile ci-cli-e2e -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --all-features
           working-directory: baml_language
@@ -1192,7 +1192,7 @@ jobs:
 
       - name: "Run sdk tests"
         if: matrix.sdk-label != 'csharp'
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
           working-directory: baml_language
@@ -1205,7 +1205,7 @@ jobs:
 
       - name: "Run C# sdk tests"
         if: matrix.sdk-label == 'csharp'
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
           working-directory: baml_language
@@ -1250,7 +1250,7 @@ jobs:
       # script and stalled the Windows job).
       - name: "Run rust bridge tests"
         if: matrix.sdk-label == 'rust'
-        uses: ./.github/actions/run-tests
+        uses: ./.github/actions/run-and-upload-tests
         with:
           run: cargo nextest run --profile ci-bridge -p baml_bridge --all-features
           working-directory: baml_language
