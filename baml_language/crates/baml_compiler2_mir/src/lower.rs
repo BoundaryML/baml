@@ -3194,6 +3194,21 @@ impl<'db> LoweringContext<'db> {
             .or_else(|| self.written_qualifier_interface_view(expr_id, member))
     }
 
+    /// Member lookup has already chosen fields and inherent methods. Only
+    /// interface methods (or accesses without a resolution record) may use
+    /// the type-based interface dispatch fallback.
+    fn allows_interface_method_dispatch(&self, access: AstExprId) -> bool {
+        use crate::inference_provider::MemberResolution;
+
+        matches!(
+            self.tir_resolution(self.expr_metadata_key(access)),
+            None | Some(MemberResolution::Method {
+                callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                ..
+            })
+        )
+    }
+
     /// The interface view used to lower a member-access expression. Optional
     /// member access has already guarded the null branch before the member is
     /// evaluated, so dispatch must use the non-null receiver type.
@@ -3203,6 +3218,9 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         member: &Name,
     ) -> Option<InterfaceTypeView> {
+        if !self.allows_interface_method_dispatch(access) {
+            return None;
+        }
         let narrowed = if matches!(
             &self.body.exprs[access],
             AstExpr::OptionalMemberAccess { .. }
@@ -3982,15 +4000,6 @@ impl<'db> LoweringContext<'db> {
     /// view of the impl whose interface (or its `requires` closure) declares it.
     /// `None` for non-concrete receivers (interfaces/type-vars take their view from
     /// the type itself) and for methods no impl provides.
-    // BUG: an inherent class method shadowed by a same-named `implements`
-    // method diverges across spellings: the checker and the UFCS/value roads
-    // resolve the INHERENT method ("class members win" ruling), but this
-    // pre-filter routes the receiver `.` call to the interface impl — so a
-    // program can type against the inherent signature and run the impl
-    // (wrong value, or a VM arity error). Predates item projections (the
-    // repro uses no qualified syntax). Fix direction: honor the ruling here
-    // (skip interface dispatch when the receiver's class declares the name
-    // inherently), or reject the shadowing at declaration like E0121.
     fn dispatch_target_for_concrete(
         &self,
         recv_ty: &Tir2Ty,
@@ -6330,6 +6339,7 @@ impl<'db> LoweringContext<'db> {
             // `resolutions` above and returns before reaching here, so the
             // receiver is always `segments[..len-1]`.
             if segments.len() >= 2
+                && self.allows_interface_method_dispatch(expr_id)
                 && let Some(recv_root) = self.path_receiver_root(expr_id, &segments[0])?
             {
                 let method_name = segments.last().unwrap().clone();
@@ -7854,7 +7864,9 @@ impl<'db> LoweringContext<'db> {
         if self.try_lower_interface_item_call(expr_id, callee, args, &dest)? {
             return Ok(());
         }
-        if let AstExpr::MemberAccess { base, member } = callee_expr {
+        if let AstExpr::MemberAccess { base, member } = callee_expr
+            && self.allows_interface_method_dispatch(callee)
+        {
             let member_name = member.clone();
             let base_id = *base;
             // BEP-044: interface-typed receiver — dispatch by type tag over
@@ -8019,6 +8031,7 @@ impl<'db> LoweringContext<'db> {
             // (expr, name) would have to prove the first load dominates the
             // second use, and these can land in different blocks.
             if segments.len() >= 2
+                && self.allows_interface_method_dispatch(callee)
                 && let Some(recv_root) = self.path_receiver_root(callee, &segments[0])?
             {
                 let method_name = segments.last().unwrap().clone();

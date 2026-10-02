@@ -6109,6 +6109,14 @@ impl<'db> InferenceContext<'db> {
         member: &baml_type::Name,
     ) -> (Ty, bool, Option<MemberResolution<'db, Ty>>) {
         let resolved = self.structurally_resolve(receiver);
+        let candidate =
+            crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
+        if candidate.is_none()
+            && let Some((field, resolution)) =
+                self.class_field_access(member_expr, &resolved, member)
+        {
+            return (field, false, resolution);
+        }
         // Callee position on a UNION: the member resolves through the
         // single interface every arm shares (TIR's rule - the union as
         // the intersection existential), `Self` bound to the union.
@@ -6167,8 +6175,6 @@ impl<'db> InferenceContext<'db> {
                 crate::method_resolution::UnionMemberLookup::NoCommonInterface => {}
             }
         }
-        let candidate =
-            crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
         // An own method does not arbitrate an interface clash: two
         // implemented interfaces declaring `member` still make the
         // unqualified access ambiguous (E0121), own method or not.
@@ -9012,6 +9018,52 @@ impl<'db> InferenceContext<'db> {
             && matches!(name.name().as_str(), "Options" | "ReservedSpan" | "SpanId")
     }
 
+    /// Class-owned fields have the same precedence in value and callee position.
+    fn class_field_access(
+        &mut self,
+        at: ExprId,
+        receiver: &Ty,
+        member: &baml_type::Name,
+    ) -> Option<(Ty, Option<MemberResolution<'db, Ty>>)> {
+        let InferTy::Class(qtn, args) = receiver.kind() else {
+            return None;
+        };
+        if member.as_str() == "_handle" && self.is_opaque_trace_type(qtn) {
+            self.pending_diags
+                .push(PendingDiag::TraceOpaqueValue { expr: at });
+            return Some((Ty::error(), None));
+        }
+        if let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
+            self.facts.definition_of(qtn)
+            && let Some((_, field_ty)) = crate::lower::class_field_types(self.db, class)
+                .iter()
+                .find(|(field, _)| field == member)
+        {
+            return Some((
+                substitute_params(&crate::impls::interned_ty(field_ty), args),
+                Some(MemberResolution::Field {
+                    class: DeclRef::Source(class),
+                    field: member.clone(),
+                }),
+            ));
+        }
+        if let Some(class) = mounted_class_loc(self.db, qtn)
+            && let Some((_, field_ty, _)) = extern_class_row(self.db, class)
+                .fields
+                .iter()
+                .find(|(field, ..)| field == member)
+        {
+            return Some((
+                substitute_params(&Ty::from_plain(field_ty), args),
+                Some(MemberResolution::Field {
+                    class: DeclRef::External(class),
+                    field: member.clone(),
+                }),
+            ));
+        }
+        None
+    }
+
     /// The resolution core behind [`InferenceContext::field_access`]:
     /// hands the resolution BACK instead of recording, so the union arm
     /// can drop its per-member recursion's resolutions (one expression,
@@ -9027,13 +9079,8 @@ impl<'db> InferenceContext<'db> {
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
         let resolved = self.structurally_resolve(base_ty);
-        if member.as_str() == "_handle"
-            && let InferTy::Class(name, _) = resolved.kind()
-            && self.is_opaque_trace_type(name)
-        {
-            self.pending_diags
-                .push(PendingDiag::TraceOpaqueValue { expr: at });
-            return (Ty::error(), None);
+        if let Some(field) = self.class_field_access(at, &resolved, member) {
+            return field;
         }
         // A union behaves as the intersection existential over the
         // interfaces every arm provides (TIR's rule): `member` resolves
@@ -9046,36 +9093,6 @@ impl<'db> InferenceContext<'db> {
         if let InferTy::Union(members) = resolved.kind() {
             let members = members.to_vec();
             return self.union_member_access(at, &resolved, &members, member);
-        }
-        if let InferTy::Class(qtn, args) = resolved.kind()
-            && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
-                self.facts.definition_of(qtn)
-            && let Some((_, field_ty)) = crate::lower::class_field_types(self.db, class)
-                .iter()
-                .find(|(field, _)| field == member)
-        {
-            return (
-                substitute_params(&crate::impls::interned_ty(field_ty), args),
-                Some(MemberResolution::Field {
-                    class: DeclRef::Source(class),
-                    field: member.clone(),
-                }),
-            );
-        }
-        if let InferTy::Class(qtn, args) = resolved.kind()
-            && let Some(class) = mounted_class_loc(self.db, qtn)
-            && let Some((_, field_ty, _)) = extern_class_row(self.db, class)
-                .fields
-                .iter()
-                .find(|(field, ..)| field == member)
-        {
-            return (
-                substitute_params(&Ty::from_plain(field_ty), args),
-                Some(MemberResolution::Field {
-                    class: DeclRef::External(class),
-                    field: member.clone(),
-                }),
-            );
         }
         if let Some(candidate) =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member)
