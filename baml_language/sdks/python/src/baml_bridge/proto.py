@@ -13,6 +13,7 @@ caller's declared Python return type plays no runtime role.
 
 from __future__ import annotations
 
+import asyncio
 import enum
 import os
 import types as python_types
@@ -26,6 +27,7 @@ from .baml_py import (
     BamlPdf,
     BamlPyHandle,
     BamlVideo,
+    cancel_function_call,
     get_runtime as _get_runtime,
     new_function_call,
     register_host_callable,
@@ -416,7 +418,7 @@ def _set_inbound_value(
     # than the media-style `class_value(name, _data: handle_value)` wrap.
     # Inbound stays a bare `BamlHandle` (key + type only) since the
     # engine's `HANDLE_TABLE` row already carries the receiver's `ty`.
-    if isinstance(value, (BamlStream, BamlFunctionSpec, BamlRuntimeValue)):
+    if isinstance(value, (BamlStream, BamlFunctionSpec, BamlRuntimeValue, BamlClosure)):
         return _set_inbound_value(
             inbound_value,
             value._to_pyhandle(),
@@ -1119,7 +1121,7 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
 
 
 class BamlClosure:
-    """A reusable, engine-owned BAML callable."""
+    """A reusable BAML callable with synchronous and asynchronous entry paths."""
 
     __slots__ = ("_handle", "_required_names", "_optional_names")
 
@@ -1137,7 +1139,12 @@ class BamlClosure:
             if param.mode == mode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
         ]
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def _to_pyhandle(self) -> BamlPyHandle:
+        return self._handle
+
+    def _encode_args(
+        self, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> Tuple[int, bytes]:
         if len(args) > len(self._required_names):
             raise TypeError(
                 f"got {len(args)} positional arguments but this BAML closure "
@@ -1157,8 +1164,24 @@ class BamlClosure:
             call_id,
             function_handle=self._handle._key_for_call(),
         )
+        return call_id, args_proto
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        _, args_proto = self._encode_args(args, kwargs)
         result_bytes = _get_runtime().call_function_sync(args_proto)
         return decode_call_result(result_bytes)
+
+    async def call_async(self, *args: Any, **kwargs: Any) -> Any:
+        """Invoke on the current application loop, with its current context."""
+        from . import _decode_call_result_async
+
+        call_id, args_proto = self._encode_args(args, kwargs)
+        try:
+            result_bytes = await _get_runtime().call_function(args_proto)
+        except asyncio.CancelledError:
+            cancel_function_call(call_id)
+            raise
+        return _decode_call_result_async(result_bytes)
 
     def __repr__(self) -> str:
         return "<BamlClosure>"

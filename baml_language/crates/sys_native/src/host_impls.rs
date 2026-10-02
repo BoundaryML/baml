@@ -47,7 +47,7 @@ impl io::IoNamespaceHost for NativeSysOps {
     fn call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
+        origin_call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
         type_arg_0: RuntimeTy,
@@ -149,7 +149,7 @@ impl io::IoNamespaceHost for NativeSysOps {
         // already-failed call) and must NOT build an `InflightGuard` (its drop
         // would evict the other call's entry). `result` already carries the
         // collision error, so the `match result` below returns it.
-        let guard = if host_dispatch::insert(call_id, completion) {
+        let guard = if host_dispatch::insert_for_call(call_id, origin_call_id, completion) {
             // RAII guard that evicts this call's in-flight table entry on drop.
             // Moved into the async future below so that if the engine drops the
             // future on cancellation (the `tokio::select!` cancel arm), the

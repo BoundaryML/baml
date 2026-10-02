@@ -240,6 +240,12 @@ class FunctionResult:
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
 
+def _complete_host_call_error(call_id: builtins.int, error: typing.Any) -> None: ...
+
+def _complete_host_call_success(call_id: builtins.int, value: typing.Any) -> None: ...
+
+def _discard_host_call_args(args: typing.Sequence[builtins.int]) -> None: ...
+
 def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     r"""
     Test-only: the outstanding ownership count of a live key — the releases it
@@ -247,10 +253,24 @@ def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     exactly-once imbalance on a shared engine-heap key, which row counts hide.
     """
 
+def _invoke_host_callable(callable: typing.Any, args: typing.Sequence[builtins.int]) -> typing.Any:
+    r"""
+    Private Python scheduler entrypoints. Decoding, callable invocation and
+    result encoding run on the selected Python thread, with the original error
+    object preserved by the existing host-value transport.
+    """
+
 def _live_handle_count() -> builtins.int:
     r"""
     Test-only: return the number of live ordinary HANDLE_TABLE rows (a
     refcounted engine-heap row counts once however many owners it has).
+    """
+
+def _register_host_call_execution(call_id: builtins.int, event_loop: typing.Any) -> builtins.bool:
+    r"""
+    Connect cancellation to the task's actual owning loop. If cancellation
+    already removed this dispatch, Python must not start its body. The hook
+    keeps the loop alive independently of the SDK entry's environment guard.
     """
 
 def _release_wire_handle(key: builtins.int) -> None:

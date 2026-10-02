@@ -134,6 +134,11 @@ export declare class BamlVideo {
   _toHandle(): BamlHandle
 }
 
+export declare function _discardHostCallArgs(args: Buffer): void
+
+/** Private adapter lookup; the C ABI and dispatch payload stay unchanged. */
+export declare function _getHostCallOrigin(callId: number): string | null
+
 /**
  * Test-only: the outstanding ownership count of a live key — the releases it
  * still owes — or `null` for a dead/unknown key. Lets an audit see an

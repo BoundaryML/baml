@@ -1,4 +1,5 @@
 import { BamlCallContext } from './native.js';
+import { captureCallbackContext } from './platform.js';
 
 export interface CallContextBinding {
     detach(): void;
@@ -11,9 +12,14 @@ export function attachCallContext(
 ): CallContextBinding {
     const serialized = callId.toString();
     ctx?._attachCallId(serialized);
+    const disposeCallbackContext = captureCallbackContext(callId);
     return {
         detach() {
-            ctx?._detachCallId(serialized);
+            try {
+                ctx?._detachCallId(serialized);
+            } finally {
+                disposeCallbackContext();
+            }
         },
     };
 }

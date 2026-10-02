@@ -6,6 +6,10 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import type { BamlPanic } from './errors.js';
+/** Capture the SDK entry, rather than the lifetime of a registered callable. */
+export declare function captureCallbackContext(callId: bigint): () => void;
+/** Each dispatch gets a child resource so enterWith cannot mutate the entry. */
+export declare function runHostCallback(callId: number, args: Buffer, callback: () => void): void;
 export declare const supportsSyncStreamPulls = true;
 export declare function handleExitPanic(code: number, _fallbackPanic: BamlPanic): never;
 //# sourceMappingURL=platform.d.ts.map

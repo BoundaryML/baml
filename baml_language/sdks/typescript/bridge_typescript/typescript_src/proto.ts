@@ -23,7 +23,7 @@ import { attachCallContext } from './call_context.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
 import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
-import { handleExitPanic } from './platform.js';
+import { handleExitPanic, runHostCallback } from './platform.js';
 import {
     registerHostOpaque,
     releaseHostOpaque,
@@ -48,6 +48,10 @@ const InboundClassValue = baml_bridge.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_bridge.cffi.v1.InboundMapEntry;
 const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
 const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
+// Keep engine closures callable in JS while retaining their native identity
+// when they cross back into BAML. Wrapping them as host callbacks would enter
+// their synchronous JS invocation and block the dispatching event loop.
+const bamlClosureHandles = new WeakMap<object, BamlHandle>();
 
 // ─── Inbound (TS → Rust) ───
 
@@ -302,6 +306,11 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         // can reconstruct a fresh stdlib wrapper without handle identity.
         iv.mediaValue = wireMedia(value);
     } else if (typeof value === 'function') {
+        const handle = bamlClosureHandles.get(value);
+        if (handle) {
+            iv.handle = { key: handle._cloneKeyForWire(), handleType: handle.handleType };
+            return;
+        }
         // Host callables cannot work on the synchronous call path —
         // fast-fail before any blocking happens (and before we register a
         // tsfn, which would otherwise be orphaned).
@@ -640,7 +649,7 @@ function decodeBamlClosure(
     const requiredNames = required.map((param, index) => param.name ?? `arg${index}`);
     const optionalNames = new Set(optional.map((param, index) => param.name ?? `arg${required.length + index}`));
 
-    return (...args: unknown[]): unknown => {
+    const closure = (...args: unknown[]): unknown => {
         if (args.length > requiredNames.length + 1) {
             throw new TypeError(
                 `got ${args.length} arguments but this BAML closure accepts ` +
@@ -673,6 +682,8 @@ function decodeBamlClosure(
         });
         return decodeCallResult(runtime.callFunctionSync(encodedArgs));
     };
+    bamlClosureHandles.set(closure, handle);
+    return closure;
 }
 
 /**
@@ -974,57 +985,65 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
 
 export function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown) {
     return (callId: number, argsBytes: Buffer): void => {
-        // Every reachable exit from this wrapper must complete `callId`
-        // exactly once — if it doesn't, the engine awaits the in-flight call
-        // forever (there is no timeout). The outer try/catch is a last-resort
-        // net: if anything below throws *after* deciding not to complete (or
-        // the normal error path itself throws), we still fire one generic
-        // completion. The branches below never both complete and fall
-        // through, so we never double-complete.
         try {
-            let args: unknown[];
-            try {
-                // Host-callable args arrive as a `BamlToHostCall` with a flat
-                // `args` list. Partition it into the positional run and the
-                // supplied optionals, then reshape into the `$opts` calling
-                // convention the callback's type advertises.
-                const { positional, optional } = decodeHostCall(argsBytes);
-                args = reshapeHostArgs(positional, optional);
-            } catch (err) {
-                sendHostCallableError(callId, err);
-                return;
-            }
-            let result: unknown;
-            try {
-                result = userFn(...args);
-            } catch (err) {
-                sendHostCallableError(callId, err);
-                return;
-            }
-            // Async callables: the wrapper resolves the promise on the libuv
-            // loop and then forwards the result. The engine has released its
-            // heap permit while awaiting `complete_host_call`, so JS-side
-            // delay is safe (mirrors the Python `run_until_complete` model).
-            if (isPromiseLike(result)) {
-                // Adopt the thenable via `Promise.resolve` rather than calling
-                // its `.then` directly: a non-compliant thenable could invoke
-                // its callbacks more than once, but `Promise.resolve(...)`
-                // collapses to a single settlement, so the call completes
-                // exactly once. The handlers only call the defended send*
-                // helpers (they can't throw synchronously).
-                Promise.resolve(result).then(
-                    (resolved) => sendHostCallableResult(callId, resolved),
-                    (err) => sendHostCallableError(callId, err)
-                );
-            } else {
-                sendHostCallableResult(callId, result);
-            }
+            runHostCallback(callId, argsBytes, () => dispatchHostCallable(userFn, callId, argsBytes));
         } catch (err) {
-            // Reached only if a send* helper or the promise plumbing threw
-            // *and* did not complete the call. Last-resort completion.
             completeHostCallLastResort(callId, err);
         }
     };
+}
+
+function dispatchHostCallable(userFn: (...args: unknown[]) => unknown, callId: number, argsBytes: Buffer): void {
+    // Every reachable exit from this wrapper must complete `callId`
+    // exactly once — if it doesn't, the engine awaits the in-flight call
+    // forever (there is no timeout). The outer try/catch is a last-resort
+    // net: if anything below throws *after* deciding not to complete (or
+    // the normal error path itself throws), we still fire one generic
+    // completion. The branches below never both complete and fall
+    // through, so we never double-complete.
+    try {
+        let args: unknown[];
+        try {
+            // Host-callable args arrive as a `BamlToHostCall` with a flat
+            // `args` list. Partition it into the positional run and the
+            // supplied optionals, then reshape into the `$opts` calling
+            // convention the callback's type advertises.
+            const { positional, optional } = decodeHostCall(argsBytes);
+            args = reshapeHostArgs(positional, optional);
+        } catch (err) {
+            sendHostCallableError(callId, err);
+            return;
+        }
+        let result: unknown;
+        try {
+            result = userFn(...args);
+        } catch (err) {
+            sendHostCallableError(callId, err);
+            return;
+        }
+        // Async callables: the wrapper resolves the promise on the libuv
+        // loop and then forwards the result. The engine has released its
+        // heap permit while awaiting `complete_host_call`, so JS-side
+        // delay is safe (mirrors the Python `run_until_complete` model).
+        if (isPromiseLike(result)) {
+            // Adopt the thenable via `Promise.resolve` rather than calling
+            // its `.then` directly: a non-compliant thenable could invoke
+            // its callbacks more than once, but `Promise.resolve(...)`
+            // collapses to a single settlement, so the call completes
+            // exactly once. The handlers only call the defended send*
+            // helpers (they can't throw synchronously).
+            Promise.resolve(result).then(
+                (resolved) => sendHostCallableResult(callId, resolved),
+                (err) => sendHostCallableError(callId, err)
+            );
+        } else {
+            sendHostCallableResult(callId, result);
+        }
+    } catch (err) {
+        // Reached only if a send* helper or the promise plumbing threw
+        // *and* did not complete the call. Last-resort completion.
+        completeHostCallLastResort(callId, err);
+    }
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
