@@ -284,7 +284,7 @@ pub const SPANS: Relation = Relation {
         ),
         value(
             "temporary_projections",
-            "model usage: model_name, model_calls (model turns), input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost (dollars; NULL for an unpriced model). On a network span, what the provider's response reported (Anthropic, OpenAI chat and responses, Gemini and Vertex, Bedrock, Jev); on a function or future span, model calls made directly in it, in recordings from before network spans only. NULL without usage",
+            "model usage: model_name, model_calls (model turns), input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost (dollars; NULL for an unpriced model). On a network span, what the provider's response reported (Anthropic, OpenAI chat and responses, Gemini and Vertex, Bedrock, Jev); on a function or future span, the model calls recorded against it, unless a request under it is priced from its response. NULL without usage",
         ),
         col(
             "span_reason",
@@ -294,18 +294,20 @@ pub const SPANS: Relation = Relation {
     ],
     view: "
 CREATE TEMP VIEW spans AS
--- Which provider a model request went to, by its URL.
-WITH network_route (url, provider) AS (VALUES
-  ('%/v1/messages%', 'anthropic'),
+-- Which provider a model request went to, by its URL. A URL can match
+-- several routes, such as a gateway's path that holds another API's: the
+-- lowest priority wins, so OpenAI's paths go before Anthropic's.
+WITH network_route (url, provider, priority) AS (VALUES
+  ('%/v1/messages%', 'anthropic', 3),
   -- Claude on Vertex: :rawPredict and :streamRawPredict.
-  ('%rawPredict%', 'anthropic'),
-  ('%/chat/completions%', 'openai_chat'),
-  ('%/responses%', 'openai_responses'),
+  ('%rawPredict%', 'anthropic', 4),
+  ('%/chat/completions%', 'openai_chat', 1),
+  ('%/responses%', 'openai_responses', 2),
   -- Gemini, also on Vertex: :generateContent and :streamGenerateContent.
-  ('%generateContent%', 'gemini'),
+  ('%generateContent%', 'gemini', 5),
   -- converse and converse-stream.
-  ('%/model/%/converse%', 'bedrock'),
-  ('%/systemone%', 'jev')),
+  ('%/model/%/converse%', 'bedrock', 6),
+  ('%/systemone%', 'jev', 7)),
 -- Where each provider's response reports its usage: JSON paths into a body,
 -- or into a stream event's data. A stream event whose usage is wrapped (in
 -- `message` or `response`) is read inside its `envelope`. `url_model`
@@ -353,13 +355,18 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   IIF(c.outcome IN (2, 3), __btel_ref(3, c.value_cas, NULL, 0), NULL) AS error_value,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
-  -- A recording with network spans (format minor 7) prices its model
-  -- requests on them; its ModelUsage would count each one twice.
-  IIF(r.format_minor >= 7, NULL,
-    (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
-       u.cache_write_tokens, u.reasoning_tokens)
-     FROM main.model_usage u WHERE u.rec = c.rec AND u.node_id = c.call_id))
-    AS temporary_projections,
+  -- The usage the stdlib recorded on this span (ModelUsage), unless a
+  -- request under it is priced from its response: a network span to a
+  -- provider's route with a recorded body, which the network branch reads.
+  -- Counting both would count that request twice.
+  (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
+     u.cache_write_tokens, u.reasoning_tokens)
+   FROM main.model_usage u WHERE u.rec = c.rec AND u.node_id = c.call_id
+     AND NOT EXISTS (SELECT 1 FROM main.network_span x
+       JOIN network_route ON x.url LIKE network_route.url
+       JOIN main.network_event v ON v.rec = x.rec AND v.span_id = x.span_id
+         AND v.name = 'data' AND v.payload_cas IS NOT NULL
+       WHERE x.rec = c.rec AND x.parent_id = c.call_id)) AS temporary_projections,
   IIF(c.late = 1, 'policy_promoted', 'other') AS span_reason,
   c.rec AS __span_id_rec, c.call_id AS __span_id_key,
   c.rec AS __future_id_rec, c.thread_id AS __future_id_key,
@@ -404,11 +411,15 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   NULL AS error_value,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
-  IIF(r.format_minor >= 7, NULL,
-    (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
-       u.cache_write_tokens, u.reasoning_tokens)
-     FROM main.model_usage u WHERE u.rec = t.rec AND u.node_id = t.thread_id))
-    AS temporary_projections,
+  -- As for a function span.
+  (SELECT __btel_usage(u.model, u.input_tokens, u.output_tokens, u.cache_read_tokens,
+     u.cache_write_tokens, u.reasoning_tokens)
+   FROM main.model_usage u WHERE u.rec = t.rec AND u.node_id = t.thread_id
+     AND NOT EXISTS (SELECT 1 FROM main.network_span x
+       JOIN network_route ON x.url LIKE network_route.url
+       JOIN main.network_event v ON v.rec = x.rec AND v.span_id = x.span_id
+         AND v.name = 'data' AND v.payload_cas IS NOT NULL
+       WHERE x.rec = t.rec AND x.parent_id = t.thread_id)) AS temporary_projections,
   'other' AS span_reason,
   t.rec AS __span_id_rec, t.thread_id AS __span_id_key,
   t.rec AS __future_id_rec, COALESCE(pt.thread_id, pc.thread_id) AS __future_id_key,
@@ -477,7 +488,7 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
      FROM (
        SELECT pv.*, COALESCE(jsonb_extract(doc.body, pv.envelope), doc.body) AS body
        FROM (SELECT network_provider.* FROM network_route JOIN network_provider USING (provider)
-             WHERE n.url LIKE network_route.url LIMIT 1) pv
+             WHERE n.url LIKE network_route.url ORDER BY network_route.priority LIMIT 1) pv
        JOIN (SELECT IIF(json_valid(raw.text), jsonb(raw.text), NULL) AS body
              FROM (SELECT __btel_body_text(e.payload_cas) AS text FROM main.network_event e
                    WHERE e.rec = n.rec AND e.span_id = n.span_id AND e.name = 'data'

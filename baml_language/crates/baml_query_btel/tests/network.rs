@@ -1136,6 +1136,13 @@ fn model_requests_are_priced_from_their_responses() {
             json!({"model": "jev-1.13.0"}),
             vec![body(&jev)],
         ),
+        // A gateway path that holds both Anthropic's and OpenAI chat's:
+        // OpenAI's route wins.
+        (
+            "https://gateway.example.com/v1/messages/chat/completions",
+            json!({"model": "gpt-6-sol"}),
+            vec![body(&chat)],
+        ),
         // Not a model provider, though its body reports usage.
         (
             "https://example.com/api",
@@ -1204,7 +1211,7 @@ fn model_requests_are_priced_from_their_responses() {
             openai.clone(),
             openai.clone(),
             openai.clone(),
-            openai,
+            openai.clone(),
             gemini("gemini-2.5-pro"),
             gemini("gemini-2.5-flash"),
             bedrock("us.anthropic.claude-opus-5-5-20260915-v1:0"),
@@ -1215,6 +1222,7 @@ fn model_requests_are_priced_from_their_responses() {
                 [Some(1_000_000), Some(5), None, None, None],
                 Some(0.042)
             ),
+            openai,
             unpriced(),
             unpriced(),
             unpriced(),
@@ -1314,6 +1322,124 @@ fn network_spans_replace_model_usage_and_older_recordings_keep_it() {
             "SELECT sum(temporary_projections['cost']) FROM spans"
         ),
         vec![vec![json!(8.0)]]
+    );
+}
+
+/// In a recording with network spans, the usage the stdlib recorded by hand
+/// is dropped only on a span with a request under it that its response
+/// prices; usage from a client that made no request stays where it was.
+#[test]
+fn hand_recorded_usage_is_dropped_only_where_a_request_prices_it() {
+    const NO_HTTP: u64 = 51;
+    const BODIES_OFF: u64 = 52;
+    const UNREAD: u64 = 102;
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path());
+    let usage = |node: u64, input: u64| proto::ModelUsage {
+        node_id: node,
+        thread_id: ROOT,
+        model: Some("claude-opus-5-5".into()),
+        input_tokens: input,
+        output_tokens: 0,
+        cache_read_tokens: None,
+        cache_write_tokens: None,
+        reasoning_tokens: None,
+    };
+    let function = |id: u64| {
+        [
+            Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                id,
+                parent_id: ROOT,
+                call_path_id: 1,
+                entered_at_ticks: 5_000,
+                inputs_cas_id: None,
+            }),
+            Event::FunctionCompletion(proto::FunctionCompletion {
+                id,
+                parent_id: ROOT,
+                node: 1 << 1,
+                entered_at_ticks: 5_000,
+                exited_at_ticks: 40_000,
+                completion_flags: 1,
+                ..Default::default()
+            }),
+        ]
+    };
+    // CALL's request is priced from its response ($4), and was also
+    // recorded by hand on CALL.
+    let mut events = function(CALL).to_vec();
+    events.extend(model_request(
+        &recording,
+        REQUEST,
+        "https://api.anthropic.com/v1/messages",
+        &json!({}),
+        &[body(
+            &json!({"model": "claude-opus-5-5", "usage": {"input_tokens": 1_000_000,
+            "output_tokens": 0}}),
+        )],
+    ));
+    // A client that made no request ($2).
+    events.extend(function(NO_HTTP));
+    // A request whose body was not recorded: only the hand-recorded usage
+    // ($1) prices it.
+    events.extend(function(BODIES_OFF));
+    events.extend([
+        Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+            id: UNREAD,
+            parent_id: BODIES_OFF,
+            call_path_id: 2,
+            started_at_ticks: 10_000,
+            method: "POST".into(),
+            url: "https://api.anthropic.com/v1/messages".into(),
+            request_cas_id: None,
+        }),
+        event(UNREAD, "data", 20_000, None),
+        complete(UNREAD, 30_000, proto::InvocationOutcome::Ok, None),
+        // The root future's own usage, from a client without a request ($0.5).
+        Event::ThreadCompletion(proto::ThreadCompletion {
+            completed_at_ticks: 60_000,
+            outcome: proto::InvocationOutcome::Ok as i32,
+            panicked: false,
+        }),
+    ]);
+    recording.write(
+        1,
+        proto::RecordingFile {
+            definitions: Some(definitions()),
+            clock_states: Some(valid()),
+            spans: Some(spans(vec![section(ROOT, events)])),
+            usage: Some(proto::UsageBatch {
+                entries: vec![
+                    usage(CALL, 1_000_000),
+                    usage(NO_HTTP, 500_000),
+                    usage(BODIES_OFF, 250_000),
+                    usage(ROOT, 125_000),
+                ],
+            }),
+            ..Default::default()
+        },
+    );
+    let mut index = index(project.path());
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT span_id, span_type, temporary_projections['cost'] FROM spans
+             WHERE temporary_projections IS NOT NULL ORDER BY span_type, 3"
+        ),
+        vec![
+            vec![recording.span(BODIES_OFF), json!("function"), json!(1.0)],
+            vec![recording.span(NO_HTTP), json!("function"), json!(2.0)],
+            vec![recording.span(ROOT), json!("future"), json!(0.5)],
+            vec![recording.span(REQUEST), json!("network_span"), json!(4.0)],
+        ]
+    );
+    // CALL's request is counted once.
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT sum(temporary_projections['cost']) FROM spans"
+        ),
+        vec![vec![json!(7.5)]]
     );
 }
 
