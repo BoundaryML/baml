@@ -15,10 +15,15 @@ pub mod baml_value;
 mod capi;
 mod completion;
 pub mod decode;
+pub mod dynamic;
 pub mod encode;
 pub mod error;
 mod function;
+mod rust_type;
+pub use rust_type::RustType;
 pub mod host_value;
+#[doc(hidden)]
+pub mod invocation;
 pub mod loader;
 pub mod runtime;
 mod spec;

@@ -843,6 +843,8 @@ public readonly partial struct BamlGeneratedCodecContext
         return async (arguments, cancellationToken) =>
         {
             ArgumentNullException.ThrowIfNull(arguments);
+            var baml = BamlInvocationPreparation.CurrentOptions;
+            if (baml is not null) cancellationToken = baml.CancellationToken;
             Baml.Cffi.NativeApi api = Baml.Cffi.NativeApi.Instance;
             Task<byte[]> completion;
             using (Baml.Cffi.BamlSafeHandleLease lease = handle.Lease())
@@ -853,7 +855,7 @@ public readonly partial struct BamlGeneratedCodecContext
                         arguments,
                         callId,
                         api),
-                    cancellationToken);
+                    cancellationToken, baml);
             }
 
             byte[] bytes = await completion.ConfigureAwait(false);
@@ -996,6 +998,11 @@ public sealed class BamlGeneratedResource : IDisposable
         ?? throw new ObjectDisposedException(nameof(BamlGeneratedResource));
 
     public bool IsClosed => Volatile.Read(ref value) is null;
+
+    public BamlGeneratedValue InvocationValue => Value;
+
+    public global::Baml.BamlHandle InvocationHandle => Value.ReadClassFields()
+        .Single(item => item.Key == "_handle").Value.ReadHandle();
 
     public BamlGeneratedResource Clone()
     {

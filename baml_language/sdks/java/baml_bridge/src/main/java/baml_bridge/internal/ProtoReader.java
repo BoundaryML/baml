@@ -1108,7 +1108,7 @@ public final class ProtoReader {
      * class / enum / recursive-alias; a union matches the wire value against the
      * declared arms in order and wraps the arm.
      */
-    static Object decodeWithDesc(byte[] valueBytes, BamlType desc, boolean lenient) {
+    public static Object decodeWithDesc(byte[] valueBytes, BamlType desc, boolean lenient) {
         if (valueBytes == null) {
             return null;
         }

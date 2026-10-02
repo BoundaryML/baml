@@ -21,6 +21,9 @@ _current_invocation = ContextVar("baml_invocation", default=None)
 
 
 def _invoke_with_frame(callback, args, frame):
+    from ._invocation import _Invocation
+
+    frame = _Invocation(frame)
     token = _current_invocation.set(frame)
     try:
         result = _invoke_host_callable(callback, args)

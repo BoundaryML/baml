@@ -88,23 +88,23 @@ class TestHostCallables {
 
     @Test
     void test_baml_closure_is_a_native_callable_with_host_language_arguments() {
-        Function<Long, Long> addTen = Fns.make_adder(10L);
+        var addTen = Fns.make_adder(10L);
         assertEquals(15L, addTen.apply(5L));
         assertEquals(17L, addTen.apply(7L));
     }
 
     @Test
     void test_baml_closure_decodes_multiple_args_and_structured_return_values() {
-        BiFunction<Long, String, Person> build = Fns.make_pair_builder(30L);
+        var build = Fns.make_pair_builder(30L);
         assertEquals(new Person("Ada", 42L), build.apply(12L, "Ada"));
         assertEquals(new Person("Grace", 35L), build.apply(5L, "Grace"));
     }
 
     @Test
     void test_baml_closure_is_reusable_and_retains_mutable_captures() {
-        java.util.function.Supplier<Long> nextValue = Fns.make_counter(40L);
-        assertEquals(41L, nextValue.get());
-        assertEquals(42L, nextValue.get());
+        var nextValue = Fns.make_counter(40L);
+        assertEquals(41L, nextValue.call());
+        assertEquals(42L, nextValue.call());
     }
 
     @Test

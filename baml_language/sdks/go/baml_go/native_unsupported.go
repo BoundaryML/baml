@@ -37,3 +37,8 @@ func nativeMediaAccess(mediaAccessor, uint64, cffi.BamlHandleType) (*string, err
 
 func nativeReleaseFunctionCall(uint64)               {}
 func nativeInvocationClockNs(uint64) (uint64, error) { return 0, unsupportedNativeOperation() }
+
+func nativeTraceSelection(uint64, uint64) ([]byte, uint64, error) {
+	return nil, 0, unsupportedNativeOperation()
+}
+func nativeInvocationContext(uint64) ([]byte, error) { return nil, unsupportedNativeOperation() }

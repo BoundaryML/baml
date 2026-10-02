@@ -222,16 +222,25 @@ impl HostExecutionLease {
         true
     }
 
-    fn frame(&self) -> PyResult<crate::py_handle::BamlPyHandle> {
+    fn frame(&self) -> PyResult<(crate::py_handle::BamlPyHandle, Vec<u8>)> {
         let frame = self
             .frame
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("callback already exited"))?;
         let key =
             crate::py_handle::handle_clone(frame.0.effective_state, "callback invocation capture")?;
-        Ok(crate::py_handle::BamlPyHandle::new(
-            key,
-            BamlHandleType::InvocationState as u64,
+        let state =
+            crate::py_handle::BamlPyHandle::new(key, BamlHandleType::InvocationState as u64);
+        let cancel = frame.0.cancel.as_ref().ok_or_else(|| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "callback has no effective cancellation token",
+            )
+        })?;
+        Ok((
+            state,
+            bridge_cffi::control_projection::clone_outbound(cancel)
+                .map_err(crate::errors::bridge_error_to_sdk_panic)?
+                .encode_to_vec(),
         ))
     }
 

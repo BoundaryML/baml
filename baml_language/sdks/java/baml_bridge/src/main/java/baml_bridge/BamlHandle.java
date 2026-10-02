@@ -136,7 +136,16 @@ public final class BamlHandle implements AutoCloseable {
      * key, so the original media/handle value stays valid after the call.
      */
     public long cloneKeyForWire() {
-        return BamlFfi.nativeHandleClone(key);
+        if (state.released.get()) throw new IllegalStateException("handle is closed");
+        long cloned = BamlFfi.nativeHandleClone(key);
+        baml_bridge.internal.EncodingScope.own(cloned, handleType);
+        return cloned;
+    }
+
+    /** Keep an independently owned reference to this row. */
+    public BamlHandle cloneOwned() {
+        if (state.released.get()) throw new IllegalStateException("handle is closed");
+        return new BamlHandle(BamlFfi.nativeHandleClone(key), handleType, classFqn);
     }
 
     /** Release the owned row eagerly (idempotent). */

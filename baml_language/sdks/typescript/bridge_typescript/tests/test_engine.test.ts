@@ -1,7 +1,7 @@
 // test_engine.test.ts — mirrors bridge_python/tests/test_engine.py
 
 import { BamlRuntime, callFunctionSync, callFunction,
-         BamlCallContext, getRuntime, getVersion } from '../dist/index.js';
+         getRuntime, getVersion } from '../dist/index.js';
 
 const BAML_SOURCE = `
 function ReturnOne() -> int {
@@ -170,15 +170,15 @@ describe('callFunction (async)', () => {
     });
 });
 
-describe('BamlCallContext', () => {
+describe('native AbortController', () => {
     test('starts not aborted', () => {
-        const ac = new BamlCallContext();
-        expect(ac.aborted).toBe(false);
+        const ac = new AbortController();
+        expect(ac.signal.aborted).toBe(false);
     });
 
     test('abort sets aborted', () => {
-        const ac = new BamlCallContext();
+        const ac = new AbortController();
         ac.abort();
-        expect(ac.aborted).toBe(true);
+        expect(ac.signal.aborted).toBe(true);
     });
 });

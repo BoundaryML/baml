@@ -1,10 +1,13 @@
 import type { BamlPanic } from './errors.js';
 import { AsyncResource, AsyncLocalStorage } from 'node:async_hooks';
-import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame, type BamlHandle } from './native.js';
+import { _startHostCallExecution, _finishHostCallExecution, _discardHostCallArgs, _hostInvocationFrame } from './native.js';
 
-const invocationFrames = new AsyncLocalStorage<BamlHandle>();
+import { Invocation } from './invocation.js';
+const invocationFrames = new AsyncLocalStorage<Invocation>();
+export function getCurrentInvocation(): Invocation | undefined { return invocationFrames.getStore(); }
+export function runWithInvocation<T>(active: Invocation, body: () => T): T { return invocationFrames.run(active, body); }
 export function currentInvocationState(): string | undefined {
-    const key = invocationFrames.getStore()?.key;
+    const key = invocationFrames.getStore()?.state.key;
     return key === undefined ? undefined : ((BigInt(key.high >>> 0) << 32n) | BigInt(key.low >>> 0)).toString();
 }
 
@@ -54,7 +57,8 @@ export function runHostCallback(
             }
         };
         try {
-            const frame = _hostInvocationFrame(lease);
+            const [state, cancel] = _hostInvocationFrame(lease);
+            const frame = new Invocation(state, cancel);
             const completion = resource.runInAsyncScope(() => invocationFrames.run(frame, callback));
             if (completion) {
                 execution.completion = completion.finally(finish);

@@ -19,6 +19,23 @@ pub struct InheritedInvocationState {
     pub(crate) host_environment: u64,
 }
 
+impl InheritedInvocationState {
+    /// Fixed context visible to a dispatched host callback, without creating
+    /// another invocation merely to inspect it.
+    pub fn trace_context(&self) -> &btel_types::context::Context {
+        &self.context
+    }
+
+    /// Observe effective cancellation without granting cancellation authority.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancellation.is_cancelled()
+    }
+
+    pub async fn cancelled(&self) {
+        self.cancellation.cancelled().await;
+    }
+}
+
 /// Engine-owned immutable callback frame and its concrete token projection.
 #[derive(Clone)]
 pub struct InvocationCapture {

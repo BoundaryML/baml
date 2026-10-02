@@ -12,7 +12,7 @@ use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
-use crate::{BridgeError, baml_to_host, error_to_outbound};
+use crate::{BridgeError, Buffer, baml_to_host, error_to_outbound};
 
 #[path = "api.rs"]
 pub mod api;
@@ -181,5 +181,54 @@ pub unsafe extern "C" fn invocation_clock_ns(call_id: u64, out_now: *mut u64) ->
             BamlCffiStatus::Ok
         }
         Err(_) => BamlCffiStatus::InvalidHandle,
+    }
+}
+
+/// Project a generated trace capability without executing a BAML call.
+/// # Safety
+/// Both outputs must point to writable storage. They remain untouched on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn trace_selection_ffi(
+    call_id: u64,
+    key: u64,
+    out_selection: *mut Buffer,
+    out_reservation: *mut u64,
+) -> BamlCffiStatus {
+    if out_selection.is_null() || out_reservation.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match std::panic::catch_unwind(|| crate::control_projection::trace_selection(call_id, key)) {
+        Ok(Ok((wire, owner))) => {
+            unsafe {
+                out_selection.write(Buffer::from(wire));
+                out_reservation.write(owner.unwrap_or(0));
+            }
+            BamlCffiStatus::Ok
+        }
+        Ok(Err(_)) => BamlCffiStatus::TypeMismatch,
+        Err(_) => BamlCffiStatus::InternalError,
+    }
+}
+
+/// Inspect a retained callback context without executing a BAML call.
+/// # Safety
+/// The output must point to writable storage and remains untouched on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn invocation_context_ffi(
+    key: u64,
+    out_context: *mut Buffer,
+) -> BamlCffiStatus {
+    if out_context.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match std::panic::catch_unwind(|| crate::control_projection::invocation_context(key)) {
+        Ok(Ok(wire)) => {
+            unsafe {
+                out_context.write(Buffer::from(wire));
+            }
+            BamlCffiStatus::Ok
+        }
+        Ok(Err(_)) => BamlCffiStatus::InvalidHandle,
+        Err(_) => BamlCffiStatus::InternalError,
     }
 }

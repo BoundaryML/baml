@@ -490,6 +490,286 @@ impl __BamlValuePrivate for wire::BamlOutboundValue {
     }
 }
 
+impl<Output: BamlValue> FunctionSpec<Output> {
+    pub fn call_with_options(
+        &self,
+        args: CallOptions,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Output, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.FunctionSpec.call",
+            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            baml.into(),
+        )
+    }
+    pub async fn call_async_with_options(
+        &self,
+        args: CallOptions,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Output, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.FunctionSpec.call",
+            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            baml.into(),
+        )
+        .await
+    }
+    pub fn parse_with_options(
+        &self,
+        json: impl Into<String>,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Output, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.FunctionSpec.parse",
+            || {
+                (
+                    crate::encode::kwargs(vec![
+                        ("self", Some(self.to_baml())),
+                        ("json", Some(json.into().to_baml())),
+                    ]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+    }
+    pub async fn parse_async_with_options(
+        &self,
+        json: impl Into<String>,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Output, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.FunctionSpec.parse",
+            || {
+                (
+                    crate::encode::kwargs(vec![
+                        ("self", Some(self.to_baml())),
+                        ("json", Some(json.into().to_baml())),
+                    ]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+        .await
+    }
+    pub fn prompt_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Prompt, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.FunctionSpec.prompt",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+    }
+    pub async fn prompt_async_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Prompt, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.FunctionSpec.prompt",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+        .await
+    }
+    pub fn build_request_with_options<Request: BamlValue>(
+        &self,
+        args: CallOptions,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Request, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.FunctionSpec.build_request",
+            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            baml.into(),
+        )
+    }
+    pub async fn build_request_async_with_options<Request: BamlValue>(
+        &self,
+        args: CallOptions,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Request, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.FunctionSpec.build_request",
+            || (args.into_kwargs(self.to_baml()), Vec::new()),
+            baml.into(),
+        )
+        .await
+    }
+    pub fn name_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<String, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.FunctionSpec.name",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+    }
+    pub async fn name_async_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<String, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.FunctionSpec.name",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+        .await
+    }
+}
+impl<T: BamlValue> Stream<T> {
+    pub fn next_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Option<T>, Error<Infallible>> {
+        let value: wire::BamlOutboundValue = crate::runtime::invoke_sync_with_options(
+            "ai.stream.Stream.next",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )?;
+        decode_stream_item(value).map_err(Error::Decode)
+    }
+    pub async fn next_async_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Option<T>, Error<Infallible>> {
+        let value: wire::BamlOutboundValue = crate::runtime::invoke_with_options(
+            "ai.stream.Stream.next",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+        .await?;
+        decode_stream_item(value).map_err(Error::Decode)
+    }
+    pub fn final_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<T, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.stream.Stream.final",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+    }
+    pub async fn final_async_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<T, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.stream.Stream.final",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+        .await
+    }
+}
+impl Prompt {
+    pub fn text_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<String, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.Prompt.text",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+    }
+    pub async fn text_async_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<String, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.Prompt.text",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+        .await
+    }
+    pub fn messages_with_options<Messages: BamlValue>(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Messages, Error<Infallible>> {
+        crate::runtime::invoke_sync_with_options(
+            "ai.Prompt.messages",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+    }
+    pub async fn messages_async_with_options<Messages: BamlValue>(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Messages, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.Prompt.messages",
+            || {
+                (
+                    crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
+                    Vec::new(),
+                )
+            },
+            baml.into(),
+        )
+        .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};

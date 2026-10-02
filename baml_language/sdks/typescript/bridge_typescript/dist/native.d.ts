@@ -29,15 +29,6 @@ export declare class BamlAudio {
   _toHandle(): BamlHandle
 }
 
-/** A call context for cancelling BAML function calls. */
-export declare class BamlCallContext {
-  constructor()
-  abort(): void
-  get aborted(): boolean
-  _attachCallId(callId: string): void
-  _detachCallId(callId: string): void
-}
-
 /**
  * Base class for all opaque BAML handles.
  *
@@ -156,7 +147,11 @@ export declare function _getHostCallOrigin(callId: number): string | null
  */
 export declare function _handleRefcount(key: HandleKey): number | null
 
-export declare function _hostInvocationFrame(execution: object): BamlHandle
+export declare function _hostInvocationFrame(execution: object): [BamlHandle, Buffer]
+
+export declare function _invocationContext(handle?: BamlHandle | undefined | null): Buffer
+
+export declare function _isInvocationCancelled(handle: BamlHandle): boolean
 
 /**
  * Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap
@@ -185,6 +180,14 @@ export declare function _seedHeapHandle(slabKey: number): [HandleKey, number]
 
 /** Claim actual JS execution atomically against waiter retirement. */
 export declare function _startHostCallExecution(execution: object): string | null
+
+export declare function _traceSelection(handle: BamlHandle, callId: string): [Buffer, BamlHandle | undefined | null]
+
+/**
+ * The JS Invocation owns this watcher. A weak TSFN neither retains its JS
+ * owner nor pins the event loop; dropping the owner stops native observation.
+ */
+export declare function _watchInvocationCancellation(handle: BamlHandle, callback: () => void): object
 
 export declare function cancelFunctionCall(callId: string): boolean
 

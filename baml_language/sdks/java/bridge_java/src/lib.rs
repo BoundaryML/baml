@@ -26,7 +26,7 @@ use bridge_cffi::handle_cffi::media_kind_from_proto;
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
 use jni::{
     JNIEnv, JavaVM,
-    objects::{GlobalRef, JByteArray, JClass, JString, JValue},
+    objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue},
     sys::{jboolean, jint, jlong},
 };
 
@@ -226,7 +226,7 @@ const COMPLETE_CALL_SIG: &str = "(J[B)V";
 
 /// The Java host-dispatch route: `static void hostDispatch(long, long, byte[])`.
 const HOST_DISPATCH_METHOD: &str = "hostDispatch";
-const HOST_DISPATCH_SIG: &str = "(JJ[BJ)V";
+const HOST_DISPATCH_SIG: &str = "(JJ[BJ[B)V";
 /// The Java host-release route: `static void hostRelease(long)`.
 const HOST_RELEASE_METHOD: &str = "hostRelease";
 const HOST_RELEASE_SIG: &str = "(J)V";
@@ -505,6 +505,20 @@ extern "C" fn host_dispatch_trampoline(request: *const u8, length: usize) {
     let id = wire.callback_id;
     let key = wire.host_value_key;
     let args = wire.application_args.clone();
+    let cancel = match wire
+        .cancel
+        .as_ref()
+        .map(bridge_cffi::control_projection::clone_outbound)
+        .transpose()
+    {
+        Ok(Some(cancel)) => cancel,
+        _ => {
+            drop(bridge_ctypes::OwnedHostInvocation(wire));
+            complete_host_call_bridge_failure(id);
+            return;
+        }
+    };
+    let cancel_bytes = prost::Message::encode_to_vec(&cancel);
     let Some(state) = HANDLE_TABLE.clone_handle(wire.effective_state) else {
         drop(bridge_ctypes::OwnedHostInvocation(wire));
         complete_host_call_bridge_failure(id);
@@ -514,7 +528,7 @@ extern "C" fn host_dispatch_trampoline(request: *const u8, length: usize) {
         .lock()
         .unwrap()
         .insert(id, bridge_ctypes::OwnedHostInvocation(wire));
-    if let Err(error) = dispatch_into_java(key, id, &args, state) {
+    if let Err(error) = dispatch_into_java(key, id, &args, state, &cancel_bytes) {
         eprintln!("bridge_java: host dispatch failed: {error}");
         HANDLE_TABLE.release(state);
         complete_host_call_bridge_failure(id);
@@ -539,11 +553,15 @@ fn dispatch_into_java(
     call_id: u32,
     bytes: &[u8],
     state: u64,
+    cancel: &[u8],
 ) -> Result<(), String> {
     with_java_callback("host dispatch", |env, class| {
         let payload = env
             .byte_array_from_slice(bytes)
             .map_err(|error| format!("args array alloc failed: {error}"))?;
+        let cancel = env
+            .byte_array_from_slice(cancel)
+            .map_err(|error| error.to_string())?;
         env.call_static_method(
             class,
             HOST_DISPATCH_METHOD,
@@ -553,6 +571,7 @@ fn dispatch_into_java(
                 JValue::Long(u64::from(call_id) as jlong),
                 JValue::from(&payload),
                 JValue::Long(state as jlong),
+                JValue::from(&cancel),
             ],
         )
         .map(|_| ())
@@ -645,6 +664,64 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInvocationClockNs(
         Err(error) => {
             throw_runtime_exception(&mut env, &error.to_string());
             0
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeTraceSelection<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    call: jlong,
+    key: jlong,
+) -> JObject<'local> {
+    let (bytes, owner) =
+        match bridge_cffi::control_projection::trace_selection(call as u64, key as u64) {
+            Ok(value) => value,
+            Err(error) => {
+                throw_runtime_exception(&mut env, &error.to_string());
+                return JObject::default();
+            }
+        };
+    let result = (|| -> jni::errors::Result<JObject<'local>> {
+        let payload = env.byte_array_from_slice(&bytes)?;
+        env.new_object(
+            "baml_bridge/InvocationOptions$TracePayload",
+            "([BJ)V",
+            &[
+                JValue::from(&payload),
+                JValue::Long(owner.unwrap_or(0) as jlong),
+            ],
+        )
+    })();
+    match result {
+        Ok(value) => value,
+        Err(error) => {
+            if let Some(owner) = owner {
+                HANDLE_TABLE.release(owner);
+            }
+            throw_runtime_exception(&mut env, &error.to_string());
+            JObject::default()
+        }
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInvocationContext<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    key: jlong,
+) -> JByteArray<'local> {
+    match bridge_cffi::control_projection::invocation_context(key as u64) {
+        Ok(bytes) => match env.byte_array_from_slice(&bytes) {
+            Ok(array) => array,
+            Err(error) => {
+                throw_runtime_exception(&mut env, &error.to_string());
+                JByteArray::default()
+            }
+        },
+        Err(error) => {
+            throw_runtime_exception(&mut env, &error.to_string());
+            JByteArray::default()
         }
     }
 }

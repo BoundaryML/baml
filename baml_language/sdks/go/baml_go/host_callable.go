@@ -359,8 +359,10 @@ func completeHostCallInput(callID uint32, isError bool, input Input) {
 
 type invocationStateContextKey struct{}
 type invocationStateCarrier struct {
-	state uint64
-	owner *resultOwner
+	state       uint64
+	owner       *resultOwner
+	cancel      *cffi.BamlOutboundValue
+	cancelOwner *resultOwner
 }
 type hostInvocationFrame struct {
 	ctx    context.Context
@@ -383,14 +385,14 @@ func dispatchHostInvocation(payload []byte) {
 	}
 	carrier := &invocationStateCarrier{state: envelope.EffectiveState,
 		owner: ownOutboundHandleKeys(map[uint64]struct{}{envelope.EffectiveState: {}})}
-	cancelOwner := ownOutboundHandles(envelope.Cancel)
+	carrier.cancel = envelope.Cancel
+	carrier.cancelOwner = ownOutboundHandles(envelope.Cancel)
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), invocationStateContextKey{}, carrier))
 	hostInvocationCancellations.Store(envelope.CallbackId, cancel)
 	var once sync.Once
 	frame := &hostInvocationFrame{ctx: ctx, finish: func() {
 		once.Do(func() {
 			hostInvocationCancellations.Delete(envelope.CallbackId)
-			releaseResultOwner(cancelOwner)
 		})
 	}}
 	dispatchHostCall(envelope.HostValueKey, envelope.CallbackId, envelope.ApplicationArgs, frame)

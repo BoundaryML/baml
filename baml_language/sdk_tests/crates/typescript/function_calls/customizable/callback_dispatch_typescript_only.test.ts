@@ -1,10 +1,11 @@
+import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 /** TypeScript-only callback dispatch.
  * Node sync entries reject host callbacks. Promises use application-owned
  * AbortSignals; these assertions do not promise bridge-driven cancellation.
  * Native-blocking cases require an external process deadline.
  */
 import "./baml_sdk/index.js";
-import { BamlCallContext, BamlAbortError } from "@boundaryml/baml-bridge";
+import { BamlAbortError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
 import { isTestRuntime } from "./test_runtime.js";
@@ -318,7 +319,7 @@ describe.runIf(isTestRuntime("node"))(
     // SDK_PARITY_LINT(skip): Node AsyncResource destruction and AsyncLocalStorage
     it("cancelled_waiter_keeps_host_resource_until_promise_exit_typescript_only", async () => {
       const request = new AsyncLocalStorage<string>();
-      const ctx = new BamlCallContext();
+      const ctx = CancelToken.new();
       const resources = new Set<number>();
       const destroyed = new Set<number>();
       const hook = createHook({
@@ -344,12 +345,12 @@ describe.runIf(isTestRuntime("node"))(
         }
       };
       const pending = request.run("original", () => baml.call_int_callback_async(
-        callback as unknown as (value: number) => number, 6, { $ctx: ctx },
+        callback as unknown as (value: number) => number, 6, { $baml: { cancel: ctx } },
       ));
       try {
         await entered;
         expect(resources.has(resourceId)).toBe(true);
-        ctx.abort();
+        ctx.cancel();
         await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
         await nextTurn();
         expect(cleanedUp).toBe(false);

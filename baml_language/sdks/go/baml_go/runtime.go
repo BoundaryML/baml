@@ -303,8 +303,8 @@ type Value struct {
 
 // Call invokes one fully-qualified BAML callable and blocks until it returns
 // or the context is cancelled.
-func Call(ctx context.Context, function string, args map[string]Input) (Value, error) {
-	return callWithTypeArgs(ctx, function, args, nil)
+func Call(ctx context.Context, function string, args map[string]Input, options ...CallOption) (Value, error) {
+	return CallWithPreparedOptions(ctx, function, args, ApplyInvocationOptions(args, nil, options...))
 }
 
 // TypeArgument binds one BAML callable type parameter to a concrete runtime
@@ -316,8 +316,11 @@ type TypeArgument struct {
 }
 
 type callOptions struct {
-	arguments map[string]Input
-	typeArgs  []TypeArgument
+	arguments   map[string]Input
+	typeArgs    []TypeArgument
+	controls    InvocationControls
+	controlsSet bool
+	err         error
 }
 
 // CallOption is shared by every generated callable option type. WithTypeArg
@@ -363,22 +366,26 @@ func ApplyCallOptions(arguments map[string]Input, defaults []TypeArgument, value
 // CallWithTypeArgs invokes a generic BAML callable with explicit, named type
 // bindings. Bindings use structured BAML descriptors so nested classes,
 // containers, and unions retain their complete runtime identity.
-func CallWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
-	return callWithTypeArgs(ctx, function, args, typeArgs)
+func CallWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument, options ...CallOption) (Value, error) {
+	return CallWithPreparedOptions(ctx, function, args, ApplyInvocationOptions(args, typeArgs, options...))
 }
 
-func callWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
+func callWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument, controls ...InvocationControls) (Value, error) {
 	if ctx == nil {
 		return Value{}, errors.New("baml_go.Call: nil context")
 	}
-	if err := ctx.Err(); err != nil {
+	waitContext := ctx
+	if function == "baml.spawn.CancelToken.cancel" || function == "baml.spawn.CancelToken.is_cancelled" {
+		waitContext = context.WithoutCancel(ctx)
+	}
+	if err := waitContext.Err(); err != nil {
 		return Value{}, err
 	}
 	if strings.IndexByte(function, 0) >= 0 {
 		return Value{}, errors.New("baml_go.Call: function name contains a NUL byte")
 	}
 
-	if err := ensureNativeRuntime(ctx); err != nil {
+	if err := ensureNativeRuntime(waitContext); err != nil {
 		return Value{}, err
 	}
 	registerCallbackOnce.Do(nativeRegisterCallback)
@@ -389,7 +396,8 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	}
 	defer nativeReleaseFunctionCall(engineCallID)
 	defer runtime.KeepAlive(ctx)
-	options, err := invocationOptions(ctx, engineCallID)
+	options, controlTransaction, err := prepareInvocation(waitContext, engineCallID, controls)
+	defer controlTransaction.rollback()
 	if err != nil {
 		return Value{}, err
 	}
@@ -411,7 +419,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	nativeCall(encoded, callbackID)
 	transaction.commitHostValues()
 
-	payload, err := waitForCallResult(ctx, call.result)
+	payload, err := waitForCallResult(waitContext, call.result)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
 		nativeCancel(engineCallID)
@@ -420,7 +428,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	return decodeResult(payload)
 }
 
-func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (Value, error) {
+func callHandle(ctx context.Context, handleKey uint64, args map[string]Input, controls ...InvocationControls) (Value, error) {
 	if ctx == nil {
 		return Value{}, errors.New("baml_go.Function.Call: nil context")
 	}
@@ -441,7 +449,8 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 	}
 	defer nativeReleaseFunctionCall(engineCallID)
 	defer runtime.KeepAlive(ctx)
-	options, err := invocationOptions(ctx, engineCallID)
+	options, controlTransaction, err := prepareInvocation(ctx, engineCallID, controls)
+	defer controlTransaction.rollback()
 	if err != nil {
 		return Value{}, err
 	}
@@ -480,6 +489,13 @@ func waitForCallResult(ctx context.Context, result <-chan []byte) ([]byte, error
 		// cancellation panic envelope.
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		// The runtime and Go timer can observe the same deadline in different
+		// orders. Once the caller deadline has elapsed, wait for its timer to
+		// publish the exact context error instead of exposing a native panic.
+		if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) && ctx.Done() != nil {
+			<-ctx.Done()
+			return nil, ctx.Err()
 		}
 		return payload, nil
 	case <-ctx.Done():
@@ -804,11 +820,13 @@ func invocationOptions(ctx context.Context, id uint64) (*cffi.InvocationOptions,
 		options.InheritedState = carrier.state
 	}
 	if deadline, ok := ctx.Deadline(); ok {
+		// Sample the remaining host budget first so the conversion cannot
+		// shorten it by the time spent querying the runtime's clock.
+		remaining := time.Until(deadline)
 		now, err := nativeInvocationClockNs(id)
 		if err != nil {
 			return nil, err
 		}
-		remaining := time.Until(deadline)
 		absolute := now
 		if remaining > 0 {
 			if uint64(remaining) > math.MaxUint64-now {

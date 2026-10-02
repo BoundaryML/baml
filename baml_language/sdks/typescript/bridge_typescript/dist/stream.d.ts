@@ -6,6 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { BamlHandle } from './native.js';
+import type { InvocationOptions } from './invocation.js';
 /**
  * A live `ai.stream.Stream<T>`. A partial and the settled value share the one
  * type: a partial is `T` parsed from the text received so far.
@@ -18,10 +19,18 @@ export declare class BamlStream<T> {
     static _fromHandle<T>(handle: BamlHandle, classFqn: string): BamlStream<T>;
     /** Internal: expose the inner BamlHandle for inbound encode. */
     _toHandle(): BamlHandle;
-    next(): T;
-    nextAsync(): Promise<T>;
-    final(): T;
-    finalAsync(): Promise<T>;
+    next(options?: {
+        $baml?: InvocationOptions | null;
+    }): T;
+    nextAsync(options?: {
+        $baml?: InvocationOptions | null;
+    }): Promise<T>;
+    final(options?: {
+        $baml?: InvocationOptions | null;
+    }): T;
+    finalAsync(options?: {
+        $baml?: InvocationOptions | null;
+    }): Promise<T>;
     private _callSync;
     private _callAsync;
 }

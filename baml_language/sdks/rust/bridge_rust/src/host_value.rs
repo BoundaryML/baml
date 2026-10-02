@@ -267,6 +267,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
                     return Err("host callback cancelled before execution".into());
                 }
                 let _scope = SyncFrameScope::enter(sync_frame);
+                let _dispatch = BlockingDispatchScope::enter();
                 (callable.0)(call.args)
             })
             .await
@@ -849,15 +850,16 @@ thread_local! { static SYNC_FRAME: std::cell::RefCell<Option<Arc<CallbackFrame>>
 tokio::task_local! { static ASYNC_FRAME: Arc<CallbackFrame>; }
 
 pub(crate) fn current_invocation_state() -> u64 {
-    ASYNC_FRAME
-        .try_with(|frame| frame.envelope.effective_state)
-        .ok()
+    SYNC_FRAME
+        .with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .map(|frame| frame.envelope.effective_state)
+        })
         .or_else(|| {
-            SYNC_FRAME.with(|slot| {
-                slot.borrow()
-                    .as_ref()
-                    .map(|frame| frame.envelope.effective_state)
-            })
+            ASYNC_FRAME
+                .try_with(|frame| frame.envelope.effective_state)
+                .ok()
         })
         .unwrap_or(0)
 }
@@ -904,7 +906,7 @@ impl Drop for CallbackFrame {
     }
 }
 
-fn release_callback_value(api: &capi::Api, value: wire::BamlOutboundValue) {
+pub(crate) fn release_callback_value(api: &capi::Api, value: wire::BamlOutboundValue) {
     use wire::baml_outbound_value::Value;
     match value.value {
         Some(Value::HandleValue(handle))
@@ -941,5 +943,108 @@ fn release_callback_value(api: &capi::Api, value: wire::BamlOutboundValue) {
             }
         }
         _ => {}
+    }
+}
+
+/// A captured inheritance scope owns state independently of the callback ID.
+#[derive(Clone)]
+pub struct Invocation(Arc<CallbackFrame>);
+impl Invocation {
+    pub fn current() -> Option<Self> {
+        let frame = SYNC_FRAME
+            .with(|slot| slot.borrow().clone())
+            .or_else(|| ASYNC_FRAME.try_with(Arc::clone).ok())?;
+        let api = capi::api().expect("live callback runtime");
+        let mut key = 0;
+        // SAFETY: the active callback owns its state through this capture.
+        #[expect(unsafe_code)]
+        let status = unsafe { (api.handle_clone)(frame.envelope.effective_state, &raw mut key) };
+        assert_eq!(status, 0, "capture live invocation state");
+        let cancel = frame.envelope.cancel.as_ref().map(clone_callback_value);
+        Some(Self(Arc::new(CallbackFrame {
+            envelope: wire::HostInvocation {
+                effective_state: key,
+                cancel,
+                ..Default::default()
+            },
+            cancelled: std::sync::atomic::AtomicBool::new(false),
+        })))
+    }
+    #[doc(hidden)]
+    pub fn cancel<T: crate::BamlValue>(&self) -> T {
+        let wire = clone_callback_value(
+            self.0
+                .envelope
+                .cancel
+                .as_ref()
+                .expect("effective callback token"),
+        );
+        T::from_baml(wire).expect("generated effective cancellation projection")
+    }
+    pub fn run<T>(&self, body: impl FnOnce() -> T) -> T {
+        let _scope = SyncFrameScope::enter(Arc::clone(&self.0));
+        body()
+    }
+    pub fn scope<F: Future>(&self, future: F) -> impl Future<Output = F::Output> + use<F> {
+        ASYNC_FRAME.scope(Arc::clone(&self.0), future)
+    }
+}
+pub(crate) fn clone_callback_value(value: &wire::BamlOutboundValue) -> wire::BamlOutboundValue {
+    use wire::baml_outbound_value::Value;
+    let mut value = value.clone();
+    match value.value.as_mut() {
+        Some(Value::HandleValue(handle))
+            if handle.handle_type != 15 && handle.handle_type != 16 =>
+        {
+            let api = capi::api().expect("live invocation runtime");
+            let mut key = 0;
+            // SAFETY: the frame owns the borrowed original and output is writable.
+            #[expect(unsafe_code)]
+            let status = unsafe { (api.handle_clone)(handle.key, &raw mut key) };
+            assert_eq!(status, 0, "clone effective token projection");
+            handle.key = key;
+        }
+        Some(Value::ListValue(list)) => {
+            for item in &mut list.items {
+                *item = clone_callback_value(item);
+            }
+        }
+        Some(Value::MapValue(map)) => {
+            for entry in &mut map.entries {
+                if let Some(item) = &mut entry.value {
+                    *item = clone_callback_value(item);
+                }
+            }
+        }
+        Some(Value::ClassValue(class)) => {
+            for entry in &mut class.fields {
+                if let Some(item) = &mut entry.value {
+                    *item = clone_callback_value(item);
+                }
+            }
+        }
+        Some(Value::UnionVariantValue(union)) => {
+            if let Some(item) = &mut union.value {
+                **item = clone_callback_value(item);
+            }
+        }
+        _ => {}
+    }
+    value
+}
+
+thread_local! { static BLOCKING_DISPATCH: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+pub(crate) fn in_blocking_dispatch() -> bool {
+    BLOCKING_DISPATCH.with(std::cell::Cell::get)
+}
+struct BlockingDispatchScope(bool);
+impl BlockingDispatchScope {
+    fn enter() -> Self {
+        Self(BLOCKING_DISPATCH.with(|slot| slot.replace(true)))
+    }
+}
+impl Drop for BlockingDispatchScope {
+    fn drop(&mut self) {
+        BLOCKING_DISPATCH.with(|slot| slot.set(self.0));
     }
 }

@@ -139,6 +139,14 @@ pub type BamlInvocationClockNsFn =
 pub type BamlReleaseFunctionCallFn = extern "C" fn(call_id: u64) -> i32;
 pub type BamlRegisterHostDispatchV2Fn = extern "C" fn(callback: BamlHostDispatchV2);
 pub type BamlRegisterHostCancelCallbackFn = extern "C" fn(callback: BamlHostCancel);
+pub type BamlTraceSelectionFn = unsafe extern "C" fn(
+    call_id: u64,
+    key: u64,
+    out_selection: *mut Buffer,
+    out_reservation: *mut u64,
+) -> BamlCffiStatus;
+pub type BamlInvocationContextFn =
+    unsafe extern "C" fn(key: u64, out_context: *mut Buffer) -> BamlCffiStatus;
 
 /// First version of the shared BAML C API.
 ///
@@ -281,6 +289,12 @@ pub struct BamlApiV1 {
     pub register_host_dispatch_v2: BamlRegisterHostDispatchV2Fn,
     /// Request cooperative cancellation; completion still reports actual exit.
     pub register_host_cancel_callback: BamlRegisterHostCancelCallbackFn,
+    /// Project generated trace options without admitting another invocation.
+    /// The caller owns the returned buffer and optional reservation handle.
+    pub trace_selection: BamlTraceSelectionFn,
+    /// Read a detached generated trace.Context; key zero reads empty context.
+    /// The caller owns the returned buffer. This never admits an invocation.
+    pub invocation_context: BamlInvocationContextFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -314,6 +328,8 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     release_function_call: crate::release_function_call,
     register_host_dispatch_v2: crate::register_host_dispatch_v2,
     register_host_cancel_callback: crate::register_host_cancel_callback,
+    trace_selection: crate::trace_selection_ffi,
+    invocation_context: crate::invocation_context_ffi,
 };
 
 /// Return the immutable version-1 BAML C API function table.

@@ -1,10 +1,11 @@
+import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 /** Shared callable dispatch contracts. Names/assertions match every SDK port.
  * Use the language's supported entry/callback forms; do not require a
  * particular thread, event loop, or context carrier in these shared cases.
  * Casts only admit Promise results omitted by current generated callback types.
  */
 import "./baml_sdk/index.js";
-import { BamlCallContext, BamlAbortError } from "@boundaryml/baml-bridge";
+import { BamlAbortError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
 
@@ -87,7 +88,7 @@ describe("callback_dispatch", () => {
   });
   it("cancelled_waiter_does_not_end_host_execution", async () => {
     for (const outcome of ["return", "throw"]) {
-      const ctx = new BamlCallContext();
+      const ctx = CancelToken.new();
       let markEntered!: () => void;
       const entered = new Promise<void>((resolve) => { markEntered = resolve; });
       let release!: () => void;
@@ -107,11 +108,11 @@ describe("callback_dispatch", () => {
         return value + 1;
       };
       const pending = baml.call_int_callback_async(
-        callback as unknown as (value: number) => number, 6, { $ctx: ctx },
+        callback as unknown as (value: number) => number, 6, { $baml: { cancel: ctx } },
       );
       try {
         await entered;
-        ctx.abort();
+        ctx.cancel();
         await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
         expect(exits).toEqual([]);
         release();

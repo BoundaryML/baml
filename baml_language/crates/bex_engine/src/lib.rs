@@ -4209,7 +4209,8 @@ impl BexEngine {
                 && self.resolve_handle(thread.proof(), handle).is_none()
             {
                 return Err(EngineError::TypeMismatch {
-                    message: "cancel token belongs to a different runtime".into(),
+                    message: "cancel token handle is stale or belongs to a different runtime"
+                        .into(),
                 });
             }
             let value = self.convert_external_to_vm_value(thread, token.clone())?;
@@ -5820,7 +5821,22 @@ impl BexEngine {
                                         Arc::new(state),
                                     )],
                                 );
-                                Some(self.vm_arg_to_bex_value(projection))
+                                // Export the same generated CancelToken value
+                                // as a normal return, not an untyped heap shell.
+                                // Dispatch adapters must expose its existing
+                                // methods without inventing another token type.
+                                let value = self.vm_arg_to_bex_value(projection);
+                                Some(
+                                    bex_heap::BexValue::from(&value)
+                                        .as_owned_with_package_handles(self.heap(), thread.proof())
+                                        .map_err(|error| {
+                                            EngineError::VmInternalError(
+                                                bex_vm::errors::VmInternalError::BridgeFailure {
+                                                    message: error.to_string(),
+                                                },
+                                            )
+                                        })?,
+                                )
                             } else {
                                 None
                             };

@@ -3,10 +3,10 @@
 //! This crate provides the same Python API as `language_client_python`
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
-mod baml_call_context;
 mod callback_dispatch;
 mod errors;
 pub mod host_value;
+mod invocation;
 mod media;
 mod py_handle;
 pub mod runtime;
@@ -76,8 +76,9 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     })
     .map_err(PyImportError::new_err)?;
 
-    m.add_class::<baml_call_context::BamlCallContext>()?;
     m.add_class::<py_handle::BamlPyHandle>()?;
+    m.add_wrapped(wrap_pyfunction!(invocation::_trace_selection))?;
+    m.add_wrapped(wrap_pyfunction!(invocation::_invocation_context))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_generic_media_handle))?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_heap_handle))?;

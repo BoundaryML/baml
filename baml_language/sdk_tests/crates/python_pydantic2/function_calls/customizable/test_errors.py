@@ -32,7 +32,8 @@ import traceback
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-from baml_bridge import BamlCallContext, BamlCancelledError, call_function, get_runtime
+from baml_bridge import BamlCancelledError, call_function, get_runtime
+from baml_sdk.baml.spawn import CancelToken
 from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
@@ -110,15 +111,15 @@ def test_errors_user_panic_surfaces_as_baml_panic():
 async def test_errors_cancellation_surfaces_as_baml_panic():
     """Async cancellation maps to `asyncio.CancelledError` with BAML reason."""
     rt = get_runtime()
-    ctx = BamlCallContext()
+    ctx = CancelToken.new()
 
     async def _abort_soon():
         await asyncio.sleep(0.1)
-        ctx.abort()
+        ctx.cancel()
 
     abort_task = asyncio.create_task(_abort_soon())
     with pytest.raises(asyncio.CancelledError) as exc_info:
-        await call_function(rt, "user.throws_test.SleepMs", {"ms": 2000}, _ctx=ctx)
+        await call_function(rt, "user.throws_test.SleepMs", {"ms": 2000}, _baml={"cancel": ctx})
 
     await abort_task
     assert isinstance(exc_info.value.reason, BamlCancelledError)

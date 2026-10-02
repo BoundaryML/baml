@@ -49,6 +49,15 @@ impl CallAllocationTable {
         Ok(id)
     }
 
+    pub fn owner(&self, id: u64) -> Result<Arc<dyn Bex>, BridgeError> {
+        let calls = self.calls.lock().unwrap_or_else(PoisonError::into_inner);
+        let allocation = calls
+            .get(&id)
+            .ok_or(BridgeError::UnknownCallAllocation(id))?;
+        let allocation = allocation.lock().unwrap_or_else(PoisonError::into_inner);
+        Ok(Arc::clone(&allocation.owner))
+    }
+
     pub fn clock_ns(&self, id: u64) -> Result<u64, BridgeError> {
         let calls = self.calls.lock().unwrap_or_else(PoisonError::into_inner);
         let allocation = calls

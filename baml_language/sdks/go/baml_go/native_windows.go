@@ -61,7 +61,7 @@ static const char *baml_open_library(const wchar_t *path) {
 		FreeLibrary(handle);
 		return baml_loader_error;
 	}
-	const size_t required_size = BAML_API_V1_MIN_SIZE;
+	const size_t required_size = sizeof(BamlApiV1);
 	if (api->struct_size < required_size) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "truncated BAML ABI v1 table: got %zu bytes, need at least %zu", api->struct_size, required_size);
 		FreeLibrary(handle);
@@ -84,7 +84,7 @@ static const char *baml_open_library(const wchar_t *path) {
 		api->initialize_runtime_from_blob_with_metadata == NULL ||
 		api->invocation_clock_ns == NULL || api->release_function_call == NULL ||
 		api->register_host_dispatch_v2 == NULL ||
-		api->register_host_cancel_callback == NULL || api->invocation_protocol_version == NULL) {
+		api->register_host_cancel_callback == NULL || api->invocation_protocol_version == NULL || api->trace_selection == NULL || api->invocation_context == NULL) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "BAML ABI v1 table contains a NULL required function");
 		FreeLibrary(handle);
 		return baml_loader_error;
@@ -127,6 +127,8 @@ static void baml_register_go_unhandled_spawn_error_callback(void) { baml_api->re
 static BamlBuffer baml_shutdown(void) { return baml_api->shutdown_runtime(); }
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
 static int32_t baml_release_function_call(uint64_t id) { return baml_api->release_function_call(id); }
+static uint32_t baml_trace_selection(uint64_t id, uint64_t key, BamlBuffer *out, uint64_t *owner) { return baml_api->trace_selection(id, key, out, owner); }
+static uint32_t baml_invocation_context(uint64_t key, BamlBuffer *out) { return baml_api->invocation_context(key, out); }
 static uint32_t baml_invocation_clock_ns(uint64_t id, uint64_t *out) { return baml_api->invocation_clock_ns(id, out); }
 static void baml_call_function(const uint8_t *args, size_t length, uint32_t callback_id) { baml_api->call_function(args, length, callback_id); }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
@@ -383,4 +385,22 @@ func bamlGoHostCancel(callID C.uint32_t) { cancelHostInvocation(uint32(callID)) 
 //export bamlGoHostRelease
 func bamlGoHostRelease(hostValueKey C.uint64_t) {
 	unregisterHostValue(uint64(hostValueKey))
+}
+
+func nativeTraceSelection(id, key uint64) ([]byte, uint64, error) {
+	var output C.BamlBuffer
+	var owner C.uint64_t
+	if status := C.baml_trace_selection(C.uint64_t(id), C.uint64_t(key), &output, &owner); status != C.BAML_CFFI_STATUS_OK {
+		return nil, 0, fmt.Errorf("invalid trace selection: status %d", status)
+	}
+	defer C.baml_free_buffer(output)
+	return C.GoBytes(unsafe.Pointer(output.ptr), C.int(output.len)), uint64(owner), nil
+}
+func nativeInvocationContext(key uint64) ([]byte, error) {
+	var output C.BamlBuffer
+	if status := C.baml_invocation_context(C.uint64_t(key), &output); status != C.BAML_CFFI_STATUS_OK {
+		return nil, fmt.Errorf("invalid invocation context: status %d", status)
+	}
+	defer C.baml_free_buffer(output)
+	return C.GoBytes(unsafe.Pointer(output.ptr), C.int(output.len)), nil
 }

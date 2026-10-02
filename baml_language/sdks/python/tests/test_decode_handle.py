@@ -52,6 +52,18 @@ def test_function_ref_decodes_to_callable():
     assert callable(result)
 
 
+def test_returned_callable_parameter_aliases_preserve_controls():
+    aliases = baml_bridge.proto._returned_param_aliases(
+        ["_baml", "_baml_", "_types", "self", "class", "class_"]
+    )
+    assert aliases == {
+        "_baml__": "_baml",
+        "_types_": "_types",
+        "self_": "self",
+        "class__": "class",
+    }
+
+
 def test_adt_media_generic_decodes_to_pyhandle():
     key, ht = _seed_generic_media_handle()
     result = _decode_handle(_make_handle(key, ht), BamlTypeMap())
@@ -153,11 +165,11 @@ async def test_function_spec_uses_canonical_method_fqns_and_wire_argument_names(
     sync_calls = []
     async_calls = []
 
-    def capture_sync(_self, fqn, kwargs=None):
+    def capture_sync(_self, fqn, kwargs=None, *, _baml=None):
         sync_calls.append((fqn, kwargs))
         return fqn
 
-    async def capture_async(_self, fqn, kwargs=None):
+    async def capture_async(_self, fqn, kwargs=None, *, _baml=None):
         async_calls.append((fqn, kwargs))
         return fqn
 
@@ -186,9 +198,9 @@ async def test_function_spec_uses_canonical_method_fqns_and_wire_argument_names(
 @pytest.mark.asyncio
 async def test_stream_uses_canonical_method_fqns(monkeypatch):
     stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
-    monkeypatch.setattr(BamlStream, "_call_sync", lambda _self, fqn: fqn)
+    monkeypatch.setattr(BamlStream, "_call_sync", lambda _self, fqn, *, _baml=None: fqn)
 
-    async def capture_async(_self, fqn):
+    async def capture_async(_self, fqn, *, _baml=None):
         return fqn
 
     monkeypatch.setattr(BamlStream, "_call_async", capture_async)

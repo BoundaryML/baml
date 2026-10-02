@@ -13,7 +13,7 @@ public static partial class BamlGeneratedContract
         BamlGeneratedFunction<T> function,
         BamlGeneratedArguments<T> arguments,
         string partialOptionName,
-        CancellationToken cancellationToken = default)
+        IBamlInvocationOptions? baml = null)
     {
         ArgumentNullException.ThrowIfNull(program);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -26,6 +26,7 @@ public static partial class BamlGeneratedContract
             arguments.Registry.Owner,
             arguments.Function,
             partialOptionName);
+        var invocation = new BamlInvocationSnapshot(baml);
         BamlGeneratedArguments<T> snapshot =
             arguments.SnapshotForDeferredCall(out IDisposable ownership);
         try
@@ -35,19 +36,20 @@ public static partial class BamlGeneratedContract
                 (activeProgram, token) => activeProgram.StartStreamAsync(
                     function,
                     snapshot,
-                    token),
+                    token, invocation),
                 ownership,
                 function.Result,
                 partialOptionName,
-                function.Declaration.Identity);
+                function.Declaration.Identity, invocation);
             return BamlStreamFactory.Create(
                 driver,
                 function.Declaration.Identity,
-                cancellationToken);
+                baml?.CancellationToken ?? default);
         }
         catch
         {
             ownership.Dispose();
+            invocation.Dispose();
             throw;
         }
     }
@@ -58,7 +60,7 @@ public static partial class BamlGeneratedContract
         BamlGeneratedBoundFunction<T> function,
         BamlGeneratedGenericArguments<T> arguments,
         string partialOptionName,
-        CancellationToken cancellationToken = default)
+        IBamlInvocationOptions? baml = null)
     {
         ArgumentNullException.ThrowIfNull(program);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -78,6 +80,7 @@ public static partial class BamlGeneratedContract
                 "The generated stream arguments belong to another generic binding.");
         }
 
+        var invocation = new BamlInvocationSnapshot(baml);
         BamlGeneratedGenericArguments<T> snapshot =
             arguments.SnapshotForDeferredCall(out IDisposable ownership);
         try
@@ -87,19 +90,20 @@ public static partial class BamlGeneratedContract
                 (activeProgram, token) => activeProgram.StartStreamAsync(
                     function,
                     snapshot,
-                    token),
+                    token, invocation),
                 ownership,
                 declaration.Result,
                 partialOptionName,
-                declaration.Definition.Identity);
+                declaration.Definition.Identity, invocation);
             return BamlStreamFactory.Create(
                 driver,
                 declaration.Definition.Identity,
-                cancellationToken);
+                baml?.CancellationToken ?? default);
         }
         catch
         {
             ownership.Dispose();
+            invocation.Dispose();
             throw;
         }
     }
@@ -136,6 +140,7 @@ internal sealed class NativeBamlStreamDriver<T>
 {
     private readonly Lazy<BamlGeneratedProgram> deferredProgram;
     private readonly Func<BamlGeneratedProgram, CancellationToken, Task<BamlStreamNativeHandle>> start;
+    private readonly IDisposable? invocationOwnership;
     private readonly TypeDeclaration<T> streamType;
     private readonly string partialOptionName;
     private readonly string streamFunctionIdentity;
@@ -151,7 +156,8 @@ internal sealed class NativeBamlStreamDriver<T>
         IDisposable argumentOwnership,
         TypeDeclaration<T> streamType,
         string partialOptionName,
-        string streamFunctionIdentity)
+        string streamFunctionIdentity,
+        IDisposable? invocationOwnership = null)
     {
         ArgumentNullException.ThrowIfNull(deferredProgram);
         ArgumentNullException.ThrowIfNull(start);
@@ -159,6 +165,7 @@ internal sealed class NativeBamlStreamDriver<T>
         ArgumentNullException.ThrowIfNull(streamType);
         ArgumentException.ThrowIfNullOrWhiteSpace(partialOptionName);
         ArgumentException.ThrowIfNullOrWhiteSpace(streamFunctionIdentity);
+        this.invocationOwnership = invocationOwnership;
         this.deferredProgram = deferredProgram;
         this.start = start;
         this.argumentOwnership = argumentOwnership;
@@ -186,6 +193,8 @@ internal sealed class NativeBamlStreamDriver<T>
         finally
         {
             Interlocked.Exchange(ref argumentOwnership, null)?.Dispose();
+        invocationOwnership?.Dispose();
+            invocationOwnership?.Dispose();
         }
     }
 
@@ -238,6 +247,7 @@ internal sealed class NativeBamlStreamDriver<T>
         disposed = true;
         stream?.Dispose();
         Interlocked.Exchange(ref argumentOwnership, null)?.Dispose();
+        invocationOwnership?.Dispose();
         return ValueTask.CompletedTask;
     }
 

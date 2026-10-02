@@ -3,10 +3,17 @@
 //! This crate provides the same API surface as `bridge_python`
 //! but powered by napi-rs instead of PyO3.
 
-mod baml_call_context;
 mod errors;
 pub mod handle;
 pub mod host_value;
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "napi-rs registration wrappers are disabled in Rust unit-test builds"
+    )
+)]
+mod invocation;
 pub mod media;
 pub mod runtime;
 pub mod unhandled_spawn;

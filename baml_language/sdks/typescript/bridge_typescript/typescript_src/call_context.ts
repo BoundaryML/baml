@@ -1,25 +1,11 @@
-import { BamlCallContext } from './native.js';
 import { captureCallbackContext } from './platform.js';
+import { attachSignal } from './invocation.js';
+import { encodedInvocation } from './proto.js';
 
-export interface CallContextBinding {
-    detach(): void;
-}
-
-/** Attach one outer call ID and return its absent-safe lifecycle owner. */
-export function attachCallContext(
-    ctx: BamlCallContext | undefined,
-    callId: bigint,
-): CallContextBinding {
-    const serialized = callId.toString();
-    ctx?._attachCallId(serialized);
-    const disposeCallbackContext = captureCallbackContext(callId);
-    return {
-        detach() {
-            try {
-                ctx?._detachCallId(serialized);
-            } finally {
-                disposeCallbackContext();
-            }
-        },
-    };
+export interface CallContextBinding { detach(): void; }
+export function attachInvocation(encoded: Uint8Array, callId: bigint): CallContextBinding {
+    const snapshot = encodedInvocation(encoded);
+    const disposeSignal = attachSignal(snapshot?.signal, callId);
+    const disposeContext = captureCallbackContext(callId);
+    return { detach() { try { disposeSignal(); snapshot?.retained.splice(0); } finally { disposeContext(); } } };
 }

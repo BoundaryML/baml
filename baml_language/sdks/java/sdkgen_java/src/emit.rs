@@ -414,7 +414,18 @@ pub(crate) fn render_class(
     // classes (both routed through here). Sealed-union
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
-    out.push_str(&format!("public final class {ident}{generics} {{\n"));
+    let trace_selection = matches!(class_fqn, "trace.Options" | "trace.ReservedSpan");
+    let implements = if trace_selection {
+        " implements baml_sdk.vendor.trace.TraceSelection"
+    } else {
+        ""
+    };
+    out.push_str(&format!(
+        "public final class {ident}{generics}{implements} {{\n"
+    ));
+    if trace_selection {
+        out.push_str("    public baml_bridge.BamlHandle bamlTraceHandle() { return _handle; }\n");
+    }
 
     // A class that carries method bindings (static or instance) must boot the
     // runtime when it is the FIRST generated symbol a program touches — merely
@@ -869,8 +880,18 @@ fn render_callable_pair(
         }
     }
 
-    let mut ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
-    let mut ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
+    let mut ret_top = match &function.return_type {
+        Ty::Function { params, ret, .. } => {
+            crate::translate_ty::translate_return_callable(params, ret, ctx, sink)
+        }
+        ty => translate_ty(ty, TyPosition::TopLevel, ctx, sink),
+    };
+    let mut ret_boxed = match &function.return_type {
+        Ty::Function { params, ret, .. } => {
+            crate::translate_ty::translate_return_callable(params, ret, ctx, sink)
+        }
+        ty => translate_ty(ty, TyPosition::Boxed, ctx, sink),
+    };
     // A nullable return (`-> T?`) carries `@Nullable` on both the sync signature
     // and the async future's element type (`CompletableFuture<@Nullable T>`). A
     // nullable type is always a boxed reference, so `ret_top == "void"` (the
@@ -1062,7 +1083,7 @@ fn render_overload_family(
 ) -> String {
     // `types` and `ctx` derive from distinct base names, so their yield-to-user
     // escapes can never collide with each other.
-    let ctx_name = synthetic_param_name("ctx", taken);
+    let ctx_name = synthetic_param_name("baml", taken);
 
     let mut out = render_method_pair(
         doc,
@@ -1165,7 +1186,7 @@ fn render_overload_family(
 /// `params` is the already-joined Java parameter list (required args, plus an
 /// optional configurator when present). The synthetic trailing params stack in
 /// a fixed order after it: `types_name` (a `baml_bridge.BamlTypes` explicit
-/// binding bag) then `ctx_name` (a `baml_bridge.BamlCallContext`), each
+/// binding bag) then `ctx_name` (a `baml_sdk.BamlOptions`), each
 /// appended only when set (both names already escaped past colliding user
 /// arguments). They thread to the runtime through the 6-arg
 /// `callSync`/`callAsync` overload `(…, returnDesc, ctx, typeArgs)`: an absent
@@ -1210,7 +1231,7 @@ fn render_method_pair(
         trailing.push_str(&format!(", baml_bridge.BamlTypes {name}"));
     }
     if let Some(name) = ctx_name {
-        trailing.push_str(&format!(", baml_bridge.BamlCallContext {name}"));
+        trailing.push_str(&format!(", @BAML_OPTIONS_FACADE@ {name}"));
     }
     let sig_params = if params.is_empty() {
         trailing.strip_prefix(", ").unwrap_or("").to_string()
@@ -1228,9 +1249,13 @@ fn render_method_pair(
         (Some(c), Some(t)) => format!(", {c}, {t}"),
     };
 
-    let sync_call = format!(
-        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
-    );
+    let sync_call = if fqn == "trace.current_context" {
+        format!("baml_bridge.BamlFfi.currentTraceContext({descriptor})")
+    } else {
+        format!(
+            "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
+        )
+    };
     let sync_body = if ret_top == "void" {
         format!("{prologue}        {sync_call};")
     } else if let Some(callable) = returned_callable {
@@ -1241,9 +1266,15 @@ fn render_method_pair(
     } else {
         format!("{prologue}        return ({ret_boxed}) {sync_call};")
     };
-    let async_call = format!(
-        "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
-    );
+    let async_call = if fqn == "trace.current_context" {
+        format!(
+            "java.util.concurrent.CompletableFuture.completedFuture(baml_bridge.BamlFfi.currentTraceContext({descriptor}))"
+        )
+    } else {
+        format!(
+            "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
+        )
+    };
     let async_body = if let Some(callable) = returned_callable {
         format!(
             "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.returnedClosureAsync({async_call}, {}.class, {}, {});",
@@ -1251,7 +1282,7 @@ fn render_method_pair(
         )
     } else {
         format!(
-            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix});"
+            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) {async_call};"
         )
     };
 
@@ -1559,6 +1590,26 @@ pub(crate) fn render_callback_interface(iface: &CallbackInterface) -> String {
         "        return apply({});\n    }}\n",
         apply_args.join(", ")
     ));
+
+    let bare_names = iface
+        .required
+        .iter()
+        .map(|(name, _)| name.clone())
+        .chain(has_opts.then(|| "$opts".to_string()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let params = apply_params.join(", ");
+    let controlled = format!(
+        "{params}{}@BAML_OPTIONS_FACADE@ $baml",
+        if params.is_empty() { "" } else { ", " }
+    );
+    let _ = std::fmt::Write::write_fmt(
+        &mut out,
+        format_args!(
+            "    default {} call({params}) {{ return apply({bare_names}); }}\n    default {} call({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n    default java.util.concurrent.CompletableFuture<{}> callAsync({params}) {{ return java.util.concurrent.CompletableFuture.completedFuture(call({bare_names})); }}\n    default java.util.concurrent.CompletableFuture<{}> callAsync({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n",
+            iface.ret, iface.ret, iface.ret, iface.ret
+        ),
+    );
 
     if has_opts {
         out.push_str(&render_opts_bag(&iface.optionals));
