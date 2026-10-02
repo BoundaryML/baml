@@ -21,11 +21,29 @@ function AnthMockAsk(question: string) -> string {
     prompt: `${role("system")}Follow the rules.${role("user")}${question}`
 }
 
-// The SYSTEM message carries an Anthropic cache breakpoint (that is where the
-// marker below puts the `cache_control` metadata, and what
-// `anthropic_cache_control_placement` asserts: `system_cc=ephemeral`,
-// `user_cc=-`).
+// The SYSTEM message ends in a cache delimiter, which puts `cache_control` on
+// its last block (what `anthropic_cache_control_placement` asserts:
+// `system_cc=ephemeral`, `user_cc=-`).
 function AnthMockCached(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `${role("system")}Follow the rules.${cache({ "type": "ephemeral" })}${role("user")}${question}`
+}
+
+// A stable prefix and a variable suffix inside one user turn, after a picture,
+// with a TTL.
+function AnthCachedMidTurn(picture: image, question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `${role("user")}Before. ${picture} After.${cache({ "type": "ephemeral", "ttl": "1h" })} ${question}`
+}
+
+// `args` as written, and the positions that send no breakpoint.
+function AnthCacheArgs(args: json) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `${role("system")}${cache({ "type": "ephemeral" })}Rules.${role("user")}Stable.${cache(args)} Variable.`
+}
+
+// Role metadata is not a cache channel: a `cache_control` key there is not sent.
+function AnthRoleMetadata(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
     prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
 }
@@ -309,9 +327,8 @@ test "anthropic_params_and_passthrough" {
     assert.contains(got, "has_max_tokens=false")
 }
 
-// A `cache_control` key in a message's metadata merges onto that message's
-// LAST content block (the engine's placement), and messages without metadata
-// stay clean.
+// A `${cache(args)}` puts `cache_control: args` on the block before it, and a
+// message without one stays clean.
 function anthropic_cache_control_placement() -> string {
     let canned = anth_canned_text("ok", "end_turn");
     root.llm_mock.mock_json_serve(
@@ -336,6 +353,79 @@ test "anthropic_cache_control_placement" {
     let got = anthropic_cache_control_placement();
     assert.contains(got, "system_cc=ephemeral|");
     assert.contains(got, "user_cc=-")
+}
+
+// One delimiter is ONE breakpoint, on the block before it, however many blocks
+// the message has; `ttl` reaches the wire; the text after it is its own block,
+// trimmed where it faced the delimiter.
+function anthropic_cache_delimiter_mid_turn() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
+    let body = anth_render_body(cl, AnthCachedMidTurn@spec(picture, "Describe it."), ai.Journal { log: [] });
+    [
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[0]")),
+        baml.json.path<string>(body, ".messages[0].content[1].type"),
+        baml.json.path_or<string>(body, ".messages[0].content[1].cache_control.type", "-"),
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[2]")),
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[3]")),
+    ].join("\n")
+}
+
+test "anthropic_cache_delimiter_mid_turn" {
+    assert.equal(
+        anthropic_cache_delimiter_mid_turn(),
+        `{"type":"text","text":"Before."}\nimage\n-\n{"type":"text","text":"After.","cache_control":{"type":"ephemeral","ttl":"1h"}}\n{"type":"text","text":"Describe it."}`,
+    )
+}
+
+function _anth_cache_args(args: json) -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let body = anth_render_body(cl, AnthCacheArgs@spec(args), ai.Journal { log: [] });
+    [
+        baml.json.stringify(baml.json.path<json>(body, ".system")),
+        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[0]")),
+    ].join("\n")
+}
+
+// `args` is the value of `cache_control`, as written: not checked, not
+// defaulted, a nested null kept. A delimiter with nothing before it in its
+// message sets nothing, and one with null `args` is as if it were not written.
+function anthropic_cache_delimiter_args_as_written() -> string {
+    [
+        _anth_cache_args(baml.json.parse(`{"ttl":"1h","type":"ephemeral","extra":{"keep":null}}`)),
+        _anth_cache_args(baml.json.parse(`"1h"`)),
+        _anth_cache_args(null),
+    ].join("\n")
+}
+
+test "anthropic_cache_delimiter_args_as_written" {
+    assert.equal(
+        anthropic_cache_delimiter_args_as_written(),
+        `[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":{"ttl":"1h","type":"ephemeral","extra":{"keep":null}}}\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable.","cache_control":"1h"}\n[{"type":"text","text":"Rules."}]\n{"type":"text","text":"Stable. Variable."}`,
+    )
+}
+
+function anthropic_role_metadata_is_not_a_cache_channel() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let spec = AnthRoleMetadata@spec("hi");
+    let journal = ai.Journal {
+        log: [
+            ai.events.UserMessage.of(["more"], metadata = { "cache_control": { "type": "ephemeral" } }),
+        ],
+    };
+    anthropic.internal.render(
+        cl,
+        ai.ModelTurnInput {
+            prompt: spec.prompt_template,
+            journal: journal,
+            toolbox: spec.tools(),
+            output_type: spec.output_type(),
+        },
+    ).body.includes("cache_control").to_string()
+}
+
+test "anthropic_role_metadata_is_not_a_cache_channel" {
+    assert.equal(anthropic_role_metadata_is_not_a_cache_channel(), "false")
 }
 
 // BUG 7.1: an assistant-first prompt with no system content used to send

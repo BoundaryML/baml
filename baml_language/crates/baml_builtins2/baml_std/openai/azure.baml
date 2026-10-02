@@ -183,6 +183,7 @@ class AzureClient {
             api_key_required = true,
             default_max_tokens = 4096,
             compat_query = query,
+            cache_breakpoints = true,
         )
     }
 

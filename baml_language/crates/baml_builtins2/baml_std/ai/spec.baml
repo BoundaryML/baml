@@ -32,12 +32,16 @@ type MediaPart = baml.media.Image | baml.media.Audio | baml.media.Video | baml.m
 /// written, and `args` rides along untouched. A client that has a cache marker
 /// on its wire sends one there, carrying `args` exactly as written; every other
 /// client drops the delimiter and sends the prompt as if it were not there.
+/// `args` is therefore written for one provider's wire.
 ///
-/// `args` is the provider's own cache object. On `aws.BedrockClient` it becomes
-/// the `cachePoint` block:
+/// `args` is the provider's own cache object:
 ///
-///     ${cache({ "type": "default" })}
-///     ${cache({ "type": "default", "ttl": "1h" })}
+///     ${cache({ "type": "default", "ttl": "1h" })}   // aws.BedrockClient: a `cachePoint` block
+///     ${cache({ "type": "ephemeral", "ttl": "1h" })} // anthropic.Client: `cache_control` on the block before
+///     ${cache({ "mode": "explicit" })}               // openai.ChatClient, openai.ResponsesClient:
+///                                                    // `prompt_cache_breakpoint` on the part before
+///
+/// Clients with no cache marker on their wire send nothing for it.
 ///
 /// Outside an LLM function's `prompt:` there is no bare `cache`; interpolate
 /// the value itself, `${ai.CacheDelimiter { args: ... }}`.
@@ -59,10 +63,10 @@ class PromptMessage {
     /// Ordered structural content. Provider clients use this instead of the
     /// readable `content` projection so media survives prompt rendering.
     parts: PromptPart[],
-    /// Per-message provider directives, carried verbatim from the
-    /// `ai.Role.metadata` of the `${role(...)}` marker that opened
-    /// this message — Anthropic `cache_control`, for example. Empty when the
-    /// message carried none.
+    /// Free-form per-message data, carried verbatim from the
+    /// `ai.Role.metadata` of the `${role(...)}` marker that opened this
+    /// message. Empty when the message carried none. The built-in clients do
+    /// not read it.
     metadata: map<string, baml.json.json>,
 }
 

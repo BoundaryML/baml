@@ -726,8 +726,9 @@ test "bedrock_tool_result_status_gating" {
 // ─── 7. cache points ─────────────────────────────────────────────────────────
 //
 // The engine emits `{"cachePoint":{"type":"default"}}`; sys_llm dropped the
-// feature entirely (research G4). Restored here as two client options, because
-// nothing populates `ai.PromptMessage.metadata` yet.
+// feature entirely (research G4). Restored here as two client options, for the
+// two positions a prompt cannot mark itself (the tool list) or that are common
+// enough to want a switch (the end of the system prompt).
 
 function bedrock_cache_points() -> string {
     let cl = aws.BedrockClient.new(

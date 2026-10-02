@@ -1464,14 +1464,14 @@ test "chat_terminated_stream_still_completes" {
     assert.equal(chat_terminated_stream_still_completes(), "ok")
 }
 
-// A message's authored metadata is a per-part provider directive on this family
-// (OpenAI `prompt_cache_breakpoint`, OpenRouter's Anthropic-style
-// `cache_control`). It rides on the message's LAST content part, forwarded
-// verbatim — and a message carrying one never collapses to a bare string, which
-// would drop it.
+// A `${cache(args)}` in the prompt is a cache breakpoint on this family:
+// `prompt_cache_breakpoint: args` on the content part BEFORE the delimiter.
+// OpenAI and Azure OpenAI send it; a message carrying one never collapses to a
+// bare string, which would drop it. Every other OpenAI-compatible client drops
+// the delimiter and sends the prompt as if it were not there.
 function ChatCached(question: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${ai.Role { name: "system", metadata: { "prompt_cache_breakpoint": { "type": "enabled" } } }}Follow the rules.${role("user")}${question}`
+    prompt: `${role("system")}Follow the rules.${cache({ "mode": "explicit" })}${role("user")}Stable. ${cache({ "mode": "explicit" })}${question}`
 }
 
 function _chat_cached_input() -> ai.ModelTurnInput {
@@ -1484,68 +1484,65 @@ function _chat_cached_input() -> ai.ModelTurnInput {
     }
 }
 
-function chat_metadata_rides_last_content_part() -> string {
+function chat_cache_delimiter_is_a_breakpoint_on_the_part_before() -> string {
     root.llm_mock.mock_json_serve(
         [
+            root.llm_mock.MockResponse.ok(_chat_ok_body()),
             root.llm_mock.MockResponse.ok(_chat_ok_body()),
             root.llm_mock.MockResponse.ok(_chat_ok_body()),
         ],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
             let _ = cl.invoke(_chat_cached_input());
-            let body = mock.last_request().json();
-            // The collapsing wrapper must not swallow the directive either.
-            let collapsing = openai.GenericClient.new(
-                model = "qwen3",
+            let openai_messages = baml.json.stringify(
+                baml.json.path<json>(mock.last_request().json(), ".messages"),
+            );
+            let azure = openai.AzureClient.new(
+                model = "gpt-deployment",
+                api_key = "k",
                 base_url = mock.base_url(),
             );
-            let _ = collapsing.invoke(_chat_cached_input());
-            let collapsed = mock.last_request().json();
-            [
-                baml.json.path<string>(body, ".messages[0].content[0].type"),
-                baml.json.path<string>(body, ".messages[0].content[0].text").trim(),
-                baml.json.path<string>(
-                    body,
-                    ".messages[0].content[0].prompt_cache_breakpoint.type",
-                ),
-                baml.json.path_or<string>(
-                    body,
-                    ".messages[1].content[0].prompt_cache_breakpoint.type",
-                    "absent",
-                ),
-                baml.json.path<string>(
-                    collapsed,
-                    ".messages[0].content[0].prompt_cache_breakpoint.type",
-                ),
-            ].join("|")
+            let _ = azure.invoke(_chat_cached_input());
+            let azure_messages = baml.json.stringify(
+                baml.json.path<json>(mock.last_request().json(), ".messages"),
+            );
+            // A generic OpenAI-compatible server is not known to take the
+            // field: the delimiters are dropped, and the all-text messages
+            // collapse to bare strings exactly as they would without them.
+            let generic = openai.GenericClient.new(model = "qwen3", base_url = mock.base_url());
+            let _ = generic.invoke(_chat_cached_input());
+            let generic_messages = baml.json.stringify(
+                baml.json.path<json>(mock.last_request().json(), ".messages"),
+            );
+            [openai_messages, (azure_messages == openai_messages).to_string(), generic_messages].join("\n")
         },
     )
 }
 
-test "chat_metadata_rides_last_content_part" {
+test "chat_cache_delimiter_is_a_breakpoint_on_the_part_before" {
     assert.equal(
-        chat_metadata_rides_last_content_part(),
-        "text|Follow the rules.|enabled|absent|enabled",
+        chat_cache_delimiter_is_a_breakpoint_on_the_part_before(),
+        `[{"role":"system","content":[{"type":"text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]},{"role":"user","content":[{"type":"text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"text","text":"hi"}]}]\ntrue\n[{"role":"system","content":"Follow the rules."},{"role":"user","content":"Stable. hi"}]`,
     )
 }
 
-// "Forwarded verbatim" includes an explicitly authored `null`. A directive is
-// the caller telling the endpoint something; `null` is a thing to say (it is
-// how OpenRouter turns a cache breakpoint OFF for one message), and it is NOT
-// the same as omitting the key. The body's null-pruning pass exists to drop the
-// CLIENT's unset options — it must not reach into an authored directive, which
-// is why the directives ride a parked, opaque subtree until after the prune.
-function ChatCachedNull(question: string) -> string {
+// `args` is sent AS WRITTEN, which includes a null nested inside it. The
+// body's null-pruning pass exists to drop the CLIENT's unset options — it must
+// not reach into `args`, which is why the breakpoint rides a parked, opaque
+// subtree until after the prune. A delimiter with nothing before it in its
+// message sends no breakpoint, and one with null `args` is as if it were not
+// written.
+function ChatCacheArgs(args: json) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${ai.Role { name: "system", metadata: { "cache_control": null, "keep": "yes" } }}Follow the rules.${role("user")}${question}`
+    prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache(args)} Variable.`
 }
 
-function chat_authored_null_directive_survives_pruning() -> string {
+function _chat_cache_args(args: json) -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
-            let spec = ChatCachedNull@spec("hi");
+            let spec = ChatCacheArgs@spec(args);
             let _ = cl.invoke(
                 ai.ModelTurnInput {
                     prompt: spec.prompt_template,
@@ -1557,21 +1554,65 @@ function chat_authored_null_directive_survives_pruning() -> string {
             let raw = mock.last_request().body;
             let body = mock.last_request().json();
             [
-                // the authored null is ON the wire ...
-                `null_kept=${raw.includes(`"cache_control":null`)}`,
-                // ... alongside its non-null sibling ...
-                baml.json.path<string>(body, ".messages[0].content[0].keep"),
-                // ... and the reserved parking key never reaches it.
+                baml.json.stringify(baml.json.path<json>(body, ".messages[0].content")),
+                baml.json.stringify(baml.json.path<json>(body, ".messages[1].content[0]")),
+                // the reserved parking key never reaches the wire
                 `parked=${raw.includes("__baml_directives")}`,
             ].join("|")
         },
     )
 }
 
-test "chat_authored_null_directive_survives_pruning" {
+function chat_cache_delimiter_args_as_written() -> string {
+    [
+        _chat_cache_args(baml.json.parse(`{"mode":"explicit","ttl":null}`)),
+        _chat_cache_args(null),
+    ].join("\n")
+}
+
+test "chat_cache_delimiter_args_as_written" {
     assert.equal(
-        chat_authored_null_directive_survives_pruning(),
-        "null_kept=true|yes|parked=false",
+        chat_cache_delimiter_args_as_written(),
+        `[{"type":"text","text":"Rules."}]|{"type":"text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit","ttl":null}}|parked=false\n[{"type":"text","text":"Rules."}]|{"type":"text","text":"Stable. Variable."}|parked=false`,
+    )
+}
+
+// Role metadata is not forwarded onto a content part any more: a key there
+// (a `cache_control`, say) no longer reaches the endpoint, where OpenAI
+// rejected it.
+function ChatRoleMetadata(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
+}
+
+function chat_role_metadata_is_not_forwarded() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let spec = ChatRoleMetadata@spec("hi");
+            let journal = ai.Journal {
+                log: [
+                    ai.events.UserMessage.of(["more"], metadata = { "cache_control": { "type": "ephemeral" } }),
+                ],
+            };
+            let _ = cl.invoke(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: journal,
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+            );
+            baml.json.stringify(baml.json.path<json>(mock.last_request().json(), ".messages"))
+        },
+    )
+}
+
+test "chat_role_metadata_is_not_forwarded" {
+    assert.equal(
+        chat_role_metadata_is_not_forwarded(),
+        `[{"role":"system","content":[{"type":"text","text":"Follow the rules."}]},{"role":"user","content":[{"type":"text","text":"hi"}]},{"role":"user","content":"more"}]`,
     )
 }
 

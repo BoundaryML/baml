@@ -855,6 +855,47 @@ test "vertex_claude_raw_predict" {
     assert.contains(got, "|vertex-2023-10-16|absent|8192|user")
 }
 
+// Claude on Vertex is the Anthropic Messages body, so a `${cache(args)}` in the
+// prompt is `cache_control: args` on the block before it there too. The same
+// client aimed at a Gemini model has no cache marker and sends nothing for it.
+function VertexCached(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache({ "type": "ephemeral", "ttl": "1h" })}${role("user")}${question}`
+}
+
+function _vertex_cached_body(model: string) -> string {
+    let spec = VertexCached@spec("Say pong.");
+    let input = ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: ai.Journal { log: [] },
+        toolbox: ai.tools.Toolbox.new([]),
+        output_type: reflect.Type.of<string>(),
+    };
+    let cl = google.VertexClient.new(
+        model = model,
+        project_id = "my-project",
+        location = "us-east5",
+        api_key = "express-key",
+    );
+    google.internal.vertex_render(cl, input).body
+}
+
+function vertex_cache_delimiter() -> string {
+    let claude = baml.json.parse(_vertex_cached_body("claude-sonnet-4-5"));
+    let gemini = _vertex_cached_body("gemini-2.5-flash");
+    [
+        baml.json.stringify(baml.json.path<json>(claude, ".system")),
+        (gemini.includes("cache_control") || gemini.includes("ephemeral")).to_string(),
+    ].join("|")
+}
+
+test "vertex_cache_delimiter" {
+    assert.equal(
+        vertex_cache_delimiter(),
+        `[{"type":"text","text":"Follow the rules.","cache_control":{"type":"ephemeral","ttl":"1h"}}]|false`,
+    )
+}
+
 // …and a caller who wants it back puts it in `request_body`, which merges
 // after the Vertex constants.
 function vertex_claude_model_override() -> string {

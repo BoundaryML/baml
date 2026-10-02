@@ -6,8 +6,8 @@
 // response field and every SSE event this client touches is a real BAML class.
 // `baml.json.json` shows up in exactly three places, all of them genuinely
 // open-ended: the `request_body` passthrough, a tool's `input_schema`, and the
-// `cache_control` directive (a beta-gated shape that arrives verbatim from
-// `ai.PromptMessage.metadata`).
+// `cache_control` directive (the `args` of a `${cache(args)}` in the prompt,
+// sent as written).
 //
 // Layering, so a future `vertex` package can reuse this: BODY construction
 // (`messages_request` / `messages_body`) is factored away
@@ -51,9 +51,9 @@ class AnthSource {
 class AnthTextBlock {
     type: string,
     text: string,
-    // Prompt-caching directive: {"type":"ephemeral"}, or under the extended-TTL
-    // beta {"type":"ephemeral","ttl":"1h"}. Deliberately untyped — the shape is
-    // beta-gated and arrives verbatim from ai.PromptMessage.metadata.
+    // Prompt-caching directive: {"type":"ephemeral"}, or with a lifetime
+    // {"type":"ephemeral","ttl":"1h"}. Deliberately untyped: it is the `args`
+    // of a `${cache(args)}` in the prompt, sent as written.
     cache_control: baml.json.json?,
 }
 
@@ -196,7 +196,7 @@ class Response {
 /// "Option::is_none"` in the Rust builders this replaces.
 ///
 /// Nulls INSIDE arrays are preserved (a JSON Schema `"enum": [null]` survives),
-/// and the two OPAQUE subtrees below are copied verbatim. The passthrough merge —
+/// and the three OPAQUE subtrees below are copied verbatim. The passthrough merge —
 /// where `null` means "delete this key" — still runs AFTER this, on the
 /// already-pruned base.
 ///
@@ -208,8 +208,11 @@ class Response {
 /// replayed tool_use, and the generated schema types optionals as
 /// `["string","null"]` and marks them required, so a null answer is the
 /// schema-conformant one.
+///
+/// `cache_control` is the `args` of a `${cache(args)}` in the prompt, which
+/// this client sends as written.
 function _anth_verbatim_subtree(key: string) -> bool {
-    key == "input" || key == "input_schema"
+    key == "input" || key == "input_schema" || key == "cache_control"
 }
 
 function _anth_drop_nulls(j: baml.json.json) -> baml.json.json {
@@ -262,11 +265,15 @@ class Prompt {
     messages: Message[],
 }
 
-/// (internal) Anthropic places a cache breakpoint on a CONTENT BLOCK, but the authored
-/// directive lives on a MESSAGE (`${ai.Role { name: "user", metadata:
-/// { "cache_control": ... } }}`). The engine's rule, ported: the directive
-/// attaches to that message's LAST content block, so everything up to and
-/// including it is the cached prefix.
+/// (internal) Anthropic places a cache breakpoint ON a content block, while a
+/// `${cache(args)}` in the prompt sits BETWEEN parts. The breakpoint goes on
+/// the last block lowered before the delimiter, so everything up to and
+/// including that block is the cached prefix, and `args` is the value of
+/// `cache_control`, as written.
+///
+/// Nothing is set when `blocks` is empty (there is no content before the
+/// delimiter in its message) or when `args` is null. A second delimiter with no
+/// block in between overwrites the first.
 function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json.json?) -> void {
     match (cache_control) {
         null => null,
@@ -401,14 +408,48 @@ function _lower_blocks(
     out
 }
 
+/// (internal) One prompt message as Messages API blocks. Text and media lower
+/// exactly as they do for a journal turn; a `${cache(args)}` sets
+/// `cache_control` on the block before it (`_anth_apply_cache_control`), and
+/// the text on either side is trimmed where it faces the delimiter
+/// (`ai.wire.prompt_parts`).
+function _prompt_blocks(
+    message: ai.PromptMessage,
+    position: string,
+    preview: bool = false,
+) -> AnthBlock[] {
+    let blocks: AnthBlock[] = [];
+    for (let part in ai.wire.prompt_parts(message)) {
+        match (part) {
+            let text: string => {
+                let block = ai.content.Text { text: text };
+                if let lowered: AnthBlock = _lower_block(block, position, preview = preview) {
+                    blocks.push(lowered);
+                }
+                null
+            },
+            let delimiter: ai.CacheDelimiter => {
+                _anth_apply_cache_control(blocks, delimiter.args);
+                null
+            },
+            let media: ai.MediaPart => {
+                let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                if let lowered: AnthBlock = _lower_block(block, position, preview = preview) {
+                    blocks.push(lowered);
+                }
+                null
+            },
+        };
+    }
+    blocks
+}
+
 function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
     let system: AnthBlock[] = [];
     let messages: Message[] = [];
     for (let message in prompt.messages()) {
-        let cache_control = message.metadata.get("cache_control");
         if (message.role == "system") {
-            let blocks = _lower_blocks(ai.wire.prompt_blocks(message), "system", preview = preview);
-            _anth_apply_cache_control(blocks, cache_control);
+            let blocks = _prompt_blocks(message, "system", preview = preview);
             for (let block in blocks) {
                 system.push(block);
             }
@@ -419,8 +460,7 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
             } else {
                 "user"
             };
-            let blocks = _lower_blocks(ai.wire.prompt_blocks(message), role, preview = preview);
-            _anth_apply_cache_control(blocks, cache_control);
+            let blocks = _prompt_blocks(message, role, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
             if (blocks.length() > 0) {
@@ -485,7 +525,6 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
         match (e) {
             let m: ai.events.UserMessage => {
                 let blocks = _lower_blocks(m.content, "user", preview = preview);
-                _anth_apply_cache_control(blocks, m.metadata.get("cache_control"));
                 if (blocks.length() > 0) {
                     msgs.push(Message { role: "user", tool_results: false, blocks: blocks });
                 }

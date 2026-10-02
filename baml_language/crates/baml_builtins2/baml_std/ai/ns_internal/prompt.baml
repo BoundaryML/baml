@@ -60,8 +60,8 @@ enum OutputFormatDefault {
 /// Construct a typed role marker for structural prompt assembly.
 /// The `${role(...)}` desugar in an LLM prompt body lowers to this call.
 ///
-/// `metadata` carries per-message provider directives, which reach the provider
-/// client as `ai.PromptMessage.metadata`.
+/// `metadata` is free-form per-message data, which reaches the client as
+/// `ai.PromptMessage.metadata`. The built-in clients do not read it.
 function make_role(
     name: string,
     metadata: map<string, baml.json.json> = {},

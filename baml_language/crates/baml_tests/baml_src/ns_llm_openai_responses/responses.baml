@@ -443,26 +443,66 @@ test "oai_tool_schema_keeps_nulls" {
     assert.contains(got, `"tool_choice":"auto"`)
 }
 
-// ai.PromptMessage.metadata is forwarded verbatim onto the LAST content item of
-// the message it was authored on (the engine's content-part placement); a
-// message with no directives stays clean.
-function oai_message_metadata_on_content_part() -> string {
-    let spec = OaiMetaEcho@spec("Say pong.");
-    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
-    let empty = ai.tools.Toolbox.new([]);
-    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
-    let body = baml.json.parse(req.body);
-    [
-        `system_role=${baml.json.path_or<string>(body, ".input[0].role", "-")}`,
-        `system_hint=${baml.json.path_or<string>(body, ".input[0].content[0].cache_hint", "-")}`,
-        `user_hint=${baml.json.path_or<string>(body, ".input[1].content[0].cache_hint", "-")}`,
-    ].join("|")
+// A `${cache(args)}` in the prompt is `prompt_cache_breakpoint: args` on the
+// content part BEFORE the delimiter, wherever in the message that is; a part
+// with no delimiter after it stays clean.
+function OaiCached(picture: image, question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache({ "mode": "explicit" })}${role("user")}Look at ${picture} closely.${cache({ "mode": "explicit", "ttl": null })} ${question}`
 }
 
-test "oai_message_metadata_on_content_part" {
+function _oai_render_input(cl: openai.ResponsesClient, spec: ai.FunctionSpec<string>) -> string {
+    let empty = ai.tools.Toolbox.new([]);
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
+    baml.json.stringify(baml.json.path<json>(baml.json.parse(req.body), ".input"))
+}
+
+function oai_cache_delimiter_is_a_breakpoint_on_the_part_before() -> string {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let picture = baml.media.Image.from_url("https://example.com/p.png", "image/png");
+    _oai_render_input(cl, OaiCached@spec(picture, "Describe it."))
+}
+
+test "oai_cache_delimiter_is_a_breakpoint_on_the_part_before" {
     assert.equal(
-        oai_message_metadata_on_content_part(),
-        "system_role=system|system_hint=ephemeral|user_hint=-",
+        oai_cache_delimiter_is_a_breakpoint_on_the_part_before(),
+        `[{"role":"system","content":[{"type":"input_text","text":"Follow the rules.","prompt_cache_breakpoint":{"mode":"explicit"}}]},{"role":"user","content":[{"type":"input_text","text":"Look at"},{"type":"input_image","image_url":"https://example.com/p.png","detail":"auto"},{"type":"input_text","text":"closely.","prompt_cache_breakpoint":{"mode":"explicit","ttl":null}},{"type":"input_text","text":"Describe it."}]}]`,
+    )
+}
+
+// A delimiter with nothing before it in its message, or with null `args`, sends
+// no breakpoint; two in a row leave one, the later one's `args`.
+function OaiCacheEdges(args: json) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache({ "mode": "explicit" })}${cache(args)} Variable.`
+}
+
+function oai_cache_delimiter_edges() -> string {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    [
+        _oai_render_input(cl, OaiCacheEdges@spec(baml.json.parse(`{"mode":"explicit","later":true}`))),
+        _oai_render_input(cl, OaiCacheEdges@spec(null)),
+    ].join("\n")
+}
+
+test "oai_cache_delimiter_edges" {
+    assert.equal(
+        oai_cache_delimiter_edges(),
+        `[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit","later":true}},{"type":"input_text","text":"Variable."}]}]\n[{"role":"system","content":[{"type":"input_text","text":"Rules."}]},{"role":"user","content":[{"type":"input_text","text":"Stable.","prompt_cache_breakpoint":{"mode":"explicit"}},{"type":"input_text","text":"Variable."}]}]`,
+    )
+}
+
+// Role metadata is not forwarded onto a content part any more: a key there no
+// longer reaches the endpoint, where an unknown one is rejected.
+function oai_role_metadata_is_not_forwarded() -> string {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    _oai_render_input(cl, OaiMetaEcho@spec("Say pong."))
+}
+
+test "oai_role_metadata_is_not_forwarded" {
+    assert.equal(
+        oai_role_metadata_is_not_forwarded(),
+        `[{"role":"system","content":[{"type":"input_text","text":"Follow the rules."}]},{"role":"user","content":[{"type":"input_text","text":"Say pong."}]}]`,
     )
 }
 

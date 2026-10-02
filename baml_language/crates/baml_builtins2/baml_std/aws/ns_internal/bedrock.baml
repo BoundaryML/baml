@@ -192,10 +192,6 @@ class ContentBlock {
         ContentBlock { ..._empty_content_block(), toolResult: tool_result }
     }
 
-    function of_cache_point() -> ContentBlock {
-        ContentBlock.of_cache_delimiter(_default_cache_point())
-    }
-
     /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
     function of_cache_delimiter(args: baml.json.json) -> ContentBlock {
         ContentBlock { ..._empty_content_block(), cachePoint: args }
@@ -715,27 +711,6 @@ function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> Co
     content
 }
 
-/// (internal) The per-message metadata key that requests a Bedrock prompt-caching
-/// checkpoint after the message's content.
-///
-/// The engine emits `{"cachePoint":{"type":"default"}}` whenever a message
-/// carries `cache_control` metadata
-/// (`engine/.../aws_client.rs:123-155`). BAML's neutral spelling of that is a
-/// `ai.PromptMessage.metadata` entry, and Bedrock's own name for the feature
-/// is a cache *point*, so the key is `cache_point` — any non-null value
-/// (`true` is the idiomatic one) turns the checkpoint on.
-///
-/// NOTE: `ai.internal.make_role` currently builds every role marker with empty
-/// metadata, so nothing populates this yet from the prompt DSL. Until that
-/// lands, use the client's `cache_system_prompt` / `cache_tools` options,
-/// which do not depend on per-message metadata.
-function _wants_cache_point(metadata: map<string, baml.json.json>) -> bool {
-    match (metadata.get("cache_point")) {
-        null => false,
-        _ => true,
-    }
-}
-
 /// (internal) The Converse conversation roles are `user` and `assistant` only. `system`
 /// is hoisted out above; every other authored role (including the role-less
 /// default and `tool`) becomes `user`, matching the native Anthropic client and
@@ -766,9 +741,6 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPromp
             for (let block in _prompt_system(message)) {
                 system.push(block);
             }
-            if (_wants_cache_point(message.metadata)) {
-                system.push(SystemContentBlock.of_cache_point());
-            }
             null
         } else {
             let content = _prompt_content(message, preview = preview);
@@ -776,9 +748,6 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPromp
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
             if (content.length() > 0) {
-                if (_wants_cache_point(message.metadata)) {
-                    content.push(ContentBlock.of_cache_point());
-                }
                 messages.push(Message { role: _conversation_role(message.role), content: content });
             }
             null
@@ -857,9 +826,6 @@ function _lower_journal(
             let user: ai.events.UserMessage => {
                 let content = _lower_blocks(user.content, preview = preview);
                 if (content.length() > 0) {
-                    if (_wants_cache_point(user.metadata)) {
-                        content.push(ContentBlock.of_cache_point());
-                    }
                     pending.push(
                         PendingMessage {
                             message: Message { role: "user", content: content },

@@ -533,16 +533,21 @@ function _cache_delimiter_is_dropped_by(target: ai.Client) -> bool {
 }
 
 test "clients without a cache marker send the prompt as if the delimiter were absent" {
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewResponses));
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewChat));
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewAnthropic));
     assert.is_true(_cache_delimiter_is_dropped_by(PreviewGemini));
     assert.is_true(_cache_delimiter_is_dropped_by(PreviewGeneric));
     assert.is_true(_cache_delimiter_is_dropped_by(PreviewOpenRouter));
     assert.is_true(_cache_delimiter_is_dropped_by(UnroutableOllama))
 }
 
-// Bedrock is the one client that sends it, so its two bodies differ.
+// The clients whose wire has a cache marker send one, so their two bodies
+// differ. `args` is written for one wire; here it is Bedrock's.
+test "clients with a cache marker send one for a cache delimiter" {
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewAnthropic) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewChat) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewResponses) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewBedrock) == false)
+}
+
 test "bedrock sends a cachePoint for a cache delimiter" {
     let picture = image.from_base64("image-data", "image/png");
     let body = baml.json.parse(CacheMarked@build_request("Ada", picture, client = PreviewBedrock).body);
@@ -553,6 +558,5 @@ test "bedrock sends a cachePoint for a cache delimiter" {
     assert.equal(
         baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]")),
         `{"cachePoint":{"type":"default","ttl":"1h"}}`,
-    );
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewBedrock) == false)
+    )
 }

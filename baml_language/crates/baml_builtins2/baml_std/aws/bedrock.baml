@@ -66,8 +66,8 @@ class BedrockClient {
 
     // --- prompt caching -----------------------------------------------------
     /// Append a `cachePoint` after the system content, making the system
-    /// prompt reusable across calls. Per-message checkpoints come from the
-    /// `cache_point` key of `ai.PromptMessage.metadata` instead.
+    /// prompt reusable across calls. A checkpoint anywhere else is written in
+    /// the prompt, as `${cache({ "type": "default" })}`.
     cache_system_prompt: bool,
     /// Append a `cachePoint` after the tool list, making the tool definitions
     /// reusable across calls.
