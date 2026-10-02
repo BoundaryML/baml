@@ -691,6 +691,65 @@ fn a_body_stored_as_a_blob_of_its_own_is_read_through_its_payload() {
 }
 
 #[test]
+fn two_event_lists_are_compared_each_by_its_own_content() {
+    const THIRD: u64 = 102;
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path());
+    // Each request has one event, whose data is long enough to be a blob of
+    // its own: comparing the lists reads through both.
+    let payload = |letter: &str| {
+        recording.cas(&json!({
+            "event": "message_delta", "data": letter.repeat(64 * 1024), "id": null,
+        }))
+    };
+    let (first, second, same) = (payload("a"), payload("b"), payload("a"));
+    let request = |id, payload| {
+        vec![
+            announce(id, "POST", URL, 10_000, None),
+            event(id, "data", 21_000, Some(payload)),
+            complete(id, 23_000, proto::InvocationOutcome::Ok, None),
+        ]
+    };
+    recording.write(
+        1,
+        proto::RecordingFile {
+            definitions: Some(definitions()),
+            clock_states: Some(valid()),
+            spans: Some(spans(vec![section(
+                ROOT,
+                [
+                    vec![call()],
+                    request(REQUEST, first),
+                    request(OTHER, second),
+                    request(THIRD, same),
+                ]
+                .concat(),
+            )])),
+            ..Default::default()
+        },
+    );
+    let mut index = index(project.path());
+    let result = run(
+        &mut index,
+        "SELECT a.span_id, b.span_id, a.network_event_values = b.network_event_values
+         FROM spans a JOIN spans b ON a.span_id < b.span_id
+         WHERE a.span_type = 'network_span' AND b.span_type = 'network_span'
+         ORDER BY a.span_id, b.span_id",
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![recording.span(REQUEST), recording.span(OTHER), json!(0)],
+            vec![recording.span(REQUEST), recording.span(THIRD), json!(1)],
+            vec![recording.span(OTHER), recording.span(THIRD), json!(0)],
+        ],
+        "{:?}",
+        result.outcome.diagnostics
+    );
+    assert_eq!(result.outcome.status, Status::Complete);
+}
+
+#[test]
 fn an_unfinished_request_shows_its_events_so_far() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path());

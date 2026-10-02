@@ -168,6 +168,14 @@ impl QueryContext {
         let load = |cas| {
             BlobSource::load(self, CasId::from_bytes(cas)).map_err(|unavailable| unavailable.code())
         };
+        // A reader knows a blob by its ID, so what is built here needs one
+        // of its own: what the handle says is what is built from it.
+        let id = {
+            let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+            hasher.update(b"baml.query.events\0");
+            hasher.update(&handle.encode());
+            CasId::from_bytes(hasher.digest128().to_le_bytes())
+        };
         let mut path = handle.path.clone();
         // A negative index counts from the end.
         if let Some(Segment::Index(index)) = path.first_mut()
@@ -187,7 +195,7 @@ impl QueryContext {
             let rest = path.split_off(2);
             let snapshot = match events[at].payload {
                 Some(cas) => load(cas)?,
-                None => Arc::new(Composer::default().finish(DecodedValue::Null)),
+                None => Arc::new(Composer::default().finish(id, DecodedValue::Null)),
             };
             return Ok((snapshot, Cow::Owned(rest)));
         }
@@ -213,7 +221,7 @@ impl QueryContext {
             ])?);
         }
         let list = composer.list(items)?;
-        Ok((Arc::new(composer.finish(list)), Cow::Owned(path)))
+        Ok((Arc::new(composer.finish(id, list)), Cow::Owned(path)))
     }
 
     /// Report `code` once per distinct `key` (a handle, or a handle plus an
@@ -655,9 +663,12 @@ impl Composer {
         Ok(shift(root))
     }
 
-    fn finish(self, root: DecodedValue) -> DecodedSnapshot {
+    /// `id` names what was built: a reader that walks several values at
+    /// once tells their blobs apart by ID, so two different compositions
+    /// must not share one.
+    fn finish(self, id: CasId, root: DecodedValue) -> DecodedSnapshot {
         DecodedSnapshot {
-            id: CasId::from_bytes([0; 16]),
+            id,
             encoded_len: 0,
             children: self.children,
             root: DecodedRoot::Value(root),
