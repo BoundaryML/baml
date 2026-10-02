@@ -10470,7 +10470,6 @@ impl<'db> LoweringContext<'db> {
         };
         use baml_type::interned::{InferInterface, Ty};
 
-        structural_interface(self.db, interface)?;
         // A closed outer class is insufficient: a specialized impl can still
         // override `Box<T>` when its type argument becomes known at runtime.
         fn is_static(ty: &Tir2Ty) -> bool {
@@ -10492,6 +10491,7 @@ impl<'db> LoweringContext<'db> {
                 _ => false,
             }
         }
+        structural_interface(self.db, interface)?;
         if !is_static(self_ty) {
             return None;
         }

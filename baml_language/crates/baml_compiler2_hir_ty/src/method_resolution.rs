@@ -297,9 +297,6 @@ pub fn prefer_explicit_members<'db, T>(
     candidates: &mut Vec<T>,
     interface: impl Fn(&T) -> InferInterface,
 ) {
-    if candidates.len() < 2 {
-        return;
-    }
     fn explicit<'db>(
         db: &'db dyn baml_compiler2_hir::Db,
         viewer: baml_base::SourceRoot,
@@ -325,6 +322,9 @@ pub fn prefer_explicit_members<'db, T>(
                 env_discharges_rigid_bounds(db, facts, resolved)
                     && resolved.implemented() == *interface
             })
+    }
+    if candidates.len() < 2 {
+        return;
     }
     let priorities: Vec<_> = candidates
         .iter()
