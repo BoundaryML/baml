@@ -42,7 +42,7 @@ jobs:
             #   ./tools/build integ-tests/typescript
             #   ./tools/build integ-tests/ruby
 
-          - runs-on: macos-14
+          - runs-on: macos-15
             setup: |
               env | sort
               brew install ollama go

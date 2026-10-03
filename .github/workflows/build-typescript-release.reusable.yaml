@@ -38,11 +38,11 @@ jobs:
             skip_protoc: true
 
           - target: aarch64-apple-darwin
-            host: macos-14
+            host: macos-15
             node_build: pnpm build:napi-release --target aarch64-apple-darwin
 
           - target: x86_64-apple-darwin
-            host: macos-14
+            host: macos-15
             node_build: pnpm build:napi-release --target x86_64-apple-darwin
 
           - target: x86_64-pc-windows-msvc

@@ -500,7 +500,7 @@ jobs:
   build-swift-sdk:
     name: Build Swift SDK (XCFramework + mirror)
     needs: [plan]
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1737,7 +1737,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, windows-latest]
+        os: [ubuntu-latest, macos-15, windows-latest]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1996,7 +1996,7 @@ jobs:
     name: Publish Homebrew wrapper formula
     needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
-    runs-on: macos-14
+    runs-on: macos-15
     environment: infisical-github-baml-language-release
     steps:
       - uses: actions/checkout@v7
