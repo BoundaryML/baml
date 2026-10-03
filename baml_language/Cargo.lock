@@ -6858,6 +6858,7 @@ dependencies = [
  "baml_artifact",
  "baml_base",
  "baml_sdkgen_types",
+ "base64",
  "bex_vm_types",
  "serde",
  "serde_json",

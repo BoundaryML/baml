@@ -1807,11 +1807,14 @@ jobs:
           key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-
 
+      # Generated fixture clients are still absent after checkout. Defer only
+      # those missing inputs until the strict post-codegen restore below.
       - name: "Backdate unchanged C# sources"
         if: matrix.sdk-label == 'csharp'
         shell: bash
         run: |
-          "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
+          "$(command -v python3 || command -v python)" .github/scripts/test_csharp_mtime_cache.py
+          "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore-before-codegen
 
       - name: "Test C# NuGet payload comparison"
         if: matrix.sdk-label == 'csharp'

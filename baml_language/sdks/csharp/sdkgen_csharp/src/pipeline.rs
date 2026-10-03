@@ -3,6 +3,7 @@
 use std::{collections::BTreeSet, fmt};
 
 use baml_sdkgen_types::Symbol;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 use crate::{
     hash::sha256,
@@ -273,20 +274,16 @@ fn render_program_carrier(
         ));
     }
 
-    let mut byte_literals = String::new();
-    for chunk in program_bytes.chunks(16) {
-        byte_literals.push_str("        ");
-        for (index, byte) in chunk.iter().enumerate() {
-            use std::fmt::Write as _;
-            if index != 0 {
-                byte_literals.push(' ');
-            }
-            write!(&mut byte_literals, "0x{byte:02x},").expect("writing to String cannot fail");
-        }
-        byte_literals.push('\n');
-    }
+    // Millions of individual byte literals dominate Roslyn's parsing and
+    // binding time. A UTF-8 literal embeds the compact payload in static data,
+    // avoiding both those syntax nodes and the CLR's user-string heap limit.
+    let bytecode = format!(
+        "DecodeBytecode(\"{}\"u8, {})",
+        BASE64.encode(program_bytes),
+        program_bytes.len(),
+    );
     Ok(template
-        .replace(PROGRAM_BYTES_PLACEHOLDER, &byte_literals)
+        .replace(PROGRAM_BYTES_PLACEHOLDER, &bytecode)
         .replace(PROGRAM_FINGERPRINT_PLACEHOLDER, fingerprint))
 }
 
@@ -398,7 +395,7 @@ mod tests {
             .program_carrier(
                 &carrier,
                 format!(
-                    "{HEADER}internal static class BamlProgram {{\n    const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n    static readonly byte[] Bytes = [\n{PROGRAM_BYTES_PLACEHOLDER}    ];\n}}\n"
+                    "{HEADER}internal static class BamlProgram {{\n    const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n    static readonly byte[] Bytes = {PROGRAM_BYTES_PLACEHOLDER};\n}}\n"
                 ),
             )
             .unwrap();
@@ -431,7 +428,7 @@ mod tests {
             .find(|file| file.relative_path.ends_with("BamlProgram.g.cs"))
             .unwrap();
         let source = std::str::from_utf8(&carrier.contents).unwrap();
-        assert!(source.contains("0x00, 0x01, 0xfe, 0xff,"));
+        assert!(source.contains("DecodeBytecode(\"AAH+/w==\"u8, 4)"));
         assert!(
             source.lines().all(|line| line.trim_end() == line),
             "generated carriers must not contain trailing whitespace"
@@ -444,6 +441,22 @@ mod tests {
         write_generated_output(&root.path().join("baml_sdk"), files).unwrap();
         assert!(root.path().join("baml_sdk/BamlProgram.g.cs").is_file());
         assert!(!root.path().join("baml_sdk/program.baml").exists());
+    }
+
+    #[test]
+    fn program_carrier_roundtrips_all_bytes_and_padding_lengths() {
+        let bytes: Vec<u8> = (0..=255).chain([0, 255]).collect();
+        for length in 0..=bytes.len() {
+            let source = render_program_carrier(
+                &format!("{PROGRAM_BYTES_PLACEHOLDER} // {PROGRAM_FINGERPRINT_PLACEHOLDER}"),
+                &bytes[..length],
+                "fingerprint",
+            )
+            .unwrap();
+            let encoded = source.split('"').nth(1).unwrap();
+            assert_eq!(BASE64.decode(encoded).unwrap(), bytes[..length]);
+            assert!(source.ends_with(&format!("\"u8, {length}) // fingerprint")));
+        }
     }
 
     #[test]
