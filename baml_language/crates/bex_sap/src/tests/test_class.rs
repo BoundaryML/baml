@@ -161,6 +161,168 @@ test_deserializer!(
     { "one": "a", "two": "b" }
 );
 
+// Regression for #4790: supported unquoted object keys must not depend on
+// whitespace around nested fields or silently drop the containing array item.
+test_deserializer!(
+    test_compact_unquoted_keys_retain_nested_array_entries,
+    r#"{routes:[{id:"001",schema_id:null,reason:"amount -1.617,98"}]}"#,
+    baml_tyannotated!(PageRoutes),
+    baml_db! {
+        class PageRoute {
+            id: string,
+            schema_id: (string | null) @class_completed_field_missing(null),
+            reason: string,
+        }
+        class PageRoutes {
+            routes: [PageRoute],
+        }
+    },
+    {
+        "routes": [{
+            "id": "001",
+            "schema_id": null,
+            "reason": "amount -1.617,98"
+        }]
+    }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_decimal_comma,
+    r#"{reason:amount -1.617,98}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "amount -1.617,98" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_url_after_comma,
+    r#"{reason:docs,https://example.com}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "docs,https://example.com" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_non_hierarchical_uris_after_comma,
+    r#"{reason:docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_colon_text_after_phrase,
+    r#"{reason:see docs,label:value}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "see docs,label:value" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_uppercase_boolean_text,
+    r#"{reason:TRUE,label:value}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "TRUE,label:value" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_non_finite_number_text,
+    r#"{reason:NaN,label:value}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "NaN,label:value" }
+);
+
+test_deserializer!(
+    test_compact_numeric_unquoted_key,
+    r#"{id:001,1:foo}"#,
+    baml_tyannotated!(NumericKey),
+    baml_db! {
+        class NumericKey {
+            id: int,
+            numeric: string @alias("1"),
+        }
+    },
+    { "id": 1, "numeric": "foo" }
+);
+
+test_deserializer!(
+    test_compact_unquoted_key_with_punctuation,
+    r#"{a:null,key.with.punctuation/123:foo}"#,
+    baml_tyannotated!(PunctuationKey),
+    baml_db! {
+        class PunctuationKey {
+            a: (string | null) @class_completed_field_missing(null),
+            punctuation: string @alias("key.with.punctuation/123"),
+        }
+    },
+    { "a": null, "punctuation": "foo" }
+);
+
+test_deserializer!(
+    test_compact_quoted_key_with_comma,
+    r#"{a:null,"last,name":foo}"#,
+    baml_tyannotated!(QuotedCommaKey),
+    baml_db! {
+        class QuotedCommaKey {
+            a: (string | null) @class_completed_field_missing(null),
+            name: string @alias("last,name"),
+        }
+    },
+    { "a": null, "name": "foo" }
+);
+
+test_deserializer!(
+    test_compact_unquoted_key_with_embedded_apostrophe,
+    r#"{a:null,owner's_name:foo}"#,
+    baml_tyannotated!(ApostropheKey),
+    baml_db! {
+        class ApostropheKey {
+            a: (string | null) @class_completed_field_missing(null),
+            owner: string @alias("owner's_name"),
+        }
+    },
+    { "a": null, "owner": "foo" }
+);
+
+test_deserializer!(
+    test_compact_key_before_unquoted_unicode_value,
+    r#"{a:null,b:x😀}"#,
+    baml_tyannotated!(UnicodeCompact),
+    baml_db! {
+        class UnicodeCompact {
+            a: (string | null) @class_completed_field_missing(null),
+            b: string,
+        }
+    },
+    { "a": null, "b": "x😀" }
+);
+
 // Regression for #4589: a valid optional class must not lose to its null arm
 // merely because the class contains omitted optional fields. This keeps the
 // reported required/present/explicit-null comparison in one coercion.
