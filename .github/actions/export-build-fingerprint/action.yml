@@ -1,10 +1,12 @@
 name: "Export BAML build fingerprint"
 description: >-
-  Export BAML_GIT_SHA as the commit checked out in the workspace. baml_artifact
-  stamps it into every compiler and bridge build, and canary runtimes only load
-  artifacts carrying their own fingerprint, so every build job of a release must
-  export the same commit. Build steps that run in their own container (cross,
-  maturin) must forward BAML_GIT_SHA into it explicitly.
+  Export BAML_GIT_SHA as the commit checked out in the workspace. For release
+  builds only: baml_artifact stamps it into the compiler and bridge, and canary
+  runtimes only load artifacts carrying their own fingerprint, so every build
+  job of a release must export the same commit. Build steps that run in their
+  own container (cross, maturin) must forward BAML_GIT_SHA into it explicitly.
+  Test jobs must not run this: the commit changes on every push and would
+  defeat their cargo and sccache caches.
 
 runs:
   using: "composite"
