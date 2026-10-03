@@ -47,7 +47,7 @@ impl CompiledSapModel {
         ctx: &::sys_types::SysOpContext,
         target: sys_types::SapTy,
     ) -> Result<Self, sap_model::ConvertError> {
-        let type_ctx = sap_model::TypeCtx::from_sys_op_context(ctx);
+        let type_ctx = sap_model::TypeCtx::for_target(ctx, &target);
         Self::from_type_ctx(type_ctx, target)
     }
 
