@@ -33,6 +33,12 @@ use wiremock::{
 /// Every byte handed out since the process started.
 static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
 
+/// Held for the whole of each test. `ALLOCATED` counts every thread, so a test
+/// running beside a measurement (`cargo test` runs this binary's tests on
+/// parallel threads; nextest gives each its own process) would add its bytes
+/// to that measurement.
+static MEASURING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 struct CountingAllocator;
 
 // SAFETY: every method forwards its arguments unchanged to `System`, which
@@ -208,6 +214,7 @@ function main() -> string {
 
 #[tokio::test]
 async fn call_cost_does_not_grow_with_unrelated_types() {
+    let _measuring = MEASURING.lock().await;
     let (_small_server, small) = engine_for(PICK_TOOL, r#"{"tool": "search"}"#).await;
     let large_program = format!("{PICK_TOOL}\n{}", unrelated_classes(400));
     let (_large_server, large) = engine_for(&large_program, r#"{"tool": "search"}"#).await;
@@ -223,6 +230,7 @@ async fn call_cost_does_not_grow_with_unrelated_types() {
 
 #[tokio::test]
 async fn string_output_call_allocates_little() {
+    let _measuring = MEASURING.lock().await;
     let (_server, engine) = engine_for(
         r#"
 function SayHi() -> string {
