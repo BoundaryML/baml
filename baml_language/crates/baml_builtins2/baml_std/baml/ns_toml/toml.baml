@@ -104,7 +104,9 @@ class Table {
     implements baml.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl() catch (e) {
-                root.errors.InvalidArgument { message } => root.sys.panic("TOML serialization: " + message),
+                root.errors.InvalidArgument { message } => {
+                    root.sys.panic("TOML serialization: " + message)
+                },
             }
         }
     }
