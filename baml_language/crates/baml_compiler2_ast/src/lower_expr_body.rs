@@ -2307,12 +2307,130 @@ impl LoweringContext {
         let target = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let value = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
+        // Only a place (a variable, a field, or an index, optionally through
+        // `?.`) can be assigned to. Anything else - a class or array literal
+        // (`[x, y] = [1, 2]`, which reads like destructuring assignment), a
+        // call, a literal - would otherwise be materialized into a temporary
+        // by MIR and the store would silently go nowhere.
+        if !self.is_assignable_place(target) {
+            let suggestion = assign_op
+                .is_none()
+                .then(|| self.destructuring_let_suggestion(node, target, value))
+                .flatten();
+            self.diags
+                .push(LoweringDiagnostic::InvalidAssignmentTarget {
+                    span: self.source_map.expr_span(target),
+                    suggestion,
+                });
+        }
+
         let stmt = match assign_op {
             None => Stmt::Assign { target, value },
             Some(op) => Stmt::AssignOp { target, op, value },
         };
 
         Some(self.alloc_stmt(stmt, node.span_range()))
+    }
+
+    /// Whether `expr` denotes a storage location an assignment can write
+    /// through. `Missing` counts as assignable so a syntax error already
+    /// reported for the target does not cascade into a second diagnostic.
+    fn is_assignable_place(&self, expr: ExprId) -> bool {
+        match &self.exprs[expr] {
+            Expr::Path(_)
+            | Expr::MemberAccess { .. }
+            | Expr::Index { .. }
+            | Expr::OptionalMemberAccess { .. }
+            | Expr::OptionalIndex { .. }
+            | Expr::Missing => true,
+            Expr::OptionalChain { expr } => self.is_assignable_place(*expr),
+            _ => false,
+        }
+    }
+
+    /// For `[x, y] = rhs` / `P { a: x } = rhs` - an attempt at destructuring
+    /// assignment - the closest valid spelling: a `let` destructure that
+    /// binds (or rebinds) the same names, e.g.
+    /// `let [let x, let y] = rhs else { … };` or `let P { a: let x } = rhs;`.
+    /// An array pattern has a fixed length, so it is refutable and needs the
+    /// `else`. `None` when the target is not a literal whose every leaf is a
+    /// plain name (a field or index leaf has no pattern equivalent).
+    fn destructuring_let_suggestion(
+        &self,
+        assignment: &SyntaxNode,
+        target: ExprId,
+        value: ExprId,
+    ) -> Option<String> {
+        if !matches!(self.exprs[target], Expr::Array { .. } | Expr::Object { .. }) {
+            return None;
+        }
+        let base = assignment.text_range().start();
+        let source =
+            |range: TextRange| -> String { assignment.text().slice(range - base).to_string() };
+        let mut refutable = false;
+        let pattern = self.destructuring_pattern_text(target, &source, &mut refutable)?;
+        let value_text = source(self.source_map.expr_span(value));
+        let value_text = if value_text.contains('\n') || value_text.chars().count() > 40 {
+            "…".to_string()
+        } else {
+            value_text
+        };
+        let else_branch = if refutable { " else { … }" } else { "" };
+        Some(format!("let {pattern} = {value_text}{else_branch};"))
+    }
+
+    fn destructuring_pattern_text(
+        &self,
+        expr: ExprId,
+        source: &dyn Fn(TextRange) -> String,
+        refutable: &mut bool,
+    ) -> Option<String> {
+        match &self.exprs[expr] {
+            Expr::Path(segments) if segments.len() == 1 => match segments[0].as_str() {
+                "_" => Some("_".to_string()),
+                "self" => None,
+                name => Some(format!("let {name}")),
+            },
+            Expr::Array { elements } => {
+                *refutable = true;
+                let elements = elements
+                    .iter()
+                    .map(|element| self.destructuring_pattern_text(*element, source, refutable))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(format!("[{}]", elements.join(", ")))
+            }
+            Expr::Object {
+                fields, spreads, ..
+            } if spreads.is_empty() => {
+                // The constructor as written (`P`, `pkg.Box<int>`): the
+                // literal's source up to its opening brace.
+                let head = source(self.source_map.expr_span(expr));
+                let head = head.split('{').next()?.trim().to_string();
+                let fields = fields
+                    .iter()
+                    .map(|field| {
+                        // A dotted key (`P { nested.value: x }`) writes a
+                        // nested field; field patterns have no such form.
+                        if field.name.contains('.') {
+                            return None;
+                        }
+                        let is_same_name = matches!(
+                            &self.exprs[field.value],
+                            Expr::Path(segments)
+                                if segments.len() == 1 && segments[0] == field.name
+                        );
+                        if is_same_name {
+                            return Some(field.name.to_string());
+                        }
+                        let pattern =
+                            self.destructuring_pattern_text(field.value, source, refutable)?;
+                        Some(format!("{}: {pattern}", field.name))
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                Some(format!("{head} {{ {} }}", fields.join(", ")))
+            }
+            _ => None,
+        }
     }
 
     fn lower_unary_expr(&mut self, node: &SyntaxNode) -> ExprId {
