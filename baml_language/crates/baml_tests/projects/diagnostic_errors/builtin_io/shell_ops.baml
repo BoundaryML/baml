@@ -1,32 +1,32 @@
 // Test shell operations typecheck correctly
 
 function RunCommand() -> string {
-    baml.sys.shell("echo hello", options = null).stdout
+    baml.sys.shell("echo hello", capture_output = true).stdout
 }
 
 function RunCommandWithVar() -> string {
     let cmd = "ls -la";
-    baml.sys.shell(cmd, options = null).stdout
+    baml.sys.shell(cmd, capture_output = true).stdout
 }
 
 function ChainCommands() -> string {
-    let result1 = baml.sys.shell("pwd", options = null);
-    let result2 = baml.sys.shell("whoami", options = null);
+    let result1 = baml.sys.shell("pwd", capture_output = true);
+    let result2 = baml.sys.shell("whoami", capture_output = true);
     result1.stdout + " - " + result2.stdout
 }
 
 function CheckExitCode() -> int {
-    baml.sys.shell("exit 42", options = null).exit_code
+    baml.sys.shell("exit 42", capture_output = true).exit_code
 }
 
 function CheckOk() -> bool {
-    baml.sys.shell("echo test", options = null).ok()
+    baml.sys.shell("echo test", capture_output = true).ok()
 }
 
 function ExecCommand() -> string {
-    baml.sys.capture("echo", args = ["hello"], options = null).stdout
+    baml.sys.run("echo", args = ["hello"], capture_output = true).stdout
 }
 
 function ExecWithOptions() -> string {
-    baml.sys.capture("pwd", args = [], options = baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+    baml.sys.run("pwd", args = [], cwd = "/tmp", capture_output = true).stdout
 }

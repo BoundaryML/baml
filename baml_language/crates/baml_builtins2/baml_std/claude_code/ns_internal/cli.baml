@@ -127,10 +127,10 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
 
 /// (internal) Consume the live JSONL stream: log every event as it arrives, return the
 /// terminal result event.
-function _read_result(p: baml.sys.Process) -> json {
+function _read_result(p: baml.sys.Subprocess) -> json {
     let result: json = null;
     let raw_lines: string[] = [];
-    for (let line in p.stdout.lines()) {
+    for (let line in (p.stdout ?? baml.sys.panic("stdout is not piped")).lines()) {
         raw_lines.push(line);
         let trimmed = line.trim();
         if (trimmed.length() > 0) {
@@ -291,15 +291,15 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     args.push(baml.json.stringify(schema));
     args.push(prompt_text);
 
-    let p = baml.sys.start_process(
+    let p = baml.sys.subprocess(
         c.executable,
         args = args,
-        options = baml.sys.ProcessOptions {
-            cwd: c.cwd,
-            env: null,
-            timeout: baml.time.Duration.from_milliseconds(c.timeout_ms),
-            stdin: null,
-        },
+        stdin = "pipe",
+        stdout = "pipe",
+        cwd = c.cwd,
+        env = null,
+        timeout = baml.time.Duration.from_milliseconds(c.timeout_ms),
+        input = null,
     ) catch_all (e) {
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,
@@ -309,11 +309,9 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             }
         },
     };
-    defer {
-        p.close()
-    }
+    defer { p.kill(); p.close(); }
     // the CLI reads stdin when the pipe is open; deliver EOF immediately
-    let _ = p.stdin.close() catch_all (e) {
+    let _ = (p.stdin ?? baml.sys.panic("stdin is not piped")).close() catch_all (e) {
         _ => null,
     };
     // events stream LIVE: each JSONL line logs as it arrives, and the last

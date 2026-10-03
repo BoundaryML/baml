@@ -7,7 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × mismatched types
    ╭─[shell_ops.baml:3:33]
  3 │ ╭─▶ function RunCommand() -> string {
- 4 │ │       baml.sys.shell("echo hello", options = null).stdout
+ 4 │ │       baml.sys.shell("echo hello", capture_output = true).stdout
  5 │ ├─▶ }
    · ╰──── expected `string`, found `uint8array`
    ╰────
@@ -18,7 +18,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[shell_ops.baml:7:40]
   7 │ ╭─▶ function RunCommandWithVar() -> string {
   8 │ │       let cmd = "ls -la";
-  9 │ │       baml.sys.shell(cmd, options = null).stdout
+  9 │ │       baml.sys.shell(cmd, capture_output = true).stdout
  10 │ ├─▶ }
     · ╰──── expected `string`, found `uint8array`
     ╰────
@@ -36,7 +36,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × mismatched types
     ╭─[shell_ops.baml:26:34]
  26 │ ╭─▶ function ExecCommand() -> string {
- 27 │ │       baml.sys.capture("echo", args = ["hello"], options = null).stdout
+ 27 │ │       baml.sys.run("echo", args = ["hello"], capture_output = true).stdout
  28 │ ├─▶ }
     · ╰──── expected `string`, found `uint8array`
     ╰────
@@ -46,7 +46,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × mismatched types
     ╭─[shell_ops.baml:30:38]
  30 │ ╭─▶ function ExecWithOptions() -> string {
- 31 │ │       baml.sys.capture("pwd", args = [], options = baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
+ 31 │ │       baml.sys.run("pwd", args = [], cwd = "/tmp", capture_output = true).stdout
  32 │ ├─▶ }
     · ╰──── expected `string`, found `uint8array`
     ╰────

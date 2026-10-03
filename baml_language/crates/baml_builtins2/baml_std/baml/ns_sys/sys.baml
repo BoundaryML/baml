@@ -1,59 +1,44 @@
 /// Text (UTF-8 encoded) or raw bytes to send to a process.
 type ProcessInput = string | uint8array;
 
-/// Options for `capture`, `start_process`, and `shell`.
-class ProcessOptions {
-    /// Working directory for the child process.
+/// How a standard stream is connected to its parent.
+type Stdio = "inherit" | "pipe" | "ignore";
+
+/// (internal) Resolved arguments for the native process operations.
+class _ProcessOptions {
     cwd: string?,
-    /// Environment variables to overlay on the inherited environment.
-    env: map<string, string>?,
-    /// Start with an empty environment before applying `env`. Defaults to false.
-    clear_env: bool?,
-    /// Maximum lifetime of the operation, including writing stdin. Null means no deadline.
+    /// Overlay the inherited environment; null removes a variable.
+    env: map<string, string?>?,
+    clear_env: bool,
     timeout: root.time.Duration?,
-    /// The child process's complete stdin. `start_process` writes it concurrently, then
-    /// closes the pipe. Leave it unset to drive `Process.stdin` incrementally.
-    stdin: ProcessInput?,
-    /// Where the child's stderr goes. Null means Pipe for capture/shell and Inherit for start_process;
-    /// only `StderrMode.Pipe` populates `Process.stderr`.
-    stderr: StderrMode?,
+    input: ProcessInput?,
+    stdin: Stdio,
+    stdout: Stdio,
+    stderr: Stdio,
+    detached: bool,
 }
 
-/// Where a child process's standard error goes.
-enum StderrMode {
-    /// The child writes to this process's stderr.
-    Inherit,
-    /// The child's stderr becomes `Process.stderr`. The caller must drain it
-    /// concurrently with stdout to prevent the child from blocking.
-    Pipe,
-    /// The child's stderr is discarded.
-    Discard,
-}
-
-/// The result of running an external process with `capture` or `shell`.
+/// A completed command. Uncaptured output streams contain empty bytes.
 class ProcessOutput {
     stdout: uint8array,
     stderr: uint8array,
     exit_code: int,
-    /// Signal number as a string, when terminated by a signal.
-    signal: string?,
+    /// Unix signal number, when terminated by a signal.
+    signal: int?,
 
-    /// Returns `true` if the process exited with code `0`.
-    function ok(self) -> bool {
-        self.exit_code == 0
+    function ok(self) -> bool throws never {
+        self.exit_code == 0 && self.signal == null
     }
 }
 
-/// The terminal status of a process returned by `run` or `Process.wait`.
+/// The exit status of a subprocess.
 class ProcessExit {
     /// Exit code, or 128 + signal number on Unix when terminated by a signal.
     exit_code: int,
-    /// The signal that caused the process to exit, if any.
-    signal: string?,
+    signal: int?,
 
-    /// Returns `true` if the process exited normally with code `0`.
     function ok(self) -> bool throws never {
-        self.exit_code == 0
+        self.exit_code == 0 && self.signal == null
     }
 }
 
@@ -122,31 +107,36 @@ function _strip_carriage_return(line: uint8array) -> uint8array throws never {
     }
 }
 
-/// A live child process created with `start_process`.
-///
-/// `stdin` and `stdout` are always caller-owned pipes. `stderr` is populated
-/// only when `ProcessOptions.stderr` is `StderrMode.Pipe`.
-class Process {
+/// A handle to an OS process. Releasing or collecting this handle does not
+/// terminate the process and does not wait for it. Use `defer { child.kill() }`
+/// when termination should follow a BAML scope's lifetime.
+class Subprocess {
     _handle: $rust_type,
-    stdin: WritePipe,
-    stdout: ReadPipe,
+    pid: int,
+    /// A stream is present only when its configuration is "pipe".
+    stdin: WritePipe?,
+    stdout: ReadPipe?,
     stderr: ReadPipe?,
 
-    /// Wait for the child to exit.
+    /// Explicitly wait for the child's exit status. A configured timeout only
+    /// limits this wait; it does not kill the child. Repeated waits are safe.
     function wait(self) -> ProcessExit throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
 
-    /// Request that the child terminate.
+    /// Request termination. Safe to call repeatedly or after the child exits.
     function kill(self) -> void throws root.errors.Io {
         $rust_io_function
     }
 
-    /// Terminate an un-waited child and close its stdin, stdout, and stderr pipes.
-    ///
-    /// Safe to use with `defer { process.close() }`.
+    /// Release local resources without terminating or waiting for the child.
     function close(self) -> null throws never {
         $rust_io_function
+    }
+
+    /// Release local resources; also invoked by GC. Termination stays explicit.
+    function cleanup(self) -> void throws never {
+        self.close();
     }
 }
 
@@ -175,7 +165,7 @@ class ReadPipe {
 class WritePipe {
     _pipe: $rust_type,
 
-    /// Close the write pipe, flushing pending data and delivering EOF.
+    /// Close the write pipe, delivering EOF. Call flush() first if needed.
     function close(self) -> void throws root.errors.Io {
         $rust_io_function
     }
@@ -191,60 +181,134 @@ class WritePipe {
     }
 }
 
-/// Runs `program` with the given `args` and returns its output. Throws on I/O failure or timeout.
-function capture(
+/// Execute a program directly and wait for its result. Arguments are passed
+/// literally. Standard streams inherit by default; `capture_output = true`
+/// collects both stdout and stderr. Nonzero exit codes are returned normally.
+/// A timeout terminates this command; cancelling the call releases the child
+/// handle without killing the process. Explicit `input` is written to a pipe.
+function run(
     program: string,
     args: string[] = [],
-    options: ProcessOptions? = null,
+    cwd: string? = null,
+    env: map<string, string?>? = null,
+    clear_env: bool = false,
+    timeout: root.time.Duration? = null,
+    input: ProcessInput? = null,
+    stdin: Stdio = "inherit",
+    stdout: Stdio = "inherit",
+    stderr: Stdio = "inherit",
+    capture_output: bool = false,
 ) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _capture(program, args, options)
+    let options = _ProcessOptions {
+        cwd: cwd,
+        env: env,
+        clear_env: clear_env,
+        timeout: timeout,
+        input: input,
+        stdin: stdin,
+        stdout: stdout,
+        stderr: stderr,
+        detached: false,
+    };
+    if (capture_output) {
+        options.stdout = "pipe";
+        options.stderr = "pipe";
+    }
+    _run(program, args, options)
 }
 
-/// (internal) Native process operation with defaults resolved.
-function _capture(
+/// (internal) Direct command execution with resolved defaults.
+function _run(
     program: string,
     args: string[],
-    options: ProcessOptions?,
+    options: _ProcessOptions,
 ) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
     $rust_io_function
 }
 
-/// Starts `program` and returns a live process with caller-owned pipes.
-///
-/// Unlike `capture`, output is not buffered until process exit. Reading
-/// `process.stdout` suspends only the current BAML green thread. If
-/// `ProcessOptions.stdin` is set, input is written concurrently while the caller
-/// drains output, then stdin closes. `wait` reports write errors and timeouts.
-function start_process(
-    program: string,
-    args: string[] = [],
-    options: ProcessOptions? = null,
-) -> Process throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    _start_process(program, args, options)
-}
-
-/// (internal) Native process operation with defaults resolved.
-function _start_process(
-    program: string,
-    args: string[],
-    options: ProcessOptions?,
-) -> Process throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-    $rust_io_function
-}
-
-/// Runs a `command` string in the host's default shell and returns its output.
+/// Interpret a command string in the host's shell and wait for its result.
+/// Supports pipes, redirection and other shell syntax. Output and timeout
+/// behavior are the same as `run`; this function always uses a shell.
 function shell(
     command: string,
-    options: ProcessOptions? = null,
+    cwd: string? = null,
+    env: map<string, string?>? = null,
+    clear_env: bool = false,
+    timeout: root.time.Duration? = null,
+    input: ProcessInput? = null,
+    stdin: Stdio = "inherit",
+    stdout: Stdio = "inherit",
+    stderr: Stdio = "inherit",
+    capture_output: bool = false,
 ) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+    let options = _ProcessOptions {
+        cwd: cwd,
+        env: env,
+        clear_env: clear_env,
+        timeout: timeout,
+        input: input,
+        stdin: stdin,
+        stdout: stdout,
+        stderr: stderr,
+        detached: false,
+    };
+    if (capture_output) {
+        options.stdout = "pipe";
+        options.stderr = "pipe";
+    }
     _shell(command, options)
 }
 
-/// (internal) Native shell operation.
+/// (internal) Shell execution with resolved defaults.
 function _shell(
     command: string,
-    options: ProcessOptions?,
+    options: _ProcessOptions,
 ) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+    $rust_io_function
+}
+
+/// Start a process and return its handle immediately. Only "pipe" streams
+/// are exposed on the handle; callers must drain piped outputs concurrently.
+/// Dropping, closing or collecting the handle never kills or waits for the
+/// process. `timeout` limits `wait()` and never terminates the child.
+/// `detached = true` creates a new session on Unix or detaches from the
+/// Windows console. It does not change GC behavior or stream configuration.
+function subprocess(
+    program: string,
+    args: string[] = [],
+    cwd: string? = null,
+    env: map<string, string?>? = null,
+    clear_env: bool = false,
+    timeout: root.time.Duration? = null,
+    input: ProcessInput? = null,
+    stdin: Stdio = "inherit",
+    stdout: Stdio = "inherit",
+    stderr: Stdio = "inherit",
+    detached: bool = false,
+) -> Subprocess throws root.errors.Io | root.errors.InvalidArgument {
+    _subprocess(
+        program,
+        args,
+        _ProcessOptions {
+            cwd: cwd,
+            env: env,
+            clear_env: clear_env,
+            timeout: timeout,
+            input: input,
+            stdin: stdin,
+            stdout: stdout,
+            stderr: stderr,
+            detached: detached,
+        },
+    )
+}
+
+/// (internal) Subprocess creation with resolved defaults.
+function _subprocess(
+    program: string,
+    args: string[],
+    options: _ProcessOptions,
+) -> Subprocess throws root.errors.Io | root.errors.InvalidArgument {
     $rust_io_function
 }
 
@@ -295,74 +359,3 @@ function pid() -> int throws never {
     $rust_io_function
 }
 
-/// Options for commands that inherit the terminal and standard streams.
-class ExecOptions {
-    cwd: string?,
-    /// Variables to overlay on the inherited environment. Null removes a variable.
-    env: map<string, string?>?,
-    /// Start with an empty environment. Defaults to false.
-    clear_env: bool?,
-}
-
-/// Runs a child with inherited stdin, stdout and stderr and waits for its status.
-/// Use `capture` to collect output or `start_process` to work with pipes.
-function run(
-    program: string,
-    args: string[] = [],
-    options: ExecOptions? = null,
-) -> ProcessExit throws root.errors.Io {
-    _run(program, args, options)
-}
-
-/// Transfers this process to `program`, preserving its terminal and streams.
-/// On Unix, successful handoff replaces the entire host process. On Windows,
-/// which cannot replace a process, waits for the child and exits with its full
-/// native status. No BAML code, deferred cleanup or telemetry shutdown runs
-/// after a successful handoff on either platform.
-/// A launch failure throws `Io` and leaves the caller running.
-function exec(
-    program: string,
-    args: string[] = [],
-    options: ExecOptions? = null,
-) -> never throws root.errors.Io {
-    let status = _exec(program, args, options);
-    exit(status.exit_code)
-}
-
-/// (internal) Native inherited-stream child operation.
-function _run(
-    program: string,
-    args: string[],
-    options: ExecOptions?,
-) -> ProcessExit throws root.errors.Io {
-    $rust_io_function
-}
-
-/// (internal) Unix exec or Windows inherited-stream child operation.
-function _exec(
-    program: string,
-    args: string[],
-    options: ExecOptions?,
-) -> ProcessExit throws root.errors.Io {
-    $rust_io_function
-}
-
-/// Starts a background child independent of this host's lifetime. All standard
-/// streams are disconnected; the caller receives its PID and does not wait.
-/// The child starts in a new process group (and detached from the Windows console).
-function detach(
-    program: string,
-    args: string[] = [],
-    options: ExecOptions? = null,
-) -> int throws root.errors.Io {
-    _detach(program, args, options)
-}
-
-/// (internal) Native detached process operation.
-function _detach(
-    program: string,
-    args: string[],
-    options: ExecOptions?,
-) -> int throws root.errors.Io {
-    $rust_io_function
-}

@@ -21,7 +21,7 @@ async fn shell_with_pipe() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'", options = null).stdout.to_string()
+                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'", capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -29,7 +29,15 @@ async fn shell_with_pipe() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "echo 'hello world' | tr 'a-z' 'A-Z'"
-        load_const null
+        load_const <omitted>
+        load_const <omitted>
+        load_const <omitted>
+        load_const <omitted>
+        load_const <omitted>
+        load_const <omitted>
+        load_const <omitted>
+        load_const <omitted>
+        load_const true
         call baml.sys.shell
         load_field .stdout
         load_type baml.ToString
@@ -50,7 +58,7 @@ async fn shell_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'error output' >&2", options = null).stderr.to_string()
+                baml.sys.shell("echo 'error output' >&2", capture_output = true).stderr.to_string()
             }
         "#
     );
@@ -61,16 +69,16 @@ async fn shell_stderr() {
     }
 }
 
-// === capture() tests ===
+// === run(capture_output = true) tests ===
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn capture_failing() {
+async fn run_capture_failing() {
     // `false` exits with code 1 — should NOT throw
     let output = baml_test!(
         r#"
             function main() -> int {
-                baml.sys.capture("false", args = [], options = null).exit_code
+                baml.sys.run("false", args = [], capture_output = true).exit_code
             }
         "#
     );
@@ -79,12 +87,12 @@ async fn capture_failing() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn capture_failing() {
+async fn run_capture_failing() {
     // cmd /c "exit 1" exits with code 1 — should NOT throw
     let output = baml_test!(
         r#"
             function main() -> int {
-                baml.sys.capture("cmd", args = ["/c", "exit 1"], options = null).exit_code
+                baml.sys.run("cmd", args = ["/c", "exit 1"], capture_output = true).exit_code
             }
         "#
     );
@@ -93,11 +101,11 @@ async fn capture_failing() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn capture_with_args() {
+async fn run_capture_with_args() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("printf", args = ["%s %s", "hello", "world"], options = null).stdout.to_string()
+                baml.sys.run("printf", args = ["%s %s", "hello", "world"], capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -109,11 +117,11 @@ async fn capture_with_args() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn capture_with_args() {
+async fn run_capture_with_args() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("cmd", args = ["/c", "echo hello world"], options = null).stdout.to_string()
+                baml.sys.run("cmd", args = ["/c", "echo hello world"], capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -125,11 +133,11 @@ async fn capture_with_args() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn capture_stderr() {
+async fn run_capture_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("sh", args = ["-c", "echo err >&2"], options = null).stderr.to_string()
+                baml.sys.run("sh", args = ["-c", "echo err >&2"], capture_output = true).stderr.to_string()
             }
         "#
     );
@@ -141,11 +149,11 @@ async fn capture_stderr() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn capture_stderr() {
+async fn run_capture_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("cmd", args = ["/c", "echo err 1>&2"], options = null).stderr.to_string()
+                baml.sys.run("cmd", args = ["/c", "echo err 1>&2"], capture_output = true).stderr.to_string()
             }
         "#
     );
@@ -155,15 +163,15 @@ async fn capture_stderr() {
     }
 }
 
-// === ProcessOptions tests ===
+// === named process options tests ===
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn capture_with_cwd() {
+async fn run_capture_with_cwd() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("pwd", args = [], options = baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
+                baml.sys.run("pwd", args = [], cwd = "/tmp", capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -175,11 +183,11 @@ async fn capture_with_cwd() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn capture_with_cwd() {
+async fn run_capture_with_cwd() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("cmd", args = ["/c", "cd"], options = baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
+                baml.sys.run("cmd", args = ["/c", "cd"], cwd = "C:\\Windows\\Temp", capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -191,11 +199,11 @@ async fn capture_with_cwd() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn capture_with_stdin() {
+async fn run_capture_with_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("cat", args = [], options = baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout.to_string()
+                baml.sys.run("cat", args = [], input = "hello from stdin", capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -209,11 +217,11 @@ async fn capture_with_stdin() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn capture_with_stdin() {
+async fn run_capture_with_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("findstr", args = [".*"], options = baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout.to_string()
+                baml.sys.run("findstr", args = [".*"], input = "hello from stdin", capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -225,11 +233,11 @@ async fn capture_with_stdin() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn capture_with_timeout() {
+async fn run_capture_with_timeout() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("sleep", args = ["10"], options = baml.sys.ProcessOptions { timeout: baml.time.Duration.from_milliseconds(100) }).stdout.to_string()
+                baml.sys.run("sleep", args = ["10"], timeout = baml.time.Duration.from_milliseconds(100), capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -239,11 +247,11 @@ async fn capture_with_timeout() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn capture_with_timeout() {
+async fn run_capture_with_timeout() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.capture("ping", args = ["-n", "11", "127.0.0.1"], options = baml.sys.ProcessOptions { timeout: baml.time.Duration.from_milliseconds(100) }).stdout.to_string()
+                baml.sys.run("ping", args = ["-n", "11", "127.0.0.1"], timeout = baml.time.Duration.from_milliseconds(100), capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -251,22 +259,18 @@ async fn capture_with_timeout() {
     assert!(output.result.is_err());
 }
 
-// === start_process() streaming tests ===
+// === subprocess() streaming tests ===
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_yields_stdout_before_exit() {
+async fn subprocess_yields_stdout_before_exit() {
     let output = baml_test!(
         r#"
             function main() -> bool throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
-                let process = baml.sys.start_process(
-                    "sh",
-                    args = ["-c", "printf 'first\n'; while :; do :; done"],
-                    options = baml.sys.ProcessOptions { timeout: baml.time.Duration.from_milliseconds(2000) },
-                );
-                defer { process.close() }
+                let process = baml.sys.subprocess("sh", args = ["-c", "printf 'first\n'; while :; do :; done"], stdin = "pipe", stdout = "pipe", timeout = baml.time.Duration.from_milliseconds(2000));
+                defer { process.kill(); process.close(); }
 
-                let first = match (process.stdout.lines().next()) {
+                let first = match ((process.stdout ?? baml.sys.panic("stdout is not piped")).lines().next()) {
                     let line: string => line,
                     baml.iter.Done => "",
                 };
@@ -282,18 +286,14 @@ async fn start_process_yields_stdout_before_exit() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_iterates_lines_and_final_unterminated_line() {
+async fn subprocess_iterates_lines_and_final_unterminated_line() {
     let output = baml_test!(
         r#"
             function main() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
-                let process = baml.sys.start_process(
-                    "sh",
-                    args = ["-c", "printf 'one\ntwo'"],
-                    options = null,
-                );
-                defer { process.close() }
+                let process = baml.sys.subprocess("sh", args = ["-c", "printf 'one\ntwo'"], stdin = "pipe", stdout = "pipe");
+                defer { process.kill(); process.close(); }
 
-                let lines = process.stdout.lines().collect();
+                let lines = (process.stdout ?? baml.sys.panic("stdout is not piped")).lines().collect();
                 let exit = process.wait();
                 if (!exit.ok()) {
                     return "bad exit";
@@ -311,18 +311,14 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_reads_complete_stdout_as_text() {
+async fn subprocess_reads_complete_stdout_as_text() {
     let output = baml_test!(
         r#"
             function main() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
-                let process = baml.sys.start_process(
-                    "sh",
-                    args = ["-c", "printf 'hello'"],
-                    options = null,
-                );
-                defer { process.close() }
+                let process = baml.sys.subprocess("sh", args = ["-c", "printf 'hello'"], stdin = "pipe", stdout = "pipe");
+                defer { process.kill(); process.close(); }
 
-                let stdout = process.stdout.text();
+                let stdout = (process.stdout ?? baml.sys.panic("stdout is not piped")).text();
                 let exit = process.wait();
                 if (!exit.ok()) {
                     return "bad exit";
@@ -340,25 +336,25 @@ async fn start_process_reads_complete_stdout_as_text() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_supports_incremental_stdin() {
+async fn subprocess_supports_incremental_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
-                let process = baml.sys.start_process("cat", args = [], options = null);
-                defer { process.close() }
+                let process = baml.sys.subprocess("cat", args = [], stdin = "pipe", stdout = "pipe");
+                defer { process.kill(); process.close(); }
 
-                let out = process.stdout.lines();
-                process.stdin.write("one\n");
+                let out = (process.stdout ?? baml.sys.panic("stdout is not piped")).lines();
+                (process.stdin ?? baml.sys.panic("stdin is not piped")).write("one\n");
                 let one = match (out.next()) {
                     let line: string => line,
                     baml.iter.Done => "",
                 };
-                process.stdin.write("two\n");
+                (process.stdin ?? baml.sys.panic("stdin is not piped")).write("two\n");
                 let two = match (out.next()) {
                     let line: string => line,
                     baml.iter.Done => "",
                 };
-                process.stdin.close();
+                (process.stdin ?? baml.sys.panic("stdin is not piped")).close();
                 let exit = process.wait();
                 if (!exit.ok()) {
                     return "bad exit";
@@ -376,20 +372,16 @@ async fn start_process_supports_incremental_stdin() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_stdout_read_is_cancellable() {
+async fn subprocess_stdout_read_is_cancellable() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                let process = baml.sys.start_process(
-                    "sh",
-                    args = ["-c", "while :; do :; done"],
-                    options = null,
-                );
-                defer { process.close() }
+                let process = baml.sys.subprocess("sh", args = ["-c", "while :; do :; done"], stdin = "pipe", stdout = "pipe");
+                defer { process.kill(); process.close(); }
 
                 let tok = baml.spawn.CancelToken.new();
                 let read = spawn with tok {
-                    process.stdout.lines().next()
+                    (process.stdout ?? baml.sys.panic("stdout is not piped")).lines().next()
                 };
                 let deadline = spawn {
                     baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
@@ -414,20 +406,16 @@ async fn start_process_stdout_read_is_cancellable() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_stdout_close_cancels_pending_read() {
+async fn subprocess_stdout_close_cancels_pending_read() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                let process = baml.sys.start_process(
-                    "sh",
-                    args = ["-c", "while :; do :; done"],
-                    options = null,
-                );
-                defer { process.close() }
+                let process = baml.sys.subprocess("sh", args = ["-c", "while :; do :; done"], stdin = "pipe", stdout = "pipe");
+                defer { process.kill(); process.close(); }
 
-                let read = spawn { process.stdout.read(1024) };
+                let read = spawn { (process.stdout ?? baml.sys.panic("stdout is not piped")).read(1024) };
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
-                process.stdout.close();
+                (process.stdout ?? baml.sys.panic("stdout is not piped")).close();
                 (await read) catch (e) {
                     baml.errors.Io => { return "closed"; }
                 };
@@ -512,7 +500,7 @@ async fn shell_with_options() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("pwd", options = baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
+                baml.sys.shell("pwd", cwd = "/tmp", capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -532,7 +520,7 @@ async fn shell_with_options() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("cmd /c cd", options = baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
+                baml.sys.shell("cmd /c cd", cwd = "C:\\Windows\\Temp", capture_output = true).stdout.to_string()
             }
         "#
     );
@@ -571,7 +559,7 @@ async fn shell_stderr_bytes() {
     let output = baml_test!(
         r#"
             function main() -> uint8array {
-                baml.sys.shell("echo err >&2", options = null).stderr
+                baml.sys.shell("echo err >&2", capture_output = true).stderr
             }
         "#
     );
@@ -587,16 +575,12 @@ async fn shell_stderr_bytes() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_stderr_pipe_is_readable() {
+async fn subprocess_stderr_pipe_is_readable() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                let process = baml.sys.start_process(
-                    "sh",
-                    args = ["-c", "printf 'boom\n' >&2"],
-                    options = baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Pipe },
-                );
-                defer { process.close() }
+                let process = baml.sys.subprocess("sh", args = ["-c", "printf 'boom\n' >&2"], stdin = "pipe", stdout = "pipe", stderr = "pipe");
+                defer { process.kill(); process.close(); }
 
                 match (process.stderr) {
                     null => "no pipe",
@@ -614,18 +598,14 @@ async fn start_process_stderr_pipe_is_readable() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_stderr_modes_without_pipe() {
+async fn subprocess_stderr_modes_without_pipe() {
     let output = baml_test!(
         r#"
             function main() -> bool {
-                let inherited = baml.sys.start_process("sh", args = ["-c", "printf 'x' >&2"], options = null);
-                defer { inherited.close() }
-                let discarded = baml.sys.start_process(
-                    "sh",
-                    args = ["-c", "printf 'x' >&2"],
-                    options = baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Discard },
-                );
-                defer { discarded.close() }
+                let inherited = baml.sys.subprocess("sh", args = ["-c", "printf 'x' >&2"], stdin = "pipe", stdout = "pipe");
+                defer { inherited.kill(); inherited.close(); }
+                let discarded = baml.sys.subprocess("sh", args = ["-c", "printf 'x' >&2"], stdin = "pipe", stdout = "pipe", stderr = "ignore");
+                defer { discarded.kill(); discarded.close(); }
 
                 inherited.stderr == null &&
                     discarded.stderr == null &&
@@ -644,8 +624,8 @@ async fn process_environment_overlay_and_clear() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            let inherited = baml.sys.capture("env", args = [], options = baml.sys.ProcessOptions { env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
-            let cleared = baml.sys.capture("env", args = [], options = baml.sys.ProcessOptions { clear_env: true, env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
+            let inherited = baml.sys.run("env", args = [], env = map { "BAML_PROCESS_TEST": "1" }, capture_output = true).stdout.to_string();
+            let cleared = baml.sys.run("env", args = [], clear_env = true, env = map { "BAML_PROCESS_TEST": "1" }, capture_output = true).stdout.to_string();
             inherited.includes("PATH=") && cleared == "BAML_PROCESS_TEST=1\n"
         }
     "#
@@ -660,7 +640,7 @@ async fn inherited_process_status_and_launch_failure() {
         function main() -> bool {
             let status = baml.sys.run("sh", args = ["-c", "exit 17"]);
             let failed = false;
-            { baml.sys.exec("/definitely-missing-baml-executable"); }
+            { baml.sys.run("/definitely-missing-baml-executable"); }
             catch (e) { baml.errors.Io => { failed = true; } }
             status.exit_code == 17 && failed
         }
@@ -670,7 +650,7 @@ async fn inherited_process_status_and_launch_failure() {
         function main() -> bool {
             let status = baml.sys.run("cmd", args = ["/c", "exit 17"]);
             let failed = false;
-            { baml.sys.exec("Z:/definitely-missing-baml-executable.exe"); }
+            { baml.sys.run("Z:/definitely-missing-baml-executable.exe"); }
             catch (e) { baml.errors.Io => { failed = true; } }
             status.exit_code == 17 && failed
         }
@@ -681,12 +661,11 @@ async fn inherited_process_status_and_launch_failure() {
 
 #[tokio::test]
 #[cfg(unix)]
-async fn capture_drains_output_while_sending_input() {
+async fn run_capture_drains_output_while_sending_input() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            let output = baml.sys.capture("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"],
-                options = baml.sys.ProcessOptions { stdin: "x".repeat(200000), timeout: baml.time.Duration.from_seconds(2) });
+            let output = baml.sys.run("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"], input = "x".repeat(200000), timeout = baml.time.Duration.from_seconds(2), capture_output = true);
             output.ok() && output.stdout.slice(200000, output.stdout.length()).to_string().trim() == "200000"
         }
     "#
@@ -696,14 +675,12 @@ async fn capture_drains_output_while_sending_input() {
 
 #[tokio::test]
 #[cfg(unix)]
-async fn capture_deadline_includes_blocked_stdin() {
+async fn run_capture_deadline_includes_blocked_stdin() {
     let started = std::time::Instant::now();
     let output = baml_test!(
         r#"
         function main() -> bool {
-            { baml.sys.capture("sleep", args = ["5"], options = baml.sys.ProcessOptions {
-                stdin: "x".repeat(200000), timeout: baml.time.Duration.from_milliseconds(50)
-            }); false } catch (e) { baml.errors.Timeout => true }
+            { baml.sys.run("sleep", args = ["5"], input = "x".repeat(200000), timeout = baml.time.Duration.from_milliseconds(50), capture_output = true); false } catch (e) { baml.errors.Timeout => true }
         }
     "#
     );
@@ -718,14 +695,183 @@ async fn binary_input_and_streaming_backpressure() {
         r#"
         function main() -> bool {
             let bytes = b"\x00\xff\x80";
-            let captured = baml.sys.capture("cat", options = baml.sys.ProcessOptions { stdin: bytes });
-            let process = baml.sys.start_process("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"],
-                options = baml.sys.ProcessOptions { stdin: "x".repeat(200000), timeout: baml.time.Duration.from_seconds(2) });
-            defer { process.close() }
-            let stdout = process.stdout.bytes();
+            let captured = baml.sys.run("cat", input = bytes, capture_output = true);
+            let process = baml.sys.subprocess("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"], stdin = "pipe", stdout = "pipe", input = "x".repeat(200000), timeout = baml.time.Duration.from_seconds(2));
+            defer { process.kill(); process.close(); }
+            let stdout = (process.stdout ?? baml.sys.panic("stdout is not piped")).bytes();
             captured.stdout == bytes && process.wait().ok() && stdout.slice(200000, stdout.length()).to_string().trim() == "200000"
         }
         "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+/// Both explicit cleanup and GC release the handle promptly while a finite
+/// OS child continues running and performs its observable side effect.
+#[tokio::test]
+#[cfg(unix)]
+async fn subprocess_cleanup_and_gc_preserve_running_child() {
+    for explicit in [true, false] {
+        let temp = tempfile::tempdir().unwrap();
+        let marker = temp.path().join("completed");
+        let output = baml_test! {
+            baml: r#"
+                function launch(marker: string, explicit: bool) -> bool {
+                    let child = baml.sys.subprocess("sh",
+                        args = ["-c", "sleep 2; printf completed > \"$1\"", "sh", marker],
+                        stdin = "ignore", stdout = "ignore", stderr = "ignore");
+                    let started = baml.time.Instant.now();
+                    if (explicit) {
+                        child.cleanup();
+                        child.cleanup();
+                    }
+                    started.elapsed().to_milliseconds() < 1000n
+                }
+                function main(marker: string, explicit: bool) -> bool {
+                    let released = launch(marker, explicit);
+                    baml.sys.collect_garbage();
+                    released
+                }
+            "#,
+            args: {
+                "marker" => BexExternalValue::String(marker.to_string_lossy().into_owned().into()),
+                "explicit" => BexExternalValue::Bool(explicit),
+            },
+        };
+        assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !marker.exists() {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("losing the handle must not terminate the child");
+        assert_eq!(std::fs::read_to_string(marker).unwrap(), "completed");
+    }
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn subprocess_scoped_termination_and_repeated_kill() {
+    let output = baml_test!(
+        r#"
+        function scoped() -> baml.sys.Subprocess {
+            let child = baml.sys.subprocess("sleep", args = ["5"]);
+            defer { child.kill(); }
+            child
+        }
+        function main() -> bool {
+            let child = scoped();
+            let status = child.wait();
+            child.kill();
+            child.kill();
+            status.signal == 9 && status.exit_code == 137 && child.wait().signal == 9
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn subprocess_wait_timeout_does_not_terminate_child() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let child = baml.sys.subprocess("sh", args = ["-c", "sleep 0.2; exit 7"],
+                timeout = baml.time.Duration.from_milliseconds(50));
+            defer { child.kill(); }
+            let timed_out = false;
+            { child.wait(); } catch (e) { baml.errors.Timeout => { timed_out = true; } }
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(400));
+            timed_out && child.wait().exit_code == 7
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+#[expect(
+    unsafe_code,
+    reason = "test queries the session and terminates a known child PID"
+)]
+async fn subprocess_detached_creates_os_session() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let child = baml.sys.subprocess("sleep", args = ["2"], detached = true,
+                stdin = "ignore", stdout = "ignore", stderr = "ignore");
+            child.pid
+        }
+    "#
+    );
+    let Ok(BexExternalValue::Int(pid)) = output.result else {
+        panic!("{:?}", output.result);
+    };
+    let pid = i32::try_from(pid).unwrap();
+    // SAFETY: these syscalls use a known child PID and no memory pointers.
+    let session = unsafe { libc::getsid(pid) };
+    unsafe {
+        libc::kill(pid, libc::SIGKILL);
+    }
+    assert_eq!(session, pid, "detached means a new OS session");
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn subprocess_cleanup_releases_pending_pipe_operations() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let child = baml.sys.subprocess("sleep", args = ["2"], stdin = "pipe", stdout = "pipe");
+            let read = spawn { (child.stdout ?? baml.sys.panic("stdout missing")).read(1024) };
+            let write = spawn { (child.stdin ?? baml.sys.panic("stdin missing")).write("x".repeat(200000)) };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(25));
+            let started = baml.time.Instant.now();
+            child.cleanup();
+            let read_closed = false;
+            let write_closed = false;
+            { await read; } catch (e) { baml.errors.Io => { read_closed = true; } }
+            { await write; } catch (e) { baml.errors.Io => { write_closed = true; } }
+            read_closed && write_closed && started.elapsed().to_milliseconds() < 1000n
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn subprocess_kill_with_pending_input_reports_exit_status() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let child = baml.sys.subprocess("sleep", args = ["5"], input = "x".repeat(200000));
+            child.kill();
+            child.kill();
+            child.wait().signal == 9
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn subprocess_wait_reports_child_exit_before_inherited_stdin_closes() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let child = baml.sys.subprocess("sh", args = ["-c", "sleep 2 <&0 & exit 7"],
+                input = "x".repeat(200000), stdout = "ignore", stderr = "ignore");
+            let started = baml.time.Instant.now();
+            let status = child.wait();
+            child.cleanup();
+            status.exit_code == 7 && started.elapsed().to_milliseconds() < 1000n
+        }
+    "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

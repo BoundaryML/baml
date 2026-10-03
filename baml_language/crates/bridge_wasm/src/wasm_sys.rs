@@ -68,42 +68,52 @@ fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ProcessOutput, V
     })
 }
 
-/// Serialize `ProcessOptions` to a JSON string for the JS callback.
-fn options_to_js(
-    options: Option<&io::owned::sys::ProcessOptions>,
-) -> Result<JsValue, VmRustFnError> {
-    match options {
-        None => Ok(JsValue::NULL),
-        Some(opts) => {
-            let obj = js_sys::Object::new();
-            if let Some(ref cwd) = opts.cwd {
-                let _ = Reflect::set(&obj, &"cwd".into(), &cwd.into());
-            }
-            if let Some(clear) = opts.clear_env {
-                let _ = Reflect::set(&obj, &"clear_env".into(), &JsValue::from_bool(clear));
-            }
-            if let Some(ref env) = opts.env {
-                let env_obj = js_sys::Object::new();
-                for (k, v) in env {
-                    let _ = Reflect::set(&env_obj, &k.into(), &v.into());
-                }
-                let _ = Reflect::set(&obj, &"env".into(), &env_obj.into());
-            }
-            if let Some(timeout) = &opts.timeout {
-                let ms = process_timeout_millis(timeout)?;
-                let _ = Reflect::set(&obj, &"timeout_ms".into(), &JsValue::from_f64(ms));
-            }
-            if let Some(ref stdin) = opts.stdin {
-                let _ = Reflect::set(&obj, &"stdin".into(), &process_input_js(stdin));
-            }
-            if let Some(BexExternalValue::Variant { variant_name, .. }) = opts.stderr.as_ref() {
-                let _ = Reflect::set(&obj, &"stderr".into(), &variant_name.into());
-            }
-            Ok(js_sys::JSON::stringify(&obj)
-                .map(JsValue::from)
-                .unwrap_or(JsValue::NULL))
-        }
+/// Serialize `_ProcessOptions` to a JSON string for the JS callback.
+fn options_to_js(options: &io::owned::sys::ProcessOptions) -> Result<JsValue, VmRustFnError> {
+    let obj = js_sys::Object::new();
+    if let Some(ref cwd) = options.cwd {
+        let _ = Reflect::set(&obj, &"cwd".into(), &cwd.into());
     }
+    let _ = Reflect::set(
+        &obj,
+        &"clear_env".into(),
+        &JsValue::from_bool(options.clear_env),
+    );
+    if let Some(ref env) = options.env {
+        let env_obj = js_sys::Object::new();
+        for (name, value) in env {
+            let value = value.as_ref().map_or(JsValue::NULL, Into::into);
+            let _ = Reflect::set(&env_obj, &name.into(), &value);
+        }
+        let _ = Reflect::set(&obj, &"env".into(), &env_obj.into());
+    }
+    if let Some(timeout) = &options.timeout {
+        let _ = Reflect::set(
+            &obj,
+            &"timeout_ms".into(),
+            &JsValue::from_f64(process_timeout_millis(timeout)?),
+        );
+    }
+    if let Some(input) = &options.input {
+        let _ = Reflect::set(&obj, &"input".into(), &process_input_js(input));
+    }
+    for (name, value) in [
+        ("stdin", &options.stdin),
+        ("stdout", &options.stdout),
+        ("stderr", &options.stderr),
+    ] {
+        fn mode(value: &BexExternalValue) -> &str {
+            match value {
+                BexExternalValue::String(value) => value.as_str(),
+                BexExternalValue::Union { value, .. } => mode(value),
+                _ => "inherit",
+            }
+        }
+        let _ = Reflect::set(&obj, &name.into(), &mode(value).into());
+    }
+    Ok(js_sys::JSON::stringify(&obj)
+        .map(JsValue::from)
+        .unwrap_or(JsValue::NULL))
 }
 
 impl io::IoClassSysReadPipe for WasmSys {
@@ -177,12 +187,12 @@ impl io::IoClassSysWritePipe for WasmSys {
     }
 }
 
-impl io::IoClassSysProcess for WasmSys {
+impl io::IoClassSysSubprocess for WasmSys {
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -195,7 +205,7 @@ impl io::IoClassSysProcess for WasmSys {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -208,7 +218,7 @@ impl io::IoClassSysProcess for WasmSys {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())
@@ -216,49 +226,6 @@ impl io::IoClassSysProcess for WasmSys {
 }
 
 impl IoNamespaceSys for WasmSys {
-    fn _detach(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _program: String,
-        _args: Vec<String>,
-        _options: Option<io::owned::sys::ExecOptions>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".into(),
-            message: "Detached processes are not supported by this host".into(),
-        })
-    }
-    fn _run(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _program: String,
-        _args: Vec<String>,
-        _options: Option<io::owned::sys::ExecOptions>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".into(),
-            message: "Terminal process handoff is not supported by this host".into(),
-        })
-    }
-    fn _exec(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _program: String,
-        _args: Vec<String>,
-        _options: Option<io::owned::sys::ExecOptions>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".into(),
-            message: "Terminal process handoff is not supported by this host".into(),
-        })
-    }
-
     fn collect_garbage(
         &self,
         _heap: &Arc<BexHeap>,
@@ -272,13 +239,13 @@ impl IoNamespaceSys for WasmSys {
         SysOpOutput::ok(())
     }
 
-    fn _capture(
+    fn _run(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
         args: Vec<String>,
-        options: Option<io::owned::sys::ProcessOptions>,
+        options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         let exec_fn = self.exec_fn.clone();
@@ -289,7 +256,7 @@ impl IoNamespaceSys for WasmSys {
                 arr.push(&arg.into());
             }
             let args_js: JsValue = arr.into();
-            let options_js = options_to_js(options.as_ref())?;
+            let options_js = options_to_js(&options)?;
 
             let result = exec_fn
                 .call3(&JsValue::NULL, &program_js, &args_js, &options_js)
@@ -308,15 +275,15 @@ impl IoNamespaceSys for WasmSys {
         }))
     }
 
-    fn _start_process(
+    fn _subprocess(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _program: String,
         _args: Vec<String>,
-        _options: Option<io::owned::sys::ProcessOptions>,
+        _options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::Process> {
+    ) -> SysOpOutput<io::owned::sys::Subprocess> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
@@ -328,13 +295,13 @@ impl IoNamespaceSys for WasmSys {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         command: String,
-        options: Option<io::owned::sys::ProcessOptions>,
+        options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         let shell_fn = self.shell_fn.clone();
         SysOpOutput::async_op(SendFuture(async move {
             let command_js: JsValue = command.into();
-            let options_js = options_to_js(options.as_ref())?;
+            let options_js = options_to_js(&options)?;
 
             let result = shell_fn
                 .call2(&JsValue::NULL, &command_js, &options_js)

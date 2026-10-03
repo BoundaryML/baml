@@ -29,11 +29,11 @@ function scan_notes() -> string[] throws baml.errors.Io | baml.errors.ParseError
 }
 
 function shell_dir() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
-    baml.sys.shell("pwd", options = null).stdout.to_string()
+    baml.sys.shell("pwd", capture_output = true).stdout.to_string()
 }
 
 function run_local_script() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
-    baml.sys.capture("./hello.sh", args = [], options = null).stdout.to_string()
+    baml.sys.run("./hello.sh", args = [], capture_output = true).stdout.to_string()
 }
 "#;
 
