@@ -1,0 +1,52 @@
+---
+title: Inferrail
+subtitle: Per-run dollar budgets for OpenAI-compatible requests
+---
+
+[Inferrail](https://github.com/domondi1/inferrail) is an open-source, OpenAI-compatible gateway that gives one run or job a hard dollar budget. Each request carries the run's id and budget as headers; the gateway reserves the request's worst-case cost before forwarding it and refuses it with HTTP 402 when the run's budget can't cover it, so concurrent calls in the same run can't overspend together.
+
+Use the [`openai-generic`](/ref/llm-client-providers/openai-generic) provider with `base_url` pointing at the gateway and the run's headers in `headers`.
+
+```bash
+pip install inferrail
+export OPENAI_API_KEY=sk-...
+inferrail serve --quickstart --app-mode   # http://127.0.0.1:8000/v1
+```
+
+```baml BAML
+client<llm> Budgeted {
+  provider "openai-generic"
+  options {
+    base_url "http://127.0.0.1:8000/v1"
+    model "gpt-4o-mini"
+    max_tokens 1000
+    headers {
+      "X-Inferrail-Attribute-Work-Id" "job-001"
+      "X-Inferrail-Budget-Usd" "0.50"
+    }
+  }
+}
+```
+
+To give each run its own id and budget, register the client at runtime with the [Client Registry](/guide/baml-advanced/llm-client-registry):
+
+```python Python
+from baml_client import b
+from baml_py import ClientRegistry
+
+def registry_for_run(run_id: str, budget_usd: str) -> ClientRegistry:
+    cr = ClientRegistry()
+    cr.add_llm_client(name="Budgeted", provider="openai-generic", options={
+        "base_url": "http://127.0.0.1:8000/v1",
+        "model": "gpt-4o-mini",
+        "max_tokens": 1000,
+        "headers": {"X-Inferrail-Attribute-Work-Id": run_id,
+                    "X-Inferrail-Budget-Usd": budget_usd},
+    })
+    cr.set_primary("Budgeted")
+    return cr
+
+result = await b.ExtractResume("...", baml_options={"client_registry": registry_for_run("job-001", "0.50")})
+```
+
+Set `max_tokens`, since the reservation is based on it. `inferrail work job-001` shows what the run cost. The model needs a price in Inferrail (`inferrail models` lists which models have one).
