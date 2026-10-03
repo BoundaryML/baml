@@ -148,6 +148,24 @@ fn use_and_pin_local_cli_preserve_configuration_and_comments() {
             && config.contains("# selected")
             && config.contains("# keep comment")
     );
+    // An inline table can contain stale competing selectors. Pinning removes
+    // them and explicitly renames the highest-priority selector's comment.
+    fs::write(f.project.join("baml.toml"), "# project\ntoolchain = { version = 'old', channel = 'stale', path = 'unused', extra = true } # inline\n[package]\nname = 'app'\n").unwrap();
+    f.success(&["toolchain", "pin", "./local-cli"]);
+    let config = fs::read_to_string(f.project.join("baml.toml")).unwrap();
+    let value: toml::Value = toml::from_str(&config).unwrap();
+    assert_eq!(
+        value["toolchain"]["path"].as_str(),
+        Some(f.project.join("local-cli").to_str().unwrap())
+    );
+    assert!(value["toolchain"].get("version").is_none());
+    assert!(value["toolchain"].get("channel").is_none());
+    assert_eq!(value["toolchain"]["extra"].as_bool(), Some(true));
+    assert!(
+        config.contains("toolchain = {")
+            && config.contains("# inline")
+            && config.contains("# project")
+    );
 }
 
 #[test]
