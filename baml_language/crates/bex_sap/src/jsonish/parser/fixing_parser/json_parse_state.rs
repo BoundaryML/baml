@@ -591,20 +591,42 @@ impl<'s> JsonParseState<'s> {
                                     Ok(1)
                                 }
                                 Some((_, 'u')) => {
-                                    // We'll consume the 'u' and the next 4 characters
-                                    let mut buffer = String::new();
-                                    buffer.push(token);
-                                    for _ in 0..4 {
-                                        if let Some((_, c)) = next.next() {
-                                            buffer.push(c);
-                                        } else {
-                                            break;
+                                    next.next(); // consume the 'u' that was only peeked
+                                    let mut hex = String::with_capacity(4);
+                                    while hex.len() < 4 {
+                                        match next.peek() {
+                                            Some((_, c)) if c.is_ascii_hexdigit() => {
+                                                hex.push(*c);
+                                                next.next();
+                                            }
+                                            _ => break,
                                         }
                                     }
-                                    for c in buffer.chars() {
-                                        let _ = self.consume(c);
+                                    let consumed = 1 + hex.len();
+                                    let decoded = (hex.len() == 4)
+                                        .then(|| {
+                                            u32::from_str_radix(&hex, 16)
+                                                .ok()
+                                                .and_then(char::from_u32)
+                                        })
+                                        .flatten();
+                                    match decoded {
+                                        Some(ch) => {
+                                            self.consume(ch)?;
+                                        }
+                                        None => {
+                                            // Truncated escape (stream ended mid-escape) or a
+                                            // lone UTF-16 surrogate half: keep the raw text so
+                                            // no input is lost; a completed document is decoded
+                                            // by serde instead.
+                                            self.consume('\\')?;
+                                            self.consume('u')?;
+                                            for c in hex.chars() {
+                                                self.consume(c)?;
+                                            }
+                                        }
                                     }
-                                    Ok(5)
+                                    Ok(consumed)
                                 }
                                 _ => self.consume(token),
                             }

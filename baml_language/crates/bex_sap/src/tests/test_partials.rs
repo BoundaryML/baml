@@ -348,3 +348,20 @@ test_partial_deserializer!(
       ]
     }
 );
+
+// ---------------------------------------------------------------------------
+// Test 6: \uXXXX escape inside a still-open string must decode
+// (regression: the 4th hex digit used to be dropped, yielding the raw
+// text "\u270 still streaming" instead of "✅ still streaming")
+// ---------------------------------------------------------------------------
+test_partial_deserializer!(
+    test_partial_string_unicode_escape,
+    r#"{"answer": "\u2705 still streaming"#,
+    baml_tyannotated!(Answer),
+    baml_db! {
+        class Answer {
+            answer: string @class_in_progress_field_missing(null),
+        }
+    },
+    {"answer": "✅ still streaming"}
+);
