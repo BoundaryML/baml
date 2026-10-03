@@ -637,3 +637,44 @@ async fn start_process_stderr_modes_without_pipe() {
 
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+#[tokio::test]
+#[cfg(unix)]
+async fn process_environment_overlay_and_clear() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let inherited = baml.sys.exec("env", null, baml.sys.ProcessOptions { env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
+            let cleared = baml.sys.exec("env", null, baml.sys.ProcessOptions { clear_env: true, env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
+            inherited.includes("PATH=") && cleared == "BAML_PROCESS_TEST=1\n"
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn inherited_process_status_and_launch_failure() {
+    #[cfg(unix)]
+    let program = r#"
+        function main() -> bool {
+            let status = baml.sys.run("sh", args = ["-c", "exit 17"]);
+            let failed = false;
+            { baml.sys.handoff("/definitely-missing-baml-executable"); }
+            catch (e) { baml.errors.Io => { failed = true; } }
+            status.exit_code == 17 && failed
+        }
+    "#;
+    #[cfg(windows)]
+    let program = r#"
+        function main() -> bool {
+            let status = baml.sys.run("cmd", args = ["/c", "exit 17"]);
+            let failed = false;
+            { baml.sys.handoff("Z:/definitely-missing-baml-executable.exe"); }
+            catch (e) { baml.errors.Io => { failed = true; } }
+            status.exit_code == 17 && failed
+        }
+    "#;
+    let output = baml_test!(program);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

@@ -337,3 +337,37 @@ fn pack_e2e_manifest_less_baml_src() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
 }
+
+/// Successful Unix handoff must retain the PID and inherited pipes, rather
+/// than leave a BAML host waiting for a second process.
+#[test]
+#[cfg(unix)]
+fn pack_handoff_preserves_pid_streams_environment_and_status() {
+    use std::{io::Write as _, process::Stdio};
+    let built = common::ensure_built();
+    let (_tmp, bin) = pack_project(
+        built,
+        r#"
+        function main() -> never {
+            baml.sys.handoff("sh", args = ["-c", "printf '%s:%s:' $$ \"$BAML_HANDOFF\"; cat; printf err >&2; exit 23"],
+                options = baml.sys.HandoffOptions { env: map { "BAML_HANDOFF": "overlay" } })
+        }
+    "#,
+        &["main"],
+    );
+    let mut child = Command::new(bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    child.stdin.take().unwrap().write_all(b"input").unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(23));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!("{pid}:overlay:input")
+    );
+    assert_eq!(output.stderr, b"err");
+}
