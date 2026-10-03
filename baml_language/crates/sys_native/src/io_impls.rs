@@ -1403,19 +1403,14 @@ fn process_exit_from_status(status: std::process::ExitStatus) -> owned::sys::Pro
     #[cfg(unix)]
     let signal = {
         use std::os::unix::process::ExitStatusExt as _;
-        status.signal().map(|signal| signal.to_string())
+        status.signal()
     };
     #[cfg(not(unix))]
-    let signal = None;
+    let signal: Option<i32> = None;
 
     owned::sys::ProcessExit {
-        exit_code: i64::from(status.code().unwrap_or_else(|| {
-            128 + signal
-                .as_ref()
-                .and_then(|s| s.parse::<i32>().ok())
-                .unwrap_or(0)
-        })),
-        signal,
+        exit_code: i64::from(status.code().unwrap_or(128 + signal.unwrap_or(0))),
+        signal: signal.map(|signal| signal.to_string()),
     }
 }
 
@@ -1834,6 +1829,9 @@ impl io::IoNamespaceSys for NativeSysOps {
         })
     }
 
+    // Windows process handoff must preserve all 32 status bits, bypassing the
+    // packed host's portable, byte-sized `baml.sys.exit` convention.
+    #[allow(clippy::exit)]
     fn _exec(
         &self,
         _heap: &Arc<BexHeap>,
@@ -1843,10 +1841,11 @@ impl io::IoNamespaceSys for NativeSysOps {
         options: Option<owned::sys::ExecOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ProcessExit> {
-        let mut command = inherited_command(&self.working_dir, &program, args, options);
+        let command = inherited_command(&self.working_dir, &program, args, options);
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt as _;
+            let mut command = command;
             let error = command.exec();
             SysOpOutput::err(VmBamlError::Io {
                 message: format!("Failed to hand off to '{program}': {error}"),
@@ -1861,7 +1860,7 @@ impl io::IoNamespaceSys for NativeSysOps {
                 .map_err(|error| VmBamlError::Io {
                     message: format!("Failed to hand off to '{program}': {error}"),
                 })?;
-            Ok(process_exit_from_status(status))
+            std::process::exit(status.code().unwrap_or(1))
         })
     }
 

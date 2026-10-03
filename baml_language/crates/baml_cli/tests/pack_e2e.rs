@@ -372,3 +372,15 @@ fn pack_handoff_preserves_pid_streams_environment_and_status() {
     );
     assert_eq!(output.stderr, b"err");
 }
+
+#[test]
+#[cfg(windows)]
+fn pack_handoff_preserves_full_windows_exit_status() {
+    let built = common::ensure_built();
+    let (_tmp, bin) = pack_project(
+        built,
+        r#"function main() -> never { baml.sys.exec("cmd", args = ["/c", "exit -23"]) }"#,
+        &["main"],
+    );
+    assert_eq!(run(&bin, &[]).status.code(), Some(-23));
+}

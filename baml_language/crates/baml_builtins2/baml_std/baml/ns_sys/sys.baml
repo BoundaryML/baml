@@ -315,9 +315,10 @@ function run(
 }
 
 /// Transfers this process to `program`, preserving its terminal and streams.
-/// On Unix, successful handoff replaces the entire host process: no BAML code,
-/// deferred cleanup or telemetry shutdown runs afterward. On Windows, which
-/// cannot replace a process, waits for the child and exits with its status.
+/// On Unix, successful handoff replaces the entire host process. On Windows,
+/// which cannot replace a process, waits for the child and exits with its full
+/// native status. No BAML code, deferred cleanup or telemetry shutdown runs
+/// after a successful handoff on either platform.
 /// A launch failure throws `Io` and leaves the caller running.
 function exec(
     program: string,
