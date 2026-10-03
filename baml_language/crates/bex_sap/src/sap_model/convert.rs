@@ -150,7 +150,7 @@ impl TypeCtx {
     }
 
     /// The context for parsing into `target`: only the classes, enums, and type
-    /// aliases that `target` reaches ([`reachable_definitions`]), in program
+    /// aliases that `target` reaches (`reachable_definitions`), in program
     /// order. Converting every definition in the program on each parse cost
     /// several MB per LLM call; the reachable set is all the converter looks up.
     pub fn for_target<E: Send + Sync + 'static>(
