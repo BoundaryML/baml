@@ -3998,7 +3998,16 @@ fn inherited_command(
             command.env_clear();
         }
         if let Some(env) = options.env {
-            command.envs(env);
+            for (name, value) in env {
+                match value {
+                    Some(value) => {
+                        command.env(name, value);
+                    }
+                    None => {
+                        command.env_remove(name);
+                    }
+                }
+            }
         }
     }
     command
