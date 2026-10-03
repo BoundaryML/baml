@@ -14,6 +14,7 @@ from baml_sdk.ai_error_test import (
 
 # SDK_PARITY_LINT(skip): exercises Python BamlError and generated Pydantic payloads
 def test_invalid_response_preserves_wire_diagnostics():
+    """Verify InvalidResponse retains wire diagnostics in a Python BamlError."""
     with pytest.raises(BamlError) as raised:
         ThrowInvalidResponse()
     assert raised.value.class_name == "ai.errors.InvalidResponse"
@@ -27,6 +28,7 @@ def test_invalid_response_preserves_wire_diagnostics():
 
 # SDK_PARITY_LINT(skip): exercises Python BamlError and generated Pydantic payloads
 def test_provider_error_preserves_native_error_metadata():
+    """Verify ProviderError retains native codes and body without a fake status."""
     with pytest.raises(BamlError) as raised:
         ThrowProviderError()
     assert raised.value.class_name == "ai.errors.ProviderError"
@@ -41,6 +43,7 @@ def test_provider_error_preserves_native_error_metadata():
 
 # SDK_PARITY_LINT(skip): exercises Python BamlError and generated Pydantic payloads
 def test_stream_schema_failure_is_parse_failed():
+    """Verify synchronous stream validation exposes ParseFailed and its diagnostic."""
     stream = ExtractInt_stream()
     with pytest.raises(BamlError) as raised:
         stream.final()
@@ -54,6 +57,7 @@ def test_stream_schema_failure_is_parse_failed():
 
 # SDK_PARITY_LINT(skip): exercises the Python asyncio streaming bridge
 async def test_async_stream_schema_failure_is_parse_failed():
+    """Verify asynchronous stream validation exposes ParseFailed and its diagnostic."""
     stream = await ExtractInt_stream_async()
     with pytest.raises(BamlError) as raised:
         await stream.final_async()
