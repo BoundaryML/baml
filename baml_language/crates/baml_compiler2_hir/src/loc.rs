@@ -18,37 +18,49 @@ use crate::ids::{
 
 #[salsa::interned]
 pub struct FunctionLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<FunctionMarker>,
 }
 
 #[salsa::interned]
 pub struct ClassLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<ClassMarker>,
 }
 
 #[salsa::interned]
 pub struct EnumLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<EnumMarker>,
 }
 
 #[salsa::interned]
 pub struct InterfaceLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<InterfaceMarker>,
 }
 
 #[salsa::interned]
 pub struct TypeAliasLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<TypeAliasMarker>,
 }
 
 #[salsa::interned]
 pub struct LetLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<LetMarker>,
 }
 
@@ -60,7 +72,9 @@ pub struct LetLoc<'db> {
 /// intentionally absent from `Definition`/`ItemId`.
 #[salsa::interned]
 pub struct ImplLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<ImplMarker>,
 }
 

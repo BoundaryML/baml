@@ -1930,7 +1930,7 @@ mod registration_tests {
     /// is real compiler output, not a mock rule.
     fn vm() -> BexVm {
         BexVm::from_program(
-            baml_db::testing::compile_source(
+            baml_test_support::compile_source(
                 r#"
 interface Gate {}
 interface Pick {}

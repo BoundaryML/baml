@@ -653,7 +653,7 @@ impl<'db> InterfaceDeclScope<'db> {
 /// surfaces them exactly once; every referencing site reuses the type and drops the
 /// diagnostics. `None` when the associated type has no default.
 #[allow(clippy::needless_pass_by_value)]
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn interface_associated_type_default<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -678,26 +678,6 @@ pub struct ResolvedInterfaceFields {
     pub fields: Vec<(Name, Ty)>,
     /// Type lowering diagnostics: (error, span of the type annotation).
     pub diagnostics: Vec<(TirTypeError, text_size::TextRange)>,
-}
-
-// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
-// `Update` impl uses `PartialEq` for early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ResolvedInterfaceFields {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 /// Resolve an interface's declared field types in its own scope.
@@ -752,26 +732,6 @@ pub struct ResolvedInterfaceMethod {
     /// Span-free lowering diagnostics; the declaration checker surfaces its
     /// own copies, these travel with the surface for completeness.
     pub diagnostics: Vec<TirTypeError>,
-}
-
-// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
-// `Update` impl uses `PartialEq` for early-cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for ResolvedInterfaceMethod {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 /// Resolve every *required* method signature of an interface at its

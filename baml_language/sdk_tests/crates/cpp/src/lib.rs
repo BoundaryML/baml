@@ -1,4 +1,4 @@
-//! C++ sdk-test crate. Two toolchain checks per fixture (compile, run),
+//! C++ sdk-test crate. One compile-and-run check per fixture,
 //! declared below and expanded by `sdk_test_harness_runner::cpp::test_suite!`.
 //!
 //! The fixture rows must match `sdk_test_harness_runner::fixtures::SHARED`;

@@ -116,34 +116,18 @@ pub struct ImplFacts<'db> {
     pub methods: Vec<baml_compiler2_hir::loc::FunctionLoc<'db>>,
 }
 
-/// A PartialEq-driven whole-value `salsa::Update` for a `'db`-carrying
-/// type. Salsa's own `update_fallback` has these exact semantics but is
-/// `'static`-gated, and the field-wise derive requires every field type to
-/// implement `Update` — `baml_type`'s types don't (it has no salsa
-/// dependency) — so compare-and-overwrite of the whole value is the
-/// correct impl, written once.
-macro_rules! partial_eq_salsa_update {
+/// Implement retention safety for query results that own their data and
+/// carry the database lifetime only through Salsa identities.
+macro_rules! owned_salsa_value {
     ($ty:ident) => {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned;
-        // `PartialEq` decides whether consumers see a change.
+        // SAFETY: This type owns its data. Its database lifetime only appears
+        // in Salsa identities; it contains no references into query storage.
         #[allow(unsafe_code)]
-        unsafe impl salsa::Update for $ty<'_> {
-            unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-                #[allow(unsafe_code)]
-                unsafe {
-                    let changed = *old_pointer != new_value;
-                    if changed {
-                        std::ptr::drop_in_place(old_pointer);
-                        std::ptr::write(old_pointer, new_value);
-                    }
-                    changed
-                }
-            }
-        }
+        unsafe impl salsa::SalsaValue for $ty<'_> {}
     };
 }
 
-partial_eq_salsa_update!(ImplFacts);
+owned_salsa_value!(ImplFacts);
 
 /// One impl block's header resolution — THE single decision point for
 /// header validity. The resolution substrate reads it through
@@ -215,7 +199,7 @@ impl<'db> ImplHeaderResolution<'db> {
     }
 }
 
-partial_eq_salsa_update!(ImplHeaderResolution);
+owned_salsa_value!(ImplHeaderResolution);
 
 /// The resolution-relevant facts of one impl block, behind the header's
 /// validity decision ([`ImplHeaderResolution`]).
@@ -651,25 +635,6 @@ pub struct MountedImplFacts {
     pub associated_types: Vec<(Name, baml_type::interned::ClosedTy)>,
 }
 
-// SAFETY: mounted/precompiled facts are fully owned interned values and
-// collections. PartialEq therefore completely determines whether Salsa may
-// retain the old allocation.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for MountedImplFacts {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
-
 /// A resolved impl's identity WITH its facts, split once by where it is
 /// declared: the two lanes carry different fact payloads, so the block and
 /// the facts that describe it travel together and cannot disagree.
@@ -748,24 +713,10 @@ struct CachedResolvedImpl<'db> {
     bindings: FxHashMap<ParamTy, Ty>,
 }
 
-// SAFETY: cached rows contain no `db` borrows: only owned collections and
-// Copy/interned handles. PartialEq therefore completely determines whether the
-// old allocation can be retained, matching Salsa's update contract.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for CachedResolvedImpl<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for CachedResolvedImpl<'_> {}
 
 impl ResolvedImpl<'_> {
     /// The interface this impl provides, realized through the match's
@@ -1193,6 +1144,7 @@ fn derived_impl_allows(
 #[salsa::interned]
 struct ImplTypeKey<'db> {
     /// The asking package: candidates come from what it can see.
+    #[returns(clone)]
     viewer: baml_base::SourceRoot,
     #[returns(ref)]
     concrete: baml_type::Ty,

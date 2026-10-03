@@ -7,11 +7,10 @@
 //! compared with `PartialEq`, so a downstream query only re-runs when the item
 //! it actually depends on changed.
 //!
-//! That only works if the result is span-free. Salsa keeps the old memoized
-//! value whenever the new one compares equal (`salsa::update` — "this may cause
-//! us not to update even if the value has changed"), so a result carrying spans
-//! would hand out *stale* spans forever after a whitespace-only edit. Hence
-//! every item is split in two:
+//! That only works if the result is span-free. Salsa treats equal results as
+//! unchanged, so downstream queries may keep results derived from the old
+//! value. Ignoring spans in equality would leave those consumers with stale
+//! locations after a whitespace-only edit. Hence every item is split in two:
 //!
 //! - `*_data` — semantic, span-free, uses [`TypeRef`](crate::type_ref::TypeRef).
 //!   This is what type checking reads.

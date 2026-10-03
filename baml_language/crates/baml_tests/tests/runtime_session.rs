@@ -511,7 +511,7 @@ async fn session_shape(engine: &Arc<BexEngine>, name: &str) -> PackageShape {
 /// history unchanged.
 #[tokio::test]
 async fn a_refused_submission_publishes_nothing() {
-    let program = baml_db::testing::compile_source(REFUSED_SUBMISSION_PROBE);
+    let program = baml_tests::stdlib_prefix::compile_source(REFUSED_SUBMISSION_PROBE);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,
@@ -532,7 +532,7 @@ async fn a_refused_submission_publishes_nothing() {
 
 #[tokio::test]
 async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
-    let program = baml_db::testing::compile_source(S11_LIVENESS_PROBE);
+    let program = baml_tests::stdlib_prefix::compile_source(S11_LIVENESS_PROBE);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,
@@ -680,7 +680,7 @@ fn trim_allocator() {}
 
 #[tokio::test]
 async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
-    let program = baml_db::testing::compile_source(SCENARIO_7);
+    let program = baml_tests::stdlib_prefix::compile_source(SCENARIO_7);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,

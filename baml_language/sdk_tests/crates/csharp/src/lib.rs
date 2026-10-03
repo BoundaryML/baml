@@ -4,7 +4,6 @@ mod tests {
         env,
         path::PathBuf,
         process::{Command, Output},
-        sync::OnceLock,
     };
 
     use sdk_test_harness_runner::{
@@ -128,39 +127,22 @@ mod tests {
         assert_stdout_contains(&output, "csharp_streaming_request=ok");
     }
 
-    fn host_callables_output() -> &'static Output {
-        static OUTPUT: OnceLock<Output> = OnceLock::new();
-
+    // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
+    #[test]
+    fn test_baml_closures_execute_host_arguments_structured_returns_and_mutable_captures() {
         let manifest = manifest_dir();
         let project = manifest.join("host_callables").join("HostCallables.csproj");
-        OUTPUT.get_or_init(|| run_project(&project, &[]))
-    }
-
-    fn assert_host_callables_marker(marker: &str) {
-        let output = host_callables_output();
-        assert_stdout_contains(output, marker);
-    }
-
-    // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
-    #[test]
-    fn test_baml_closure_is_a_native_callable_with_host_language_arguments() {
-        assert_host_callables_marker(
+        // Nextest runs each Rust test in a separate process. Check all markers
+        // from one execution instead of caching the output in a process-local
+        // OnceLock that reruns the full consumer for every marker.
+        let output = run_project(&project, &[]);
+        for marker in [
             "baml_closure_is_a_native_callable_with_host_language_arguments=ok",
-        );
-    }
-
-    // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
-    #[test]
-    fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
-        assert_host_callables_marker(
             "baml_closure_decodes_multiple_args_and_structured_return_values=ok",
-        );
-    }
-
-    // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
-    #[test]
-    fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
-        assert_host_callables_marker("baml_closure_is_reusable_and_retains_mutable_captures=ok");
+            "baml_closure_is_reusable_and_retains_mutable_captures=ok",
+        ] {
+            assert_stdout_contains(&output, marker);
+        }
     }
 
     fn stdlib_resources_output(arguments: &[&str]) -> Output {

@@ -496,34 +496,12 @@ impl<'db> PackageItems<'db> {
     }
 }
 
-// ── salsa::Update impl ────────────────────────────────────────────────────────
+// ── Salsa retention safety ────────────────────────────────────────────────
 
-/// # Safety
-///
-/// `PackageItems<'db>` contains `NamespaceItems<'db>` which transitively
-/// contains `Definition<'db>` (Salsa interned types). This impl allows
-/// `PackageItems<'db>` to be stored and returned by
-/// `#[salsa::tracked(returns(ref))]` queries.
-///
-/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageItems<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for PackageItems<'_> {}
 
 impl<'db> PackageItems<'db> {
     /// Look up a type by explicit namespace and item name.

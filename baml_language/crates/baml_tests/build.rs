@@ -21,44 +21,11 @@ fn make_include_str(path: &str) -> TokenStream {
     }
 }
 
-#[path = "build_stdlib_prefix_config.rs"]
-mod stdlib_prefix_config;
-
-/// Compile the stdlib once and embed it, so the compile helpers in
-/// `src/stdlib_prefix.rs` can splice it in instead of re-deriving it per test.
-/// See that module for why this cannot be an in-process cache.
-fn generate_stdlib_prefix() {
-    use baml_db::stdlib_prefix::{OptLevel, build_stdlib_prefix};
-
-    println!("cargo:rerun-if-changed=build_stdlib_prefix_config.rs");
-
-    let prefixes = stdlib_prefix_config::OPT_LEVELS
-        .into_iter()
-        .map(|raw| {
-            let opt = match raw {
-                0 => OptLevel::Zero,
-                1 => OptLevel::One,
-                2 => OptLevel::Two,
-                other => panic!("OPT_LEVELS lists {other}, which is not an OptLevel"),
-            };
-            build_stdlib_prefix(opt)
-        })
-        .collect();
-    let bytes =
-        baml_db::stdlib_prefix::encode_artifact(&stdlib_prefix_config::artifact_key(), prefixes);
-
-    let out_dir = env::var_os("OUT_DIR").expect("Cargo sets OUT_DIR for build scripts");
-    fs::write(PathBuf::from(out_dir).join("stdlib_prefix.borsh"), bytes)
-        .expect("write stdlib prefix artifact");
-}
-
 fn main() {
     // Watch the projects directory for changes
     println!("cargo:rerun-if-changed=projects");
 
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-
-    generate_stdlib_prefix();
 
     // Generate tests
     generate_tests(&manifest_dir);

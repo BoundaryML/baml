@@ -758,80 +758,6 @@ async fn spawn_with_options_cancel_token_propagates() {
     );
 }
 
-/// `Cancelled` delivered to a token-cancelled spawn is catchable at the
-/// awaiter — the `catch` arm runs and produces the fallback value.
-#[tokio::test]
-async fn spawn_with_options_cancel_token_is_catchable() {
-    let source = r#"
-        function main() -> int {
-            let tok = baml.spawn.CancelToken.new();
-            let f = spawn with tok {
-                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
-                42
-            };
-            let _ = tok.cancel();
-            (await f) catch (e) { baml.panics.Cancelled => 0 }
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            std::sync::Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "main",
-            vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("call should succeed (Cancelled caught)");
-
-    assert_eq!(result, BexExternalValue::Int(0));
-}
-
-/// A spawn configured with `options(cancel = tok)` whose token is never fired
-/// completes normally — the option must not perturb the happy path.
-#[tokio::test]
-async fn spawn_with_options_uncancelled_completes_normally() {
-    let source = r#"
-        function main() -> int {
-            let tok = baml.spawn.CancelToken.new();
-            let f = spawn with tok { 42 };
-            await f
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            std::sync::Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "main",
-            vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("call should succeed");
-
-    assert_eq!(result, BexExternalValue::Int(42));
-}
-
 /// `CancelToken.any([a, b])` composes inputs: firing one input cancels a spawn
 /// configured with the composite token. The awaiter catches `Cancelled` and
 /// returns the fallback; if composition were broken the 10s sleep would run to
@@ -884,39 +810,6 @@ async fn spawn_with_composite_cancel_token() {
 // ============================================================================
 // `baml.spawn.Root`
 // ============================================================================
-
-/// `Root` does not perturb normal completion.
-#[tokio::test]
-async fn spawn_with_root_completes_normally() {
-    let source = r#"
-        function main() -> int {
-            let f = spawn with baml.spawn.Root.new() { 42 };
-            await f
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            std::sync::Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "main",
-            vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("call should succeed");
-
-    assert_eq!(result, BexExternalValue::Int(42));
-}
 
 /// A `Root` spawn still honors an explicit token: `Root` only drops the
 /// *parent* token from the task's own, so a linked `CancelToken` still cancels

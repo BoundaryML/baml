@@ -24,30 +24,10 @@ use crate::{
     package_interface::{ThrowFact, throw_set_key},
 };
 
-/// Per-file extraction output, wrapped so the tracked query can return by
-/// reference (comparison-based salsa `Update`).
+/// Per-file extraction output, memoized by reference with `PartialEq` for
+/// Salsa's early cutoff.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileThrowFacts(pub Vec<FunctionThrowFacts>);
-
-// Safety: comparison-based replacement for Salsa early cutoff.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FileThrowFacts {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
 
 /// Extract throw-analysis facts for every function defined in `file`
 /// (top-level functions and class methods; interface default methods are

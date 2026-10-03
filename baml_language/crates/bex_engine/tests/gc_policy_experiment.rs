@@ -184,7 +184,7 @@ fn percentile(values: &[f64], fraction: f64) -> f64 {
 fn compare_gc_policy() {
     let policy_name = std::env::var("GC_POLICY").unwrap_or_else(|_| "fixed32".into());
     let workload = std::env::var("GC_WORKLOAD").unwrap_or_else(|_| "tiny".into());
-    let program = baml_db::testing::compile_source(SOURCE);
+    let program = baml_test_support::compile_source(SOURCE);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -366,7 +366,7 @@ fn profile_json(stats: &bex_heap::GcStats) -> serde_json::Value {
 #[test]
 #[ignore = "manual concurrent GC profile, not a CI performance assertion"]
 fn profile_concurrent_gc() {
-    let program = baml_db::testing::compile_source(SOURCE);
+    let program = baml_test_support::compile_source(SOURCE);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_all()

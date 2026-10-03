@@ -8,6 +8,7 @@ fn main() {
         ("ai", "aifunctions_generated.rs"),
         ("reflect", "reflectfunctions_generated.rs"),
         ("trace", "tracefunctions_generated.rs"),
+        ("testing", "testingfunctions_generated.rs"),
     ] {
         let (vm_builtins, _io_builtins, class_defs) =
             baml_builtins2_codegen::extract_native_builtins_for(package)

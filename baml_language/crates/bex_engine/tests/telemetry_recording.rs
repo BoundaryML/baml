@@ -16,7 +16,7 @@ fn context() -> bex_engine::FunctionCallContext {
 // BAML cannot inspect recording protobufs or CAS files after engine shutdown.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn trace_capture_reaches_cas_with_exact_values() {
-    let program = baml_db::testing::compile_source(include_str!(
+    let program = baml_test_support::compile_source(include_str!(
         "../../baml_tests/baml_src/ns_trace_capture/capture.baml"
     ));
     let source = program.source_content_hash;
@@ -228,7 +228,7 @@ fn recording_bytes(directory: &std::path::Path) -> Vec<(std::ffi::OsString, Vec<
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
-    let mut program = baml_db::testing::compile_source(
+    let mut program = baml_test_support::compile_source(
         r#"
         function leaf() -> int { 7 }
         function main() -> int {
@@ -408,7 +408,7 @@ fn telemetry_environment_modes() {
     }
     let mode = std::env::var("BAML_TELEMETRY").unwrap_or_else(|_| "medium".into());
     tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap().block_on(async {
-        let program = baml_db::testing::compile_source(r#"
+        let program = baml_test_support::compile_source(r#"
             function leaf() -> int { "abc".length() }
             function main() -> int { let child = spawn { leaf() }; leaf() + (await child) }
             function fail() -> int { baml.sys.exit(7); 1 }

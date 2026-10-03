@@ -41,29 +41,31 @@ constant-pool entry, so BAML source cannot force two distinct allocations).
 
 ## Rust tests: import the prefixed compile helpers
 
-A fresh `ProjectDatabase` re-derives the whole stdlib — about nine CPU-seconds,
-against a few milliseconds for the snippet under test. `cargo nextest` runs each
+A fresh `ProjectDatabase` re-derives the whole stdlib, repeating much more work
+than a small test snippet needs. `cargo nextest` runs each
 test in its own process, so no in-process cache can amortize that; the stdlib
-slice is compiled **once at build time** by `baml_tests`' build script
+slice is compiled **once at build time** by `baml_test_support`'s build script
 instead.
 
-So in a Rust test, import the compile helpers from `baml_tests::stdlib_prefix`,
-not from `baml_project::testing`:
+Add `baml_test_support` as a dev dependency and import its compile helpers.
+It depends only on the compiler/database and VM types, so runtime tests do not
+need a dependency on the full `baml_tests` harness. Existing harness callers
+can also use its `baml_tests::stdlib_prefix` re-export.
 
 ```rust
 // slow — re-derives the stdlib on every test
-use baml_project::{collect_diagnostics, testing::setup_test_db};
+use baml_db::{collect_diagnostics, testing::setup_test_db};
 
 // fast — splices in the build-time stdlib slice
-use baml_tests::stdlib_prefix::{check_user_files, setup_test_db};
+use baml_test_support::{check_user_files, setup_test_db};
 ```
 
 | Need | Use |
 |---|---|
-| compile a snippet to bytecode | `baml_tests::stdlib_prefix::compile_source{,_with_opt}` |
-| several files in one project | `baml_tests::stdlib_prefix::compile_multi_file` / `setup_multi_file_db` |
-| a database to collect diagnostics from | `baml_tests::stdlib_prefix::setup_test_db` |
-| the diagnostics themselves | `baml_tests::stdlib_prefix::check_user_files` (**not** `collect_diagnostics`) |
+| compile a snippet to bytecode | `baml_test_support::compile_source{,_with_opt}` |
+| several files in one project | `baml_test_support::compile_multi_file` / `setup_multi_file_db` |
+| a database to collect diagnostics from | `baml_test_support::setup_test_db` |
+| the diagnostics themselves | `baml_test_support::check_user_files` (**not** `collect_diagnostics`) |
 
 `check_user_files` checks only the project's own files plus the package-level
 pass, instead of re-checking all ~50 stdlib files whose diagnostics every caller
@@ -75,7 +77,7 @@ everything.
 Emitted bytecode is **byte-identical** either way, at every optimization level;
 `tests/stdlib_prefix_equivalence.rs` compiles a corpus both ways and compares
 the serialized programs, so a divergence fails CI. That oracle is why the honest
-helpers in `baml_project::testing` still exist — they are its control arm, not
+helpers in `baml_db::testing` still exist — they are its control arm, not
 dead code.
 
 One thing deliberately *not* done: mounting the stdlib as a source-less

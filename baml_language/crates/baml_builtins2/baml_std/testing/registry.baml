@@ -41,15 +41,7 @@ class TestCollector {
         } else {
             self.prefix + "::" + name
         };
-        let count = 0;
-        let hash_prefix = full_name + "#";
-        for (let t in self.tests) {
-            if (t.name == full_name || t.name.starts_with(hash_prefix)) {
-                count += 1
-            } else {
-                null
-            }
-        }
+        let count = root._test_name_count(self.tests, full_name);
         let final_name = if (count > 0) {
             full_name + "#" + string.from(count + 1)
         } else {
@@ -74,15 +66,7 @@ class TestCollector {
         } else {
             self.prefix + "::" + name
         };
-        let count = 0;
-        let hash_prefix = full_name + "#";
-        for (let ts in self.testsets) {
-            if (ts.name == full_name || ts.name.starts_with(hash_prefix)) {
-                count += 1
-            } else {
-                null
-            }
-        }
+        let count = root._testset_name_count(self.testsets, full_name);
         let final_name = if (count > 0) {
             full_name + "#" + string.from(count + 1)
         } else {
@@ -1277,4 +1261,20 @@ function _collect_leaf_messages(results: ChildReport[], out: string[]) -> void {
             },
         }
     }
+}
+
+/// (internal) Count the current names that the registration suffix rule treats
+/// as duplicates. Registration records and their arrays are publicly mutable,
+/// so these scans deliberately read the current data instead of caching names.
+//baml:vm
+function _test_name_count(entries: TestRegistration[], full_name: string) -> int throws never {
+    $rust_function
+}
+
+//baml:vm
+function _testset_name_count(
+    entries: TestSetRegistration[],
+    full_name: string,
+) -> int throws never {
+    $rust_function
 }

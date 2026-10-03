@@ -3,6 +3,8 @@
 //! Each test creates a minimal DB, adds a `.baml` file, runs the full
 //! compiler2 pipeline through the build-time, byte-identical stdlib prefix,
 //! and verifies the resulting `Program` has the expected structure.
+//! Basic function, enum, and class execution is covered by the native suites
+//! in `baml_src/ns_prompt_parameter`, `ns_enums`, and `ns_classes`.
 
 use baml_db::{ProjectDatabase, compile_program_with};
 
@@ -51,10 +53,6 @@ fn callable(program: &bex_vm_types::Program, name: &str) -> usize {
         })
         .object
         .raw()
-}
-
-fn has_callable(program: &bex_vm_types::Program, name: &str) -> bool {
-    program.rendered_callables().contains_key(name)
 }
 
 /// Every rendered callable name, sorted, for diagnostics.
@@ -130,21 +128,6 @@ macro_rules! emit_snapshot {
 }
 
 #[test]
-fn simple_function_compiles() {
-    let mut db = make_db();
-    db.file(
-        "test.baml",
-        "function greet(name: string) -> string { return name; }",
-    );
-    let program = compile(&db);
-    assert!(
-        has_callable(&program, "user.greet"),
-        "expected `user.greet` among the callables, got: {:?}",
-        rendered_names(&program)
-    );
-}
-
-#[test]
 fn builtin_functions_included() {
     let mut db = make_db();
     db.file("test.baml", "function f() -> string { return \"x\"; }");
@@ -160,42 +143,6 @@ fn builtin_functions_included() {
     assert!(
         has_baml_env,
         "expected at least one 'baml.env.*' function, got: {names:?}"
-    );
-}
-
-#[test]
-fn enum_variant_lookup() {
-    let mut db = make_db();
-    db.file(
-        "test.baml",
-        r#"
-        enum Color { Red Green Blue }
-        function pick() -> Color { return Color.Red; }
-        "#,
-    );
-    let program = compile(&db);
-    assert!(
-        has_callable(&program, "user.pick"),
-        "expected `user.pick` among the callables, got: {:?}",
-        rendered_names(&program)
-    );
-}
-
-#[test]
-fn class_field_lookup() {
-    let mut db = make_db();
-    db.file(
-        "test.baml",
-        r#"
-        class Point { x int  y int }
-        function origin() -> Point { return Point { x: 0, y: 0 }; }
-        "#,
-    );
-    let program = compile(&db);
-    assert!(
-        has_callable(&program, "user.origin"),
-        "expected `user.origin` among the callables, got: {:?}",
-        rendered_names(&program)
     );
 }
 
@@ -229,13 +176,7 @@ fn optional_param_metadata_and_omitted_sentinel_emit() {
             .any(|c| matches!(c, bex_vm_types::ConstValue::OmittedArg)),
         "expected omitted source argument to be emitted as OmittedArg"
     );
-}
 
-#[test]
-fn optional_defaults_emit_snapshot() {
-    let mut db = make_db();
-    db.file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
-    let program = compile(&db);
     emit_snapshot!(
         "optional_defaults_emit_snapshot",
         crate::engine::display_user_functions(&program)

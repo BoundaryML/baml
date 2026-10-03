@@ -9,7 +9,7 @@
 //! This module is the single producer. Its consumers each embed their own
 //! artifact, because their requirements genuinely differ: `bex_project` ships
 //! one optimization level in a production binary where size matters, while
-//! `baml_tests` carries every level for tests, where it does not.
+//! `baml_test_support` carries every level for tests, where it does not.
 //! Sharing the *derivation* is what matters — an artifact that drifted from
 //! what a real compile produces would be silently wrong in both.
 

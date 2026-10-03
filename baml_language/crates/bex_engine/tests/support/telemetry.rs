@@ -8,7 +8,7 @@ pub(crate) fn recording_engine(
     captured_functions: &[&str],
     recording: TelemetryRecording,
 ) -> Arc<BexEngine> {
-    let mut program = baml_db::testing::compile_source(source);
+    let mut program = baml_test_support::compile_source(source);
     // Exercise full-capture AI policy without making an LLM request.
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(function) = object {

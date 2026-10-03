@@ -17,6 +17,42 @@ fn query_semantic_index(db: &baml_db::ProjectDatabase, file: SourceFile) {
     let _ = baml_compiler2_hir::file_semantic_index(db, file);
 }
 
+/// An empty package needs no dependency export work. Adding implementations
+/// afterward must still invalidate the empty coherence result.
+#[test]
+fn empty_package_check_avoids_dependency_interfaces_and_tracks_new_impls() {
+    let mut test_db = IncrementalTestDb::new();
+    let file = test_db
+        .db_mut()
+        .file("test.baml", "// No declarations yet.\n");
+
+    let diagnostics = test_db.assert_not_executed(
+        |db| db.check_file(file),
+        &[
+            "package_resolution_context",
+            "package_interface",
+            "normalized_alias_map",
+        ],
+    );
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+
+    file.set_text(test_db.db_mut()).to(r#"
+interface Marker {}
+class Subject {}
+implement Marker for Subject {}
+implement Marker for Subject {}
+"#
+    .to_string());
+    let diagnostics =
+        test_db.assert_not_executed(|db| db.check_file(file), &["package_resolution_context"]);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.id == baml_compiler_diagnostics::DiagnosticId::OverlappingImplements
+        }),
+        "adding local implementations must invalidate the empty coherence result: {diagnostics:#?}",
+    );
+}
+
 /// Test that editing a function body doesn't invalidate the item tree.
 ///
 /// The ItemTree only contains function names, not bodies. So changing a
@@ -592,7 +628,7 @@ fn editing_a_function_body_preserves_its_signature_data() {
 
 /// A downstream consumer that reads spans out of the memoized signature, the
 /// way a signature-lowering pass anchors its diagnostics.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 fn signature_param_type_spans<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -1076,8 +1112,8 @@ fn hir_ty_editing_one_file_preserves_other_files_inference() {
 /// THE firewall (S3): a body edit that leaves the callee's SIGNATURE
 /// unchanged (declared return, unchanged inferred effect) does not
 /// re-infer its callers - `function_signature`/`callable_throws`
-/// re-execute but produce EQUAL results, and the PartialEq-driven
-/// `salsa::Update` cuts the caller's `infer_function_body` off.
+/// re-execute but produce EQUAL results, and Salsa's PartialEq-based change
+/// detection cuts the caller's `infer_function_body` off.
 #[test]
 fn hir_ty_body_edit_with_stable_signature_does_not_reinfer_callers() {
     let mut test_db = IncrementalTestDb::new();

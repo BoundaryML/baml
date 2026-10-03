@@ -16,7 +16,7 @@ use crate::{
 /// `methods` holds `FunctionLoc`s, not `LocalItemId`s: a `Loc` already carries
 /// its file, so a consumer can go straight to `function_data` without knowing
 /// which file the class came from.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ClassData<'db> {
     pub name: Name,
     /// Generic type parameters, each with its conjunction of bounds.

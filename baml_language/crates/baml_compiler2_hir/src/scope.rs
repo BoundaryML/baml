@@ -43,7 +43,9 @@ impl FileScopeId {
 /// pairing File + FileScopeId.
 #[salsa::tracked]
 pub struct ScopeId<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub file_scope_id: FileScopeId,
 }
 

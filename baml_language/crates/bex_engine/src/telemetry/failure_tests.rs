@@ -14,7 +14,7 @@ fn engine_with_writer(
     write: impl FnMut(&SealedFile) -> Result<(), btel_file::LocalDeliveryError> + Send + 'static,
 ) -> Arc<BexEngine> {
     let mut engine = BexEngine::new(
-        baml_db::testing::compile_source(source),
+        baml_test_support::compile_source(source),
         Arc::new(sys_native::SysOps::native()),
         vec![],
     )

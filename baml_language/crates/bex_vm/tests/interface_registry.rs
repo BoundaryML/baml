@@ -7,7 +7,7 @@
 //! adopts defaults at dispatch through the interface's `default_fn`), and a
 //! provided method for a defaulted name is the impl's own body.
 
-use baml_db::testing::compile_source;
+use baml_test_support::compile_source;
 use bex_vm_types::{Object, TyTemplate, types::Program};
 
 /// The head type name of a for-type pattern (`Dog` for `Dog`, `Wrap` for

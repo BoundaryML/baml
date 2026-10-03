@@ -611,10 +611,10 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = pkg_info.root;
-    let res_ctx = baml_compiler2_hir_ty::package_interface::package_resolution_context(db, pkg_id);
-    let pkg_items = &res_ctx.own_items;
-    // Salsa-cached per package — previously rebuilt (and cloned per function
-    // below) on every file check.
+    // This validation needs only the package's symbols. A full resolution
+    // context also derives and clones every dependency interface, needlessly
+    // serializing otherwise independent file checks on those shared queries.
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     // Reuse the memoized CST → AST lowering instead of re-lowering here.
     let ast_items = &baml_compiler2_hir::file_ast(db, file).items;
     diagnostics.extend(validate_associated_type_bindings_in_items(

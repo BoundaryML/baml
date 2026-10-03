@@ -26,7 +26,7 @@ fn engine(program: bex_vm_types::Program, recording: TelemetryRecording) -> Arc<
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_delivery() {
     let root = tempfile::tempdir().unwrap();
-    let mut program = baml_db::testing::compile_source(
+    let mut program = baml_test_support::compile_source(
         r#"
         function leaf() -> int { 7 }
         function main() -> int { let child = spawn { leaf() }; leaf() + (await child) }
@@ -164,7 +164,7 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
 async fn shutdown_reports_disk_errors_even_without_another_invocation() {
     let root = tempfile::tempdir().unwrap();
     let engine = engine(
-        baml_db::testing::compile_source("function main() -> int { 1 }"),
+        baml_test_support::compile_source("function main() -> int { 1 }"),
         TelemetryRecording::local_files_in(
             root.path(),
             RecordingConfig {
@@ -210,7 +210,7 @@ fn off_does_not_create_local_files() {
     let destination = root.path().join("must-not-exist");
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let engine = engine(
-            baml_db::testing::compile_source("function main() -> int { 1 }"),
+            baml_test_support::compile_source("function main() -> int { 1 }"),
             TelemetryRecording::local_files_in(&destination, RecordingConfig::default()),
         );
         assert!(engine.telemetry_recording_directory().is_none());
@@ -233,7 +233,7 @@ async fn storage_startup_failure_preserves_status_without_preventing_execution()
     let destination = root.path().join("file-not-directory");
     std::fs::write(&destination, b"occupied").unwrap();
     let engine = engine(
-        baml_db::testing::compile_source(
+        baml_test_support::compile_source(
             "function main() -> int { let child = spawn { 7 }; await child }",
         ),
         TelemetryRecording::local_files_in(destination, RecordingConfig::default()),
@@ -257,7 +257,7 @@ async fn cas_storage_failure_disables_recording_but_execution_continues() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".baml/btel")).unwrap();
     std::fs::write(root.path().join(".baml/btel/cas"), b"not a directory").unwrap();
-    let mut program = baml_db::testing::compile_source(
+    let mut program = baml_test_support::compile_source(
         "function leaf() -> int { 7 } function main() -> int { leaf() }",
     );
     for object in &mut program.objects.0 {

@@ -461,12 +461,13 @@ mod tests {
         }
         "#;
 
-        let omitted = run_test(source, "is_null", IndexMap::new(), OptLevel::One).await;
+        let program = compile_source_with_opt(source, OptLevel::One);
+        let omitted = run_compiled(program.clone(), "is_null", IndexMap::new(), false).await;
         assert_eq!(omitted.result, Ok(BexExternalValue::Bool(false)));
 
         let mut args = IndexMap::new();
         args.insert("value", BexExternalValue::Null);
-        let explicit_null = run_test(source, "is_null", args, OptLevel::One).await;
+        let explicit_null = run_compiled(program, "is_null", args, false).await;
         assert_eq!(explicit_null.result, Ok(BexExternalValue::Bool(true)));
     }
 

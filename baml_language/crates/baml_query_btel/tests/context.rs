@@ -25,7 +25,7 @@ fn context_engine(config: bex_engine::EngineConfig) -> std::sync::Arc<bex_engine
     use sys_native::SysOpsExt;
     std::sync::Arc::new(
         bex_engine::BexEngine::new_with_config(
-            baml_db::testing::compile_source(ENGINE_CONTEXT_SOURCE),
+            baml_test_support::compile_source(ENGINE_CONTEXT_SOURCE),
             std::sync::Arc::new(sys_native::SysOps::native()),
             vec![],
             config,
@@ -68,7 +68,7 @@ async fn independent_engine_contexts_and_empty_defaults_in_one_process() {
     // Construct the default after explicit contexts to catch hidden initialization order.
     let empty = std::sync::Arc::new(
         bex_engine::BexEngine::new(
-            baml_db::testing::compile_source(ENGINE_CONTEXT_SOURCE),
+            baml_test_support::compile_source(ENGINE_CONTEXT_SOURCE),
             std::sync::Arc::new(sys_native::SysOps::native()),
             vec![],
         )

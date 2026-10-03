@@ -12,6 +12,9 @@ This script closes that gap by content, not by time:
 
 - `record` walks the C# source roots (everything except `bin/`/`obj/`) and
   writes a `{path: sha256}` manifest into the cache directory.
+- `restore-before-codegen` defers missing generated fixture clients, which
+  codegen recreates before the strict `restore` pass. All other input changes
+  still invalidate the cache before the early bridge/tool builds.
 - `restore` re-hashes the same tree and backdates ONLY byte-identical files
   to a fixed timestamp in 2000, i.e. older than any cached output. Files
   that changed — or are new, or of a kind we didn't anticipate — keep their
@@ -84,7 +87,15 @@ def record():
     print(f"recorded {len(manifest)} files")
 
 
-def restore():
+def is_generated_fixture_client(path):
+    prefix = ROOTS[1] + "/"
+    if not path.startswith(prefix):
+        return False
+    parts = path[len(prefix):].split("/")
+    return len(parts) >= 3 and parts[1] == "baml_sdk"
+
+
+def restore(before_codegen=False):
     if not os.path.exists(MANIFEST):
         print("no manifest from a previous run; leaving all mtimes fresh")
         return
@@ -93,6 +104,7 @@ def restore():
     backdated = 0
     changed = []
     missing = []
+    deferred = []
     for path, want in manifest.items():
         try:
             if digest(path) == want:
@@ -100,6 +112,13 @@ def restore():
                 backdated += 1
             else:
                 changed.append(path)
+        except FileNotFoundError:
+            if before_codegen and is_generated_fixture_client(path):
+                # These untracked files are absent after checkout and recreated
+                # by codegen. The strict pass checks them before fixture builds.
+                deferred.append(path)
+            else:
+                missing.append(path)
         except OSError:
             # Deleted or unreadable file: nothing to backdate; any project
             # that referenced it rebuilds via its own fresh inputs.
@@ -114,6 +133,8 @@ def restore():
         # provides the fast path when every input is identical.
         remove_build_outputs()
     print(f"backdated {backdated}/{len(manifest)} unchanged files")
+    if deferred:
+        print(f"deferred {len(deferred)} missing generated client files until after codegen")
     for label, paths in (("changed", changed), ("missing", missing), ("new", new)):
         if not paths:
             continue
@@ -129,9 +150,13 @@ def restore():
 
 
 def main():
-    actions = {"record": record, "restore": restore}
+    actions = {
+        "record": record,
+        "restore": restore,
+        "restore-before-codegen": lambda: restore(before_codegen=True),
+    }
     if len(sys.argv) != 2 or sys.argv[1] not in actions:
-        sys.exit(f"usage: {sys.argv[0]} {{record|restore}}")
+        sys.exit(f"usage: {sys.argv[0]} {{record|restore|restore-before-codegen}}")
     actions[sys.argv[1]]()
 
 

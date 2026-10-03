@@ -32,8 +32,8 @@ sqlparser = { workspace = true }
 xxhash-rust = { workspace = true }
 
 [dev-dependencies]
-baml_db = { workspace = true }
 baml_query_btel = { workspace = true, features = [ "fault-injection" ] }
+baml_test_support = { workspace = true }
 bex_engine = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }

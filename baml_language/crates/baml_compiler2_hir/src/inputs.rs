@@ -49,6 +49,7 @@ pub struct SeededCallableThrows {
 /// which is the one place a package is found by its manifest name.
 #[salsa::input]
 pub struct LangRootsInput {
+    #[returns(clone)]
     pub roots: baml_base::LangRoots,
 }
 
