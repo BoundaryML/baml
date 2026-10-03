@@ -172,9 +172,10 @@ fn cached_channel_activation_and_local_listing_need_no_network() {
             && text.contains("Remote versions were not checked.")
     );
     let out = f.success(&["--version"]);
+    let manifest: toml::Value = toml::from_str(include_str!("../Cargo.toml")).unwrap();
+    let wrapper_version = manifest["package"]["version"].as_str().unwrap();
     assert!(
-        String::from_utf8_lossy(&out.stdout)
-            .contains(concat!("baml wrapper ", env!("CARGO_PKG_VERSION")))
+        String::from_utf8_lossy(&out.stdout).contains(&format!("baml wrapper {wrapper_version}"))
     );
     f.success(&["toolchain", "uninstall", "0.12.0"]);
     assert!(!f.home.join("toolchains/0.12.0").exists());
