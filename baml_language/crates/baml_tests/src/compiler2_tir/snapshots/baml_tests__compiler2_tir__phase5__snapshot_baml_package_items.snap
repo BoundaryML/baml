@@ -32,6 +32,9 @@ namespace baml:
   function _to_string_default<T>
   function _trunc_to_int
   function deep_copy<T>
+namespace baml.archive:
+  function extract
+  function read_file
 namespace baml.crypto:
   type Aead
   class Aes128GcmSiv { methods: [new] }
@@ -42,6 +45,7 @@ namespace baml.crypto:
   type Hasher
   class Sha256 { methods: [new] }
   class XChaCha20Poly1305 { methods: [new] }
+  function sha256
 namespace baml.csv:
   class Error { methods: [] }
   enum ErrorKind
@@ -111,9 +115,14 @@ namespace baml.events:
 namespace baml.fs:
   class DirEntry { methods: [] }
   class File { methods: [text, bytes, close, seek_from, write] }
+  class Lock { methods: [close] }
+  class Metadata { methods: [] }
   class MkdirOptions { methods: [] }
+  function canonicalize
   function chmod
   function exists
+  function lock
+  function metadata
   function mkdir
   function open
   function read
@@ -121,9 +130,11 @@ namespace baml.fs:
   function remove
   function remove_dir
   function remove_dir_all
+  function rename
   function size
   function symlink
   function write
+  function write_atomic
   function write_bytes
 namespace baml.future:
   class AllFailed<E> { methods: [] }
@@ -265,6 +276,12 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
+namespace baml.path:
+  function _absolute
+  function absolute
+  function is_absolute
+  function join
+  function parent
 namespace baml.random:
   class ChaCha20 { methods: [new, _new] }
   type Rng
@@ -298,28 +315,40 @@ namespace baml.spawn:
   class Root { methods: [new] }
   function __spawn<T, E>
 namespace baml.sys:
+  class ExecOptions { methods: [] }
+  class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }
   type ProcessInput
+  class ProcessOptions { methods: [] }
   class ProcessOutput { methods: [ok] }
   class ReadPipe { methods: [close, lines] }
   class ReadPipeLines { methods: [] }
-  type Stdio
-  class Subprocess { methods: [wait, kill, close, cleanup] }
+  enum StderrMode
   class WritePipe { methods: [close] }
-  class _ProcessOptions { methods: [] }
+  function _capture
+  function _detach
+  function _exec
   function _run
   function _shell
+  function _start_process
   function _strip_carriage_return
-  function _subprocess
   function argv
+  function capture
   function collect_garbage
+  function current_dir
+  function current_exe
+  function detach
+  function exec
   function exit
+  function home_dir
+  function host_target
   function panic
   function pid
+  function platform
   function run
   function shell
   function sleep
-  function subprocess
+  function start_process
 namespace baml.time:
   class AmbiguousTimeError { methods: [] }
   type Disambiguation
@@ -340,6 +369,7 @@ namespace baml.toml:
   type Item
   class ParseError { methods: [] }
   class Table { methods: [parse] }
+  function edit_strings
   function item_from_json
   function item_to_json
   function table_from_json
