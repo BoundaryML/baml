@@ -2135,43 +2135,7 @@ impl BexEngine {
             if let Object::Class(cls) = obj {
                 defs.insert(
                     ::sys_types::DefKey::new(cls.type_tag, cls.name.clone()),
-                    sys_types::ClassDefinition {
-                        name: cls.name.display_name().to_string(),
-                        description: cls.description.clone(),
-                        docstring: cls.docstring.clone(),
-                        alias: cls.alias.clone(),
-                        stream_done: cls.stream_done,
-                        fields: cls
-                            .fields
-                            .iter()
-                            .map(|f| sys_types::ClassFieldDefinition {
-                                name: f.name.clone(),
-                                field_type: f
-                                    .field_type
-                                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-                                    .unwrap_or_else(|_| {
-                                        unreachable!(
-                                            "compiled class fields name compiled declarations"
-                                        )
-                                    }),
-                                field_template: Some(
-                                    f.field_template
-                                        .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-                                        .unwrap_or_else(|_| {
-                                            unreachable!(
-                                                "compiled class fields name compiled declarations"
-                                            )
-                                        }),
-                                ),
-                                description: f.description.clone(),
-                                docstring: f.docstring.clone(),
-                                alias: f.alias.clone(),
-                                skip: f.skip,
-                                stream_done: f.stream_done,
-                                must_exist: f.must_exist,
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::class_definition(cls),
                 );
             }
         }
@@ -2189,109 +2153,18 @@ impl BexEngine {
             if let Object::Enum(enm) = obj {
                 defs.insert(
                     ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
-                    sys_types::EnumDefinition {
-                        name: enm.name.display_name().to_string(),
-                        description: enm.description.clone(),
-                        docstring: enm.docstring.clone(),
-                        alias: enm.alias.clone(),
-                        variants: enm
-                            .variants
-                            .iter()
-                            .filter(|v| !v.skip)
-                            .map(|v| sys_types::EnumVariantDefinition {
-                                name: v.name.clone(),
-                                description: v.description.clone(),
-                                docstring: v.docstring.clone(),
-                                alias: v.alias.clone(),
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::enum_definition(enm),
                 );
             }
         }
         defs
     }
 
-    /// Carry a declaration's field type onto the sys-op lane.
-    ///
-    /// Total by invariant: a live declaration's heads are resolved pointers to
-    /// declarations, so each yields its identity and its own name.
-    fn lane_ty(ty: &bex_vm_types::RuntimeTy) -> ::sys_types::SapTy {
-        ty.try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-            .unwrap_or_else(|head| {
-                unreachable!("a live declaration's field names a declaration: {head}")
-            })
-    }
-
-    /// [`Self::lane_ty`] for a field's symbolic template, same totality
-    /// argument: every head a live declaration's template names is resolved.
-    fn lane_template(template: &bex_vm_types::TyTemplate) -> ::sys_types::SapTyTemplate {
-        template
-            .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-            .unwrap_or_else(|head| {
-                unreachable!("a live declaration's field template names a declaration: {head}")
-            })
-    }
-
-    fn enum_definition(enm: &bex_vm_types::Enum) -> sys_types::EnumDefinition {
-        sys_types::EnumDefinition {
-            name: enm.name.display_name().to_string(),
-            description: enm.description.clone(),
-            docstring: enm.docstring.clone(),
-            alias: enm.alias.clone(),
-            variants: enm
-                .variants
-                .iter()
-                .filter(|variant| !variant.skip)
-                .map(|variant| sys_types::EnumVariantDefinition {
-                    name: variant.name.clone(),
-                    description: variant.description.clone(),
-                    docstring: variant.docstring.clone(),
-                    alias: variant.alias.clone(),
-                })
-                .collect(),
-        }
-    }
-
-    fn class_definition(
-        class: &bex_vm_types::Class,
-        _permit: bex_heap::PermitProof<'_>,
-    ) -> sys_types::ClassDefinition {
-        sys_types::ClassDefinition {
-            name: class.name.display_name().to_string(),
-            description: class.description.clone(),
-            docstring: class.docstring.clone(),
-            alias: class.alias.clone(),
-            stream_done: class.stream_done,
-            fields: class
-                .fields
-                .iter()
-                .filter(|field| !field.skip)
-                .map(|field| sys_types::ClassFieldDefinition {
-                    name: field.name.clone(),
-                    field_type: Self::lane_ty(&field.field_type),
-                    field_template: Some(Self::lane_template(&field.field_template)),
-                    description: field.description.clone(),
-                    docstring: field.docstring.clone(),
-                    alias: field.alias.clone(),
-                    skip: field.skip,
-                    stream_done: field.stream_done,
-                    must_exist: field.must_exist,
-                })
-                .collect(),
-        }
-    }
-
     /// Gather runtime definitions from the type descriptors passed directly
     /// to a sys-op. Type arguments are lowered as ordinary `Object::Type`
     /// arguments, so this is the last synchronous chokepoint before the permit
     /// is released for async work.
-    fn runtime_type_overlay(
-        &self,
-        vm: &BexVm,
-        args: &[Value],
-        permit: bex_heap::PermitProof<'_>,
-    ) -> RuntimeTypeOverlay {
+    fn runtime_type_overlay(&self, vm: &BexVm, args: &[Value]) -> RuntimeTypeOverlay {
         let mut overlay = RuntimeTypeOverlay::default();
         for value in args {
             let Some(type_ptr) = value.as_object_ptr() else {
@@ -2312,7 +2185,7 @@ impl BexEngine {
                 overlay
                     .class_definitions
                     .entry(head.clone())
-                    .or_insert_with(|| Self::class_definition(class, permit));
+                    .or_insert_with(|| bex_vm::definitions::class_definition(class));
                 overlay
                     .class_handles
                     .entry(head)
@@ -2326,7 +2199,7 @@ impl BexEngine {
                 overlay
                     .enum_definitions
                     .entry(head.clone())
-                    .or_insert_with(|| Self::enum_definition(enm));
+                    .or_insert_with(|| bex_vm::definitions::enum_definition(enm));
                 overlay
                     .enum_handles
                     .entry(head)
@@ -2386,28 +2259,7 @@ impl BexEngine {
                 };
                 classes.insert(
                     ::sys_types::DefKey::new(class.type_tag, class.name.clone()),
-                    sys_types::ClassDefinition {
-                        name: class.name.display_name().to_string(),
-                        description: class.description.clone(),
-                        docstring: class.docstring.clone(),
-                        alias: class.alias.clone(),
-                        stream_done: class.stream_done,
-                        fields: class
-                            .fields
-                            .iter()
-                            .map(|field| sys_types::ClassFieldDefinition {
-                                name: field.name.clone(),
-                                field_type: Self::lane_ty(&field.field_type),
-                                field_template: Some(Self::lane_template(&field.field_template)),
-                                description: field.description.clone(),
-                                docstring: field.docstring.clone(),
-                                alias: field.alias.clone(),
-                                skip: field.skip,
-                                stream_done: field.stream_done,
-                                must_exist: field.must_exist,
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::class_definition(class),
                 );
                 named_owners.insert(class.name.to_string(), handle.clone());
             }
@@ -2417,23 +2269,7 @@ impl BexEngine {
                 };
                 enums.insert(
                     ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
-                    sys_types::EnumDefinition {
-                        name: enm.name.display_name().to_string(),
-                        description: enm.description.clone(),
-                        docstring: enm.docstring.clone(),
-                        alias: enm.alias.clone(),
-                        variants: enm
-                            .variants
-                            .iter()
-                            .filter(|variant| !variant.skip)
-                            .map(|variant| sys_types::EnumVariantDefinition {
-                                name: variant.name.clone(),
-                                description: variant.description.clone(),
-                                docstring: variant.docstring.clone(),
-                                alias: variant.alias.clone(),
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::enum_definition(enm),
                 );
                 named_owners.insert(enm.name.to_string(), handle.clone());
             }
@@ -5771,8 +5607,7 @@ impl BexEngine {
                         // runs its sys-ops to completion.
                         let op_cancel = thread.sysop_cancel.clone();
 
-                        let runtime_type_overlay =
-                            self.runtime_type_overlay(&thread.vm, &args, thread.proof());
+                        let runtime_type_overlay = self.runtime_type_overlay(&thread.vm, &args);
                         let runtime_compile_request = match operation {
                             SysOp::ReflectPackageCompile => {
                                 Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))

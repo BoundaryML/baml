@@ -2,7 +2,10 @@ use ouroboros::self_referencing;
 use sys_types::DefKey;
 
 pub use crate::jsonish::parse;
-use crate::sap_model::{Ty, TypeRefDb};
+use crate::{
+    deserializer::coercer::{ParsingContext, ParsingError},
+    sap_model::{Ty, TyResolvedRef, TypeRefDb},
+};
 
 pub mod baml_value;
 pub mod deserializer;
@@ -10,7 +13,7 @@ pub mod jsonish;
 pub mod sap_model;
 #[cfg(test)]
 mod tests;
-pub mod to_external;
+pub mod to_baml_ty;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamingMode {
@@ -43,20 +46,24 @@ impl CompiledSapModel {
         )?;
         Ok(Self { inner })
     }
-    pub fn from_sys_op_context(
-        ctx: &::sys_types::SysOpContext,
-        target: sys_types::SapTy,
-    ) -> Result<Self, sap_model::ConvertError> {
-        let type_ctx = sap_model::TypeCtx::for_target(ctx, &target);
-        Self::from_type_ctx(type_ctx, target)
-    }
-
     pub fn db(&self) -> &TypeRefDb<'_, DefKey> {
         self.inner.borrow_db()
     }
 
     pub fn ty(&self) -> &Ty<'_, DefKey> {
         self.inner.borrow_ty()
+    }
+
+    /// The parse target, resolved in [`Self::db`].
+    ///
+    /// # Errors
+    ///
+    /// The target names a type the database does not hold: a schema the
+    /// converter accepted but cannot resolve, which no input text can fix.
+    pub fn resolved_target(&self) -> Result<TyResolvedRef<'_, DefKey>, ParsingError> {
+        self.db()
+            .resolve(self.ty())
+            .map_err(|name| ParsingContext::new(self.db()).error_type_resolution(name))
     }
 }
 
