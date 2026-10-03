@@ -27,9 +27,9 @@ impl BamlRuntime {
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> napi::Result<Self> {
-        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
-        // singleton; we don't keep our own copy.
-        match bridge_cffi::initialize_runtime(&root_path, files) {
+        // bridge_cffi's singleton owns the runtime, and initializes it on the
+        // first call; we don't keep our own copy.
+        match bridge_cffi::stage_runtime(&root_path, files) {
             Ok(()) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
@@ -47,7 +47,7 @@ impl BamlRuntime {
             Either::A(encoded) => encoded.as_bytes(),
             Either::B(bytes) => bytes.as_ref(),
         };
-        match bridge_cffi::initialize_runtime_from_blob(bytecode, embedded_baml_toml.as_deref()) {
+        match bridge_cffi::stage_runtime_from_blob(bytecode, embedded_baml_toml.as_deref()) {
             Ok(()) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }

@@ -52,7 +52,7 @@ pub fn stage_runtime_from_files_with_sys_ops(
     )?)
 }
 
-pub(crate) fn stage_runtime(runtime: PreparedRuntime) -> Result<(), BridgeError> {
+fn stage_runtime(runtime: PreparedRuntime) -> Result<(), BridgeError> {
     if WORKERD.get() {
         replace_state(RuntimeState::Pending(Box::new(runtime)))
     } else {
@@ -95,7 +95,7 @@ fn initialization_in_progress() -> BridgeError {
     BridgeError::Startup("BAML runtime initialization is already in progress".to_string())
 }
 
-pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
+pub(crate) fn get_or_init_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     RUNTIME.with(|slot| {
         let pending = {
             let mut state = slot.borrow_mut();

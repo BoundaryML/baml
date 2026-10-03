@@ -1,8 +1,7 @@
-//! Initializing the runtime compiles the program but does not construct the
-//! engine: that happens on the first use. Telemetry is configured from the
-//! process environment during engine construction, so a host that initializes
-//! the runtime as its generated SDK loads can still set that environment
-//! before its first BAML call.
+//! Staging the runtime only stores the program. The first use compiles it,
+//! builds the engine, and configures telemetry from the process environment,
+//! so a host that stages the runtime as its generated SDK loads can still set
+//! that environment before its first BAML call.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -14,9 +13,8 @@ fn sources(source: &str) -> HashMap<String, String> {
     HashMap::from([("main.baml".to_string(), source.to_string())])
 }
 
-fn initialize() {
-    bridge_cffi::initialize_runtime(".", sources("function one() -> int throws never { 1 }"))
-        .unwrap();
+fn stage() {
+    bridge_cffi::stage_runtime(".", sources("function one() -> int throws never { 1 }")).unwrap();
 }
 
 fn set_telemetry(value: &str) {
@@ -28,19 +26,22 @@ fn set_telemetry(value: &str) {
 // One test: the runtime slot and the environment are both process-global.
 #[tokio::test(flavor = "multi_thread")]
 async fn engine_is_constructed_on_first_use() {
-    // A program that does not compile still fails initialization.
-    assert!(
-        bridge_cffi::initialize_runtime(".", sources("function broken( -> int { 1 }")).is_err()
-    );
     assert!(matches!(
         bridge_cffi::get_runtime(),
         Err(BridgeError::NotInitialized)
     ));
 
+    // Staging does not compile: a broken program fails its first use instead.
+    bridge_cffi::stage_runtime(".", sources("function broken( -> int { 1 }")).unwrap();
+    assert!(matches!(
+        bridge_cffi::get_runtime(),
+        Err(BridgeError::Startup(_))
+    ));
+
     // The engine reads `BAML_TELEMETRY` as it is constructed. An invalid level
-    // set after initialization fails the first use, so nothing was constructed
+    // set after staging fails the first use, so nothing was constructed
     // before it. The failure is reported again on every later use.
-    initialize();
+    stage();
     set_telemetry("not-a-level");
     for _ in 0..2 {
         let Err(BridgeError::Startup(message)) = bridge_cffi::get_runtime() else {
@@ -49,9 +50,9 @@ async fn engine_is_constructed_on_first_use() {
         assert!(message.contains(TELEMETRY), "{message}");
     }
 
-    // A valid level set after initialization is likewise the one used, and
+    // A valid level set after staging is likewise the one used, and
     // concurrent first uses share one engine.
-    initialize();
+    stage();
     set_telemetry("off");
     let threads: Vec<_> = (0..8)
         .map(|_| std::thread::spawn(|| bridge_cffi::get_runtime().unwrap()))
@@ -68,7 +69,7 @@ async fn engine_is_constructed_on_first_use() {
     ));
 
     // A runtime that was never used has no engine to shut down.
-    initialize();
+    stage();
     bridge_cffi::shutdown_runtime(None).await.unwrap();
     assert!(matches!(
         bridge_cffi::get_runtime(),

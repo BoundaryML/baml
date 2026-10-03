@@ -47,15 +47,62 @@ pub use ffi::{
     unhandled_spawn::register_unhandled_spawn_error_callback,
 };
 
-/// Initialization stages a validated program; the first [`get_runtime`] builds
-/// its engine. Building is what runs package initializers and configures
-/// telemetry from the environment, so a host that initializes the runtime as
-/// its generated SDK loads can still set that environment before its first
-/// call.
+/// A program as a host handed it to `stage_runtime*`: not yet validated,
+/// decoded, or compiled.
+enum StagedProgram {
+    Bytecode {
+        bytecode: Vec<u8>,
+        embedded_baml_toml: Option<String>,
+    },
+    Files {
+        root_path: String,
+        src_files: HashMap<String, String>,
+    },
+}
+
+impl StagedProgram {
+    /// Validate and compile the program, build its engine, and run its package
+    /// initializers. Building the engine is where telemetry is configured from
+    /// the environment.
+    fn initialize(self) -> Result<Arc<dyn Bex>, BridgeError> {
+        let prepared = match self {
+            Self::Bytecode {
+                bytecode,
+                embedded_baml_toml,
+            } => crate::prepare_runtime_from_blob(
+                &bytecode,
+                embedded_baml_toml.as_deref(),
+                bex_project::SysOps::native(),
+            )?,
+            Self::Files {
+                root_path,
+                src_files,
+            } => {
+                let physical_fs = vfs::PhysicalFS::new("/");
+                let vfs_root = vfs::VfsPath::new(physical_fs);
+                let vfs_path = vfs_root
+                    .join(&root_path)
+                    .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
+                let files = src_files
+                    .into_iter()
+                    .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
+                    .collect();
+                PreparedRuntime {
+                    runtime: bex_project::prepare(vfs_path, bex_project::SysOps::native(), files)?,
+                    error_context: None,
+                }
+            }
+        };
+        prepared.build()
+    }
+}
+
+/// The process-global runtime slot. Staging stores the program; the first
+/// [`get_or_init_runtime`] (in practice, the first BAML call) initializes it.
 enum RuntimeSlot {
-    Pending(Box<PreparedRuntime>),
+    Staged(StagedProgram),
     Ready(Arc<dyn Bex>),
-    /// Building failed. Every later use reports the same error.
+    /// Initialization failed. Every later use reports the same error.
     Failed(String),
 }
 
@@ -75,7 +122,7 @@ pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
     result.cloned()
 }
 
-pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
+pub(crate) fn get_or_init_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     if let Some(RuntimeSlot::Ready(runtime)) = &*RUNTIME_INSTANCE
         .read()
         .map_err(|_| BridgeError::LockPoisoned)?
@@ -83,16 +130,16 @@ pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
         return Ok(runtime.clone());
     }
 
-    // Build under the write lock, so concurrent first uses share one engine.
+    // Initialize under the write lock, so concurrent first uses share one engine.
     let mut slot = RUNTIME_INSTANCE
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    let built = match slot.take().ok_or(BridgeError::NotInitialized)? {
-        RuntimeSlot::Pending(prepared) => prepared.build().map_err(|error| error.to_string()),
+    let initialized = match slot.take().ok_or(BridgeError::NotInitialized)? {
+        RuntimeSlot::Staged(program) => program.initialize().map_err(|error| error.to_string()),
         RuntimeSlot::Ready(runtime) => Ok(runtime),
         RuntimeSlot::Failed(message) => Err(message),
     };
-    match built {
+    match initialized {
         Ok(runtime) => {
             *slot = Some(RuntimeSlot::Ready(runtime.clone()));
             Ok(runtime)
@@ -104,41 +151,40 @@ pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     }
 }
 
-/// Initialize the global runtime from BAML source files.
-///
-/// The sources are compiled here; the engine is built on the first use of the
-/// runtime. If a runtime is already initialized, it will be replaced with the
-/// new one.
+/// Stage BAML source files as the global runtime, replacing any previous one.
+/// Nothing is compiled until the first use of the runtime.
 ///
 /// # Arguments
 /// * `root_path` - Root path for BAML files
 /// * `src_files` - Map of filename to content
-pub fn initialize_runtime(
+pub fn stage_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
 ) -> Result<(), BridgeError> {
-    let physical_fs = vfs::PhysicalFS::new("/");
-    let vfs_root = vfs::VfsPath::new(physical_fs);
-    let vfs_path = vfs_root
-        .join(root_path)
-        .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
-
-    let files = src_files
-        .into_iter()
-        .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
-        .collect();
-
-    stage_runtime(PreparedRuntime {
-        runtime: bex_project::prepare(vfs_path, bex_project::SysOps::native(), files)?,
-        error_context: None,
+    replace_slot(StagedProgram::Files {
+        root_path: root_path.to_owned(),
+        src_files,
     })
 }
 
-pub(crate) fn stage_runtime(runtime: PreparedRuntime) -> Result<(), BridgeError> {
+/// Stage serialized BAML bytecode, and the generated `baml.toml` when there is
+/// one, as the global runtime, replacing any previous one. Nothing is
+/// validated or decoded until the first use of the runtime.
+pub fn stage_runtime_from_blob(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+) -> Result<(), BridgeError> {
+    replace_slot(StagedProgram::Bytecode {
+        bytecode: bytecode.to_vec(),
+        embedded_baml_toml: embedded_baml_toml.map(str::to_owned),
+    })
+}
+
+fn replace_slot(program: StagedProgram) -> Result<(), BridgeError> {
     let mut guard = RUNTIME_INSTANCE
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    let previous = guard.replace(RuntimeSlot::Pending(Box::new(runtime)));
+    let previous = guard.replace(RuntimeSlot::Staged(program));
     drop(guard);
     if let Some(RuntimeSlot::Ready(previous)) = previous {
         get_tokio_runtime()?.spawn(previous.shutdown(None));

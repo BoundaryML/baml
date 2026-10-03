@@ -132,9 +132,11 @@ class BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
 
-        Mirrors `bridge_cffi::initialize_runtime`: the same
+        Stages the files with `bridge_cffi::stage_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
-        runtime.
+        runtime. Nothing is compiled here; the first BAML call compiles the
+        files, builds the engine, and reads telemetry settings from the
+        environment.
 
         # Arguments
         * `root_path` - Root path for BAML files
@@ -145,8 +147,10 @@ class BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
 
-        Generated SDKs use this path so importing `baml_sdk` can skip parsing
-        and compiling the inlined BAML source files.
+        Generated SDKs call this while `baml_sdk` is imported. It only stores
+        the bytecode and `embedded_baml_toml`; the first BAML call validates
+        them, builds the engine, and reads telemetry settings from the
+        environment.
 
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
