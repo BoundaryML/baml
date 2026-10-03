@@ -7,7 +7,11 @@ async fn toml_selector_edit_preserves_inline_table_and_comments() {
     let output = baml_test!(
         r##"
         function main() -> string {
-            baml.toml.edit_strings("# project\nname = \"app\"\n[toolchain] # selection\nversion = \"old\" # keep this\nextra = true\n", ["toolchain"], map { "path": "./cli" }, ["version", "channel", "path"])
+            let doc = baml.toml.Table.parse("# project\nname = \"app\"\n[toolchain] # selection\nversion = \"old\" # keep this\nextra = true\n");
+            let toolchain = doc.table("toolchain");
+            toolchain.rename("version", "path");
+            toolchain.set("path", "./cli");
+            doc.to_string()
         }
     "##
     );
@@ -22,7 +26,11 @@ async fn toml_selector_edit_preserves_inline_table_and_comments() {
     let output = baml_test!(
         r##"
         function main() -> string {
-            baml.toml.edit_strings("toolchain = { version = \"old\", extra = true } # inline\n", ["toolchain"], map { "channel": "canary" }, ["version", "channel", "path"])
+            let doc = baml.toml.Table.parse("toolchain = { version = \"old\", extra = true } # inline\n");
+            let toolchain = doc.table("toolchain");
+            toolchain.rename("version", "channel");
+            toolchain.set("channel", "canary");
+            doc.to_string()
         }
     "##
     );

@@ -289,59 +289,6 @@ impl io::IoNamespaceArchive for NativeSysOps {
     }
 }
 
-impl io::IoNamespaceToml for NativeSysOps {
-    fn edit_strings(
-        &self,
-        _: &Arc<BexHeap>,
-        _: CallId,
-        source: String,
-        table: Vec<String>,
-        values: indexmap::IndexMap<String, String>,
-        remove: Vec<String>,
-        _: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        use toml_edit::{DocumentMut, Item, Key, Table, Value};
-        SysOpOutput::Ready((|| {
-            let mut document = source.parse::<DocumentMut>().map_err(error)?;
-            let mut item = document.as_item_mut();
-            for key in &table {
-                let table = item
-                    .as_table_like_mut()
-                    .ok_or_else(|| error("Expected a TOML table or inline table"))?;
-                if !table.contains_key(key) {
-                    table.insert(key, Item::Table(Table::new()));
-                }
-                item = table
-                    .get_mut(key)
-                    .ok_or_else(|| error("Missing TOML table"))?;
-            }
-            let target = item
-                .as_table_like_mut()
-                .ok_or_else(|| error("Expected a TOML table or inline table"))?;
-            let mut decoration = None;
-            for key in &remove {
-                if decoration.is_none() {
-                    decoration = target.key(key).cloned().zip(target.get(key).cloned());
-                }
-                target.remove(key);
-            }
-            for (name, value) in values {
-                let mut key = Key::new(&name);
-                let mut value = Value::from(value);
-                let existing = target.key(&name).cloned().zip(target.remove(&name));
-                if let Some((old_key, old_item)) = existing.or_else(|| decoration.take()) {
-                    *key.leaf_decor_mut() = old_key.leaf_decor().clone();
-                    if let Some(old_value) = old_item.as_value() {
-                        *value.decor_mut() = old_value.decor().clone();
-                    }
-                }
-                target.entry_format(&key).or_insert(Item::Value(value));
-            }
-            Ok(document.to_string())
-        })())
-    }
-}
-
 pub(crate) fn fs_metadata(native: &NativeSysOps, path: &str) -> SysOpOutput<owned::fs::Metadata> {
     let path = native.working_dir.resolve(path);
     blocking(move || {

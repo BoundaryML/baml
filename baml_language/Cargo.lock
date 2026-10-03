@@ -1555,6 +1555,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "wasm-bindgen-futures",
  "yaml_serde",
 ]
@@ -7442,7 +7443,6 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
- "toml_edit 0.22.27",
  "tracing",
  "walkdir",
  "zip",

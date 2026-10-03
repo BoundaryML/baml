@@ -3075,24 +3075,6 @@ impl io::IoNamespaceArchive for DefaultIoOps {
     }
 }
 
-impl io::IoNamespaceToml for DefaultIoOps {
-    fn edit_strings(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _source: String,
-        _table: Vec<String>,
-        _values: indexmap::IndexMap<String, String>,
-        _remove: Vec<String>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "toml".into(),
-            message: "Operation not supported on this platform".into(),
-        })
-    }
-}
-
 impl io::IoClassFsLock for DefaultIoOps {
     fn close(
         &self,
