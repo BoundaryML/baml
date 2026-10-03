@@ -1710,6 +1710,7 @@ impl io::IoClassSysSubprocess for DefaultIoOps {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _process: io::owned::sys::Subprocess,
+        _timeout: Option<BexExternalValue>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
         SysOpOutput::err(VmPanic::HostUnavailable {

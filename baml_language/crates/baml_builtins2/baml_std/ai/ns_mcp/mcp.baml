@@ -44,7 +44,6 @@ class Connection {
             stdout = "pipe",
             cwd = null,
             env = null,
-            timeout = baml.time.Duration.from_milliseconds(timeout_ms),
             input = null,
         ) catch_all (e) {
             _ => {

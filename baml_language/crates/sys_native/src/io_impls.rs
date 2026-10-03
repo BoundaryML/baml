@@ -1280,8 +1280,6 @@ type ProcessKillRequest = tokio::sync::oneshot::Sender<Result<(), VmBamlError>>;
 struct LiveProcessHandle {
     kill_tx: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<ProcessKillRequest>>>,
     exit_rx: tokio::sync::watch::Receiver<Option<NativeProcessResult>>,
-    deadline: Option<tokio::time::Instant>,
-    timeout: Option<std::time::Duration>,
     label: String,
 }
 
@@ -1483,7 +1481,7 @@ fn process_input(options: &owned::sys::ProcessOptions) -> Result<Option<Vec<u8>>
 }
 
 fn process_timeout(
-    options: &owned::sys::ProcessOptions,
+    duration: Option<&BexExternalValue>,
 ) -> Result<Option<std::time::Duration>, VmRustFnError> {
     fn nanos(value: &BexExternalValue) -> Result<u64, VmRustFnError> {
         let invalid = || VmBamlError::InvalidArgument {
@@ -1499,9 +1497,7 @@ fn process_timeout(
             _ => Err(invalid().into()),
         }
     }
-    options
-        .timeout
-        .as_ref()
+    duration
         .map(|duration| nanos(duration).map(std::time::Duration::from_nanos))
         .transpose()
 }
@@ -1686,17 +1682,19 @@ impl io::IoClassSysSubprocess for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         process: owned::sys::Subprocess,
+        timeout: Option<BexExternalValue>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ProcessExit> {
         SysOpOutput::async_op(async move {
             let handle = downcast_process_handle(&process)?;
+            let timeout = process_timeout(timeout.as_ref())?;
             if let Some(result) = handle.exit_rx.borrow().clone() {
                 return result.map_err(Into::into);
             }
-            if let Some(deadline) = handle.deadline {
-                tokio::time::timeout_at(deadline, receive_process_exit(handle.exit_rx.clone()))
+            if let Some(timeout) = timeout {
+                tokio::time::timeout(timeout, receive_process_exit(handle.exit_rx.clone()))
                     .await
-                    .map_err(|_| process_timeout_error(&handle.label, handle.timeout))?
+                    .map_err(|_| process_timeout_error(&handle.label, Some(timeout)))?
             } else {
                 receive_process_exit(handle.exit_rx.clone()).await
             }
@@ -1770,7 +1768,7 @@ async fn run_process(
     label: &str,
 ) -> Result<owned::sys::ProcessOutput, VmRustFnError> {
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
-    let timeout = process_timeout(&options)?;
+    let timeout = process_timeout(options.timeout.as_ref())?;
     configure_process(cmd, &options, working_dir)?;
     let input = process_input(&options)?;
     let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
@@ -1806,7 +1804,16 @@ async fn run_process(
         let operation = async move {
             let write = async move {
                 if let (Some(mut stdin), Some(input)) = (stdin, input) {
-                    stdin.write_all(&input).await?;
+                    // A command can finish without consuming all supplied input.
+                    // Still return its output/status when it closes stdin early.
+                    if let Err(error) = stdin.write_all(&input).await
+                        && !matches!(
+                            error.kind(),
+                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
+                        )
+                    {
+                        return Err(error);
+                    }
                 }
                 Ok::<_, std::io::Error>(())
             };
@@ -1891,7 +1898,12 @@ impl io::IoNamespaceSys for NativeSysOps {
     ) -> SysOpOutput<owned::sys::ProcessOutput> {
         let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
-            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
+            let executable = working_dir
+                .resolve_program(&program, options.cwd.as_deref())
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to resolve '{program}': {error}"),
+                })?;
+            let mut cmd = tokio::process::Command::new(executable);
             cmd.args(&args);
             run_process(&mut cmd, options, &working_dir, &program).await
         })
@@ -1909,10 +1921,14 @@ impl io::IoNamespaceSys for NativeSysOps {
         let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             use tokio::io::AsyncWriteExt as _;
-            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
+            let executable = working_dir
+                .resolve_program(&program, options.cwd.as_deref())
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to resolve '{program}': {error}"),
+                })?;
+            let mut cmd = tokio::process::Command::new(executable);
             cmd.args(&args);
             configure_process(&mut cmd, &options, &working_dir)?;
-            let timeout = process_timeout(&options)?;
             let input = process_input(&options)?;
             let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
                 message: format!("Failed to spawn '{program}': {error}"),
@@ -1932,8 +1948,6 @@ impl io::IoNamespaceSys for NativeSysOps {
                 .stderr
                 .take()
                 .map(|pipe| read_pipe(pipe, format!("{program} stderr")));
-            let deadline =
-                timeout.and_then(|duration| tokio::time::Instant::now().checked_add(duration));
             let (kill_tx, mut kill_rx) =
                 tokio::sync::mpsc::unbounded_channel::<ProcessKillRequest>();
             let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
@@ -1998,8 +2012,6 @@ impl io::IoNamespaceSys for NativeSysOps {
                 _handle: Arc::new(LiveProcessHandle {
                     kill_tx: std::sync::Mutex::new(Some(kill_tx)),
                     exit_rx,
-                    deadline,
-                    timeout,
                     label: program,
                 }),
             })

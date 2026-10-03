@@ -42,9 +42,7 @@ function fas_gate(hold_ms: int) -> FasGate {
     let limit = baml.spawn.Limit.new(1) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("one is positive"),
     };
-    let holder = spawn with limit {
-        baml.sys.sleep(baml.time.Duration.from_milliseconds(hold_ms))
-    };
+    let holder = spawn with limit { baml.sys.sleep(baml.time.Duration.from_milliseconds(hold_ms)) };
     FasGate { limit: limit, holder: holder }
 }
 
@@ -208,16 +206,24 @@ test "cancelling_the_collector_stops_waiting_without_cancelling_inputs" {
 // act, so the collector wakes to its own cancellation and a settled input at
 // once.
 function fas_collector_cancelled_as_input_settles() -> string {
+    // Publish the collector before allowing its input to run. A sleep in the
+    // input cannot establish this ordering on a loaded executor.
+    let gate = fas_gate(15000);
+    defer { gate.holder.cancel() }
     let collectors: baml.future.Future<
-        (baml.future.Success<int> | baml.future.Failure<FasFailed | baml.errors.Io> | baml.future.Panicked)[],
-        never,
+        (
+            baml.future.Success<int>
+                | baml.future.Failure<FasFailed | baml.errors.Io>
+                | baml.future.Panicked
+        )[],
+        never
     >[] = [];
-    let input = spawn {
-        baml.sys.sleep(baml.time.Duration.from_milliseconds(20));
+    let input = spawn with gate.limit {
         collectors[0].cancel();
         fas_value(7)
     };
     collectors.push(baml.future.all_settled([input]));
+    gate.holder.cancel();
     {
         await collectors[0];
         "recorded as an input outcome"

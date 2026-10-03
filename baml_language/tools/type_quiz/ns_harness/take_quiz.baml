@@ -297,6 +297,7 @@ function put(
         args = full,
         env = env,
         timeout = baml.time.Duration.from_minutes(10),
+        stdin = "ignore",
         stdout = "pipe",
     );
     let printed = string.from_utf8(out.stdout);

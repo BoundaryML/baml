@@ -193,6 +193,7 @@ impl io::IoClassSysSubprocess for WasmSys {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _process: io::owned::sys::Subprocess,
+        _timeout: Option<BexExternalValue>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
         SysOpOutput::err(VmPanic::HostUnavailable {

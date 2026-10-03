@@ -162,10 +162,7 @@ function scan_only_files_by_default_checks() -> bool[] {
     baml.fs.mkdir(root + "/dir.txt", baml.fs.MkdirOptions { recursive: false });
     let g = baml.glob.new("*.txt");
     let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("file.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes("file.txt")];
     let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     ok
 }
@@ -228,10 +225,7 @@ function scan_matches_absolute_pattern_checks() -> bool[] {
     let pattern = root + "/**/*.txt";
     let g = baml.glob.new(pattern);
     let result = g.scan(baml.glob.ScanOptions { cwd: root, absolute: true });
-    let ok = [
-        result.length() == 1,
-        result.includes(root + "/file.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes(root + "/file.txt")];
     let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     ok
 }
@@ -273,10 +267,7 @@ function scan_default_prunes_dot_directories_checks() -> bool[] {
     let _ = baml.fs.write(root + "/.git/HEAD", "x");
     let g = baml.glob.new("**/*.txt");
     let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("visible.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes("visible.txt")];
     let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     ok
 }
@@ -299,10 +290,7 @@ function scan_follows_symlinked_directory_checks() -> bool[] {
     let _ = baml.sys.shell("ln -s " + target + " " + outer_root + "/link_dir", capture_output = true);
     let g = baml.glob.new("**/*.txt");
     let result = g.scan(baml.glob.ScanOptions { cwd: outer_root, follow_symlinks: true });
-    let ok = [
-        result.length() == 1,
-        result.includes("link_dir/hidden_via_link.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes("link_dir/hidden_via_link.txt")];
     let _ = baml.sys.shell("rm -rf " + outer_root + " " + target, capture_output = true);
     ok
 }
@@ -320,7 +308,10 @@ function scan_skips_broken_symlinks_by_default() -> string[] {
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/real.txt", "content");
     // Create a dangling symlink pointing to a non-existent file.
-    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", capture_output = true);
+    let _ = baml.sys.shell(
+        "ln -s " + root + "/missing.txt " + root + "/dangling.txt",
+        capture_output = true,
+    );
     let g = baml.glob.new("*.txt");
     let result = g.scan(baml.glob.ScanOptions { cwd: root, follow_symlinks: true });
     let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
@@ -344,7 +335,10 @@ function scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/real.txt", "content");
     // Create a dangling symlink pointing to a non-existent file.
-    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", capture_output = true);
+    let _ = baml.sys.shell(
+        "ln -s " + root + "/missing.txt " + root + "/dangling.txt",
+        capture_output = true,
+    );
     let g = baml.glob.new("*.txt");
     let threw = {
         let _ = g.scan(

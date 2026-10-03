@@ -118,9 +118,13 @@ class Subprocess {
     stdout: ReadPipe?,
     stderr: ReadPipe?,
 
-    /// Explicitly wait for the child's exit status. A configured timeout only
-    /// limits this wait; it does not kill the child. Repeated waits are safe.
-    function wait(self) -> ProcessExit throws root.errors.Io | root.errors.Timeout {
+    /// Wait for the child's exit status. The timeout applies to this call,
+    /// without killing the child. A later call can wait again; completed
+    /// processes return their status immediately, including repeated waits.
+    function wait(
+        self,
+        timeout: root.time.Duration? = null,
+    ) -> ProcessExit throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
         $rust_io_function
     }
 
@@ -271,7 +275,7 @@ function _shell(
 /// Start a process and return its handle immediately. Only "pipe" streams
 /// are exposed on the handle; callers must drain piped outputs concurrently.
 /// Dropping, closing or collecting the handle never kills or waits for the
-/// process. `timeout` limits `wait()` and never terminates the child.
+/// process. Use `child.wait(timeout = ...)` to limit a wait without terminating it.
 /// `detached = true` creates a new session on Unix or detaches from the
 /// Windows console. It does not change GC behavior or stream configuration.
 function subprocess(
@@ -280,7 +284,6 @@ function subprocess(
     cwd: string? = null,
     env: map<string, string?>? = null,
     clear_env: bool = false,
-    timeout: root.time.Duration? = null,
     input: ProcessInput? = null,
     stdin: Stdio = "inherit",
     stdout: Stdio = "inherit",
@@ -294,7 +297,7 @@ function subprocess(
             cwd: cwd,
             env: env,
             clear_env: clear_env,
-            timeout: timeout,
+            timeout: null,
             input: input,
             stdin: stdin,
             stdout: stdout,
@@ -359,4 +362,3 @@ function argv() -> string[] throws never {
 function pid() -> int throws never {
     $rust_io_function
 }
-
