@@ -1,5 +1,6 @@
 ---
 title: Inferrail
+subtitle: Per-run dollar budgets for OpenAI-compatible requests
 ---
 
 [Inferrail](https://github.com/domondi1/inferrail) is an open-source, OpenAI-compatible gateway that gives one run or job a hard dollar budget. Each request carries the run's id and budget as headers; the gateway reserves the request's worst-case cost before forwarding it and refuses it with HTTP 402 when the run's budget can't cover it, so concurrent calls in the same run can't overspend together.
