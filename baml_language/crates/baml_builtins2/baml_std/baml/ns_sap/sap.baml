@@ -8,14 +8,16 @@
 class _ParseCache<T> {
     _data: $rust_type,
 
+    //baml:mut_vm
     /// (internal) Final SAP operation shared by streams and public SAP.
     function _parse_final(self, json: string) -> T throws root.errors.LlmClient {
-        $rust_io_function
+        $rust_function
     }
 
+    //baml:mut_vm
     /// (internal) Partial SAP operation used by `ai.stream.Stream`.
     function _parse_partial(self, json: string) -> T | _NoYield throws root.errors.LlmClient {
-        $rust_io_function
+        $rust_function
     }
 }
 
@@ -23,6 +25,8 @@ class _ParseCache<T> {
 class _NoYield {
 }
 
+//baml:mut_vm
+//baml:fallible
 /// (internal) Builds a parse cache for `T`.
 ///
 /// A free function rather than a `_ParseCache` static method: a *static*
@@ -31,7 +35,7 @@ class _NoYield {
 /// operand slots the call site never fills. Instance methods on a generic
 /// class (`_parse_final`, `_parse_partial`) are threaded correctly.
 function _new_parse_cache<T>() -> _ParseCache<T> throws never {
-    $rust_io_function
+    $rust_function
 }
 
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.

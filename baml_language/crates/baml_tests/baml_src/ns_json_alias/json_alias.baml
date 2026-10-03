@@ -137,3 +137,70 @@ function json_wrap_tag() -> string {
 test "impl_on_recursive_alias_generic_arg_dispatches" {
     assert.equal(json_wrap_tag(), "json-wrap")
 }
+
+// ─── 1.9 Container arms on a json scrutinee ──────────────────────────────────
+
+// `json[]` and `map<string, json>` are json's only list and map members, so a
+// match on a json value tests these arms by the runtime tag alone. Every kind
+// of json value must still reach its own arm, also through recursion (the
+// request builders prune nulls this way).
+
+function json_kind(j: json) -> string {
+    match (j) {
+        let object: map<string, json> => "map",
+        let items: json[] => "list",
+        _ => "scalar",
+    }
+}
+
+function json_kinds() -> string[] {
+    [
+        json_kind({"a": 1}),
+        json_kind({}),
+        json_kind([1, "two"]),
+        json_kind([]),
+        json_kind("map"),
+        json_kind(1),
+        json_kind(true),
+        json_kind(null),
+    ]
+}
+
+test "json_container_arms_match_each_kind" {
+    assert.equal(json_kinds(), ["map", "map", "list", "list", "scalar", "scalar", "scalar", "scalar"])
+}
+
+function drop_nulls(j: json) -> json {
+    match (j) {
+        let object: map<string, json> => {
+            let out: map<string, json> = {};
+            for (let key in object.keys()) {
+                let entry = object.get(key);
+                match (entry) {
+                    null => null,
+                    _ => {
+                        let _ = out.set(key, drop_nulls(entry));
+                        null
+                    },
+                };
+            }
+            out
+        },
+        let items: json[] => {
+            let out: json[] = [];
+            for (let item in items) {
+                out.push(drop_nulls(item));
+            }
+            out
+        },
+        _ => j,
+    }
+}
+
+function drop_nulls_nested() -> string {
+    baml.json.stringify(drop_nulls(baml.json.parse("{\"a\":null,\"b\":[1,{\"c\":null,\"d\":\"x\"}],\"e\":{\"f\":null}}")))
+}
+
+test "json_container_arms_recurse_through_nested_values" {
+    assert.equal(drop_nulls_nested(), "{\"b\":[1,{\"d\":\"x\"}],\"e\":{}}")
+}

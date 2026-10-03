@@ -121,14 +121,17 @@ pub fn runtime_nominals_under_permit(
     (classes, enums)
 }
 
-/// Every class and enum `ty` reaches, including compile-time declarations.
-///
-/// Most runtime consumers intentionally stop at the immutable program image,
-/// but source rendering must emit a standalone graph: a runtime class field
-/// that names a static class needs that static declaration in the output too.
+/// Every declaration `ty` reaches when each reached declaration leads on to the
+/// heads `follow` reports for it, in the order a depth-first walk meets them:
+/// the heads of `ty`, then each declaration's followed heads.
 #[must_use]
-pub fn all_nominals(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> (Vec<HeapPtr>, Vec<HeapPtr>) {
+pub fn declarations_reached(
+    vm: &BexVm,
+    ty: &bex_vm_types::RealizedTy,
+    follow: impl Fn(&Object, &mut dyn FnMut(&bex_vm_types::TypeHead)),
+) -> Vec<HeapPtr> {
     let mut found = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     let mut pending = Vec::new();
     ty.visit_heads(&mut |head| {
         if head.is_resolved() {
@@ -137,13 +140,12 @@ pub fn all_nominals(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> (Vec<HeapPtr>,
     });
     pending.reverse();
     while let Some(ptr) = pending.pop() {
-        if found.contains(&ptr) {
+        if !seen.insert(ptr) {
             continue;
         }
         found.push(ptr);
         let mut next = Vec::new();
-        let object = vm.get_object(ptr);
-        bex_vm_types::head_walk::visit_object_heads(object, &mut |head| {
+        follow(vm.get_object(ptr), &mut |head| {
             if head.is_resolved() {
                 next.push(head.ptr());
             }
@@ -151,10 +153,29 @@ pub fn all_nominals(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> (Vec<HeapPtr>,
         next.reverse();
         pending.extend(next);
     }
+    found
+}
 
+/// Every declaration `ty` reaches (classes, enums, interfaces, type aliases),
+/// including compile-time ones, through every head a declaration holds (field
+/// types, templates, alias bodies, ...).
+#[must_use]
+pub fn all_declarations(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Vec<HeapPtr> {
+    declarations_reached(vm, ty, |object, visit| {
+        bex_vm_types::head_walk::visit_object_heads(object, &mut |head| visit(head));
+    })
+}
+
+/// Every class and enum `ty` reaches, including compile-time declarations.
+///
+/// Most runtime consumers intentionally stop at the immutable program image,
+/// but source rendering must emit a standalone graph: a runtime class field
+/// that names a static class needs that static declaration in the output too.
+#[must_use]
+pub fn all_nominals(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> (Vec<HeapPtr>, Vec<HeapPtr>) {
     let mut classes = Vec::new();
     let mut enums = Vec::new();
-    for ptr in found {
+    for ptr in all_declarations(vm, ty) {
         match vm.get_object(ptr) {
             Object::Class(_) => classes.push(ptr),
             Object::Enum(_) => enums.push(ptr),

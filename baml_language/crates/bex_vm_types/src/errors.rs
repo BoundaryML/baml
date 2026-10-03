@@ -244,6 +244,10 @@ pub enum VmInternalError {
 
     #[error("missing native function: {name}")]
     MissingNativeFunction { name: String },
+    /// Schema-aligned parsing produced a value its target's declarations
+    /// cannot hold: the parse model and the heap disagree.
+    #[error("schema-aligned parsing produced a value its target cannot hold: {message}")]
+    SapValue { message: String },
 
     #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
     UnexpectedConstantKind,

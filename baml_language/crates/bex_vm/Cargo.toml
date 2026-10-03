@@ -24,6 +24,7 @@ baml_compiler_diagnostics = { workspace = true }
 baml_linker_types = { workspace = true }
 baml_type = { workspace = true }
 bex_heap = { workspace = true }
+bex_sap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
 btel_clock = { workspace = true }

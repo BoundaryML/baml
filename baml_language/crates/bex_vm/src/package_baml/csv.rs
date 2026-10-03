@@ -190,34 +190,6 @@ fn done_value(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
 // Handle-state access
 // =============================================================================
 
-/// Clone the `Arc` out of a `$rust_type` field so the caller can lock it while
-/// still holding `&mut BexVm` for allocation.
-fn state_arc<T: Send + Sync + 'static>(
-    vm: &BexVm,
-    holder: Value,
-    field_idx: usize,
-) -> Result<Arc<T>, VmRustFnError> {
-    let inst = vm.as_instance(&holder)?;
-    let handle = inst.load_field(field_idx);
-    let ptr = handle
-        .as_object_ptr()
-        .ok_or_else(|| VmInternalError::MissingNativeFunction {
-            name: "csv handle field is not an object".to_string(),
-        })?;
-    match vm.get_object(ptr) {
-        Object::RustData(arc) => arc.clone().downcast::<T>().map_err(|_| {
-            VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-                name: "csv handle holds an unexpected Rust type".to_string(),
-            })
-        }),
-        _ => Err(VmRustFnError::InternalError(
-            VmInternalError::MissingNativeFunction {
-                name: "csv handle field is not RustData".to_string(),
-            },
-        )),
-    }
-}
-
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
@@ -1490,7 +1462,7 @@ impl From<VmRustFnError> for DecodeFail {
 }
 
 fn record_arc(vm: &BexVm, rec: Value) -> Result<Arc<RecordData>, VmRustFnError> {
-    state_arc::<RecordData>(vm, rec, 0)
+    Ok(vm.rust_data_field::<RecordData>(&rec, 0)?)
 }
 
 /// Decode a whole record into an instance of class `ty`.
@@ -2088,7 +2060,7 @@ fn render_markdown(headers: &[String], rows: &[Vec<String>], total_rows: usize) 
 
 impl BamlClassCsvReader for PackageBamlImpl {
     fn skipped(vm: &mut BexVm, csvreader: &Value) -> Vec<Value> {
-        let Ok(st) = state_arc::<Mutex<ReaderState>>(vm, *csvreader, 0) else {
+        let Ok(st) = vm.rust_data_field::<Mutex<ReaderState>>(csvreader, 0) else {
             return Vec::new();
         };
         let infos: Vec<ErrInfo> = lock(&st).skipped.clone();
@@ -2103,7 +2075,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
     }
 
     fn position(vm: &mut BexVm, csvreader: &Value) -> Value {
-        match state_arc::<Mutex<ReaderState>>(vm, *csvreader, 0) {
+        match vm.rust_data_field::<Mutex<ReaderState>>(csvreader, 0) {
             Ok(st) => {
                 let (byte, line, record) = {
                     let s = lock(&st);
@@ -2121,7 +2093,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
     }
 
     fn _poll(vm: &mut BexVm, csvreader: &Value) -> Result<Value, VmRustFnError> {
-        let st = state_arc::<Mutex<ReaderState>>(vm, *csvreader, 0)?;
+        let st = vm.rust_data_field::<Mutex<ReaderState>>(csvreader, 0)?;
         let polled = {
             let mut s = lock(&st);
             poll_record(&mut s)
@@ -2142,7 +2114,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
     }
 
     fn _poll_headers(vm: &mut BexVm, csvreader: &Value) -> Result<Value, VmRustFnError> {
-        let st = state_arc::<Mutex<ReaderState>>(vm, *csvreader, 0)?;
+        let st = vm.rust_data_field::<Mutex<ReaderState>>(csvreader, 0)?;
         let polled = {
             let mut s = lock(&st);
             poll_headers(&mut s)
@@ -2257,7 +2229,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
     }
 
     fn text(vm: &mut BexVm, csvwriter: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
-        let st = state_arc::<Mutex<WriterState>>(vm, *csvwriter, 0)?;
+        let st = vm.rust_data_field::<Mutex<WriterState>>(csvwriter, 0)?;
         let text = {
             let s = lock(&st);
             s.buffer.clone()
@@ -2279,7 +2251,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         csvwriter: &Value,
         record: &[Value],
     ) -> Result<bex_str::BexStr, VmRustFnError> {
-        let st = state_arc::<Mutex<WriterState>>(vm, *csvwriter, 0)?;
+        let st = vm.rust_data_field::<Mutex<WriterState>>(csvwriter, 0)?;
         let mut s = lock(&st);
         if s.closed {
             drop(s);
@@ -2314,7 +2286,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         csvwriter: &Value,
         names: &[Value],
     ) -> Result<bex_str::BexStr, VmRustFnError> {
-        let st = state_arc::<Mutex<WriterState>>(vm, *csvwriter, 0)?;
+        let st = vm.rust_data_field::<Mutex<WriterState>>(csvwriter, 0)?;
         let mut s = lock(&st);
         if s.closed {
             drop(s);
@@ -2432,7 +2404,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             }
         };
 
-        let st = state_arc::<Mutex<ReaderState>>(vm, *r, 0)?;
+        let st = vm.rust_data_field::<Mutex<ReaderState>>(r, 0)?;
         let header = lock(&st).header.clone();
 
         for cf in &class_fields {
@@ -2480,7 +2452,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             Err(DecodeFail::Fatal(e)) => Err(e),
             Err(DecodeFail::Info(info)) => {
                 let skip = info.kind == Kind::Decode && {
-                    let st = state_arc::<Mutex<ReaderState>>(vm, *r, 0)?;
+                    let st = vm.rust_data_field::<Mutex<ReaderState>>(r, 0)?;
                     let mut s = lock(&st);
                     if s.opts.skip_on_error {
                         s.register_skip(&info);
@@ -2557,7 +2529,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         w: &Value,
         row: &Value,
     ) -> Result<bex_str::BexStr, VmRustFnError> {
-        let st = state_arc::<Mutex<WriterState>>(vm, *w, 0)?;
+        let st = vm.rust_data_field::<Mutex<WriterState>>(w, 0)?;
         let mut s = lock(&st);
         if s.closed {
             drop(s);
@@ -2584,7 +2556,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         w: &Value,
         rows: &[Value],
     ) -> Result<bex_str::BexStr, VmRustFnError> {
-        let st = state_arc::<Mutex<WriterState>>(vm, *w, 0)?;
+        let st = vm.rust_data_field::<Mutex<WriterState>>(w, 0)?;
         let mut s = lock(&st);
         if s.closed {
             drop(s);

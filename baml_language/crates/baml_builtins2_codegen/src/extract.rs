@@ -1579,8 +1579,15 @@ implements<T, E> Modifier<T, E> for Root {
             .find(|b| b.path == "baml.http._fetch")
             .unwrap();
         assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
+    }
 
-        let sap_final = io_builtins
+    /// Schema-aligned parsing does no IO, so its entry points are VM natives.
+    #[test]
+    fn test_sap_parse_is_a_vm_builtin() {
+        let (vm_builtins, io_builtins, _class_defs) = extract_native_builtins().unwrap();
+
+        assert!(!io_builtins.iter().any(|b| b.path.starts_with("baml.sap.")));
+        let sap_final = vm_builtins
             .iter()
             .find(|b| b.path == "baml.sap._ParseCache._parse_final")
             .unwrap();
