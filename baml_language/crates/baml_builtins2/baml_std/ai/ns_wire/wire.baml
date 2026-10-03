@@ -136,7 +136,14 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
         throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
     }
     baml.json.from_string<T>(text) catch_all (e) {
-        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+        let parse => {
+            throw root.errors.InvalidResponse {
+                provider: provider,
+                message: parse.to_string(),
+                raw_body: text,
+                status_code: resp.status_code,
+            }
+        },
     }
 }
 
@@ -184,7 +191,14 @@ function send_as_with_wire<T>(
         throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
     }
     let value = baml.json.from_string<T>(text) catch_all (e) {
-        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+        let parse => {
+            throw root.errors.InvalidResponse {
+                provider: provider,
+                message: parse.to_string(),
+                raw_body: text,
+                status_code: resp.status_code,
+            }
+        },
     };
     let call = root.events.LLMCall {
         client_name: client_name,
@@ -466,13 +480,21 @@ function prompt_blocks(message: root.PromptMessage) -> root.content.Block[] {
 ///     text around a media part already gets. The marker sits between two
 ///     blocks on the wire, so the whitespace that separated them in the
 ///     template has no block to belong to.
-///   * A delimiter whose `args` is null is removed and the text around it is
-///     joined, untrimmed: there is nothing to send for it, so it is as if it
-///     had not been written.
+///   * A delimiter whose `args` is null (`${cache()}`) takes
+///     `default_cache_args`, which the caller passes from its client's
+///     `default_cache_args()`. The delimiter returned carries the resolved
+///     value, so the caller never sees a null `args`.
+///   * When that default is null too, the delimiter is removed and the text
+///     around it is joined, untrimmed: there is nothing to send for it, so it
+///     is as if it had not been written.
 ///
 /// What the caller does with a delimiter is its own business (a sibling block,
-/// a field on the block before); the positions and `args` are as written.
-function prompt_parts(message: root.PromptMessage) -> root.PromptPart[] {
+/// a field on the block before); the positions are as written, and so is every
+/// `args` that was not null.
+function prompt_parts(
+    message: root.PromptMessage,
+    default_cache_args: baml.json.json = null,
+) -> root.PromptPart[] {
     let out: root.PromptPart[] = [];
     // True right after a delimiter that is kept: the next text is start-trimmed.
     let trim_next = false;
@@ -509,7 +531,12 @@ function prompt_parts(message: root.PromptMessage) -> root.PromptPart[] {
                 null
             },
             let delimiter: root.CacheDelimiter => {
-                if (delimiter.args == null) {
+                let args = if (delimiter.args == null) {
+                    default_cache_args
+                } else {
+                    delimiter.args
+                };
+                if (args == null) {
                     rejoin = !trim_next;
                 } else {
                     if let last: string = out.at(out.length() - 1) {
@@ -519,7 +546,7 @@ function prompt_parts(message: root.PromptMessage) -> root.PromptPart[] {
                             out.push(trimmed);
                         }
                     }
-                    out.push(delimiter);
+                    out.push(root.CacheDelimiter { args: args });
                     trim_next = true;
                     rejoin = false;
                 }

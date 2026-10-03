@@ -22,6 +22,7 @@ btel_settings = { workspace = true }
 btel_snapshot = { workspace = true }
 btel_types = { workspace = true }
 prost = { workspace = true }
+rustc-hash = { workspace = true }
 tempfile = { workspace = true }
 
 [package.metadata.ci]

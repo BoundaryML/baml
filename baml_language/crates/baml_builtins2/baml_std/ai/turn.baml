@@ -74,4 +74,14 @@ interface Client {
         input: ModelTurnInput,
     ) -> baml.http.Request throws root.errors.InvokeError;
     function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.InvokeError;
+    /// The `args` this client uses for a `${cache()}` written with none (or
+    /// with null): the object its wire's cache marker carries. Null when the
+    /// client has no cache marker on its wire, or when the model it is
+    /// configured for would reject one; a `${cache()}` then sends nothing.
+    ///
+    /// A client that sends cache markers passes this to
+    /// `ai.wire.prompt_parts(message, default_cache_args)`.
+    function default_cache_args(self) -> baml.json.json throws never {
+        null
+    }
 }

@@ -3,24 +3,29 @@
 //!
 //! Navigation follows constant string keys (map entries, instance fields,
 //! named arguments) and zero-based list indices through the graph without
-//! expanding it. Three outcomes stay distinct:
+//! expanding it. A value may continue in other blobs; they are read only
+//! when a path or a rendering reaches them. Three outcomes stay distinct:
 //! - a captured BAML `null` is data;
 //! - an absent path, an omitted argument or an incompatible step is
 //!   `Missing`, a SQL-NULL-like non-match that keeps an answer complete;
-//! - truncated evidence or unknown argument names are `Unavailable`: the
-//!   recording cannot answer, and callers report that separately.
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-};
+//! - truncated evidence, unknown argument names or a blob that cannot be
+//!   read are `Unavailable`: the recording cannot answer, and callers report
+//!   that separately.
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
-use btel_snapshot::{DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit};
+use btel_snapshot::{
+    CasId, DecodedMediaSource, DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit,
+    NodeId,
+};
 use num_bigint::BigInt;
 use serde_json::{Map, Value as Json};
 
 use crate::evidence::ArgumentNames;
 
 pub mod equality;
+mod span;
+pub use span::{BlobSource, Found, Located, media_content};
+use span::{Examine, Span, reach};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Segment {
@@ -49,6 +54,11 @@ pub enum Unavailable {
     WrongRoot,
     /// A cycle of cells cannot resolve to a logical value.
     CellCycle,
+    /// A blob the value continues in cannot be read: its CAS diagnostic code.
+    Blob(&'static str),
+    /// The value continues in more blobs, or more bytes of them, than one
+    /// operation may read.
+    BlobBudget,
 }
 
 impl Unavailable {
@@ -59,42 +69,26 @@ impl Unavailable {
             Self::ArgumentLayoutMismatch => "argument_layout_mismatch",
             Self::WrongRoot => "capture_root_mismatch",
             Self::CellCycle => "value_cycle",
+            Self::Blob(code) => code,
+            Self::BlobBudget => "value_blob_budget",
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Nav<'a> {
-    /// The whole argument root (a bare `args`).
-    Arguments,
-    Value(&'a DecodedValue),
+#[derive(Clone, Debug, PartialEq)]
+pub enum Nav {
+    /// The whole argument root (a bare `args`), in its blob.
+    Arguments(Arc<DecodedSnapshot>),
+    Value(Located),
     Missing,
     Unavailable(Unavailable),
-}
-
-/// Cells are an execution detail: navigation and rendering see through them.
-/// Cycles of cells are unavailable rather than looping or becoming absent data.
-fn through_cells<'a>(
-    snapshot: &'a DecodedSnapshot,
-    mut value: &'a DecodedValue,
-) -> Option<&'a DecodedValue> {
-    for _ in 0..=snapshot.objects.len() {
-        match value {
-            DecodedValue::Object(id) => match snapshot.object(*id) {
-                DecodedObject::Cell(inner) => value = inner,
-                _ => return Some(value),
-            },
-            _ => return Some(value),
-        }
-    }
-    None
 }
 
 fn argument_slot<'a>(
     slots: &'a [DecodedValue],
     names: Option<&ArgumentNames>,
     segment: &Segment,
-) -> Result<&'a DecodedValue, Nav<'a>> {
+) -> Result<&'a DecodedValue, Nav> {
     let index = match segment {
         Segment::Key(name) => {
             let names = names.ok_or(Nav::Unavailable(Unavailable::ArgumentNamesUnknown))?;
@@ -105,24 +99,24 @@ fn argument_slot<'a>(
         }
         Segment::Index(index) => usize::try_from(*index).map_err(|_| Nav::Missing)?,
     };
-    match slots.get(index) {
-        // Not passed by the caller: absent, not null.
-        Some(DecodedValue::OmittedArg) | None => Err(Nav::Missing),
-        Some(value) => Ok(value),
-    }
+    slots.get(index).ok_or(Nav::Missing)
 }
 
-/// Follow `path` from a snapshot root.
-pub fn navigate<'a>(
-    snapshot: &'a DecodedSnapshot,
+/// Follow `path` from a snapshot root, entering at most `max_blobs` other
+/// blobs. Cells are an execution detail: navigation sees through them, and a
+/// cycle of cells is unavailable rather than looping or becoming absent data.
+pub fn navigate(
+    source: &(impl BlobSource + ?Sized),
+    snapshot: &Arc<DecodedSnapshot>,
     root: Root,
     names: Option<&ArgumentNames>,
     path: &[Segment],
-) -> Nav<'a> {
-    let (mut value, rest) = match (root, &snapshot.root) {
+    max_blobs: usize,
+) -> Nav {
+    let (first, rest) = match (root, &snapshot.root) {
         (Root::Arguments, btel_snapshot::DecodedRoot::FunctionArgs { slots, .. }) => {
             let Some((first, rest)) = path.split_first() else {
-                return Nav::Arguments;
+                return Nav::Arguments(Arc::clone(snapshot));
             };
             match argument_slot(slots, names, first) {
                 Ok(value) => (value, rest),
@@ -130,45 +124,37 @@ pub fn navigate<'a>(
             }
         }
         (Root::Value, btel_snapshot::DecodedRoot::Value(value)) => (value, path),
-        _ => return Nav::Unavailable(Unavailable::WrongRoot),
-    };
-    for segment in rest {
-        let Some(current) = through_cells(snapshot, value) else {
-            return Nav::Unavailable(Unavailable::CellCycle);
-        };
-        value = match step(snapshot, current, segment) {
-            Ok(next) => next,
-            Err(nav) => return nav,
-        };
-    }
-    match through_cells(snapshot, value) {
-        Some(DecodedValue::Truncated(limit)) => Nav::Unavailable(Unavailable::Truncated(*limit)),
-        Some(DecodedValue::OmittedArg) => Nav::Missing,
-        None => Nav::Unavailable(Unavailable::CellCycle),
-        Some(DecodedValue::Object(id)) => match snapshot.object(*id) {
-            DecodedObject::Truncated(limit) => Nav::Unavailable(Unavailable::Truncated(*limit)),
-            _ => Nav::Value(value_ref(snapshot, value)),
-        },
-        Some(value) => Nav::Value(value),
-    }
-}
-
-fn value_ref<'a>(snapshot: &'a DecodedSnapshot, value: &'a DecodedValue) -> &'a DecodedValue {
-    through_cells(snapshot, value).unwrap_or(value)
-}
-
-fn step<'a>(
-    snapshot: &'a DecodedSnapshot,
-    value: &'a DecodedValue,
-    segment: &Segment,
-) -> Result<&'a DecodedValue, Nav<'a>> {
-    let id = match value {
-        DecodedValue::Truncated(limit) => {
-            return Err(Nav::Unavailable(Unavailable::Truncated(*limit)));
+        (Root::Arguments, btel_snapshot::DecodedRoot::Value(_))
+        | (Root::Value, btel_snapshot::DecodedRoot::FunctionArgs { .. }) => {
+            return Nav::Unavailable(Unavailable::WrongRoot);
         }
-        DecodedValue::Object(id) => *id,
+    };
+    let mut blobs_left = max_blobs;
+    let mut nav = reach(source, snapshot, first, &mut blobs_left);
+    for segment in rest {
+        let Nav::Value(current) = nav else {
+            return nav;
+        };
+        nav = match step(&current, segment) {
+            Ok(value) => reach(source, current.blob(), value, &mut blobs_left),
+            Err(nav) => nav,
+        };
+    }
+    nav
+}
+
+fn step<'a>(current: &'a Located, segment: &Segment) -> Result<&'a DecodedValue, Nav> {
+    let id = match current.value() {
+        Found::Object(id) => *id,
         // Scalars, null and enum values have no children.
-        _ => return Err(Nav::Missing),
+        Found::Null
+        | Found::Bool(_)
+        | Found::Int(_)
+        | Found::Float(_)
+        | Found::String(_)
+        | Found::Bigint(_)
+        | Found::Type(_)
+        | Found::Enum { .. } => return Err(Nav::Missing),
     };
     let keyed = |entries: &'a [(Box<str>, DecodedValue)], original_len: u64, key: &str| {
         match entries.iter().find(|(k, _)| &**k == key) {
@@ -181,7 +167,7 @@ fn step<'a>(
             None => Err(Nav::Missing),
         }
     };
-    match (snapshot.object(id), segment) {
+    match (current.blob().object(id), segment) {
         (
             DecodedObject::List {
                 items,
@@ -217,7 +203,17 @@ fn step<'a>(
         (DecodedObject::Truncated(limit), _) => {
             Err(Nav::Unavailable(Unavailable::Truncated(*limit)))
         }
-        _ => Err(Nav::Missing),
+        (DecodedObject::List { .. }, Segment::Key(_))
+        | (DecodedObject::Map { .. } | DecodedObject::Instance { .. }, Segment::Index(_))
+        | (
+            DecodedObject::Uint8Array { .. }
+            | DecodedObject::Declaration { .. }
+            | DecodedObject::Cell(_)
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. }
+            | DecodedObject::Media(_),
+            _,
+        ) => Err(Nav::Missing),
     }
 }
 
@@ -226,44 +222,35 @@ fn step<'a>(
 /// argument the caller did not pass) or an unavailable-evidence code such as
 /// `value_truncated`. Distinguishes the cases navigation folds together.
 pub fn state(
-    snapshot: &DecodedSnapshot,
+    source: &(impl BlobSource + ?Sized),
+    snapshot: &Arc<DecodedSnapshot>,
     root: Root,
     names: Option<&ArgumentNames>,
     path: &[Segment],
+    max_blobs: usize,
 ) -> &'static str {
     if let (Root::Arguments, btel_snapshot::DecodedRoot::FunctionArgs { slots, .. }, [first]) =
         (root, &snapshot.root, path)
-        && let Ok(DecodedValue::OmittedArg) = argument_slot_raw(slots, names, first)
+        && let Ok(DecodedValue::OmittedArg) = argument_slot(slots, names, first)
     {
         return "omitted";
     }
-    match navigate(snapshot, root, names, path) {
-        Nav::Arguments => "present",
-        Nav::Value(DecodedValue::Null) => "null",
-        Nav::Value(_) => "present",
+    match navigate(source, snapshot, root, names, path, max_blobs) {
+        Nav::Arguments(_) => "present",
+        Nav::Value(found) => match found.value() {
+            Found::Null => "null",
+            Found::Bool(_)
+            | Found::Int(_)
+            | Found::Float(_)
+            | Found::String(_)
+            | Found::Bigint(_)
+            | Found::Type(_)
+            | Found::Enum { .. }
+            | Found::Object(_) => "present",
+        },
         Nav::Missing => "missing",
         Nav::Unavailable(reason) => reason.code(),
     }
-}
-
-/// The raw slot a first argument segment names, without folding omitted
-/// arguments into `Missing`.
-fn argument_slot_raw<'a>(
-    slots: &'a [DecodedValue],
-    names: Option<&ArgumentNames>,
-    segment: &Segment,
-) -> Result<&'a DecodedValue, ()> {
-    let index = match segment {
-        Segment::Key(name) => {
-            let names = names.ok_or(())?;
-            if names.slots.len() != slots.len() {
-                return Err(());
-            }
-            names.position(name).ok_or(())?
-        }
-        Segment::Index(index) => usize::try_from(*index).map_err(|_| ())?,
-    };
-    slots.get(index).ok_or(())
 }
 
 /// How a navigated value presents in SQL.
@@ -327,36 +314,60 @@ impl Kind {
     }
 }
 
+/// A navigation result as SQL presents it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Presented {
+    pub scalar: Scalar,
+    pub kind: Kind,
+    /// Why part of a structured value is marked unavailable in its rendering.
+    pub incomplete: Option<Unavailable>,
+    /// Whether a render limit cut part of a structured value's rendering.
+    pub cut: bool,
+}
+
 /// Convert a navigation result to its SQL presentation. Leaves become native
 /// SQL values; structured values become bounded JSON envelope text.
 pub fn to_scalar(
-    snapshot: &DecodedSnapshot,
-    nav: Nav<'_>,
+    source: &(impl BlobSource + ?Sized),
+    nav: &Nav,
     names: Option<&ArgumentNames>,
     limits: &RenderLimits,
-) -> (Scalar, Kind) {
-    let value = match nav {
-        Nav::Missing => return (Scalar::Null, Kind::Missing),
-        Nav::Unavailable(_) => return (Scalar::Null, Kind::Unavailable),
-        Nav::Arguments => {
-            let json = render_arguments(snapshot, names, limits);
-            return (Scalar::Text(json.to_string()), Kind::Json);
-        }
-        Nav::Value(value) => value,
+) -> Presented {
+    let whole = |scalar, kind| Presented {
+        scalar,
+        kind,
+        incomplete: None,
+        cut: false,
     };
-    match value {
-        DecodedValue::Null => (Scalar::Null, Kind::Null),
-        DecodedValue::Bool(b) => (Scalar::Integer(i64::from(*b)), Kind::Bool),
-        DecodedValue::Int(n) => (Scalar::Integer(*n), Kind::Int),
-        DecodedValue::Float(f) if f.is_finite() => (Scalar::Real(*f), Kind::Float),
-        DecodedValue::Float(f) => (Scalar::Text(non_finite(*f).into()), Kind::Float),
-        DecodedValue::String(s) => (Scalar::Text(s.to_string()), Kind::String),
-        DecodedValue::Bigint(n) => (Scalar::Text(n.to_string()), Kind::Bigint),
-        DecodedValue::Enum { name, .. } => (Scalar::Text(name.to_string()), Kind::Enum),
-        other => (
-            Scalar::Text(render_value(snapshot, other, limits).to_string()),
-            Kind::Json,
-        ),
+    let rendered = |rendered: Rendered| Presented {
+        scalar: Scalar::Text(rendered.json.to_string()),
+        kind: Kind::Json,
+        incomplete: rendered.incomplete,
+        cut: rendered.cut,
+    };
+    let found = match nav {
+        Nav::Missing => return whole(Scalar::Null, Kind::Missing),
+        Nav::Unavailable(_) => return whole(Scalar::Null, Kind::Unavailable),
+        Nav::Arguments(snapshot) => {
+            return rendered(render_arguments(source, snapshot, names, limits));
+        }
+        Nav::Value(found) => found,
+    };
+    match found.value() {
+        Found::Null => whole(Scalar::Null, Kind::Null),
+        Found::Bool(b) => whole(Scalar::Integer(i64::from(*b)), Kind::Bool),
+        Found::Int(n) => whole(Scalar::Integer(*n), Kind::Int),
+        Found::Float(f) if f.is_finite() => whole(Scalar::Real(*f), Kind::Float),
+        Found::Float(f) => whole(Scalar::Text(non_finite(*f).into()), Kind::Float),
+        Found::String(s) => whole(Scalar::Text(s.to_string()), Kind::String),
+        Found::Bigint(n) if n.bits() <= limits.max_bigint_bits => {
+            whole(Scalar::Text(n.to_string()), Kind::Bigint)
+        }
+        Found::Enum { name, .. } => whole(Scalar::Text(name.to_string()), Kind::Enum),
+        // A number too long to print presents as its cut rendering.
+        Found::Bigint(_) | Found::Object(_) | Found::Type(_) => {
+            rendered(render_value(source, found, limits))
+        }
     }
 }
 
@@ -453,19 +464,19 @@ pub enum Leaf<'a> {
     Structured,
 }
 
-pub fn leaf_of(nav: Nav<'_>) -> Option<Leaf<'_>> {
+pub fn leaf_of(nav: &Nav) -> Option<Leaf<'_>> {
     Some(match nav {
         Nav::Missing | Nav::Unavailable(_) => return None,
-        Nav::Arguments => Leaf::Structured,
-        Nav::Value(value) => match value {
-            DecodedValue::Null => Leaf::Null,
-            DecodedValue::Bool(b) => Leaf::Bool(*b),
-            DecodedValue::Int(n) => Leaf::Int(*n),
-            DecodedValue::Float(f) => Leaf::Float(*f),
-            DecodedValue::Bigint(n) => Leaf::Bigint(n),
-            DecodedValue::String(s) => Leaf::Text(s),
-            DecodedValue::Enum { name, .. } => Leaf::Enum(name),
-            _ => Leaf::Structured,
+        Nav::Arguments(_) => Leaf::Structured,
+        Nav::Value(found) => match found.value() {
+            Found::Null => Leaf::Null,
+            Found::Bool(b) => Leaf::Bool(*b),
+            Found::Int(n) => Leaf::Int(*n),
+            Found::Float(f) => Leaf::Float(*f),
+            Found::Bigint(n) => Leaf::Bigint(n),
+            Found::String(s) => Leaf::Text(s),
+            Found::Enum { name, .. } => Leaf::Enum(name),
+            Found::Object(_) | Found::Type(_) => Leaf::Structured,
         },
     })
 }
@@ -565,69 +576,147 @@ fn num_bigint_from_f64(value: f64) -> BigInt {
 
 /// `IS NULL` for a navigated value: captured null and absent paths are
 /// null-like; unavailable evidence is unknown (`None`).
-pub fn is_null(nav: Nav<'_>) -> Option<bool> {
+pub fn is_null(nav: &Nav) -> Option<bool> {
     match nav {
-        Nav::Missing | Nav::Value(DecodedValue::Null) => Some(true),
+        Nav::Missing => Some(true),
         Nav::Unavailable(_) => None,
-        _ => Some(false),
+        Nav::Arguments(_) => Some(false),
+        Nav::Value(found) => Some(matches!(found.value(), Found::Null)),
     }
 }
 
-/// Bounds for whole-value rendering.
+/// Bounds for whole-value rendering. A rendering holds at most `max_nodes`
+/// values and `max_text_bytes` of text, however large the value is and
+/// however often it reaches the same blob.
 #[derive(Clone, Copy, Debug)]
 pub struct RenderLimits {
     pub max_depth: usize,
+    /// Values rendered. An object reached at the limit ends there, marked.
     pub max_nodes: usize,
+    /// Text written: strings, keys, names and inline byte data, counted each
+    /// time they appear. Text that does not fit leaves a marker in its place,
+    /// and a key that does not fit ends its object.
+    pub max_text_bytes: usize,
     /// Byte data rendered as base64 per object; longer data reports length.
     pub max_bytes_inline: usize,
+    /// Bits of the longest bigint printed: printing takes time quadratic in
+    /// them. A longer one is cut.
+    pub max_bigint_bits: u64,
+    /// Blobs read for one value beyond the one it starts in, for navigation
+    /// and for rendering each.
+    pub max_blobs: usize,
+    /// Encoded bytes of the blobs read for one rendering. No blob is read
+    /// once this many are held, so the last one read may pass it.
+    pub max_blob_bytes: u64,
 }
 impl Default for RenderLimits {
     fn default() -> Self {
         Self {
             max_depth: 64,
             max_nodes: 100_000,
+            max_text_bytes: 16 << 20,
             max_bytes_inline: 4096,
+            max_bigint_bits: 1 << 17,
+            max_blobs: 1024,
+            max_blob_bytes: 64 << 20,
         }
     }
+}
+
+/// A rendering, and why part of it is marked `$unavailable`, if any is.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rendered {
+    pub json: Json,
+    /// The first reason met in output order.
+    pub incomplete: Option<Unavailable>,
+    /// Whether a render limit cut part of it, leaving a `$truncated` marker.
+    pub cut: bool,
 }
 
 /// Render the argument root: `{name: value}` when names match the slots,
 /// otherwise `{"$args": [..]}`.
 pub fn render_arguments(
-    snapshot: &DecodedSnapshot,
+    source: &(impl BlobSource + ?Sized),
+    snapshot: &Arc<DecodedSnapshot>,
     names: Option<&ArgumentNames>,
     limits: &RenderLimits,
-) -> Json {
+) -> Rendered {
     let btel_snapshot::DecodedRoot::FunctionArgs { slots, .. } = &snapshot.root else {
-        return envelope("$unavailable", Json::from("capture_root_mismatch"));
+        return Rendered {
+            json: envelope("$unavailable", Json::from(Unavailable::WrongRoot.code())),
+            incomplete: Some(Unavailable::WrongRoot),
+            cut: false,
+        };
     };
-    let mut renderer = Renderer::new(snapshot, slots.iter(), limits);
-    match names.filter(|names| names.slots.len() == slots.len()) {
+    let span = Span::load(
+        source,
+        slots.iter().map(|slot| (snapshot, slot)),
+        Examine::Structure,
+        limits.max_blobs,
+        limits.max_blob_bytes,
+    );
+    let mut renderer = Renderer::new(&span, limits);
+    let json = match names.filter(|names| names.slots.len() == slots.len()) {
         Some(names) if names.slots.iter().all(|slot| slot.name.is_some()) => {
             let mut map = Map::new();
             for (slot, value) in names.slots.iter().zip(slots) {
                 let name = slot.name.clone().unwrap_or_default();
-                map.insert(name, renderer.value(value, 1));
+                if !renderer.entry(&name) {
+                    renderer.end_early(&mut map);
+                    break;
+                }
+                map.insert(name, renderer.value(snapshot, value, 1));
             }
             Json::Object(map)
         }
-        _ => envelope(
-            "$args",
-            Json::Array(slots.iter().map(|value| renderer.value(value, 1)).collect()),
-        ),
+        _ => {
+            let (rendered, whole) = renderer.sequence(snapshot, slots, 1);
+            let mut map = Map::new();
+            map.insert("$args".into(), Json::Array(rendered));
+            if !whole {
+                renderer.end_early(&mut map);
+            }
+            Json::Object(map)
+        }
+    };
+    Rendered {
+        json,
+        incomplete: renderer.incomplete,
+        cut: renderer.cut,
     }
 }
 
 /// Render one value as a bounded JSON envelope. Plain JSON where it is
 /// unambiguous; `$`-prefixed markers for BAML kinds JSON lacks, truncation,
 /// opaque objects, and graph structure (`$id`/`$ref` for shared or cyclic
-/// objects). This is a display format, not a lossless serialization.
+/// objects). A part in a blob that cannot be read is `$unavailable` with the
+/// reason's code. Media is described, never rendered:
+/// `{"$media": kind, "mime", "url" | "file", "base64_len"}`, with
+/// `base64_len` present when the value holds content, and its content is not
+/// read. A part past a render limit is `$truncated` with `render_depth` or
+/// `render_size`: alone in place of a value or a piece of text, or beside
+/// what an object rendered before it ended. This is a display format, not a
+/// lossless serialization.
 pub fn render_value(
-    snapshot: &DecodedSnapshot,
-    value: &DecodedValue,
+    source: &(impl BlobSource + ?Sized),
+    found: &Located,
     limits: &RenderLimits,
-) -> Json {
-    Renderer::new(snapshot, std::iter::once(value), limits).value(value, 0)
+) -> Rendered {
+    let value = DecodedValue::from(found.value());
+    let span = Span::load(
+        source,
+        [(found.blob(), &value)],
+        Examine::Structure,
+        limits.max_blobs,
+        limits.max_blob_bytes,
+    );
+    let mut renderer = Renderer::new(&span, limits);
+    let json = renderer.value(found.blob(), &value, 0);
+    Rendered {
+        json,
+        incomplete: renderer.incomplete,
+        cut: renderer.cut,
+    }
 }
 
 fn envelope(key: &str, value: Json) -> Json {
@@ -635,6 +724,10 @@ fn envelope(key: &str, value: Json) -> Json {
     map.insert(key.into(), value);
     Json::Object(map)
 }
+
+/// Why a render limit cut a part: its nesting, or the rendering's size.
+const RENDER_DEPTH: &str = "render_depth";
+const RENDER_SIZE: &str = "render_size";
 
 fn limit_label(limit: Limit) -> &'static str {
     match limit {
@@ -663,81 +756,112 @@ fn description_label(kind: Description) -> &'static str {
 }
 
 struct Renderer<'a> {
-    snapshot: &'a DecodedSnapshot,
+    span: &'a Span,
     limits: &'a RenderLimits,
-    /// Objects reachable more than once from the rendered roots.
-    shared: HashSet<u32>,
     /// Label of each shared object already printed with its `$id`.
-    rendered: HashMap<u32, u32>,
+    rendered: HashMap<(CasId, NodeId), u32>,
     nodes: usize,
+    /// Bytes of text written, never past the limit.
+    text_bytes: usize,
+    incomplete: Option<Unavailable>,
+    cut: bool,
 }
 
 impl<'a> Renderer<'a> {
-    fn new(
-        snapshot: &'a DecodedSnapshot,
-        roots: impl Iterator<Item = &'a DecodedValue>,
-        limits: &'a RenderLimits,
-    ) -> Self {
-        // Count incoming references reachable from the roots (iteratively).
-        let mut counts: HashMap<u32, u32> = HashMap::new();
-        let mut stack: Vec<u32> = Vec::new();
-        let visit = |value: &DecodedValue, counts: &mut HashMap<u32, u32>, stack: &mut Vec<u32>| {
-            if let DecodedValue::Object(id) = value {
-                let count = counts.entry(*id).or_insert(0);
-                *count += 1;
-                if *count == 1 {
-                    stack.push(*id);
-                }
-            }
-        };
-        for root in roots {
-            visit(root, &mut counts, &mut stack);
-        }
-        while let Some(id) = stack.pop() {
-            match snapshot.object(id) {
-                DecodedObject::List { items, .. } => {
-                    for item in items {
-                        visit(item, &mut counts, &mut stack);
-                    }
-                }
-                DecodedObject::Map { entries, .. }
-                | DecodedObject::Instance {
-                    fields: entries, ..
-                } => {
-                    for (_, value) in entries {
-                        visit(value, &mut counts, &mut stack);
-                    }
-                }
-                DecodedObject::Cell(value) => visit(value, &mut counts, &mut stack),
-                _ => {}
-            }
-        }
-        let shared = counts
-            .into_iter()
-            .filter_map(|(id, count)| (count > 1).then_some(id))
-            .collect();
+    fn new(span: &'a Span, limits: &'a RenderLimits) -> Self {
         Self {
-            snapshot,
+            span,
             limits,
-            shared,
             rendered: HashMap::new(),
             nodes: 0,
+            text_bytes: 0,
+            incomplete: None,
+            cut: false,
         }
     }
 
-    fn declaration_name(&self, id: u32) -> Json {
-        match self.snapshot.object(id) {
-            DecodedObject::Declaration { name, .. } => {
-                Json::from(name.0.display_name().to_string())
+    fn unavailable(&mut self, reason: Unavailable) -> Json {
+        self.incomplete.get_or_insert(reason);
+        envelope("$unavailable", Json::from(reason.code()))
+    }
+
+    /// What a part cut by a render limit leaves in its place.
+    fn truncated(&mut self, limit: &'static str) -> Json {
+        self.cut = true;
+        envelope("$truncated", Json::from(limit))
+    }
+
+    /// Mark an object that ended before all of it was rendered.
+    fn end_early(&mut self, object: &mut Map<String, Json>) {
+        self.cut = true;
+        object.insert("$truncated".into(), Json::from(RENDER_SIZE));
+    }
+
+    /// Whether the node limit leaves no room to start another value.
+    fn full(&self) -> bool {
+        self.nodes >= self.limits.max_nodes
+    }
+
+    /// Take `len` bytes from the text limit, if that much is left.
+    fn take_text(&mut self, len: usize) -> bool {
+        let fits = len <= self.limits.max_text_bytes - self.text_bytes;
+        if fits {
+            self.text_bytes += len;
+        }
+        fits
+    }
+
+    fn text(&mut self, text: &str) -> Json {
+        if self.take_text(text.len()) {
+            Json::from(text)
+        } else {
+            self.truncated(RENDER_SIZE)
+        }
+    }
+
+    /// Whether an entry under `key` may start. An object ends at the first
+    /// one that may not.
+    fn entry(&mut self, key: &str) -> bool {
+        !self.full() && self.take_text(key.len())
+    }
+
+    /// Render `values` in order until the node limit is reached, and whether
+    /// every one was rendered.
+    fn sequence(
+        &mut self,
+        blob: &'a DecodedSnapshot,
+        values: &'a [DecodedValue],
+        depth: usize,
+    ) -> (Vec<Json>, bool) {
+        let mut rendered = Vec::new();
+        for value in values {
+            if self.full() {
+                return (rendered, false);
             }
-            _ => Json::Null,
+            rendered.push(self.value(blob, value, depth));
+        }
+        (rendered, true)
+    }
+
+    fn declaration_name(&mut self, blob: &DecodedSnapshot, id: NodeId) -> Json {
+        match blob.object(id) {
+            DecodedObject::Declaration { name, .. } => self.text(name.0.display_name().as_ref()),
+            DecodedObject::Uint8Array { .. }
+            | DecodedObject::List { .. }
+            | DecodedObject::Map { .. }
+            | DecodedObject::Instance { .. }
+            | DecodedObject::Cell(_)
+            | DecodedObject::NonSnapshotable
+            | DecodedObject::Descriptive { .. }
+            | DecodedObject::Media(_)
+            | DecodedObject::Truncated(_) => Json::Null,
         }
     }
 
-    fn value(&mut self, value: &DecodedValue, depth: usize) -> Json {
+    fn value(&mut self, blob: &'a DecodedSnapshot, value: &'a DecodedValue, depth: usize) -> Json {
         self.nodes += 1;
         if self.nodes > self.limits.max_nodes {
-            return envelope("$truncated", Json::from("render_size"));
+            return self.truncated(RENDER_SIZE);
         }
         match value {
             DecodedValue::Null => Json::Null,
@@ -748,63 +872,85 @@ impl<'a> Renderer<'a> {
                 || envelope("$float", Json::from(non_finite(*f))),
                 Json::Number,
             ),
-            DecodedValue::String(s) => Json::from(s.to_string()),
-            DecodedValue::Bigint(n) => envelope("$bigint", Json::from(n.to_string())),
-            DecodedValue::Type(ty) => envelope(
-                "$type",
-                ty.decoded
-                    .as_ref()
-                    .map_or(Json::Null, |ty| Json::from(ty.to_string())),
-            ),
+            DecodedValue::String(s) => self.text(s),
+            DecodedValue::Bigint(n) => {
+                let digits = if n.bits() <= self.limits.max_bigint_bits {
+                    self.text(&n.to_string())
+                } else {
+                    self.truncated(RENDER_SIZE)
+                };
+                envelope("$bigint", digits)
+            }
+            DecodedValue::Type(ty) => {
+                let ty = match &ty.decoded {
+                    Some(ty) => self.text(&ty.to_string()),
+                    None => Json::Null,
+                };
+                envelope("$type", ty)
+            }
             DecodedValue::Enum {
                 declaration, name, ..
             } => {
                 let mut map = Map::new();
-                map.insert("$enum".into(), self.declaration_name(*declaration));
-                map.insert("$variant".into(), Json::from(name.to_string()));
+                map.insert("$enum".into(), self.declaration_name(blob, *declaration));
+                map.insert("$variant".into(), self.text(name));
                 Json::Object(map)
             }
             DecodedValue::Truncated(limit) => {
                 envelope("$truncated", Json::from(limit_label(*limit)))
             }
-            DecodedValue::Object(id) => self.object(*id, depth),
+            DecodedValue::Object(id) => self.object(blob, *id, depth),
+            DecodedValue::External(child) => match self.span.root_of(blob, *child) {
+                // A blob's root value is stored in it, so this ends there.
+                Ok((child, value)) => self.value(child, value, depth),
+                Err(reason) => self.unavailable(reason),
+            },
+            DecodedValue::ExternalNode { child, node } => {
+                match self.span.node_of(blob, *child, *node) {
+                    Ok((child, id)) => self.object(child, id, depth),
+                    Err(reason) => self.unavailable(reason),
+                }
+            }
         }
     }
 
-    fn object(&mut self, id: u32, depth: usize) -> Json {
-        let is_shared = self.shared.contains(&id);
-        if is_shared && let Some(label) = self.rendered.get(&id) {
+    fn object(&mut self, blob: &'a DecodedSnapshot, id: NodeId, depth: usize) -> Json {
+        let key = (blob.id, id);
+        let is_shared = self.span.shared(blob, id);
+        if is_shared && let Some(label) = self.rendered.get(&key) {
             return envelope("$ref", Json::from(*label));
         }
         // A truncated visit prints no `$id`, so it must not take the label.
         if depth >= self.limits.max_depth {
-            return envelope("$truncated", Json::from("render_depth"));
+            return self.truncated(RENDER_DEPTH);
         }
         // Labels count up in output order, so a capture renders the same way
         // in every process.
         let shared = is_shared.then(|| {
             let label = u32::try_from(self.rendered.len()).unwrap_or(u32::MAX);
-            self.rendered.insert(id, label);
+            self.rendered.insert(key, label);
             label
         });
         let mut map = Map::new();
         if let Some(label) = shared {
             map.insert("$id".into(), Json::from(label));
         }
-        let snapshot = self.snapshot;
-        match snapshot.object(id) {
+        match blob.object(id) {
             DecodedObject::List {
                 items,
                 original_len,
                 ..
             } => {
-                let rendered = items.iter().map(|v| self.value(v, depth + 1)).collect();
-                if shared.is_none() && items.len() as u64 == *original_len {
+                let (rendered, whole) = self.sequence(blob, items, depth + 1);
+                if shared.is_none() && whole && items.len() as u64 == *original_len {
                     return Json::Array(rendered);
                 }
                 map.insert("$list".into(), Json::Array(rendered));
                 if items.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
+                }
+                if !whole {
+                    self.end_early(&mut map);
                 }
             }
             DecodedObject::Map {
@@ -813,10 +959,16 @@ impl<'a> Renderer<'a> {
                 ..
             } => {
                 let mut inner = Map::new();
+                let mut whole = true;
                 for (key, value) in entries {
-                    inner.insert(key.to_string(), self.value(value, depth + 1));
+                    if !self.entry(key) {
+                        whole = false;
+                        break;
+                    }
+                    inner.insert(key.to_string(), self.value(blob, value, depth + 1));
                 }
                 let plain = shared.is_none()
+                    && whole
                     && entries.len() as u64 == *original_len
                     && !entries.iter().any(|(key, _)| key.starts_with('$'));
                 if plain {
@@ -826,6 +978,9 @@ impl<'a> Renderer<'a> {
                 if entries.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }
+                if !whole {
+                    self.end_early(&mut map);
+                }
             }
             DecodedObject::Instance {
                 declaration,
@@ -833,10 +988,15 @@ impl<'a> Renderer<'a> {
                 original_len,
                 ..
             } => {
-                map.insert("$class".into(), self.declaration_name(*declaration));
+                map.insert("$class".into(), self.declaration_name(blob, *declaration));
                 let mut inner = Map::new();
+                let mut whole = true;
                 for (key, value) in fields {
-                    inner.insert(key.to_string(), self.value(value, depth + 1));
+                    if !self.entry(key) {
+                        whole = false;
+                        break;
+                    }
+                    inner.insert(key.to_string(), self.value(blob, value, depth + 1));
                 }
                 if inner.keys().any(|key| key.starts_with('$')) {
                     map.insert("$fields".into(), Json::Object(inner));
@@ -846,14 +1006,15 @@ impl<'a> Renderer<'a> {
                 if fields.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }
+                if !whole {
+                    self.end_early(&mut map);
+                }
             }
-            DecodedObject::Bytes { data, original_len } => {
+            DecodedObject::Uint8Array { data, original_len } => {
                 use base64::Engine as _;
                 if data.len() <= self.limits.max_bytes_inline {
-                    map.insert(
-                        "$bytes".into(),
-                        Json::from(base64::engine::general_purpose::STANDARD.encode(data)),
-                    );
+                    let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+                    map.insert("$bytes".into(), self.text(&encoded));
                 } else {
                     map.insert("$bytes".into(), Json::Null);
                 }
@@ -870,14 +1031,14 @@ impl<'a> Renderer<'a> {
                         "$class_type"
                     }
                     .into(),
-                    Json::from(name.0.display_name().to_string()),
+                    self.text(name.0.display_name().as_ref()),
                 );
             }
             DecodedObject::Cell(value) => {
                 if shared.is_none() {
-                    return self.value(value, depth);
+                    return self.value(blob, value, depth);
                 }
-                let inner = self.value(value, depth + 1);
+                let inner = self.value(blob, value, depth + 1);
                 map.insert("$cell".into(), inner);
             }
             DecodedObject::NonSnapshotable => {
@@ -886,7 +1047,27 @@ impl<'a> Renderer<'a> {
             DecodedObject::Descriptive { kind, name } => {
                 map.insert("$opaque".into(), Json::from(description_label(*kind)));
                 if let Some(name) = name {
-                    map.insert("$name".into(), Json::from(name.to_string()));
+                    map.insert("$name".into(), self.text(name));
+                }
+            }
+            DecodedObject::Media(media) => {
+                map.insert("$media".into(), Json::from(media.kind.tag_str()));
+                let mime = match media.mime_type.as_deref() {
+                    Some(mime) => self.text(mime),
+                    None => Json::Null,
+                };
+                map.insert("mime".into(), mime);
+                match &media.source {
+                    DecodedMediaSource::Url { url, .. } => {
+                        map.insert("url".into(), self.text(url));
+                    }
+                    DecodedMediaSource::File { path, .. } => {
+                        map.insert("file".into(), self.text(path));
+                    }
+                    DecodedMediaSource::Base64 { .. } => {}
+                }
+                if let Some(data) = media.source.data() {
+                    map.insert("base64_len".into(), Json::from(data.text_len()));
                 }
             }
             DecodedObject::Truncated(limit) => {

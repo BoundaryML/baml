@@ -6,8 +6,8 @@
 // response field and every SSE event this client touches is a real BAML class.
 // `baml.json.json` shows up in exactly three places, all of them genuinely
 // open-ended: the `request_body` passthrough, a tool's `input_schema`, and the
-// `cache_control` directive (a beta-gated shape that arrives verbatim from
-// `ai.PromptMessage.metadata`).
+// `cache_control` directive (the `args` of a `${cache(args)}` in the prompt,
+// sent as written).
 //
 // Layering, so a future `vertex` package can reuse this: BODY construction
 // (`messages_request` / `messages_body`) is factored away
@@ -51,9 +51,9 @@ class AnthSource {
 class AnthTextBlock {
     type: string,
     text: string,
-    // Prompt-caching directive: {"type":"ephemeral"}, or under the extended-TTL
-    // beta {"type":"ephemeral","ttl":"1h"}. Deliberately untyped — the shape is
-    // beta-gated and arrives verbatim from ai.PromptMessage.metadata.
+    // Prompt-caching directive: {"type":"ephemeral"}, or with a lifetime
+    // {"type":"ephemeral","ttl":"1h"}. Deliberately untyped: it is the `args`
+    // of a `${cache(args)}` in the prompt, sent as written.
     cache_control: baml.json.json?,
 }
 
@@ -130,7 +130,7 @@ class MessagesRequest {
 // ---------------------------------------------------------------------------
 // Response envelope. from_string ignores unknown fields; only what the
 // client reads is typed, and EVERY field the API may omit is optional
-// (a required int here is a ParseFailed waiting to happen).
+// (a required int here is an InvalidResponse waiting to happen).
 
 class ContentBlock {
     type: string,
@@ -196,7 +196,7 @@ class Response {
 /// "Option::is_none"` in the Rust builders this replaces.
 ///
 /// Nulls INSIDE arrays are preserved (a JSON Schema `"enum": [null]` survives),
-/// and the two OPAQUE subtrees below are copied verbatim. The passthrough merge —
+/// and the three OPAQUE subtrees below are copied verbatim. The passthrough merge —
 /// where `null` means "delete this key" — still runs AFTER this, on the
 /// already-pruned base.
 ///
@@ -208,8 +208,11 @@ class Response {
 /// replayed tool_use, and the generated schema types optionals as
 /// `["string","null"]` and marks them required, so a null answer is the
 /// schema-conformant one.
+///
+/// `cache_control` is the `args` of a `${cache(args)}` in the prompt, which
+/// this client sends as written.
 function _anth_verbatim_subtree(key: string) -> bool {
-    key == "input" || key == "input_schema"
+    key == "input" || key == "input_schema" || key == "cache_control"
 }
 
 function _anth_drop_nulls(j: baml.json.json) -> baml.json.json {
@@ -262,11 +265,15 @@ class Prompt {
     messages: Message[],
 }
 
-/// (internal) Anthropic places a cache breakpoint on a CONTENT BLOCK, but the authored
-/// directive lives on a MESSAGE (`${ai.Role { name: "user", metadata:
-/// { "cache_control": ... } }}`). The engine's rule, ported: the directive
-/// attaches to that message's LAST content block, so everything up to and
-/// including it is the cached prefix.
+/// (internal) Anthropic places a cache breakpoint ON a content block, while a
+/// `${cache(args)}` in the prompt sits BETWEEN parts. The breakpoint goes on
+/// the last block lowered before the delimiter, so everything up to and
+/// including that block is the cached prefix, and `args` is the value of
+/// `cache_control`, as written.
+///
+/// Nothing is set when `blocks` is empty (there is no content before the
+/// delimiter in its message) or when `args` is null. A second delimiter with no
+/// block in between overwrites the first.
 function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json.json?) -> void {
     match (cache_control) {
         null => null,
@@ -401,14 +408,53 @@ function _lower_blocks(
     out
 }
 
-function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
+/// (internal) One prompt message as Messages API blocks. Text and media lower
+/// exactly as they do for a journal turn; a `${cache(args)}` sets
+/// `cache_control` on the block before it (`_anth_apply_cache_control`), and
+/// the text on either side is trimmed where it faces the delimiter
+/// (`ai.wire.prompt_parts`). A `${cache()}` carries `default_cache_args`.
+function _prompt_blocks(
+    message: ai.PromptMessage,
+    position: string,
+    default_cache_args: baml.json.json,
+    preview: bool = false,
+) -> AnthBlock[] {
+    let blocks: AnthBlock[] = [];
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
+        match (part) {
+            let text: string => {
+                let block = ai.content.Text { text: text };
+                if let lowered: AnthBlock = _lower_block(block, position, preview = preview) {
+                    blocks.push(lowered);
+                }
+                null
+            },
+            let delimiter: ai.CacheDelimiter => {
+                _anth_apply_cache_control(blocks, delimiter.args);
+                null
+            },
+            let media: ai.MediaPart => {
+                let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                if let lowered: AnthBlock = _lower_block(block, position, preview = preview) {
+                    blocks.push(lowered);
+                }
+                null
+            },
+        };
+    }
+    blocks
+}
+
+function _lower_prompt(
+    prompt: ai.Prompt,
+    default_cache_args: baml.json.json,
+    preview: bool = false,
+) -> Prompt {
     let system: AnthBlock[] = [];
     let messages: Message[] = [];
     for (let message in prompt.messages()) {
-        let cache_control = message.metadata.get("cache_control");
         if (message.role == "system") {
-            let blocks = _lower_blocks(ai.wire.prompt_blocks(message), "system", preview = preview);
-            _anth_apply_cache_control(blocks, cache_control);
+            let blocks = _prompt_blocks(message, "system", default_cache_args, preview = preview);
             for (let block in blocks) {
                 system.push(block);
             }
@@ -419,8 +465,7 @@ function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> Prompt {
             } else {
                 "user"
             };
-            let blocks = _lower_blocks(ai.wire.prompt_blocks(message), role, preview = preview);
-            _anth_apply_cache_control(blocks, cache_control);
+            let blocks = _prompt_blocks(message, role, default_cache_args, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
             if (blocks.length() > 0) {
@@ -485,7 +530,6 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
         match (e) {
             let m: ai.events.UserMessage => {
                 let blocks = _lower_blocks(m.content, "user", preview = preview);
-                _anth_apply_cache_control(blocks, m.metadata.get("cache_control"));
                 if (blocks.length() > 0) {
                     msgs.push(Message { role: "user", tool_results: false, blocks: blocks });
                 }
@@ -591,6 +635,16 @@ class BodyParams {
     request_body: baml.json.json?,
     // The id journal sanitization is performed against — `Client.id()`.
     client_id: string,
+    // What a `${cache()}` in the prompt sends as `cache_control` — the host
+    // client's `default_cache_args()`.
+    default_cache_args: baml.json.json,
+}
+
+/// The `cache_control` a `${cache()}` sends on the Messages wire: an ephemeral
+/// breakpoint with the default 5-minute lifetime. Shared by every client that
+/// speaks that wire (`anthropic.Client`, Claude on `google.VertexClient`).
+function default_cache_control() -> baml.json.json throws never {
+    { "type": "ephemeral" }
 }
 
 function _body_params(c: root.Client) -> BodyParams {
@@ -605,6 +659,7 @@ function _body_params(c: root.Client) -> BodyParams {
         tool_choice: c.tool_choice,
         request_body: c.request_body,
         client_id: c.id(),
+        default_cache_args: c.default_cache_args(),
     }
 }
 
@@ -655,7 +710,7 @@ function messages_request(
     preview: bool = false,
 ) -> MessagesRequest {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
-    let lowered_prompt = _lower_prompt(prompt, preview = preview);
+    let lowered_prompt = _lower_prompt(prompt, params.default_cache_args, preview = preview);
     let system = lowered_prompt.system;
     let lowered = lowered_prompt.messages;
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and
@@ -879,7 +934,13 @@ function parse(resp: Response) -> ai.ModelTurn {
     let usage: ai.events.Usage? = match (resp.usage) {
         let u: Usage => {
             ai.events.Usage {
-                input_tokens: u.input_tokens ?? 0,
+                // Anthropic's input_tokens excludes both cache counts.
+                input_tokens: ai.internal.total_input_tokens(
+                    u.input_tokens,
+                    u.cache_read_input_tokens,
+                    u.cache_creation_input_tokens,
+                )
+                    ?? 0,
                 output_tokens: u.output_tokens ?? 0,
                 // Cache READS are the cached-input tokens. Cache WRITES
                 // (cache_creation_input_tokens) are billed above the normal
@@ -935,7 +996,11 @@ function _anth_stream_meta(
 ) -> ai.stream.TurnMeta {
     ai.stream.TurnMeta {
         stop_reason: stop,
-        input_tokens: usage?.input_tokens,
+        input_tokens: ai.internal.total_input_tokens(
+            usage?.input_tokens,
+            usage?.cache_read_input_tokens,
+            usage?.cache_creation_input_tokens,
+        ),
         output_tokens: usage?.output_tokens,
         cached_input_tokens: usage?.cache_read_input_tokens,
         cache_write_input_tokens: usage?.cache_creation_input_tokens,
@@ -1047,40 +1112,24 @@ function _anth_stream_call_at(state: AnthStreamState, index: int?) -> AnthStream
     null
 }
 
-/// (internal) A mid-stream `error` event -> the precise failure. Same discipline as
-/// ai.errors.classify_http: only genuinely transient conditions get a
-/// retry-safe transport classification; a bad request stays a bad request so
-/// ai.clients.Retry does not replay it.
+/// (internal) Preserve a valid in-band provider error and its native type.
 function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors.Failure {
-    let kind = error?.type ?? "";
-    let detail = error?.message ?? kind;
-    match (kind) {
-        "rate_limit_error" => {
-            ai.errors.RateLimited {
-                status_code: null,
-                provider: "anthropic",
-                retry_after_ms: null,
-                raw_body: raw,
-            }
-        },
-        "overloaded_error" | "api_error" | "timeout_error" => {
-            ai.errors.NetworkFailure {
-                status_code: null,
-                provider: "anthropic",
-                detail: `${kind}: ${detail}`,
-                raw_body: raw,
-            }
-        },
-        // authentication_error, permission_error, invalid_request_error,
-        // not_found_error, request_too_large, billing_error, and anything new.
-        _ => {
-            ai.errors.InvalidRequest {
-                provider: "anthropic",
-                status_code: null,
-                detail: `${kind}: ${detail}`,
-                raw_body: raw,
-            }
-        },
+    if let reported: AnthStreamError = error {
+        ai.errors.ProviderError {
+            provider: "anthropic",
+            message: reported.message ?? reported.type ?? "the Anthropic request failed",
+            error_type: reported.type,
+            error_code: null,
+            raw_body: raw,
+            status_code: null,
+        }
+    } else {
+        ai.errors.InvalidResponse {
+            provider: "anthropic",
+            message: "the error event contained no error object",
+            raw_body: raw,
+            status_code: null,
+        }
     }
 }
 
@@ -1090,8 +1139,18 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
     let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
-            let ev: AnthStreamEvent? = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
-                _ => null,
+            if (data.trim() == "") {
+                continue;
+            }
+            let ev = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
+                let parse => {
+                    throw ai.errors.InvalidResponse {
+                    provider: "anthropic",
+                    message: parse.to_string(),
+                    raw_body: data,
+                    status_code: null,
+                }
+                },
             };
             if let event: AnthStreamEvent = ev {
                 let t = event.type ?? raw.event ?? "";

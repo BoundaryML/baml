@@ -4,7 +4,7 @@ use super::*;
 use crate::proto::{self, thread_section::Context};
 
 fn context(value: u64) -> Context {
-    Context::ContextCasId(proto::SnapshotId {
+    Context::ContextCasId(proto::CasId {
         low: value,
         high: value,
     })
@@ -174,7 +174,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
             self_await_ticks: u64::MAX,
             completion_flags: u32::MAX,
             panicked: true,
-            value_cas_id: Some(proto::SnapshotId {
+            value_cas_id: Some(proto::CasId {
                 low: u64::MAX,
                 high: u64::MAX,
             }),

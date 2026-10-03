@@ -20,7 +20,7 @@ use btel_types::{
 pub enum ContextReference {
     Unavailable,
     Empty,
-    Snapshot(btel_snapshot::SnapshotId),
+    Snapshot(btel_snapshot::CasId),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,7 +115,7 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     },
     /// Reselect an already handed-off snapshot without recapturing its values.
     /// The reference does not imply that delivery of the blob succeeded.
-    ContextReferenced { id: btel_snapshot::SnapshotId },
+    ContextReferenced { id: btel_snapshot::CasId },
     /// An explicitly empty execution context, distinct from an unavailable one.
     ContextCleared,
     /// A point observation with context selected by the surrounding run.
@@ -1246,22 +1246,26 @@ impl<I, V> SpanRecord<I, V> {
     }
 }
 
-impl<C> SpanRecord<C, C> {
-    /// Transfer the exclusive capture owners, one per call until none is
-    /// left; record destruction handles everything else. Only an
-    /// announcement holds two: its inputs, then its type arguments.
-    pub fn take_capture(&mut self) -> Option<C> {
-        match self {
-            Self::Log { captured_data, .. } => captured_data.take(),
-            Self::ContextSelected { captured_context } => captured_context.take(),
+/// The slots holding the captures a record owns, in the order
+/// `take_capture` hands them over, borrowed as `$record` is: `$borrow`
+/// repeats that borrow for a slot behind a box. Every variant is listed, so
+/// a new one must say what it carries. Only an announcement holds two: its
+/// inputs, then its type arguments.
+macro_rules! capture_slots {
+    ($record:expr, $($borrow:tt)+) => {
+        match $record {
+            Self::Log { captured_data, .. } => [Some(captured_data), None],
+            Self::ContextSelected { captured_context } => [Some(captured_context), None],
             Self::FunctionSpanAnnouncement {
                 captured_inputs,
                 captured_type_args,
                 ..
-            } => captured_inputs.take().or_else(|| captured_type_args.take()),
-            Self::NetworkSpanAnnouncement(announcement) => announcement.request.take(),
-            Self::NetworkEvent(event) => event.payload.take(),
-            Self::NetworkSpanCompletion(completion) => completion.error.take(),
+            } => [Some(captured_inputs), Some(captured_type_args)],
+            Self::NetworkSpanAnnouncement(announcement) => {
+                [Some($($borrow)+ announcement.request), None]
+            }
+            Self::NetworkEvent(event) => [Some($($borrow)+ event.payload), None],
+            Self::NetworkSpanCompletion(completion) => [Some($($borrow)+ completion.error), None],
             Self::FunctionSpanCompletionOk { captured_value, .. }
             | Self::FunctionSpanCompletionOkNeedsAnnouncement { captured_value, .. }
             | Self::FunctionSpanCompletionOkReentry { captured_value, .. }
@@ -1293,7 +1297,7 @@ impl<C> SpanRecord<C, C> {
             }
             | Self::LateFunctionSpanCompletionPanicked { captured_value, .. }
             | Self::LateFunctionSpanCompletionPanickedReentry { captured_value, .. } => {
-                captured_value.take()
+                [Some(captured_value), None]
             }
             Self::HostFunctionDefined(_)
             | Self::ThreadSelected { .. }
@@ -1308,7 +1312,27 @@ impl<C> SpanRecord<C, C> {
             | Self::ErrorRaised { .. }
             | Self::ErrorRaisedAndEnded { .. }
             | Self::ErrorRaiseFrameCompleted { .. }
-            | Self::ErrorUnwindEnded { .. } => None,
+            | Self::ErrorUnwindEnded { .. } => [None, None],
         }
+    };
+}
+
+impl<C> SpanRecord<C, C> {
+    /// The captures this record owns, in the order `take_capture` hands
+    /// them over.
+    pub fn captures(&self) -> impl Iterator<Item = &C> {
+        capture_slots!(self, &)
+            .into_iter()
+            .flatten()
+            .filter_map(Option::as_ref)
+    }
+
+    /// Transfer the exclusive capture owners, one per call until none is
+    /// left; record destruction handles everything else.
+    pub fn take_capture(&mut self) -> Option<C> {
+        capture_slots!(self, &mut)
+            .into_iter()
+            .flatten()
+            .find_map(Option::take)
     }
 }

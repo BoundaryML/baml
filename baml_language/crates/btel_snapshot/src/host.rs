@@ -1,6 +1,6 @@
 //! Bounded, owned host observations supplied by adapters without invoking user
 //! serializers, getters, iterators or display hooks. No live host references.
-use crate::{Builder, Limit, Snapshot, SnapshotObject, SnapshotValue};
+use crate::{Builder, Limit, OwnedType, Shaper, Snapshot, SnapshotObject, SnapshotValue};
 
 #[derive(Debug)]
 pub enum HostValue {
@@ -25,7 +25,9 @@ pub fn capture(mut builder: Builder, value: &HostValue) -> Snapshot {
     let mut remaining = MAX_VALUES;
     let mut bytes = MAX_BYTES;
     let value = add(&mut builder, value, 0, &mut remaining, &mut bytes);
-    builder.finish_value(value)
+    // Host observations are small and arrive from adapter threads, which
+    // hold no shaping scratch of their own.
+    builder.finish(value, &mut Shaper::default())
 }
 
 fn add(
@@ -36,10 +38,10 @@ fn add(
     bytes: &mut usize,
 ) -> SnapshotValue {
     if depth > MAX_DEPTH {
-        return builder.limited(Limit::Depth);
+        return SnapshotValue::Truncated(Limit::Depth);
     }
     if *remaining == 0 {
-        return builder.limited(Limit::Values);
+        return SnapshotValue::Truncated(Limit::Values);
     }
     *remaining -= 1;
     match value {
@@ -49,109 +51,69 @@ fn add(
         HostValue::Float(v) => SnapshotValue::Float(*v),
         HostValue::String(v) => {
             if v.len() > *bytes {
-                return builder.limited(Limit::Bytes);
+                return SnapshotValue::Truncated(Limit::Bytes);
             }
             *bytes -= v.len();
-            match builder.string(&v.as_str().into()) {
-                Some(value) => SnapshotValue::String(value),
-                None => builder.limited(Limit::Bytes),
-            }
+            builder.leaves().string_value(&v.as_str().into())
         }
-        HostValue::Truncated(reason) => builder.limited(*reason),
-        HostValue::Unavailable => {
-            let Some(id) = builder.reserve_object() else {
-                return builder.limited(Limit::Objects);
-            };
-            builder.set_object(id, SnapshotObject::NonSnapshotableValue {});
-            SnapshotValue::Object(id)
-        }
+        HostValue::Truncated(reason) => SnapshotValue::Truncated(*reason),
+        HostValue::Unavailable => object(builder, SnapshotObject::NonSnapshotableValue {}),
         HostValue::List(values) => {
             if values.len() > *remaining {
-                return builder.limited(Limit::Values);
+                return SnapshotValue::Truncated(Limit::Values);
             }
-            let Some(id) = builder.reserve_object() else {
-                return builder.limited(Limit::Objects);
-            };
-            let mut copied = Vec::new();
+            // A container's values are one run, so what it holds is built
+            // before it.
+            let mut copied = Vec::with_capacity(values.len());
             for value in values {
                 if *remaining == 0 {
-                    return builder.limited(Limit::Values);
+                    return SnapshotValue::Truncated(Limit::Values);
                 }
                 copied.push(add(builder, value, depth + 1, remaining, bytes));
             }
-            let start = builder.value_start();
-            for value in copied {
-                if builder.remaining_values() == 0 {
-                    builder.limited(Limit::Values);
-                    break;
-                }
-                builder.push_value(value);
-            }
-            let items = builder.value_range(start);
-            let element_type = builder.push_type(baml_type::RealizedTy::Unknown);
-            builder.set_object(
-                id,
-                SnapshotObject::List {
-                    element_type,
-                    items,
-                    original_len: match value {
-                        HostValue::List(values) => values.len(),
-                        _ => unreachable!(),
-                    },
-                },
-            );
-            SnapshotValue::Object(id)
+            let element_type = builder.leaves().ty(OwnedType::Unknown);
+            let list = builder.list(element_type, copied.into_iter(), |_, value| value);
+            object(builder, list)
         }
         HostValue::Map(entries) => {
             if entries.len() > *remaining {
-                return builder.limited(Limit::Values);
+                return SnapshotValue::Truncated(Limit::Values);
             }
             let Some(key_bytes) = entries
                 .iter()
                 .try_fold(0usize, |size, (key, _)| size.checked_add(key.len()))
             else {
-                return builder.limited(Limit::Bytes);
+                return SnapshotValue::Truncated(Limit::Bytes);
             };
             if key_bytes > *bytes {
-                return builder.limited(Limit::Bytes);
+                return SnapshotValue::Truncated(Limit::Bytes);
             }
             *bytes -= key_bytes;
-            let Some(id) = builder.reserve_object() else {
-                return builder.limited(Limit::Objects);
-            };
-            let mut values = Vec::new();
+            let mut values = Vec::with_capacity(entries.len());
             for (key, value) in entries {
                 if *remaining == 0 {
-                    return builder.limited(Limit::Values);
+                    return SnapshotValue::Truncated(Limit::Values);
                 }
                 values.push((key, add(builder, value, depth + 1, remaining, bytes)));
             }
-            let start = builder.entry_start();
-            for (key, value) in values {
-                if builder.remaining_entries() == 0 {
-                    builder.limited(Limit::Values);
-                    break;
-                }
-                if !builder.content(key.len(), false) {
-                    break;
-                }
-                builder.entry(&key.as_str().into(), value);
-            }
-            let fields = builder.entry_range(start);
-            let key_type = builder.push_type(baml_type::RealizedTy::String);
-            let value_type = builder.push_type(baml_type::RealizedTy::Unknown);
-            builder.set_object(
-                id,
-                SnapshotObject::Map {
-                    key_type,
-                    value_type,
-                    entries: fields,
-                    original_len: entries.len(),
-                },
+            let key_type = builder.leaves().ty(OwnedType::string());
+            let value_type = builder.leaves().ty(OwnedType::Unknown);
+            let map = builder.map(
+                key_type,
+                value_type,
+                values.into_iter(),
+                |_, (key, value)| (key.as_str().into(), value),
             );
-            SnapshotValue::Object(id)
+            object(builder, map)
         }
     }
+}
+
+fn object(builder: &mut Builder, object: SnapshotObject) -> SnapshotValue {
+    builder.leaves().object(object).map_or(
+        SnapshotValue::Truncated(Limit::Objects),
+        SnapshotValue::Object,
+    )
 }
 
 #[cfg(test)]
@@ -181,7 +143,10 @@ mod tests {
             SnapshotRoot::Value(SnapshotValue::Truncated(Limit::Bytes))
         ));
         let mut blob = vec![];
-        oversized.write_blob(&mut blob).unwrap();
+        oversized
+            .root_blob()
+            .write(&mut crate::BlobScratch::default(), &mut blob)
+            .unwrap();
         crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
     }
 
@@ -197,7 +162,10 @@ mod tests {
         )]);
         let snapshot = capture(pool.try_acquire().unwrap(), &value);
         let mut blob = vec![];
-        snapshot.write_blob(&mut blob).unwrap();
+        snapshot
+            .root_blob()
+            .write(&mut crate::BlobScratch::default(), &mut blob)
+            .unwrap();
         crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
         assert!(!snapshot.stats().limited);
     }
@@ -217,7 +185,10 @@ mod tests {
         );
         assert!(snapshot.stats().limited);
         let mut blob = vec![];
-        snapshot.write_blob(&mut blob).unwrap();
+        snapshot
+            .root_blob()
+            .write(&mut crate::BlobScratch::default(), &mut blob)
+            .unwrap();
         crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
     }
 }

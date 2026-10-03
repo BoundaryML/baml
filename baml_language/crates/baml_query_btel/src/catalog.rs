@@ -69,7 +69,7 @@ pub const PROCESSES: Relation = Relation {
         col(
             "baml_source_code_content_id",
             "text",
-            "CAS id of the BAML sources it ran, a map<path, content>; NULL when not recorded",
+            "CAS id of the BAML sources it ran: the root blob of a map<path, content> whose large files are blobs of their own; NULL when not recorded",
         ),
         col("baml_version", "text", ""),
         col(
@@ -85,9 +85,12 @@ pub const PROCESSES: Relation = Relation {
         col(
             "context_distinct_id",
             "text",
-            "not recorded yet: always NULL",
+            "immutable launch identity; NULL when absent or unavailable",
         ),
-        value("context_metadata", "not recorded yet: always an empty map"),
+        value(
+            "context_metadata",
+            "immutable launch metadata; unavailable in older recordings",
+        ),
         col(
             "status",
             "text",
@@ -109,14 +112,16 @@ SELECT lower(hex(g.process_id)) AS process_id,
   lower(hex(g.source_cas)) AS baml_source_code_content_id,
   g.baml_version, g.host,
   (SELECT group_concat(a.value, ' ') FROM json_each(g.command) a) AS command,
-  NULL AS context_distinct_id,
-  __btel_empty_map() AS context_metadata,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(IIF(g.initial_context_cas IS NULL, 0, 2),
+    g.initial_context_cas, cx.state) AS context_metadata,
   COALESCE(g.ended, IIF(g.open = 0, 'unknown', 'running')) AS status,
   __btel_status_history(g.started_ns, g.ended, g.ended_ns) AS status_history,
   __btel_ns_utc(COALESCE(g.ended_ns, g.updated_ns)) AS last_updated
 FROM (
   SELECT COALESCE(r.process_id, r.recording_id) AS process_id,
     MAX(r.source_cas) AS source_cas, MAX(r.baml_version) AS baml_version,
+    MAX(r.initial_context_cas) AS initial_context_cas,
     MAX(r.host) AS host, MAX(r.command) AS command,
     MIN(r.process_started_ns) AS started_ns,
     CASE MAX(r.process_end_status) WHEN 1 THEN 'success' WHEN 2 THEN 'error'
@@ -126,7 +131,7 @@ FROM (
     MAX(r.updated_ns) AS updated_ns
   FROM main.recording r
   GROUP BY COALESCE(r.process_id, r.recording_id)
-) g",
+) g LEFT JOIN main.context_snapshot cx ON cx.cas = g.initial_context_cas",
 };
 
 pub const PROFILER: Relation = Relation {

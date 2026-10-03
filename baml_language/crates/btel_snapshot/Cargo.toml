@@ -9,6 +9,12 @@ license = { workspace = true }
 [lints]
 workspace = true
 
+[features]
+# Capture and pool statistics: what a capture copied and shared, and how much
+# the pool's storages have allocated. Measurement only; nothing reads them in
+# production, and counting growth costs every arena push.
+stats = [  ]
+
 [dependencies]
 baml_type = { workspace = true }
 bex_str = { workspace = true }
@@ -16,4 +22,5 @@ btel_settings = { workspace = true }
 btel_types = { workspace = true }
 borsh = { workspace = true }
 num-bigint = { workspace = true }
+rustc-hash = { workspace = true }
 xxhash-rust = { workspace = true }

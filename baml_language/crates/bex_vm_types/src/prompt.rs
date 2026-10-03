@@ -96,8 +96,8 @@ impl PromptAst {
     /// role-less `Simple` node contributes an empty role and null metadata;
     /// nested `Vec` nodes are flattened in document order. The content stays
     /// structural so stdlib clients can lower media to their provider-specific
-    /// wire representation, and the metadata stays attached so they can lower
-    /// per-message directives (Anthropic `cache_control`, for example).
+    /// wire representation, and the metadata stays attached for a client that
+    /// wants the free-form data its `${role(...)}` marker carried.
     pub fn to_structured_messages(&self) -> Vec<StructuredMessage> {
         let mut out = Vec::new();
         self.collect_structured_messages(&mut out);

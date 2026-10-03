@@ -851,14 +851,17 @@ function _gm_usage(usage: GmUsageMetadata?) -> ai.events.Usage? {
 /// return "" as a success. `provider` names the backend in that failure.
 function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.ModelTurn {
     // An error document that reached this far was served with a 2xx status
-    // (`ai.wire.send_as` classifies the non-2xx case). Classify it the same
-    // way rather than reading a turn out of a body that has none.
+    // (`ai.wire.send_as` classifies the non-2xx case). Preserve this
+    // in-band failure rather than reading a turn out of a body that has none.
     if let err: GmError = resp.error {
-        throw ai.errors.classify_http(
-            provider,
-            err.code ?? 0,
-            err.message ?? baml.json.stringify(baml.json.to_json(resp)),
-        )
+        throw ai.errors.ProviderError {
+            provider: provider,
+            message: err.message ?? "the Google request failed",
+            error_type: err.status,
+            error_code: if let code: int = err.code { code.to_string() } else { null },
+            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            status_code: null,
+        }
     }
     let content: ai.content.ModelBlock[] = [];
     let has_call = false;
@@ -907,9 +910,11 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
     // MAX_TOKENS spent entirely on thinking) IS the provider explaining
     // itself, so those still return an empty turn.
     if (content.length() == 0 && finish == "" && !blocked) {
-        throw ai.errors.ParseFailed {
+        throw ai.errors.InvalidResponse {
             provider: provider,
-            raw_output: baml.json.stringify(baml.json.to_json(resp)),
+            message: "the response contained no model turn",
+            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            status_code: null,
         }
     }
     let stop = if (has_call) {
@@ -1018,14 +1023,26 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
         } else {
             let resp: GmResponse = baml.json.from_string<GmResponse>(payload) catch_all (e) {
                 _ => {
-                    throw ai.errors.ParseFailed { provider: provider, raw_output: payload }
+                    throw ai.errors.InvalidResponse {
+                        provider: provider,
+                        message: e.to_string(),
+                        raw_body: payload,
+                        status_code: null,
+                    }
                 },
             };
             // A mid-stream `{"error": …}` payload is a real failure: raise
             // it instead of ending the turn silently on whatever text
             // arrived first.
             if let err: GmError = resp.error {
-                throw ai.errors.classify_http(provider, err.code ?? 0, err.message ?? payload)
+                throw ai.errors.ProviderError {
+                    provider: provider,
+                    message: err.message ?? "the Google stream failed",
+                    error_type: err.status,
+                    error_code: if let code: int = err.code { code.to_string() } else { null },
+                    raw_body: payload,
+                    status_code: null,
+                }
             }
             let cand: GmCandidate? = resp.candidates?.at(0);
             let parts: GmRespPart[] = cand?.content?.parts ?? [];

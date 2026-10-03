@@ -147,11 +147,12 @@ impl LocalDelivery {
         let directory = recording_directory(&root, id);
         fs::create_dir(&directory)?;
         let writer_directory = directory.clone();
+        let mut cas = cas::CasWriter::new(cas_root);
         Self::start_with_snapshots(
             directory,
             config,
             move |file| write_file(&writer_directory, id, file),
-            move |snapshot| cas::write_snapshot(&cas_root, snapshot),
+            move |snapshot| cas.write(snapshot),
             on_failure,
         )
     }
@@ -163,12 +164,12 @@ impl LocalDelivery {
         write: impl FnMut(&SealedFile) -> Result<(), LocalDeliveryError> + Send + 'static,
         on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
-        let cas_root = directory.join("cas");
+        let mut cas = cas::CasWriter::new(directory.join("cas"));
         Self::start_with_snapshots(
             directory,
             config,
             write,
-            move |snapshot| cas::write_snapshot(&cas_root, snapshot),
+            move |snapshot| cas.write(snapshot),
             on_failure,
         )
     }

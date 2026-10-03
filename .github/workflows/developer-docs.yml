@@ -97,21 +97,8 @@ jobs:
         run: pnpm --filter app-developer-docs lint
         working-directory: typescript2
       - name: Test
-        id: docs-tests
-        continue-on-error: true
-        run: pnpm --filter app-developer-docs test:ci
+        run: pnpm --filter app-developer-docs test
         working-directory: typescript2
-
-      - name: Analyze test results in Trunk
-        uses: ./.github/actions/upload-test-results
-        with:
-          junit-path: typescript2/app-developer-docs/junit.xml
-          # https://app.trunk.io/boundaryml/flaky-tests/collections/aDqMrNXq
-          collection: aDqMrNXq
-          normalize: node-test
-          test-outcome: ${{ steps.docs-tests.outcome }}
-          token: ${{ secrets.TRUNK_ORG_TOKEN }}
-
       - name: Type-check
         run: pnpm --filter app-developer-docs typecheck
         working-directory: typescript2

@@ -98,12 +98,26 @@ function assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt 
     }
 }
 
+/// All input tokens, for a provider whose own input count (`uncached`)
+/// excludes cache reads and writes: null when it reported no input count.
+function total_input_tokens(uncached: int?, cached: int?, cache_write: int?) -> int? throws never {
+    match (uncached) {
+        let n: int => n + (cached ?? 0) + (cache_write ?? 0),
+        null => null,
+    }
+}
+
 /// Input tokens billed at the full rate, for a provider whose `total` counts
-/// the cached share too: null when it reported no total, never below zero.
-function uncached_input_tokens(total: int?, cached: int?) -> int? throws never {
+/// the cached share (and, where it reports them, the cache writes) too: null
+/// when it reported no total, never below zero.
+function uncached_input_tokens(
+    total: int?,
+    cached: int?,
+    cache_write: int? = null,
+) -> int? throws never {
     match (total) {
         let t: int => {
-            let rest = t - (cached ?? 0);
+            let rest = t - (cached ?? 0) - (cache_write ?? 0);
             if (rest < 0) {
                 0
             } else {

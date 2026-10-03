@@ -320,7 +320,7 @@ mod tests {
             exited_at_ticks: u64::MAX,
             self_await_ticks: u64::MAX,
             completion_flags: 3,
-            value_cas_id: Some(proto::SnapshotId {
+            value_cas_id: Some(proto::CasId {
                 low: u64::MAX,
                 high: u64::MAX,
             }),
@@ -338,11 +338,11 @@ mod tests {
                 parent_id: u64::MAX,
                 call_path_id: u32::MAX,
                 entered_at_ticks: u64::MAX,
-                inputs_cas_id: Some(proto::SnapshotId {
+                inputs_cas_id: Some(proto::CasId {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
-                type_args_cas_id: Some(proto::SnapshotId {
+                type_args_cas_id: Some(proto::CasId {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
@@ -360,7 +360,7 @@ mod tests {
                 started_at_ticks: u64::MAX,
                 method: String::new(),
                 url: String::new(),
-                request_cas_id: Some(proto::SnapshotId {
+                request_cas_id: Some(proto::CasId {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
@@ -369,7 +369,7 @@ mod tests {
                 span_id: u64::MAX,
                 name: String::new(),
                 at_ticks: u64::MAX,
-                payload_cas_id: Some(proto::SnapshotId {
+                payload_cas_id: Some(proto::CasId {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
@@ -379,7 +379,7 @@ mod tests {
                 completed_at_ticks: u64::MAX,
                 outcome: proto::InvocationOutcome::Errored as i32,
                 panicked: true,
-                error_cas_id: Some(proto::SnapshotId {
+                error_cas_id: Some(proto::CasId {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
@@ -441,20 +441,20 @@ mod equivalence_tests {
                     5 => message.self_await_ticks = value,
                     6 => message.completion_flags = u32::try_from(value).unwrap_or(u32::MAX),
                     7 => {
-                        message.value_cas_id = Some(proto::SnapshotId {
+                        message.value_cas_id = Some(proto::CasId {
                             low: value,
                             high: 0,
                         });
                     }
                     8 => {
-                        message.value_cas_id = Some(proto::SnapshotId {
+                        message.value_cas_id = Some(proto::CasId {
                             low: 0,
                             high: value,
                         });
                     }
                     9 => message.panicked = value != 0,
                     _ => {
-                        message.value_cas_id = Some(proto::SnapshotId {
+                        message.value_cas_id = Some(proto::CasId {
                             low: value,
                             high: value,
                         });

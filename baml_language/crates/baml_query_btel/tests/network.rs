@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use baml_query_btel::{Index, IndexOptions, QueryRequest, QueryResult, Status};
 use btel_recorder::proto::{self, span_event::Event};
-use btel_snapshot::{BexStr, OwnedType, SnapshotObject, SnapshotValue};
+use btel_snapshot::{BexStr, OwnedType, SnapshotValue};
 use prost::Message as _;
 use serde_json::{Value as Json, json};
 
@@ -66,32 +66,35 @@ impl Recording {
     }
 
     /// Store `value` in the CAS, as a recording does, and return its ID.
-    fn cas(&self, value: &Json) -> proto::SnapshotId {
+    fn cas(&self, value: &Json) -> proto::CasId {
         let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
         let mut builder = pool.try_acquire().unwrap();
         let root = build(&mut builder, value);
-        let snapshot = builder.finish_value(root);
-        let mut blob = Vec::new();
-        snapshot.write_blob(&mut blob).unwrap();
-        let path = self.blob(snapshot.id());
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, blob).unwrap();
-        let bytes = *snapshot.id().as_bytes();
-        proto::SnapshotId {
+        let snapshot = builder.finish(root, &mut btel_snapshot::Shaper::default());
+        let mut scratch = btel_snapshot::BlobScratch::default();
+        for blob in snapshot.blobs() {
+            let mut bytes = Vec::new();
+            blob.write(&mut scratch, &mut bytes).unwrap();
+            let path = self.blob(blob.id());
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let bytes = *snapshot.root_id().as_bytes();
+        proto::CasId {
             low: u64::from_le_bytes(bytes[..8].try_into().unwrap()),
             high: u64::from_le_bytes(bytes[8..].try_into().unwrap()),
         }
     }
 
-    fn blob(&self, id: btel_snapshot::SnapshotId) -> PathBuf {
+    fn blob(&self, id: btel_snapshot::CasId) -> PathBuf {
         btel_reader::layout::SourceLayout::for_project(&self.project).blob_path(id)
     }
 
-    fn remove(&self, id: &proto::SnapshotId) {
+    fn remove(&self, id: &proto::CasId) {
         let mut bytes = [0; 16];
         bytes[..8].copy_from_slice(&id.low.to_le_bytes());
         bytes[8..].copy_from_slice(&id.high.to_le_bytes());
-        std::fs::remove_file(self.blob(btel_snapshot::SnapshotId::from_bytes(bytes))).unwrap();
+        std::fs::remove_file(self.blob(btel_snapshot::CasId::from_bytes(bytes))).unwrap();
     }
 
     fn span(&self, n: u64) -> Json {
@@ -104,31 +107,18 @@ fn build(b: &mut btel_snapshot::Builder, value: &Json) -> SnapshotValue {
     match value {
         Json::Null => SnapshotValue::Null,
         Json::Number(n) => SnapshotValue::Int(n.as_i64().unwrap()),
-        Json::String(text) => {
-            SnapshotValue::String(b.string(&BexStr::from(text.as_str())).unwrap())
-        }
+        Json::String(text) => b.leaves().string_value(&BexStr::from(text.as_str())),
         Json::Object(entries) => {
             let values: Vec<SnapshotValue> = entries.values().map(|v| build(b, v)).collect();
-            let id = b.reserve_object().unwrap();
-            let key_type = b.push_type(OwnedType::string());
-            let value_type = b.push_type(OwnedType::unknown());
-            let start = b.entry_start();
-            b.reserve_entries(entries.len());
-            for (key, value) in entries.keys().zip(values) {
-                assert!(b.content(key.len(), false));
-                b.entry(&BexStr::from(key.as_str()), value);
-            }
-            let range = b.entry_range(start);
-            b.set_object(
-                id,
-                SnapshotObject::Map {
-                    key_type,
-                    value_type,
-                    entries: range,
-                    original_len: entries.len(),
-                },
+            let key_type = b.leaves().ty(OwnedType::string());
+            let value_type = b.leaves().ty(OwnedType::unknown());
+            let map = b.map(
+                key_type,
+                value_type,
+                entries.keys().zip(values),
+                |_, (key, value)| (BexStr::from(key.as_str()), value),
             );
-            SnapshotValue::Object(id)
+            SnapshotValue::Object(b.leaves().object(map).unwrap())
         }
         other => panic!("unsupported fixture value {other}"),
     }
@@ -228,7 +218,7 @@ fn announce(
     method: &str,
     url: &str,
     started: u64,
-    request: Option<proto::SnapshotId>,
+    request: Option<proto::CasId>,
 ) -> Event {
     Event::NetworkAnnouncement(proto::NetworkAnnouncement {
         id,
@@ -241,7 +231,7 @@ fn announce(
     })
 }
 
-fn event(span: u64, name: &str, at: u64, payload: Option<proto::SnapshotId>) -> Event {
+fn event(span: u64, name: &str, at: u64, payload: Option<proto::CasId>) -> Event {
     Event::NetworkEvent(proto::NetworkEvent {
         span_id: span,
         name: name.into(),
@@ -254,7 +244,7 @@ fn complete(
     span: u64,
     at: u64,
     outcome: proto::InvocationOutcome,
-    error: Option<proto::SnapshotId>,
+    error: Option<proto::CasId>,
 ) -> Event {
     Event::NetworkCompletion(proto::NetworkCompletion {
         span_id: span,
@@ -582,6 +572,181 @@ fn an_event_payload_loads_only_its_own_blob() {
         "{:?}",
         result.outcome.diagnostics
     );
+}
+
+#[test]
+fn events_with_the_same_payload_each_show_it() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path());
+    // One blob, named by both events.
+    let ping = recording.cas(&json!({"event": "ping", "data": "{}", "id": null}));
+    let again = recording.cas(&json!({"event": "ping", "data": "{}", "id": null}));
+    assert_eq!(ping, again);
+    recording.write(
+        1,
+        proto::RecordingFile {
+            definitions: Some(definitions()),
+            clock_states: Some(valid()),
+            spans: Some(spans(vec![section(
+                ROOT,
+                vec![
+                    call(),
+                    announce(REQUEST, "POST", URL, 10_000, None),
+                    event(REQUEST, "data", 21_000, Some(ping)),
+                    event(REQUEST, "data", 22_000, Some(again)),
+                    complete(REQUEST, 23_000, proto::InvocationOutcome::Ok, None),
+                ],
+            )])),
+            ..Default::default()
+        },
+    );
+    let mut index = index(project.path());
+    let result = run(
+        &mut index,
+        "SELECT network_event_values FROM spans WHERE span_type = 'network_span'",
+    );
+    let payload = json!({"event": "ping", "data": "{}", "id": null});
+    let payloads: Vec<_> = result.rows[0][0]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["payload"].clone())
+        .collect();
+    assert_eq!(payloads, [payload.clone(), payload]);
+    assert_eq!(result.outcome.query.values.cas_loads, 1);
+    assert_eq!(result.outcome.status, Status::Complete);
+}
+
+#[test]
+fn a_body_stored_as_a_blob_of_its_own_is_read_through_its_payload() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path());
+    // Long enough for the capture to store each as its own blob: the request
+    // body inside its payload, and one event's data inside its.
+    let long = "x".repeat(64 * 1024);
+    let body = json!({"model": "claude-opus-5-5", "prompt": long}).to_string();
+    let request = recording.cas(&json!({"request": {
+        "method": "POST", "url": URL, "headers": {}, "body": body,
+    }}));
+    let usage = json!({"usage": {"input_tokens": 900, "output_tokens": 30}, "text": long});
+    let data = recording.cas(&json!({
+        "event": "message_delta", "data": usage.to_string(), "id": null,
+    }));
+    let cas = btel_reader::layout::SourceLayout::for_project(project.path());
+    let blobs = |id: &proto::CasId| {
+        let mut bytes = [0; 16];
+        bytes[..8].copy_from_slice(&id.low.to_le_bytes());
+        bytes[8..].copy_from_slice(&id.high.to_le_bytes());
+        let path = cas.blob_path(btel_snapshot::CasId::from_bytes(bytes));
+        std::fs::metadata(path).unwrap().len()
+    };
+    assert!(blobs(&request) < 1024 && blobs(&data) < 1024);
+    recording.write(
+        1,
+        proto::RecordingFile {
+            definitions: Some(definitions()),
+            clock_states: Some(valid()),
+            spans: Some(spans(vec![section(
+                ROOT,
+                vec![
+                    call(),
+                    announce(
+                        REQUEST,
+                        "POST",
+                        "https://api.anthropic.com/v1/messages",
+                        10_000,
+                        Some(request),
+                    ),
+                    event(REQUEST, "data", 21_000, Some(data)),
+                    complete(REQUEST, 23_000, proto::InvocationOutcome::Ok, None),
+                ],
+            )])),
+            ..Default::default()
+        },
+    );
+    let mut index = index(project.path());
+    let result = run(
+        &mut index,
+        "SELECT input_args['request']['body'], network_event_values[0]['payload']['data'],
+           network_event_values[0]['payload'], temporary_projections['model_name'],
+           temporary_projections['input_tokens']
+         FROM spans WHERE span_type = 'network_span'",
+    );
+    let [body_read, data_read, payload, model, input] = &result.rows[0][..] else {
+        panic!("five columns")
+    };
+    assert_eq!(*body_read, json!(body));
+    assert_eq!(*data_read, json!(usage.to_string()));
+    assert_eq!(
+        *payload,
+        json!({"event": "message_delta", "data": usage.to_string(), "id": null})
+    );
+    assert_eq!(
+        (model, input),
+        (&json!("claude-opus-5-5"), &json!(900)),
+        "{:?}",
+        result.outcome.diagnostics
+    );
+    assert_eq!(result.outcome.status, Status::Complete);
+}
+
+#[test]
+fn two_event_lists_are_compared_each_by_its_own_content() {
+    const THIRD: u64 = 102;
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path());
+    // Each request has one event, whose data is long enough to be a blob of
+    // its own: comparing the lists reads through both.
+    let payload = |letter: &str| {
+        recording.cas(&json!({
+            "event": "message_delta", "data": letter.repeat(64 * 1024), "id": null,
+        }))
+    };
+    let (first, second, same) = (payload("a"), payload("b"), payload("a"));
+    let request = |id, payload| {
+        vec![
+            announce(id, "POST", URL, 10_000, None),
+            event(id, "data", 21_000, Some(payload)),
+            complete(id, 23_000, proto::InvocationOutcome::Ok, None),
+        ]
+    };
+    recording.write(
+        1,
+        proto::RecordingFile {
+            definitions: Some(definitions()),
+            clock_states: Some(valid()),
+            spans: Some(spans(vec![section(
+                ROOT,
+                [
+                    vec![call()],
+                    request(REQUEST, first),
+                    request(OTHER, second),
+                    request(THIRD, same),
+                ]
+                .concat(),
+            )])),
+            ..Default::default()
+        },
+    );
+    let mut index = index(project.path());
+    let result = run(
+        &mut index,
+        "SELECT a.span_id, b.span_id, a.network_event_values = b.network_event_values
+         FROM spans a JOIN spans b ON a.span_id < b.span_id
+         WHERE a.span_type = 'network_span' AND b.span_type = 'network_span'
+         ORDER BY a.span_id, b.span_id",
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![recording.span(REQUEST), recording.span(OTHER), json!(0)],
+            vec![recording.span(REQUEST), recording.span(THIRD), json!(1)],
+            vec![recording.span(OTHER), recording.span(THIRD), json!(0)],
+        ],
+        "{:?}",
+        result.outcome.diagnostics
+    );
+    assert_eq!(result.outcome.status, Status::Complete);
 }
 
 #[test]
