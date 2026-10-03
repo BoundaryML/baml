@@ -24,7 +24,7 @@ env:
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
-  BAML_AUTH_CLIENT_ID: ${{ vars.BAML_WORKOS_CLIENT_ID }}
+  BAML_AUTH_CLIENT_ID: ${{ vars.BAML_AUTH_CLIENT_ID }}
 
 jobs:
   matrix:
@@ -89,41 +89,65 @@ jobs:
           # CROSS_CONFIG makes the plan's image control linking; the image's
           # host ldd does not determine the wrapper's compatibility floor.
           cross_config="$RUNNER_TEMP/baml-wrapper-cross.toml"
-          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = ["BAML_GIT_SHA", "BAML_AUTH_CLIENT_ID"]\n' \
-            "$TARGET" "$CROSS_IMAGE" "$TARGET" > "$cross_config"
+          passthrough='"BAML_GIT_SHA", "BAML_AUTH_CLIENT_ID"'
+          if [[ "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
+            # The glibc-2.17 image's target GCC is 4.8 and cannot compile
+            # mimalloc v3's warning flags. Its host GCC is current; point that
+            # compiler at the image's 2.17 sysroot so C dependencies retain the
+            # same compatibility floor as the Rust linker. Cross sets TARGET_CC
+            # and TARGET_CXX to the old compilers, and native build scripts give
+            # those variables precedence over the target-specific overrides.
+            passthrough+=', "TARGET_CC=gcc", "TARGET_CXX=g++"'
+            passthrough+=', "CC_x86_64_unknown_linux_gnu=gcc"'
+            passthrough+=', "CXX_x86_64_unknown_linux_gnu=g++"'
+            passthrough+=', "CFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
+            passthrough+=', "CXXFLAGS_x86_64_unknown_linux_gnu=--sysroot=/usr/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu/sysroot"'
+          fi
+          printf '[target.%s]\nimage = "%s"\n[target.%s.env]\npassthrough = [%s]\n' \
+            "$TARGET" "$CROSS_IMAGE" "$TARGET" "$passthrough" > "$cross_config"
           {
             echo 'CARGO=cross'
             echo "CROSS_CONFIG=$cross_config"
           } >> "$GITHUB_ENV"
-      - name: Build wrapper
+      - name: Build native pack compiler
+        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli
+      - name: Build pack host
+        env:
+          TARGET: ${{ matrix.target }}
+        run: ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml-pack-host --target "$TARGET"
+      - name: Prepare wrapper project
+        env:
+          WRAPPER_VERSION: ${{ inputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/baml-wrapper-project"
+          cp baml_language/crates/baml/baml_src/*.baml "$RUNNER_TEMP/baml-wrapper-project/"
+          cp baml_language/crates/baml/baml_src/baml.toml "$RUNNER_TEMP/baml-wrapper-project/"
+          printf 'function WrapperVersion() -> string throws never { "%s" }\n' "$WRAPPER_VERSION" \
+            > "$RUNNER_TEMP/baml-wrapper-project/version.baml"
+      - name: Pack wrapper
         env:
           EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$TARGET"
           mkdir -p staging/bin
-          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
-            "staging/bin/baml$EXECUTABLE_SUFFIX"
-          if test -f "staging/bin/baml-cli$EXECUTABLE_SUFFIX"; then
-            exit 1
-          fi
-      - name: Build no-self-update wrapper
+          "baml_language/target/release/baml-cli$EXECUTABLE_SUFFIX" pack Main \
+            --project "$RUNNER_TEMP/baml-wrapper-project" \
+            --host "baml_language/target/$TARGET/release/baml-pack-host$EXECUTABLE_SUFFIX" \
+            --target "$TARGET" --output "staging/bin/baml$EXECUTABLE_SUFFIX"
+      - name: Pack no-self-update wrapper
         if: ${{ matrix.no_self_update }}
         env:
           EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          ${CARGO} build \
-            --manifest-path baml_language/Cargo.toml \
-            --release \
-            --bin baml \
-            --features no-self-update \
-            --target "$TARGET"
           mkdir -p staging-no-self-update/bin
-          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
-            "staging-no-self-update/bin/baml$EXECUTABLE_SUFFIX"
+          "baml_language/target/release/baml-cli$EXECUTABLE_SUFFIX" pack NoSelfUpdateMain \
+            --project "$RUNNER_TEMP/baml-wrapper-project" \
+            --host "baml_language/target/$TARGET/release/baml-pack-host$EXECUTABLE_SUFFIX" \
+            --target "$TARGET" --output "staging-no-self-update/bin/baml$EXECUTABLE_SUFFIX"
       - name: Archive wrapper
         env:
           ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
