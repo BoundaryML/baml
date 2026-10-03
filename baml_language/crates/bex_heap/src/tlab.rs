@@ -1,8 +1,9 @@
 //! Thread-Local Allocation Buffer (TLAB) for per-VM allocation.
 //!
 //! Each VM owns a bump-allocated region. Reservations begin at 32 slots and grow
-//! to 1024 as the VM allocates. Only reserved object slots spend the GC budget;
-//! backing storage is excluded. Ordinary yields preserve unused capacity.
+//! to 1024 as the VM allocates. Reserved object slots spend the GC budget, as do
+//! fresh string and byte-array buffers (see `gc_policy`). Ordinary yields
+//! preserve unused capacity.
 
 use std::sync::Arc;
 
@@ -130,6 +131,7 @@ impl Tlab {
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, obj: Object) -> HeapPtr {
+        self.heap.charge_backing_bytes(&obj);
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
         }

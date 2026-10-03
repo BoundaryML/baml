@@ -504,3 +504,20 @@ fn content_hash_can_be_published_concurrently() {
         }
     });
 }
+
+#[test]
+fn unshared_heap_counts_only_exclusive_flat_buffers() {
+    assert_eq!(BexStr::from("inline").unshared_heap_bytes(), 0);
+    let parent = BexStr::from("x".repeat(100_000));
+    assert_eq!(parent.unshared_heap_bytes(), 100_000);
+    let slice = parent.substring(1, 101);
+    assert_eq!(slice.unshared_heap_bytes(), 0);
+    // The slice now shares the parent's buffer.
+    assert_eq!(parent.unshared_heap_bytes(), 0);
+    drop(slice);
+    let clone = parent.clone();
+    assert_eq!(clone.unshared_heap_bytes(), 0);
+    drop(clone);
+    let rope = BexStr::concat(parent, BexStr::from("y".repeat(100)));
+    assert_eq!(rope.unshared_heap_bytes(), 0);
+}
