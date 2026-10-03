@@ -1814,13 +1814,27 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn _detach(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _program: String,
+        _args: Vec<String>,
+        _options: Option<io::owned::sys::ExecOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Detached processes are not supported by this host".into(),
+        })
+    }
     fn _run(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _program: String,
-        _args: Option<Vec<String>>,
-        _options: Option<io::owned::sys::HandoffOptions>,
+        _args: Vec<String>,
+        _options: Option<io::owned::sys::ExecOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1828,13 +1842,13 @@ impl io::IoNamespaceSys for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _handoff(
+    fn _exec(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _program: String,
-        _args: Option<Vec<String>>,
-        _options: Option<io::owned::sys::HandoffOptions>,
+        _args: Vec<String>,
+        _options: Option<io::owned::sys::ExecOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1854,27 +1868,27 @@ impl io::IoNamespaceSys for DefaultIoOps {
         SysOpOutput::ok(())
     }
 
-    fn exec(
+    fn _capture(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _program: String,
-        _args: Option<Vec<String>>,
+        _args: Vec<String>,
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+    ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
 
-    fn start_process(
+    fn _start_process(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _program: String,
-        _args: Option<Vec<String>>,
+        _args: Vec<String>,
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::Process> {
@@ -1884,14 +1898,14 @@ impl io::IoNamespaceSys for DefaultIoOps {
         })
     }
 
-    fn shell(
+    fn _shell(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _command: String,
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+    ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -2691,34 +2705,40 @@ impl IoSysOpsBuilder {
                 )
             })
         };
+        self.inner.baml_sys__detach = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys__detach(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_sys__run = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys__run(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys__handoff = {
+        self.inner.baml_sys__exec = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys__handoff(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__exec(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_exec = {
+        self.inner.baml_sys__capture = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_exec(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__capture(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_start_process = {
+        self.inner.baml_sys__start_process = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_start_process(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__start_process(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_shell = {
+        self.inner.baml_sys__shell = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_shell(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__shell(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_sleep = {
@@ -2903,7 +2923,7 @@ mod tests {
         ));
 
         // Test shell panics with HostUnavailable
-        let result = (ops.baml_sys_shell)(&heap, permit.proof(), vec![], &ctx, CallId::next());
+        let result = (ops.baml_sys__shell)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {

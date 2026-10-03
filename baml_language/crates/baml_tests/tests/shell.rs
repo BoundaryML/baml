@@ -3,12 +3,12 @@
 //! Platform-specific and timing-sensitive tests:
 //!   shell_with_pipe        — Unix-only (`tr`), has insta bytecode snapshot.
 //!   shell_stderr           — Unix-only `>&2` redirect.
-//!   exec_failing           — platform-split binary (`false` vs `cmd`).
-//!   exec_with_args         — platform-split (`printf` vs `cmd`).
-//!   exec_stderr            — platform-split redirection syntax.
-//!   exec_with_cwd          — platform-split (`pwd` vs `cmd /c cd`).
-//!   exec_with_stdin        — platform-split (`cat` vs `findstr`).
-//!   exec_with_timeout      — timing-dependent; assert is_err().
+//!   capture_failing           — platform-split binary (`false` vs `cmd`).
+//!   capture_with_args         — platform-split (`printf` vs `cmd`).
+//!   capture_stderr            — platform-split redirection syntax.
+//!   capture_with_cwd          — platform-split (`pwd` vs `cmd /c cd`).
+//!   capture_with_stdin        — platform-split (`cat` vs `findstr`).
+//!   capture_with_timeout      — timing-dependent; assert is_err().
 //!   shell_with_options     — platform-split (`pwd` vs `cmd /c cd`).
 //!   shell_stderr_bytes     — Unix-only `>&2` redirect, byte-prefix assertion.
 
@@ -21,7 +21,7 @@ async fn shell_with_pipe() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'", null).stdout.to_string()
+                baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'", options = null).stdout.to_string()
             }
         "#
     );
@@ -30,7 +30,7 @@ async fn shell_with_pipe() {
     function main() -> string {
         load_const "echo 'hello world' | tr 'a-z' 'A-Z'"
         load_const null
-        sys_op baml.sys.shell
+        call baml.sys.shell
         load_field .stdout
         load_type baml.ToString
         load_const "to_string"
@@ -50,7 +50,7 @@ async fn shell_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("echo 'error output' >&2", null).stderr.to_string()
+                baml.sys.shell("echo 'error output' >&2", options = null).stderr.to_string()
             }
         "#
     );
@@ -61,16 +61,16 @@ async fn shell_stderr() {
     }
 }
 
-// === exec() tests ===
+// === capture() tests ===
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn exec_failing() {
+async fn capture_failing() {
     // `false` exits with code 1 — should NOT throw
     let output = baml_test!(
         r#"
             function main() -> int {
-                baml.sys.exec("false", null, null).exit_code
+                baml.sys.capture("false", args = [], options = null).exit_code
             }
         "#
     );
@@ -79,12 +79,12 @@ async fn exec_failing() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn exec_failing() {
+async fn capture_failing() {
     // cmd /c "exit 1" exits with code 1 — should NOT throw
     let output = baml_test!(
         r#"
             function main() -> int {
-                baml.sys.exec("cmd", ["/c", "exit 1"], null).exit_code
+                baml.sys.capture("cmd", args = ["/c", "exit 1"], options = null).exit_code
             }
         "#
     );
@@ -93,11 +93,11 @@ async fn exec_failing() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn exec_with_args() {
+async fn capture_with_args() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("printf", ["%s %s", "hello", "world"], null).stdout.to_string()
+                baml.sys.capture("printf", args = ["%s %s", "hello", "world"], options = null).stdout.to_string()
             }
         "#
     );
@@ -109,11 +109,11 @@ async fn exec_with_args() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn exec_with_args() {
+async fn capture_with_args() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("cmd", ["/c", "echo hello world"], null).stdout.to_string()
+                baml.sys.capture("cmd", args = ["/c", "echo hello world"], options = null).stdout.to_string()
             }
         "#
     );
@@ -125,11 +125,11 @@ async fn exec_with_args() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn exec_stderr() {
+async fn capture_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("sh", ["-c", "echo err >&2"], null).stderr.to_string()
+                baml.sys.capture("sh", args = ["-c", "echo err >&2"], options = null).stderr.to_string()
             }
         "#
     );
@@ -141,11 +141,11 @@ async fn exec_stderr() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn exec_stderr() {
+async fn capture_stderr() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("cmd", ["/c", "echo err 1>&2"], null).stderr.to_string()
+                baml.sys.capture("cmd", args = ["/c", "echo err 1>&2"], options = null).stderr.to_string()
             }
         "#
     );
@@ -159,11 +159,11 @@ async fn exec_stderr() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn exec_with_cwd() {
+async fn capture_with_cwd() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
+                baml.sys.capture("pwd", args = [], options = baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
             }
         "#
     );
@@ -175,11 +175,11 @@ async fn exec_with_cwd() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn exec_with_cwd() {
+async fn capture_with_cwd() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("cmd", ["/c", "cd"], baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
+                baml.sys.capture("cmd", args = ["/c", "cd"], options = baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
             }
         "#
     );
@@ -191,11 +191,11 @@ async fn exec_with_cwd() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn exec_with_stdin() {
+async fn capture_with_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("cat", null, baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout.to_string()
+                baml.sys.capture("cat", args = [], options = baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout.to_string()
             }
         "#
     );
@@ -209,11 +209,11 @@ async fn exec_with_stdin() {
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn exec_with_stdin() {
+async fn capture_with_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("findstr", [".*"], baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout.to_string()
+                baml.sys.capture("findstr", args = [".*"], options = baml.sys.ProcessOptions { stdin: "hello from stdin" }).stdout.to_string()
             }
         "#
     );
@@ -225,29 +225,29 @@ async fn exec_with_stdin() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn exec_with_timeout() {
+async fn capture_with_timeout() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("sleep", ["10"], baml.sys.ProcessOptions { timeout_ms: 100 }).stdout.to_string()
+                baml.sys.capture("sleep", args = ["10"], options = baml.sys.ProcessOptions { timeout: baml.time.Duration.from_milliseconds(100) }).stdout.to_string()
             }
         "#
     );
-    // Should timeout and throw (not return ShellOutput)
+    // Should timeout and throw (not return ProcessOutput)
     assert!(output.result.is_err());
 }
 
 #[tokio::test]
 #[cfg(target_os = "windows")]
-async fn exec_with_timeout() {
+async fn capture_with_timeout() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.exec("ping", ["-n", "11", "127.0.0.1"], baml.sys.ProcessOptions { timeout_ms: 100 }).stdout.to_string()
+                baml.sys.capture("ping", args = ["-n", "11", "127.0.0.1"], options = baml.sys.ProcessOptions { timeout: baml.time.Duration.from_milliseconds(100) }).stdout.to_string()
             }
         "#
     );
-    // Should timeout and throw (not return ShellOutput)
+    // Should timeout and throw (not return ProcessOutput)
     assert!(output.result.is_err());
 }
 
@@ -258,11 +258,11 @@ async fn exec_with_timeout() {
 async fn start_process_yields_stdout_before_exit() {
     let output = baml_test!(
         r#"
-            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> bool throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
                 let process = baml.sys.start_process(
                     "sh",
-                    ["-c", "printf 'first\n'; while :; do :; done"],
-                    baml.sys.ProcessOptions { timeout_ms: 2000 },
+                    args = ["-c", "printf 'first\n'; while :; do :; done"],
+                    options = baml.sys.ProcessOptions { timeout: baml.time.Duration.from_milliseconds(2000) },
                 );
                 defer { process.close() }
 
@@ -285,11 +285,11 @@ async fn start_process_yields_stdout_before_exit() {
 async fn start_process_iterates_lines_and_final_unterminated_line() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
                 let process = baml.sys.start_process(
                     "sh",
-                    ["-c", "printf 'one\ntwo'"],
-                    null,
+                    args = ["-c", "printf 'one\ntwo'"],
+                    options = null,
                 );
                 defer { process.close() }
 
@@ -314,11 +314,11 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
 async fn start_process_reads_complete_stdout_as_text() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
+            function main() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
                 let process = baml.sys.start_process(
                     "sh",
-                    ["-c", "printf 'hello'"],
-                    null,
+                    args = ["-c", "printf 'hello'"],
+                    options = null,
                 );
                 defer { process.close() }
 
@@ -343,8 +343,8 @@ async fn start_process_reads_complete_stdout_as_text() {
 async fn start_process_supports_incremental_stdin() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
-                let process = baml.sys.start_process("cat", [], null);
+            function main() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process("cat", args = [], options = null);
                 defer { process.close() }
 
                 let out = process.stdout.lines();
@@ -382,8 +382,8 @@ async fn start_process_stdout_read_is_cancellable() {
             function main() -> string {
                 let process = baml.sys.start_process(
                     "sh",
-                    ["-c", "while :; do :; done"],
-                    null,
+                    args = ["-c", "while :; do :; done"],
+                    options = null,
                 );
                 defer { process.close() }
 
@@ -420,8 +420,8 @@ async fn start_process_stdout_close_cancels_pending_read() {
             function main() -> string {
                 let process = baml.sys.start_process(
                     "sh",
-                    ["-c", "while :; do :; done"],
-                    null,
+                    args = ["-c", "while :; do :; done"],
+                    options = null,
                 );
                 defer { process.close() }
 
@@ -512,7 +512,7 @@ async fn shell_with_options() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("pwd", baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
+                baml.sys.shell("pwd", options = baml.sys.ProcessOptions { cwd: "/tmp" }).stdout.to_string()
             }
         "#
     );
@@ -532,7 +532,7 @@ async fn shell_with_options() {
     let output = baml_test!(
         r#"
             function main() -> string {
-                baml.sys.shell("cmd /c cd", baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
+                baml.sys.shell("cmd /c cd", options = baml.sys.ProcessOptions { cwd: "C:\\Windows\\Temp" }).stdout.to_string()
             }
         "#
     );
@@ -571,7 +571,7 @@ async fn shell_stderr_bytes() {
     let output = baml_test!(
         r#"
             function main() -> uint8array {
-                baml.sys.shell("echo err >&2", null).stderr
+                baml.sys.shell("echo err >&2", options = null).stderr
             }
         "#
     );
@@ -593,8 +593,8 @@ async fn start_process_stderr_pipe_is_readable() {
             function main() -> string {
                 let process = baml.sys.start_process(
                     "sh",
-                    ["-c", "printf 'boom\n' >&2"],
-                    baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Pipe },
+                    args = ["-c", "printf 'boom\n' >&2"],
+                    options = baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Pipe },
                 );
                 defer { process.close() }
 
@@ -618,12 +618,12 @@ async fn start_process_stderr_modes_without_pipe() {
     let output = baml_test!(
         r#"
             function main() -> bool {
-                let inherited = baml.sys.start_process("sh", ["-c", "printf 'x' >&2"], null);
+                let inherited = baml.sys.start_process("sh", args = ["-c", "printf 'x' >&2"], options = null);
                 defer { inherited.close() }
                 let discarded = baml.sys.start_process(
                     "sh",
-                    ["-c", "printf 'x' >&2"],
-                    baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Discard },
+                    args = ["-c", "printf 'x' >&2"],
+                    options = baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Discard },
                 );
                 defer { discarded.close() }
 
@@ -644,8 +644,8 @@ async fn process_environment_overlay_and_clear() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            let inherited = baml.sys.exec("env", null, baml.sys.ProcessOptions { env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
-            let cleared = baml.sys.exec("env", null, baml.sys.ProcessOptions { clear_env: true, env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
+            let inherited = baml.sys.capture("env", args = [], options = baml.sys.ProcessOptions { env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
+            let cleared = baml.sys.capture("env", args = [], options = baml.sys.ProcessOptions { clear_env: true, env: map { "BAML_PROCESS_TEST": "1" } }).stdout.to_string();
             inherited.includes("PATH=") && cleared == "BAML_PROCESS_TEST=1\n"
         }
     "#
@@ -660,7 +660,7 @@ async fn inherited_process_status_and_launch_failure() {
         function main() -> bool {
             let status = baml.sys.run("sh", args = ["-c", "exit 17"]);
             let failed = false;
-            { baml.sys.handoff("/definitely-missing-baml-executable"); }
+            { baml.sys.exec("/definitely-missing-baml-executable"); }
             catch (e) { baml.errors.Io => { failed = true; } }
             status.exit_code == 17 && failed
         }
@@ -670,11 +670,62 @@ async fn inherited_process_status_and_launch_failure() {
         function main() -> bool {
             let status = baml.sys.run("cmd", args = ["/c", "exit 17"]);
             let failed = false;
-            { baml.sys.handoff("Z:/definitely-missing-baml-executable.exe"); }
+            { baml.sys.exec("Z:/definitely-missing-baml-executable.exe"); }
             catch (e) { baml.errors.Io => { failed = true; } }
             status.exit_code == 17 && failed
         }
     "#;
     let output = baml_test!(program);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn capture_drains_output_while_sending_input() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let output = baml.sys.capture("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"],
+                options = baml.sys.ProcessOptions { stdin: "x".repeat(200000), timeout: baml.time.Duration.from_seconds(2) });
+            output.ok() && output.stdout.slice(200000, output.stdout.length()).to_string().trim() == "200000"
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn capture_deadline_includes_blocked_stdin() {
+    let started = std::time::Instant::now();
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            { baml.sys.capture("sleep", args = ["5"], options = baml.sys.ProcessOptions {
+                stdin: "x".repeat(200000), timeout: baml.time.Duration.from_milliseconds(50)
+            }); false } catch (e) { baml.errors.Timeout => true }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert!(started.elapsed() < std::time::Duration::from_secs(4));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn binary_input_and_streaming_backpressure() {
+    let output = baml_test!(
+        r#"
+        function main() -> bool {
+            let bytes = b"\x00\xff\x80";
+            let captured = baml.sys.capture("cat", options = baml.sys.ProcessOptions { stdin: bytes });
+            let process = baml.sys.start_process("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"],
+                options = baml.sys.ProcessOptions { stdin: "x".repeat(200000), timeout: baml.time.Duration.from_seconds(2) });
+            defer { process.close() }
+            let stdout = process.stdout.bytes();
+            captured.stdout == bytes && process.wait().ok() && stdout.slice(200000, stdout.length()).to_string().trim() == "200000"
+        }
+        "#
+    );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

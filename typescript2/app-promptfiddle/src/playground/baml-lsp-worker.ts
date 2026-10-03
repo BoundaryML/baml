@@ -178,7 +178,8 @@ interface ProcessOptionsJson {
   cwd?: string;
   env?: Record<string, string>;
   timeout_ms?: number;
-  stdin?: string;
+  stdin?: string | number[];
+  clear_env?: boolean;
 }
 
 async function executeShell(
@@ -193,8 +194,10 @@ async function executeShell(
   const execOptions: Parameters<Bash['exec']>[1] = {
     cwd: options?.cwd,
     env: options?.env,
-    stdin: options?.stdin,
-    ...(options?.env ? { replaceEnv: false } : {}),
+    stdin: Array.isArray(options?.stdin)
+      ? new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(options.stdin))
+      : options?.stdin,
+    ...(options?.env || options?.clear_env ? { replaceEnv: options?.clear_env ?? false } : {}),
     ...(options?.timeout_ms != null
       ? { signal: AbortSignal.timeout(options.timeout_ms) }
       : {}),
@@ -231,8 +234,10 @@ async function executeExec(
   const execOptions: Parameters<Bash['exec']>[1] = {
     cwd: options?.cwd,
     env: options?.env,
-    stdin: options?.stdin,
-    ...(options?.env ? { replaceEnv: false } : {}),
+    stdin: Array.isArray(options?.stdin)
+      ? new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(options.stdin))
+      : options?.stdin,
+    ...(options?.env || options?.clear_env ? { replaceEnv: options?.clear_env ?? false } : {}),
     ...(options?.timeout_ms != null
       ? { signal: AbortSignal.timeout(options.timeout_ms) }
       : {}),
