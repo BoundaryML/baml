@@ -8,18 +8,17 @@ use std::{
 };
 
 use btel_recorder::SealedFile;
-use btel_snapshot::Snapshot;
+use btel_snapshot::{BlobIndex, BlobScratch, CasId, Leaf, Snapshot, Split, Structure};
 use bytes::Bytes;
 use futures::FutureExt;
-use prost::Message;
 use reqwest::{Client, StatusCode, Url};
 use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, mpsc, watch};
 
 use crate::{
+    body::{self, Body},
     liveness::{Heartbeat, HeartbeatError},
     plan::{validate_proposal, validate_response, validate_url},
-    proto::{CasObject, CloudUploadEnvelope},
     wire::{
         CasCandidate, CasSizeClass, Disposition, PrepareUploadsRequest, PrepareUploadsResponse,
         ProducerState, ProposedUploadTarget, RecordingDescriptor, UploadKind, UploadTarget,
@@ -46,23 +45,38 @@ impl fmt::Display for DeliveryError {
 impl std::error::Error for DeliveryError {}
 
 /// Limits reserve retained owners and both sides of serialization before admission.
-/// HTTP is opt-in for local tests; production endpoints must use HTTPS.
+/// No capture or blob is refused for its size: a plan that needs more than the
+/// whole CAS reservation is admitted beside it, one such plan at a time, and
+/// holds nothing else up. HTTP is opt-in for local tests; production
+/// endpoints must use HTTPS.
 #[derive(Clone)]
 pub struct DeliveryConfig {
     pub prepare_base_url: Url,
     pub bearer_token: Option<String>,
     pub max_pending_plans: usize,
-    /// At most 32 owners, leaving default snapshot-pool headroom for VM capture.
+    /// At most 32 captures, leaving default snapshot-pool headroom for VM
+    /// capture. A capture spanning plans counts once per plan.
     pub max_pending_snapshots: usize,
     pub recording_reserved_bytes: usize,
+    /// Memory for what the admitted plans hold: their captures until their
+    /// bodies are built, and each CAS body until it is uploaded.
     pub cas_reserved_bytes: usize,
+    /// CAS bodies uploaded at once, so that one long upload does not hold
+    /// the others back. Recordings upload one at a time.
+    pub max_cas_uploads: usize,
     pub max_request_bytes: usize,
     pub max_response_bytes: usize,
+    /// Blobs per plan.
     pub max_candidates: usize,
     pub max_targets: usize,
     pub max_recording_body_bytes: usize,
-    pub max_cas_body_bytes: usize,
+    /// Time for one request, before its body's share: see
+    /// [`Self::min_upload_bytes_per_second`].
     pub request_timeout: Duration,
+    /// The slowest upload a PUT waits for. A PUT is given `request_timeout`
+    /// plus its body's length at this rate, so a large body is not lost for
+    /// taking long, only for stalling. Upload URLs must live as long.
+    pub min_upload_bytes_per_second: usize,
     pub retry_delay: Duration,
     /// Initial attempt plus retries. Nonretryable HTTP and invalid plans drop immediately.
     pub max_attempts: u32,
@@ -78,13 +92,14 @@ impl DeliveryConfig {
             max_pending_snapshots: 32,
             recording_reserved_bytes: 128 * 1024 * 1024,
             cas_reserved_bytes: 256 * 1024 * 1024,
+            max_cas_uploads: 2,
             max_request_bytes: 64 * 1024,
             max_response_bytes: 64 * 1024,
             max_candidates: 32,
             max_targets: 33,
             max_recording_body_bytes: 8 * 1024 * 1024,
-            max_cas_body_bytes: 8 * 1024 * 1024,
             request_timeout: Duration::from_secs(10),
+            min_upload_bytes_per_second: 1024 * 1024,
             retry_delay: Duration::from_millis(200),
             max_attempts: 4,
         }
@@ -98,15 +113,30 @@ impl DeliveryConfig {
         Ok(url)
     }
 
-    fn retry_window(&self) -> Result<Duration, DeliveryError> {
-        self.request_timeout
+    /// The time one PUT of `body_bytes` is given.
+    fn put_timeout(&self, body_bytes: usize) -> Duration {
+        let millis = (body_bytes as u128).saturating_mul(1000)
+            / (self.min_upload_bytes_per_second as u128).max(1);
+        self.request_timeout.saturating_add(Duration::from_millis(
+            u64::try_from(millis).unwrap_or(u64::MAX),
+        ))
+    }
+
+    /// The longest a body of `body_bytes` holds its lane: every attempt at
+    /// its full timeout, and the delays between them.
+    fn put_window(&self, body_bytes: usize) -> Option<Duration> {
+        self.put_timeout(body_bytes)
             .checked_mul(self.max_attempts)
             .and_then(|v| {
                 self.retry_delay
-                    .checked_mul(self.max_attempts - 1)
+                    .checked_mul(self.max_attempts.checked_sub(1)?)
                     .and_then(|delay| v.checked_add(delay))
             })
-            .ok_or(DeliveryError::InvalidConfig)
+    }
+
+    /// The window of a request without a body to speak of.
+    fn retry_window(&self) -> Result<Duration, DeliveryError> {
+        self.put_window(0).ok_or(DeliveryError::InvalidConfig)
     }
 
     fn validate(&self) -> Result<(), DeliveryError> {
@@ -121,18 +151,19 @@ impl DeliveryConfig {
         }
         if self.max_attempts == 0
             || self.request_timeout.is_zero()
+            || self.min_upload_bytes_per_second == 0
             || self.max_pending_plans == 0
             || self.max_pending_plans > 32
             || self.max_pending_snapshots == 0
             || self.max_pending_snapshots > 32
+            || self.max_cas_uploads == 0
+            || self.max_cas_uploads > 32
             || self.max_candidates == 0
-            || self.max_candidates > self.max_pending_snapshots
             || self.max_targets == 0
             || self.max_targets > self.max_candidates + 1
             || self.max_request_bytes == 0
             || self.max_response_bytes == 0
             || self.max_recording_body_bytes == 0
-            || self.max_cas_body_bytes == 0
         {
             return Err(DeliveryError::InvalidConfig);
         }
@@ -150,12 +181,62 @@ struct State {
     metadata_replay_evictions: u64,
     progress: DeliveryProgress,
     recording_bytes: usize,
-    cas_bytes: usize,
+    cas: Budget,
     snapshots: usize,
+    /// Plans whose recording is not yet uploaded.
     plans: usize,
-    cas_targets: usize,
+    /// The longest the admitted, unfinished bodies can keep a recording, or
+    /// a CAS body, waiting for its turn to upload.
+    recording_window: Duration,
+    cas_window: Duration,
     last_file: Option<([u8; 16], u64)>,
     finished: bool,
+}
+
+/// A byte budget that refuses nothing. Plans that fit are admitted together;
+/// one whose parts total more than the whole budget is admitted beside it,
+/// one such plan at a time. So the most held is the budget and one plan.
+#[derive(Default)]
+struct Budget {
+    used: usize,
+    /// Parts still held of the plan admitted beside the budget.
+    oversize: usize,
+}
+
+/// One part of what a plan was admitted with, given back when the part ends.
+#[derive(Clone, Copy)]
+enum Share {
+    Within(usize),
+    Oversize,
+}
+
+impl Budget {
+    /// Whether a plan whose parts total `total` may be admitted now.
+    fn admits(&self, total: usize, limit: usize) -> bool {
+        if total > limit {
+            self.oversize == 0
+        } else {
+            self.used
+                .checked_add(total)
+                .is_some_and(|used| used <= limit)
+        }
+    }
+    /// A part of `bytes` of an admitted plan whose parts total `total`.
+    fn take(&mut self, bytes: usize, total: usize, limit: usize) -> Share {
+        if total > limit {
+            self.oversize += 1;
+            Share::Oversize
+        } else {
+            self.used += bytes;
+            Share::Within(bytes)
+        }
+    }
+    fn give(&mut self, share: Share) {
+        match share {
+            Share::Within(bytes) => self.used -= bytes,
+            Share::Oversize => self.oversize -= 1,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -206,18 +287,25 @@ impl Shared {
     }
 }
 
+/// What a plan holds until its recording is uploaded. Its captures, and the
+/// storage slots they hold, are given back sooner: once its bodies are built.
 struct Reservation {
     shared: Arc<Shared>,
     recording: usize,
-    cas: usize,
     snapshots: usize,
-    cas_targets: usize,
+    captures: Option<Share>,
+    /// The strings among the blobs placed with the recording.
+    inline: Share,
+    recording_window: Duration,
 }
 
 impl Reservation {
-    fn release_snapshot_slots(&mut self) {
+    fn release_captures(&mut self) {
         let mut state = self.shared.state.lock().unwrap();
         state.snapshots -= std::mem::take(&mut self.snapshots);
+        if let Some(share) = self.captures.take() {
+            state.cas.give(share);
+        }
         self.shared.capacity.notify_all();
     }
 }
@@ -226,19 +314,127 @@ impl Drop for Reservation {
     fn drop(&mut self) {
         let mut state = self.shared.state.lock().unwrap();
         state.recording_bytes -= self.recording;
-        state.cas_bytes -= self.cas;
         state.snapshots -= self.snapshots;
+        if let Some(share) = self.captures.take() {
+            state.cas.give(share);
+        }
+        state.cas.give(self.inline);
         state.plans -= 1;
-        state.cas_targets -= self.cas_targets;
+        state.recording_window -= self.recording_window;
         self.shared.capacity.notify_all();
+    }
+}
+
+/// What one CAS body holds until its upload ends: its part of the budget,
+/// and the longest it may keep the bodies behind it waiting.
+struct BodyHold {
+    shared: Arc<Shared>,
+    share: Share,
+    window: Duration,
+}
+
+impl BodyHold {
+    /// The body turned out shorter: part of it is stored already.
+    fn shorten(&mut self, window: Duration) {
+        let window = window.min(self.window);
+        let mut state = self.shared.state.lock().unwrap();
+        state.cas_window -= self.window.saturating_sub(window);
+        self.window = window;
+    }
+}
+
+impl Drop for BodyHold {
+    fn drop(&mut self) {
+        let mut state = self.shared.state.lock().unwrap();
+        state.cas.give(self.share);
+        state.cas_window -= self.window;
+        self.shared.capacity.notify_all();
+    }
+}
+
+/// Where a candidate's bytes come from.
+pub(crate) enum Source {
+    /// A string blob, which holds its own content.
+    Leaf(Leaf),
+    /// A blob written from one of the window's captures.
+    Kept {
+        /// Index into the window's owners.
+        owner: u32,
+        blob: BlobIndex,
+    },
+}
+
+/// One blob offered with a file.
+pub(crate) struct Candidate {
+    pub id: CasId,
+    pub encoded_len: u64,
+    pub source: Source,
+}
+impl Candidate {
+    /// How many of its bytes an upload body holds in a buffer of its own.
+    pub(crate) fn buffered_len(&self) -> u64 {
+        match &self.source {
+            Source::Leaf(leaf) => body::buffered_len(Some(leaf), self.encoded_len),
+            Source::Kept { .. } => body::buffered_len(None, self.encoded_len),
+        }
+    }
+}
+
+/// A file's candidates and the captures some of them are written from. A
+/// string blob holds its own content and is let go on its own. Several
+/// windows may hold one capture; it is freed with the last.
+#[derive(Default)]
+pub(crate) struct Window {
+    pub(crate) owners: Vec<Arc<Structure>>,
+    /// Each owner's retained memory, accounted once by the publisher.
+    pub(crate) sizes: Vec<usize>,
+    /// Per owner: whether this window holds the last of its queued blobs.
+    pub(crate) releases: Vec<bool>,
+    pub(crate) candidates: Vec<Candidate>,
+}
+
+impl Window {
+    /// Every blob of every capture, in the captures' order, children first.
+    fn whole(snapshots: Vec<Snapshot>) -> Result<Self, DeliveryError> {
+        let mut window = Self::default();
+        for snapshot in snapshots {
+            let Split { leaves, structure } = snapshot.split();
+            window
+                .candidates
+                .extend(leaves.into_iter().map(|leaf| Candidate {
+                    id: leaf.id(),
+                    encoded_len: leaf.encoded_len(),
+                    source: Source::Leaf(leaf),
+                }));
+            let Some(structure) = structure else {
+                continue;
+            };
+            let owner = u32::try_from(window.owners.len()).map_err(|_| DeliveryError::Capacity)?;
+            window
+                .candidates
+                .extend(structure.blobs().map(|blob| Candidate {
+                    id: blob.id(),
+                    encoded_len: blob.encoded_len(),
+                    source: Source::Kept {
+                        owner,
+                        blob: blob.index(),
+                    },
+                }));
+            window.sizes.push(structure.retained_bytes());
+            window.releases.push(true);
+            window.owners.push(Arc::new(structure));
+        }
+        Ok(window)
     }
 }
 
 struct Work {
     file: SealedFile,
-    candidates: Vec<Snapshot>,
+    window: Window,
     request: PrepareUploadsRequest,
     reservation: Reservation,
+    /// One per proposed CAS target, by its client target ID.
+    holds: Vec<(u32, BodyHold)>,
 }
 
 /// Cloneable producer handle. Admission waits for capacity without performing I/O.
@@ -314,34 +510,32 @@ impl BcsDeliveryHandle {
         &self.shared.config
     }
 
+    /// Offer every blob of every capture with the file; `proposed_uploads`
+    /// index the blobs in the captures' order, children first.
     pub fn try_submit(
         &self,
         file: SealedFile,
-        candidates: Vec<Snapshot>,
+        snapshots: Vec<Snapshot>,
         proposed_uploads: Vec<ProposedUploadTarget>,
     ) -> Result<(), DeliveryError> {
-        self.submit_and_observe(file, candidates, proposed_uploads, None)
+        let window = match Window::whole(snapshots) {
+            Ok(window) => window,
+            Err(error) => {
+                self.shared.lose(error, true);
+                return Err(error);
+            }
+        };
+        self.try_submit_window(file, window, proposed_uploads)
     }
 
-    /// The publisher accounts each frozen owner once while building its window.
-    pub(crate) fn try_submit_accounted(
+    /// The publisher accounts each capture once while building its window.
+    pub(crate) fn try_submit_window(
         &self,
         file: SealedFile,
-        candidates: Vec<Snapshot>,
+        window: Window,
         proposed_uploads: Vec<ProposedUploadTarget>,
-        retained_sizes: &[usize],
     ) -> Result<(), DeliveryError> {
-        self.submit_and_observe(file, candidates, proposed_uploads, Some(retained_sizes))
-    }
-
-    fn submit_and_observe(
-        &self,
-        file: SealedFile,
-        candidates: Vec<Snapshot>,
-        proposed_uploads: Vec<ProposedUploadTarget>,
-        retained_sizes: Option<&[usize]>,
-    ) -> Result<(), DeliveryError> {
-        let result = self.submit(file, candidates, proposed_uploads, retained_sizes);
+        let result = self.submit(file, window, proposed_uploads);
         if let Err(error) = result {
             if error != DeliveryError::Closed {
                 self.shared.lose(error, true);
@@ -353,16 +547,22 @@ impl BcsDeliveryHandle {
     fn submit(
         &self,
         file: SealedFile,
-        candidates: Vec<Snapshot>,
+        window: Window,
         proposed_uploads: Vec<ProposedUploadTarget>,
-        retained_sizes: Option<&[usize]>,
     ) -> Result<(), DeliveryError> {
         let config = &self.shared.config;
-        if retained_sizes.is_some_and(|sizes| sizes.len() != candidates.len()) {
+        let candidates = &window.candidates;
+        if window.sizes.len() != window.owners.len()
+            || candidates.iter().any(|candidate| match candidate.source {
+                Source::Leaf(_) => false,
+                Source::Kept { owner, .. } => owner as usize >= window.owners.len(),
+            })
+        {
             return Err(DeliveryError::InvalidPlan);
         }
         if file.bytes().len() > config.max_recording_body_bytes
             || candidates.len() > config.max_candidates
+            || window.owners.len() > config.max_pending_snapshots
             || proposed_uploads.len() > config.max_targets
             || proposed_uploads
                 .iter()
@@ -371,22 +571,28 @@ impl BcsDeliveryHandle {
             return Err(DeliveryError::Capacity);
         }
         let mut metadata = Vec::with_capacity(candidates.len());
-        let mut retained = candidates
+        // The captures, held until the plan's bodies are built.
+        let mut captures = window
+            .owners
             .capacity()
-            .checked_mul(std::mem::size_of::<Snapshot>())
+            .checked_mul(std::mem::size_of::<Arc<Structure>>())
+            .and_then(|v| {
+                candidates
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<Candidate>())
+                    .and_then(|c| v.checked_add(c))
+            })
             .ok_or(DeliveryError::Capacity)?;
-        for (index, snapshot) in candidates.iter().enumerate() {
-            let size = match retained_sizes {
-                Some(sizes) => sizes[index],
-                None => snapshot.retained_bytes().ok_or(DeliveryError::Capacity)?,
-            };
+        for size in &window.sizes {
+            captures = captures.checked_add(*size).ok_or(DeliveryError::Capacity)?;
+        }
+        for (index, candidate) in candidates.iter().enumerate() {
             let index = u32::try_from(index).map_err(|_| DeliveryError::Capacity)?;
-            retained = retained.checked_add(size).ok_or(DeliveryError::Capacity)?;
             let standalone = proposed_uploads
                 .iter()
                 .any(|p| p.kind == UploadKind::CasObject && p.candidate_indices.contains(&index));
             metadata.push(CasCandidate {
-                snapshot_id: hex::encode(snapshot.id().as_bytes()),
+                snapshot_id: hex::encode(candidate.id.as_bytes()),
                 snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                 size_class: standalone.then_some(CasSizeClass::Large),
             });
@@ -406,13 +612,8 @@ impl BcsDeliveryHandle {
             state: None,
         };
         validate_proposal(&request)?;
-        let cas_targets = request
-            .proposed_uploads
-            .iter()
-            .filter(|p| p.kind != UploadKind::Recording)
-            .count();
-        // Envelopes coexist with their encoded body during prost encoding. Response
-        // JSON allocations and parsed strings are bounded conservatively as control bytes.
+        // Response JSON allocations and parsed strings are bounded
+        // conservatively as control bytes.
         let control = config
             .max_response_bytes
             .checked_mul(64)
@@ -451,24 +652,60 @@ impl BcsDeliveryHandle {
                     .ok_or(DeliveryError::Capacity)
             },
         )?;
+        // The file is held until its body, which copies it once, is built.
         let recording = config
             .max_recording_body_bytes
-            .checked_mul(2)
-            .and_then(|v| v.checked_add(file.retained_bytes()))
+            .checked_add(file.retained_bytes())
             .and_then(|v| v.checked_add(control))
             .and_then(|v| v.checked_add(proposal_bytes))
             .and_then(|v| v.checked_add(metadata_bytes))
             .ok_or(DeliveryError::Capacity)?;
-        let cas = config
-            .max_cas_body_bytes
-            .checked_mul(cas_targets)
-            .and_then(|v| v.checked_mul(2))
-            .and_then(|v| v.checked_add(retained))
+        // A body holds what it buffers (its blobs, once, but for the strings
+        // it sends from where they are held) and those strings, until its
+        // upload ends. Its whole length decides how long that may take.
+        let mut bodies = Vec::new();
+        let mut recording_window = Duration::ZERO;
+        // What a blob placed with the recording buffers is within the
+        // recording body, reserved above. A string among them is held like
+        // any other, and a string may hold far more than its own length (a
+        // part of a long one holds all of it): that is the CAS budget's to
+        // count, which refuses nothing.
+        let mut inline = 0;
+        for target in &request.proposed_uploads {
+            let window = blob_bytes(candidates, &target.candidate_indices);
+            let leaves = leaf_bytes(candidates, &target.candidate_indices);
+            match target.kind {
+                UploadKind::Recording => {
+                    recording_window = window
+                        .and_then(|blobs| blobs.checked_add(file.bytes().len()))
+                        .and_then(|body| config.put_window(body))
+                        .ok_or(DeliveryError::Capacity)?;
+                    inline = leaves.ok_or(DeliveryError::Capacity)?;
+                }
+                UploadKind::CasBatch | UploadKind::CasObject => {
+                    let window = window
+                        .and_then(|blobs| config.put_window(blobs))
+                        .ok_or(DeliveryError::Capacity)?;
+                    let held = buffered_bytes(candidates, &target.candidate_indices)
+                        .zip(leaves)
+                        .and_then(|(buffered, leaves)| buffered.checked_add(leaves))
+                        .ok_or(DeliveryError::Capacity)?;
+                    bodies.push((target.client_target_id, held, window));
+                }
+            }
+        }
+        let cas = bodies
+            .iter()
+            .try_fold(captures, |sum, (_, held, _)| sum.checked_add(*held))
+            .and_then(|sum| sum.checked_add(inline))
             .ok_or(DeliveryError::Capacity)?;
-        if recording > config.recording_reserved_bytes
-            || cas > config.cas_reserved_bytes
-            || candidates.len() > config.max_pending_snapshots
-        {
+        let cas_window = bodies
+            .iter()
+            .try_fold(Duration::ZERO, |sum, (_, _, window)| {
+                sum.checked_add(*window)
+            })
+            .ok_or(DeliveryError::Capacity)?;
+        if recording > config.recording_reserved_bytes {
             return Err(DeliveryError::Capacity);
         }
         let mut state = self.shared.state.lock().unwrap();
@@ -492,7 +729,7 @@ impl BcsDeliveryHandle {
             if state.plans >= config.max_pending_plans
                 || !fits(
                     state.snapshots,
-                    candidates.len(),
+                    window.owners.len(),
                     config.max_pending_snapshots,
                 )
                 || !fits(
@@ -500,31 +737,45 @@ impl BcsDeliveryHandle {
                     recording,
                     config.recording_reserved_bytes,
                 )
-                || !fits(state.cas_bytes, cas, config.cas_reserved_bytes)
+                || !state.cas.admits(cas, config.cas_reserved_bytes)
             {
                 state = self.shared.capacity.wait(state).unwrap();
                 continue;
             }
             break;
         }
+        let limit = config.cas_reserved_bytes;
         state.recording_bytes += recording;
-        state.cas_bytes += cas;
-        state.snapshots += candidates.len();
+        state.snapshots += window.owners.len();
         state.plans += 1;
-        state.cas_targets += cas_targets;
+        state.recording_window += recording_window;
+        state.cas_window += cas_window;
         state.last_file = Some(identity);
         let reservation = Reservation {
             shared: self.shared.clone(),
             recording,
-            cas,
-            snapshots: candidates.len(),
-            cas_targets,
+            snapshots: window.owners.len(),
+            captures: Some(state.cas.take(captures, cas, limit)),
+            inline: state.cas.take(inline, cas, limit),
+            recording_window,
         };
+        let holds = bodies
+            .into_iter()
+            .map(|(target, held, window)| {
+                let hold = BodyHold {
+                    shared: self.shared.clone(),
+                    share: state.cas.take(held, cas, limit),
+                    window,
+                };
+                (target, hold)
+            })
+            .collect();
         let work = Work {
             file,
-            candidates,
+            window,
             request,
             reservation,
+            holds,
         };
         let result = state.sender.as_ref().unwrap().try_send(work);
         drop(state);
@@ -640,6 +891,43 @@ impl Drop for BcsDelivery {
     fn drop(&mut self) {
         let _ = self.finish();
     }
+}
+
+/// A blob's share of an upload envelope beyond its bytes: the object's
+/// identity, version, digest and lengths, and the envelope's plan and upload
+/// identifiers.
+const CAS_OBJECT_OVERHEAD_BYTES: usize = 512;
+
+/// The most the blobs at `indices` add to an upload body. `None` when that
+/// does not fit a `usize`.
+fn blob_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
+    indices.iter().try_fold(0_usize, |sum, &index| {
+        usize::try_from(candidates[index as usize].encoded_len)
+            .ok()?
+            .checked_add(CAS_OBJECT_OVERHEAD_BYTES)?
+            .checked_add(sum)
+    })
+}
+
+/// As [`blob_bytes`], counting only what a body buffers.
+fn buffered_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
+    indices.iter().try_fold(0_usize, |sum, &index| {
+        usize::try_from(candidates[index as usize].buffered_len())
+            .ok()?
+            .checked_add(CAS_OBJECT_OVERHEAD_BYTES)?
+            .checked_add(sum)
+    })
+}
+
+/// What the strings among the blobs at `indices` retain: a body holds them
+/// until its upload ends.
+fn leaf_bytes(candidates: &[Candidate], indices: &[u32]) -> Option<usize> {
+    indices.iter().try_fold(0_usize, |sum, &index| {
+        match &candidates[index as usize].source {
+            Source::Leaf(leaf) => sum.checked_add(leaf.retained_bytes()),
+            Source::Kept { .. } => Some(sum),
+        }
+    })
 }
 
 struct LimitedWriter {
@@ -767,7 +1055,7 @@ async fn put(
     client: &Client,
     config: &DeliveryConfig,
     target: UploadTarget,
-    body: Bytes,
+    body: Body,
     plan_expiry: u64,
 ) -> Result<(), DeliveryError> {
     let expiry = plan_expiry.min(target.expires_at_unix_ms);
@@ -783,6 +1071,11 @@ async fn put(
     headers.entry(reqwest::header::CONTENT_TYPE).or_insert(
         reqwest::header::HeaderValue::from_static("application/x-protobuf"),
     );
+    // The body goes out in chunks of known total length, not chunk-encoded.
+    headers.insert(
+        reqwest::header::CONTENT_LENGTH,
+        reqwest::header::HeaderValue::from(body.len() as u64),
+    );
     for attempt in 0..config.max_attempts {
         let remaining = expiry
             .checked_sub(now_ms()?)
@@ -790,9 +1083,17 @@ async fn put(
             .ok_or(DeliveryError::Expired)?;
         let request = client
             .put(&target.presigned_put_url)
-            .timeout(config.request_timeout.min(Duration::from_millis(remaining)))
+            .timeout(
+                config
+                    .put_timeout(body.len())
+                    .min(Duration::from_millis(remaining)),
+            )
             .headers(headers.clone())
-            .body(body.clone());
+            .body(reqwest::Body::wrap_stream(futures::stream::iter(
+                body.chunks()
+                    .into_iter()
+                    .map(Ok::<Bytes, std::convert::Infallible>),
+            )));
         match request.send().await {
             Ok(response) if response.status().is_success() => return Ok(()),
             Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
@@ -815,9 +1116,9 @@ async fn put(
 }
 
 struct Prepared {
-    recording: Option<(UploadTarget, Bytes)>,
+    recording: Option<(UploadTarget, Body)>,
     recording_sequence: u64,
-    cas: Vec<(UploadTarget, Bytes)>,
+    cas: Vec<(UploadTarget, Body, BodyHold)>,
     expiry: u64,
     reservation: Reservation,
 }
@@ -829,42 +1130,66 @@ async fn assemble(
 ) -> Result<Prepared, DeliveryError> {
     let Work {
         file,
-        candidates,
+        window,
         request,
         mut reservation,
+        mut holds,
     } = work;
     let response = prepare(client, config, &request, &reservation.shared.heartbeat).await?;
-    let retry_window = config.retry_window()?;
     let now = now_ms()?;
-    let horizon = |windows: usize| {
-        u32::try_from(windows)
+    // When a lane that may be held for `held` is certainly free.
+    let after = |held: Duration| {
+        u64::try_from(held.as_millis())
             .ok()
-            .and_then(|n| retry_window.checked_mul(n.max(1)))
-            .and_then(|d| u64::try_from(d.as_millis()).ok())
             .and_then(|ms| now.checked_add(ms))
             .ok_or(DeliveryError::Expired)
     };
     validate_response(&request, &response, &config.prepare_base_url)?;
-    if response.expires_at_unix_ms <= horizon(1)? {
+    if response.expires_at_unix_ms <= after(config.retry_window()?)? {
         return Err(DeliveryError::Expired);
     }
-    let actual_cas = response
-        .uploads
-        .iter()
-        .filter(|u| u.kind != UploadKind::Recording)
-        .count();
+    // What the server already has is not uploaded: a body is as long as
+    // what is left of it, and one with nothing left holds nothing.
+    let mut wanted = Vec::with_capacity(holds.len());
+    for upload in &response.uploads {
+        if upload.kind == UploadKind::Recording {
+            continue;
+        }
+        let at = holds
+            .iter()
+            .position(|(target, _)| *target == upload.client_target_id)
+            .ok_or(DeliveryError::InvalidPlan)?;
+        let (target, mut hold) = holds.swap_remove(at);
+        hold.shorten(
+            blob_bytes(&window.candidates, &upload.candidate_indices)
+                .and_then(|blobs| config.put_window(blobs))
+                .ok_or(DeliveryError::Capacity)?,
+        );
+        wanted.push((target, hold));
+    }
+    drop(holds);
+    // A URL must outlive every body that may upload before its own.
     let (recording_horizon, cas_horizon) = {
-        let mut state = reservation.shared.state.lock().unwrap();
-        state.cas_targets -= reservation.cas_targets - actual_cas;
-        reservation.cas_targets = actual_cas;
-        (horizon(state.plans)?, horizon(state.cas_targets)?)
+        let state = reservation.shared.state.lock().unwrap();
+        (after(state.recording_window)?, after(state.cas_window)?)
     };
-    let mut candidates: Vec<_> = candidates.into_iter().map(Some).collect();
+    let Window {
+        owners, candidates, ..
+    } = window;
+    // A candidate goes into at most one body; an available one into none,
+    // and a string the server has is let go here.
+    let mut sources: Vec<Option<Source>> = Vec::with_capacity(candidates.len());
+    let mut heads = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        heads.push((candidate.id, candidate.encoded_len));
+        sources.push(Some(candidate.source));
+    }
     for disposition in &response.cas {
         if matches!(disposition.disposition, Disposition::AlreadyAvailable {}) {
-            candidates[disposition.candidate_index as usize].take();
+            sources[disposition.candidate_index as usize] = None;
         }
     }
+    let mut scratch = BlobScratch::default();
     let mut recording = None;
     let mut cas = Vec::new();
     for target in response.uploads {
@@ -877,45 +1202,33 @@ async fn assemble(
             if target.expires_at_unix_ms <= horizon || response.expires_at_unix_ms <= horizon {
                 return Err(DeliveryError::Expired);
             }
-            let limit = if target.kind == UploadKind::Recording {
-                config.max_recording_body_bytes
-            } else {
-                config.max_cas_body_bytes
+            // A CAS body is as long as its blobs, which admission reserved.
+            let limit = match target.kind {
+                UploadKind::Recording => config.max_recording_body_bytes,
+                UploadKind::CasBatch | UploadKind::CasObject => usize::MAX,
             };
-            let mut envelope = CloudUploadEnvelope {
-                format_version: 1,
-                plan_id: response.plan_id.clone(),
-                upload_id: target.upload_id.clone(),
-                recording_file: (target.kind == UploadKind::Recording)
-                    .then(|| file.bytes().to_vec()),
-                cas_objects: Vec::new(),
+            let head = body::Head {
+                plan_id: &response.plan_id,
+                upload_id: &target.upload_id,
+                recording_file: (target.kind == UploadKind::Recording).then(|| file.bytes()),
+                limit,
             };
-            if envelope.encoded_len() > limit {
-                return Err(DeliveryError::Capacity);
-            }
-            for &index in &target.candidate_indices {
-                let snapshot = candidates[index as usize]
-                    .take()
-                    .ok_or(DeliveryError::InvalidPlan)?;
-                let mut writer = LimitedWriter::new(limit - envelope.encoded_len());
-                snapshot
-                    .write_blob(&mut writer)
-                    .map_err(|_| DeliveryError::Encoding)?;
-                let object = CasObject {
-                    snapshot_id: snapshot.id().as_bytes().to_vec(),
-                    snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
-                    blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
-                    blob: writer.bytes.into_boxed_slice().into_vec(),
-                };
-                drop(snapshot);
-                envelope.cas_objects.push(object);
-                if envelope.encoded_len() > limit {
-                    return Err(DeliveryError::Capacity);
-                }
-            }
-            let body = Bytes::from(envelope.encode_to_vec());
-            drop(envelope);
-            Ok(body)
+            let blobs = target
+                .candidate_indices
+                .iter()
+                .map(|&index| {
+                    let (id, encoded_len) = heads[index as usize];
+                    sources[index as usize]
+                        .take()
+                        .map(|source| Candidate {
+                            id,
+                            encoded_len,
+                            source,
+                        })
+                        .ok_or(DeliveryError::InvalidPlan)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            body::build(&head, blobs, &owners, &mut scratch)
         })();
         let body = match body {
             Ok(body) => body,
@@ -924,21 +1237,31 @@ async fn assemble(
                     .shared
                     .lose(error, !target.candidate_indices.is_empty());
                 for &index in &target.candidate_indices {
-                    candidates[index as usize].take();
+                    sources[index as usize] = None;
                 }
                 continue;
             }
         };
-        if target.kind == UploadKind::Recording {
-            recording = Some((target, body));
-        } else {
-            cas.push((target, body));
+        match target.kind {
+            UploadKind::Recording => recording = Some((target, body)),
+            UploadKind::CasBatch | UploadKind::CasObject => {
+                let at = wanted
+                    .iter()
+                    .position(|(id, _)| *id == target.client_target_id)
+                    .unwrap_or_else(|| unreachable!("every CAS upload was given its hold"));
+                cas.push((target, body, wanted.swap_remove(at).1));
+            }
         }
     }
-    drop(candidates);
+    // A body that was not built holds nothing.
+    drop(wanted);
+    // Every candidate is in a body or skipped: the captures can go. A long
+    // string stays with the body that sends it.
+    drop(sources);
+    drop(owners);
     let recording_sequence = file.sequence().get();
     drop(file);
-    reservation.release_snapshot_slots();
+    reservation.release_captures();
     Ok(Prepared {
         recording,
         recording_sequence,
@@ -948,52 +1271,48 @@ async fn assemble(
     })
 }
 
-async fn upload(
+/// Upload a plan's recording, in its turn. The plan is pending until then.
+async fn upload_recording(
     client: &Client,
     config: &DeliveryConfig,
-    prepared: Prepared,
-    recording_slots: Arc<Semaphore>,
-    cas_slots: Arc<Semaphore>,
+    recording: Option<(UploadTarget, Body)>,
+    recording_sequence: u64,
+    expiry: u64,
+    reservation: Reservation,
+    slots: Arc<Semaphore>,
 ) {
-    let Prepared {
-        recording,
-        recording_sequence,
-        cas,
-        expiry,
-        reservation,
-    } = prepared;
     let shared = &reservation.shared;
-    let recording_lane = async {
-        if let Some((target, body)) = recording {
-            let _slot = recording_slots
-                .acquire()
-                .await
-                .expect("recording lane open");
-            let reset_cas = !target.candidate_indices.is_empty();
-            match put(client, config, target, body, expiry).await {
-                Ok(()) => {
-                    let mut state = shared.state.lock().unwrap();
-                    state.progress.recording_acked_through = state
-                        .progress
-                        .recording_acked_through
-                        .max(recording_sequence);
-                }
-                Err(error) => shared.lose(error, reset_cas),
+    if let Some((target, body)) = recording {
+        let _slot = slots.acquire().await.expect("recording lane open");
+        let reset_cas = !target.candidate_indices.is_empty();
+        match put(client, config, target, body, expiry).await {
+            Ok(()) => {
+                let mut state = shared.state.lock().unwrap();
+                state.progress.recording_acked_through = state
+                    .progress
+                    .recording_acked_through
+                    .max(recording_sequence);
             }
+            Err(error) => shared.lose(error, reset_cas),
         }
-    };
-    let cas_lane = async {
-        if cas.is_empty() {
-            return;
-        }
-        let _slot = cas_slots.acquire().await.expect("CAS lane open");
-        for (target, body) in cas {
-            if let Err(error) = put(client, config, target, body, expiry).await {
-                shared.lose(error, true);
-            }
-        }
-    };
-    tokio::join!(recording_lane, cas_lane);
+    }
+}
+
+/// Upload one CAS body, when one of the upload slots is free. It answers for
+/// itself: the plan it came with may be long done.
+async fn upload_body(
+    client: &Client,
+    config: &DeliveryConfig,
+    target: UploadTarget,
+    body: Body,
+    hold: BodyHold,
+    expiry: u64,
+    slots: Arc<Semaphore>,
+) {
+    let _slot = slots.acquire().await.expect("CAS lane open");
+    if let Err(error) = put(client, config, target, body, expiry).await {
+        hold.shared.lose(error, true);
+    }
 }
 
 async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Receiver<Work>) {
@@ -1014,8 +1333,10 @@ async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Re
 
 async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Receiver<Work>) {
     let recording_slots = Arc::new(Semaphore::new(1));
-    let cas_slots = Arc::new(Semaphore::new(1));
-    let mut uploads = tokio::task::JoinSet::new();
+    let cas_slots = Arc::new(Semaphore::new(shared.config.max_cas_uploads));
+    // One task per plan, for its recording, and one per CAS body.
+    let mut recordings = tokio::task::JoinSet::new();
+    let mut bodies = tokio::task::JoinSet::new();
     let mut heartbeats = tokio::task::JoinSet::new();
     let mut heartbeat_started = false;
     loop {
@@ -1023,12 +1344,17 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
             break;
         }
         tokio::select! {
-            completed = uploads.join_next(), if !uploads.is_empty() => {
+            completed = recordings.join_next(), if !recordings.is_empty() => {
                 if completed.is_some_and(|result| result.is_err()) {
                     shared.fail(DeliveryError::Worker);
                 }
             }
-            work = receiver.recv(), if uploads.len() < shared.config.max_pending_plans => {
+            completed = bodies.join_next(), if !bodies.is_empty() => {
+                if completed.is_some_and(|result| result.is_err()) {
+                    shared.fail(DeliveryError::Worker);
+                }
+            }
+            work = receiver.recv(), if recordings.len() < shared.config.max_pending_plans => {
                 let Some(work) = work else { break };
                 if !heartbeat_started {
                     heartbeat_started = true;
@@ -1051,13 +1377,24 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                 }
                 match assemble(&client, &shared.config, work).await {
                     Ok(prepared) => {
+                        let Prepared { recording, recording_sequence, cas, expiry, reservation } = prepared;
+                        for (target, body, hold) in cas {
+                            let client = client.clone();
+                            let shared = shared.clone();
+                            let slots = cas_slots.clone();
+                            bodies.spawn(async move {
+                                upload_body(
+                                    &client, &shared.config, target, body, hold, expiry, slots,
+                                ).await;
+                            });
+                        }
                         let client = client.clone();
                         let shared = shared.clone();
-                        let recording_slots = recording_slots.clone();
-                        let cas_slots = cas_slots.clone();
-                        uploads.spawn(async move {
-                            upload(
-                                &client, &shared.config, prepared, recording_slots, cas_slots,
+                        let slots = recording_slots.clone();
+                        recordings.spawn(async move {
+                            upload_recording(
+                                &client, &shared.config, recording, recording_sequence, expiry,
+                                reservation, slots,
                             ).await;
                         });
                     }
@@ -1069,19 +1406,19 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
         }
     }
     drop(receiver);
-    if shared.state.lock().unwrap().failure.is_some() {
-        uploads.abort_all();
-    }
-    while let Some(result) = uploads.join_next().await {
-        if result.is_err()
-            && !result
-                .as_ref()
-                .is_err_and(tokio::task::JoinError::is_cancelled)
-        {
-            shared.fail(DeliveryError::Worker);
-        }
+    // Drain what was admitted, unless delivery failed.
+    loop {
         if shared.state.lock().unwrap().failure.is_some() {
-            uploads.abort_all();
+            recordings.abort_all();
+            bodies.abort_all();
+        }
+        let result = tokio::select! {
+            Some(result) = recordings.join_next() => result,
+            Some(result) = bodies.join_next() => result,
+            else => break,
+        };
+        if result.is_err_and(|error| !error.is_cancelled()) {
+            shared.fail(DeliveryError::Worker);
         }
     }
     shared.heartbeat.stop();
@@ -1127,6 +1464,33 @@ mod tests {
             DeliveryConfig::new(oversized.parse().unwrap()).validate(),
             Err(DeliveryError::InvalidConfig)
         );
+    }
+
+    #[test]
+    fn a_put_is_given_time_for_its_body_at_the_slowest_rate_waited_for() {
+        let config = DeliveryConfig::new("https://bcs.example".parse().unwrap());
+        assert_eq!(config.min_upload_bytes_per_second, 1 << 20);
+        assert_eq!(config.put_timeout(0), Duration::from_secs(10));
+        assert_eq!(config.put_timeout(8 << 20), Duration::from_secs(18));
+        assert_eq!(config.put_timeout(1 << 30), Duration::from_secs(10 + 1024));
+        // Four attempts and the three delays between them.
+        assert_eq!(config.retry_window(), Ok(Duration::from_millis(40_600)));
+        assert_eq!(
+            config.put_window(8 << 20),
+            Some(Duration::from_millis(4 * 18_000 + 600))
+        );
+        // A time too long to count saturates; it does not wrap.
+        let slow = DeliveryConfig {
+            min_upload_bytes_per_second: 1,
+            ..config.clone()
+        };
+        assert_eq!(slow.put_timeout(3), Duration::from_secs(13));
+        assert!(slow.put_timeout(usize::MAX) >= Duration::from_millis(u64::MAX));
+        let stalled = DeliveryConfig {
+            min_upload_bytes_per_second: 0,
+            ..config
+        };
+        assert_eq!(stalled.validate(), Err(DeliveryError::InvalidConfig));
     }
 
     #[test]

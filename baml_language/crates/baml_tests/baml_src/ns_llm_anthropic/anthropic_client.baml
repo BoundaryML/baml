@@ -18,29 +18,82 @@
 
 function AnthMockAsk(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("system")}Follow the rules.${role("user")}${question}`
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${role("user")}
+      ${question}
+    `
 }
 
-// The SYSTEM message carries an Anthropic cache breakpoint (that is where the
-// marker below puts the `cache_control` metadata, and what
-// `anthropic_cache_control_placement` asserts: `system_cc=ephemeral`,
-// `user_cc=-`).
+// The SYSTEM message ends in a cache delimiter, which puts `cache_control` on
+// its last block (what `anthropic_cache_control_placement` asserts:
+// `system_cc=ephemeral`, `user_cc=-`).
 function AnthMockCached(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}Follow the rules.${role("user")}${question}`
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache({ "type": "ephemeral" })}
+      ${role("user")}
+      ${question}
+    `
+}
+
+// A stable prefix and a variable suffix inside one user turn, after a picture,
+// with a TTL.
+function AnthCachedMidTurn(picture: image, question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("user")}
+      Before. ${picture} After.
+      ${cache({ "type": "ephemeral", "ttl": "1h" })}
+      ${question}
+    `
+}
+
+// `args` as written, and the positions that send no breakpoint.
+function AnthCacheArgs(args: json) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("system")}
+      ${cache({ "type": "ephemeral" })}
+      Rules.
+      ${role("user")}
+      Stable.
+      ${cache(args)}
+      Variable.
+    `
+}
+
+// Role metadata is not a cache channel: a `cache_control` key there is not sent.
+function AnthRoleMetadata(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}
+      Follow the rules.
+      ${role("user")}
+      ${question}
+    `
 }
 
 // An assistant-first prompt with NO system content: the shape that used to
 // produce an API-rejected request whose first message was not `user`.
 function AnthAssistantFirst() -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("assistant")}I already said hello.`
+    prompt: `
+      ${role("assistant")}
+      I already said hello.
+    `
 }
 
 // An ordinary single-user-message prompt, for journal-only assertions.
 function AnthMockPlain() -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Hello.`
+    prompt: `
+      ${role("user")}
+      Hello.
+    `
 }
 
 function anth_weather(city: string) -> string {
@@ -51,19 +104,28 @@ function anth_weather(city: string) -> string {
 function AnthMockTools(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
     tools: [anth_weather]
-    prompt: `${role("user")}${question}`
+    prompt: `
+      ${role("user")}
+      ${question}
+    `
 }
 
 // A leading literal keeps the media part at a known index: the rendered parts
 // are ["Look at", <media>].
 function AnthMockVision(picture: image) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Look at ${picture}`
+    prompt: `
+      ${role("user")}
+      Look at ${picture}
+    `
 }
 
 function AnthMockListen(clip: audio) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Listen to ${clip}`
+    prompt: `
+      ${role("user")}
+      Listen to ${clip}
+    `
 }
 
 // ─── shared helpers ──────────────────────────────────────────────────────────
@@ -82,6 +144,8 @@ function anth_failure_label(e: unknown) -> string {
         let n: ai.errors.NetworkFailure => `NetworkFailure:${n.detail}`,
         let i: ai.errors.InvalidRequest => `InvalidRequest:${i.detail}`,
         let p: ai.errors.ParseFailed => `ParseFailed:${p.raw_output}`,
+        let p: ai.errors.InvalidResponse => `InvalidResponse:${p.message}`,
+        let p: ai.errors.ProviderError => `ProviderError:${p.error_type ?? ""}: ${p.message}`,
         let f: ai.errors.FinishReasonError => {
             `FinishReasonError:${f.finish_reason.to_string()}:${f.raw_output}`
         },
@@ -209,7 +273,8 @@ test "anthropic_request_shape" {
     assert.contains(got, "has_null=false|");
     // usage.cache_read_input_tokens is no longer hardcoded null
     assert.contains(got, "cached=4|");
-    assert.contains(got, "input=9")
+    // input_tokens counts the cache reads and writes: 9 + 4 + 6.
+    assert.contains(got, "input=19")
 }
 
 function anthropic_request_timeout() -> string {
@@ -309,10 +374,9 @@ test "anthropic_params_and_passthrough" {
     assert.contains(got, "has_max_tokens=false")
 }
 
-// A `cache_control` key in a message's metadata merges onto that message's
-// LAST content block (the engine's placement), and messages without metadata
-// stay clean.
-function anthropic_cache_control_placement() -> string {
+// A `${cache(args)}` puts `cache_control: args` on the block before it, and a
+// message without one stays clean.
+function anthropic_cache_control_placement() -> json {
     let canned = anth_canned_text("ok", "end_turn");
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
@@ -323,19 +387,142 @@ function anthropic_cache_control_placement() -> string {
                 base_url = mock.base_url(),
             );
             let _ = ai.Agent.new(client = cl).run(AnthMockCached@spec("hi"));
-            let body = mock.last_request().json();
-            [
-                `system_cc=${baml.json.path_or<string>(body, ".system[0].cache_control.type", "-")}`,
-                `user_cc=${baml.json.path_or<string>(body, ".messages[0].content[0].cache_control.type", "-")}`,
-            ].join("|")
+            mock.last_request().json()
         },
     )
 }
 
 test "anthropic_cache_control_placement" {
-    let got = anthropic_cache_control_placement();
-    assert.contains(got, "system_cc=ephemeral|");
-    assert.contains(got, "user_cc=-")
+    let body = anthropic_cache_control_placement();
+    let system: json = [{ "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } }];
+    assert.equal(baml.json.path<json>(body, ".system"), system);
+    let user: json = [{ "type": "text", "text": "hi" }];
+    assert.equal(baml.json.path<json>(body, ".messages[0].content"), user)
+}
+
+// One delimiter is ONE breakpoint, on the block before it, however many blocks
+// the message has; `ttl` reaches the wire; the text after it is its own block,
+// trimmed where it faced the delimiter.
+test "anthropic_cache_delimiter_mid_turn" {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
+    let body = anth_render_body(cl, AnthCachedMidTurn@spec(picture, "Describe it."), ai.Journal { log: [] });
+    let content = baml.json.path<json[]>(body, ".messages[0].content");
+    assert.equal(content.length(), 4);
+    let before: json = { "type": "text", "text": "Before." };
+    assert.equal(content[0], before);
+    // the picture is its own block, and carries no breakpoint
+    assert.equal(baml.json.path<string>(content[1], ".type"), "image");
+    assert.equal(baml.json.path_or<json>(content[1], ".cache_control", null), null);
+    let after: json = {
+        "type": "text",
+        "text": "After.",
+        "cache_control": { "type": "ephemeral", "ttl": "1h" },
+    };
+    assert.equal(content[2], after);
+    let question: json = { "type": "text", "text": "Describe it." };
+    assert.equal(content[3], question)
+}
+
+function _anth_cache_args(args: json) -> json {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    anth_render_body(cl, AnthCacheArgs@spec(args), ai.Journal { log: [] })
+}
+
+// A non-null `args` is the value of `cache_control`, as written: not checked,
+// not merged with the default, a nested null kept. A delimiter with nothing
+// before it in its message sets nothing.
+test "anthropic_cache_delimiter_args_as_written" {
+    let rules: json = [{ "type": "text", "text": "Rules." }];
+
+    let object_args: json = { "ttl": "1h", "type": "ephemeral", "extra": { "keep": null } };
+    let with_object = _anth_cache_args(object_args);
+    assert.equal(baml.json.path<json>(with_object, ".system"), rules);
+    let stable_object: json = {
+        "type": "text",
+        "text": "Stable.",
+        "cache_control": { "ttl": "1h", "type": "ephemeral", "extra": { "keep": null } },
+    };
+    assert.equal(baml.json.path<json>(with_object, ".messages[0].content[0]"), stable_object);
+
+    let with_string = _anth_cache_args("1h");
+    assert.equal(baml.json.path<json>(with_string, ".system"), rules);
+    let stable_string: json = { "type": "text", "text": "Stable.", "cache_control": "1h" };
+    assert.equal(baml.json.path<json>(with_string, ".messages[0].content[0]"), stable_string)
+}
+
+// `${cache()}` takes the client's default, `{"type": "ephemeral"}`: one
+// breakpoint on the block before it. `${cache(null)}` is the same thing, and
+// `${cache(args = ...)}` is `${cache(...)}` spelled by name.
+function AnthCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache()}
+      ${role("user")}
+      Stable.
+      ${cache()}
+      ${question}
+    `
+}
+
+function AnthCacheNamed(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache(args = { "type": "ephemeral", "ttl": "1h" })}
+      ${role("user")}
+      ${question}
+    `
+}
+
+test "anthropic_cache_default_args" {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let ephemeral: json = { "type": "ephemeral" };
+    assert.equal(cl.default_cache_args(), ephemeral);
+
+    let body = anth_render_body(cl, AnthCacheDefault@spec("Variable."), ai.Journal { log: [] });
+    let system: json = [{ "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } }];
+    assert.equal(baml.json.path<json>(body, ".system"), system);
+    let user: json = [
+        { "type": "text", "text": "Stable.", "cache_control": { "type": "ephemeral" } },
+        { "type": "text", "text": "Variable." },
+    ];
+    assert.equal(baml.json.path<json>(body, ".messages[0].content"), user);
+
+    // null `args` is the default too
+    let nulled = _anth_cache_args(null);
+    let stable: json = { "type": "text", "text": "Stable.", "cache_control": { "type": "ephemeral" } };
+    assert.equal(baml.json.path<json>(nulled, ".messages[0].content[0]"), stable);
+
+    let named = anth_render_body(cl, AnthCacheNamed@spec("hi"), ai.Journal { log: [] });
+    let with_ttl: json = { "type": "ephemeral", "ttl": "1h" };
+    assert.equal(baml.json.path<json>(named, ".system[0].cache_control"), with_ttl)
+}
+
+function anthropic_role_metadata_is_not_a_cache_channel() -> bool {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let spec = AnthRoleMetadata@spec("hi");
+    let journal = ai.Journal {
+        log: [
+            ai.events.UserMessage.of(["more"], metadata = { "cache_control": { "type": "ephemeral" } }),
+        ],
+    };
+    anthropic.internal.render(
+        cl,
+        ai.ModelTurnInput {
+            prompt: spec.prompt_template,
+            journal: journal,
+            toolbox: spec.tools(),
+            output_type: spec.output_type(),
+        },
+    ).body.includes("cache_control")
+}
+
+test "anthropic_role_metadata_is_not_a_cache_channel" {
+    assert.equal(anthropic_role_metadata_is_not_a_cache_channel(), false)
 }
 
 // BUG 7.1: an assistant-first prompt with no system content used to send
@@ -702,7 +889,7 @@ function anthropic_stream_usage_splits_the_cache() -> string {
 
 test "anthropic_stream_usage_splits_the_cache" {
     // input/cached/cache writes/uncached/output/reasoning
-    assert.equal(anthropic_stream_usage_splits_the_cache(), "5/2/3/5/7/4")
+    assert.equal(anthropic_stream_usage_splits_the_cache(), "10/2/3/5/7/4")
 }
 
 function anthropic_stream_first_token_timeout() -> string {
@@ -811,7 +998,7 @@ test "anthropic_stream_error_overloaded" {
         anthropic_stream_error_event(
             `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`,
         ),
-        "NetworkFailure:overloaded_error: Overloaded",
+        "ProviderError:overloaded_error: Overloaded",
     )
 }
 
@@ -820,7 +1007,7 @@ test "anthropic_stream_error_rate_limit" {
         anthropic_stream_error_event(
             `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`,
         ),
-        "RateLimited",
+        "ProviderError:rate_limit_error: slow down",
     )
 }
 
@@ -829,7 +1016,7 @@ test "anthropic_stream_error_auth" {
         anthropic_stream_error_event(
             `{"type":"error","error":{"type":"authentication_error","message":"bad key"}}`,
         ),
-        "InvalidRequest:authentication_error: bad key",
+        "ProviderError:authentication_error: bad key",
     )
 }
 
@@ -929,7 +1116,7 @@ test "anthropic_decode_tool_stream" {
     // stop/input/output/cached/cache writes/uncached/reasoning, per event
     assert.contains(
         got,
-        "events=meta:-/11/-1/7/3/11/-1,text:Hel,text:lo,meta:ToolUse/-1/42/9/-1/-1/13,done|",
+        "events=meta:-/21/-1/7/3/11/-1,text:Hel,text:lo,meta:ToolUse/-1/42/9/-1/-1/13,done|",
     );
     // thinking never becomes answer text
     assert.contains(got, "thinking=hmm|");
@@ -939,30 +1126,25 @@ test "anthropic_decode_tool_stream" {
     assert.contains(got, "model=claude-haiku-4-5")
 }
 
-// A malformed `data:` payload is skipped, not fatal.
-function anthropic_decode_skips_garbage() -> string {
+// A malformed nonempty `data:` payload is an invalid provider response.
+function anthropic_decode_rejects_garbage() -> bool {
     let state = anthropic.internal.AnthStreamState.new();
-    let batch = anth_batch(
-        [
-            "not json at all",
-            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`,
-        ],
-    );
-    let seen: string[] = [];
-    for (let ev in anthropic.internal.decode_batch(batch, state)) {
-        match (ev) {
-            let d: ai.stream.TextDelta => {
-                seen.push(d.text);
-                null
-            },
-            _ => null,
-        };
-    }
-    seen.join(",")
+    let batch = anth_batch(["not json at all"]);
+    anthropic.internal.decode_batch(batch, state) catch_all (e) {
+        let invalid: ai.errors.InvalidResponse => {
+            return invalid.provider == "anthropic"
+                && invalid.raw_body == "not json at all"
+                && invalid.message != "";
+        },
+        _ => {
+            return false;
+        },
+    };
+    false
 }
 
-test "anthropic_decode_skips_garbage" {
-    assert.equal(anthropic_decode_skips_garbage(), "ok")
+test "anthropic_decode_rejects_garbage" {
+    assert.is_true(anthropic_decode_rejects_garbage())
 }
 
 // ─── media limits ────────────────────────────────────────────────────────────
@@ -1168,7 +1350,10 @@ test "anthropic_reasoning_tokens" {
 
 function AnthLiveAsk(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
-    prompt: `${role("user")}Reply with exactly one word. ${question}`
+    prompt: `
+      ${role("user")}
+      Reply with exactly one word. ${question}
+    `
 }
 
 function anth_live_temperature(city: string) -> string {
@@ -1179,7 +1364,10 @@ function anth_live_temperature(city: string) -> string {
 function AnthLiveTools(question: string) -> string {
     client: "anthropic/claude-haiku-4-5"
     tools: [anth_live_temperature]
-    prompt: `${role("user")}${question} Call the tool, then answer with the number.`
+    prompt: `
+      ${role("user")}
+      ${question} Call the tool, then answer with the number.
+    `
 }
 
 function anth_live_answers() -> bool {

@@ -1,9 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use baml_builtins2::{PromptAst, PromptAstSimple};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr,
+    HeapPtr, PromptAst, PromptAstSimple,
     types::{Object, Value},
 };
 
@@ -361,7 +360,7 @@ impl BamlClassPrompt for PackageAiImpl {
         let data = prompt.instance.load_field(0);
         let prompt = vm
             .as_rust_data::<PromptAst>(&data)
-            .expect("ai.Prompt._data must contain baml_builtins2::PromptAst");
+            .expect("ai.Prompt._data must contain bex_vm_types::PromptAst");
         bex_str::BexStr::from(prompt.render_text())
     }
 
@@ -372,7 +371,7 @@ impl BamlClassPrompt for PackageAiImpl {
                 .expect("ai.Prompt.messages receiver must be an ai.Prompt instance");
             let data = instance.load_field(0);
             vm.as_rust_data::<PromptAst>(&data)
-                .expect("ai.Prompt._data must contain baml_builtins2::PromptAst")
+                .expect("ai.Prompt._data must contain bex_vm_types::PromptAst")
                 .to_structured_messages()
         };
         let message_class = vm.resolve_class("ai.PromptMessage");

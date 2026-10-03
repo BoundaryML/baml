@@ -2,7 +2,7 @@
 //! is an explicit outcome, and a later read may find a blob that arrived since.
 use std::{fs, io, io::Read, path::PathBuf, sync::Arc};
 
-use btel_snapshot::{BlobError, DecodeLimits, DecodedSnapshot, SnapshotId};
+use btel_snapshot::{BlobError, CasId, DecodeLimits, DecodedSnapshot};
 
 #[derive(Clone, Copy, Debug)]
 pub struct CasLimits {
@@ -18,9 +18,9 @@ impl Default for CasLimits {
     }
 }
 
+/// Why a blob did not yield a verified snapshot.
 #[derive(Clone, Debug)]
-pub enum CasOutcome {
-    Available(Arc<DecodedSnapshot>),
+pub enum CasUnavailable {
     /// No blob at the expected path (not delivered, removed, or another
     /// blob format version).
     Missing,
@@ -33,24 +33,25 @@ pub enum CasOutcome {
     Corrupt(BlobError),
 }
 
-impl CasOutcome {
-    /// Stable diagnostic code for an unavailable outcome.
+impl CasUnavailable {
+    /// Stable diagnostic code.
     pub fn code(&self) -> &'static str {
         match self {
-            Self::Available(_) => "available",
             Self::Missing => "cas_missing",
             Self::Unreadable(_) => "cas_unreadable",
             Self::TooLarge { .. } => "cas_too_large",
             Self::Corrupt(BlobError::IdMismatch { .. }) => "cas_id_mismatch",
             Self::Corrupt(BlobError::Limit(_)) => "cas_decode_limit",
             Self::Corrupt(BlobError::Version(_)) => "cas_unsupported_version",
-            Self::Corrupt(_) => "cas_corrupt",
+            Self::Corrupt(BlobError::Magic | BlobError::Truncated | BlobError::Invalid(_)) => {
+                "cas_corrupt"
+            }
         }
     }
 }
 
 pub struct CasLoad {
-    pub outcome: CasOutcome,
+    pub snapshot: Result<Arc<DecodedSnapshot>, CasUnavailable>,
     pub bytes_read: u64,
 }
 
@@ -70,24 +71,24 @@ impl CasStore {
         &self.limits
     }
 
-    pub fn path(&self, id: SnapshotId) -> PathBuf {
+    pub fn path(&self, id: CasId) -> PathBuf {
         btel_file::cas_path(&self.root, id)
     }
 
     /// Read, decode and verify one blob.
-    pub fn load(&self, id: SnapshotId) -> CasLoad {
+    pub fn load(&self, id: CasId) -> CasLoad {
         let path = self.path(id);
         let file = match fs::File::open(&path) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 return CasLoad {
-                    outcome: CasOutcome::Missing,
+                    snapshot: Err(CasUnavailable::Missing),
                     bytes_read: 0,
                 };
             }
             Err(error) => {
                 return CasLoad {
-                    outcome: CasOutcome::Unreadable(error.to_string()),
+                    snapshot: Err(CasUnavailable::Unreadable(error.to_string())),
                     bytes_read: 0,
                 };
             }
@@ -96,32 +97,32 @@ impl CasStore {
         let mut bytes = Vec::new();
         if let Err(error) = file.take(limit + 1).read_to_end(&mut bytes) {
             return CasLoad {
-                outcome: CasOutcome::Unreadable(error.to_string()),
+                snapshot: Err(CasUnavailable::Unreadable(error.to_string())),
                 bytes_read: bytes.len() as u64,
             };
         }
         let bytes_read = bytes.len() as u64;
         if bytes_read > limit {
             return CasLoad {
-                outcome: CasOutcome::TooLarge {
+                snapshot: Err(CasUnavailable::TooLarge {
                     len: bytes_read,
                     limit,
-                },
+                }),
                 bytes_read,
             };
         }
-        let outcome = match btel_snapshot::decode_blob(&bytes, &self.limits.decode) {
+        let snapshot = match btel_snapshot::decode_blob(&bytes, &self.limits.decode) {
             // The path is derived from the ID, but only the recomputed graph
             // identity proves the content belongs to it.
-            Ok(snapshot) if snapshot.id == id => CasOutcome::Available(Arc::new(snapshot)),
-            Ok(snapshot) => CasOutcome::Corrupt(BlobError::IdMismatch {
+            Ok(snapshot) if snapshot.id == id => Ok(Arc::new(snapshot)),
+            Ok(snapshot) => Err(CasUnavailable::Corrupt(BlobError::IdMismatch {
                 declared: id,
                 computed: snapshot.id,
-            }),
-            Err(error) => CasOutcome::Corrupt(error),
+            })),
+            Err(error) => Err(CasUnavailable::Corrupt(error)),
         };
         CasLoad {
-            outcome,
+            snapshot,
             bytes_read,
         }
     }

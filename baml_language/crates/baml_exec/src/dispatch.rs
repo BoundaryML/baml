@@ -33,7 +33,15 @@ pub fn validate_help_param(engine: &BexEngine, function_name: &str) -> Result<()
     let params = engine
         .function_params(function_name)
         .with_context(|| format!("failed to resolve target `{function_name}`"))?;
-    if params.iter().any(|(name, _, _)| *name == "help") {
+    validate_help_param_names(function_name, params.iter().map(|(name, _, _)| *name))
+}
+
+/// Check a signature before constructing an engine.
+pub fn validate_help_param_names<'a>(
+    function_name: &str,
+    param_names: impl IntoIterator<Item = &'a str>,
+) -> Result<()> {
+    if param_names.into_iter().any(|name| name == "help") {
         anyhow::bail!(
             "Target `{function_name}` declares a parameter named `help`, \
              which collides with the auto-derived `--help` flag. \

@@ -104,9 +104,9 @@ pub enum BexExternalAdt {
     /// live capability, not data, so it cannot cross a process (BEP-066 H-4).
     TypeDef(TypeDefRef),
     /// The Rust-backed payload inside a rendered `ai.Prompt`.
-    PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
+    PromptAst(std::sync::Arc<bex_vm_types::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
-    Media(std::sync::Arc<baml_builtins2::MediaValue>),
+    Media(std::sync::Arc<bex_vm_types::MediaValue>),
     /// GC-rooted reference to an engine-owned heap value with a trusted
     /// boundary kind and optional host-facing type decoration.
     ///
@@ -863,13 +863,13 @@ impl ToBexExternalValue for OpaqueExternalValue {
     }
 }
 
-impl ToBexExternalValue for baml_builtins2::PromptAst {
+impl ToBexExternalValue for bex_vm_types::PromptAst {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
     }
 }
 
-impl ToBexExternalValue for baml_builtins2::MediaValue {
+impl ToBexExternalValue for bex_vm_types::MediaValue {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Media(self))
     }
@@ -883,10 +883,10 @@ impl ToBexExternalValue for baml_builtins2::MediaValue {
 pub fn try_convert_rust_data(
     arc: &std::sync::Arc<dyn std::any::Any + Send + Sync>,
 ) -> Option<BexExternalValue> {
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::PromptAst>() {
+    if let Ok(typed) = arc.clone().downcast::<bex_vm_types::PromptAst>() {
         return Some(typed.to_bex_external_value());
     }
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
+    if let Ok(typed) = arc.clone().downcast::<bex_vm_types::MediaValue>() {
         return Some(typed.to_bex_external_value());
     }
     // A structural host-only value stashed verbatim on the way in (an unbound
@@ -987,7 +987,7 @@ mod render_readable_tests {
     fn prompt_ast_renders_readable_text_not_debug() {
         use std::sync::Arc;
 
-        use baml_builtins2::{PromptAst, PromptAstSimple};
+        use bex_vm_types::{PromptAst, PromptAstSimple};
 
         // `metadata` is `serde_json::Value` (not a direct dep of this crate); its
         // `Default` is `Value::Null`, so use `Default::default()` to avoid naming it.

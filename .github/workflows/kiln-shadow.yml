@@ -1103,7 +1103,7 @@ jobs:
 
       - name: "Run tests with nextest"
         id: cargo-test
-        run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       # Release leg: structured-log value copying carries `debug_assert`-adjacent
@@ -1246,7 +1246,7 @@ jobs:
         # The runtime corpus moved from the excluded baml_tests package into
         # baml_cli; keep its existing ownership in the snapshot job.
         id: cargo-test
-        run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
+        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
@@ -1952,13 +1952,13 @@ jobs:
       - name: "Run sdk tests"
         id: sdk-test
         if: matrix.sdk-label != 'csharp'
-        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
       - name: "Run C# sdk tests"
         id: csharp-sdk-test
         if: matrix.sdk-label == 'csharp'
-        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
       # Record the content hashes the next run's backdate steps compare
@@ -1996,7 +1996,7 @@ jobs:
       - name: "Run rust bridge tests"
         id: bridge-test
         if: matrix.sdk-label == 'rust'
-        run: cargo nextest run --profile ci-bridge -p baml_bridge --all-features
+        run: cargo nextest run -p baml_bridge --all-features
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -2115,17 +2115,11 @@ jobs:
       # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
       # Keep the GNU job's --exclude list in sync. The musl job also runs
       # pack_e2e, so both Linux libc variants exercise the ELF pack path.
-      # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
       - name: "Run compiler, CLI, and snapshot tests"
-        id: snapshot-test
-        # The shared upload action gates this outcome (including a tokenless
-        # fallback on forks). Do not add a second raw-outcome gate: that would
-        # override Trunk's intentional quarantine handling.
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
-          NEXTEST_PROFILE: ci
 
       - name: "Check for snapshot changes"
         run: |

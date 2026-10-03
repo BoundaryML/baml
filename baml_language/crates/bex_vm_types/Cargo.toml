@@ -23,7 +23,6 @@ baml_builtins2_codegen = { workspace = true }
 
 [dependencies]
 baml_base = { workspace = true }
-baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_resource_types = { workspace = true }
@@ -32,6 +31,7 @@ btel_types = { workspace = true }
 borsh = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros", "sync" ] }

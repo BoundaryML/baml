@@ -500,7 +500,8 @@ impl TypeCtx {
 
 /// The definitions `target` can reach: the classes, interfaces, enums, and type
 /// aliases it names, then, transitively, the ones named by a reached class's
-/// field types or a reached alias's body.
+/// field types (except `@skip` fields, which the parser drops) or a reached
+/// alias's body.
 ///
 /// The walk is [`RuntimeTy::visit_heads`](baml_type::RuntimeTy::visit_heads),
 /// the head walk `bex_vm::reachable` uses for heap declarations, run over the
@@ -521,7 +522,7 @@ fn reachable_definitions(
             continue;
         }
         if let Some(class) = class_definitions.get(&name) {
-            for field in &class.fields {
+            for field in class.fields.iter().filter(|field| !field.skip) {
                 field
                     .field_type
                     .visit_heads(&mut |head: &DefKey| pending.push(head.clone()));
@@ -757,6 +758,27 @@ mod tests {
         definitions: impl IntoIterator<Item = (&'d DefKey, &'d V)>,
     ) -> Vec<&'d DefKey> {
         definitions.into_iter().map(|(name, _)| name).collect()
+    }
+
+    /// The parser drops a `@skip` field, so a type only a skipped field names
+    /// is not part of the model.
+    #[test]
+    fn skipped_fields_reach_nothing() {
+        let (root, hidden) = (key("Root"), key("Hidden"));
+        let (root_key, mut root_definition) = class(
+            &root,
+            vec![("name", SapTy::string()), ("secret", class_ty(&hidden))],
+        );
+        root_definition.fields[1].skip = true;
+        let mut ctx = SysOpContext::empty();
+        ctx.class_definitions = Arc::new(IndexMap::from([
+            (root_key, root_definition),
+            class(&hidden, vec![("value", SapTy::int())]),
+        ]));
+
+        let type_ctx = TypeCtx::for_target(&ctx, &class_ty(&root));
+
+        assert_eq!(names(&type_ctx.class_definitions), vec![&root]);
     }
 
     #[test]

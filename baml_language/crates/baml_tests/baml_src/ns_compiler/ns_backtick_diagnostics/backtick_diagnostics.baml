@@ -116,6 +116,22 @@ test "prompt empty interpolation reports a successful warning" {
     )
 }
 
+// `cache` is prompt-local: `cache()` asks the client for its default, and a
+// positional argument is `args`, which may also be passed by name.
+test "prompt cache takes no argument, one positional, or args by name" {
+    root.compiler.AssertCompiles(
+        { "prompt.baml": prompt("${cache()}a${cache({ \"ttl\": \"1h\" })}b${cache(args = { \"ttl\": \"1h\" })}c${cache(null)}") },
+    );
+    root.compiler.AssertHasMessage(
+        { "prompt.baml": prompt("${cache({ \"a\": 1 }, { \"b\": 2 })}") },
+        "expected 1 argument(s), got 2",
+    );
+    root.compiler.AssertHasMessage(
+        { "prompt.baml": prompt("${cache(ttl = \"1h\")}") },
+        "unknown named argument `ttl`",
+    )
+}
+
 test "const for binding reaches the ordinary const-to-let advisory" {
     let files = { "prompt.baml": prompt("${for (const x in [1, 2])}${x}${endfor}") };
     root.compiler.AssertSuccessHasMessage(files, "treated like `let`");

@@ -5,9 +5,10 @@
 // envelopes whose fields are optional wherever the API may omit them, and typed
 // SSE event classes. `baml.json.json` appears only where the shape is genuinely
 // the caller's: a tool's `parameters` (an arbitrary JSON Schema), the
-// `request_body` passthrough, and the per-message directives carried verbatim
-// from `ai.PromptMessage.metadata`. All three are applied to the SERIALIZED
-// body, after the typed layer's null-prune, so none of them is rewritten.
+// `request_body` passthrough, and the `args` of a `${cache(args)}` in the
+// prompt, carried as written onto a content part. All three are applied to the
+// SERIALIZED body, after the typed layer's null-prune, so none of them is
+// rewritten.
 //
 // Output mode is SAP (the schema rides in the prompt text, tools are native);
 // `text.format` is deliberately never set — see the research report's G15.
@@ -138,7 +139,7 @@ class OaResponsesRequest {
 // ---------------------------------------------------------------------------
 // Response envelopes. `from_string` ignores unknown fields, and every field the
 // API may omit is optional — a missing `usage.input_tokens` must not turn a
-// good response into ai.errors.ParseFailed.
+// good response into ai.errors.InvalidResponse.
 
 class OaContentPart {
     type: string?,
@@ -165,6 +166,7 @@ class OaOutputItem {
 
 class OaInputTokenDetails {
     cached_tokens: int?,
+    cache_write_tokens: int?,
 }
 
 class OaOutputTokenDetails {
@@ -470,58 +472,80 @@ function _lower_blocks(
     content
 }
 
+/// (internal) Where one `${cache(args)}` in the prompt lands on the wire: content part
+/// `part` of input item `item`, which gets `prompt_cache_breakpoint: args`.
+class OaCacheBreakpoint {
+    item: int,
+    part: int,
+    args: baml.json.json,
+}
+
 /// Role-less content uses the ordinary user role; `tool` is not a valid
 /// free-standing Responses message role, so authored tool context is user
 /// content (actual tool outputs come from the journal path below).
-function lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInputItem[] {
+///
+/// A `${cache(args)}` in a message becomes a cache breakpoint on the content
+/// part before it: the Responses API places a breakpoint ON a part, while the
+/// delimiter sits BETWEEN parts, so everything up to and including that part
+/// is the cached prefix. The typed parts have no slot for it and `args` is
+/// sent as written, so the position is recorded in `breakpoints` and
+/// `_apply_cache_breakpoints` writes the key onto the serialized body. The text
+/// on either side is trimmed where it faces the delimiter
+/// (`ai.wire.prompt_parts`). A `${cache()}` carries `default_cache_args`.
+/// Nothing is recorded when no part precedes the delimiter in its message, or
+/// when the delimiter has no args and there is no default.
+function lower_prompt(
+    prompt: ai.Prompt,
+    breakpoints: OaCacheBreakpoint[],
+    default_cache_args: baml.json.json = null,
+    preview: bool = false,
+) -> OaInputItem[] {
     let items: OaInputItem[] = [];
     for (let message in prompt.messages()) {
         let role = match (message.role) {
             "" | "tool" => "user",
             _ => message.role,
         };
-        items.push(
-            OaMessageItem {
-                role: role,
-                content: _lower_blocks(ai.wire.prompt_blocks(message), role, preview = preview),
-            },
-        );
+        let content: OaInputPart[] = [];
+        for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
+            match (part) {
+                let text: string => {
+                    let block = ai.content.Text { text: text };
+                    content.push(_lower_block(block, role, preview = preview));
+                    null
+                },
+                let delimiter: ai.CacheDelimiter => {
+                    if (content.length() > 0 && delimiter.args != null) {
+                        breakpoints.push(
+                            OaCacheBreakpoint {
+                                item: items.length(),
+                                part: content.length() - 1,
+                                args: delimiter.args,
+                            },
+                        );
+                    }
+                    null
+                },
+                let media: ai.MediaPart => {
+                    let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                    content.push(_lower_block(block, role, preview = preview));
+                    null
+                },
+            };
+        }
+        items.push(OaMessageItem { role: role, content: content });
     }
     items
 }
 
-/// Per-message provider directives (`ai.PromptMessage.metadata`, authored as
-/// `${ai.Role { name: "user", metadata: { … } }}`), in prompt order and
-/// aligned one-to-one with the items `lower_prompt` produced — the prompt
-/// items are always the FIRST items of `input`, the journal's are appended after.
-///
-/// The Responses API has no per-message directive slot, so PLAN §5's accepted
-/// placement for this provider is the CONTENT PART: the keys are forwarded
-/// verbatim onto the LAST content item of the message they were authored on
-/// (the same "everything up to and including this block" rule the engine used).
-/// Applied to the SERIALIZED body, after the null-prune, because a directive is
-/// a provider shape: an explicit null in it is the caller's, not an unset field.
-function prompt_metadata(prompt: ai.Prompt) -> map<string, baml.json.json>[] {
-    let out: map<string, baml.json.json>[] = [];
-    for (let message in prompt.messages()) {
-        out.push(message.metadata);
-    }
-    out
-}
-
-function _merge_onto_last_part(
-    item: baml.json.json,
-    directives: map<string, baml.json.json>,
-) -> void {
+function _set_cache_breakpoint(item: baml.json.json, breakpoint: OaCacheBreakpoint) -> void {
     match (item) {
         let message: map<string, baml.json.json> => {
             match (message.get("content")) {
                 let parts: baml.json.json[] => {
-                    match (parts.at(parts.length() - 1)) {
+                    match (parts.at(breakpoint.part)) {
                         let part: map<string, baml.json.json> => {
-                            for (let key in directives.keys()) {
-                                let _ = part.set(key, directives.get(key));
-                            }
+                            let _ = part.set("prompt_cache_breakpoint", breakpoint.args);
                             null
                         },
                         _ => null,
@@ -534,20 +558,24 @@ function _merge_onto_last_part(
     }
 }
 
-function _apply_message_metadata(
+/// (internal) Write each recorded cache breakpoint onto its content part. The prompt's
+/// items are always the FIRST items of `input` (the journal's are appended
+/// after), and the null-prune drops map entries, never array elements, so the
+/// recorded indices still address the same parts.
+///
+/// Applied to the SERIALIZED body, after the null-prune, because `args` is the
+/// caller's own JSON: an explicit null inside it is theirs, not an unset field.
+/// A second breakpoint on the same part replaces the first.
+function _apply_cache_breakpoints(
     body: baml.json.json,
-    metadata: map<string, baml.json.json>[],
+    breakpoints: OaCacheBreakpoint[],
 ) -> baml.json.json {
     match (body) {
         let object: map<string, baml.json.json> => {
             match (object.get("input")) {
                 let items: baml.json.json[] => {
-                    let index = 0;
-                    for (let directives in metadata) {
-                        if (directives.keys().length() > 0) {
-                            _merge_onto_last_part(items.at(index), directives);
-                        }
-                        index += 1;
+                    for (let breakpoint in breakpoints) {
+                        _set_cache_breakpoint(items.at(breakpoint.item), breakpoint);
                     }
                     null
                 },
@@ -577,24 +605,14 @@ function _tool_output(parts: OaInputPart[]) -> string | OaInputPart[] {
 /// ai.Journal -> Responses API input items. Only promptable events lower;
 /// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are
 /// journal-only. Callers pass the SANITIZED journal (see _request).
-///
-/// `metadata` is the per-item directive list `_apply_message_metadata` walks:
-/// one map is appended per item produced here (a user turn's own, an empty
-/// one for everything else) so it stays aligned one-to-one with `input`.
-function lower_journal(
-    j: ai.Journal,
-    metadata: map<string, baml.json.json>[],
-    preview: bool = false,
-) -> OaInputItem[] {
+function lower_journal(j: ai.Journal, preview: bool = false) -> OaInputItem[] {
     let items: OaInputItem[] = [];
-    let none: map<string, baml.json.json> = {};
     for (let e in j.entries()) {
         match (e) {
             let u: ai.events.UserMessage => {
                 let content = _lower_blocks(u.content, "user", preview = preview);
                 if (content.length() > 0) {
                     items.push(OaMessageItem { role: "user", content: content });
-                    metadata.push(u.metadata);
                 }
                 null
             },
@@ -608,7 +626,6 @@ function lower_journal(
                                     content: [_lower_block(content, "assistant", preview = preview)],
                                 },
                             );
-                            metadata.push(none);
                             null
                         },
                         let use: ai.content.ToolUse => {
@@ -620,7 +637,6 @@ function lower_journal(
                                     arguments: baml.json.stringify(baml.json.to_json(use.args)),
                                 },
                             );
-                            metadata.push(none);
                             null
                         },
                         // ai.Reasoning does not round-trip yet: the API wants
@@ -642,7 +658,6 @@ function lower_journal(
                         output: _tool_output(_lower_blocks(c.content, "tool_result", preview = preview)),
                     },
                 );
-                metadata.push(none);
                 null
             },
             let f: ai.events.ToolFailed => {
@@ -655,7 +670,6 @@ function lower_journal(
                         output: baml.json.stringify(baml.json.to_json(err)),
                     },
                 );
-                metadata.push(none);
                 null
             },
             _ => null,
@@ -780,15 +794,15 @@ function _request(
     preview: bool = false,
 ) -> baml.http.Request {
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
-    let items = lower_prompt(prompt, preview = preview);
+    let breakpoints: OaCacheBreakpoint[] = [];
+    let items = lower_prompt(prompt, breakpoints, default_cache_args = c.default_cache_args(), preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.degrade_tool_media(
         ai.wire.sanitize_for_client(input.journal, c.id()),
         ["image", "pdf", "video"],
     );
-    let metadata = prompt_metadata(prompt);
-    for (let item in lower_journal(journal, metadata, preview = preview)) {
+    for (let item in lower_journal(journal, preview = preview)) {
         items.push(item);
     }
     let wants_image = _wants_image(input.output_type);
@@ -812,10 +826,10 @@ function _request(
         tool_choice: _tool_choice(tools, wants_image),
     };
     // typed request -> json -> drop unset optionals -> put the caller's own
-    // open-ended JSON back (tool schemas, then the per-message directives that
-    // ride on a content part) -> user passthrough LAST.
+    // open-ended JSON back (tool schemas, then the cache breakpoints that ride
+    // on a content part) -> user passthrough LAST.
     let pruned = _restore_tool_schemas(_prune_nulls(baml.json.to_json(request)), tools);
-    let body = ai.wire.merge_request_body(_apply_message_metadata(pruned, metadata), c.request_body);
+    let body = ai.wire.merge_request_body(_apply_cache_breakpoints(pruned, breakpoints), c.request_body);
     baml.http.Request {
         method: "POST",
         url: _url(c),
@@ -837,54 +851,15 @@ function _image_mime(output_format: string?) -> string {
     }
 }
 
-/// (internal) Error codes that name a TRANSIENT provider-side failure. The Responses API's
-/// own `response.failed` example is `{"code":"server_error", …}` — a 500
-/// delivered inside a 200 body — and the same failure arriving as an HTTP status
-/// classifies as ai.errors.NetworkFailure (ai.errors.classify_http maps >=500
-/// there). Classifying the in-body form as InvalidRequest instead would make it
-/// permanently non-retryable under ai.Retry's default judgment, purely because
-/// of which envelope the provider chose.
-function _transient_code(code: string) -> bool {
-    code.includes("server_error")
-        || code.includes("timeout")
-        || code.includes("timed_out")
-        || code.includes("overloaded")
-        || code.includes("unavailable")
-        || code.includes("try_again")
-}
-
-/// (internal) A provider-reported error becomes the precise ai.errors class, never a
-/// blanket NetworkFailure: a retry-safe classification on a 400-shaped failure
-/// is what makes a Retry policy replay an invalid request forever.
-function _error_failure(err: OaErrorBody) -> ai.errors.Failure {
-    // Billing errors split the signal across `type` ("insufficient_quota")
-    // and `code` ("credit_balance_exhausted"), so classify on both.
-    let code = ((err.code ?? "") + " " + (err.type ?? "")).to_lower_case();
-    let detail = err.message ?? "the OpenAI Responses request failed";
-    let raw = baml.json.stringify(baml.json.to_json(err));
-    if (code.includes("rate_limit") || code.includes("quota") || code.includes("credit_balance")) {
-        ai.errors.RateLimited {
-            status_code: null,
-            provider: "openai",
-            retry_after_ms: null,
-            raw_body: raw,
-        }
-    } else if (code.includes("content_filter") || code.includes("moderation") || code.includes("refusal")) {
-        ai.errors.Refused { provider: "openai", reason: detail, raw_body: raw }
-    } else if (_transient_code(code)) {
-        ai.errors.NetworkFailure {
-            status_code: null,
-            provider: "openai",
-            detail: detail,
-            raw_body: raw,
-        }
-    } else {
-        ai.errors.InvalidRequest {
-            provider: "openai",
-            status_code: null,
-            detail: detail,
-            raw_body: raw,
-        }
+/// (internal) Preserve a valid provider-reported failure as structured data.
+function _error_failure(err: OaErrorBody) -> ai.errors.ProviderError {
+    ai.errors.ProviderError {
+        provider: "openai",
+        message: err.message ?? "the OpenAI Responses request failed",
+        error_type: err.type,
+        error_code: err.code,
+        raw_body: baml.json.stringify(baml.json.to_json(err)),
+        status_code: null,
     }
 }
 
@@ -1005,8 +980,13 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
             output_tokens: u.output_tokens ?? 0,
             cached_input_tokens: u.input_tokens_details?.cached_tokens,
             reasoning_tokens: u.output_tokens_details?.reasoning_tokens,
-            // input_tokens counts the cached share too.
-            uncached_input_tokens: ai.internal.uncached_input_tokens(u.input_tokens, u.input_tokens_details?.cached_tokens),
+            cache_write_input_tokens: u.input_tokens_details?.cache_write_tokens,
+            // input_tokens counts the cached share and the cache writes too.
+            uncached_input_tokens: ai.internal.uncached_input_tokens(
+                u.input_tokens,
+                u.input_tokens_details?.cached_tokens,
+                cache_write = u.input_tokens_details?.cache_write_tokens,
+            ),
         }
     } else {
         null
@@ -1202,8 +1182,18 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
     let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
-            let decoded: OaStreamEvent? = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
-                _ => null,
+            if (data.trim() == "" || data.trim() == "[DONE]") {
+                continue;
+            }
+            let decoded = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
+                let parse => {
+                    throw ai.errors.InvalidResponse {
+                    provider: "openai",
+                    message: parse.to_string(),
+                    raw_body: data,
+                    status_code: null,
+                }
+                },
             };
             if let event: OaStreamEvent = decoded {
                 for (let e in _stream_events(event, raw.event, state)) {
