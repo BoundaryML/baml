@@ -561,17 +561,16 @@ function passthrough(args: string[]) -> never {
     let base = base_url(null);
     if (local(selected.value)) {
         verify_local(selected.value);
-        baml.sys.exec(
+        let status = baml.sys.run(
             selected.value,
             args = args,
-            options = baml.sys.ExecOptions {
-                env: {
-                    "BAML_WRAPPER_EXEC": "1",
-                    "BAML_WRAPPER_LOCAL_TOOLCHAIN": selected.value,
-                    "BAML_WRAPPER_RESOLVED_TOOLCHAIN": null,
-                },
+            env = {
+                "BAML_WRAPPER_EXEC": "1",
+                "BAML_WRAPPER_LOCAL_TOOLCHAIN": selected.value,
+                "BAML_WRAPPER_RESOLVED_TOOLCHAIN": null,
             },
         );
+        baml.sys.exit(status.exit_code);
     }
     let version = concrete(selected.value, base);
     verify_installed(version);
@@ -595,37 +594,35 @@ function passthrough(args: string[]) -> never {
         let status = baml.sys.run(
             cli_path(version),
             args = args,
-            options = baml.sys.ExecOptions {
-                env: {
-                    "BAML_WRAPPER_EXEC": "1",
-                    "BAML_WRAPPER_RESOLVED_TOOLCHAIN": version,
-                    "BAML_WRAPPER_LOCAL_TOOLCHAIN": null,
-                },
+            env = {
+                "BAML_WRAPPER_EXEC": "1",
+                "BAML_WRAPPER_RESOLVED_TOOLCHAIN": version,
+                "BAML_WRAPPER_LOCAL_TOOLCHAIN": null,
             },
         );
         await refresh;
         outdated(selected.value, version, base);
         baml.sys.exit(status.exit_code);
     }
-    baml.sys.exec(
+    let status = baml.sys.run(
         cli_path(version),
         args = args,
-        options = baml.sys.ExecOptions {
-            env: {
-                "BAML_WRAPPER_EXEC": "1",
-                "BAML_WRAPPER_RESOLVED_TOOLCHAIN": version,
-                "BAML_WRAPPER_LOCAL_TOOLCHAIN": null,
-            },
+        env = {
+            "BAML_WRAPPER_EXEC": "1",
+            "BAML_WRAPPER_RESOLVED_TOOLCHAIN": version,
+            "BAML_WRAPPER_LOCAL_TOOLCHAIN": null,
         },
-    )
+    );
+    baml.sys.exit(status.exit_code)
 }
 
 function local_version(path: string) -> string {
     {
-        let output = baml.sys.capture(
+        let output = baml.sys.run(
             path,
             args = ["--version"],
-            options = baml.sys.ProcessOptions { timeout: baml.time.Duration.from_seconds(3) },
+            timeout = baml.time.Duration.from_seconds(3),
+            capture_output = true,
         );
         if (!output.ok()) {
             return "version unknown";
@@ -852,7 +849,14 @@ function self_update() -> void {
         let helper_bytes = file.bytes();
         file.close();
         baml.fs.write_atomic(helper, helper_bytes);
-        baml.sys.detach(helper, args = ["--replace", tmp, current]);
+        let _ = baml.sys.subprocess(
+            helper,
+            args = ["--replace", tmp, current],
+            detached = true,
+            stdin = "ignore",
+            stdout = "ignore",
+            stderr = "ignore",
+        );
         baml.io.println("updating BAML wrapper to " + manifest.version);
     } else {
         defer { if (baml.fs.exists(tmp)) { baml.fs.remove(tmp); } }

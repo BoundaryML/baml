@@ -73,7 +73,7 @@ impl Fixture {
 }
 
 #[test]
-fn selector_precedence_and_handoff_preserve_arguments_streams_and_status() {
+fn selector_precedence_and_child_preserve_arguments_streams_and_status() {
     let f = Fixture::new();
     fs::write(
         f.project.join("baml.toml"),

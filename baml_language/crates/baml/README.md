@@ -1,6 +1,7 @@
 The `baml` wrapper is a BAML application in `baml_src`. It selects and installs
-Rust `baml-cli` toolchains, edits configuration, and hands off the user's terminal
-to the selected CLI. The CLI itself stays in Rust.
+Rust `baml-cli` toolchains and edits configuration. It launches the selected CLI
+with inherited standard streams, waits for its status, and then shuts down the
+wrapper runtime normally. The CLI itself stays in Rust.
 
 To build an ordinary packed wrapper from this checkout:
 
@@ -23,4 +24,6 @@ Installation uses a lock per version, verifies the archive checksum, extracts in
 an empty staging directory, checks the toolchain layout, and then publishes it.
 Configuration edits hold a separate lock and preserve unrelated TOML and comments.
 Windows self-update uses a detached copy of the wrapper to retry executable
-replacement after the original process exits.
+replacement after the original process exits. Detachment creates an OS session
+or detaches from the Windows console; dropping the subprocess handle does not
+terminate the helper.
