@@ -592,6 +592,7 @@ version = "0.2.5"
 dependencies = [
  "anyhow",
  "baml_release",
+ "clap",
  "console",
  "reqwest",
  "serde",
