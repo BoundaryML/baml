@@ -137,6 +137,28 @@ impl Program {
         Self::default()
     }
 
+    /// Name a compiled type head without binding it to a heap.
+    ///
+    /// Like the loader, resolve the tag's static index only when the pooled
+    /// declaration carries that exact tag. Never dereference a head's pointer.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::UnnameableHead`] if the tag does not identify a named declaration
+    /// in this program.
+    pub fn type_head_name(
+        &self,
+        head: &crate::TypeHead,
+    ) -> Result<baml_type::TypeName, crate::UnnameableHead> {
+        let tag = head.tag();
+        tag.static_index()
+            .and_then(|index| self.objects.get(index))
+            .filter(|object| object.declaration_tag() == Some(tag))
+            .and_then(Object::declaration_name)
+            .cloned()
+            .ok_or(crate::UnnameableHead(tag))
+    }
+
     /// Check the executable against the format's laws — every index within
     /// its pool, every table naming an object of the kind it says, every
     /// head bindable to the declaration its tag encodes, every type switch
@@ -819,6 +841,52 @@ impl Type {
 #[cfg(test)]
 mod tests {
     use super::{ConstValue, HeapPtr, Instance, Program, Type, Value, format_float};
+
+    #[test]
+    fn compiled_head_names_require_a_matching_named_declaration() {
+        use baml_type::{TypeName, typetag::TypeTag};
+
+        use crate::{DeclarationName, Enum, Object, TypeHead, types::Owner};
+
+        let mut program = Program::default();
+        let tag = TypeTag::of_static_index(0);
+        let head = TypeHead::unresolved(tag);
+        assert!(program.type_head_name(&head).is_err());
+
+        program
+            .objects
+            .push(Object::String("not a declaration".into()));
+        assert!(program.type_head_name(&head).is_err());
+
+        let name = TypeName::from_dotted_path("user.Status");
+        program.objects[crate::ObjectIndex::from_raw(0)] = Object::Enum(Box::new(Enum {
+            name: DeclarationName::Declared(name.clone()),
+            type_tag: TypeTag::of_static_index(1),
+            variants: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
+            owner: Owner::anonymous(),
+        }));
+        assert!(program.type_head_name(&head).is_err());
+
+        program.objects[crate::ObjectIndex::from_raw(0)].assign_declaration_tag(tag);
+        assert_eq!(program.type_head_name(&head), Ok(name));
+        assert!(!head.is_resolved());
+        assert!(head.to_name().is_err());
+
+        let Object::Enum(enm) = &mut program.objects[crate::ObjectIndex::from_raw(0)] else {
+            unreachable!()
+        };
+        enm.name = DeclarationName::Anonymous(baml_base::Name::new("Status"));
+        assert!(program.type_head_name(&head).is_err());
+        assert!(
+            program
+                .type_head_name(&TypeHead::unresolved(TypeTag::fresh_dynamic()))
+                .is_err()
+        );
+    }
 
     /// The empty program names a root it does not have; nothing may index
     /// into it, and the check says so instead.

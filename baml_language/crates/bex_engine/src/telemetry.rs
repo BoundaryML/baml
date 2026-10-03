@@ -199,7 +199,10 @@ impl TelemetryRecording {
         Arc::clone(&self.exit)
     }
 
-    fn process(&self) -> btel_recorder::ProcessRecording {
+    fn process(
+        &self,
+        launch_context: &btel_types::context::Context,
+    ) -> btel_recorder::ProcessRecording {
         btel_recorder::ProcessRecording {
             info: btel_types::ProcessInfo {
                 process_id: bex_events::ids::ProcessEuid::current().0,
@@ -224,6 +227,10 @@ impl TelemetryRecording {
                     btel_snapshot::string_map(&pool, &self.sources, SOURCES_MAX_BYTES)
                 })
                 .flatten(),
+            context: btel_snapshot::context::capture(
+                launch_context,
+                &btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default()),
+            ),
             exit: Arc::clone(&self.exit),
         }
     }
@@ -232,6 +239,7 @@ impl TelemetryRecording {
         self,
         source_snapshot: Option<[u8; 32]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
+        launch_context: &btel_types::context::Context,
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
@@ -240,7 +248,7 @@ impl TelemetryRecording {
         EngineError,
     > {
         let transport = btel_settings::transport::ChunkConfig::default();
-        let process = self.process();
+        let process = self.process(launch_context);
         self.config
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
@@ -416,13 +424,16 @@ impl BexEngine {
         clock_mode: btel_clock::ClockMode,
         recording: TelemetryRecording,
     ) -> Result<Self, EngineError> {
-        Self::build(
+        Self::new_with_config(
             program,
             sys_ops,
             argv,
-            runtime_compiler,
-            clock_mode,
-            Some(recording),
+            crate::EngineConfig {
+                runtime_compiler,
+                clock_mode,
+                recording: Some(recording),
+                ..crate::EngineConfig::default()
+            },
         )
     }
 

@@ -81,12 +81,15 @@ pub struct ProcessRecording {
     pub info: btel_types::ProcessInfo,
     /// The project's sources, a `map<path, content>` snapshot.
     pub sources: Option<Snapshot>,
+    /// Canonical launch context snapshot; absence means unavailable.
+    pub context: Option<Snapshot>,
     pub exit: std::sync::Arc<btel_types::ProcessExitSlot>,
 }
 
 struct ProcessHeader {
     info: btel_types::ProcessInfo,
     source: Option<proto::CasId>,
+    context: Option<proto::CasId>,
     exit: std::sync::Arc<btel_types::ProcessExitSlot>,
 }
 
@@ -169,9 +172,14 @@ impl RecordingBuilder {
         if let Some(sources) = process.sources {
             self.pending_captures.push(sources);
         }
+        let context = process.context.as_ref().map(crate::cas_id);
+        if let Some(context) = process.context {
+            self.pending_captures.push(context);
+        }
         self.process = Some(ProcessHeader {
             info: process.info,
             source,
+            context,
             exit: process.exit,
         });
         self
@@ -236,7 +244,15 @@ impl RecordingBuilder {
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
-                format_minor: self.buffer.spans.format_minor(),
+                format_minor: self
+                    .buffer
+                    .spans
+                    .format_minor()
+                    .max(if self.process.is_some() {
+                        btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
+                    } else {
+                        0
+                    }),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
                 process_id: self.process.as_ref().map(|p| p.info.process_id.to_vec()),
@@ -252,6 +268,7 @@ impl RecordingBuilder {
                     .as_ref()
                     .map(|p| p.info.started_at_unix_ns),
                 source_cas_id: self.process.as_ref().and_then(|p| p.source),
+                initial_context_cas_id: self.process.as_ref().and_then(|p| p.context),
             }),
             sequence: sequence.get(),
             definitions: Some(ready.definitions),
