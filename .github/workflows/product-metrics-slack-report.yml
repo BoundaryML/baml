@@ -31,7 +31,7 @@ jobs:
       SLACK_CHANNEL_NAME: "${{ inputs.channel || '#general' }}"
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node2
