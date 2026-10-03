@@ -298,8 +298,8 @@ function pid() -> int throws never {
 /// Options for commands that inherit the terminal and standard streams.
 class ExecOptions {
     cwd: string?,
-    /// Variables to overlay on the inherited environment.
-    env: map<string, string>?,
+    /// Variables to overlay on the inherited environment. Null removes a variable.
+    env: map<string, string?>?,
     /// Start with an empty environment. Defaults to false.
     clear_env: bool?,
 }

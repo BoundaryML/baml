@@ -346,13 +346,14 @@ fn pack_handoff_preserves_pid_streams_environment_and_status() {
         built,
         r#"
         function main() -> never {
-            baml.sys.exec("sh", args = ["-c", "printf '%s:%s:' $$ \"$BAML_HANDOFF\"; cat; printf err >&2; exit 23"],
-                options = baml.sys.ExecOptions { env: map { "BAML_HANDOFF": "overlay" } })
+            baml.sys.exec("sh", args = ["-c", "printf '%s:%s:%s:' $$ \"$BAML_HANDOFF\" \"${BAML_HANDOFF_REMOVE-unset}\"; cat; printf err >&2; exit 23"],
+                options = baml.sys.ExecOptions { env: map { "BAML_HANDOFF": "overlay", "BAML_HANDOFF_REMOVE": null } })
         }
     "#,
         &["main"],
     );
     let mut child = Command::new(bin)
+        .env("BAML_HANDOFF_REMOVE", "inherited")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -364,7 +365,7 @@ fn pack_handoff_preserves_pid_streams_environment_and_status() {
     assert_eq!(output.status.code(), Some(23));
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        format!("{pid}:overlay:input")
+        format!("{pid}:overlay:unset:input")
     );
     assert_eq!(output.stderr, b"err");
 }
