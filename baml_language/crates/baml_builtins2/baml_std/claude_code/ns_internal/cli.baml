@@ -293,8 +293,13 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
 
     let p = baml.sys.start_process(
         c.executable,
-        args,
-        baml.sys.ProcessOptions { cwd: c.cwd, env: null, timeout_ms: c.timeout_ms, stdin: null },
+        args = args,
+        options = baml.sys.ProcessOptions {
+            cwd: c.cwd,
+            env: null,
+            timeout: baml.time.Duration.from_milliseconds(c.timeout_ms),
+            stdin: null,
+        },
     ) catch_all (e) {
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,

@@ -1274,13 +1274,13 @@ impl io::IoClassGlobGlob for NativeSysOps {
 // System
 // ============================================================================
 
-type NativeProcessResult = Result<owned::sys::ProcessExit, String>;
+type NativeProcessResult = Result<owned::sys::ProcessExit, VmBamlError>;
 
 struct LiveProcessHandle {
     kill_tx: tokio::sync::watch::Sender<bool>,
     exit_rx: tokio::sync::watch::Receiver<Option<NativeProcessResult>>,
     deadline: Option<tokio::time::Instant>,
-    timeout_ms: Option<i64>,
+    timeout: Option<std::time::Duration>,
     label: String,
 }
 
@@ -1409,18 +1409,66 @@ fn process_exit_from_status(status: std::process::ExitStatus) -> owned::sys::Pro
     let signal = None;
 
     owned::sys::ProcessExit {
-        exit_code: i64::from(status.code().unwrap_or(-1)),
+        exit_code: i64::from(status.code().unwrap_or_else(|| {
+            128 + signal
+                .as_ref()
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(0)
+        })),
         signal,
     }
 }
 
-fn process_timeout_error(label: &str, timeout_ms: Option<i64>) -> VmBamlError {
-    let duration_ms = timeout_ms.unwrap_or(0);
+fn process_input(
+    options: Option<&owned::sys::ProcessOptions>,
+) -> Result<Option<Vec<u8>>, VmRustFnError> {
+    fn bytes(input: &BexExternalValue) -> Result<Vec<u8>, VmRustFnError> {
+        match input {
+            BexExternalValue::String(text) => Ok(text.as_bytes().to_vec()),
+            BexExternalValue::Uint8Array(data) => Ok(data.clone()),
+            BexExternalValue::Union { value, .. } => bytes(value),
+            _ => Err(VmBamlError::InvalidArgument {
+                message: "Process stdin must be text or bytes".into(),
+            }
+            .into()),
+        }
+    }
+    options
+        .and_then(|opts| opts.stdin.as_ref())
+        .map(bytes)
+        .transpose()
+}
+
+fn process_timeout(
+    options: Option<&owned::sys::ProcessOptions>,
+) -> Result<Option<std::time::Duration>, VmRustFnError> {
+    fn nanos(value: &BexExternalValue) -> Result<u64, VmRustFnError> {
+        let invalid = || VmBamlError::InvalidArgument {
+            message: "Process timeout must be a nonnegative duration representable in nanoseconds"
+                .into(),
+        };
+        match value {
+            BexExternalValue::Instance { fields, .. } => match fields.get("_nanoseconds") {
+                Some(BexExternalValue::Bigint(n)) => u64::try_from(n).map_err(|_| invalid().into()),
+                _ => Err(invalid().into()),
+            },
+            BexExternalValue::Union { value, .. } => nanos(value),
+            _ => Err(invalid().into()),
+        }
+    }
+    options
+        .and_then(|opts| opts.timeout.as_ref())
+        .map(|duration| nanos(duration).map(std::time::Duration::from_nanos))
+        .transpose()
+}
+
+fn process_timeout_error(label: &str, timeout: Option<std::time::Duration>) -> VmBamlError {
     VmBamlError::Timeout {
-        message: format!("Command '{label}' timed out after {duration_ms}ms"),
-        duration: Some(std::time::Duration::from_millis(
-            u64::try_from(duration_ms).unwrap_or(0),
-        )),
+        message: format!(
+            "Command '{label}' timed out after {}ms",
+            timeout.unwrap_or_default().as_millis()
+        ),
+        duration: timeout,
         timeout_type: "timeout".to_string(),
     }
 }
@@ -1430,7 +1478,7 @@ async fn receive_process_exit(
 ) -> Result<owned::sys::ProcessExit, VmRustFnError> {
     loop {
         if let Some(result) = exit_rx.borrow().clone() {
-            return result.map_err(|message| VmBamlError::Io { message }.into());
+            return result.map_err(Into::into);
         }
         exit_rx.changed().await.map_err(|_| VmBamlError::Io {
             message: "Process monitor stopped before reporting an exit status".into(),
@@ -1594,7 +1642,7 @@ impl io::IoClassSysProcess for NativeSysOps {
                     Ok(result) => result,
                     Err(_) => {
                         let _ = handle.kill_tx.send(true);
-                        Err(process_timeout_error(&handle.label, handle.timeout_ms).into())
+                        Err(process_timeout_error(&handle.label, handle.timeout).into())
                     }
                 }
             } else {
@@ -1647,101 +1695,130 @@ impl io::IoClassSysProcess for NativeSysOps {
 }
 
 /// Shared helper: apply `ProcessOptions` to a `tokio::process::Command`, run
-/// it, and collect its output. Both `exec()` and `shell()` use this.
+/// it, and collect its output. Both `capture()` and `shell()` use this.
 async fn run_process(
     cmd: &mut tokio::process::Command,
     options: Option<owned::sys::ProcessOptions>,
     working_dir: &WorkingDir,
     label: &str,
-) -> Result<owned::sys::ShellOutput, VmRustFnError> {
+) -> Result<owned::sys::ProcessOutput, VmRustFnError> {
     use std::process::Stdio;
 
     use tokio::io::AsyncWriteExt as _;
-
+    let timeout = process_timeout(options.as_ref())?;
     if let Some(dir) = working_dir.for_child(options.as_ref().and_then(|opts| opts.cwd.as_deref()))
     {
         cmd.current_dir(dir);
     }
-    if let Some(ref opts) = options {
+    if let Some(opts) = &options {
         if opts.clear_env == Some(true) {
             cmd.env_clear();
         }
-        if let Some(ref env) = opts.env {
-            cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        }
-        if opts.stdin.is_some() {
-            cmd.stdin(Stdio::piped());
+        if let Some(env) = &opts.env {
+            cmd.envs(env);
         }
     }
-
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    cmd.kill_on_drop(true);
-
-    let mut child = cmd.spawn().map_err(|e| VmBamlError::Io {
-        message: format!("Failed to spawn '{label}': {e}"),
-    })?;
-
-    // Write stdin if provided
-    if let Some(ref opts) = options {
-        if let Some(ref stdin_data) = opts.stdin {
-            if let Some(mut stdin_pipe) = child.stdin.take() {
-                let _ = stdin_pipe.write_all(stdin_data.as_bytes()).await;
-                // Drop stdin_pipe to close the pipe (child gets EOF)
-            }
-        }
-    }
-
-    // Apply timeout if specified
-    let timeout_ms = options.as_ref().and_then(|o| o.timeout_ms);
-    let output = if let Some(ms) = timeout_ms {
-        let duration = std::time::Duration::from_millis(ms.max(0).cast_unsigned());
-        // Spawn the wait in a separate task so we can kill regardless of ownership
-        let task_child = child;
-        let mut wait_task = tokio::spawn(async move { task_child.wait_with_output().await });
-        match tokio::time::timeout(duration, &mut wait_task).await {
-            Ok(Ok(result)) => result.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to wait on '{label}': {e}"),
-            })?,
-            Ok(Err(join_err)) => {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: format!("Task join error waiting on '{label}': {join_err}"),
-                }));
-            }
-            Err(_elapsed) => {
-                // Abort the task so task_child is dropped, triggering kill_on_drop
-                wait_task.abort();
-                return Err(VmRustFnError::from(VmBamlError::Timeout {
-                    message: format!("Command '{label}' timed out after {ms}ms"),
-                    duration: Some(duration),
-                    timeout_type: "timeout".to_string(),
-                }));
-            }
-        }
+    let input = process_input(options.as_ref())?;
+    cmd.stdin(if input.is_some() {
+        Stdio::piped()
     } else {
-        child
-            .wait_with_output()
-            .await
-            .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to wait on '{label}': {e}"),
-            })?
+        Stdio::null()
+    });
+    let stderr = match options.as_ref().and_then(|opts| opts.stderr.as_ref()) {
+        None => Stdio::piped(),
+        Some(mode) => stderr_stdio(Some(mode))?.0,
     };
-
-    let exit_code = i64::from(output.status.code().unwrap_or(-1));
-    Ok(owned::sys::ShellOutput {
+    cmd.stdout(Stdio::piped()).stderr(stderr).kill_on_drop(true);
+    let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
+        message: format!("Failed to spawn '{label}': {error}"),
+    })?;
+    let stdin = child.stdin.take();
+    // Drain both output streams while writing input: a child may write more than
+    // a pipe's capacity before it reads its stdin. Keeping both futures owned by
+    // this operation also makes cancellation and deadlines kill/reap the child.
+    let operation = async move {
+        let write = async move {
+            if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                stdin
+                    .write_all(&input)
+                    .await
+                    .map_err(|error| VmBamlError::Io {
+                        message: format!("Failed to write stdin to '{label}': {error}"),
+                    })?;
+            }
+            Ok::<(), VmRustFnError>(())
+        };
+        let read = async move {
+            child.wait_with_output().await.map_err(|error| {
+                VmBamlError::Io {
+                    message: format!("Failed to wait on '{label}': {error}"),
+                }
+                .into()
+            })
+        };
+        let ((), output) = tokio::try_join!(write, read)?;
+        Ok::<_, VmRustFnError>(output)
+    };
+    let output = match timeout {
+        Some(timeout) => tokio::time::timeout(timeout, operation)
+            .await
+            .map_err(|_| process_timeout_error(label, Some(timeout)))??,
+        None => operation.await?,
+    };
+    let status = process_exit_from_status(output.status);
+    Ok(owned::sys::ProcessOutput {
         stdout: output.stdout,
         stderr: output.stderr,
-        exit_code,
+        exit_code: status.exit_code,
+        signal: status.signal,
     })
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn _detach(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        program: String,
+        args: Vec<String>,
+        options: Option<owned::sys::ExecOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        let mut command = inherited_command(&self.working_dir, &program, args, options);
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            command.process_group(0);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt as _;
+            command.creation_flags(0x0000_0008 | 0x0000_0200);
+        }
+        SysOpOutput::async_op(async move {
+            let mut child = command.spawn().map_err(|error| VmBamlError::Io {
+                message: format!("Failed to detach '{program}': {error}"),
+            })?;
+            let pid = i64::from(child.id());
+            // Reap on long-lived hosts; dropping this host does not terminate the child.
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            Ok(pid)
+        })
+    }
+
     fn _run(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
-        args: Option<Vec<String>>,
-        options: Option<owned::sys::HandoffOptions>,
+        args: Vec<String>,
+        options: Option<owned::sys::ExecOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ProcessExit> {
         let command = inherited_command(&self.working_dir, &program, args, options);
@@ -1757,13 +1834,13 @@ impl io::IoNamespaceSys for NativeSysOps {
         })
     }
 
-    fn _handoff(
+    fn _exec(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
-        args: Option<Vec<String>>,
-        options: Option<owned::sys::HandoffOptions>,
+        args: Vec<String>,
+        options: Option<owned::sys::ExecOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ProcessExit> {
         let mut command = inherited_command(&self.working_dir, &program, args, options);
@@ -1801,31 +1878,29 @@ impl io::IoNamespaceSys for NativeSysOps {
         SysOpOutput::ok(())
     }
 
-    fn exec(
+    fn _capture(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
-        args: Option<Vec<String>>,
+        args: Vec<String>,
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::sys::ShellOutput> {
+    ) -> SysOpOutput<owned::sys::ProcessOutput> {
         let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
-            if let Some(ref a) = args {
-                cmd.args(a);
-            }
+            cmd.args(&args);
             run_process(&mut cmd, options, &working_dir, &program).await
         })
     }
 
-    fn start_process(
+    fn _start_process(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
-        args: Option<Vec<String>>,
+        args: Vec<String>,
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::Process> {
@@ -1836,9 +1911,7 @@ impl io::IoNamespaceSys for NativeSysOps {
             use tokio::io::AsyncWriteExt as _;
 
             let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
-            if let Some(ref args) = args {
-                cmd.args(args);
-            }
+            cmd.args(&args);
             if let Some(dir) =
                 working_dir.for_child(options.as_ref().and_then(|options| options.cwd.as_deref()))
             {
@@ -1856,6 +1929,8 @@ impl io::IoNamespaceSys for NativeSysOps {
                 }
             }
 
+            let timeout = process_timeout(options.as_ref())?;
+            let input = process_input(options.as_ref())?;
             let (stderr_stdio, stderr_piped) =
                 stderr_stdio(options.as_ref().and_then(|options| options.stderr.as_ref()))?;
             cmd.stdin(Stdio::piped())
@@ -1877,15 +1952,8 @@ impl io::IoNamespaceSys for NativeSysOps {
                 None
             };
 
-            let timeout_ms = options
-                .as_ref()
-                .and_then(|options| options.timeout_ms)
-                .map(|milliseconds| milliseconds.max(0));
-            let deadline = timeout_ms.and_then(|milliseconds| {
-                tokio::time::Instant::now().checked_add(std::time::Duration::from_millis(
-                    milliseconds.cast_unsigned(),
-                ))
-            });
+            let deadline =
+                timeout.and_then(|duration| tokio::time::Instant::now().checked_add(duration));
             let stdin = write_pipe(child_stdin, format!("{program} stdin"));
             let stdout = read_pipe(child_stdout, format!("{program} stdout"));
             let stderr = child_stderr
@@ -1894,44 +1962,44 @@ impl io::IoNamespaceSys for NativeSysOps {
             let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
             let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
             let monitor_label = program.clone();
+            let input_pipe = downcast_write_pipe(&stdin)?;
             tokio::spawn(async move {
-                let exit = tokio::select! {
-                    biased;
-                    _ = kill_rx.changed() => {
-                        let _ = child.start_kill();
-                        child.wait().await
-                    }
-                    result = child.wait() => result,
-                }
-                .map(process_exit_from_status)
-                .map_err(|error| format!("Failed to wait on '{monitor_label}': {error}"));
-                let _ = exit_tx.send(Some(exit));
-            });
-
-            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
-                let handle = downcast_write_pipe(&stdin)?;
-                let mut writer = handle.writer.lock().await;
-                let write_result = if let Some(writer) = writer.as_mut() {
-                    let write = writer.write_all(stdin_data.as_bytes());
-                    let result =
-                        match deadline {
-                            Some(deadline) => tokio::time::timeout_at(deadline, write)
+                let write = async move {
+                    if let Some(data) = input {
+                        let mut guard = input_pipe.writer.lock().await;
+                        if let Some(mut pipe) = guard.take() {
+                            pipe.write_all(&data)
                                 .await
-                                .map_err(|_| {
-                                    let _ = kill_tx.send(true);
-                                    process_timeout_error(&program, timeout_ms)
-                                })?,
-                            None => write.await,
-                        };
-                    result.map_err(|error| VmBamlError::Io {
-                        message: format!("Failed to write stdin to '{program}': {error}"),
-                    })
-                } else {
-                    Ok(())
+                                .map_err(|error| VmBamlError::Io {
+                                    message: format!("Failed to write process stdin: {error}"),
+                                })?;
+                        }
+                    }
+                    Ok::<(), VmBamlError>(())
                 };
-                writer.take();
-                write_result?;
-            }
+                let wait =
+                    async move {
+                        tokio::select! {
+                        biased;
+                        _ = kill_rx.changed() => { let _ = child.start_kill(); child.wait().await }
+                        result = child.wait() => result,
+                    }.map(process_exit_from_status).map_err(|error| VmBamlError::Io {
+                        message: format!("Failed to wait on process: {error}"),
+                    })
+                    };
+                let operation = async move {
+                    let ((), status) = tokio::try_join!(write, wait)?;
+                    Ok::<_, VmBamlError>(status)
+                };
+                let result = match deadline {
+                    Some(deadline) => match tokio::time::timeout_at(deadline, operation).await {
+                        Ok(result) => result,
+                        Err(_) => Err(process_timeout_error(&monitor_label, timeout)),
+                    },
+                    None => operation.await,
+                };
+                let _ = exit_tx.send(Some(result));
+            });
 
             Ok(owned::sys::Process {
                 stdin,
@@ -1941,21 +2009,21 @@ impl io::IoNamespaceSys for NativeSysOps {
                     kill_tx,
                     exit_rx,
                     deadline,
-                    timeout_ms,
+                    timeout,
                     label: program,
                 }),
             })
         })
     }
 
-    fn shell(
+    fn _shell(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         command: String,
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::sys::ShellOutput> {
+    ) -> SysOpOutput<owned::sys::ProcessOutput> {
         let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             let resolved = crate::shell::default_shell();
@@ -3916,13 +3984,11 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
 fn inherited_command(
     working_dir: &WorkingDir,
     program: &str,
-    args: Option<Vec<String>>,
-    options: Option<owned::sys::HandoffOptions>,
+    args: Vec<String>,
+    options: Option<owned::sys::ExecOptions>,
 ) -> std::process::Command {
     let mut command = std::process::Command::new(working_dir.resolve_program(program));
-    if let Some(args) = args {
-        command.args(args);
-    }
+    command.args(args);
     if let Some(dir) = working_dir.for_child(options.as_ref().and_then(|opts| opts.cwd.as_deref()))
     {
         command.current_dir(dir);

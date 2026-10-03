@@ -38,8 +38,13 @@ class Connection {
     ) -> Connection {
         let p = baml.sys.start_process(
             command,
-            args,
-            baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: timeout_ms, stdin: null },
+            args = args,
+            options = baml.sys.ProcessOptions {
+                cwd: null,
+                env: null,
+                timeout: baml.time.Duration.from_milliseconds(timeout_ms),
+                stdin: null,
+            },
         ) catch_all (e) {
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,

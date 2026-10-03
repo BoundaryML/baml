@@ -349,8 +349,8 @@ fn pack_handoff_preserves_pid_streams_environment_and_status() {
         built,
         r#"
         function main() -> never {
-            baml.sys.handoff("sh", args = ["-c", "printf '%s:%s:' $$ \"$BAML_HANDOFF\"; cat; printf err >&2; exit 23"],
-                options = baml.sys.HandoffOptions { env: map { "BAML_HANDOFF": "overlay" } })
+            baml.sys.exec("sh", args = ["-c", "printf '%s:%s:' $$ \"$BAML_HANDOFF\"; cat; printf err >&2; exit 23"],
+                options = baml.sys.ExecOptions { env: map { "BAML_HANDOFF": "overlay" } })
         }
     "#,
         &["main"],

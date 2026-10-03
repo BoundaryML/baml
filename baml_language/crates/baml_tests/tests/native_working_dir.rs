@@ -28,12 +28,12 @@ function scan_notes() -> string[] throws baml.errors.Io | baml.errors.ParseError
     baml.glob.new("*.txt").scan(".")
 }
 
-function shell_dir() -> string throws baml.errors.Io | baml.errors.Timeout {
-    baml.sys.shell("pwd", null).stdout.to_string()
+function shell_dir() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
+    baml.sys.shell("pwd", options = null).stdout.to_string()
 }
 
-function run_local_script() -> string throws baml.errors.Io | baml.errors.Timeout {
-    baml.sys.exec("./hello.sh", null, null).stdout.to_string()
+function run_local_script() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
+    baml.sys.capture("./hello.sh", args = [], options = null).stdout.to_string()
 }
 "#;
 
