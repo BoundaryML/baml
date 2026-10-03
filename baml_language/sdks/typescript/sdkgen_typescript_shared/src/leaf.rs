@@ -1396,6 +1396,6 @@ mod tests {
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, stageRuntimeFromBlob, setTypeMap } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("import { defineFunction, setTypeMap, stageRuntimeFromBlob } from \"@boundaryml/baml-bridge\";"));
     }
 }

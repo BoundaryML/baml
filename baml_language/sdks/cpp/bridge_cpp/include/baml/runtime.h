@@ -89,7 +89,7 @@ inline std::string version() {
 // canonical version) first -- the contract-required ordering -- then boots.
 // Replaces any previously initialized runtime.
 inline void stage_runtime_from_blob(const uint8_t* bytecode, size_t length,
-                                         const char* sdk_version) {
+                                    const char* sdk_version) {
   static_cast<void>(sdk_version);
   detail::ensure_registered(toolchain_version(), kBridgeRuntimeName,
                             bridge_runtime_version());
@@ -111,8 +111,8 @@ inline void stage_runtime_from_blob_with_metadata(
       baml_cpp_unhandled_spawn_error_trampoline);
   install_shutdown_hook();
   detail::owned_buffer failure{
-      detail::api().stage_runtime_from_blob_with_metadata(
-          bytecode, length, embedded_baml_toml)};
+      detail::api().stage_runtime_from_blob_with_metadata(bytecode, length,
+                                                          embedded_baml_toml)};
   if (!failure.empty()) {
     throw error(failure.to_string());
   }

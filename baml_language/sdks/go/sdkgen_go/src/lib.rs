@@ -5106,7 +5106,7 @@ fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String
     out.push_str("package bootstrap\n\n");
     out.push_str("import (\n\t\"sync\"\n\n");
     let _ = writeln!(out, "\t\"{BAML_GO_MODULE}\"\n)\n");
-    out.push_str("var (\n\tonce          sync.Once\n\tinitializeErr error\n)\n\n");
+    out.push_str("var (\n\tonce     sync.Once\n\tstageErr error\n)\n\n");
     // One line of encoded bytecode, passed to the runtime as bytes; the
     // bridge decodes it natively.
     let _ = writeln!(
