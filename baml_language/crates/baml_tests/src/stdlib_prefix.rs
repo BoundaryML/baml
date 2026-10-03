@@ -31,9 +31,10 @@
 //! `bex_project`'s build script. Each consumer embeds its own artifact because
 //! their requirements differ: `bex_project` ships one optimization level inside
 //! production binaries where size matters, this crate carries every level for
-//! tests, where it does not.
+//! tests, where it does not. Each level is a separate artifact so a nextest
+//! process only deserializes the level it uses.
 
-use std::{collections::BTreeMap, sync::LazyLock};
+use std::sync::LazyLock;
 
 use baml_db::{ProjectDatabase, stdlib_prefix::decode_artifact, testing};
 pub use baml_db::{
@@ -45,26 +46,45 @@ use bex_vm_types::Program;
 #[path = "../build_stdlib_prefix_config.rs"]
 mod config;
 
-const ARTIFACT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/stdlib_prefix.borsh"));
+// Nextest starts a fresh process per test. Keep each level independently lazy:
+// most tests use One, so decoding Zero and Two would only allocate unused data.
+static PREFIX_ZERO: LazyLock<StdlibPrefix> = LazyLock::new(|| {
+    decode_prefix(
+        OptLevel::Zero,
+        0,
+        include_bytes!(concat!(env!("OUT_DIR"), "/stdlib_prefix_0.borsh")),
+    )
+});
+static PREFIX_ONE: LazyLock<StdlibPrefix> = LazyLock::new(|| {
+    decode_prefix(
+        OptLevel::One,
+        1,
+        include_bytes!(concat!(env!("OUT_DIR"), "/stdlib_prefix_1.borsh")),
+    )
+});
+static PREFIX_TWO: LazyLock<StdlibPrefix> = LazyLock::new(|| {
+    decode_prefix(
+        OptLevel::Two,
+        2,
+        include_bytes!(concat!(env!("OUT_DIR"), "/stdlib_prefix_2.borsh")),
+    )
+});
 
-/// Decoded once per process, on first use. Under `cargo test` that is once for
-/// a whole binary; under `cargo nextest` it is once per test, which is still
-/// one borsh decode instead of one stdlib compile.
-static PREFIXES: LazyLock<BTreeMap<OptLevel, StdlibPrefix>> =
-    LazyLock::new(|| decode_artifact(&config::artifact_key(), ARTIFACT));
+fn decode_prefix(opt: OptLevel, raw: u8, artifact: &[u8]) -> StdlibPrefix {
+    let mut prefixes = decode_artifact(&config::artifact_key(raw), artifact);
+    assert_eq!(prefixes.len(), 1, "expected one stdlib prefix per artifact");
+    prefixes
+        .remove(&opt)
+        .unwrap_or_else(|| panic!("the embedded stdlib prefix carries no slice for {opt:?}"))
+}
 
-/// The build-time stdlib slice for `opt`.
-///
-/// # Panics
-///
-/// If the artifact carries no slice for `opt`. That is a build-configuration
-/// bug (add the level to `config::OPT_LEVELS`), not a runtime condition, so it
-/// fails loudly rather than silently falling back to an honest compile — which
-/// would look like a mysterious slowdown instead of a fixable mistake.
+/// The build-time stdlib slice for `opt`, decoded once per process on first use.
 pub fn prefix(opt: OptLevel) -> &'static StdlibPrefix {
-    PREFIXES.get(&opt).unwrap_or_else(|| {
-        panic!("the embedded stdlib prefix carries no slice for {opt:?}; add it to OPT_LEVELS")
-    })
+    match opt {
+        OptLevel::Zero => &PREFIX_ZERO,
+        OptLevel::One => &PREFIX_ONE,
+        OptLevel::Two => &PREFIX_TWO,
+    }
 }
 
 /// Set up a test database from BAML source code.

@@ -1,17 +1,19 @@
-//! Executes the type-system quiz conformance suite in `tools/type_quiz/` via
-//! `baml_cli`, the same way `baml_src.rs` drives the corpus.
+//! Execute the type-system quiz conformance suite in `tools/type_quiz/` with
+//! Cargo's prebuilt CLI, the same way `baml_corpus.rs` drives the corpus.
+//! Keeping this in `baml_cli` makes the subprocess use the outer invocation's
+//! exact binary, including its profile and features, without nested Cargo runs.
 //!
 //! The suite verifies every quiz item against the real compiler, so a
 //! compiler change that alters a verdict, a diagnostic code, or a reflected
 //! type kind fails here rather than leaving the quiz teaching a stale
 //! language.
 
-/// The workspace root, which `crates/baml_tests` sits two levels under.
+/// The workspace root, which `crates/baml_cli` sits two levels under.
 fn workspace_root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
-        .expect("crates/baml_tests sits two levels under the workspace root")
+        .expect("crates/baml_cli sits two levels under the workspace root")
         .to_path_buf()
 }
 
@@ -91,8 +93,8 @@ fn type_quiz_formatted() {
     let package = workspace_root.join("tools/type_quiz");
     let mut unformatted = Vec::new();
     for source in quiz_sources(&package) {
-        let output = std::process::Command::new("cargo")
-            .args(["run", "-q", "-p", "baml_cli", "--", "fmt", "--dry-run"])
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+            .args(["fmt", "--dry-run"])
             .arg(&source)
             .env("BAML_CLI_ALLOW_DIRECT", "1")
             .current_dir(&workspace_root)
@@ -148,9 +150,10 @@ fn type_quiz_conformance() {
     let home = tmp.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
-    let status = std::process::Command::new("cargo")
-        .args(["run", "-p", "baml_cli", "--", "test", "--from"])
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+        .args(["test", "--from"])
         .arg(workspace_root.join("tools/type_quiz"))
+        .current_dir(&workspace_root)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         // Most of the suite compiles programs through the real compiler, and on
         // a shared runner with the rest of `baml_tests` alongside, the CLI's

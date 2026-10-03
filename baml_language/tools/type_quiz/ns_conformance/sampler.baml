@@ -441,8 +441,8 @@ function selected() -> root.engine.Turn[] throws never {
     )
 }
 
-function served_candidates() -> root.engine.Candidate[] throws never {
-    root.engine.served(selected()).map((turn) -> {
+function served_candidates(turns: root.engine.Turn[]) -> root.engine.Candidate[] throws never {
+    root.engine.served(turns).map((turn) -> {
         turn.chosen.candidate
     })
 }
@@ -469,8 +469,8 @@ function size_of(c: root.engine.Candidate) -> float throws never {
     c.served.features.get("size") ?? 0.0
 }
 
-function balance_report() -> string[] throws never {
-    let cases = served_candidates();
+function balance_report(turns: root.engine.Turn[]) -> string[] throws never {
+    let cases = served_candidates(turns);
     let traps = cases.filter((c) -> {
         c.served.traps.length() > 0
     });
@@ -499,8 +499,8 @@ function balance_report() -> string[] throws never {
         })
 }
 
-function served_kinds() -> root.engine.VerdictKind[] throws never {
-    root.engine.served(selected()).map((turn) -> {
+function served_kinds(turns: root.engine.Turn[]) -> root.engine.VerdictKind[] throws never {
+    root.engine.served(turns).map((turn) -> {
         root.engine.verdict_kind(turn.chosen.candidate.case.key)
     })
 }
@@ -508,8 +508,8 @@ function served_kinds() -> root.engine.VerdictKind[] throws never {
 /// The verdict at a step must not be guessable from the step's index or
 /// from the step before: a parity guess and a "same as last time" guess
 /// must both land near one half.
-function serial_report() -> string[] throws never {
-    let kinds = served_kinds();
+function serial_report(turns: root.engine.Turn[]) -> string[] throws never {
+    let kinds = served_kinds(turns);
     let n = kinds.length();
     if (n < 2) {
         return ["fewer than two turns were served"];
@@ -535,8 +535,7 @@ function serial_report() -> string[] throws never {
 
 /// Every turn of the fixed session has a case, and the schedule is honoured
 /// outright: the budget's re-draws must leave no turn to fall back.
-function session_health() -> string[] throws never {
-    let turns = selected();
+function session_health(turns: root.engine.Turn[]) -> string[] throws never {
     let served = root.engine.served(turns);
     let fallbacks = served
         .filter((turn) -> {
@@ -552,7 +551,7 @@ function session_health() -> string[] throws never {
         })
 }
 
-function unverified_items_served() -> string[] throws never {
+function unverified_items_served(turns: root.engine.Turn[]) -> string[] throws never {
     let verified = root.bank.items().filter_map((item) -> {
         if (item.status() is root.engine.Verified) {
             item.id()
@@ -561,7 +560,7 @@ function unverified_items_served() -> string[] throws never {
         }
     });
     distinct(
-        root.engine.served(selected()).filter_map((turn) -> {
+        root.engine.served(turns).filter_map((turn) -> {
             if (verified.includes(turn.chosen.item)) {
                 null
             } else {
@@ -572,8 +571,8 @@ function unverified_items_served() -> string[] throws never {
 }
 
 /// Every served case, through the compiler.
-function served_disagreements() -> string[] throws never {
-    root.engine.served(selected()).filter_map((turn) -> {
+function served_disagreements(turns: root.engine.Turn[]) -> string[] throws never {
+    root.engine.served(turns).filter_map((turn) -> {
         let outcome = root.engine.verify(turn.chosen.candidate.case);
         if (root.engine.agrees(outcome)) {
             null
@@ -583,12 +582,8 @@ function served_disagreements() -> string[] throws never {
     })
 }
 
-function session_is_deterministic() -> bool throws never {
-    selected() == selected()
-}
-
-function boring_share() -> float throws never {
-    let cases = served_candidates();
+function boring_share(turns: root.engine.Turn[]) -> float throws never {
+    let cases = served_candidates(turns);
     if (cases.length() == 0) {
         return 1.0;
     }
@@ -600,30 +595,33 @@ function boring_share() -> float throws never {
     boring * 1.0 / (cases.length() * 1.0)
 }
 
-test "session: the verdict is balanced overall, among traps, and across size" {
-    assert.equal(balance_report().join("\n"), "")
+/// Report the same empty-string comparison as the individual tests, with a
+/// label that identifies the assertion when several share one session.
+function assert_session_report(label: string, report: string[]) -> void throws never {
+    assert.equal(`${label}: ${report.join("\n")}`, `${label}: `)
 }
 
-test "session: the verdict is not predictable from the step index or the step before" {
-    assert.equal(serial_report().join("\n"), "")
+/// Generate the fixed session twice for determinism, then reuse the first
+/// session for each independent report. Reporting only reads the turns.
+function check_selected_session() -> void throws never {
+    let turns = selected();
+    assert.equal(
+        `same seed serves same turns: ${turns == selected()}`,
+        "same seed serves same turns: true",
+    );
+    assert_session_report("verdict balanced overall, among traps, and across size", balance_report(turns));
+    assert_session_report("verdict not predictable from step index or previous step", serial_report(turns));
+    assert_session_report("every turn served and fallbacks rare", session_health(turns));
+    assert_session_report("only verified items served", unverified_items_served(turns));
+    assert_session_report("every served case agrees with the compiler", served_disagreements(turns));
+    let boring = boring_share(turns);
+    if (!(boring < 0.25)) {
+        throw baml.panics.AssertionFailed {
+            message: `single-rule cases every model agrees with: share ${boring}, expected < 0.25`,
+        }
+    }
 }
 
-test "session: every turn is served and fallbacks are rare" {
-    assert.equal(session_health().join("\n"), "")
-}
-
-test "session: only verified items are served" {
-    assert.equal(unverified_items_served().join("\n"), "")
-}
-
-test "session: every served case agrees with the compiler" {
-    assert.equal(served_disagreements().join("\n"), "")
-}
-
-test "session: the same seed serves the same turns" {
-    assert.is_true(session_is_deterministic())
-}
-
-test "session: single-rule cases every model agrees with are rare" {
-    assert.is_true(boring_share() < 0.25)
+test "session: fixed-seed turns are deterministic, balanced, healthy, and compiler-verified" {
+    check_selected_session()
 }

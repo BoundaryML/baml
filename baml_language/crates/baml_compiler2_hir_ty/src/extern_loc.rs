@@ -441,7 +441,7 @@ pub fn mounted_alias_loc<'db>(
 /// admissibility, and an impl header cannot carry one (`implement I<X = T>
 /// for …` is E0001; asserted where the identity is built) — while the pins
 /// inside a bound-side interface ride along, as inputs.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct ImplIdentity {
     /// The implemented interface's head.
     pub interface: DeclName,
@@ -536,6 +536,7 @@ fn canonical_closed_interface(interface: &ClosedInterface) -> ClosedInterface {
 /// while [`ImplIdentity`] is what coherence guarantees unique per package.
 #[salsa::interned]
 pub struct ExternImplLoc<'db> {
+    #[returns(clone)]
     pub package: SourceRoot,
     #[returns(ref)]
     pub identity: ImplIdentity,

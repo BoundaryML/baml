@@ -412,3 +412,66 @@ testset "transient" {
     assert!(stdout(&retry).contains("root.orders::transient::path/to/case"));
     assert!(!stdout(&retry).contains("(failed to expand)"));
 }
+
+/// Registration must observe mutable records, including edits that keep array
+/// lengths unchanged. Counting a cached name set would silently miss these.
+#[test]
+fn registration_suffixes_follow_current_mutable_names() {
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path());
+    std::fs::write(
+        tmp.path().join("baml_src/ns_orders/tests.baml"),
+        r#"
+test "registration" {
+  let c = testing.TestCollector.new("");
+  let body: testing.TestBody = () -> void {};
+  c.register_test("item#explicit", body, null);
+  c.register_test("item", body, null);
+  c.register_test("item", body, null);
+  assert.equal(c.tests[1].name, "item#2");
+  assert.equal(c.tests[2].name, "item#3");
+
+  c.tests[0].name = "unrelated";
+  c.register_test("item", body, null);
+  assert.equal(c.tests[3].name, "item#3");
+  c.tests[0] = testing.TestRegistration { name: "item#replacement", body: body, runner: null };
+  c.register_test("item", body, null);
+  assert.equal(c.tests[4].name, "item#5");
+  c.tests = [
+    testing.TestRegistration { name: "item_extra", body: body, runner: null },
+    testing.TestRegistration { name: "other", body: body, runner: null },
+    testing.TestRegistration { name: "third", body: body, runner: null },
+    testing.TestRegistration { name: "fourth", body: body, runner: null },
+    testing.TestRegistration { name: "fifth", body: body, runner: null },
+  ];
+  c.register_test("item", body, null);
+  assert.equal(c.tests[5].name, "item");
+
+  let collect: testing.TestSetBody = (child: testing.TestCollector) -> void {};
+  c.register_test_set("item", collect, null);
+  c.register_test_set("item", collect, null);
+  assert.equal(c.testsets[0].name, "item");
+  assert.equal(c.testsets[1].name, "item#2");
+  c.testsets[0].name = "other";
+  c.register_test_set("item", collect, null);
+  assert.equal(c.testsets[2].name, "item#2");
+  c.testsets[1] = testing.TestSetRegistration { name: "other", collector: collect, runner: null };
+  c.register_test_set("item", collect, null);
+  assert.equal(c.testsets[3].name, "item#2");
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run(tmp.path(), &["test", "--no-profile"]);
+    let combined = format!(
+        "{}{}",
+        stdout(&output),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "{combined}");
+    assert!(
+        combined.contains("1 passed, 0 failed, 1 total"),
+        "{combined}"
+    );
+}

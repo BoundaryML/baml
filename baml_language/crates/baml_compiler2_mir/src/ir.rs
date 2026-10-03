@@ -37,7 +37,7 @@ use subenum::subenum;
 ///   testing individual instructions (e.g. `unary_op -` for `-5`).
 /// - `Two`: Everything in `One` plus MIR-level constant folding and future
 ///   advanced transforms (e.g. type-tag switch dispatch).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, salsa::Update)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, salsa::SalsaValue)]
 pub enum OptLevel {
     Zero,
     #[default]
@@ -181,7 +181,7 @@ pub struct RuntimeInterfaceBound {
 /// bug and never a user error (lowering runs only on a program with no
 /// errors). A function or initializer that hits one has no MIR — lowering
 /// answers with this instead, and the compile fails.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct MirInternalError {
     pub message: String,
     /// The source being lowered when the inconsistency was found.
@@ -221,25 +221,10 @@ pub struct MirFunction<'db> {
     pub signature: Option<RuntimeSignature>,
 }
 
-// Safety: replacement-only `Update` (always report changed). MIR feeds the
-// untracked emit stage, so backdating buys nothing, and the tree has no
-// `PartialEq` to compare with; unconditionally replacing the old value is
-// always sound under the `Update` contract ONLY under this premise:
-// `MirFunction` OWNS all of its data — its sole `'db` members are Copy
-// interned ids (no `&'db` references, no drop glue that could observe the
-// old revision). Adding any `&'db` field would make the blind replacement
-// UB; re-derive that before extending the struct.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[expect(unsafe_code)]
-unsafe impl salsa::Update for MirFunction<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        unsafe {
-            std::ptr::drop_in_place(old_pointer);
-            std::ptr::write(old_pointer, new_value);
-        }
-        true
-    }
-}
+unsafe impl salsa::SalsaValue for MirFunction<'_> {}
 
 // ============================================================================
 // Identifiers

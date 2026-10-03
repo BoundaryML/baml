@@ -11,7 +11,7 @@ pub use tokens::{Token, TokenKind, is_baml_identifier, lex_lossless, reconstruct
 /// Tracked: tokenize a source file
 /// This function performs lexical analysis on a BAML source file,
 /// converting the raw text into a sequence of tokens.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn lex_file(db: &dyn salsa::Database, file: SourceFile) -> Vec<Token> {
     let text = file.text(db);
     lex_lossless(text, file.file_id(db))

@@ -231,9 +231,9 @@ jobs:
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        # The runtime corpus moved from the excluded baml_tests package into
-        # baml_cli; keep its existing ownership in the snapshot job.
-        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
+        # The runtime corpus and type quiz moved from the excluded baml_tests
+        # package into baml_cli; keep their ownership in the snapshot job.
+        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus) and not binary(=type_quiz)'
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
@@ -448,7 +448,7 @@ jobs:
 
       # CLI binary e2e tests run separately after disk cleanup below.
       - name: "Run tests"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus)'
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus) and not binary(=type_quiz)'
         working-directory: baml_language
 
       - name: "Free disk for CLI binary e2e tests"

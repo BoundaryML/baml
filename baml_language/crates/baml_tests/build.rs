@@ -32,24 +32,33 @@ fn generate_stdlib_prefix() {
 
     println!("cargo:rerun-if-changed=build_stdlib_prefix_config.rs");
 
-    let prefixes = stdlib_prefix_config::OPT_LEVELS
-        .into_iter()
-        .map(|raw| {
-            let opt = match raw {
-                0 => OptLevel::Zero,
-                1 => OptLevel::One,
-                2 => OptLevel::Two,
-                other => panic!("OPT_LEVELS lists {other}, which is not an OptLevel"),
-            };
-            build_stdlib_prefix(opt)
-        })
-        .collect();
-    let bytes =
-        baml_db::stdlib_prefix::encode_artifact(&stdlib_prefix_config::artifact_key(), prefixes);
-
-    let out_dir = env::var_os("OUT_DIR").expect("Cargo sets OUT_DIR for build scripts");
-    fs::write(PathBuf::from(out_dir).join("stdlib_prefix.borsh"), bytes)
-        .expect("write stdlib prefix artifact");
+    let out_dir =
+        PathBuf::from(env::var_os("OUT_DIR").expect("Cargo sets OUT_DIR for build scripts"));
+    let mut interfaces = None;
+    for raw in stdlib_prefix_config::OPT_LEVELS {
+        let opt = match raw {
+            0 => OptLevel::Zero,
+            1 => OptLevel::One,
+            2 => OptLevel::Two,
+            other => panic!("OPT_LEVELS lists {other}, which is not an OptLevel"),
+        };
+        let prefix = build_stdlib_prefix(opt);
+        // Interfaces do not depend on optimization. Preserve the combined
+        // artifact's consistency check while storing each level separately.
+        match &interfaces {
+            None => interfaces = Some(prefix.interfaces.clone()),
+            Some(first) => assert_eq!(
+                first, &prefix.interfaces,
+                "stdlib package interfaces differ between optimization levels"
+            ),
+        }
+        let bytes = baml_db::stdlib_prefix::encode_artifact(
+            &stdlib_prefix_config::artifact_key(raw),
+            vec![prefix],
+        );
+        fs::write(out_dir.join(format!("stdlib_prefix_{raw}.borsh")), bytes)
+            .expect("write stdlib prefix artifact");
+    }
 }
 
 fn main() {

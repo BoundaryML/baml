@@ -285,33 +285,12 @@ pub struct FileSemanticIndex<'db> {
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
-// ── salsa::Update impl ────────────────────────────────────────────────────────
+// ── Salsa retention safety ────────────────────────────────────────────────
 
-/// # Safety
-///
-/// This impl is required for `FileSemanticIndex` to be returned from a
-/// `#[salsa::tracked(no_eq)]` query. With `no_eq`, Salsa never calls
-/// `values_equal` so the actual equality logic doesn't matter — but the
-/// `maybe_update` function must correctly transfer ownership of `new_value`
-/// into `old_pointer` and return whether a change occurred.
-///
-/// We always return `true` (always mark as changed), matching the `no_eq`
-/// semantics. The `*old_pointer = new_value` write is safe because `old_pointer`
-/// points to valid allocated memory that Salsa owns.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for FileSemanticIndex<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and points to memory Salsa
-        // has previously initialized. We drop the old value and write the new one.
-        #[allow(unsafe_code)]
-        unsafe {
-            std::ptr::drop_in_place(old_pointer);
-            std::ptr::write(old_pointer, new_value);
-        }
-        true
-    }
-}
+unsafe impl salsa::SalsaValue for FileSemanticIndex<'_> {}
 
 impl FileSemanticIndex<'_> {
     /// Find the `Lambda` scope whose range exactly matches `span`.

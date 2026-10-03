@@ -86,7 +86,7 @@ function Run(state: app.AgentState) -> PlanThenAct {
 async fn run_main_with_logs(
     source: &str,
 ) -> (Result<BexExternalValue, EngineError>, TraceLogDrainReport) {
-    let program = baml_db::testing::compile_source(source);
+    let program = baml_tests::stdlib_prefix::compile_source(source);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,

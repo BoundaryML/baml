@@ -1308,25 +1308,10 @@ impl Default for WorkingResult<'_> {
     }
 }
 
-// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent. The
-// equality comparison IS the S3 firewall: an edit that re-executes
-// `infer_body` but reproduces the same result cuts off every downstream
-// consumer.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for InferenceResult<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for InferenceResult<'_> {}
 
 fn infer_function_body_cycle_initial<'db>(
     _db: &'db dyn baml_compiler2_hir::Db,
@@ -1415,7 +1400,7 @@ fn infer_let_body_cycle_initial<'db>(
 /// span-free by construction - the HIR body, the item type refs, the
 /// body type refs, and the semantic index's structural joins (the
 /// lambda-scope map replaced the last span dependence) - and the
-/// PartialEq-driven `Update` gives downstream consumers early cutoff on
+/// `PartialEq` comparison gives downstream consumers early cutoff on
 /// unchanged results.
 #[salsa::tracked(returns(ref), cycle_initial = infer_function_body_cycle_initial)]
 fn infer_function_body<'db>(

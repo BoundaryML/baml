@@ -125,26 +125,6 @@ impl std::ops::Deref for PackageAliases {
     }
 }
 
-// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
-// `Update` impl uses `PartialEq` for early-cutoff.
-#[expect(unsafe_code)]
-unsafe impl salsa::Update for PackageAliases {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[expect(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[expect(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 // ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
 
 /// Lower a type expression, treating the `bindings` map's keys as the in-scope type variables,
@@ -1593,30 +1573,6 @@ struct PackageLoweringData {
     /// enumeration is skipped for the overwhelmingly common plain-method /
     /// field-access case.
     interface_method_names: FxHashSet<Name>,
-}
-
-/// # Safety
-///
-/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
-/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
-/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
-#[expect(unsafe_code)]
-unsafe impl salsa::Update for PackageLoweringData {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[expect(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[expect(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 /// Build the package-invariant [`PackageLoweringData`] once per package,

@@ -60,6 +60,12 @@ pub fn package_coherence_diagnostics(
     pkg_id: baml_base::SourceRoot,
 ) -> Vec<CoherenceViolation> {
     let mut own = package_impls_with_spans(db, pkg_id);
+    // Every reported pair contains an implementation owned by this package.
+    // With none, dependency preparation and alias normalization cannot affect
+    // the result. Reading `own` still tracks later additions of local impls.
+    if own.is_empty() {
+        return Vec::new();
+    }
     // Sort by source position so the overlap attribution tracks a stable textual order
     // rather than query iteration order, and stays stable when an unrelated item is
     // added. Key on `(file_id, start, end)`: a package spans multiple files, and keying

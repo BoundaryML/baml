@@ -60,7 +60,7 @@ pub const AI_STREAM_DONE: &str = "ai.stream.Done";
 /// // Builtin method "Array.length"
 /// QualifiedName { namespace: Namespace::Builtin { path: ["Array"] }, name: "length" }
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct QualifiedName {
     /// The namespace this item belongs to.
     pub namespace: Namespace,
@@ -71,7 +71,7 @@ pub struct QualifiedName {
 /// The namespace an item belongs to.
 ///
 /// Namespaces organize items by their origin and resolution rules.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum Namespace {
     /// Compiler builtins that are "magic" - the compiler knows about them specially.
     ///
