@@ -1663,8 +1663,10 @@ async fn run_process(
         cmd.current_dir(dir);
     }
     if let Some(ref opts) = options {
-        if let Some(ref env) = opts.env {
+        if opts.clear_env == Some(true) {
             cmd.env_clear();
+        }
+        if let Some(ref env) = opts.env {
             cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
         }
         if opts.stdin.is_some() {
@@ -1733,6 +1735,59 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn _run(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        program: String,
+        args: Option<Vec<String>>,
+        options: Option<owned::sys::HandoffOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::sys::ProcessExit> {
+        let command = inherited_command(&self.working_dir, &program, args, options);
+        SysOpOutput::async_op(async move {
+            let status = tokio::process::Command::from(command)
+                .kill_on_drop(true)
+                .status()
+                .await
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to run '{program}': {error}"),
+                })?;
+            Ok(process_exit_from_status(status))
+        })
+    }
+
+    fn _handoff(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        program: String,
+        args: Option<Vec<String>>,
+        options: Option<owned::sys::HandoffOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::sys::ProcessExit> {
+        let mut command = inherited_command(&self.working_dir, &program, args, options);
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            let error = command.exec();
+            SysOpOutput::err(VmBamlError::Io {
+                message: format!("Failed to hand off to '{program}': {error}"),
+            })
+        }
+        #[cfg(not(unix))]
+        SysOpOutput::async_op(async move {
+            let status = tokio::process::Command::from(command)
+                .kill_on_drop(true)
+                .status()
+                .await
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to hand off to '{program}': {error}"),
+                })?;
+            Ok(process_exit_from_status(status))
+        })
+    }
+
     fn collect_garbage(
         &self,
         _heap: &Arc<BexHeap>,
@@ -1790,8 +1845,10 @@ impl io::IoNamespaceSys for NativeSysOps {
                 cmd.current_dir(dir);
             }
             if let Some(ref options) = options {
-                if let Some(ref env) = options.env {
+                if options.clear_env == Some(true) {
                     cmd.env_clear();
+                }
+                if let Some(ref env) = options.env {
                     cmd.envs(
                         env.iter()
                             .map(|(key, value)| (key.as_str(), value.as_str())),
@@ -3855,3 +3912,28 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
 // state + SetOnce + cancel token) and are dispatched via the native-call
 // path (`$rust_function` in `ns_future/future.baml`), not through sys-ops.
 // See `bex_vm::package_baml` for the trait impl.
+
+fn inherited_command(
+    working_dir: &WorkingDir,
+    program: &str,
+    args: Option<Vec<String>>,
+    options: Option<owned::sys::HandoffOptions>,
+) -> std::process::Command {
+    let mut command = std::process::Command::new(working_dir.resolve_program(program));
+    if let Some(args) = args {
+        command.args(args);
+    }
+    if let Some(dir) = working_dir.for_child(options.as_ref().and_then(|opts| opts.cwd.as_deref()))
+    {
+        command.current_dir(dir);
+    }
+    if let Some(options) = options {
+        if options.clear_env == Some(true) {
+            command.env_clear();
+        }
+        if let Some(env) = options.env {
+            command.envs(env);
+        }
+    }
+    command
+}

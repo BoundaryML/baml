@@ -210,6 +210,35 @@ impl io::IoClassSysProcess for WasmSys {
 }
 
 impl IoNamespaceSys for WasmSys {
+    fn _run(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::HandoffOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Terminal process handoff is not supported by this host".into(),
+        })
+    }
+    fn _handoff(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::HandoffOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".into(),
+            message: "Terminal process handoff is not supported by this host".into(),
+        })
+    }
+
     fn collect_garbage(
         &self,
         _heap: &Arc<BexHeap>,

@@ -1814,6 +1814,35 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn _run(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::HandoffOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _handoff(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _program: String,
+        _args: Option<Vec<String>>,
+        _options: Option<io::owned::sys::HandoffOptions>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
     fn collect_garbage(
         &self,
         _h: &Arc<BexHeap>,
@@ -2660,6 +2689,18 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_root_io_write_for_writepipe_flush(
                     heap, permit, args, ctx, call_id,
                 )
+            })
+        };
+        self.inner.baml_sys__run = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys__run(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys__handoff = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys__handoff(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_exec = {

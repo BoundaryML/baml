@@ -2,8 +2,10 @@
 class ProcessOptions {
     /// Working directory for the child process.
     cwd: string?,
-    /// Environment variables to set for the child process.
+    /// Environment variables to overlay on the inherited environment.
     env: map<string, string>?,
+    /// Start with an empty environment before applying `env`. Defaults to false.
+    clear_env: bool?,
     /// Maximum time in milliseconds to wait for the process to complete.
     timeout_ms: int?,
     /// The child process's complete stdin. `start_process` writes it and then
@@ -207,7 +209,7 @@ function start_process(
     $rust_io_function
 }
 
-/// Runs a shell `command` string (passed to `/bin/sh -c`) and returns its output.
+/// Runs a `command` string in the host's default shell and returns its output.
 function shell(
     command: string,
     options: ProcessOptions?,
@@ -259,5 +261,56 @@ function argv() -> string[] throws never {
 ///
 /// - `baml.panics.HostUnavailable` if the environment does not support process IDs (e.g. in a browser).
 function pid() -> int throws never {
+    $rust_io_function
+}
+
+/// Options for commands that inherit the terminal and standard streams.
+class HandoffOptions {
+    cwd: string?,
+    /// Variables to overlay on the inherited environment.
+    env: map<string, string>?,
+    /// Start with an empty environment. Defaults to false.
+    clear_env: bool?,
+}
+
+/// Runs a child with inherited stdin, stdout and stderr and waits for its status.
+/// Use `exec` to capture output or `start_process` to work with pipes.
+function run(
+    program: string,
+    args: string[]? = null,
+    options: HandoffOptions? = null,
+) -> ProcessExit throws root.errors.Io {
+    _run(program, args, options)
+}
+
+/// Transfers this process to `program`, preserving its terminal and streams.
+/// On Unix, successful handoff replaces the entire host process: no BAML code,
+/// deferred cleanup or telemetry shutdown runs afterward. On Windows, which
+/// cannot replace a process, waits for the child and exits with its status.
+/// A launch failure throws `Io` and leaves the caller running.
+function handoff(
+    program: string,
+    args: string[]? = null,
+    options: HandoffOptions? = null,
+) -> never throws root.errors.Io {
+    let status = _handoff(program, args, options);
+    exit(status.exit_code)
+}
+
+/// (internal) Native inherited-stream child operation.
+function _run(
+    program: string,
+    args: string[]?,
+    options: HandoffOptions?,
+) -> ProcessExit throws root.errors.Io {
+    $rust_io_function
+}
+
+/// (internal) Unix exec or Windows inherited-stream child operation.
+function _handoff(
+    program: string,
+    args: string[]?,
+    options: HandoffOptions?,
+) -> ProcessExit throws root.errors.Io {
     $rust_io_function
 }
