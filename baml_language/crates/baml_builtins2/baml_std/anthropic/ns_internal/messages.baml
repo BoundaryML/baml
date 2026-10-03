@@ -130,7 +130,7 @@ class MessagesRequest {
 // ---------------------------------------------------------------------------
 // Response envelope. from_string ignores unknown fields; only what the
 // client reads is typed, and EVERY field the API may omit is optional
-// (a required int here is a ParseFailed waiting to happen).
+// (a required int here is an InvalidResponse waiting to happen).
 
 class ContentBlock {
     type: string,
@@ -1047,40 +1047,24 @@ function _anth_stream_call_at(state: AnthStreamState, index: int?) -> AnthStream
     null
 }
 
-/// (internal) A mid-stream `error` event -> the precise failure. Same discipline as
-/// ai.errors.classify_http: only genuinely transient conditions get a
-/// retry-safe transport classification; a bad request stays a bad request so
-/// ai.clients.Retry does not replay it.
+/// (internal) Preserve a valid in-band provider error and its native type.
 function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors.Failure {
-    let kind = error?.type ?? "";
-    let detail = error?.message ?? kind;
-    match (kind) {
-        "rate_limit_error" => {
-            ai.errors.RateLimited {
-                status_code: null,
-                provider: "anthropic",
-                retry_after_ms: null,
-                raw_body: raw,
-            }
-        },
-        "overloaded_error" | "api_error" | "timeout_error" => {
-            ai.errors.NetworkFailure {
-                status_code: null,
-                provider: "anthropic",
-                detail: `${kind}: ${detail}`,
-                raw_body: raw,
-            }
-        },
-        // authentication_error, permission_error, invalid_request_error,
-        // not_found_error, request_too_large, billing_error, and anything new.
-        _ => {
-            ai.errors.InvalidRequest {
-                provider: "anthropic",
-                status_code: null,
-                detail: `${kind}: ${detail}`,
-                raw_body: raw,
-            }
-        },
+    if let reported: AnthStreamError = error {
+        ai.errors.ProviderError {
+            provider: "anthropic",
+            message: reported.message ?? reported.type ?? "the Anthropic request failed",
+            error_type: reported.type,
+            error_code: null,
+            raw_body: raw,
+            status_code: null,
+        }
+    } else {
+        ai.errors.InvalidResponse {
+            provider: "anthropic",
+            message: "the error event contained no error object",
+            raw_body: raw,
+            status_code: null,
+        }
     }
 }
 
@@ -1090,8 +1074,18 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
     let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
-            let ev: AnthStreamEvent? = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
-                _ => null,
+            if (data.trim() == "") {
+                continue;
+            }
+            let ev = baml.json.from_string<AnthStreamEvent>(data) catch_all (e) {
+                let parse => {
+                    throw ai.errors.InvalidResponse {
+                    provider: "anthropic",
+                    message: parse.to_string(),
+                    raw_body: data,
+                    status_code: null,
+                }
+                },
             };
             if let event: AnthStreamEvent = ev {
                 let t = event.type ?? raw.event ?? "";

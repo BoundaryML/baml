@@ -113,6 +113,8 @@ function _oai_error_name(error: unknown) -> string {
         let refused: ai.errors.Refused => `refused:${refused.reason}`,
         let network: ai.errors.NetworkFailure => `network:${network.detail}`,
         let parse: ai.errors.ParseFailed => "parse_failed",
+        let invalid: ai.errors.InvalidResponse => "invalid_response",
+        let provider: ai.errors.ProviderError => `provider_error:${provider.message}`,
         _ => `other:${error.to_string()}`,
     }
 }
@@ -756,7 +758,7 @@ test "oai_stream_failed_event" {
     // provider failure that happens to be delivered inside a 200 body. It
     // classifies exactly like the HTTP 500 form (NetworkFailure), so a Retry
     // policy treats the two envelopes of the same failure alike.
-    assert.equal(oai_stream_failed_event(), "network:the model failed")
+    assert.equal(oai_stream_failed_event(), "provider_error:the model failed")
 }
 
 // An in-body failure whose code is NOT transient stays a permanent
@@ -779,7 +781,7 @@ function oai_stream_failed_event_permanent() -> string {
 }
 
 test "oai_stream_failed_event_permanent" {
-    assert.equal(oai_stream_failed_event_permanent(), "invalid_request:bad prompt")
+    assert.equal(oai_stream_failed_event_permanent(), "provider_error:bad prompt")
 }
 
 // A stream that dies mid-turn — one delta, then the socket closes with no
@@ -892,7 +894,7 @@ function oai_stream_error_event() -> string {
 }
 
 test "oai_stream_error_event" {
-    assert.equal(oai_stream_error_event(), "rate_limited")
+    assert.equal(oai_stream_error_event(), "provider_error:slow down")
 }
 
 // Open a stream below the runner and drain it — the client interface directly,

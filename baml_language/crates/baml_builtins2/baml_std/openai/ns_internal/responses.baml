@@ -138,7 +138,7 @@ class OaResponsesRequest {
 // ---------------------------------------------------------------------------
 // Response envelopes. `from_string` ignores unknown fields, and every field the
 // API may omit is optional — a missing `usage.input_tokens` must not turn a
-// good response into ai.errors.ParseFailed.
+// good response into ai.errors.InvalidResponse.
 
 class OaContentPart {
     type: string?,
@@ -837,54 +837,15 @@ function _image_mime(output_format: string?) -> string {
     }
 }
 
-/// (internal) Error codes that name a TRANSIENT provider-side failure. The Responses API's
-/// own `response.failed` example is `{"code":"server_error", …}` — a 500
-/// delivered inside a 200 body — and the same failure arriving as an HTTP status
-/// classifies as ai.errors.NetworkFailure (ai.errors.classify_http maps >=500
-/// there). Classifying the in-body form as InvalidRequest instead would make it
-/// permanently non-retryable under ai.Retry's default judgment, purely because
-/// of which envelope the provider chose.
-function _transient_code(code: string) -> bool {
-    code.includes("server_error")
-        || code.includes("timeout")
-        || code.includes("timed_out")
-        || code.includes("overloaded")
-        || code.includes("unavailable")
-        || code.includes("try_again")
-}
-
-/// (internal) A provider-reported error becomes the precise ai.errors class, never a
-/// blanket NetworkFailure: a retry-safe classification on a 400-shaped failure
-/// is what makes a Retry policy replay an invalid request forever.
-function _error_failure(err: OaErrorBody) -> ai.errors.Failure {
-    // Billing errors split the signal across `type` ("insufficient_quota")
-    // and `code` ("credit_balance_exhausted"), so classify on both.
-    let code = ((err.code ?? "") + " " + (err.type ?? "")).to_lower_case();
-    let detail = err.message ?? "the OpenAI Responses request failed";
-    let raw = baml.json.stringify(baml.json.to_json(err));
-    if (code.includes("rate_limit") || code.includes("quota") || code.includes("credit_balance")) {
-        ai.errors.RateLimited {
-            status_code: null,
-            provider: "openai",
-            retry_after_ms: null,
-            raw_body: raw,
-        }
-    } else if (code.includes("content_filter") || code.includes("moderation") || code.includes("refusal")) {
-        ai.errors.Refused { provider: "openai", reason: detail, raw_body: raw }
-    } else if (_transient_code(code)) {
-        ai.errors.NetworkFailure {
-            status_code: null,
-            provider: "openai",
-            detail: detail,
-            raw_body: raw,
-        }
-    } else {
-        ai.errors.InvalidRequest {
-            provider: "openai",
-            status_code: null,
-            detail: detail,
-            raw_body: raw,
-        }
+/// (internal) Preserve a valid provider-reported failure as structured data.
+function _error_failure(err: OaErrorBody) -> ai.errors.ProviderError {
+    ai.errors.ProviderError {
+        provider: "openai",
+        message: err.message ?? "the OpenAI Responses request failed",
+        error_type: err.type,
+        error_code: err.code,
+        raw_body: baml.json.stringify(baml.json.to_json(err)),
+        status_code: null,
     }
 }
 
@@ -1202,8 +1163,18 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
     let out: ai.stream.Event[] = [];
     for (let raw in ai.stream.decode_sse_batch(batch)) {
         if let data: string = raw.data {
-            let decoded: OaStreamEvent? = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
-                _ => null,
+            if (data.trim() == "" || data.trim() == "[DONE]") {
+                continue;
+            }
+            let decoded = baml.json.from_string<OaStreamEvent>(data) catch_all (e) {
+                let parse => {
+                    throw ai.errors.InvalidResponse {
+                    provider: "openai",
+                    message: parse.to_string(),
+                    raw_body: data,
+                    status_code: null,
+                }
+                },
             };
             if let event: OaStreamEvent = decoded {
                 for (let e in _stream_events(event, raw.event, state)) {

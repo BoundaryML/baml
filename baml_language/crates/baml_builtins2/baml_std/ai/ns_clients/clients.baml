@@ -86,8 +86,53 @@ function default_retry_judgment(f: root.errors.Failure) -> bool {
         let i: root.errors.InvalidRequest => false,
         let p: root.errors.ParseFailed => false,
         let f: root.errors.FinishReasonError => false,
+        let p: root.errors.ProviderError => _provider_error_retryable(p),
         _ => true,
     }
+}
+
+// Provider-reported failures have no reliable HTTP status. Keep the native
+// code/type so policy does not infer retryability from the human message.
+function _provider_error_retryable(error: root.errors.ProviderError) -> bool {
+    let code = ((error.error_code ?? "") + " " + (error.error_type ?? "")).to_lower_case();
+    let native_code = error.error_code ?? "";
+    let kind = error.error_type ?? "";
+    if (error.provider == "aws-bedrock") {
+        return kind == "throttlingException"
+            || kind == "serviceUnavailableException"
+            || kind == "internalServerException"
+            || kind == "modelTimeoutException"
+            || kind.starts_with("error:");
+    }
+    if (error.provider == "anthropic") {
+        return kind == "rate_limit_error"
+            || kind == "overloaded_error"
+            || kind == "api_error"
+            || kind == "timeout_error";
+    }
+    if (native_code == "408" || native_code == "429") {
+        return true;
+    }
+    let status = baml.Int.parse(native_code) catch (e) {
+        baml.errors.ParseError => 0,
+    };
+    if (status >= 500) {
+        return true;
+    }
+    if (code.includes("refusal") || code.includes("content_filter") || code.includes("moderation")) {
+        return false;
+    }
+    // Responses API codes (including quota/billing, which previously used
+    // RateLimited) and matching OpenAI-compatible provider codes.
+    code.includes("rate_limit")
+        || code.includes("quota")
+        || code.includes("credit_balance")
+        || code.includes("server_error")
+        || code.includes("timeout")
+        || code.includes("timed_out")
+        || code.includes("overloaded")
+        || code.includes("unavailable")
+        || code.includes("try_again")
 }
 
 class Backoff {
@@ -139,6 +184,8 @@ function _failed_leg_call(client_name: string?, f: Retryable) -> root.events.LLM
         let e: root.errors.PreviewUnsupported => e.provider,
         let e: root.errors.Refused => e.provider,
         let e: root.errors.ParseFailed => e.provider,
+        let e: root.errors.InvalidResponse => e.provider,
+        let e: root.errors.ProviderError => e.provider,
         let e: root.errors.FinishReasonError => e.provider,
         let e: root.errors.StreamingUnsupported => e.client_id,
         _ => "unknown",
@@ -147,12 +194,16 @@ function _failed_leg_call(client_name: string?, f: Retryable) -> root.events.LLM
         let e: root.errors.RateLimited => e.status_code,
         let e: root.errors.NetworkFailure => e.status_code,
         let e: root.errors.InvalidRequest => e.status_code,
+        let e: root.errors.InvalidResponse => e.status_code,
+        let e: root.errors.ProviderError => e.status_code,
         _ => null,
     };
     let raw: string? = match (f) {
         let e: root.errors.RateLimited => e.raw_body,
         let e: root.errors.NetworkFailure => e.raw_body,
         let e: root.errors.InvalidRequest => e.raw_body,
+        let e: root.errors.InvalidResponse => e.raw_body,
+        let e: root.errors.ProviderError => e.raw_body,
         let e: root.errors.Refused => e.raw_body,
         _ => null,
     };

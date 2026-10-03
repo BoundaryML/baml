@@ -82,6 +82,8 @@ function anth_failure_label(e: unknown) -> string {
         let n: ai.errors.NetworkFailure => `NetworkFailure:${n.detail}`,
         let i: ai.errors.InvalidRequest => `InvalidRequest:${i.detail}`,
         let p: ai.errors.ParseFailed => `ParseFailed:${p.raw_output}`,
+        let p: ai.errors.InvalidResponse => `InvalidResponse:${p.message}`,
+        let p: ai.errors.ProviderError => `ProviderError:${p.error_type ?? ""}: ${p.message}`,
         let f: ai.errors.FinishReasonError => {
             `FinishReasonError:${f.finish_reason.to_string()}:${f.raw_output}`
         },
@@ -811,7 +813,7 @@ test "anthropic_stream_error_overloaded" {
         anthropic_stream_error_event(
             `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`,
         ),
-        "NetworkFailure:overloaded_error: Overloaded",
+        "ProviderError:overloaded_error: Overloaded",
     )
 }
 
@@ -820,7 +822,7 @@ test "anthropic_stream_error_rate_limit" {
         anthropic_stream_error_event(
             `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`,
         ),
-        "RateLimited",
+        "ProviderError:rate_limit_error: slow down",
     )
 }
 
@@ -829,7 +831,7 @@ test "anthropic_stream_error_auth" {
         anthropic_stream_error_event(
             `{"type":"error","error":{"type":"authentication_error","message":"bad key"}}`,
         ),
-        "InvalidRequest:authentication_error: bad key",
+        "ProviderError:authentication_error: bad key",
     )
 }
 
@@ -939,30 +941,25 @@ test "anthropic_decode_tool_stream" {
     assert.contains(got, "model=claude-haiku-4-5")
 }
 
-// A malformed `data:` payload is skipped, not fatal.
-function anthropic_decode_skips_garbage() -> string {
+// A malformed nonempty `data:` payload is an invalid provider response.
+function anthropic_decode_rejects_garbage() -> bool {
     let state = anthropic.internal.AnthStreamState.new();
-    let batch = anth_batch(
-        [
-            "not json at all",
-            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`,
-        ],
-    );
-    let seen: string[] = [];
-    for (let ev in anthropic.internal.decode_batch(batch, state)) {
-        match (ev) {
-            let d: ai.stream.TextDelta => {
-                seen.push(d.text);
-                null
-            },
-            _ => null,
-        };
-    }
-    seen.join(",")
+    let batch = anth_batch(["not json at all"]);
+    anthropic.internal.decode_batch(batch, state) catch_all (e) {
+        let invalid: ai.errors.InvalidResponse => {
+            return invalid.provider == "anthropic"
+                && invalid.raw_body == "not json at all"
+                && invalid.message != "";
+        },
+        _ => {
+            return false;
+        },
+    };
+    false
 }
 
-test "anthropic_decode_skips_garbage" {
-    assert.equal(anthropic_decode_skips_garbage(), "ok")
+test "anthropic_decode_rejects_garbage" {
+    assert.is_true(anthropic_decode_rejects_garbage())
 }
 
 // ─── media limits ────────────────────────────────────────────────────────────
