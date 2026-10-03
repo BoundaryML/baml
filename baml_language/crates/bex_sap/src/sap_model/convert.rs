@@ -47,8 +47,9 @@ pub enum ConvertError {
 
 const MAX_RECURSION_DEPTH: usize = 16;
 
-/// Contains stuff from [`sys_types::SysOpContext`] that we need for converting to the sap model:
-/// the definitions one parse target reaches ([`TypeCtx::for_target`]), not the whole program's.
+/// The class, enum, and type-alias definitions one parse target reaches, which the converter
+/// needs to build the sap model. The caller reads them off the target's heap declarations, so a
+/// parse pays only for the types its target uses, not for the whole program's.
 ///
 /// ## Representation
 /// - Unions should be flattened:
@@ -71,9 +72,9 @@ pub struct TypeCtx {
 }
 impl TypeCtx {
     /// Builds the context from definitions that are closed under reference:
-    /// every name a class field or an alias body refers to is present too
-    /// ([`TypeCtx::for_target`] collects such a set). A missing name makes the
-    /// types that refer to it unparsable.
+    /// every name a class field or an alias body refers to is present too (the
+    /// declarations a type reaches on the heap are such a set). A missing name
+    /// makes the types that refer to it unparsable.
     pub fn new<'d>(
         class_definitions: impl IntoIterator<Item = (&'d DefKey, &'d ClassDefinition)>,
         enum_definitions: IndexMap<DefKey, EnumDefinition>,
@@ -147,38 +148,6 @@ impl TypeCtx {
             type_alias_definitions,
             sap_parseable,
         }
-    }
-
-    /// The context for parsing into `target`: only the classes, enums, and type
-    /// aliases that `target` reaches (`reachable_definitions`), in program
-    /// order. Converting every definition in the program on each parse cost
-    /// several MB per LLM call; the reachable set is all the converter looks up.
-    pub fn for_target<E: Send + Sync + 'static>(
-        ctx: &::sys_types::SysOpContext<E>,
-        target: &SapTy,
-    ) -> Self {
-        let reachable =
-            reachable_definitions(target, &ctx.class_definitions, &ctx.type_alias_definitions);
-        let enum_definitions = ctx
-            .enum_definitions
-            .iter()
-            .filter(|(name, _)| reachable.contains(*name))
-            .map(|(name, definition)| (name.clone(), definition.clone()))
-            .collect();
-        let type_alias_definitions = ctx
-            .type_alias_definitions
-            .iter()
-            .filter(|(name, _)| reachable.contains(*name))
-            .map(|(name, ty)| (name.clone(), ty.clone()))
-            .collect();
-
-        Self::new(
-            ctx.class_definitions
-                .iter()
-                .filter(|(name, _)| reachable.contains(*name)),
-            enum_definitions,
-            &type_alias_definitions,
-        )
     }
 
     /// Normalize a runtime-materialized parse target before converting it to
@@ -498,42 +467,6 @@ impl TypeCtx {
     }
 }
 
-/// The definitions `target` can reach: the classes, interfaces, enums, and type
-/// aliases it names, then, transitively, the ones named by a reached class's
-/// field types (except `@skip` fields, which the parser drops) or a reached
-/// alias's body.
-///
-/// The walk is [`RuntimeTy::visit_heads`](baml_type::RuntimeTy::visit_heads),
-/// the head walk `bex_vm::reachable` uses for heap declarations, run over the
-/// context's definition tables (which the engine extracts from those same
-/// declarations). Heads the converter never resolves, such as type arguments
-/// and function types, are kept too. That only adds definitions, so every name
-/// the converter looks up is present.
-fn reachable_definitions(
-    target: &SapTy,
-    class_definitions: &IndexMap<DefKey, ClassDefinition>,
-    type_alias_definitions: &IndexMap<DefKey, SapTy>,
-) -> HashSet<DefKey> {
-    let mut reachable = HashSet::new();
-    let mut pending = Vec::new();
-    target.visit_heads(&mut |name: &DefKey| pending.push(name.clone()));
-    while let Some(name) = pending.pop() {
-        if !reachable.insert(name.clone()) {
-            continue;
-        }
-        if let Some(class) = class_definitions.get(&name) {
-            for field in class.fields.iter().filter(|field| !field.skip) {
-                field
-                    .field_type
-                    .visit_heads(&mut |head: &DefKey| pending.push(head.clone()));
-            }
-        } else if let Some(alias) = type_alias_definitions.get(&name) {
-            alias.visit_heads(&mut |head: &DefKey| pending.push(head.clone()));
-        }
-    }
-    reachable
-}
-
 fn check_parseable(
     name: &DefKey,
     class_definitions: &IndexMap<DefKey, ClassDefinition>,
@@ -631,197 +564,5 @@ fn is_sap_parseable(ty: &SapTy) -> Result<Vec<DefKey>, ()> {
         | SapTy::Never
         | SapTy::RustType
         | SapTy::Type => Err(()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use baml_type::{DeclarationName, Name, typetag::TypeTag};
-    use sys_types::{ClassFieldDefinition, EnumVariantDefinition, SysOpContext};
-
-    use super::*;
-
-    fn key(name: &str) -> DefKey {
-        DefKey::new(
-            TypeTag::fresh_dynamic(),
-            DeclarationName::Anonymous(Name::new(name)),
-        )
-    }
-
-    fn class(key: &DefKey, fields: Vec<(&str, SapTy)>) -> (DefKey, ClassDefinition) {
-        let fields = fields
-            .into_iter()
-            .map(|(name, field_type)| ClassFieldDefinition {
-                name: name.to_string(),
-                field_type,
-                field_template: None,
-                description: None,
-                docstring: None,
-                alias: None,
-                skip: false,
-                stream_done: false,
-                must_exist: false,
-            })
-            .collect();
-        let definition = ClassDefinition {
-            name: key.to_string(),
-            description: None,
-            docstring: None,
-            alias: None,
-            fields,
-            stream_done: false,
-        };
-        (key.clone(), definition)
-    }
-
-    fn enumeration(key: &DefKey) -> (DefKey, EnumDefinition) {
-        let definition = EnumDefinition {
-            name: key.to_string(),
-            description: None,
-            docstring: None,
-            alias: None,
-            variants: vec![EnumVariantDefinition {
-                name: "Only".to_string(),
-                description: None,
-                docstring: None,
-                alias: None,
-            }],
-        };
-        (key.clone(), definition)
-    }
-
-    fn class_ty(key: &DefKey) -> SapTy {
-        SapTy::Class(key.clone(), Box::new([]))
-    }
-
-    /// A program with a reachable cluster around `Root` and types nothing in it
-    /// refers to. `Root -> Child -> Root` is a cycle; `Child` also names an enum
-    /// and a recursive alias whose body names `Leaf`.
-    struct Program {
-        root: DefKey,
-        child: DefKey,
-        leaf: DefKey,
-        color: DefKey,
-        tree: DefKey,
-        unrelated: DefKey,
-        unrelated_enum: DefKey,
-        ctx: SysOpContext,
-    }
-
-    fn program() -> Program {
-        let [root, child, leaf, color, tree, unrelated, unrelated_enum] = [
-            "Root",
-            "Child",
-            "Leaf",
-            "Color",
-            "Tree",
-            "Unrelated",
-            "UnrelatedEnum",
-        ]
-        .map(key);
-        let tree_body =
-            SapTy::union([SapTy::list(SapTy::TypeAlias(tree.clone())), class_ty(&leaf)]);
-        let mut ctx = SysOpContext::empty();
-        ctx.class_definitions = Arc::new(IndexMap::from([
-            class(&unrelated, vec![("value", SapTy::string())]),
-            class(&root, vec![("child", class_ty(&child))]),
-            class(
-                &child,
-                vec![
-                    ("parent", SapTy::optional(class_ty(&root))),
-                    ("color", SapTy::Enum(color.clone())),
-                    ("tree", SapTy::TypeAlias(tree.clone())),
-                ],
-            ),
-            class(&leaf, vec![("value", SapTy::int())]),
-        ]));
-        ctx.enum_definitions = Arc::new(IndexMap::from([
-            enumeration(&unrelated_enum),
-            enumeration(&color),
-        ]));
-        ctx.type_alias_definitions = Arc::new(IndexMap::from([(tree.clone(), tree_body)]));
-        Program {
-            root,
-            child,
-            leaf,
-            color,
-            tree,
-            unrelated,
-            unrelated_enum,
-            ctx,
-        }
-    }
-
-    fn names<'d, V: 'd>(
-        definitions: impl IntoIterator<Item = (&'d DefKey, &'d V)>,
-    ) -> Vec<&'d DefKey> {
-        definitions.into_iter().map(|(name, _)| name).collect()
-    }
-
-    /// The parser drops a `@skip` field, so a type only a skipped field names
-    /// is not part of the model.
-    #[test]
-    fn skipped_fields_reach_nothing() {
-        let (root, hidden) = (key("Root"), key("Hidden"));
-        let (root_key, mut root_definition) = class(
-            &root,
-            vec![("name", SapTy::string()), ("secret", class_ty(&hidden))],
-        );
-        root_definition.fields[1].skip = true;
-        let mut ctx = SysOpContext::empty();
-        ctx.class_definitions = Arc::new(IndexMap::from([
-            (root_key, root_definition),
-            class(&hidden, vec![("value", SapTy::int())]),
-        ]));
-
-        let type_ctx = TypeCtx::for_target(&ctx, &class_ty(&root));
-
-        assert_eq!(names(&type_ctx.class_definitions), vec![&root]);
-    }
-
-    #[test]
-    fn primitive_target_keeps_no_definitions() {
-        let program = program();
-        let ctx = TypeCtx::for_target(&program.ctx, &SapTy::string());
-        assert!(ctx.class_definitions.is_empty());
-        assert!(ctx.enum_definitions.is_empty());
-        assert!(ctx.type_alias_definitions.is_empty());
-    }
-
-    #[test]
-    fn class_target_keeps_what_its_fields_reach_in_program_order() {
-        let program = program();
-        let ctx = TypeCtx::for_target(&program.ctx, &class_ty(&program.root));
-
-        assert_eq!(
-            names(&ctx.class_definitions),
-            vec![&program.root, &program.child, &program.leaf],
-        );
-        assert_eq!(names(&ctx.enum_definitions), vec![&program.color]);
-        assert_eq!(names(&ctx.type_alias_definitions), vec![&program.tree]);
-        assert!(!ctx.class_definitions.contains_key(&program.unrelated));
-        assert!(!ctx.enum_definitions.contains_key(&program.unrelated_enum));
-    }
-
-    #[test]
-    fn alias_target_keeps_its_body() {
-        let program = program();
-        let ctx = TypeCtx::for_target(&program.ctx, &SapTy::TypeAlias(program.tree.clone()));
-
-        assert_eq!(names(&ctx.class_definitions), vec![&program.leaf]);
-        assert!(ctx.enum_definitions.is_empty());
-        assert_eq!(names(&ctx.type_alias_definitions), vec![&program.tree]);
-    }
-
-    #[test]
-    fn reachable_definitions_convert_without_unknown_names() {
-        let program = program();
-        let root = class_ty(&program.root);
-        let ctx = TypeCtx::for_target(&program.ctx, &root);
-        let db = ctx.build_db().expect("the reachable set converts");
-        let target = ctx.convert_ty(&root).expect("the target converts");
-        assert!(db.resolve(&target).is_ok());
     }
 }

@@ -4940,6 +4940,38 @@ impl BexVm {
         }
     }
 
+    /// Clone the `Arc` out of the `$rust_type` field `field` of the instance
+    /// `holder`, so a native can keep using the payload while it borrows
+    /// `&mut BexVm` to allocate.
+    pub fn rust_data_field<T: Send + Sync + 'static>(
+        &self,
+        holder: &Value,
+        field: usize,
+    ) -> Result<Arc<T>, VmInternalError> {
+        let handle = self.as_instance(holder)?.load_field(field);
+        let Some(ptr) = handle.as_object_ptr() else {
+            return Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::RustData),
+                got: self.type_of(&handle),
+            });
+        };
+        match self.get_object(ptr) {
+            Object::RustData(arc) => {
+                let got = arc.as_ref().type_id();
+                arc.clone()
+                    .downcast::<T>()
+                    .map_err(|_| VmInternalError::RustTypeError {
+                        expected: TypeId::of::<T>(),
+                        got,
+                    })
+            }
+            _ => Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::RustData),
+                got: self.type_of(&handle),
+            }),
+        }
+    }
+
     /// Extract an `&Instance` from a `Value` carrying a heap-object pointer.
     ///
     /// Used by generated glue code to construct `view::` structs.

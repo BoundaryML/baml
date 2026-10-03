@@ -1476,7 +1476,6 @@ name = "bex_sap"
 version = "0.0.0-beta"
 dependencies = [
  "baml_type",
- "bex_external_types",
  "bex_str",
  "bex_vm_types",
  "derive_more",
@@ -1516,6 +1515,7 @@ dependencies = [
  "baml_type",
  "base64",
  "bex_heap",
+ "bex_sap",
  "bex_str",
  "bex_vm_types",
  "btel_clock",
@@ -7424,7 +7424,6 @@ dependencies = [
  "bex_external_types",
  "bex_heap",
  "bex_resource_types",
- "bex_sap",
  "bex_vm_types",
  "indexmap",
  "num-bigint",

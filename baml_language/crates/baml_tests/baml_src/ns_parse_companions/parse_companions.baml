@@ -172,3 +172,49 @@ test "sap_parse_matches_the_enum_lines_the_prompt_renders" {
     assert.is_true(prompt.includes("- A: eaten in the morning"));
     assert.is_true(prompt.includes("- B: LUNCH eaten at noon"))
 }
+
+// ─── @skip fields ────────────────────────────────────────────────────────────
+//
+// The parser never reads a `@skip` field (the prompt does not show it), so a
+// parsed instance holds its type's empty value: "" for a string, the zero of a
+// number, false, an empty list, null for an optional field, an enum's first
+// variant, and a class of its fields' empty values.
+
+enum ParseCompanionsSkipColor {
+    Red,
+    Green,
+}
+
+class ParseCompanionsSkipInner {
+    label: string,
+    count: int,
+}
+
+class ParseCompanionsSkipPerson {
+    name: string,
+    age: int @skip,
+    score: float @skip,
+    active: bool @skip,
+    tags: string[] @skip,
+    nick: string? @skip,
+    color: ParseCompanionsSkipColor @skip,
+    inner: ParseCompanionsSkipInner @skip,
+}
+
+function parse_companions_skipped_fields_fn() -> bool {
+    let parsed = baml.sap.parse<ParseCompanionsSkipPerson>("{\"name\": \"Ada\", \"age\": 37}");
+    parsed == ParseCompanionsSkipPerson {
+        name: "Ada",
+        age: 0,
+        score: 0.0,
+        active: false,
+        tags: [],
+        nick: null,
+        color: ParseCompanionsSkipColor.Red,
+        inner: ParseCompanionsSkipInner { label: "", count: 0 },
+    }
+}
+
+test "sap_parse_fills_skipped_fields_with_empty_values" {
+    assert.is_true(parse_companions_skipped_fields_fn())
+}
