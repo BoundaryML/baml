@@ -57,6 +57,55 @@ Answer in JSON using this schema:
 ```
 
 Here's the parameters:
+<ParamField path="format" type="'json' | 'xml'">
+
+**Default: `"json"`**
+
+Selects the wire format described to the model. Use `"xml"` to render an XML
+template instead of the default JSON-like type definition:
+
+```baml
+{{ ctx.output_format(format="xml") }}
+```
+
+For example, a `Resume` class is rendered as an element whose fields are child
+elements:
+
+```xml
+Answer in XML using this structure:
+<Resume>
+  <name>string</name>
+  <education>
+    <EducationList>
+      <Education>
+        <school>string</school>
+        <graduation_year>int</graduation_year>
+      </Education>
+    </EducationList>
+  </education>
+</Resume>
+```
+
+BAML parses the XML response into the function's declared return type. Preamble
+text, insignificant whitespace, and missing trailing close tags are tolerated.
+
+### XML type mapping
+
+| BAML type | XML representation |
+| --- | --- |
+| Class | A class-named element with a child element for each field; nested class fields keep the field element around the class element |
+| Enum | Element text containing one enum value |
+| List | `<list>` with `<item>` elements for scalar values; class arrays use `<ClassNameList>` with `<ClassName>` elements |
+| Map | A wrapper containing repeated `<entry><key>…</key><value>…</value></entry>` elements |
+| Optional | Append `or null` to the field's rendered type; responses may omit the element or use `null` as its text |
+| Union | Class alternatives use their own class elements, separated by a bare `OR` line in the prompt |
+
+XML field names use [`@alias`](/ref/attributes/alias) when present. Characters
+that are not valid in XML element names are replaced with underscores in the
+template, and schema-aligned parsing still matches them to the declared field.
+
+</ParamField>
+
 <ParamField path="prefix" type="string">
 The prefix instruction to use before printing out the schema. 
 

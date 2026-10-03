@@ -359,6 +359,14 @@ impl PredefinedTypes {
                     (
                         Type::String,
                         vec![
+                            (
+                                "format".into(),
+                                Type::merge(vec![
+                                    Type::None,
+                                    Type::Literal(LiteralValue::String(String::from("json"))),
+                                    Type::Literal(LiteralValue::String(String::from("xml"))),
+                                ]),
+                            ),
                             ("prefix".into(), Type::merge(vec![Type::String, Type::None])),
                             (
                                 "or_splitter".into(),
