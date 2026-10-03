@@ -430,6 +430,14 @@ pub trait TypeContext<H: Head = DeclName> {
         {
             return false;
         }
+        // Cross-category miss (`map<string, json>` against `json[]`, a list
+        // against `string | int`, …): refuted from the outermost constructors
+        // alone. Without this, a failed runtime `is`/`match` type test pays for
+        // canonicalizing both sides — including the μ automaton for a recursive
+        // alias like `json` — while a hit returns from the reflexive fast path.
+        if subtype_refuted_by_category(sub, sup) {
+            return false;
+        }
         let sub = NormalTy::canonical(sub, self);
         let sup = NormalTy::canonical(sup, self);
         sub.is_subtype_of(&sup, self, &mut HashSet::new())
@@ -640,6 +648,61 @@ fn heads_definitely_differ<H: Head>(a: &Ty<H>, b: &Ty<H>) -> bool {
         (Ty::EnumVariant(q1, v1, ..), Ty::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
         _ => false,
     }
+}
+
+/// The outermost concrete [`Category`] of a *raw* [`Ty`], answered only for the
+/// constructors [`NormalTy::from_ty`] and canonicalization preserve as-is (a
+/// `List` stays a `List`, a literal keeps its base's category, …). Anything
+/// that normalization can rewrite into another shape (`TypeAlias`, `Union`,
+/// `TypeVar`, projections, generic `Media`) or that has cross-category subtype
+/// rules (`Interface`, `Never`, `Unknown`, `Error`) answers `None`.
+fn raw_head_category<H: Head>(ty: &Ty<H>) -> Option<Category> {
+    Some(match ty {
+        Ty::Int | Ty::Literal(Literal::Int(_), _) => Category::Int,
+        Ty::Bigint | Ty::Literal(Literal::Bigint(_), _) => Category::Bigint,
+        Ty::Float | Ty::Literal(Literal::Float(_), _) => Category::Float,
+        Ty::String | Ty::Literal(Literal::String(_), _) => Category::String,
+        Ty::Bool | Ty::Literal(Literal::Bool(_), _) => Category::Bool,
+        Ty::Null => Category::Null,
+        Ty::Uint8Array => Category::Uint8Array,
+        Ty::Void => Category::Void,
+        Ty::RustType => Category::RustType,
+        Ty::Type => Category::Type,
+        Ty::Resource => Category::Resource,
+        Ty::PromptAst => Category::PromptAst,
+        Ty::Class(..) => Category::Class,
+        Ty::List(_) => Category::List,
+        Ty::Map { .. } => Category::Map,
+        Ty::Enum(_) | Ty::EnumVariant(..) => Category::Enum,
+        Ty::Function { .. } => Category::Function,
+        Ty::Future(..) => Category::Future,
+        _ => return None,
+    })
+}
+
+/// True only when `sub <: sup` is provably false from outermost constructors:
+/// `sub` has a stable concrete category, and `sup` is either a stable concrete
+/// category that differs from it or a union none of whose members could admit
+/// it by the same argument.
+///
+/// Sound because every same-context subtype rule between two stable heads
+/// (`is_subtype_of_inner`) relates heads of the *same* category — a literal to
+/// its base, a variant to its enum, a class/list/map/future/function to one of
+/// its own kind — and union canonicalization only absorbs members, never
+/// changing a member's category. Everything else (`sub` or a `sup` member that
+/// is an interface, alias, type variable, `unknown`, `never`, …) is left to the
+/// canonical walk.
+fn subtype_refuted_by_category<H: Head>(sub: &Ty<H>, sup: &Ty<H>) -> bool {
+    let Some(sub_category) = raw_head_category(sub) else {
+        return false;
+    };
+    fn refutes<H: Head>(sub_category: &Category, sup: &Ty<H>) -> bool {
+        match sup {
+            Ty::Union(members) => members.iter().all(|m| refutes(sub_category, m)),
+            _ => raw_head_category(sup).is_some_and(|c| c != *sub_category),
+        }
+    }
+    refutes(&sub_category, sup)
 }
 
 /// Free-function form of [`TypeContext::definitely_disjoint`], for a context held
