@@ -3,9 +3,11 @@
 //! A Rust test because BAML cannot observe allocations. Each parse used to build
 //! a schema-aligned-parsing model of every type in the program, the standard
 //! library included: about 5 MB per call for a one-function program, kept alive
-//! until the VM collected it. A counting global allocator measures every byte
-//! allocated while the calls run, on every thread, so the bound does not depend
-//! on when the GC runs.
+//! until the VM collected it. And every `match` type test that failed
+//! canonicalized the recursive `json` alias: the request builder tests each
+//! node of the request JSON that way, so the cost grew with the conversation.
+//! A counting global allocator measures every byte allocated while the calls
+//! run, on every thread, so the bounds do not depend on when the GC runs.
 
 #![allow(
     unsafe_code,
@@ -68,12 +70,19 @@ static GLOBAL: CountingAllocator = CountingAllocator;
 const WARM_UP_CALLS: usize = 3;
 /// Calls measured.
 const MEASURED_CALLS: usize = 20;
-/// The ceiling for one small LLM call. A debug build allocated about 3.4 MB per
-/// call with the fix and about 13 MB before it.
-const MAX_BYTES_PER_CALL: usize = 8 * 1024 * 1024;
+/// The ceiling for one small LLM call. A debug build allocates about 0.7 MB; it
+/// allocated about 3.4 MB while failed type tests expanded `json`, and about
+/// 13 MB while each parse converted the whole program.
+const MAX_BYTES_PER_CALL: usize = 2 * 1024 * 1024;
 /// The extra bytes per call that 400 unrelated classes may cost: about 22 KB with
 /// the fix, about 6.3 MB before it (each call converted every class twice).
 const MAX_UNRELATED_GROWTH_PER_CALL: usize = 256 * 1024;
+/// User/assistant exchanges in the long conversation.
+const LONG_CONVERSATION_TURNS: usize = 10;
+/// The extra bytes per call that one more prompt message may cost: about 35 KB,
+/// and about 1.56 MB while every failed type test on the request JSON expanded
+/// `json`.
+const MAX_BYTES_PER_MESSAGE: usize = 128 * 1024;
 
 fn completed_json(text: &str) -> String {
     let text = serde_json::to_string(text).expect("response text is JSON-serializable");
@@ -157,6 +166,28 @@ fn unrelated_classes(count: usize) -> String {
         .collect()
 }
 
+/// A chat program whose prompt holds `turns` user/assistant exchanges before
+/// the last question.
+fn chat_program(turns: usize) -> String {
+    let history: String = (0..turns)
+        .map(|turn| {
+            format!("${{role(\"user\")}}Question {turn}?${{role(\"assistant\")}}Answer {turn}.")
+        })
+        .collect();
+    format!(
+        r#"
+function Chat() -> string {{
+    client: Fake
+    prompt: `${{role("system")}}Be concise.{history}${{role("user")}}Say hi.`
+}}
+
+function main() -> string {{
+    Chat()
+}}
+"#
+    )
+}
+
 const PICK_TOOL: &str = r#"
 class Choice {
     tool string
@@ -214,5 +245,21 @@ function main() -> string {
     assert!(
         bytes <= MAX_BYTES_PER_CALL,
         "one LLM call allocated {bytes} bytes (limit {MAX_BYTES_PER_CALL})"
+    );
+}
+
+#[tokio::test]
+async fn call_cost_does_not_grow_with_conversation_length() {
+    let (_short_server, short) = engine_for(&chat_program(0), "hi").await;
+    let (_long_server, long) = engine_for(&chat_program(LONG_CONVERSATION_TURNS), "hi").await;
+    let short_bytes = bytes_per_call(&short, "main").await;
+    let long_bytes = bytes_per_call(&long, "main").await;
+    let extra_messages = 2 * LONG_CONVERSATION_TURNS;
+    let per_message = long_bytes.saturating_sub(short_bytes) / extra_messages;
+    assert!(
+        per_message <= MAX_BYTES_PER_MESSAGE,
+        "each prompt message added {per_message} bytes per call ({short_bytes} -> {long_bytes} \
+         for {extra_messages} more messages); building the request must stay linear in its size \
+         with a small constant"
     );
 }
