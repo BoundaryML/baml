@@ -36,7 +36,7 @@ indexmap = { workspace = true }
 libloading = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
-serde_json = { workspace = true }
+serde_json_feature_free = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
