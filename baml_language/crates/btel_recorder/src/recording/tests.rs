@@ -898,7 +898,10 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
 fn snapshot() -> btel_snapshot::Snapshot {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let b = pool.try_acquire().unwrap();
-    b.finish_value(btel_snapshot::SnapshotValue::Int(42))
+    b.finish(
+        btel_snapshot::SnapshotValue::Int(42),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 #[test]
@@ -912,16 +915,16 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
         RecordingId::generate(),
         config(),
         |f| files.borrow_mut().push(f),
-        |snapshot| received.borrow_mut().push(crate::snapshot_id(&snapshot)),
+        |snapshot| received.borrow_mut().push(crate::cas_id(&snapshot)),
     )
     .unwrap();
     let snapshots = btel_snapshot::SnapshotPool::new(2, btel_snapshot::Limits::default());
     let capture = |value| {
-        let snapshot = snapshots
-            .try_acquire()
-            .unwrap()
-            .finish_value(btel_snapshot::SnapshotValue::Int(value));
-        let id = crate::snapshot_id(&snapshot);
+        let snapshot = snapshots.try_acquire().unwrap().finish(
+            btel_snapshot::SnapshotValue::Int(value),
+            &mut btel_snapshot::Shaper::default(),
+        );
+        let id = crate::cas_id(&snapshot);
         (snapshot, id)
     };
     let (inputs, inputs_id) = capture(1);
@@ -1012,11 +1015,11 @@ fn network_spans_round_trip_at_minor_seven() {
     );
     let snapshots = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
     let capture = |value| {
-        let snapshot = snapshots
-            .try_acquire()
-            .unwrap()
-            .finish_value(btel_snapshot::SnapshotValue::Int(value));
-        let id = crate::snapshot_id(&snapshot);
+        let snapshot = snapshots.try_acquire().unwrap().finish(
+            btel_snapshot::SnapshotValue::Int(value),
+            &mut btel_snapshot::Shaper::default(),
+        );
+        let id = crate::cas_id(&snapshot);
         (snapshot, id)
     };
     let (request, request_id) = capture(1);
@@ -1129,14 +1132,14 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
     let snapshots = SnapshotPool::new(2, Limits::default());
     let make = || {
-        snapshots
-            .try_acquire()
-            .unwrap()
-            .finish_value(SnapshotValue::Int(42))
+        snapshots.try_acquire().unwrap().finish(
+            SnapshotValue::Int(42),
+            &mut btel_snapshot::Shaper::default(),
+        )
     };
     let first = make();
     let second = make();
-    let expected = crate::snapshot_id(&first);
+    let expected = crate::cas_id(&first);
     let chunks =
         ChunkPool::<btel_records::TimingRecord, SpanRecord<Snapshot, Snapshot>>::new(Config {
             chunk_capacity: nz(4),
@@ -1213,7 +1216,7 @@ fn snapshot_receiver_panic_releases_pending_owners() {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish_value(SnapshotValue::Int(n));
+            .finish(SnapshotValue::Int(n), &mut btel_snapshot::Shaper::default());
         p.span(
             thread,
             &mut SpanRecord::FunctionSpanAnnouncement {

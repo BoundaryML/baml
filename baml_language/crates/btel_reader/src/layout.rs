@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use btel_settings::local_files::{CAS_DIRECTORY, RECORDINGS_DIRECTORY};
-use btel_snapshot::SnapshotId;
+use btel_snapshot::CasId;
 
 /// `<project>/.baml/btel`: `recordings/<id>/<sequence>.btel` plus shared CAS.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,7 +30,7 @@ impl SourceLayout {
         }
     }
 
-    pub fn blob_path(&self, id: SnapshotId) -> PathBuf {
+    pub fn blob_path(&self, id: CasId) -> PathBuf {
         btel_file::cas_path(&self.cas, id)
     }
 }

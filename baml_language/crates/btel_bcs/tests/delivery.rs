@@ -13,7 +13,7 @@ use btel_bcs::{
 };
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingConfig, RecordingId, RecordingPublisher, SealedFile};
-use btel_snapshot::{Limits, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue};
+use btel_snapshot::{Limits, Snapshot, SnapshotPool, SnapshotValue};
 use prost::Message;
 use sha2::{Digest, Sha256};
 use wiremock::{
@@ -37,7 +37,6 @@ fn config(server: &MockServer) -> DeliveryConfig {
         max_candidates: 8,
         max_targets: 8,
         max_recording_body_bytes: 4096,
-        max_cas_body_bytes: 4096,
         request_timeout: Duration::from_millis(200),
         retry_delay: Duration::from_millis(5),
         max_attempts: 2,
@@ -67,24 +66,21 @@ fn files(count: usize) -> Vec<SealedFile> {
 }
 
 fn scalar(pool: &SnapshotPool, value: i64) -> Snapshot {
-    pool.try_acquire()
-        .unwrap()
-        .finish_value(SnapshotValue::Int(value))
+    pool.try_acquire().unwrap().finish(
+        SnapshotValue::Int(value),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 fn large(pool: &SnapshotPool) -> Snapshot {
     let mut builder = pool.try_acquire().unwrap();
     let bytes = vec![1; 64 * 1024];
-    let data = builder.copy_bytes(&bytes);
-    let id = builder.reserve_object().unwrap();
-    builder.set_object(
-        id,
-        SnapshotObject::Bytes {
-            data,
-            original_len: bytes.len(),
-        },
-    );
-    builder.finish_value(SnapshotValue::Object(id))
+    let object = builder.bytes(&bytes);
+    let id = builder.leaves().object(object).unwrap();
+    builder.finish(
+        SnapshotValue::Object(id),
+        &mut btel_snapshot::Shaper::default(),
+    )
 }
 
 fn proposed(id: u32, kind: UploadKind, members: &[u32]) -> ProposedUploadTarget {
@@ -480,8 +476,10 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
         .filter(|(i, _)| *i != 2 && *i != 4)
         .map(|(_, s)| {
             let mut bytes = Vec::new();
-            s.write_blob(&mut bytes).unwrap();
-            (s.id().as_bytes().to_vec(), bytes)
+            s.root_blob()
+                .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+                .unwrap();
+            (s.root_id().as_bytes().to_vec(), bytes)
         })
         .collect();
     let file = files(1).pop().unwrap();
@@ -534,7 +532,7 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
             (body.upload_id == "1-0").then_some(&recording_bytes)
         );
         for object in body.cas_objects {
-            assert_eq!(object.snapshot_format_version, 2);
+            assert_eq!(object.snapshot_format_version, 3);
             assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
             uploaded.push((object.snapshot_id, object.blob));
         }
@@ -1022,7 +1020,7 @@ async fn drain_finishes_multiple_plans_without_cas_blocking_the_recording_lane()
 }
 
 #[tokio::test]
-async fn response_and_serialization_byte_limits_drop_only_affected_work() {
+async fn response_and_recording_body_byte_limits_drop_only_affected_work() {
     for oversized_response in [true, false] {
         let server = MockServer::start().await;
         let base = server.uri();
@@ -1039,32 +1037,302 @@ async fn response_and_serialization_byte_limits_drop_only_affected_work() {
             .await;
         Mock::given(method("PUT"))
             .respond_with(ResponseTemplate::new(200))
-            .expect(u64::from(!oversized_response))
+            .expect(0)
             .mount(&server)
             .await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
         let pool = SnapshotPool::new(2, Limits::default());
+        // A recording body has a limit, and a blob placed in it counts.
         delivery
             .handle()
             .try_submit(
                 files(1).pop().unwrap(),
                 vec![large(&pool)],
+                vec![proposed(0, UploadKind::Recording, &[0])],
+            )
+            .unwrap();
+        assert_eq!(finish(delivery).await, Err(DeliveryError::Capacity));
+        assert_eq!(pool.stats().in_use, 0);
+    }
+}
+
+/// The CAS blobs the server received, by upload path.
+async fn uploaded_blobs(server: &MockServer) -> Vec<(String, Vec<u8>)> {
+    let mut blobs = Vec::new();
+    for request in server.received_requests().await.unwrap() {
+        if request.method == "PUT" {
+            let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+            for object in envelope.cas_objects {
+                assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
+                blobs.push((request.url.path().to_owned(), object.blob));
+            }
+        }
+    }
+    blobs
+}
+
+#[tokio::test]
+async fn a_blob_larger_than_every_byte_limit_uploads_whole() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |r: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(r, &base, &[]))
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    // Less than the blob, let alone its capture and both sides of its body.
+    settings.cas_reserved_bytes = 4096;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let pool = SnapshotPool::new(1, Limits::default());
+    let snapshot = large(&pool);
+    let mut expected = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut expected)
+        .unwrap();
+    assert!(expected.len() > 64 * 1024);
+    delivery
+        .handle()
+        .try_submit(
+            files(1).pop().unwrap(),
+            vec![snapshot],
+            vec![
+                proposed(0, UploadKind::Recording, &[]),
+                proposed(1, UploadKind::CasObject, &[0]),
+            ],
+        )
+        .unwrap();
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(pool.stats().in_use, 0);
+    assert_eq!(
+        uploaded_blobs(&server).await,
+        [("/put/1-1".to_owned(), expected)]
+    );
+}
+
+/// A server that takes every upload but those to `held`, which it answers
+/// with 503 until released. The notifier fires when a held upload arrives.
+async fn holding(
+    held: &'static [&'static str],
+) -> (MockServer, Arc<tokio::sync::Notify>, Arc<AtomicBool>) {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |r: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(r, &base, &[]))
+        })
+        .mount(&server)
+        .await;
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let observed = entered.clone();
+    let release = Arc::new(AtomicBool::new(false));
+    let released = release.clone();
+    Mock::given(method("PUT"))
+        .respond_with(move |request: &Request| {
+            if !held.contains(&request.url.path()) || released.load(Ordering::Acquire) {
+                return ResponseTemplate::new(200);
+            }
+            observed.notify_one();
+            ResponseTemplate::new(503)
+        })
+        .mount(&server)
+        .await;
+    (server, entered, release)
+}
+
+/// The paths of the uploads the server has answered.
+async fn upload_paths(server: &MockServer) -> Vec<String> {
+    server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == "PUT")
+        .map(|request| request.url.path().to_owned())
+        .collect()
+}
+
+fn object(pool: &SnapshotPool, large_capture: bool) -> (Vec<Snapshot>, Vec<ProposedUploadTarget>) {
+    let snapshot = if large_capture {
+        large(pool)
+    } else {
+        scalar(pool, 1)
+    };
+    let targets = vec![
+        proposed(0, UploadKind::Recording, &[]),
+        proposed(1, UploadKind::CasObject, &[0]),
+    ];
+    (vec![snapshot], targets)
+}
+
+#[tokio::test]
+async fn a_plan_over_the_cas_reservation_holds_up_only_another_such_plan() {
+    let (server, entered, release) = holding(&["/put/1-1"]).await;
+    let mut settings = config(&server);
+    settings.max_attempts = 1000;
+    settings.retry_delay = Duration::from_millis(10);
+    // Room for a small capture's plan, not for a large one's.
+    settings.cas_reserved_bytes = 32 * 1024;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::new(2, Limits::default());
+    // A storage that held a large capture keeps its capacity, and is
+    // charged for it: the small capture takes a storage of its own.
+    let small = SnapshotPool::new(1, Limits::default());
+    let mut files = files(4).into_iter();
+    // Nothing else is held: the large plan goes at once, beside the budget.
+    let (snapshots, targets) = object(&pool, true);
+    handle
+        .try_submit(files.next().unwrap(), snapshots, targets)
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), entered.notified())
+        .await
+        .unwrap();
+    // While its upload is held back, plans that fit come and go: one with a
+    // capture, and one with none.
+    let (snapshots, targets) = object(&small, false);
+    handle
+        .try_submit(files.next().unwrap(), snapshots, targets)
+        .unwrap();
+    handle
+        .try_submit(
+            files.next().unwrap(),
+            vec![],
+            vec![proposed(0, UploadKind::Recording, &[])],
+        )
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !upload_paths(&server)
+            .await
+            .iter()
+            .any(|path| path == "/put/3-0")
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let paths = upload_paths(&server).await;
+    assert!(paths.iter().any(|path| path == "/put/2-1"));
+    // A second large plan waits for the first.
+    let (snapshots, targets) = object(&pool, true);
+    let last = files.next().unwrap();
+    let producer = handle.clone();
+    let mut waiting =
+        tokio::task::spawn_blocking(move || producer.try_submit(last, snapshots, targets));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), &mut waiting)
+            .await
+            .is_err()
+    );
+    assert_eq!(handle.loss_count(), 0);
+    release.store(true, Ordering::Release);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(2), waiting)
+            .await
+            .unwrap()
+            .unwrap(),
+        Ok(())
+    );
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(pool.stats().in_use + small.stats().in_use, 0);
+    let paths = upload_paths(&server).await;
+    for expected in ["/put/1-1", "/put/2-1", "/put/4-1"] {
+        assert!(paths.iter().any(|path| path == expected), "{expected}");
+    }
+}
+
+#[tokio::test]
+async fn a_long_cas_upload_does_not_keep_its_plan_pending() {
+    let (server, entered, release) = holding(&["/put/1-1"]).await;
+    let mut settings = config(&server);
+    settings.max_attempts = 1000;
+    settings.retry_delay = Duration::from_millis(10);
+    // The next plan is admitted only when this one is no longer pending.
+    settings.max_pending_plans = 1;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut files = files(2).into_iter();
+    let (snapshots, targets) = object(&pool, false);
+    handle
+        .try_submit(files.next().unwrap(), snapshots, targets)
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), entered.notified())
+        .await
+        .unwrap();
+    let second = files.next().unwrap();
+    let producer = handle.clone();
+    let waiting = tokio::task::spawn_blocking(move || {
+        producer.try_submit(
+            second,
+            vec![],
+            vec![proposed(0, UploadKind::Recording, &[])],
+        )
+    });
+    // The first plan's recording is uploaded; its blob is not.
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(2), waiting)
+            .await
+            .unwrap()
+            .unwrap(),
+        Ok(())
+    );
+    assert!(!release.load(Ordering::Acquire));
+    release.store(true, Ordering::Release);
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(handle.loss_count(), 0);
+}
+
+#[tokio::test]
+async fn cas_bodies_upload_side_by_side_up_to_the_slot_count() {
+    for slots in [1, 2] {
+        let (server, entered, release) = holding(&["/put/1-1"]).await;
+        let mut settings = config(&server);
+        settings.max_attempts = 1000;
+        settings.retry_delay = Duration::from_millis(10);
+        settings.max_cas_uploads = slots;
+        let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+        let pool = SnapshotPool::new(2, Limits::default());
+        delivery
+            .handle()
+            .try_submit(
+                files(1).pop().unwrap(),
+                vec![scalar(&pool, 1), scalar(&pool, 2)],
                 vec![
                     proposed(0, UploadKind::Recording, &[]),
                     proposed(1, UploadKind::CasObject, &[0]),
+                    proposed(2, UploadKind::CasObject, &[1]),
                 ],
             )
             .unwrap();
-        let error = finish(delivery).await.unwrap_err();
-        assert_eq!(
-            error,
-            if oversized_response {
-                DeliveryError::Capacity
-            } else {
-                DeliveryError::Encoding
-            }
+        tokio::time::timeout(Duration::from_secs(2), entered.notified())
+            .await
+            .unwrap();
+        // The first blob's upload is held back. With a second slot the
+        // other goes meanwhile; with one it waits its turn.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let passed = upload_paths(&server)
+            .await
+            .iter()
+            .any(|path| path == "/put/1-2");
+        assert_eq!(passed, slots == 2);
+        release.store(true, Ordering::Release);
+        assert_eq!(finish(delivery).await, Ok(()));
+        assert!(
+            upload_paths(&server)
+                .await
+                .iter()
+                .any(|path| path == "/put/1-2")
         );
-        assert_eq!(pool.stats().in_use, 0);
     }
 }
 
@@ -1207,4 +1475,244 @@ async fn required_content_type_is_sent_once_and_short_recording_url_uses_actual_
     assert_eq!(values.len(), 1);
     assert_eq!(values[0], "application/vnd.btel.protobuf");
     assert_eq!(put.headers["x-amz-content-sha256"], "UNSIGNED-PAYLOAD");
+}
+
+/// A plan with one file and one 64 KiB blob uploaded on its own, against a
+/// server that takes `delay` to accept the blob and lets its URL live for
+/// `lifetime`.
+async fn large_upload(
+    delay: Duration,
+    lifetime: Duration,
+    min_upload_bytes_per_second: usize,
+) -> (Result<(), DeliveryError>, Vec<String>) {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            let mut plan = response(request, &base, &[]);
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+            let expiry = u64::try_from((now + lifetime).as_millis()).unwrap();
+            for target in &mut plan.uploads {
+                if target.kind == UploadKind::CasObject {
+                    target.expires_at_unix_ms = expiry;
+                }
+            }
+            ResponseTemplate::new(200).set_body_json(plan)
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/put/1-0"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/put/1-1"))
+        .respond_with(ResponseTemplate::new(200).set_delay(delay))
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.request_timeout = Duration::from_millis(100);
+    settings.min_upload_bytes_per_second = min_upload_bytes_per_second;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let pool = SnapshotPool::new(1, Limits::default());
+    delivery
+        .handle()
+        .try_submit(
+            files(1).pop().unwrap(),
+            vec![large(&pool)],
+            vec![
+                proposed(0, UploadKind::Recording, &[]),
+                proposed(1, UploadKind::CasObject, &[0]),
+            ],
+        )
+        .unwrap();
+    let result = finish(delivery).await;
+    assert_eq!(pool.stats().in_use, 0);
+    let puts = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == "PUT")
+        .map(|request| request.url.path().to_owned())
+        .collect();
+    (result, puts)
+}
+
+#[tokio::test]
+async fn a_slow_upload_is_given_time_for_its_body_and_no_more() {
+    let hour = Duration::from_secs(3600);
+    let slow = Duration::from_millis(500);
+    // 64 KiB at 64 KiB a second: a second on top of the request timeout.
+    let (result, puts) = large_upload(slow, hour, 64 * 1024).await;
+    assert_eq!(result, Ok(()));
+    assert_eq!(puts.len(), 2);
+    // At a rate that gives the body no time of its own, each attempt at the
+    // blob times out; the recording still arrives.
+    let (result, puts) = large_upload(slow, hour, usize::MAX).await;
+    assert_eq!(result, Err(DeliveryError::Http));
+    assert_eq!(
+        puts.iter().filter(|path| *path == "/put/1-1").count(),
+        2,
+        "one attempt and one retry"
+    );
+    assert!(puts.contains(&"/put/1-0".to_owned()));
+}
+
+#[tokio::test]
+async fn an_upload_url_must_outlive_the_window_of_its_body() {
+    let minute = Duration::from_secs(60);
+    // Two attempts of 64 KiB at 1 KiB a second can hold the lane for over
+    // two minutes: the URL is refused before anything is sent to it.
+    let (result, puts) = large_upload(Duration::ZERO, minute, 1024).await;
+    assert_eq!(result, Err(DeliveryError::Expired));
+    assert_eq!(puts, ["/put/1-0"]);
+    // At a megabyte a second the same URL lives long enough.
+    let (result, puts) = large_upload(Duration::ZERO, minute, 1 << 20).await;
+    assert_eq!(result, Ok(()));
+    assert_eq!(puts.len(), 2);
+}
+
+#[tokio::test]
+async fn a_long_string_is_held_until_its_upload_ends_and_the_capture_only_until_assembly() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    // The server has the first string already.
+    Mock::given(method("POST"))
+        .respond_with(move |r: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(r, &base, &[0]))
+        })
+        .mount(&server)
+        .await;
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let observed = entered.clone();
+    let release = Arc::new(AtomicBool::new(false));
+    let released = release.clone();
+    Mock::given(method("PUT"))
+        .respond_with(move |_: &Request| {
+            observed.notify_one();
+            ResponseTemplate::new(if released.load(Ordering::Acquire) {
+                200
+            } else {
+                503
+            })
+        })
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.max_attempts = 1000;
+    settings.retry_delay = Duration::from_millis(10);
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let pool = SnapshotPool::new(1, Limits::default());
+    let texts = ["a", "b"].map(|letter| btel_snapshot::BexStr::from(letter.repeat(10_000)));
+    let backing = texts.each_ref().map(|text| match text {
+        btel_snapshot::BexStr::Flat(flat) => Arc::downgrade(flat),
+        other => panic!("expected a heap-backed string, got {other:?}"),
+    });
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let list = b.list(element_type, texts.iter(), |leaves, text| {
+        leaves.string_value(text)
+    });
+    let list = b.leaves().object(list).unwrap();
+    let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 64,
+    });
+    let snapshot = b.finish(SnapshotValue::Object(list), &mut shaper);
+    drop(texts);
+    assert_eq!(snapshot.blobs().len(), 3);
+    let mut wanted = Vec::new();
+    snapshot
+        .blobs()
+        .nth(1)
+        .unwrap()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut wanted)
+        .unwrap();
+    delivery
+        .handle()
+        .try_submit(
+            files(1).pop().unwrap(),
+            vec![snapshot],
+            vec![
+                proposed(0, UploadKind::Recording, &[2]),
+                proposed(1, UploadKind::CasObject, &[0]),
+                proposed(2, UploadKind::CasObject, &[1]),
+            ],
+        )
+        .unwrap();
+    // The first upload is under way and held back: every body is built.
+    tokio::time::timeout(Duration::from_secs(2), entered.notified())
+        .await
+        .unwrap();
+    assert!(backing[0].upgrade().is_none(), "the server had it");
+    assert!(backing[1].upgrade().is_some(), "its body sends it");
+    assert_eq!(pool.stats().in_use, 0, "nothing more is written from it");
+    release.store(true, Ordering::Release);
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert!(backing[1].upgrade().is_none(), "its upload is over");
+    let uploaded = uploaded_blobs(&server).await;
+    assert!(uploaded.iter().all(|(path, _)| path != "/put/1-1"));
+    // Sent in pieces, received as the blob it is.
+    assert!(
+        uploaded
+            .iter()
+            .any(|(path, blob)| path == "/put/1-2" && *blob == wanted)
+    );
+}
+
+#[tokio::test]
+async fn a_short_part_of_a_long_string_goes_with_its_recording() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |r: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(r, &base, &[]))
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    // Room for a recording, not for what the long string retains.
+    settings.recording_reserved_bytes = 5 * 1024 * 1024;
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::new(1, Limits::default());
+    let document = btel_snapshot::BexStr::from("d".repeat(8 * 1024 * 1024));
+    // One part short enough to be copied into the body, one sent from the
+    // document's own memory: each holds all of it.
+    let mut sent = Vec::new();
+    for (file, end) in files(2).into_iter().zip([1000, 3000]) {
+        let part = document.substring(0, end);
+        let mut b = pool.try_acquire().unwrap();
+        let value = b.leaves().string_value(&part);
+        let snapshot = b.finish(value, &mut btel_snapshot::Shaper::default());
+        let mut blob = Vec::new();
+        snapshot
+            .root_blob()
+            .write(&mut btel_snapshot::BlobScratch::default(), &mut blob)
+            .unwrap();
+        sent.push(blob);
+        handle
+            .try_submit(
+                file,
+                vec![snapshot],
+                vec![proposed(0, UploadKind::Recording, &[0])],
+            )
+            .unwrap();
+    }
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(handle.loss_count(), 0);
+    let uploaded: Vec<_> = uploaded_blobs(&server)
+        .await
+        .into_iter()
+        .map(|(_, blob)| blob)
+        .collect();
+    assert_eq!(uploaded, sent);
 }

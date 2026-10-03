@@ -22,9 +22,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{
     NETWORK_COMPLETION_CONFLICT, NETWORK_INVALID, NETWORK_INVALID_DETAIL, NETWORK_SPAN_CONFLICT,
-    Totals, event_seq, id, network_invalid,
+    Totals, cas_id, event_seq, id, network_invalid,
     profile::{self, Counts, Part, PathFacts, Sysop},
-    quantity, sequence_i64, snapshot_id,
+    quantity, sequence_i64,
 };
 use crate::{Error, functions};
 
@@ -686,8 +686,8 @@ impl Bulk {
                                 reentry: None,
                                 announced_sequence: Some(saturating_sequence(sequence)),
                                 entered: tick(entry.entered_at_ticks),
-                                inputs_cas: entry.inputs_cas_id.as_ref().map(snapshot_id),
-                                type_args_cas: entry.type_args_cas_id.as_ref().map(snapshot_id),
+                                inputs_cas: entry.inputs_cas_id.as_ref().map(cas_id),
+                                type_args_cas: entry.type_args_cas_id.as_ref().map(cas_id),
                                 completed_sequence: None,
                                 late: None,
                                 exited: None,
@@ -740,7 +740,7 @@ impl Bulk {
                                 started: tick(entry.started_at_ticks),
                                 method: entry.method.clone(),
                                 url: entry.url.clone(),
-                                request_cas: entry.request_cas_id.as_ref().map(snapshot_id),
+                                request_cas: entry.request_cas_id.as_ref().map(cas_id),
                             };
                             let row = self.network_spans.entry(entry.id).or_default();
                             match &row.def {
@@ -766,7 +766,7 @@ impl Bulk {
                                 position: network_events,
                                 name: observed.name.clone(),
                                 at: tick(observed.at_ticks),
-                                payload_cas: observed.payload_cas_id.as_ref().map(snapshot_id),
+                                payload_cas: observed.payload_cas_id.as_ref().map(cas_id),
                             });
                             network_events += 1;
                         }
@@ -775,7 +775,7 @@ impl Bulk {
                                 completed: tick(done.completed_at_ticks),
                                 outcome: i64::from(done.outcome),
                                 panicked: done.panicked,
-                                error_cas: done.error_cas_id.as_ref().map(snapshot_id),
+                                error_cas: done.error_cas_id.as_ref().map(cas_id),
                             };
                             let row = self.network_spans.entry(done.span_id).or_default();
                             match row.done {
@@ -823,7 +823,7 @@ impl Bulk {
         let entered = tick(done.entered_at_ticks);
         let exited = tick(done.exited_at_ticks);
         let self_await = tick(done.self_await_ticks);
-        let value_cas = done.value_cas_id.as_ref().map(snapshot_id);
+        let value_cas = done.value_cas_id.as_ref().map(cas_id);
         let completed_sequence = Some(saturating_sequence(sequence));
         match self.calls.get_mut(&done.id) {
             None => {

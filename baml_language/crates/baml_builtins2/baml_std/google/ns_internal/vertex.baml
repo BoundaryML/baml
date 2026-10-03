@@ -277,6 +277,7 @@ function _vertex_anthropic_body(
         // explicit anthropic_version wins.
         request_body: ai.wire.merge_request_body(vertex_fields, c.request_body),
         client_id: c.id(),
+        default_cache_args: c.default_cache_args(),
     };
     anthropic.internal.messages_body(params, input, stream, preview = preview)
 }

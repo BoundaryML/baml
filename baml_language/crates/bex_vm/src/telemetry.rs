@@ -186,7 +186,7 @@ pub struct ThreadTelemetry {
 pub struct TelemetryState {
     context: btel_types::context::Context,
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
-    context_snapshot: Option<(btel_types::context::Context, btel_snapshot::SnapshotId)>,
+    context_snapshot: Option<(btel_types::context::Context, btel_snapshot::CasId)>,
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
     pending_context_snapshot: Option<btel_snapshot::Snapshot>,
     capture_scratch: snapshot::Scratch,
@@ -230,8 +230,11 @@ impl TelemetryState {
             return;
         }
         if let Some(builder) = self.runtime.acquire_snapshot() {
-            self.pending_context_snapshot =
-                btel_snapshot::context::capture_with_builder(&self.context, builder);
+            self.pending_context_snapshot = btel_snapshot::context::capture_with_builder(
+                &self.context,
+                builder,
+                self.capture_scratch.shaper(),
+            );
         }
     }
 
@@ -1399,7 +1402,7 @@ impl TelemetryState {
             } else {
                 self.prepare_context();
                 if let Some(captured) = self.pending_context_snapshot.take() {
-                    let id = captured.id();
+                    let id = captured.root_id();
                     snapshot = Some(captured);
                     ContextReference::Snapshot(id)
                 } else {

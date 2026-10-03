@@ -681,6 +681,7 @@ function _token_timeout_error(
 /// Partial and final values share one type: a partial is the declared type parsed
 /// from the text received so far.
 class Stream<T> {
+    _provider: string,
     _next_text: () -> string? throws root.errors.InvokeError,
     _cache: baml.sap._ParseCache<T>,
     _text: string,
@@ -699,7 +700,15 @@ class Stream<T> {
                 },
                 let s: string => {
                     self._text = self._text + s;
-                    let parsed: T | baml.sap._NoYield = self._cache._parse_partial(self._text);
+                    let parsed: T | baml.sap._NoYield = self._cache._parse_partial(self._text) catch (e) {
+                        let parse: baml.errors.LlmClient => {
+                            throw root.errors.ParseFailed {
+                                provider: self._provider,
+                                raw_output: self._text,
+                                message: parse.message,
+                            }
+                        },
+                    };
                     match (parsed) {
                         baml.sap._NoYield => {},
                         let p: T => {
@@ -724,7 +733,15 @@ class Stream<T> {
                 },
             }
         }
-        self._cache._parse_final(self._text)
+        self._cache._parse_final(self._text) catch (e) {
+            let parse: baml.errors.LlmClient => {
+                throw root.errors.ParseFailed {
+                    provider: self._provider,
+                    raw_output: self._text,
+                    message: parse.message,
+                }
+            },
+        }
     }
 }
 
@@ -782,6 +799,7 @@ function from_spec<T>(
     // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
     // all it needs is a way to pull the next text delta from TurnStream.
     Stream {
+        _provider: provider,
         _next_text: () -> {
             match (turns.next()) {
                 let d: Done => {

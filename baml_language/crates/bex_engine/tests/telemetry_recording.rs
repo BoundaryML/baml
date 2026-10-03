@@ -157,16 +157,13 @@ async fn trace_capture_reaches_cas_with_exact_values() {
 }
 
 /// The `error` of a captured `baml.errors.Context`, which must be a string.
-fn read_error_capture(root: &std::path::Path, id: proto::SnapshotId) -> String {
+fn read_error_capture(root: &std::path::Path, id: proto::CasId) -> String {
     use btel_snapshot::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
 
     let mut digest = [0; 16];
     digest[..8].copy_from_slice(&id.low.to_le_bytes());
     digest[8..].copy_from_slice(&id.high.to_le_bytes());
-    let path = btel_file::cas_path(
-        &root.join("cas"),
-        btel_snapshot::SnapshotId::from_bytes(digest),
-    );
+    let path = btel_file::cas_path(&root.join("cas"), btel_snapshot::CasId::from_bytes(digest));
     let snapshot = decode_blob(&std::fs::read(path).unwrap(), &DecodeLimits::default()).unwrap();
     let DecodedRoot::Value(DecodedValue::Object(context)) = snapshot.root else {
         panic!("expected a captured context object");
@@ -182,20 +179,17 @@ fn read_error_capture(root: &std::path::Path, id: proto::SnapshotId) -> String {
     error.to_string()
 }
 
-fn read_string_capture(root: &std::path::Path, id: proto::SnapshotId, args: bool) -> String {
+fn read_string_capture(root: &std::path::Path, id: proto::CasId, args: bool) -> String {
     use btel_snapshot::{DecodeLimits, DecodedRoot, DecodedValue, decode_blob};
 
     let mut digest = [0; 16];
     digest[..8].copy_from_slice(&id.low.to_le_bytes());
     digest[8..].copy_from_slice(&id.high.to_le_bytes());
-    let path = btel_file::cas_path(
-        &root.join("cas"),
-        btel_snapshot::SnapshotId::from_bytes(digest),
-    );
+    let path = btel_file::cas_path(&root.join("cas"), btel_snapshot::CasId::from_bytes(digest));
     let bytes = std::fs::read(path).unwrap();
     let snapshot = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
     assert_eq!(snapshot.id.as_bytes(), &digest);
-    assert!(!snapshot.limited);
+    assert!(snapshot.children.is_empty());
     assert!(snapshot.objects.is_empty());
     let value = match (snapshot.root, args) {
         (DecodedRoot::Value(value), false) => value,
@@ -215,7 +209,7 @@ fn read_string_capture(root: &std::path::Path, id: proto::SnapshotId, args: bool
     let DecodedValue::String(value) = value else {
         panic!("expected captured string");
     };
-    value.into()
+    value.to_string()
 }
 
 /// Every entry of a recording directory with its bytes, sorted by name:

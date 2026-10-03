@@ -187,26 +187,16 @@ impl TypeHead {
         if !self.is_resolved() {
             return None;
         }
-        // SAFETY: as in `tagged_name` — the caller holds the heap permit for
+        // SAFETY: as in `tagged_name`, the caller holds the heap permit for
         // the read and the collector forwards heads when declarations move
-        // (runtime-created declarations live in the moving region; this very
-        // function's `Anonymous` arm exists for them). A declaration is
-        // immutable after it is created.
+        // (runtime-created declarations live in the moving region).
+        // A declaration is immutable after it is created.
         #[expect(
             unsafe_code,
             reason = "recovering a head's name requires reading its declaration"
         )]
         let object = unsafe { self.ptr.get() };
-        match object {
-            // An anonymous (runtime-created) declaration has no qualified name,
-            // so it is unnameable here by design — `to_name` refuses rather
-            // than fabricating a spelling nothing declares.
-            crate::Object::Class(class) => class.name.declared().cloned(),
-            crate::Object::Enum(enm) => enm.name.declared().cloned(),
-            crate::Object::Interface(iface) => Some(iface.name.clone()),
-            crate::Object::TypeAlias(alias) => Some(alias.name.clone()),
-            _ => None,
-        }
+        object.declaration_name().cloned()
     }
 
     /// This head's declaration name, or the head itself when it has none.

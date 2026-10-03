@@ -382,9 +382,11 @@ function _gw_images_value(encoded: string, fallback_mime: string) -> image {
         } else {
             encoded
         };
-        throw ai.errors.ParseFailed {
+        throw ai.errors.InvalidResponse {
             provider: "ai-gateway-images",
-            raw_output: `images[] carried a data: URL with no ;base64, marker: ${preview}`,
+            message: `images[] carried a data: URL with no ;base64, marker: ${preview}`,
+            raw_body: encoded,
+            status_code: null,
         }
     }
     baml.media.Image.from_base64(encoded, fallback_mime)
@@ -433,9 +435,11 @@ function gateway_images_parse(
         }
     }
     if (content.length() == 0) {
-        throw ai.errors.ParseFailed {
+        throw ai.errors.InvalidResponse {
             provider: "ai-gateway-images",
-            raw_output: "response contained no images in images[]",
+            message: "response contained no images in images[]",
+            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            status_code: null,
         }
     }
     let usage: ai.events.Usage? = if let reported: GwImagesUsage = resp.usage {

@@ -14,6 +14,7 @@ use std::{
 };
 
 use baml_base::MediaKind;
+use bex_str::BexStr;
 
 // Do not clone. Only clone as `Arc<MediaValue>`.
 #[derive(Debug)]
@@ -30,8 +31,8 @@ pub struct MediaValue {
 
 // `UnsafeCell` is not `Sync`; we make `MediaValue` `Sync` manually
 // because every access to `content` goes through the explicit
-// `read_content` / `write_content` / `read_content_unguarded` methods,
-// which serialize via `content_rw_lock`.
+// `read_content` / `write_content` methods, which serialize via
+// `content_rw_lock`.
 #[allow(unsafe_code)]
 unsafe impl Sync for MediaValue {}
 
@@ -89,12 +90,14 @@ impl MediaValue {
         ))
     }
 
-    /// Construct an `Arc<MediaValue>` from a base64 payload.
-    pub fn from_base64(kind: MediaKind, base64: &str, mime_type: Option<&str>) -> Arc<Self> {
+    /// Construct an `Arc<MediaValue>` from a base64 payload. The payload is
+    /// held by handle: passing a clone of an existing `BexStr` shares its
+    /// storage.
+    pub fn from_base64(kind: MediaKind, base64: BexStr, mime_type: Option<&str>) -> Arc<Self> {
         Arc::new(Self::new(
             kind,
             MediaContent::Base64 {
-                base64_data: base64.to_string(),
+                base64_data: base64,
             },
             mime_type.map(str::to_string),
         ))
@@ -135,20 +138,10 @@ impl MediaValue {
 
     /// Base64 payload. Returns the stored base64 for `Base64` content,
     /// or pre-fetched bytes for `Url` / `File` content. Returns the
-    /// empty string when no base64 data is available.
-    pub fn base64(&self) -> String {
-        self.read_content(|c| match c {
-            MediaContent::Base64 { base64_data } => base64_data.clone(),
-            MediaContent::File {
-                base64_data: Some(b),
-                ..
-            }
-            | MediaContent::Url {
-                base64_data: Some(b),
-                ..
-            } => b.clone(),
-            _ => String::new(),
-        })
+    /// empty string when no base64 data is available. The result shares
+    /// the stored payload rather than copying it.
+    pub fn base64(&self) -> BexStr {
+        self.read_content(|c| c.base64_data().cloned().unwrap_or_else(BexStr::empty))
     }
 
     pub fn read_content<T>(&self, f: impl FnOnce(&MediaContent) -> T) -> T {
@@ -170,14 +163,14 @@ impl MediaValue {
 pub enum MediaContent {
     Url {
         url: String,
-        base64_data: Option<String>,
+        base64_data: Option<BexStr>,
     },
     Base64 {
-        base64_data: String,
+        base64_data: BexStr,
     },
     File {
         file: String,
-        base64_data: Option<String>,
+        base64_data: Option<BexStr>,
     },
 }
 
@@ -186,11 +179,12 @@ impl MediaContent {
     ///
     /// Returns `Some` for `Base64`, and for `Url`/`File` when the data has
     /// been pre-fetched. Returns `None` when no base64 data is available.
-    pub fn base64_data(&self) -> Option<&str> {
+    pub fn base64_data(&self) -> Option<&BexStr> {
         match self {
             MediaContent::Base64 { base64_data } => Some(base64_data),
-            MediaContent::Url { base64_data, .. } => base64_data.as_deref(),
-            MediaContent::File { base64_data, .. } => base64_data.as_deref(),
+            MediaContent::Url { base64_data, .. } | MediaContent::File { base64_data, .. } => {
+                base64_data.as_ref()
+            }
         }
     }
 
@@ -250,7 +244,7 @@ mod tests {
         let media = MediaValue::new(
             MediaKind::Image,
             MediaContent::Base64 {
-                base64_data: "abc".to_string(),
+                base64_data: "abc".into(),
             },
             None,
         );
@@ -265,9 +259,9 @@ mod tests {
     #[test]
     fn test_media_content_base64_data() {
         let base64 = MediaContent::Base64 {
-            base64_data: "abc123".to_string(),
+            base64_data: "abc123".into(),
         };
-        assert_eq!(base64.base64_data(), Some("abc123"));
+        assert_eq!(base64.base64_data().map(BexStr::as_str), Some("abc123"));
 
         let url_no_data = MediaContent::Url {
             url: "http://example.com".to_string(),
@@ -277,9 +271,9 @@ mod tests {
 
         let url_with_data = MediaContent::Url {
             url: "http://example.com".to_string(),
-            base64_data: Some("xyz".to_string()),
+            base64_data: Some("xyz".into()),
         };
-        assert_eq!(url_with_data.base64_data(), Some("xyz"));
+        assert_eq!(url_with_data.base64_data().map(BexStr::as_str), Some("xyz"));
 
         let file_no_data = MediaContent::File {
             file: "/path/to/file".to_string(),
@@ -289,9 +283,12 @@ mod tests {
 
         let file_with_data = MediaContent::File {
             file: "/path/to/file".to_string(),
-            base64_data: Some("data".to_string()),
+            base64_data: Some("data".into()),
         };
-        assert_eq!(file_with_data.base64_data(), Some("data"));
+        assert_eq!(
+            file_with_data.base64_data().map(BexStr::as_str),
+            Some("data")
+        );
     }
 
     #[test]
@@ -303,7 +300,7 @@ mod tests {
         assert_eq!(url.url(), Some("http://example.com"));
 
         let base64 = MediaContent::Base64 {
-            base64_data: "abc".to_string(),
+            base64_data: "abc".into(),
         };
         assert_eq!(base64.url(), None);
 
@@ -329,7 +326,7 @@ mod tests {
         assert_eq!(url.file_path(), None);
 
         let base64 = MediaContent::Base64 {
-            base64_data: "abc".to_string(),
+            base64_data: "abc".into(),
         };
         assert_eq!(base64.file_path(), None);
     }
@@ -357,10 +354,34 @@ mod tests {
 
     #[test]
     fn from_base64_constructs_arc() {
-        let arc = MediaValue::from_base64(MediaKind::Audio, "Zm9v", Some("audio/wav"));
+        let arc = MediaValue::from_base64(MediaKind::Audio, "Zm9v".into(), Some("audio/wav"));
         assert_eq!(arc.kind, MediaKind::Audio);
-        assert_eq!(arc.base64(), "Zm9v");
+        assert_eq!(arc.base64().as_str(), "Zm9v");
         assert!(arc.url().is_none());
         assert!(arc.file().is_none());
+    }
+
+    #[test]
+    fn base64_shares_the_payload_it_was_constructed_from() {
+        // Longer than the inline capacity, so the payload is heap-backed.
+        let payload = BexStr::from("QUJD".repeat(64));
+        let BexStr::Flat(source) = &payload else {
+            panic!("expected a heap-backed payload, got {payload:?}")
+        };
+        let media = MediaValue::from_base64(MediaKind::Image, payload.clone(), None);
+        for read in [media.base64(), media.base64()] {
+            let BexStr::Flat(shared) = &read else {
+                panic!("expected a heap-backed payload, got {read:?}")
+            };
+            assert!(Arc::ptr_eq(source, shared));
+        }
+        assert_eq!(media.base64().content_hash(), payload.content_hash());
+    }
+
+    #[test]
+    fn base64_is_empty_without_a_payload() {
+        let media = MediaValue::from_url(MediaKind::Image, "https://example.test/x.png", None);
+        assert!(media.base64().is_empty());
+        media.read_content(|content| assert_eq!(content.base64_data(), None));
     }
 }

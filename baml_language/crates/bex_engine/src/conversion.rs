@@ -34,9 +34,18 @@ use crate::{BexEngine, EngineError, thread::BexThread};
 /// invented name, and quietly supplying one is how a runtime declaration ends
 /// up impersonating a compiled one.
 pub(crate) fn to_wire_ty(ty: &bex_vm_types::RuntimeTy) -> Result<RuntimeTy, EngineError> {
-    ty.try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+    to_wire_ty_with(ty, &mut bex_vm_types::TypeHead::to_name)
+}
+
+pub(crate) fn to_wire_ty_with(
+    ty: &bex_vm_types::RuntimeTy,
+    name: &mut impl FnMut(
+        &bex_vm_types::TypeHead,
+    ) -> Result<baml_type::TypeName, bex_vm_types::UnnameableHead>,
+) -> Result<RuntimeTy, EngineError> {
+    ty.try_map_heads(name)
         .map_err(|head| EngineError::TypeMismatch {
-            message: format!("type leaving the VM names an unnameable declaration: {head}"),
+            message: format!("type names an unnameable declaration: {head}"),
         })
 }
 
@@ -5030,14 +5039,13 @@ fn member_admits_numeric_arm(
 mod union_container_selection_tests {
     use std::sync::Arc;
 
-    use baml_builtins2::{MediaContent, MediaValue};
     use baml_type::{
         Freshness, FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, TypeName,
     };
     use bex_external_types::{HostValueArc, HostValueKind};
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
-        DeclarationName, EnumVariant, Object, Value,
+        DeclarationName, EnumVariant, MediaContent, MediaValue, Object, Value,
         types::{Class, Enum},
     };
 

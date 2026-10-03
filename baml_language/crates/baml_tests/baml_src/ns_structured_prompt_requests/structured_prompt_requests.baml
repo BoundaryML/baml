@@ -533,26 +533,286 @@ function _cache_delimiter_is_dropped_by(target: ai.Client) -> bool {
 }
 
 test "clients without a cache marker send the prompt as if the delimiter were absent" {
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewResponses));
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewChat));
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewAnthropic));
     assert.is_true(_cache_delimiter_is_dropped_by(PreviewGemini));
     assert.is_true(_cache_delimiter_is_dropped_by(PreviewGeneric));
     assert.is_true(_cache_delimiter_is_dropped_by(PreviewOpenRouter));
     assert.is_true(_cache_delimiter_is_dropped_by(UnroutableOllama))
 }
 
-// Bedrock is the one client that sends it, so its two bodies differ.
+// The clients whose wire has a cache marker send one, so their two bodies
+// differ. `args` is written for one wire; here it is Bedrock's.
+test "clients with a cache marker send one for a cache delimiter" {
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewAnthropic) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewChat) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewResponses) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewBedrock) == false)
+}
+
 test "bedrock sends a cachePoint for a cache delimiter" {
     let picture = image.from_base64("image-data", "image/png");
     let body = baml.json.parse(CacheMarked@build_request("Ada", picture, client = PreviewBedrock).body);
-    assert.equal(
-        baml.json.stringify(baml.json.path<json>(body, ".system")),
-        `[{"text":"You greet people."},{"cachePoint":{"type":"default"}}]`,
+    let system: json = [{ "text": "You greet people." }, { "cachePoint": { "type": "default" } }];
+    assert.equal(baml.json.path<json>(body, ".system"), system);
+    let checkpoint: json = { "cachePoint": { "type": "default", "ttl": "1h" } };
+    assert.equal(baml.json.path<json>(body, ".messages[0].content[1]"), checkpoint)
+}
+
+// ── `${cache()}`: the client's default ───────────────────────────────────────
+//
+// With no args (or null), the delimiter carries no provider object. The client
+// that sends the request fills in its own `default_cache_args()`, or sends
+// nothing when it has none.
+
+client DefaultBedrockClaude = aws.BedrockClient.new(
+    model = "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    endpoint_url = "http://localhost:1234",
+);
+
+client DefaultResponses = openai.ResponsesClient.new(
+    model = "gpt-5.6-luna",
+    api_key = "test-key",
+    base_url = "http://localhost:1234/v1",
+);
+
+client DefaultChat = openai.ChatClient.new(
+    model = "gpt-5.6-luna",
+    api_key = "test-key",
+    base_url = "http://localhost:1234/v1",
+);
+
+client OldResponses = openai.ResponsesClient.new(
+    model = "gpt-5.5",
+    api_key = "test-key",
+    base_url = "http://localhost:1234/v1",
+);
+
+client OldChat = openai.ChatClient.new(
+    model = "gpt-5-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234/v1",
+);
+
+client PreviewAzure = openai.AzureClient.new(
+    model = "my-deployment",
+    api_key = "test-key",
+    base_url = "http://localhost:1234/openai/deployments/my-deployment",
+);
+
+function CacheDefault(name: string) -> string {
+    client: PreviewResponses
+    prompt: `${role("system")}You greet people.${cache()}${role("user")}Long stable document. ${cache()}Greet ${name}.`
+}
+
+function CacheNull(name: string) -> string {
+    client: PreviewResponses
+    prompt: `${role("system")}You greet people.${cache(null)}${role("user")}Long stable document. ${cache(null)}Greet ${name}.`
+}
+
+function CacheUnmarked(name: string) -> string {
+    client: PreviewResponses
+    prompt: `${role("system")}You greet people.${role("user")}Long stable document. Greet ${name}.`
+}
+
+function _default_cache_body(target: ai.Client) -> string {
+    CacheDefault@build_request("Ada", client = target).body
+}
+
+// One value out of the request a `${cache()}` prompt produces on `target`.
+function _default_cache_at(target: ai.Client, selector: string) -> json {
+    baml.json.path<json>(baml.json.parse(_default_cache_body(target)), selector)
+}
+
+function _default_cache_sends_nothing(target: ai.Client) -> bool {
+    _default_cache_body(target) == CacheUnmarked@build_request("Ada", client = target).body
+}
+
+test "cache() sends each client's own default marker" {
+    let anthropic_system: json = [
+        { "type": "text", "text": "You greet people.", "cache_control": { "type": "ephemeral" } },
+    ];
+    assert.equal(_default_cache_at(PreviewAnthropic, ".system"), anthropic_system);
+    let anthropic_user: json = [
+        { "type": "text", "text": "Long stable document.", "cache_control": { "type": "ephemeral" } },
+        { "type": "text", "text": "Greet Ada." },
+    ];
+    assert.equal(_default_cache_at(PreviewAnthropic, ".messages[0].content"), anthropic_user);
+    let bedrock_system: json = [{ "text": "You greet people." }, { "cachePoint": { "type": "default" } }];
+    assert.equal(_default_cache_at(DefaultBedrockClaude, ".system"), bedrock_system);
+    let responses_system: json = [
+        {
+            "type": "input_text",
+            "text": "You greet people.",
+            "prompt_cache_breakpoint": { "mode": "explicit" },
+        },
+    ];
+    assert.equal(_default_cache_at(DefaultResponses, ".input[0].content"), responses_system);
+    let chat_system: json = [
+        { "type": "text", "text": "You greet people.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+    ];
+    assert.equal(_default_cache_at(DefaultChat, ".messages[0].content"), chat_system)
+}
+
+// No default: no cache marker on the wire (Gemini, the generic chat hosts), a
+// model the marker would be rejected by (GPT-5.5 and earlier, a Bedrock model
+// that is not Claude or Nova), or a model that cannot be told (an Azure
+// deployment). The request is the one the prompt produces without `${cache()}`.
+test "cache() sends nothing where the client has no default" {
+    assert.is_true(_default_cache_sends_nothing(PreviewGemini));
+    assert.is_true(_default_cache_sends_nothing(PreviewGeneric));
+    assert.is_true(_default_cache_sends_nothing(PreviewOpenRouter));
+    assert.is_true(_default_cache_sends_nothing(UnroutableOllama));
+    assert.is_true(_default_cache_sends_nothing(OldResponses));
+    assert.is_true(_default_cache_sends_nothing(OldChat));
+    assert.is_true(_default_cache_sends_nothing(PreviewBedrock));
+    assert.is_true(_default_cache_sends_nothing(PreviewAzure));
+    // ...and where it has one, the bodies differ
+    assert.is_true(_default_cache_sends_nothing(PreviewAnthropic) == false);
+    assert.is_true(_default_cache_sends_nothing(DefaultBedrockClaude) == false);
+    assert.is_true(_default_cache_sends_nothing(DefaultResponses) == false);
+    assert.is_true(_default_cache_sends_nothing(DefaultChat) == false)
+}
+
+function _null_is_default(target: ai.Client) -> bool {
+    CacheNull@build_request("Ada", client = target).body == _default_cache_body(target)
+}
+
+test "cache(null) is cache()" {
+    assert.is_true(_null_is_default(PreviewAnthropic));
+    assert.is_true(_null_is_default(DefaultBedrockClaude));
+    assert.is_true(_null_is_default(DefaultResponses));
+    assert.is_true(_null_is_default(DefaultChat));
+    assert.is_true(_null_is_default(OldResponses));
+    assert.is_true(_null_is_default(PreviewGemini))
+}
+
+// Explicit args are never gated: they are sent as written to a model the
+// default would have skipped.
+test "cache(args) is sent where the default is withheld" {
+    let picture = image.from_base64("image-data", "image/png");
+    assert.is_true(_cache_delimiter_is_dropped_by(OldResponses) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(OldChat) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(PreviewAzure) == false);
+    let body = baml.json.parse(CacheMarked@build_request("Ada", picture, client = OldResponses).body);
+    let system: json = [
+        { "type": "input_text", "text": "You greet people.", "prompt_cache_breakpoint": { "type": "default" } },
+    ];
+    assert.equal(baml.json.path<json>(body, ".input[0].content"), system)
+}
+
+test "default_cache_args per client" {
+    let vertex_claude: ai.Client = google.VertexClient.new(
+        model = "claude-sonnet-4-5",
+        project_id = "p",
+        location = "us-east5",
     );
-    assert.equal(
-        baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]")),
-        `{"cachePoint":{"type":"default","ttl":"1h"}}`,
+    let vertex_gemini: ai.Client = google.VertexClient.new(
+        model = "gemini-2.5-flash",
+        project_id = "p",
+        location = "us-east5",
     );
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewBedrock) == false)
+    let clients: ai.Client[] = [
+        PreviewAnthropic,
+        DefaultBedrockClaude,
+        PreviewBedrock,
+        DefaultResponses,
+        OldResponses,
+        DefaultChat,
+        OldChat,
+        PreviewAzure,
+        vertex_claude,
+        vertex_gemini,
+        PreviewGemini,
+        PreviewGeneric,
+        PreviewOpenRouter,
+        UnroutableOllama,
+    ];
+    let got: json[] = [];
+    for (let c in clients) {
+        got.push(c.default_cache_args());
+    }
+    let expected: json[] = [
+        { "type": "ephemeral" }, // PreviewAnthropic
+        { "type": "default" }, // DefaultBedrockClaude
+        null, // PreviewBedrock: not a Claude or Nova model
+        { "mode": "explicit" }, // DefaultResponses
+        null, // OldResponses: GPT-5.5
+        { "mode": "explicit" }, // DefaultChat
+        null, // OldChat: GPT-5-mini
+        null, // PreviewAzure: a deployment name
+        { "type": "ephemeral" }, // Claude on Vertex
+        null, // Gemini on Vertex
+        null, // PreviewGemini
+        null, // PreviewGeneric
+        null, // PreviewOpenRouter
+        null, // UnroutableOllama
+    ];
+    assert.equal(got, expected)
+}
+
+// A client that does not say otherwise has no default, so the interface
+// method costs an existing implementer nothing.
+class NoCacheClient {
+    implements ai.Client {
+        function id(self) -> string {
+            "no-cache"
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            PreviewGeneric.render(input)
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            PreviewGeneric.invoke(input)
+        }
+    }
+}
+
+test "a client that does not override default_cache_args has none" {
+    let own: ai.Client = NoCacheClient {};
+    assert.equal(own.default_cache_args(), null);
+    assert.is_true(_default_cache_sends_nothing(own))
+}
+
+// Reliability wrappers hand the same input to each member, and the member
+// that sends the request resolves the default. So one `${cache()}` is a
+// `cachePoint` on a Bedrock member and a `cache_control` on an Anthropic one.
+// (`Fallback.render` previews only its first member, so the members are
+// rendered directly.)
+test "each fallback member resolves its own default" {
+    let fallback = ai.clients.Fallback { members: [DefaultBedrockClaude, PreviewAnthropic] };
+    let whole: ai.Client = fallback;
+    assert.equal(whole.default_cache_args(), null);
+    let bodies: string[] = [];
+    for (let member in fallback.members) {
+        bodies.push(_default_cache_body(member));
+    }
+    let bedrock_system: json = [{ "text": "You greet people." }, { "cachePoint": { "type": "default" } }];
+    assert.equal(baml.json.path<json>(baml.json.parse(bodies[0]), ".system"), bedrock_system);
+    assert.is_true(!bodies[0].includes("cache_control"));
+    let anthropic_system: json = [
+        { "type": "text", "text": "You greet people.", "cache_control": { "type": "ephemeral" } },
+    ];
+    assert.equal(baml.json.path<json>(baml.json.parse(bodies[1]), ".system"), anthropic_system);
+    assert.is_true(!bodies[1].includes("cachePoint"))
+}
+
+// `ai.wire.prompt_parts` is where a null `args` takes the default: the caller
+// sees the resolved delimiter, or none at all when there is no default.
+function _resolved_parts(default_cache_args: json) -> ai.PromptPart[] {
+    let message = CacheDefault@spec("Ada").prompt().messages()[1];
+    ai.wire.prompt_parts(message, default_cache_args = default_cache_args)
+}
+
+test "prompt_parts gives a null-args delimiter the default" {
+    let resolved: ai.PromptPart[] = [
+        "Long stable document.",
+        ai.CacheDelimiter { args: { "type": "x" } },
+        "Greet Ada.",
+    ];
+    assert.equal(_resolved_parts({ "type": "x" }), resolved);
+    let joined: ai.PromptPart[] = ["Long stable document. Greet Ada."];
+    assert.equal(_resolved_parts(null), joined);
+    // the message itself still carries the unresolved delimiter
+    let raw = CacheDefault@spec("Ada").prompt().messages()[1].parts[1];
+    assert.is_true(raw is ai.CacheDelimiter)
 }

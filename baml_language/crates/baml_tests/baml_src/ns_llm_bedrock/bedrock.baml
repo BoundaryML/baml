@@ -198,6 +198,8 @@ function _failure_label(error: unknown) -> string {
         let e: ai.errors.InvalidRequest => `InvalidRequest/${e.status_code ?? -1}`,
         let e: ai.errors.NetworkFailure => "NetworkFailure",
         let e: ai.errors.ParseFailed => "ParseFailed",
+        let e: ai.errors.InvalidResponse => "InvalidResponse",
+        let e: ai.errors.ProviderError => `ProviderError/${e.error_type ?? ""}`,
         _ => `other/${error.to_string()}`,
     }
 }
@@ -726,8 +728,9 @@ test "bedrock_tool_result_status_gating" {
 // ─── 7. cache points ─────────────────────────────────────────────────────────
 //
 // The engine emits `{"cachePoint":{"type":"default"}}`; sys_llm dropped the
-// feature entirely (research G4). Restored here as two client options, because
-// nothing populates `ai.PromptMessage.metadata` yet.
+// feature entirely (research G4). Restored here as two client options, for the
+// two positions a prompt cannot mark itself (the tool list) or that are common
+// enough to want a switch (the end of the system prompt).
 
 function bedrock_cache_points() -> string {
     let cl = aws.BedrockClient.new(
@@ -853,8 +856,8 @@ test "bedrock_cache_delimiter_media_ttl" {
     )
 }
 
-// `args` is not checked, defaulted or rewritten: a null member, a nested
-// value and a non-object all go on the wire as written.
+// A non-null `args` is not checked, defaulted or rewritten: a null member, a
+// nested value and a non-object all go on the wire as written.
 function BedrockCacheArgs(args: json) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
@@ -865,29 +868,26 @@ function BedrockCacheArgs(args: json) -> string {
     `
 }
 
-function _cache_args_block(args: json) -> string {
+function _cache_args_block(args: json) -> json {
     let body = _cached_body(BedrockCacheArgs@spec(args));
-    baml.json.stringify(baml.json.path<json>(body, ".messages[0].content[1]"))
-}
-
-function bedrock_cache_delimiter_args_as_written() -> string {
-    [
-        _cache_args_block(baml.json.parse(`{"ttl":"1h","type":"default","extra":{"keep":null}}`)),
-        _cache_args_block(baml.json.parse(`{}`)),
-        _cache_args_block(baml.json.parse(`"1h"`)),
-    ].join("|")
+    baml.json.path<json>(body, ".messages[0].content[1]")
 }
 
 test "bedrock_cache_delimiter_args_as_written" {
-    assert.equal(
-        bedrock_cache_delimiter_args_as_written(),
-        `{"cachePoint":{"ttl":"1h","type":"default","extra":{"keep":null}}}|{"cachePoint":{}}|{"cachePoint":"1h"}`,
-    )
+    let object_args: json = { "ttl": "1h", "type": "default", "extra": { "keep": null } };
+    let object_block: json = { "cachePoint": { "ttl": "1h", "type": "default", "extra": { "keep": null } } };
+    assert.equal(_cache_args_block(object_args), object_block);
+
+    let empty_args: json = {};
+    let empty_block: json = { "cachePoint": {} };
+    assert.equal(_cache_args_block(empty_args), empty_block);
+
+    let string_block: json = { "cachePoint": "1h" };
+    assert.equal(_cache_args_block("1h"), string_block)
 }
 
-// Where a delimiter produces NO block: before any content of its message, right
-// after another cachePoint, and with null `args` — which is as if it had not
-// been written, so the text around it stays one block.
+// Where a delimiter produces NO block: before any content of its message, and
+// right after another cachePoint.
 function BedrockCacheLeading(name: string) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
@@ -911,23 +911,87 @@ function BedrockCacheTwice(name: string) -> string {
     `
 }
 
-function bedrock_cache_delimiter_dropped() -> string {
+test "bedrock_cache_delimiter_dropped" {
     let leading = _cached_body(BedrockCacheLeading@spec("Ada"));
+    let system: json = [{ "text": "You greet people." }];
+    assert.equal(baml.json.path<json>(leading, ".system"), system);
+    let user: json = [{ "text": "Greet Ada." }];
+    assert.equal(baml.json.path<json>(leading, ".messages[0].content"), user);
+
     let twice = _cached_body(BedrockCacheTwice@spec("Ada"));
-    let nulled = _cached_body(BedrockCacheArgs@spec(null));
-    [
-        baml.json.stringify(baml.json.path<json>(leading, ".system")),
-        baml.json.stringify(baml.json.path<json>(leading, ".messages[0].content")),
-        baml.json.stringify(baml.json.path<json>(twice, ".messages[0].content")),
-        baml.json.stringify(baml.json.path<json>(nulled, ".messages[0].content")),
-    ].join("\n")
+    let once: json = [{ "text": "Stable." }, { "cachePoint": { "type": "default" } }, { "text": "Greet Ada." }];
+    assert.equal(baml.json.path<json>(twice, ".messages[0].content"), once)
 }
 
-test "bedrock_cache_delimiter_dropped" {
-    assert.equal(
-        bedrock_cache_delimiter_dropped(),
-        `[{"text":"You greet people."}]\n[{"text":"Greet Ada."}]\n[{"text":"Stable."},{"cachePoint":{"type":"default"}},{"text":"Greet Ada."}]\n[{"text":"Stable.\\n\\nVariable."}]`,
-    )
+// `${cache()}` (and null `args`, which is the same thing) takes the client's
+// default: `{"type": "default"}` for a Claude or Nova model, whatever region
+// prefix or ARN the id is written with. Converse answers 403 to a checkpoint
+// on any other family, so those models get no default and the delimiter is
+// as if it had not been written: the text around it stays one block.
+function BedrockCacheDefault(name: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Stable.
+        ${cache()}
+        Greet ${name}.
+    `
+}
+
+function _default_cache_content(model: string) -> json {
+    let cl = aws.BedrockClient.new(model = model, region = "us-east-1");
+    let body = _body(cl, _turn_input(BedrockCacheDefault@spec("Ada"), _empty_journal(), _no_tools()));
+    baml.json.path<json>(body, ".messages[0].content")
+}
+
+function bedrock_cache_default_by_model() -> json[] {
+    let models = [
+        "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "us.amazon.nova-lite-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "us.meta.llama3-3-70b-instruct-v1:0",
+        "mistral.mistral-large-2402-v1:0",
+        "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123",
+    ];
+    let out: json[] = [];
+    for (let model in models) {
+        let cl = aws.BedrockClient.new(model = model, region = "us-east-1");
+        out.push(cl.default_cache_args());
+    }
+    out
+}
+
+test "bedrock_cache_default_by_model" {
+    let expected: json[] = [
+        { "type": "default" },
+        { "type": "default" },
+        { "type": "default" },
+        { "type": "default" },
+        null,
+        null,
+        null,
+    ];
+    assert.equal(bedrock_cache_default_by_model(), expected)
+}
+
+test "bedrock_cache_default_args" {
+    let marked: json = [{ "text": "Stable." }, { "cachePoint": { "type": "default" } }, { "text": "Greet Ada." }];
+    let unmarked: json = [{ "text": "Stable.\n\nGreet Ada." }];
+    assert.equal(_default_cache_content("us.anthropic.claude-haiku-4-5-20251001-v1:0"), marked);
+    assert.equal(_default_cache_content("us.amazon.nova-lite-v1:0"), marked);
+    assert.equal(_default_cache_content("us.meta.llama3-3-70b-instruct-v1:0"), unmarked);
+    // null `args` is the default
+    let nulled: json = [{ "text": "Stable." }, { "cachePoint": { "type": "default" } }, { "text": "Variable." }];
+    assert.equal(baml.json.path<json>(_cached_body(BedrockCacheArgs@spec(null)), ".messages[0].content"), nulled);
+    // explicit args are sent as written to a model the default skips
+    let llama = aws.BedrockClient.new(model = "us.meta.llama3-3-70b-instruct-v1:0", region = "us-east-1");
+    let explicit = _body(
+        llama,
+        _turn_input(BedrockCacheArgs@spec(baml.json.parse(`{"type":"default"}`)), _empty_journal(), _no_tools()),
+    );
+    let checkpoint: json = { "cachePoint": { "type": "default" } };
+    assert.equal(baml.json.path<json>(explicit, ".messages[0].content[1]"), checkpoint)
 }
 
 // A system-only prompt folds its system blocks into the leading user message;
@@ -1190,7 +1254,8 @@ function bedrock_parse_text_and_usage() -> string {
 }
 
 test "bedrock_parse_text_and_usage" {
-    assert.equal(bedrock_parse_text_and_usage(), "Second part.|Complete|10|15|7|2")
+    // input_tokens counts the cache reads and writes: 10 + 7 + 3.
+    assert.equal(bedrock_parse_text_and_usage(), "Second part.|Complete|20|15|7|2")
 }
 
 // A turn whose stop reason means the generation was cut short or is unusable
@@ -1245,7 +1310,7 @@ function bedrock_parse_malformed_stop() -> string {
 test "bedrock_parse_malformed_stop" {
     assert.equal(
         bedrock_parse_malformed_stop(),
-        "ParseFailed|ParseFailed|Refused|Refused",
+        "ProviderError/malformed_model_output|ProviderError/malformed_tool_use|Refused|Refused",
     )
 }
 
@@ -1290,7 +1355,7 @@ function bedrock_parse_empty_and_malformed() -> string {
 }
 
 test "bedrock_parse_empty_and_malformed" {
-    assert.equal(bedrock_parse_empty_and_malformed(), "0|ParseFailed")
+    assert.equal(bedrock_parse_empty_and_malformed(), "0|InvalidResponse")
 }
 
 // Usage is optional on the wire; its absence is not a parse failure
@@ -1426,7 +1491,7 @@ function bedrock_garbage_body() -> string {
 }
 
 test "bedrock_garbage_body" {
-    assert.equal(bedrock_garbage_body(), "ParseFailed")
+    assert.equal(bedrock_garbage_body(), "InvalidResponse")
 }
 
 // ─── 13. streaming (ConverseStream) ──────────────────────────────────────────
@@ -1631,8 +1696,7 @@ test "bedrock_stream_truncated" {
     assert.equal(bedrock_stream_truncated(), "NetworkFailure")
 }
 
-// A modeled exception frame mid-stream fails the turn with the identity the
-// same HTTP status gets on `invoke`.
+// A modeled exception frame mid-stream retains its native provider identity.
 function bedrock_stream_exception(exception_type: string) -> string {
     let frames = [
         root.llm_mock.eventstream_event("messageStart", `{"role":"assistant"}`),
@@ -1662,7 +1726,7 @@ test "bedrock_stream_exceptions" {
             bedrock_stream_exception("modelStreamErrorException"),
             bedrock_stream_exception("serviceUnavailableException"),
         ].join("|"),
-        "RateLimited|InvalidRequest/400|InvalidRequest/424|NetworkFailure",
+        "ProviderError/throttlingException|ProviderError/validationException|ProviderError/modelStreamErrorException|ProviderError/serviceUnavailableException",
     )
 }
 

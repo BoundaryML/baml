@@ -8,11 +8,11 @@ use btel_snapshot::{
 };
 use sys_native::SysOpsExt;
 
-fn capture_id(id: &proto::SnapshotId) -> btel_snapshot::SnapshotId {
+fn capture_id(id: &proto::CasId) -> btel_snapshot::CasId {
     let mut digest = [0; 16];
     digest[..8].copy_from_slice(&id.low.to_le_bytes());
     digest[8..].copy_from_slice(&id.high.to_le_bytes());
-    btel_snapshot::SnapshotId::from_bytes(digest)
+    btel_snapshot::CasId::from_bytes(digest)
 }
 
 struct Recording {
@@ -144,31 +144,43 @@ impl Recording {
         };
         for (_, entry, done) in &recording.spans {
             for id in entry.inputs_cas_id.iter().chain(done.value_cas_id.iter()) {
-                recording.blob(id);
+                recording.blobs(capture_id(id));
             }
         }
         (result, recording)
     }
 
-    fn blob(&self, id: &proto::SnapshotId) -> Vec<u8> {
-        let id = capture_id(id);
+    /// One blob from the recording's CAS, decoded and checked against its ID.
+    fn blob(&self, id: btel_snapshot::CasId) -> (Vec<u8>, btel_snapshot::DecodedSnapshot) {
         let path = btel_file::cas_path(&self.directory.path().join("cas"), id);
         let bytes = std::fs::read(path).unwrap();
         let decoded =
             btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default()).unwrap();
         assert_eq!(decoded.id, id);
-        bytes
+        (bytes, decoded)
+    }
+
+    /// A capture's blobs as the recording's CAS holds them: the root and every
+    /// blob it reaches, each of which must be there.
+    fn blobs(&self, root: btel_snapshot::CasId) -> Blobs {
+        let mut blobs = HashMap::new();
+        let mut pending = vec![root];
+        while let Some(id) = pending.pop() {
+            if blobs.contains_key(&id) {
+                continue;
+            }
+            let (_, decoded) = self.blob(id);
+            pending.extend(decoded.children.iter().copied());
+            blobs.insert(id, decoded);
+        }
+        Blobs { root, blobs }
     }
 
     /// A failure captures the `baml.errors.Context` a handler would bind: its
     /// `error` is the thrown value `expected` holds.
     #[track_caller]
-    fn assert_error_capture(
-        &self,
-        actual: Option<&proto::SnapshotId>,
-        expected: Option<&Snapshot>,
-    ) {
-        use btel_snapshot::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
+    fn assert_error_capture(&self, actual: Option<&proto::CasId>, expected: Option<&Snapshot>) {
+        use btel_snapshot::{DecodedObject, DecodedRoot, DecodedValue};
         let (actual, expected) = match (actual, expected) {
             (None, None) => return,
             (Some(actual), Some(expected)) => (actual, expected),
@@ -178,39 +190,43 @@ impl Recording {
                 expected.is_some()
             ),
         };
-        let context = decode_blob(&self.blob(actual), &DecodeLimits::default()).unwrap();
-        let DecodedRoot::Value(DecodedValue::Object(root)) = context.root else {
+        let actual = self.blobs(capture_id(actual));
+        let context = actual.root();
+        let DecodedRoot::Value(DecodedValue::Object(root)) = context.blob.root else {
             panic!("expected a captured context object");
         };
-        let DecodedObject::Instance { fields, .. } = context.object(root) else {
+        let DecodedObject::Instance { fields, .. } = context.blob.object(root) else {
             panic!("expected a baml.errors.Context instance");
         };
-        let mut bytes = Vec::new();
-        expected.write_blob(&mut bytes).unwrap();
-        let expected = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
-        let DecodedRoot::Value(value) = &expected.root else {
+        let expected = Blobs::of(expected);
+        let expected = expected.root();
+        let DecodedRoot::Value(value) = &expected.blob.root else {
             panic!("expected a captured value");
         };
         assert_eq!(fields[0].0.as_ref(), "error");
         assert!(
-            same_value(&context, &fields[0].1, &expected, value),
+            same_value(context, &fields[0].1, expected, value),
             "error {:?} differs from {value:?}",
             fields[0].1
         );
     }
 
+    /// The recording holds every blob of `expected`, byte for byte.
     #[track_caller]
-    fn assert_capture(&self, actual: Option<&proto::SnapshotId>, expected: Option<&Snapshot>) {
+    fn assert_capture(&self, actual: Option<&proto::CasId>, expected: Option<&Snapshot>) {
         match (actual, expected) {
             (None, None) => {}
             (Some(actual), Some(expected)) => {
-                if capture_id(actual) != expected.id() {
+                if capture_id(actual) != expected.root_id() {
                     // Not the value itself: a failure's context around it.
                     return self.assert_error_capture(Some(actual), Some(expected));
                 }
-                let mut expected_bytes = Vec::new();
-                expected.write_blob(&mut expected_bytes).unwrap();
-                assert_eq!(self.blob(actual), expected_bytes);
+                let mut scratch = btel_snapshot::BlobScratch::default();
+                for blob in expected.blobs() {
+                    let mut expected_bytes = Vec::new();
+                    blob.write(&mut scratch, &mut expected_bytes).unwrap();
+                    assert_eq!(self.blob(blob.id()).0, expected_bytes);
+                }
             }
             _ => panic!(
                 "capture presence differs: actual={}, expected={}",
@@ -221,35 +237,288 @@ impl Recording {
     }
 }
 
-/// Structural equality across two snapshots: object IDs are local to each.
+/// A capture's blobs by ID.
+struct Blobs {
+    root: btel_snapshot::CasId,
+    blobs: HashMap<btel_snapshot::CasId, btel_snapshot::DecodedSnapshot>,
+}
+
+impl Blobs {
+    /// Every blob of a capture this test built.
+    fn of(snapshot: &Snapshot) -> Self {
+        let mut scratch = btel_snapshot::BlobScratch::default();
+        let blobs = snapshot
+            .blobs()
+            .map(|blob| {
+                let mut bytes = Vec::new();
+                blob.write(&mut scratch, &mut bytes).unwrap();
+                let decoded =
+                    btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                        .unwrap();
+                (blob.id(), decoded)
+            })
+            .collect();
+        Self {
+            root: snapshot.root_id(),
+            blobs,
+        }
+    }
+
+    fn root(&self) -> Side<'_> {
+        Side {
+            blobs: self,
+            blob: &self.blobs[&self.root],
+        }
+    }
+}
+
+/// A capture, and the blob of it a value is read in.
+#[derive(Clone, Copy)]
+struct Side<'a> {
+    blobs: &'a Blobs,
+    blob: &'a btel_snapshot::DecodedSnapshot,
+}
+
+impl<'a> Side<'a> {
+    /// Media content, read from the child blob that stores it there.
+    fn content(self, payload: &'a btel_snapshot::MediaPayload) -> &'a str {
+        use btel_snapshot::{DecodedRoot, DecodedValue as V, MediaPayload};
+        match payload {
+            MediaPayload::Inline(text) => text,
+            MediaPayload::External { child, text_len } => {
+                let blob = &self.blobs.blobs[&self.blob.child(*child)];
+                let DecodedRoot::Value(V::String(text)) = &blob.root else {
+                    panic!("media content is a string");
+                };
+                assert_eq!(text.len() as u64, *text_len);
+                text
+            }
+        }
+    }
+
+    /// What `value` names, and the blob it is read in: a reference into a
+    /// child blob is followed there.
+    fn resolve(self, value: &btel_snapshot::DecodedValue) -> (Self, btel_snapshot::DecodedValue) {
+        use btel_snapshot::{DecodedRoot, DecodedValue as V};
+        match value {
+            V::External(child) => {
+                let blob = &self.blobs.blobs[&self.blob.child(*child)];
+                let DecodedRoot::Value(root) = &blob.root else {
+                    panic!("a child blob's root is a value");
+                };
+                (Side { blob, ..self }, root.clone())
+            }
+            V::ExternalNode { child, node } => {
+                let blob = &self.blobs.blobs[&self.blob.child(*child)];
+                (Side { blob, ..self }, V::Object(*node))
+            }
+            V::Null
+            | V::OmittedArg
+            | V::Bool(_)
+            | V::Int(_)
+            | V::Float(_)
+            | V::String(_)
+            | V::Bigint(_)
+            | V::Type(_)
+            | V::Truncated(_)
+            | V::Object(_)
+            | V::Enum { .. } => (self, value.clone()),
+        }
+    }
+}
+
+/// Structural equality across two captures: object numbers are local to each
+/// blob, and a reference into a child blob compares as what it names.
 fn same_value(
-    a: &btel_snapshot::DecodedSnapshot,
+    a: Side<'_>,
     x: &btel_snapshot::DecodedValue,
-    b: &btel_snapshot::DecodedSnapshot,
+    b: Side<'_>,
     y: &btel_snapshot::DecodedValue,
 ) -> bool {
-    use btel_snapshot::{DecodedObject, DecodedValue};
-    match (x, y) {
+    use btel_snapshot::DecodedValue as V;
+    let (a, x) = a.resolve(x);
+    let (b, y) = b.resolve(y);
+    match (&x, &y) {
+        (V::External(_) | V::ExternalNode { .. }, _)
+        | (_, V::External(_) | V::ExternalNode { .. }) => {
+            unreachable!("a blob's root value is stored in it")
+        }
+        (V::Null, V::Null) | (V::OmittedArg, V::OmittedArg) => true,
+        (V::Bool(x), V::Bool(y)) => x == y,
+        (V::Int(x), V::Int(y)) => x == y,
         // NaN is its own bits, not equal to itself.
-        (DecodedValue::Float(x), DecodedValue::Float(y)) => x.to_bits() == y.to_bits(),
-        (DecodedValue::Object(x), DecodedValue::Object(y)) => match (a.object(*x), b.object(*y)) {
-            (DecodedObject::List { items: x, .. }, DecodedObject::List { items: y, .. }) => {
-                x.len() == y.len() && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y))
-            }
-            (
-                DecodedObject::Map { entries: x, .. } | DecodedObject::Instance { fields: x, .. },
-                DecodedObject::Map { entries: y, .. } | DecodedObject::Instance { fields: y, .. },
-            ) => {
-                x.len() == y.len()
-                    && x.iter()
-                        .zip(y)
-                        .all(|((kx, x), (ky, y))| kx == ky && same_value(a, x, b, y))
-            }
-            (DecodedObject::Cell(x), DecodedObject::Cell(y)) => same_value(a, x, b, y),
-            (x, y) => x == y,
-        },
-        (x, y) => x == y,
+        (V::Float(x), V::Float(y)) => x.to_bits() == y.to_bits(),
+        (V::String(x), V::String(y)) => x == y,
+        (V::Bigint(x), V::Bigint(y)) => x == y,
+        (V::Type(x), V::Type(y)) => x == y,
+        (V::Truncated(x), V::Truncated(y)) => x == y,
+        (V::Object(x), V::Object(y)) => same_object(a, a.blob.object(*x), b, b.blob.object(*y)),
+        (
+            V::Enum {
+                declaration: x,
+                variant: variant_x,
+                name: name_x,
+            },
+            V::Enum {
+                declaration: y,
+                variant: variant_y,
+                name: name_y,
+            },
+        ) => {
+            variant_x == variant_y
+                && name_x == name_y
+                && same_object(a, a.blob.object(*x), b, b.blob.object(*y))
+        }
+        (
+            V::Null
+            | V::OmittedArg
+            | V::Bool(_)
+            | V::Int(_)
+            | V::Float(_)
+            | V::String(_)
+            | V::Bigint(_)
+            | V::Type(_)
+            | V::Truncated(_)
+            | V::Object(_)
+            | V::Enum { .. },
+            _,
+        ) => false,
     }
+}
+
+fn same_object(
+    a: Side<'_>,
+    x: &btel_snapshot::DecodedObject,
+    b: Side<'_>,
+    y: &btel_snapshot::DecodedObject,
+) -> bool {
+    use btel_snapshot::{DecodedObject as O, Entries};
+    let same_entries = |x: &Entries, y: &Entries| {
+        x.len() == y.len()
+            && x.iter()
+                .zip(y)
+                .all(|((key_x, x), (key_y, y))| key_x == key_y && same_value(a, x, b, y))
+    };
+    match (x, y) {
+        (
+            O::List {
+                element_type: type_x,
+                items: x,
+                original_len: len_x,
+            },
+            O::List {
+                element_type: type_y,
+                items: y,
+                original_len: len_y,
+            },
+        ) => {
+            type_x == type_y
+                && len_x == len_y
+                && x.len() == y.len()
+                && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y))
+        }
+        (
+            O::Map {
+                key_type: key_x,
+                value_type: value_x,
+                entries: x,
+                original_len: len_x,
+            },
+            O::Map {
+                key_type: key_y,
+                value_type: value_y,
+                entries: y,
+                original_len: len_y,
+            },
+        ) => key_x == key_y && value_x == value_y && len_x == len_y && same_entries(x, y),
+        (
+            O::Instance {
+                type_arguments: arguments_x,
+                declaration: declaration_x,
+                fields: x,
+                original_len: len_x,
+            },
+            O::Instance {
+                type_arguments: arguments_y,
+                declaration: declaration_y,
+                fields: y,
+                original_len: len_y,
+            },
+        ) => {
+            arguments_x == arguments_y
+                && len_x == len_y
+                && same_object(
+                    a,
+                    a.blob.object(*declaration_x),
+                    b,
+                    b.blob.object(*declaration_y),
+                )
+                && same_entries(x, y)
+        }
+        (O::Cell(x), O::Cell(y)) => same_value(a, x, b, y),
+        (O::Media(x), O::Media(y)) => same_media(a, x, b, y),
+        // Objects without references compare as they are.
+        (O::Uint8Array { .. }, O::Uint8Array { .. })
+        | (O::Declaration { .. }, O::Declaration { .. })
+        | (O::NonSnapshotable, O::NonSnapshotable)
+        | (O::Descriptive { .. }, O::Descriptive { .. })
+        | (O::Truncated(_), O::Truncated(_)) => x == y,
+        (
+            O::Uint8Array { .. }
+            | O::List { .. }
+            | O::Map { .. }
+            | O::Instance { .. }
+            | O::Declaration { .. }
+            | O::Cell(_)
+            | O::NonSnapshotable
+            | O::Descriptive { .. }
+            | O::Media(_)
+            | O::Truncated(_),
+            _,
+        ) => false,
+    }
+}
+
+/// Media compares by kind, MIME type, source and content, wherever each side
+/// stores its content.
+fn same_media(
+    left: Side<'_>,
+    x: &btel_snapshot::DecodedMedia,
+    right: Side<'_>,
+    y: &btel_snapshot::DecodedMedia,
+) -> bool {
+    use btel_snapshot::{DecodedMediaSource as S, MediaPayload};
+    let content = |x: Option<&MediaPayload>, y: Option<&MediaPayload>| match (x, y) {
+        (Some(x), Some(y)) => left.content(x) == right.content(y),
+        (None, None) => true,
+        (Some(_) | None, _) => false,
+    };
+    x.kind == y.kind
+        && x.mime_type == y.mime_type
+        && match (&x.source, &y.source) {
+            (
+                S::Url {
+                    url: source,
+                    data: loaded,
+                },
+                S::Url {
+                    url: other,
+                    data: other_loaded,
+                },
+            )
+            | (
+                S::File {
+                    path: source,
+                    data: loaded,
+                },
+                S::File {
+                    path: other,
+                    data: other_loaded,
+                },
+            ) => source == other && content(loaded.as_ref(), other_loaded.as_ref()),
+            (S::Base64 { data }, S::Base64 { data: other }) => content(Some(data), Some(other)),
+            (S::Url { .. } | S::File { .. } | S::Base64 { .. }, _) => false,
+        }
 }
 
 fn snapshot(args: bool, values: &[External]) -> Snapshot {
@@ -263,16 +532,13 @@ fn snapshot(args: bool, values: &[External]) -> Snapshot {
 }
 
 fn finish(mut builder: Builder, args: bool, roots: &[Value]) -> Snapshot {
+    let mut shaper = btel_snapshot::Shaper::default();
     if args {
-        let start = builder.value_start();
-        for root in roots {
-            builder.push_value(*root);
-        }
-        let slots = builder.value_range(start);
-        builder.finish_args(roots.len(), slots)
+        let root = builder.arguments(roots.iter(), |_, root| *root);
+        builder.finish(root, &mut shaper)
     } else {
         assert_eq!(roots.len(), 1);
-        builder.finish_value(roots[0])
+        builder.finish(roots[0], &mut shaper)
     }
 }
 
@@ -282,24 +548,15 @@ fn scalar(builder: &mut Builder, value: &External) -> Value {
         External::Bool(value) => Value::Bool(*value),
         External::Int(value) => Value::Int(*value),
         External::Float(value) => Value::Float(*value),
-        External::String(value) => Value::String(builder.string(value).unwrap()),
-        External::Bigint(value) => Value::Bigint(builder.bigint(&Arc::new(value.clone())).unwrap()),
+        External::String(value) => builder.leaves().string_value(value),
+        External::Bigint(value) => builder.leaves().bigint(&Arc::new(value.clone())),
         External::Uint8Array(value) => {
-            let object = builder.reserve_object().unwrap();
-            let data = builder.copy_bytes(value);
-            builder.set_object(
-                object,
-                SnapshotObject::Bytes {
-                    data,
-                    original_len: value.len(),
-                },
-            );
-            Value::Object(object)
+            let bytes = builder.bytes(value);
+            Value::Object(builder.leaves().object(bytes).unwrap())
         }
         External::RustData(_) => {
-            let object = builder.reserve_object().unwrap();
-            builder.set_object(object, SnapshotObject::NonSnapshotableValue {});
-            Value::Object(object)
+            let opaque = SnapshotObject::NonSnapshotableValue {};
+            Value::Object(builder.leaves().object(opaque).unwrap())
         }
         _ => panic!("expected a scalar fixture value"),
     }
@@ -429,54 +686,38 @@ async fn scalar_values(program: &Program) {
 fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> Snapshot {
     use baml_type::RealizedTy;
     use bex_vm_types::Object;
-    use btel_snapshot::Range;
 
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let object = b.reserve_object().unwrap();
+    let class = |suffix: &str| {
+        program
+            .objects
+            .0
+            .iter()
+            .find_map(|object| match object {
+                Object::Class(class) if class.name.display_name().ends_with(suffix) => Some(class),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let field =
+        |_: &mut btel_snapshot::Leaves<'_>, (key, value): (&str, Value)| (key.into(), value);
     let root = match scenario {
         "cycle" | "node" => {
-            let class = program
-                .objects
-                .0
-                .iter()
-                .find_map(|object| match object {
-                    Object::Class(class) if class.name.display_name().ends_with("MatrixNode") => {
-                        Some(class)
-                    }
-                    _ => None,
-                })
-                .unwrap();
-            let declaration = b.reserve_object().unwrap();
-            b.set_object(
-                declaration,
-                SnapshotObject::Declaration {
-                    name: class.name.clone(),
-                    tag: class.type_tag,
-                    is_enum: false,
-                },
-            );
-            let start = b.entry_start();
-            b.entry(&"value".into(), Value::Int(value));
-            b.entry(
-                &"next".into(),
-                if scenario == "cycle" {
-                    Value::Object(object)
-                } else {
-                    Value::Null
-                },
-            );
-            let fields = b.entry_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::Instance {
-                    type_arguments: Range::empty(),
-                    declaration,
-                    fields,
-                    original_len: 2,
-                },
-            );
-            Value::Object(object)
+            let class = class("MatrixNode");
+            let named = b.declaration(&class.name, class.type_tag, false);
+            let declaration = b.leaves().object(named).unwrap();
+            let slot = b.leaves().reserve().unwrap();
+            let object = Value::Object(slot.id());
+            let next = if scenario == "cycle" {
+                object
+            } else {
+                Value::Null
+            };
+            let fields = [("value", Value::Int(value)), ("next", next)];
+            let instance = b.instance(declaration, [], fields.into_iter(), field);
+            b.fill(slot, instance);
+            object
         }
         "enum" => {
             let enm = program
@@ -490,119 +731,44 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
                     _ => None,
                 })
                 .unwrap();
-            b.set_object(
-                object,
-                SnapshotObject::Declaration {
-                    name: enm.name.clone(),
-                    tag: enm.type_tag,
-                    is_enum: true,
-                },
-            );
+            let named = b.declaration(&enm.name, enm.type_tag, true);
             Value::Enum {
-                declaration: object,
+                declaration: b.leaves().object(named).unwrap(),
                 variant: 1,
-                name: b.string(&"Second".into()).unwrap(),
+                name: b.leaves().label(&"Second".into()).unwrap(),
             }
         }
         "aliases" => {
-            let shared = b.reserve_object().unwrap();
-            let outer_type = b.push_type(RealizedTy::List(Box::new(RealizedTy::Int)));
-            let inner_type = b.push_type(RealizedTy::Int);
-            let start = b.value_start();
-            b.push_value(Value::Object(shared));
-            b.push_value(Value::Object(shared));
-            let items = b.value_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::List {
-                    element_type: outer_type,
-                    items,
-                    original_len: 2,
-                },
-            );
-            let start = b.value_start();
-            b.push_value(Value::Int(1));
-            b.push_value(Value::Int(2));
-            let items = b.value_range(start);
-            b.set_object(
-                shared,
-                SnapshotObject::List {
-                    element_type: inner_type,
-                    items,
-                    original_len: 2,
-                },
-            );
-            Value::Object(object)
+            let outer_type = b.leaves().ty(RealizedTy::List(Box::new(RealizedTy::Int)));
+            let inner_type = b.leaves().ty(RealizedTy::Int);
+            let shared = b.list(inner_type, [1, 2].into_iter(), |_, n| Value::Int(n));
+            let shared = Value::Object(b.leaves().object(shared).unwrap());
+            let outer = b.list(outer_type, [shared, shared].into_iter(), |_, item| item);
+            Value::Object(b.leaves().object(outer).unwrap())
         }
         "empty_array" => {
-            let element_type = b.push_type(RealizedTy::Int);
-            b.set_object(
-                object,
-                SnapshotObject::List {
-                    element_type,
-                    items: Range::empty(),
-                    original_len: 0,
-                },
-            );
-            Value::Object(object)
+            let element_type = b.leaves().ty(RealizedTy::Int);
+            let empty = b.list(element_type, std::iter::empty(), |_, item| item);
+            Value::Object(b.leaves().object(empty).unwrap())
         }
         "generic" => {
-            let class = program
-                .objects
-                .0
-                .iter()
-                .find_map(|object| match object {
-                    Object::Class(class) if class.name.display_name().ends_with("MatrixBox") => {
-                        Some(class)
-                    }
-                    _ => None,
-                })
-                .unwrap();
-            let declaration = b.reserve_object().unwrap();
-            b.set_object(
-                declaration,
-                SnapshotObject::Declaration {
-                    name: class.name.clone(),
-                    tag: class.type_tag,
-                    is_enum: false,
-                },
-            );
-            let start = b.type_start();
-            b.push_type(RealizedTy::Int);
-            let type_arguments = b.type_range(start);
-            let start = b.entry_start();
-            b.entry(&"value".into(), Value::Int(7));
-            let fields = b.entry_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::Instance {
-                    type_arguments,
-                    declaration,
-                    fields,
-                    original_len: 1,
-                },
-            );
-            Value::Object(object)
+            let class = class("MatrixBox");
+            let named = b.declaration(&class.name, class.type_tag, false);
+            let declaration = b.leaves().object(named).unwrap();
+            let fields = [("value", Value::Int(7))];
+            let instance = b.instance(declaration, [RealizedTy::Int], fields.into_iter(), field);
+            Value::Object(b.leaves().object(instance).unwrap())
         }
         "map" => {
-            let key_type = b.push_type(RealizedTy::String);
-            let value_type = b.push_type(RealizedTy::Int);
-            let start = b.entry_start();
-            if value != 0 {
-                b.entry(&"first".into(), Value::Int(1));
-                b.entry(&"second".into(), Value::Int(2));
-            }
-            let entries = b.entry_range(start);
-            b.set_object(
-                object,
-                SnapshotObject::Map {
-                    key_type,
-                    value_type,
-                    entries,
-                    original_len: if value == 0 { 0 } else { 2 },
-                },
-            );
-            Value::Object(object)
+            let key_type = b.leaves().ty(RealizedTy::String);
+            let value_type = b.leaves().ty(RealizedTy::Int);
+            let entries: &[(&str, Value)] = if value == 0 {
+                &[]
+            } else {
+                &[("first", Value::Int(1)), ("second", Value::Int(2))]
+            };
+            let map = b.map(key_type, value_type, entries.iter().copied(), field);
+            Value::Object(b.leaves().object(map).unwrap())
         }
         _ => unreachable!(),
     };
@@ -713,7 +879,7 @@ async fn call_structure(program: &Program) {
                 entry
                     .inputs_cas_id
                     .as_ref()
-                    .is_some_and(|id| capture_id(id) == child_args.id())
+                    .is_some_and(|id| capture_id(id) == child_args.root_id())
             })
             .unwrap();
         recording.assert_capture(child.1.inputs_cas_id.as_ref(), Some(&child_args));
@@ -762,7 +928,7 @@ async fn call_structure(program: &Program) {
                 .find(|(_, _, done)| {
                     done.value_cas_id
                         .as_ref()
-                        .is_some_and(|id| capture_id(id) == expected.id())
+                        .is_some_and(|id| capture_id(id) == expected.root_id())
                 })
                 .unwrap();
             recording.assert_capture(
@@ -795,29 +961,13 @@ fn one_field_instance(
     assert_eq!(class.fields.len(), 1);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let object = b.reserve_object().unwrap();
-    let declaration = b.reserve_object().unwrap();
-    b.set_object(
-        declaration,
-        SnapshotObject::Declaration {
-            name: class.name.clone(),
-            tag: class.type_tag,
-            is_enum: false,
-        },
-    );
+    let named = b.declaration(&class.name, class.type_tag, false);
+    let declaration = b.leaves().object(named).unwrap();
     let value = scalar(&mut b, field);
-    let start = b.entry_start();
-    b.entry(&class.fields[0].name.as_str().into(), value);
-    let fields = b.entry_range(start);
-    b.set_object(
-        object,
-        SnapshotObject::Instance {
-            type_arguments: btel_snapshot::Range::empty(),
-            declaration,
-            fields,
-            original_len: 1,
-        },
-    );
+    let instance = b.instance(declaration, [], std::iter::once(value), |_, value| {
+        (class.fields[0].name.as_str().into(), value)
+    });
+    let object = b.leaves().object(instance).unwrap();
     let mut roots = vec![Value::Object(object)];
     roots.extend(additional_args.iter().map(|value| scalar(&mut b, value)));
     finish(b, args, &roots)

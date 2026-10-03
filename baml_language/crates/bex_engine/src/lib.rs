@@ -344,6 +344,91 @@ pub struct UserFunctionInfo {
     pub is_llm: bool,
 }
 
+/// Callable signatures available without loading a VM or running package init.
+pub struct UserFunctionCatalog {
+    // Keep non-user names in resolution so ambiguous suffixes match the engine.
+    functions: HashMap<String, Option<UserFunctionInfo>>,
+}
+
+impl UserFunctionCatalog {
+    /// Read callable signatures without loading the program.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a signature names no matching declared type in
+    /// the program, rather than erasing that signature to `unknown`.
+    pub fn from_program(program: &bex_vm_types::Program) -> Result<Self, EngineError> {
+        Ok(Self {
+            functions: program
+                .rendered_callables()
+                .into_iter()
+                .map(|(name, callable)| {
+                    let info = match &program.objects[callable.object] {
+                        Object::Function(func)
+                            if func.origin.is_user_callable()
+                                && matches!(func.kind, bex_vm_types::FunctionKind::Bytecode) =>
+                        {
+                            Some(UserFunctionInfo::from_function(&name, func, &mut |ty| {
+                                crate::conversion::to_wire_ty_with(ty, &mut |head| {
+                                    program.type_head_name(head)
+                                })
+                            })?)
+                        }
+                        _ => None,
+                    };
+                    Ok((name, info))
+                })
+                .collect::<Result<_, EngineError>>()?,
+        })
+    }
+
+    pub fn find_user_function(&self, name: &str) -> Option<UserFunctionInfo> {
+        let (_, info) = sys_types::resolve_name(&self.functions, name).found()?;
+        info.clone()
+    }
+
+    pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
+        self.functions.values().filter_map(Clone::clone).collect()
+    }
+}
+
+impl UserFunctionInfo {
+    fn from_function<E>(
+        name: &str,
+        func: &bex_vm_types::Function,
+        to_wire_ty: &mut impl FnMut(&bex_vm_types::RuntimeTy) -> Result<RuntimeTy, E>,
+    ) -> Result<Self, E> {
+        let display_param_types = if func.display_param_types.len() == func.param_names.len() {
+            func.display_param_types.clone()
+        } else {
+            func.param_types.iter().map(ToString::to_string).collect()
+        };
+        let display_return_type = if func.display_return_type.is_empty() {
+            func.return_type.to_string()
+        } else {
+            func.display_return_type.clone()
+        };
+        Ok(Self {
+            qualified_name: name.to_string(),
+            display_name: name.strip_prefix("user.").unwrap_or(name).to_string(),
+            origin: func.origin,
+            param_names: func.param_names.clone(),
+            param_types: func
+                .param_types
+                .iter()
+                .map(|t| to_wire_ty(&declared_symbolic(t, func)))
+                .collect::<Result<_, E>>()?,
+            param_has_default: func.param_has_default.clone(),
+            return_type: to_wire_ty(&declared_symbolic(&func.return_type, func))?,
+            display_type_params: func.display_type_params.clone(),
+            display_param_types,
+            display_return_type,
+            source_file: func.source_file.clone(),
+            is_llm: matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. })),
+        })
+    }
+}
+
 pub struct BexCallResult {
     pub value: Result<BexExternalValue, EngineError>,
 }
@@ -770,6 +855,31 @@ pub fn cancelled_unhandled_throw() -> EngineError {
 // BexEngine
 // ============================================================================
 
+/// Construction options applied before package initialization.
+pub struct EngineConfig {
+    /// Immutable context inherited by package initialization and root calls.
+    /// Recorded engines in one OS process must receive the same launch context:
+    /// recordings share a process identity and queries expose one process row.
+    /// The caller owns this invariant; engines do not coordinate global state.
+    pub launch_context: btel_types::context::Context,
+    pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+    pub clock_mode: btel_clock::ClockMode,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub recording: Option<TelemetryRecording>,
+}
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            launch_context: btel_types::context::Context::default(),
+            runtime_compiler: None,
+            clock_mode: btel_settings::clock::DEFAULT_MODE,
+            #[cfg(not(target_arch = "wasm32"))]
+            recording: None,
+        }
+    }
+}
+
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
@@ -837,6 +947,7 @@ pub struct BexEngine {
     #[cfg(test)]
     completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
+    launch_context: btel_types::context::Context,
     /// A panic escaped some root call: how a host that fails because of it
     /// reports the process's end.
     root_panicked: std::sync::atomic::AtomicBool,
@@ -1558,15 +1669,7 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
-        Self::build(
-            bytecode_program,
-            sys_ops,
-            argv,
-            None,
-            btel_settings::clock::DEFAULT_MODE,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
-        )
+        Self::new_with_config(bytecode_program, sys_ops, argv, EngineConfig::default())
     }
 
     /// Construct an engine with runtime compilation enabled by an injected
@@ -1577,14 +1680,14 @@ impl BexEngine {
         argv: Vec<String>,
         runtime_compiler: Arc<dyn RuntimeCompiler>,
     ) -> Result<Self, EngineError> {
-        Self::build(
+        Self::new_with_config(
             bytecode_program,
             sys_ops,
             argv,
-            Some(runtime_compiler),
-            btel_settings::clock::DEFAULT_MODE,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
+            EngineConfig {
+                runtime_compiler: Some(runtime_compiler),
+                ..EngineConfig::default()
+            },
         )
     }
 
@@ -1596,14 +1699,15 @@ impl BexEngine {
         runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
         clock_mode: btel_clock::ClockMode,
     ) -> Result<Self, EngineError> {
-        Self::build(
+        Self::new_with_config(
             bytecode_program,
             sys_ops,
             argv,
-            runtime_compiler,
-            clock_mode,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
+            EngineConfig {
+                runtime_compiler,
+                clock_mode,
+                ..EngineConfig::default()
+            },
         )
     }
 
@@ -1616,14 +1720,20 @@ impl BexEngine {
             .map(|telemetry| telemetry.clock.reset_after_restore())
     }
 
-    fn build(
+    /// Configure launch context and telemetry before package initialization.
+    pub fn new_with_config(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
-        runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
-        clock_mode: btel_clock::ClockMode,
-        #[cfg(not(target_arch = "wasm32"))] recording: Option<TelemetryRecording>,
+        config: EngineConfig,
     ) -> Result<Self, EngineError> {
+        let EngineConfig {
+            launch_context,
+            runtime_compiler,
+            clock_mode,
+            #[cfg(not(target_arch = "wasm32"))]
+            recording,
+        } = config;
         let auto_telemetry_level = btel_settings::mode::from_env()
             .map_err(|error| EngineError::Other(error.to_string()))?;
         raise_fd_soft_limit();
@@ -1788,6 +1898,7 @@ impl BexEngine {
                     Some(recording) => recording.start(
                         source_snapshot_id.map(|id| id.0),
                         Arc::new(heap.static_function_metadata()),
+                        &launch_context,
                     )?,
                     None => (
                         btel_processor::TelemetryRuntime::new().map_err(|error| {
@@ -1843,6 +1954,7 @@ impl BexEngine {
                     EngineTelemetry::new_root(telemetry.as_ref()),
                     trace_scope,
                 );
+                vm.set_root_context(launch_context.clone());
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
                 // bytecode, but events and GC safepoints may still yield.
@@ -1978,6 +2090,7 @@ impl BexEngine {
             #[cfg(test)]
             completed_threads: std::sync::Mutex::new(Vec::new()),
             process_euid,
+            launch_context,
             root_panicked: std::sync::atomic::AtomicBool::new(false),
             engine_id,
             invocation_clock: invocation::InvocationClock::new(),
@@ -3436,6 +3549,7 @@ impl BexEngine {
         // permit's `RootHaver` is the thread (delegating to the inner VM).
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
+        vm.set_root_context(self.launch_context.clone());
         vm.thread_id = self.next_bex_thread_id().0;
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
@@ -4022,7 +4136,7 @@ impl BexEngine {
         reservation: Option<Arc<bex_vm_types::trace::ReservedSpanData>>,
         host_environment: u64,
     ) -> Result<(), EngineError> {
-        let mut context = btel_types::context::Context::default();
+        let mut context = self.launch_context.clone();
         if let Some(inherited) = inherited {
             if inherited.engine_id != self.engine_id {
                 return Err(EngineError::TypeMismatch {
@@ -4402,47 +4516,15 @@ impl BexEngine {
                 }
                 let obj = unsafe { ptr.get() };
                 match obj {
-                    Object::Function(func) if func.origin.is_user_callable() => {
-                        let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
-                        let is_llm =
-                            matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. }));
-                        let display_param_types =
-                            if func.display_param_types.len() == func.param_names.len() {
-                                func.display_param_types.clone()
-                            } else {
-                                func.param_types.iter().map(ToString::to_string).collect()
-                            };
-                        let display_return_type = if func.display_return_type.is_empty() {
-                            func.return_type.to_string()
-                        } else {
-                            func.display_return_type.clone()
-                        };
-                        Some(UserFunctionInfo {
-                            qualified_name: name.clone(),
-                            display_name,
-                            origin: func.origin,
-                            param_names: func.param_names.clone(),
-                            param_types: func
-                                .param_types
-                                .iter()
-                                .map(|t| {
-                                    crate::conversion::to_wire_ty(&declared_symbolic(t, func))
-                                        .unwrap_or_else(|_| RuntimeTy::unknown())
-                                })
-                                .collect(),
-                            param_has_default: func.param_has_default.clone(),
-                            return_type: crate::conversion::to_wire_ty(&declared_symbolic(
-                                &func.return_type,
-                                func,
-                            ))
-                            .unwrap_or_else(|_| RuntimeTy::unknown()),
-                            display_type_params: func.display_type_params.clone(),
-                            display_param_types,
-                            display_return_type,
-                            source_file: func.source_file.clone(),
-                            is_llm,
+                    Object::Function(func) if func.origin.is_user_callable() => Some(
+                        UserFunctionInfo::from_function(name, func, &mut |ty| {
+                            Ok::<_, std::convert::Infallible>(
+                                crate::conversion::to_wire_ty(ty)
+                                    .unwrap_or_else(|_| RuntimeTy::unknown()),
+                            )
                         })
-                    }
+                        .unwrap_or_else(|never| match never {}),
+                    ),
                     _ => None,
                 }
             })
