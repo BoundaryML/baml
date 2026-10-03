@@ -145,6 +145,9 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
         let binary = temp.path().join(format!("packed-{index}"));
         run(
             cli(temp.path(), &home)
+                // This case checks recording roots, not cold-cache behavior.
+                // Reuse the stdlib compiled by other CLI integration tests.
+                .env("BAML_CACHE_DIR", common::shared_cache_dir())
                 .args(["pack", "--from"])
                 .arg(&source)
                 .arg("-o")
