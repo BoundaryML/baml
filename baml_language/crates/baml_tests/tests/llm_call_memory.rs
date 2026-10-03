@@ -6,6 +6,9 @@
 //! until the VM collected it. And every `match` type test that failed
 //! canonicalized the recursive `json` alias: the request builder tests each
 //! node of the request JSON that way, so the cost grew with the conversation.
+//! Parsing a reply also used to build a second, external copy of the parsed
+//! value and land it on the heap by name, so the parse cost of a large or
+//! streamed output was larger than it needs to be.
 //! A counting global allocator measures every byte allocated while the calls
 //! run, on every thread, so the bounds do not depend on when the GC runs.
 
@@ -85,6 +88,15 @@ const MAX_BYTES_PER_CALL: usize = 2 * 1024 * 1024;
 const MAX_UNRELATED_GROWTH_PER_CALL: usize = 256 * 1024;
 /// User/assistant exchanges in the long conversation.
 const LONG_CONVERSATION_TURNS: usize = 10;
+/// Items in the large parsed output, and the characters a stream adds per batch.
+const PARSED_ITEMS: i64 = 200;
+const STREAM_STEP: usize = 256;
+/// The ceiling for parsing a 13 KB reply of 200 items: about 665 KB; about
+/// 1.15 MB while each parse built an external copy of the value.
+const MAX_FINAL_PARSE_BYTES: usize = 900 * 1024;
+/// The ceiling for the same reply streamed in 52 batches, each reparsed from
+/// the start: about 32.3 MB; about 45.4 MB with the external copy.
+const MAX_STREAMED_PARSE_BYTES: usize = 40 * 1024 * 1024;
 /// The extra bytes per call that one more prompt message may cost: about 35 KB,
 /// and about 1.56 MB while every failed type test on the request JSON expanded
 /// `json`.
@@ -119,14 +131,19 @@ client Fake = openai.ResponsesClient.new(model = "fake", api_key = "test-key", b
 "#,
         base_url = server.uri()
     );
+    (server, engine(&source))
+}
+
+/// An engine running `source` with the native sys ops.
+fn engine(source: &str) -> Arc<BexEngine> {
     let engine = BexEngine::new_with_runtime_compiler(
-        compile_source(&source),
+        compile_source(source),
         Arc::new(sys_ops::SysOps::native()),
         Vec::new(),
         bex_project::runtime_compiler(),
     )
     .expect("engine builds");
-    (server, Arc::new(engine))
+    Arc::new(engine)
 }
 
 async fn call(engine: &Arc<BexEngine>, function: &str) -> BexExternalValue {
@@ -189,6 +206,47 @@ function Chat() -> string {{
 
 function main() -> string {{
     Chat()
+}}
+"#
+    )
+}
+
+/// A program that parses a 13 KB JSON reply of `PARSED_ITEMS` items: whole in
+/// `final_parse`, and in `stream_parse` the way `ai.stream.Stream` does, one
+/// growing prefix per batch through one parse cache.
+fn parse_program() -> String {
+    let items: Vec<String> = (0..PARSED_ITEMS)
+        .map(|i| format!(r#"{{"id": {i}, "name": "item number {i}", "tags": ["alpha", "beta"]}}"#))
+        .collect();
+    let text = serde_json::to_string(&format!("[{}]", items.join(", ")))
+        .expect("the reply is JSON-serializable");
+    format!(
+        r#"
+class Item {{
+    id: int,
+    name: string,
+    tags: string[],
+}}
+
+function final_parse() -> int {{
+    baml.sap.parse<Item[]>({text}).length()
+}}
+
+function stream_parse() -> int {{
+    let text = {text};
+    let cache = baml.sap._new_parse_cache<Item[]>();
+    let yielded = 0;
+    let end = {STREAM_STEP};
+    while (end < text.length() + {STREAM_STEP}) {{
+        let upto = if (end > text.length()) {{ text.length() }} else {{ end }};
+        let parsed: Item[] | baml.sap._NoYield = cache._parse_partial(text.slice(0, upto));
+        match (parsed) {{
+            let items: Item[] => {{ yielded = yielded + 1; }},
+            _ => {{}},
+        }};
+        end = end + {STREAM_STEP};
+    }}
+    yielded
 }}
 "#
     )
@@ -270,5 +328,61 @@ async fn call_cost_does_not_grow_with_conversation_length() {
         "each prompt message added {per_message} bytes per call ({short_bytes} -> {long_bytes} \
          for {extra_messages} more messages); building the request must stay linear in its size \
          with a small constant"
+    );
+}
+
+#[tokio::test]
+async fn large_parse_allocates_little() {
+    let _measuring = MEASURING.lock().await;
+    let engine = engine(&parse_program());
+    assert_eq!(
+        call(&engine, "final_parse").await,
+        BexExternalValue::Int(PARSED_ITEMS)
+    );
+    let bytes = bytes_per_call(&engine, "final_parse").await;
+    assert!(
+        bytes <= MAX_FINAL_PARSE_BYTES,
+        "parsing {PARSED_ITEMS} items allocated {bytes} bytes (limit {MAX_FINAL_PARSE_BYTES})"
+    );
+}
+
+#[tokio::test]
+async fn streamed_parse_allocates_little() {
+    let _measuring = MEASURING.lock().await;
+    let engine = engine(&parse_program());
+    assert!(
+        matches!(call(&engine, "stream_parse").await, BexExternalValue::Int(yields) if yields > 0),
+        "the stream never yielded a partial value"
+    );
+    let bytes = bytes_per_call(&engine, "stream_parse").await;
+    assert!(
+        bytes <= MAX_STREAMED_PARSE_BYTES,
+        "streaming {PARSED_ITEMS} items allocated {bytes} bytes (limit {MAX_STREAMED_PARSE_BYTES})"
+    );
+}
+
+/// The parser drops a `@skip` field, so the types only a skipped field names
+/// cost a parse nothing.
+#[tokio::test]
+async fn call_cost_does_not_grow_with_types_only_skipped_fields_name() {
+    let _measuring = MEASURING.lock().await;
+    let (_small_server, small) = engine_for(PICK_TOOL, r#"{"tool": "search"}"#).await;
+    let skipping_program = format!(
+        "{}\n{}",
+        unrelated_classes(400),
+        PICK_TOOL.replace(
+            "class Choice {\n    tool string\n}",
+            "class Choice {\n    tool string\n    extra Unrelated399 @skip\n}",
+        )
+    );
+    assert!(skipping_program.contains("extra Unrelated399 @skip"));
+    let (_skipping_server, skipping) = engine_for(&skipping_program, r#"{"tool": "search"}"#).await;
+    let small_bytes = bytes_per_call(&small, "main").await;
+    let skipping_bytes = bytes_per_call(&skipping, "main").await;
+    let growth = skipping_bytes.saturating_sub(small_bytes);
+    assert!(
+        growth <= MAX_UNRELATED_GROWTH_PER_CALL,
+        "400 classes a skipped field names added {growth} bytes per call \
+         ({small_bytes} -> {skipping_bytes}); the parse must not convert them"
     );
 }
