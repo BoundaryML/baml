@@ -510,7 +510,7 @@ impl RunArgs {
                 program,
                 ..
             } = self.load_and_compile(reporter)?;
-            let catalog = UserFunctionCatalog::from_program(&program);
+            let catalog = UserFunctionCatalog::from_program(&program)?;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
             let scripts = if self.file.is_some() {
@@ -557,7 +557,7 @@ impl RunArgs {
     fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
         let mut argv = self.build_argv_for_single(target);
         let prepared = self.load_and_compile(reporter)?;
-        let catalog = UserFunctionCatalog::from_program(&prepared.program);
+        let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
         Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
         let project_root = Self::project_root(&prepared.db, prepared.package);
 
@@ -659,7 +659,7 @@ impl RunArgs {
     fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let mut argv = self.build_argv_for_subcommand();
         let prepared = self.load_and_compile(reporter)?;
-        let catalog = UserFunctionCatalog::from_program(&prepared.program);
+        let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
         Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
 
         let (entries, lookups) = self.resolve_subcommand_targets(&catalog)?;
@@ -2175,13 +2175,17 @@ mod tests {
     /// single-source `compile_source` helper can't express.
     fn engine_from_files(files: &[(&str, &str)]) -> UserFunctionCatalog {
         let snapshot = baml_db::testing::compile_multi_file(files);
-        UserFunctionCatalog::from_program(&snapshot)
+        UserFunctionCatalog::from_program(&snapshot).unwrap()
     }
 
     #[test]
     fn signature_catalog_matches_loaded_engine() {
         let program = baml_db::testing::compile_multi_file(&[
             ("main.baml", "function Identity<T>(value: T) -> T { value }"),
+            (
+                "ns_nominal/main.baml",
+                include_str!("../tests/fixtures/catalog_types/baml_src/main.baml"),
+            ),
             (
                 "ns_one/main.baml",
                 "function Echo(value: string = \"default\") -> string { value }",
@@ -2191,7 +2195,7 @@ mod tests {
                 "function Echo(value: int?) -> int? { value }",
             ),
         ]);
-        let catalog = UserFunctionCatalog::from_program(&program);
+        let catalog = UserFunctionCatalog::from_program(&program).unwrap();
         let engine =
             BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap();
         let mut planned = catalog.user_functions();
@@ -2204,6 +2208,13 @@ mod tests {
             "user.Identity",
             "one.Echo",
             "two.Echo",
+            "nominal.EnumArg",
+            "nominal.ClassArg",
+            "nominal.Nested",
+            "nominal.UnionArg",
+            "nominal.RecursiveArg",
+            "nominal.InterfaceArg",
+            "nominal.GenericBox",
             "Echo",
             "missing",
         ] {

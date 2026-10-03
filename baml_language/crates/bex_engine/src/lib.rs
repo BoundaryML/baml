@@ -351,8 +351,14 @@ pub struct UserFunctionCatalog {
 }
 
 impl UserFunctionCatalog {
-    pub fn from_program(program: &bex_vm_types::Program) -> Self {
-        Self {
+    /// Read callable signatures without loading the program.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a signature names no matching declared type in
+    /// the program, rather than erasing that signature to `unknown`.
+    pub fn from_program(program: &bex_vm_types::Program) -> Result<Self, EngineError> {
+        Ok(Self {
             functions: program
                 .rendered_callables()
                 .into_iter()
@@ -362,14 +368,18 @@ impl UserFunctionCatalog {
                             if func.origin.is_user_callable()
                                 && matches!(func.kind, bex_vm_types::FunctionKind::Bytecode) =>
                         {
-                            Some(UserFunctionInfo::from_function(&name, func))
+                            Some(UserFunctionInfo::from_function(&name, func, &mut |ty| {
+                                crate::conversion::to_wire_ty_with(ty, &mut |head| {
+                                    program.type_head_name(head)
+                                })
+                            })?)
                         }
                         _ => None,
                     };
-                    (name, info)
+                    Ok((name, info))
                 })
-                .collect(),
-        }
+                .collect::<Result<_, EngineError>>()?,
+        })
     }
 
     pub fn find_user_function(&self, name: &str) -> Option<UserFunctionInfo> {
@@ -383,7 +393,11 @@ impl UserFunctionCatalog {
 }
 
 impl UserFunctionInfo {
-    fn from_function(name: &str, func: &bex_vm_types::Function) -> Self {
+    fn from_function<E>(
+        name: &str,
+        func: &bex_vm_types::Function,
+        to_wire_ty: &mut impl FnMut(&bex_vm_types::RuntimeTy) -> Result<RuntimeTy, E>,
+    ) -> Result<Self, E> {
         let display_param_types = if func.display_param_types.len() == func.param_names.len() {
             func.display_param_types.clone()
         } else {
@@ -394,7 +408,7 @@ impl UserFunctionInfo {
         } else {
             func.display_return_type.clone()
         };
-        Self {
+        Ok(Self {
             qualified_name: name.to_string(),
             display_name: name.strip_prefix("user.").unwrap_or(name).to_string(),
             origin: func.origin,
@@ -402,20 +416,16 @@ impl UserFunctionInfo {
             param_types: func
                 .param_types
                 .iter()
-                .map(|t| {
-                    crate::conversion::to_wire_ty(&declared_symbolic(t, func))
-                        .unwrap_or_else(|_| RuntimeTy::unknown())
-                })
-                .collect(),
+                .map(|t| to_wire_ty(&declared_symbolic(t, func)))
+                .collect::<Result<_, E>>()?,
             param_has_default: func.param_has_default.clone(),
-            return_type: crate::conversion::to_wire_ty(&declared_symbolic(&func.return_type, func))
-                .unwrap_or_else(|_| RuntimeTy::unknown()),
+            return_type: to_wire_ty(&declared_symbolic(&func.return_type, func))?,
             display_type_params: func.display_type_params.clone(),
             display_param_types,
             display_return_type,
             source_file: func.source_file.clone(),
             is_llm: matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. })),
-        }
+        })
     }
 }
 
@@ -4670,9 +4680,15 @@ impl BexEngine {
                 }
                 let obj = unsafe { ptr.get() };
                 match obj {
-                    Object::Function(func) if func.origin.is_user_callable() => {
-                        Some(UserFunctionInfo::from_function(name, func))
-                    }
+                    Object::Function(func) if func.origin.is_user_callable() => Some(
+                        UserFunctionInfo::from_function(name, func, &mut |ty| {
+                            Ok::<_, std::convert::Infallible>(
+                                crate::conversion::to_wire_ty(ty)
+                                    .unwrap_or_else(|_| RuntimeTy::unknown()),
+                            )
+                        })
+                        .unwrap_or_else(|never| match never {}),
+                    ),
                     _ => None,
                 }
             })

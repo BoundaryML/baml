@@ -95,6 +95,99 @@ fn assert_success(output: &Output, expected: &str) {
 }
 
 #[test]
+fn nominal_parameters_preserve_cli_flags_and_json_coercion() {
+    let project = tempfile::tempdir().unwrap();
+    common::write_project(
+        project.path(),
+        include_str!("fixtures/catalog_types/baml_src/main.baml"),
+    );
+    for target in ["EnumArg", "OptionalEnum"] {
+        assert_success(
+            &piped_cli(
+                project.path(),
+                &[
+                    "run",
+                    target,
+                    "--output-format",
+                    "json",
+                    "--",
+                    "--status",
+                    "Active",
+                ],
+                None,
+            ),
+            r#""Active""#,
+        );
+    }
+    assert_success(
+        &piped_cli(
+            project.path(),
+            &[
+                "run",
+                "-f",
+                "EnumArg",
+                "--context",
+                "-",
+                "--output-format",
+                "json",
+                "--",
+                "EnumArg",
+                "--status",
+                "Active",
+            ],
+            Some(CONTEXT),
+        ),
+        r#""Active""#,
+    );
+    for (target, input, expected) in [
+        (
+            "ClassArg",
+            r#"{"customer":{"name":"Ada","status":"Active"}}"#,
+            serde_json::json!({"name": "Ada", "status": "Active"}),
+        ),
+        (
+            "Nested",
+            r#"{"values":{"items":[{"value":"Inactive"}]}}"#,
+            serde_json::json!({"items": [{"value": "Inactive"}]}),
+        ),
+        (
+            "UnionArg",
+            r#"{"value":"Inactive"}"#,
+            serde_json::json!("Inactive"),
+        ),
+        (
+            "RecursiveArg",
+            r#"{"value":[1,[2,3]]}"#,
+            serde_json::json!([1, [2, 3]]),
+        ),
+    ] {
+        let output = piped_cli(
+            project.path(),
+            &[
+                "run",
+                target,
+                "--output-format",
+                "json",
+                "--",
+                "--json-args",
+                input,
+            ],
+            None,
+        );
+        assert!(
+            output.status.success(),
+            "{target}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
+            expected,
+            "{target}"
+        );
+    }
+}
+
+#[test]
 fn context_stdin_reaches_target_and_spawn_on_cold_and_cached_runs() {
     let project = project();
     for _ in 0..2 {
