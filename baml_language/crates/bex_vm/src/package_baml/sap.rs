@@ -104,6 +104,21 @@ fn parse_target(vm: &BexVm) -> Result<RealizedTy, VmRustFnError> {
     })
 }
 
+/// The declarations the parse model of `target` needs: those `target` names,
+/// then those a reached class's field types name (except `@skip` fields, which
+/// the parser drops) and those a reached alias's body names.
+fn parsed_declarations(vm: &BexVm, target: &RealizedTy) -> Vec<HeapPtr> {
+    reachable::declarations_reached(vm, target, |object, visit| match object {
+        Object::Class(class) => {
+            for field in class.fields.iter().filter(|field| !field.skip) {
+                field.field_type.visit_heads(&mut |head| visit(head));
+            }
+        }
+        Object::TypeAlias(alias) => alias.definition.visit_heads(&mut |head| visit(head)),
+        _ => {}
+    })
+}
+
 /// The parse model for `target`, built from the declarations it reaches.
 fn build_model(
     vm: &BexVm,
@@ -112,7 +127,7 @@ fn build_model(
     let mut classes = IndexMap::new();
     let mut enums = IndexMap::new();
     let mut aliases = HashMap::new();
-    for ptr in reachable::all_declarations(vm, target) {
+    for ptr in parsed_declarations(vm, target) {
         match vm.get_object(ptr) {
             Object::Class(class) => {
                 classes.insert(
@@ -197,7 +212,7 @@ struct Declarations(HashMap<TypeTag, HeapPtr>);
 impl Declarations {
     fn reached_by(vm: &BexVm, target: &RealizedTy) -> Self {
         Self(
-            reachable::all_declarations(vm, target)
+            parsed_declarations(vm, target)
                 .into_iter()
                 .filter_map(|ptr| {
                     let tag = match vm.get_object(ptr) {

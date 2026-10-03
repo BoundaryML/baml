@@ -360,3 +360,29 @@ async fn streamed_parse_allocates_little() {
         "streaming {PARSED_ITEMS} items allocated {bytes} bytes (limit {MAX_STREAMED_PARSE_BYTES})"
     );
 }
+
+/// The parser drops a `@skip` field, so the types only a skipped field names
+/// cost a parse nothing.
+#[tokio::test]
+async fn call_cost_does_not_grow_with_types_only_skipped_fields_name() {
+    let _measuring = MEASURING.lock().await;
+    let (_small_server, small) = engine_for(PICK_TOOL, r#"{"tool": "search"}"#).await;
+    let skipping_program = format!(
+        "{}\n{}",
+        unrelated_classes(400),
+        PICK_TOOL.replace(
+            "class Choice {\n    tool string\n}",
+            "class Choice {\n    tool string\n    extra Unrelated399 @skip\n}",
+        )
+    );
+    assert!(skipping_program.contains("extra Unrelated399 @skip"));
+    let (_skipping_server, skipping) = engine_for(&skipping_program, r#"{"tool": "search"}"#).await;
+    let small_bytes = bytes_per_call(&small, "main").await;
+    let skipping_bytes = bytes_per_call(&skipping, "main").await;
+    let growth = skipping_bytes.saturating_sub(small_bytes);
+    assert!(
+        growth <= MAX_UNRELATED_GROWTH_PER_CALL,
+        "400 classes a skipped field names added {growth} bytes per call \
+         ({small_bytes} -> {skipping_bytes}); the parse must not convert them"
+    );
+}
