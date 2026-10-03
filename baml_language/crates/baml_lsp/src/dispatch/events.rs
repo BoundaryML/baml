@@ -16,7 +16,7 @@ use crate::{
     executor::{ReadOutcome, spawn_read},
     mutation::SourceMutation,
     snapshot::{RequestCx, TaskFailure},
-    state::{DiagnosticCandidate, GlobalState, OwnerEvent},
+    state::{DiagnosticCandidate, GlobalState, OwnerEvent, SourceRevision},
 };
 
 impl GlobalState {
@@ -41,10 +41,16 @@ impl GlobalState {
             OwnerEvent::DiagnosticsResult { root, outcome } => {
                 self.on_diagnostics_result(root, outcome);
             }
-            OwnerEvent::RootsLoaded { folder, roots } => {
-                self.on_roots_loaded(folder.as_deref(), roots);
+            OwnerEvent::RootsLoaded {
+                started_at,
+                folder,
+                roots,
+            } => {
+                self.on_roots_loaded(started_at, folder.as_deref(), roots);
             }
-            OwnerEvent::FilesReloaded { files } => self.on_files_reloaded(files),
+            OwnerEvent::FilesReloaded { started_at, files } => {
+                self.on_files_reloaded(started_at, files);
+            }
             OwnerEvent::Call(f) => f(self),
         }
     }
@@ -133,7 +139,12 @@ impl GlobalState {
     /// `folder` that discovery no longer reports are removed if no document
     /// under them is open. Files skipped because they were open are re-fed
     /// from the overlay (or the database, if closed meanwhile).
-    fn on_roots_loaded(&mut self, folder: Option<&Path>, roots: Vec<LoadedRoot>) {
+    fn on_roots_loaded(
+        &mut self,
+        started_at: SourceRevision,
+        folder: Option<&Path>,
+        roots: Vec<LoadedRoot>,
+    ) {
         let discovered: HashSet<PathBuf> =
             roots.iter().map(|root| root.spec.path.clone()).collect();
         let mut batch: Vec<SourceMutation> = Vec::new();
@@ -179,6 +190,13 @@ impl GlobalState {
                 mut files,
                 unread,
             } = root;
+            files.retain(|(path, _)| !self.disk_observation_is_stale(path, started_at));
+            batch.extend(
+                files
+                    .iter()
+                    .filter(|(path, _)| self.path_is_deleted(path))
+                    .map(|(path, _)| SourceMutation::RestoreFile { path: path.clone() }),
+            );
             for path in unread {
                 if self.open_document(&path).is_some() {
                     // The overlay is merged by `UpsertRoot` itself.
@@ -214,12 +232,24 @@ impl GlobalState {
         }
     }
 
-    fn on_files_reloaded(&mut self, files: Vec<(PathBuf, Option<String>)>) {
+    fn on_files_reloaded(
+        &mut self,
+        started_at: SourceRevision,
+        files: Vec<(PathBuf, Option<String>)>,
+    ) {
         let batch = files
             .into_iter()
-            .map(|(path, text)| match text {
-                Some(text) => SourceMutation::SetDisk { path, text },
-                None => SourceMutation::RemoveFile { path },
+            .flat_map(|(path, text)| {
+                if self.disk_observation_is_stale(&path, started_at) {
+                    return Vec::new();
+                }
+                match text {
+                    Some(text) => vec![
+                        SourceMutation::RestoreFile { path: path.clone() },
+                        SourceMutation::SetDisk { path, text },
+                    ],
+                    None => vec![SourceMutation::RemoveFile { path }],
+                }
             })
             .collect();
         let applied = self.apply(batch);

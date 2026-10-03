@@ -11,7 +11,7 @@ use std::{
 
 use baml_lsp::{
     ClientSender, GlobalState, LspError, OwnerEvent, SessionKey,
-    discovery::{DiscoveredRoot, ProjectFs, workspace_root_spec},
+    discovery::{DiscoveredRoot, LoadedRoot, ProjectFs, workspace_root_spec},
     executor::{Executor, Executors, Inline, Job, ThreadPool},
     snapshot::TaskFailure,
     state::DIAGNOSTICS_DEBOUNCE,
@@ -817,6 +817,285 @@ fn watched_files_reload_exactly_the_named_paths() {
         a.last().unwrap().version,
         None,
         "closed files publish unversioned"
+    );
+}
+
+/// An editor buffer deleted through the LSP file-operation lifecycle stops
+/// contributing declarations, while a normal unsaved buffer remains
+/// authoritative over its on-disk text.
+#[test]
+fn deleted_open_document_is_not_indexed_but_unsaved_edits_are() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    let original = "function original() -> int { 1 }\n";
+    let existing = "function existing() -> int { 2 }\n";
+    h.fs.write(h.ws.join("main.baml"), original);
+    h.fs.write(h.ws.join("copy.baml"), original);
+    h.fs.write(h.ws.join("existing.baml"), existing);
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    let main_uri = h.uri("main.baml");
+    let copy_uri = h.uri("copy.baml");
+    h.open(s, &copy_uri, 1, original);
+    h.settle();
+
+    assert!(
+        has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the copied declaration is diagnosed")
+        ),
+        "the copied file initially contributes a duplicate declaration"
+    );
+
+    let discovery_started_at = h.state.revision();
+    h.fs.remove(&h.ws.join("copy.baml"));
+    h.notify(
+        s,
+        "workspace/didDeleteFiles",
+        json!({ "files": [{ "uri": copy_uri }] }),
+    )
+    .unwrap();
+    h.settle();
+
+    // VS Code may continue sending buffer changes before it closes the tab;
+    // deletion state must keep those changes out of the compiler index.
+    h.change(s, &copy_uri, 2, original);
+    h.settle();
+
+    // A discovery that read the file before deletion may finish afterward.
+    // Its stale disk snapshot must not reintroduce the deleted overlay.
+    h.state.handle_event(OwnerEvent::RootsLoaded {
+        started_at: discovery_started_at,
+        folder: None,
+        roots: vec![LoadedRoot {
+            spec: workspace_root_spec(h.ws.clone()),
+            files: vec![
+                (h.ws.join("main.baml"), original.to_owned()),
+                (h.ws.join("copy.baml"), original.to_owned()),
+                (h.ws.join("existing.baml"), existing.to_owned()),
+            ],
+            unread: Vec::new(),
+        }],
+    });
+    h.settle();
+
+    assert!(
+        h.state
+            .open_document(&h.ws.join("copy.baml"))
+            .is_some_and(|document| document.deleted),
+        "the editor lifecycle remains open even though the file was deleted"
+    );
+    assert!(h.state.file_text(&h.ws.join("copy.baml")).is_none());
+    assert!(
+        !has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the original file is republished without the duplicate")
+        ),
+        "the deleted open buffer no longer contributes declarations"
+    );
+
+    h.open(s, &main_uri, 1, original);
+    h.change(s, &main_uri, 2, existing);
+    h.settle();
+    assert!(
+        has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the unsaved duplicate is diagnosed")
+        ),
+        "ordinary unsaved edits remain authoritative"
+    );
+}
+
+#[test]
+fn stale_disk_jobs_do_not_restore_an_unopened_deleted_file() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    let original = "function original() -> int { 1 }\n";
+    h.fs.write(h.ws.join("main.baml"), original);
+    h.fs.write(h.ws.join("copy.baml"), original);
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    h.settle();
+    let main_uri = h.uri("main.baml");
+    let copy_uri = h.uri("copy.baml");
+    let stale_started_at = h.state.revision();
+
+    h.fs.remove(&h.ws.join("copy.baml"));
+    h.notify(
+        s,
+        "workspace/didDeleteFiles",
+        json!({ "files": [{ "uri": copy_uri }] }),
+    )
+    .unwrap();
+    h.settle();
+    assert!(h.state.file_text(&h.ws.join("copy.baml")).is_none());
+
+    h.state.handle_event(OwnerEvent::RootsLoaded {
+        started_at: stale_started_at,
+        folder: None,
+        roots: vec![LoadedRoot {
+            spec: workspace_root_spec(h.ws.clone()),
+            files: vec![
+                (h.ws.join("main.baml"), original.to_owned()),
+                (h.ws.join("copy.baml"), original.to_owned()),
+            ],
+            unread: Vec::new(),
+        }],
+    });
+    h.state.handle_event(OwnerEvent::FilesReloaded {
+        started_at: stale_started_at,
+        files: vec![(h.ws.join("copy.baml"), Some(original.to_owned()))],
+    });
+    h.settle();
+
+    assert!(h.state.file_text(&h.ws.join("copy.baml")).is_none());
+    assert!(
+        !has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the original is republished without the deleted unopened copy")
+        ),
+        "disk jobs started before deletion cannot replay an unopened file"
+    );
+
+    let recreated_started_at = h.state.revision();
+    h.state.handle_event(OwnerEvent::FilesReloaded {
+        started_at: recreated_started_at,
+        files: vec![(h.ws.join("copy.baml"), Some(original.to_owned()))],
+    });
+    h.settle();
+    assert!(
+        h.state.file_text(&h.ws.join("copy.baml")).is_some(),
+        "a disk observation started after deletion confirms recreation"
+    );
+    assert!(
+        has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the recreated unopened copy is diagnosed")
+        ),
+        "the confirmed recreation contributes declarations again"
+    );
+}
+
+#[test]
+fn recreated_or_saved_open_document_resumes_indexing() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    let original = "function original() -> int { 1 }\n";
+    h.fs.write(h.ws.join("main.baml"), original);
+    h.fs.write(h.ws.join("copy.baml"), original);
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    let main_uri = h.uri("main.baml");
+    let copy_uri = h.uri("copy.baml");
+    h.open(s, &copy_uri, 1, original);
+    h.settle();
+
+    h.notify(
+        s,
+        "workspace/didDeleteFiles",
+        json!({ "files": [{ "uri": copy_uri }] }),
+    )
+    .unwrap();
+    h.settle();
+    assert!(h.state.file_text(&h.ws.join("copy.baml")).is_none());
+
+    h.notify(
+        s,
+        "workspace/didCreateFiles",
+        json!({ "files": [{ "uri": copy_uri }] }),
+    )
+    .unwrap();
+    h.settle();
+    assert!(h.state.file_text(&h.ws.join("copy.baml")).is_some());
+    assert!(
+        has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the recreated duplicate is diagnosed")
+        ),
+        "an explicit recreation revives the open overlay"
+    );
+
+    h.notify(
+        s,
+        "workspace/didDeleteFiles",
+        json!({ "files": [{ "uri": copy_uri }] }),
+    )
+    .unwrap();
+    h.notify(
+        s,
+        "textDocument/didSave",
+        json!({ "textDocument": { "uri": copy_uri } }),
+    )
+    .unwrap();
+    h.settle();
+    assert!(h.state.file_text(&h.ws.join("copy.baml")).is_some());
+    assert!(
+        !h.state
+            .open_document(&h.ws.join("copy.baml"))
+            .expect("the document stays open")
+            .deleted,
+        "saving a deleted buffer proves that it exists again"
+    );
+}
+
+#[test]
+fn deleting_folder_suppresses_nested_open_documents() {
+    let mut h = Harness::new();
+    h.fs.add_project(&h.ws);
+    let original = "function original() -> int { 1 }\n";
+    h.fs.write(h.ws.join("main.baml"), original);
+    h.fs.write(h.ws.join("copies/copy.baml"), original);
+    let s = SessionKey(1);
+    h.init_session(s, &[]);
+    let main_uri = h.uri("main.baml");
+    let copy_uri = h.uri("copies/copy.baml");
+    h.open(s, &copy_uri, 1, original);
+    h.settle();
+    assert!(
+        has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the nested copy is diagnosed")
+        ),
+        "the nested copy initially contributes a duplicate declaration"
+    );
+
+    let folder_uri = h.uri("copies");
+    h.notify(
+        s,
+        "workspace/didDeleteFiles",
+        json!({ "files": [{ "uri": folder_uri }] }),
+    )
+    .unwrap();
+    h.settle();
+
+    assert!(
+        h.state
+            .open_document(&h.ws.join("copies/copy.baml"))
+            .is_some_and(|document| document.deleted)
+    );
+    assert!(h.state.file_text(&h.ws.join("copies/copy.baml")).is_none());
+    assert!(
+        !has_error(
+            h.sender(s)
+                .publications_for(&main_uri)
+                .last()
+                .expect("the original is republished after folder deletion")
+        ),
+        "deleting a containing folder suppresses nested open buffers"
     );
 }
 

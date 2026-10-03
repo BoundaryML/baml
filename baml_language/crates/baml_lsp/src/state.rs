@@ -68,6 +68,16 @@ pub struct OpenDocument {
     pub session: SessionKey,
     /// The buffer's current text.
     pub text: Arc<str>,
+    /// The client reported this file deleted through `workspace/didDeleteFiles`.
+    /// Keep tracking the buffer lifecycle, but do not index its text until a
+    /// fresh `didOpen` proves it is a live document again.
+    pub deleted: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DeletedPath {
+    recursive: bool,
+    revision: SourceRevision,
 }
 
 /// Canonical database path → open document.
@@ -299,11 +309,15 @@ pub enum OwnerEvent {
     /// (roots previously found under it that vanished are reconciled) and
     /// `None` for a host-supplied root set (upsert only).
     RootsLoaded {
+        /// Source revision when the discovery job captured its inputs.
+        started_at: SourceRevision,
         folder: Option<PathBuf>,
         roots: Vec<LoadedRoot>,
     },
     /// Disk reads finished for individual files; `None` = the file is gone.
     FilesReloaded {
+        /// Source revision when the reload job captured its inputs.
+        started_at: SourceRevision,
         files: Vec<(PathBuf, Option<String>)>,
     },
     /// An arbitrary owner-thread continuation.
@@ -356,6 +370,11 @@ pub struct GlobalState {
     /// Canonical, so a URI under it maps back onto `<builtin>/…` exactly.
     stdlib_dir: Option<PathBuf>,
     open_documents: Arc<OpenDocuments>,
+    /// Explicit editor file-operation lifecycle. These generations prevent
+    /// I/O jobs started before a delete/create transition from replaying a
+    /// stale disk snapshot afterward.
+    deleted_paths: HashMap<PathBuf, DeletedPath>,
+    restored_paths: HashMap<PathBuf, SourceRevision>,
     root_state: HashMap<SourceRoot, RootState>,
     /// Paths of `Workspace` roots minted by `didOpen` for a document under
     /// no known root. They exist only to serve open documents: superseded
@@ -411,6 +430,8 @@ impl GlobalState {
             roots: Arc::default(),
             stdlib_dir: stdlib_dir.map(|dir| paths::canonical_physical_path(&dir)),
             open_documents: Arc::default(),
+            deleted_paths: HashMap::new(),
+            restored_paths: HashMap::new(),
             root_state: HashMap::new(),
             provisional_roots: HashSet::new(),
             host_folders: Vec::new(),
@@ -545,6 +566,46 @@ impl GlobalState {
 
     pub fn revision(&self) -> SourceRevision {
         self.revision
+    }
+
+    fn latest_deletion(&self, path: &Path) -> Option<SourceRevision> {
+        self.deleted_paths
+            .iter()
+            .filter(|(deleted_path, deletion)| {
+                path == deleted_path.as_path()
+                    || (deletion.recursive && path.starts_with(deleted_path))
+            })
+            .map(|(_, deletion)| deletion.revision)
+            .max()
+    }
+
+    fn latest_lifecycle_transition(&self, path: &Path) -> Option<SourceRevision> {
+        self.latest_deletion(path)
+            .into_iter()
+            .chain(self.restored_paths.get(path).copied())
+            .max()
+    }
+
+    /// Whether the latest explicit lifecycle transition leaves `path`
+    /// deleted, including a containing-folder deletion.
+    pub(crate) fn path_is_deleted(&self, path: &Path) -> bool {
+        let Some(deleted_at) = self.latest_deletion(path) else {
+            return false;
+        };
+        self.restored_paths
+            .get(path)
+            .is_none_or(|restored_at| *restored_at < deleted_at)
+    }
+
+    /// Whether a disk observation began before the latest explicit lifecycle
+    /// transition for `path` and therefore cannot update current state.
+    pub(crate) fn disk_observation_is_stale(
+        &self,
+        path: &Path,
+        started_at: SourceRevision,
+    ) -> bool {
+        self.latest_lifecycle_transition(path)
+            .is_some_and(|transition| transition > started_at)
     }
 
     pub fn roots(&self) -> &Arc<RootsView> {
@@ -882,13 +943,18 @@ impl GlobalState {
                 let open_documents = Arc::clone(&self.open_documents);
                 let mut merged: BTreeMap<&Path, &str> = files
                     .iter()
+                    .filter(|(path, _)| !self.path_is_deleted(path))
                     .map(|(path, text)| (path.as_path(), text.as_str()))
                     .collect();
                 for (path, doc) in open_documents
                     .iter()
                     .filter(|(path, _)| path.starts_with(&root_path))
                 {
-                    merged.insert(path.as_path(), &doc.text);
+                    if doc.deleted || self.path_is_deleted(path) {
+                        merged.remove(path.as_path());
+                    } else {
+                        merged.insert(path.as_path(), &doc.text);
+                    }
                 }
                 self.db.set_root_files(root, merged);
                 Ok(vec![root])
@@ -915,15 +981,22 @@ impl GlobalState {
                 text,
                 version,
             } => {
+                let deleted =
+                    if let Some(doc) = Arc::make_mut(&mut self.open_documents).get_mut(path) {
+                        doc.version = *version;
+                        doc.text = Arc::from(text.as_str());
+                        doc.deleted
+                    } else {
+                        false
+                    };
+                if deleted {
+                    return Ok(Vec::new());
+                }
                 let root = self
                     .db
                     .source_root_for_path(path)
                     .ok_or_else(|| LspError::NoRootForPath(path.clone()))?;
                 self.db.add_or_update_file_in(root, path, text);
-                if let Some(doc) = Arc::make_mut(&mut self.open_documents).get_mut(path) {
-                    doc.version = *version;
-                    doc.text = Arc::from(text.as_str());
-                }
                 Ok(vec![root])
             }
             SourceMutation::SetDisk { path, text } => {
@@ -944,6 +1017,66 @@ impl GlobalState {
                 let root = self.db.source_root_for_path(path);
                 self.db.remove_file(path);
                 Ok(root.into_iter().collect())
+            }
+            SourceMutation::DeletePath { path, recursive } => {
+                self.deleted_paths.insert(
+                    path.clone(),
+                    DeletedPath {
+                        recursive: *recursive,
+                        revision: SourceRevision(self.revision.0 + 1),
+                    },
+                );
+                for (open_path, doc) in Arc::make_mut(&mut self.open_documents) {
+                    if open_path == path || (*recursive && open_path.starts_with(path)) {
+                        doc.deleted = true;
+                    }
+                }
+                let deleted: Vec<PathBuf> = self
+                    .db
+                    .workspace_files()
+                    .into_iter()
+                    .map(|file| file.path(&self.db))
+                    .filter(|file_path| {
+                        file_path == path || (*recursive && file_path.starts_with(path))
+                    })
+                    .collect();
+                let mut roots = Vec::new();
+                for file_path in deleted {
+                    if let Some(root) = self.db.source_root_for_path(&file_path)
+                        && !roots.contains(&root)
+                    {
+                        roots.push(root);
+                    }
+                    self.db.remove_file(&file_path);
+                }
+                Ok(roots)
+            }
+            SourceMutation::RestoreFile { path } => {
+                let open_was_deleted = self
+                    .open_documents
+                    .get(path)
+                    .is_some_and(|document| document.deleted);
+                if !open_was_deleted && !self.path_is_deleted(path) {
+                    return Ok(Vec::new());
+                }
+                self.restored_paths
+                    .insert(path.clone(), SourceRevision(self.revision.0 + 1));
+                let Some(doc) = self.open_documents.get(path) else {
+                    return Ok(Vec::new());
+                };
+                if !doc.deleted {
+                    return Ok(Vec::new());
+                }
+                let text = Arc::clone(&doc.text);
+                Arc::make_mut(&mut self.open_documents)
+                    .get_mut(path)
+                    .expect("the open document cannot disappear on the owner thread")
+                    .deleted = false;
+                let Some(root) = self.db.source_root_for_path(path) else {
+                    return Ok(Vec::new());
+                };
+                self.db.add_or_update_file_in(root, path, &text);
+                Ok(vec![root])
             }
             SourceMutation::CloseDocument { path } => {
                 Arc::make_mut(&mut self.open_documents).remove(path);

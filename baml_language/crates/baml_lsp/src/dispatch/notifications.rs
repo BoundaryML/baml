@@ -163,9 +163,10 @@ pub(super) fn did_open(
             version: Some(version),
             session,
             text: Arc::from(text.as_str()),
+            deleted: false,
         },
     );
-    let mut batch = Vec::with_capacity(2);
+    let mut batch = Vec::with_capacity(3);
     if let Some(root) = &provisional_root {
         // The overlay just tracked is merged into the root's file set.
         batch.push(SourceMutation::UpsertRoot {
@@ -173,6 +174,7 @@ pub(super) fn did_open(
             files: Vec::new(),
         });
     }
+    batch.push(SourceMutation::RestoreFile { path: path.clone() });
     batch.push(SourceMutation::SetOverlay {
         path,
         text,
@@ -251,15 +253,19 @@ pub(super) fn will_save(
     Ok(())
 }
 
-/// The buffer already is the database text; disk catching up changes
-/// nothing.
-#[expect(clippy::unnecessary_wraps, reason = "uniform dispatch-table signature")]
+/// The buffer already is the database text. Saving a buffer that was deleted
+/// is the exception: it proves the document exists again and revives it.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "uniform dispatch-table signature"
+)]
 pub(super) fn did_save(
-    _state: &mut GlobalState,
+    state: &mut GlobalState,
     _session: SessionKey,
-    _params: DidSaveTextDocumentParams,
+    params: DidSaveTextDocumentParams,
 ) -> Result<(), LspError> {
-    Ok(())
+    let path = paths::canonical_document_path(state.roots(), &params.text_document.uri)?;
+    first_rejection(state.apply(vec![SourceMutation::RestoreFile { path }]))
 }
 
 #[expect(
@@ -435,12 +441,25 @@ pub(super) fn did_change_workspace_folders(
     Ok(())
 }
 
+/// Revive deleted overlays when the editor reports that a BAML file exists
+/// again; disk discovery or watcher reload supplies unopened files' text.
 #[expect(clippy::unnecessary_wraps, reason = "uniform dispatch-table signature")]
 pub(super) fn did_create_files(
-    _state: &mut GlobalState,
+    state: &mut GlobalState,
     _session: SessionKey,
-    _params: lsp_types::CreateFilesParams,
+    params: lsp_types::CreateFilesParams,
 ) -> Result<(), LspError> {
+    let batch = params
+        .files
+        .into_iter()
+        .filter_map(|file| {
+            let uri = lsp_types::Url::parse(&file.uri).ok()?;
+            let path = paths::canonical_document_path(state.roots(), &uri).ok()?;
+            is_baml_source(&path).then_some(SourceMutation::RestoreFile { path })
+        })
+        .collect();
+    let applied = state.apply(batch);
+    log_rejections(&applied, "didCreateFiles");
     Ok(())
 }
 
@@ -453,11 +472,49 @@ pub(super) fn did_rename_files(
     Ok(())
 }
 
+/// Record explicit file or folder deletion state so open overlays and delayed
+/// disk observations cannot keep the deleted sources indexed.
 #[expect(clippy::unnecessary_wraps, reason = "uniform dispatch-table signature")]
 pub(super) fn did_delete_files(
-    _state: &mut GlobalState,
+    state: &mut GlobalState,
     _session: SessionKey,
-    _params: lsp_types::DeleteFilesParams,
+    params: lsp_types::DeleteFilesParams,
 ) -> Result<(), LspError> {
+    let batch = params
+        .files
+        .into_iter()
+        .filter_map(|file| {
+            let uri = match lsp_types::Url::parse(&file.uri) {
+                Ok(uri) => uri,
+                Err(error) => {
+                    tracing::debug!(uri = file.uri, %error, "ignoring deleted-file event");
+                    return None;
+                }
+            };
+            let path = match paths::canonical_document_path(state.roots(), &uri) {
+                Ok(path) => path,
+                Err(error) => {
+                    tracing::debug!(%uri, %error, "ignoring deleted-file event");
+                    return None;
+                }
+            };
+            if state
+                .roots()
+                .root_for_path(&path)
+                .is_some_and(|entry| !is_editable(entry.kind))
+            {
+                return None;
+            }
+            // File-operation notifications do not carry the matched filter's
+            // kind. An exact tracked document is a file; otherwise a path
+            // without a BAML extension (or a BAML-named path with no exact
+            // source) came through the folder filter.
+            let recursive = !is_baml_source(&path)
+                || (state.open_document(&path).is_none() && state.file_text(&path).is_none());
+            Some(SourceMutation::DeletePath { path, recursive })
+        })
+        .collect();
+    let applied = state.apply(batch);
+    log_rejections(&applied, "didDeleteFiles");
     Ok(())
 }
