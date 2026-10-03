@@ -13,6 +13,14 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 beforeAll(() => {
   HTMLElement.prototype.scrollTo ??= vi.fn();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
 });
 
 describe('ExecutionPanel StrictMode lifecycle', () => {
@@ -174,6 +182,84 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
         ),
       ).toBe(true);
     });
+  });
+
+  it('keeps the selected graph expand mode through the function loading lifecycle', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
+        type: 'playgroundNotification',
+      });
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions: [
+              { kind: 'expr', name: 'First', origin: 'userDefined' },
+              { kind: 'expr', name: 'Second', origin: 'userDefined' },
+            ],
+            generation: 1,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (2)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'First' }));
+
+    await waitFor(() => {
+      expect(latestCfgRequest(port, 'First')).toBeDefined();
+    });
+    const firstRequest = latestCfgRequest(port, 'First');
+    if (!firstRequest) throw new Error('missing First CFG request');
+
+    act(() => {
+      port.emit({
+        functionName: 'First',
+        graph: graphFixture('First'),
+        requestId: firstRequest.requestId,
+        type: 'controlFlowGraphResult',
+      });
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'All' }));
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Second' }));
+    expect(await screen.findByText('Loading graph...')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(latestCfgRequest(port, 'Second')).toBeDefined();
+    });
+    const secondRequest = latestCfgRequest(port, 'Second');
+    if (!secondRequest) throw new Error('missing Second CFG request');
+
+    act(() => {
+      port.emit({
+        functionName: 'Second',
+        graph: graphFixture('Second'),
+        requestId: secondRequest.requestId,
+        type: 'controlFlowGraphResult',
+      });
+    });
+
+    expect(await screen.findByRole('button', { name: 'All' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('ignores stale CFG responses after a project update', async () => {
@@ -1189,4 +1275,20 @@ function cfgRequestId(
     throw new Error(`missing CFG request ID for ${functionName}`);
   }
   return requestId;
+}
+
+function latestCfgRequest(
+  port: FakeRuntimePort,
+  functionName: string,
+): Extract<WorkerInMessage, { type: 'requestControlFlowGraph' }> | undefined {
+  for (let index = port.sent.length - 1; index >= 0; index -= 1) {
+    const message = port.sent[index];
+    if (
+      message?.type === 'requestControlFlowGraph' &&
+      message.functionName === functionName
+    ) {
+      return message;
+    }
+  }
+  return undefined;
 }

@@ -53,7 +53,7 @@ import type { ExecutionStoreSnapshot } from './execution-store';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { FunctionSidebar } from './FunctionSidebar';
 import { setGatewayEnabled } from './gateway';
-import { GraphView } from './graph/GraphView';
+import { type ExpandMode, GraphView } from './graph/GraphView';
 import { findLatestGraphRunSnapshot } from './graph-run-selection';
 import { cn } from './lib/utils';
 import { projectLabels, toProjectEntry } from './project-label';
@@ -89,17 +89,17 @@ import { TelemetryView } from './telemetry/TelemetryView';
 import { useTelemetry } from './telemetry/use-telemetry';
 import { collectLatestTestRunResults } from './test-run-results';
 import { createValueBodyCache } from './value-body-cache';
-import {
-  type BoundaryId,
-  type ControlFlowGraph,
-  type CursorContext,
-  type FetchLogEntry,
-  type FunctionInfo,
-  type ProjectUpdate,
-  type Run,
-  type RunStatus,
-  type SourceNavigationTarget,
-  type WorkerOutMessage,
+import type {
+  BoundaryId,
+  ControlFlowGraph,
+  CursorContext,
+  FetchLogEntry,
+  FunctionInfo,
+  ProjectUpdate,
+  Run,
+  RunStatus,
+  SourceNavigationTarget,
+  WorkerOutMessage,
 } from './worker-protocol';
 
 registerBuiltinResultRenderers();
@@ -656,6 +656,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
   const [controlFlowGraph, setControlFlowGraph] =
     useState<ControlFlowGraph | null>(null);
+  // GraphView unmounts while the next function's CFG loads, so this
+  // session-scoped view preference must live in the persistent panel.
+  const [graphExpandMode, setGraphExpandMode] = useState<ExpandMode>('click');
   // CFGs for EVERY function in the project (prefetched) — powers the
   // workflow-root heuristic when a function is picked from the list.
   const workflowCfgCacheRef = useRef<Map<string, ControlFlowGraph>>(new Map());
@@ -3201,8 +3204,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   {controlFlowGraph ? (
                     <GraphView
                       customRenderers={resultRenderers}
+                      expandMode={graphExpandMode}
                       functionName={graphTargetName}
                       graph={controlFlowGraph}
+                      onExpandModeChange={setGraphExpandMode}
                       onNodeClick={handleGraphNodeClick}
                       run={latestGraphRunSnapshot ?? null}
                       runError={latestGraphRunSnapshot?.error?.message ?? null}
@@ -3395,8 +3400,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     {controlFlowGraph ? (
                       <GraphView
                         customRenderers={resultRenderers}
+                        expandMode={graphExpandMode}
                         functionName={graphTargetName}
                         graph={controlFlowGraph}
+                        onExpandModeChange={setGraphExpandMode}
                         onNodeClick={handleGraphNodeClick}
                         run={latestGraphRunSnapshot ?? null}
                         runError={

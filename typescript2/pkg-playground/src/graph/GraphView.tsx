@@ -44,6 +44,9 @@ import {
   liftGroupValuePreviews,
 } from './value-previews';
 
+/** How the graph decides which subgraphs to reveal vs. collapse. */
+export type ExpandMode = 'zoom' | 'click' | 'all';
+
 interface GraphViewProps {
   graph: ControlFlowGraph;
   /** Function whose graph is displayed — keys the per-function layout
@@ -55,14 +58,13 @@ interface GraphViewProps {
   runStatus?: Run['status'];
   runError?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
+  expandMode: ExpandMode;
+  onExpandModeChange: (mode: ExpandMode) => void;
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
 }
 
 type LayoutDirection = 'horizontal' | 'vertical';
-
-/** How the graph decides which subgraphs to reveal vs. collapse. */
-type ExpandMode = 'zoom' | 'click' | 'all';
 
 const EXPAND_MODES: { id: ExpandMode; label: string; title: string }[] = [
   { id: 'zoom', label: 'Zoom', title: 'Reveal subgraphs as you zoom in' },
@@ -149,6 +151,8 @@ function GraphViewInner({
   customRenderers,
   selectedNodeId,
   onNodeClick,
+  expandMode,
+  onExpandModeChange,
 }: GraphViewProps) {
   const theme = useGraphTheme();
   const chrome = getChrome(theme);
@@ -195,7 +199,6 @@ function GraphViewInner({
     () => maxNodeDepth(graphModel.rfNodes),
     [graphModel],
   );
-  const [expandMode, setExpandMode] = useState<ExpandMode>('click');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -225,11 +228,14 @@ function GraphViewInner({
   }, [graphModel, revealDepth, expanded]);
 
   // Switching modes clears manual expansions and refits to the new extent.
-  const selectExpandMode = useCallback((mode: ExpandMode) => {
-    setExpandMode(mode);
-    setExpanded(new Set());
-    refitAfterLayoutRef.current = true;
-  }, []);
+  const selectExpandMode = useCallback(
+    (mode: ExpandMode) => {
+      onExpandModeChange(mode);
+      setExpanded(new Set());
+      refitAfterLayoutRef.current = true;
+    },
+    [onExpandModeChange],
+  );
 
   // Click a collapsed node to reveal its subgraph; click again to collapse.
   const toggleExpanded = useCallback((nodeId: string) => {
