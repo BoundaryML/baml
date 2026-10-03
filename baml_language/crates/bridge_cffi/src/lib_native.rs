@@ -12,7 +12,7 @@ use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
-use crate::{BridgeError, Buffer, baml_to_host, error_to_outbound};
+use crate::{BridgeError, Buffer, PreparedRuntime, baml_to_host, error_to_outbound};
 
 #[path = "api.rs"]
 pub mod api;
@@ -47,8 +47,67 @@ pub use ffi::{
     unhandled_spawn::register_unhandled_spawn_error_callback,
 };
 
+/// A program as a host handed it to `stage_runtime*`: not yet validated,
+/// decoded, or compiled.
+enum StagedProgram {
+    Bytecode {
+        bytecode: Vec<u8>,
+        embedded_baml_toml: Option<String>,
+    },
+    Files {
+        root_path: String,
+        src_files: HashMap<String, String>,
+    },
+}
+
+impl StagedProgram {
+    /// Validate and compile the program, build its engine, and run its package
+    /// initializers. Building the engine is where telemetry is configured from
+    /// the environment.
+    fn initialize(self) -> Result<Arc<dyn Bex>, BridgeError> {
+        let prepared = match self {
+            Self::Bytecode {
+                bytecode,
+                embedded_baml_toml,
+            } => crate::prepare_runtime_from_blob(
+                &bytecode,
+                embedded_baml_toml.as_deref(),
+                bex_project::SysOps::native(),
+            )?,
+            Self::Files {
+                root_path,
+                src_files,
+            } => {
+                let physical_fs = vfs::PhysicalFS::new("/");
+                let vfs_root = vfs::VfsPath::new(physical_fs);
+                let vfs_path = vfs_root
+                    .join(&root_path)
+                    .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
+                let files = src_files
+                    .into_iter()
+                    .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
+                    .collect();
+                PreparedRuntime {
+                    runtime: bex_project::prepare(vfs_path, bex_project::SysOps::native(), files)?,
+                    error_context: None,
+                }
+            }
+        };
+        prepared.build()
+    }
+}
+
+/// The process-global runtime slot. Staging stores the program; the first
+/// [`get_or_init_runtime`] (in practice, the first BAML call) initializes it.
+enum RuntimeSlot {
+    Staged(StagedProgram),
+    Ready(Arc<dyn Bex>),
+    /// Initialization failed. Every later use reports the same error.
+    Failed(String),
+}
+
 /// Global Bex runtime. Uses RwLock to allow replacing the runtime.
-static RUNTIME_INSTANCE: RwLock<Option<Arc<dyn Bex>>> = RwLock::new(None);
+static RUNTIME_INSTANCE: RwLock<Option<RuntimeSlot>> = RwLock::new(None);
 
 /// Global Tokio runtime for async execution.
 static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
@@ -63,59 +122,85 @@ pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
     result.cloned()
 }
 
-pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
-    RUNTIME_INSTANCE
+pub(crate) fn get_or_init_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
+    if let Some(RuntimeSlot::Ready(runtime)) = &*RUNTIME_INSTANCE
         .read()
         .map_err(|_| BridgeError::LockPoisoned)?
-        .clone()
-        .ok_or(BridgeError::NotInitialized)
+    {
+        return Ok(runtime.clone());
+    }
+
+    // Initialize under the write lock, so concurrent first uses share one engine.
+    let mut slot = RUNTIME_INSTANCE
+        .write()
+        .map_err(|_| BridgeError::LockPoisoned)?;
+    let initialized = match slot.take().ok_or(BridgeError::NotInitialized)? {
+        RuntimeSlot::Staged(program) => program.initialize().map_err(|error| error.to_string()),
+        RuntimeSlot::Ready(runtime) => Ok(runtime),
+        RuntimeSlot::Failed(message) => Err(message),
+    };
+    match initialized {
+        Ok(runtime) => {
+            *slot = Some(RuntimeSlot::Ready(runtime.clone()));
+            Ok(runtime)
+        }
+        Err(message) => {
+            *slot = Some(RuntimeSlot::Failed(message.clone()));
+            Err(BridgeError::Startup(message))
+        }
+    }
 }
 
-/// Initialize the global runtime from BAML source files.
-///
-/// If a runtime is already initialized, it will be replaced with the new one.
+/// Stage BAML source files as the global runtime, replacing any previous one.
+/// Nothing is compiled until the first use of the runtime.
 ///
 /// # Arguments
 /// * `root_path` - Root path for BAML files
 /// * `src_files` - Map of filename to content
-pub fn initialize_runtime(
+pub fn stage_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
-) -> Result<Arc<dyn Bex>, BridgeError> {
-    let physical_fs = vfs::PhysicalFS::new("/");
-    let vfs_root = vfs::VfsPath::new(physical_fs);
-    let vfs_path = vfs_root
-        .join(root_path)
-        .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
-
-    let files = src_files
-        .into_iter()
-        .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
-        .collect();
-
-    let rt: Arc<dyn Bex> = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
-    crate::install_unhandled_spawn_error_handler(&rt);
-    replace_runtime(rt.clone())?;
-    Ok(rt)
+) -> Result<(), BridgeError> {
+    replace_slot(StagedProgram::Files {
+        root_path: root_path.to_owned(),
+        src_files,
+    })
 }
 
-pub(crate) fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
+/// Stage serialized BAML bytecode, and the generated `baml.toml` when there is
+/// one, as the global runtime, replacing any previous one. Nothing is
+/// validated or decoded until the first use of the runtime.
+pub fn stage_runtime_from_blob(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+) -> Result<(), BridgeError> {
+    replace_slot(StagedProgram::Bytecode {
+        bytecode: bytecode.to_vec(),
+        embedded_baml_toml: embedded_baml_toml.map(str::to_owned),
+    })
+}
+
+fn replace_slot(program: StagedProgram) -> Result<(), BridgeError> {
     let mut guard = RUNTIME_INSTANCE
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    let previous = guard.replace(rt);
+    let previous = guard.replace(RuntimeSlot::Staged(program));
     drop(guard);
-    if let Some(previous) = previous {
+    if let Some(RuntimeSlot::Ready(previous)) = previous {
         get_tokio_runtime()?.spawn(previous.shutdown(None));
     }
     Ok(())
 }
 
 pub(crate) fn take_runtime() -> Result<Option<Arc<dyn Bex>>, BridgeError> {
-    RUNTIME_INSTANCE
+    let slot = RUNTIME_INSTANCE
         .write()
-        .map_err(|_| BridgeError::LockPoisoned)
-        .map(|mut runtime| runtime.take())
+        .map_err(|_| BridgeError::LockPoisoned)?
+        .take();
+    Ok(match slot {
+        Some(RuntimeSlot::Ready(runtime)) => Some(runtime),
+        _ => None,
+    })
 }
 
 pub(crate) fn dispatch_unhandled_spawn_error(content: Vec<u8>, cancelled: bool) {
