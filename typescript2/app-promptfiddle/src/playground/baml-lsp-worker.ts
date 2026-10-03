@@ -195,9 +195,13 @@ async function executeShell(
     cwd: options?.cwd,
     env: options?.env,
     stdin: Array.isArray(options?.stdin)
-      ? new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(options.stdin))
+      ? new TextDecoder('utf-8', { fatal: true }).decode(
+          new Uint8Array(options.stdin),
+        )
       : options?.stdin,
-    ...(options?.env || options?.clear_env ? { replaceEnv: options?.clear_env ?? false } : {}),
+    ...(options?.env || options?.clear_env
+      ? { replaceEnv: options?.clear_env ?? false }
+      : {}),
     ...(options?.timeout_ms != null
       ? { signal: AbortSignal.timeout(options.timeout_ms) }
       : {}),
@@ -235,9 +239,13 @@ async function executeExec(
     cwd: options?.cwd,
     env: options?.env,
     stdin: Array.isArray(options?.stdin)
-      ? new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(options.stdin))
+      ? new TextDecoder('utf-8', { fatal: true }).decode(
+          new Uint8Array(options.stdin),
+        )
       : options?.stdin,
-    ...(options?.env || options?.clear_env ? { replaceEnv: options?.clear_env ?? false } : {}),
+    ...(options?.env || options?.clear_env
+      ? { replaceEnv: options?.clear_env ?? false }
+      : {}),
     ...(options?.timeout_ms != null
       ? { signal: AbortSignal.timeout(options.timeout_ms) }
       : {}),
