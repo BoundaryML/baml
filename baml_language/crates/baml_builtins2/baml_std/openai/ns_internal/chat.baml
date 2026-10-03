@@ -436,7 +436,7 @@ class ChatRequest {
 
 // ---------------------------------------------------------------------------
 // Typed response wire classes. Every field is optional: OpenAI-compatible
-// servers omit freely, and a non-optional int is a ParseFailed waiting to
+// servers omit freely, and a non-optional int is an InvalidResponse waiting to
 // happen (PLAN §1.5).
 
 class CcFunctionCall {
@@ -529,7 +529,33 @@ class CcUsage {
     completion_tokens_details: CcCompletionTokensDetails?,
 }
 
+class CcError {
+    message: string?,
+    type: string?,
+    code: (string | int)?,
+}
+
+function _chat_provider_error(
+    error: CcError,
+    provider: string,
+    raw: string,
+) -> ai.errors.ProviderError {
+    ai.errors.ProviderError {
+        provider: provider,
+        message: error.message ?? "the provider reported a failure",
+        error_type: error.type,
+        error_code: if let code: string | int = error.code {
+            code.to_string()
+        } else {
+            null
+        },
+        raw_body: raw,
+        status_code: null,
+    }
+}
+
 class CcResponse {
+    error: CcError?,
     id: string?,
     model: string?,
     choices: CcChoice[]?,
@@ -1365,7 +1391,7 @@ function _chat_push_tool_uses(
 
 /// One decoded response -> canonical content blocks, stop reason and usage.
 ///
-/// `raw` is the response text, used only to populate `ai.errors.ParseFailed`
+/// `raw` is the response text, used to populate `ai.errors.InvalidResponse`
 /// when the envelope carries no usable choice.
 ///
 /// Divergence from both prior implementations, deliberate: more than one choice
@@ -1378,14 +1404,31 @@ function chat_parse(
     raw: string,
     audio_mime: string = "audio/wav",
 ) -> ai.ModelTurn {
+    if let reported: CcError = response.error {
+        throw _chat_provider_error(reported, provider, raw)
+    }
     let choices: CcChoice[] = response.choices ?? [];
     let choice: CcChoice = match (choices.at(0)) {
         let first: CcChoice => first,
-        null => throw ai.errors.ParseFailed { provider: provider, raw_output: raw },
+        null => {
+            throw ai.errors.InvalidResponse {
+                provider: provider,
+                message: "the chat response is missing a choice or its message",
+                raw_body: raw,
+                status_code: null,
+            }
+        },
     };
     let message: CcMessage = match (choice.message) {
         let m: CcMessage => m,
-        null => throw ai.errors.ParseFailed { provider: provider, raw_output: raw },
+        null => {
+            throw ai.errors.InvalidResponse {
+                provider: provider,
+                message: "the chat response is missing a choice or its message",
+                raw_body: raw,
+                status_code: null,
+            }
+        },
     };
 
     let content: ai.content.ModelBlock[] = [];
@@ -1528,7 +1571,14 @@ function _chat_send(
         )
     }
     let decoded = baml.json.to<CcResponse>(baml.json.parse(text)) catch_all (e) {
-        _ => throw ai.errors.ParseFailed { provider: provider, raw_output: text },
+        let parse => {
+            throw ai.errors.InvalidResponse {
+                provider: provider,
+                message: parse.to_string(),
+                raw_body: text,
+                status_code: response.status_code,
+            }
+        },
     };
     let turn = chat_parse(decoded, provider, text, audio_mime = audio_mime);
     let call = ai.events.LLMCall {
@@ -1611,6 +1661,7 @@ class CcStreamChoice {
 }
 
 class CcStreamChunk {
+    error: CcError?,
     id: string?,
     model: string?,
     choices: CcStreamChoice[]?,
@@ -1684,9 +1735,17 @@ class ChatStreamDecoder {
                     // a blank line, an OpenRouter `: PROCESSING` keepalive, a
                     // vendor sentinel — is still ignored.
                     if (parsed == null && data.trim().starts_with("{")) {
-                        throw ai.errors.ParseFailed { provider: self.provider, raw_output: data }
+                        throw ai.errors.InvalidResponse {
+                            provider: self.provider,
+                            message: "the chat stream event could not be decoded",
+                            raw_body: data,
+                            status_code: null,
+                        }
                     }
                     if let chunk: CcStreamChunk = parsed {
+                        if let reported: CcError = chunk.error {
+                            throw _chat_provider_error(reported, self.provider, data)
+                        }
                         let choices: CcStreamChoice[] = chunk.choices ?? [];
                         if let choice: CcStreamChoice = choices.at(0) {
                             if let text: string = choice.delta?.content {

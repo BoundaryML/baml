@@ -136,7 +136,14 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
         throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
     }
     baml.json.from_string<T>(text) catch_all (e) {
-        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+        let parse => {
+            throw root.errors.InvalidResponse {
+                provider: provider,
+                message: parse.to_string(),
+                raw_body: text,
+                status_code: resp.status_code,
+            }
+        },
     }
 }
 
@@ -184,7 +191,14 @@ function send_as_with_wire<T>(
         throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
     }
     let value = baml.json.from_string<T>(text) catch_all (e) {
-        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+        let parse => {
+            throw root.errors.InvalidResponse {
+                provider: provider,
+                message: parse.to_string(),
+                raw_body: text,
+                status_code: resp.status_code,
+            }
+        },
     };
     let call = root.events.LLMCall {
         client_name: client_name,

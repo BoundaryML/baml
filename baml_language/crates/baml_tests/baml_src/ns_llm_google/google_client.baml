@@ -298,14 +298,9 @@ test "google_parse_stop_reasons" {
 function _parse_label(raw: string) -> string {
     let resp = baml.json.from_string<google.internal.GmResponse>(raw);
     google.internal.parse(resp, 0).stop_reason.to_string() catch_all (e) {
-        _ => {
-            match (e) {
-                let failed: ai.errors.ParseFailed => "ParseFailed",
-                let limited: ai.errors.RateLimited => "RateLimited",
-                let bad: ai.errors.InvalidRequest => "InvalidRequest",
-                _ => "other",
-            }
-        },
+        let invalid: ai.errors.InvalidResponse => "InvalidResponse",
+        let reported: ai.errors.ProviderError => "ProviderError",
+        _ => "other",
     }
 }
 
@@ -323,7 +318,7 @@ function google_parse_empty_response() -> string {
 test "google_parse_empty_response" {
     assert.equal(
         google_parse_empty_response(),
-        "ParseFailed|ParseFailed|ParseFailed|MaxTokens|RateLimited|Refused",
+        "InvalidResponse|InvalidResponse|InvalidResponse|MaxTokens|ProviderError|Refused",
     )
 }
 
@@ -343,6 +338,7 @@ function google_empty_response_e2e() -> string {
                 _ => {
                     match (e) {
                         let failed: ai.errors.ParseFailed => "ParseFailed",
+                        let invalid: ai.errors.InvalidResponse => "InvalidResponse",
                         _ => "other",
                     }
                 },
@@ -352,7 +348,7 @@ function google_empty_response_e2e() -> string {
 }
 
 test "google_empty_response_e2e" {
-    assert.equal(google_empty_response_e2e(), "ParseFailed")
+    assert.equal(google_empty_response_e2e(), "InvalidResponse")
 }
 
 // ─── Gemini 3: thought signatures ────────────────────────────────────────────
@@ -634,6 +630,7 @@ function _stream_failure_label(events: string[]) -> string {
                     match (e) {
                         let net: ai.errors.NetworkFailure => "NetworkFailure",
                         let failed: ai.errors.ParseFailed => "ParseFailed",
+                        let invalid: ai.errors.InvalidResponse => "InvalidResponse",
                         _ => "other",
                     }
                 },
@@ -665,7 +662,7 @@ function google_stream_malformed_payload() -> string {
 }
 
 test "google_stream_malformed_payload" {
-    assert.equal(google_stream_malformed_payload(), "ParseFailed")
+    assert.equal(google_stream_malformed_payload(), "InvalidResponse")
 }
 
 // ─── Vertex: URL construction ────────────────────────────────────────────────

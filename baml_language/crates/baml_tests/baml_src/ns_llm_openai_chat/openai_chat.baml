@@ -115,6 +115,8 @@ function _chat_failure_label(error: ai.errors.RaisedInClient) -> string {
         let f: ai.errors.InvalidRequest => `InvalidRequest/${f.status_code ?? -1}/${f.retry_safety()}`,
         let f: ai.errors.NetworkFailure => `NetworkFailure/${f.retry_safety()}`,
         let f: ai.errors.ParseFailed => "ParseFailed",
+        let f: ai.errors.InvalidResponse => "InvalidResponse",
+        let f: ai.errors.ProviderError => "ProviderError",
         _ => "other",
     }
 }
@@ -932,7 +934,7 @@ function chat_classifies_http_errors() -> string {
 test "chat_classifies_http_errors" {
     assert.equal(
         chat_classifies_http_errors(),
-        "InvalidRequest/400/Safe|RateLimited/Safe|NetworkFailure/Safe|ParseFailed",
+        "InvalidRequest/400/Safe|RateLimited/Safe|NetworkFailure/Safe|InvalidResponse",
     )
 }
 
@@ -1884,7 +1886,7 @@ function chat_stream_rejects_corrupt_chunk() -> string {
 }
 
 test "chat_stream_rejects_corrupt_chunk" {
-    assert.equal(chat_stream_rejects_corrupt_chunk(), "ParseFailed")
+    assert.equal(chat_stream_rejects_corrupt_chunk(), "InvalidResponse")
 }
 
 // A non-JSON keepalive between chunks is still skipped.

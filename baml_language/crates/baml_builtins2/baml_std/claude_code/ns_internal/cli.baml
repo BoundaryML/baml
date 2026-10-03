@@ -129,12 +129,19 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
 /// terminal result event.
 function _read_result(p: baml.sys.Process) -> json {
     let result: json = null;
+    let raw_lines: string[] = [];
     for (let line in p.stdout.lines()) {
+        raw_lines.push(line);
         let trimmed = line.trim();
         if (trimmed.length() > 0) {
             let raw = baml.json.parse(trimmed) catch_all (e) {
                 _ => {
-                    throw ai.errors.ParseFailed { provider: "claude-code", raw_output: trimmed }
+                    throw ai.errors.InvalidResponse {
+                        provider: "claude-code",
+                        message: "the CLI emitted an invalid JSON event",
+                        raw_body: trimmed,
+                        status_code: null,
+                    }
                 },
             };
             _log_cc_event(raw);
@@ -146,9 +153,11 @@ function _read_result(p: baml.sys.Process) -> json {
         };
     }
     if (result == null) {
-        throw ai.errors.ParseFailed {
+        throw ai.errors.InvalidResponse {
             provider: "claude-code",
-            raw_output: "the Claude Code CLI stream ended without a result event",
+            message: "the Claude Code CLI stream ended without a result event",
+            raw_body: raw_lines.join("\n"),
+            status_code: null,
         }
     }
     result
@@ -336,10 +345,13 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     }
 
     if (baml.json.path_or<bool>(result, ".is_error", false)) {
-        throw ai.errors.Refused {
+        throw ai.errors.ProviderError {
             provider: "claude-code",
-            reason: baml.json.path_or<string>(result, ".subtype", "error"),
+            message: baml.json.path_or<string>(result, ".result", "the CLI reported a failure"),
+            error_type: baml.json.path_or<string>(result, ".subtype", "error"),
+            error_code: null,
             raw_body: baml.json.stringify(result),
+            status_code: null,
         }
     }
     log.info(

@@ -198,6 +198,8 @@ function _failure_label(error: unknown) -> string {
         let e: ai.errors.InvalidRequest => `InvalidRequest/${e.status_code ?? -1}`,
         let e: ai.errors.NetworkFailure => "NetworkFailure",
         let e: ai.errors.ParseFailed => "ParseFailed",
+        let e: ai.errors.InvalidResponse => "InvalidResponse",
+        let e: ai.errors.ProviderError => `ProviderError/${e.error_type ?? ""}`,
         _ => `other/${error.to_string()}`,
     }
 }
@@ -1308,7 +1310,7 @@ function bedrock_parse_malformed_stop() -> string {
 test "bedrock_parse_malformed_stop" {
     assert.equal(
         bedrock_parse_malformed_stop(),
-        "ParseFailed|ParseFailed|Refused|Refused",
+        "ProviderError/malformed_model_output|ProviderError/malformed_tool_use|Refused|Refused",
     )
 }
 
@@ -1353,7 +1355,7 @@ function bedrock_parse_empty_and_malformed() -> string {
 }
 
 test "bedrock_parse_empty_and_malformed" {
-    assert.equal(bedrock_parse_empty_and_malformed(), "0|ParseFailed")
+    assert.equal(bedrock_parse_empty_and_malformed(), "0|InvalidResponse")
 }
 
 // Usage is optional on the wire; its absence is not a parse failure
@@ -1489,7 +1491,7 @@ function bedrock_garbage_body() -> string {
 }
 
 test "bedrock_garbage_body" {
-    assert.equal(bedrock_garbage_body(), "ParseFailed")
+    assert.equal(bedrock_garbage_body(), "InvalidResponse")
 }
 
 // ─── 13. streaming (ConverseStream) ──────────────────────────────────────────
@@ -1694,8 +1696,7 @@ test "bedrock_stream_truncated" {
     assert.equal(bedrock_stream_truncated(), "NetworkFailure")
 }
 
-// A modeled exception frame mid-stream fails the turn with the identity the
-// same HTTP status gets on `invoke`.
+// A modeled exception frame mid-stream retains its native provider identity.
 function bedrock_stream_exception(exception_type: string) -> string {
     let frames = [
         root.llm_mock.eventstream_event("messageStart", `{"role":"assistant"}`),
@@ -1725,7 +1726,7 @@ test "bedrock_stream_exceptions" {
             bedrock_stream_exception("modelStreamErrorException"),
             bedrock_stream_exception("serviceUnavailableException"),
         ].join("|"),
-        "RateLimited|InvalidRequest/400|InvalidRequest/424|NetworkFailure",
+        "ProviderError/throttlingException|ProviderError/validationException|ProviderError/modelStreamErrorException|ProviderError/serviceUnavailableException",
     )
 }
 
