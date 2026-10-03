@@ -18,6 +18,14 @@ class RunResult<Out> {
     usage: root.events.Usage,
 }
 
+/// (internal) A turn `Agent._attempt_turn` accepted. When parsing its terminal
+/// text is what accepted it, `text_output` holds that parse, so `Agent.run`
+/// does not parse the same text a second time.
+class _AcceptedTurn {
+    turn: ModelTurn,
+    text_output: ParsedOutput?,
+}
+
 /// The default runner. A spec-mode LLM function's direct call runs
 /// `Agent.new(client = client).run(Fn@spec(...)).value`; construct it
 /// yourself to set the other fields (`$` call-site parameters are a future
@@ -198,7 +206,10 @@ class Agent {
         }
     }
 
-    function _parses<Out>(self, turn: ModelTurn, candidate: string) -> bool {
+    /// (internal) Whether the turn answers with an `Out` without parsing its
+    /// text: the provider-decoded output decides, or the turn's media does.
+    /// `null` when only parsing the terminal text can tell.
+    function _fits_without_text<Out>(self, turn: ModelTurn) -> bool? {
         if let parsed: ParsedOutput = turn.parsed_output {
             return match (parsed.value) {
                 let value: Out => true,
@@ -216,12 +227,18 @@ class Agent {
         if (self._has_media_output<Out>(turn)) {
             return true;
         }
-        let _ = baml.sap.parse<Out>(candidate) catch_all (e) {
+        null
+    }
+
+    /// (internal) The terminal text parsed into an `Out`, or `null` when it does
+    /// not parse.
+    function _parse_text<Out>(self, candidate: string) -> ParsedOutput? {
+        let value = baml.sap.parse<Out>(candidate) catch_all (e) {
             _ => {
-                return false;
+                return null;
             },
         };
-        true
+        ParsedOutput { value: value }
     }
 
     /// (internal) One accepted model turn, with the within-turn repair loop: when a
@@ -237,7 +254,7 @@ class Agent {
         j: Journal,
         total: root.events.Usage,
         attempts_left: int,
-    ) -> ModelTurn {
+    ) -> _AcceptedTurn {
         let turn = c.invoke(
             ModelTurnInput {
                 prompt: spec.prompt_template,
@@ -275,10 +292,22 @@ class Agent {
             batch.push(u);
         }
         let candidate = turn.terminal_text() ?? "";
-        let accepted = turn.tool_uses().length() > 0
-            || turn.stop_reason == root.content.StopReason.MaxTokens
-            || turn.stop_reason == root.content.StopReason.Refused
-            || self._parses<Out>(turn, candidate);
+        let text_output: ParsedOutput? = null;
+        let accepted = if (
+            turn.tool_uses().length() > 0
+                || turn.stop_reason == root.content.StopReason.MaxTokens
+                || turn.stop_reason == root.content.StopReason.Refused
+        ) {
+            true
+        } else {
+            match (self._fits_without_text<Out>(turn)) {
+                let fits: bool => fits,
+                null => {
+                    text_output = self._parse_text<Out>(candidate);
+                    text_output != null
+                },
+            }
+        };
         if (accepted) {
             j.append_all(batch);
             // terminal wire outcomes are thrown here, with the turn on the record
@@ -295,7 +324,7 @@ class Agent {
                 },
                 _ => null,
             };
-            turn
+            _AcceptedTurn { turn: turn, text_output: text_output }
         } else if (attempts_left > 1) {
             batch.push(
                 root.events.UserMessage.new(
@@ -354,7 +383,8 @@ class Agent {
             while (steps < self.max_steps) {
                 // Repair re-asks happen inside the step and share this total
                 // schema-attempt budget.
-                let turn = self._attempt_turn<Out>(selected, spec, j, total, schema_attempts);
+                let accepted = self._attempt_turn<Out>(selected, spec, j, total, schema_attempts);
+                let turn = accepted.turn;
                 steps = steps + 1;
                 seen = self._emit_from(j, seen);
                 let calls = turn.tool_uses();
@@ -402,26 +432,19 @@ class Agent {
                     }
                 } else {
                     let candidate = turn.terminal_text() ?? "";
-                    // A media-shaped Out comes from the turn's media blocks;
-                    // everything else, including a media Out the turn produced
-                    // no media for, goes through the ordinary text parse. That
-                    // second branch is REACHABLE for a media Out and is how
-                    // absence is expressed: SAP answers `null` for `image?` /
-                    // `image[]?` and `[]` for `image[]`, and only a required
-                    // `image` fails there (`_parses` agrees, by construction).
-                    let value = if let parsed: ParsedOutput = turn.parsed_output {
+                    // `_attempt_turn` accepted this turn for exactly one of three
+                    // reasons: the provider decoded the output, the terminal text
+                    // parsed (it kept that value), or the turn carries the media
+                    // a media-shaped Out is built from. A media Out the turn
+                    // produced no media for went through the text parse, which is
+                    // how absence is expressed (`_fits_without_text`).
+                    let value = if let parsed: ParsedOutput = turn.parsed_output ?? accepted.text_output {
                         let typed: Out = parsed.value else {
                             throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
                         };
                         typed
-                    } else if (self._has_media_output<Out>(turn)) {
-                        self._media_value<Out>(turn, selected.id())
                     } else {
-                        baml.sap.parse<Out>(candidate) catch_all (e) {
-                            _ => {
-                                throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
-                            },
-                        }
+                        self._media_value<Out>(turn, selected.id())
                     };
                     let value_json = baml.json.to_json(value) catch_all (e) {
                         _ => {
