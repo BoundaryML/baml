@@ -10,7 +10,7 @@
 // BamlStream wraps a BamlHandle whose HANDLE_TABLE row is a
 // `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`
 // (handle_type ADT_TAGGED_HEAP_HANDLE). next/final round-trip through
-// getRuntime().callFunction* against methods on the class FQN carried by
+// getOrInitRuntime().callFunction* against methods on the class FQN carried by
 // that tagged handle.
 //
 // The runtime exports this under its `BamlStream` name; codegen aliases it as

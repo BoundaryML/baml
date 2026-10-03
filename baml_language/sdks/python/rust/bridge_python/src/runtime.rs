@@ -18,7 +18,7 @@ use crate::{
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
 /// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
-/// `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
+/// `bridge_cffi::get_or_init_runtime()` at each call site (31e-phase4), so this
 /// no longer caches its own clone.
 #[gen_stub_pyclass]
 #[pyclass]
@@ -195,13 +195,13 @@ impl BamlRuntime {
 /// site.
 #[gen_stub_pyfunction]
 #[pyfunction]
-pub fn get_runtime() -> PyResult<BamlRuntime> {
+pub fn get_or_init_runtime() -> PyResult<BamlRuntime> {
     // Validate the singleton is initialized so callers get a helpful error
     // here rather than a confusing one deep in a later call; the handle itself
     // is zero-sized (the Arc lives in bridge_cffi).
     // Handle-returning site: an uninitialized/failed runtime is an SDK setup
     // failure, surfaced as BamlPanic(SdkPanic) (32c).
-    bridge_cffi::get_runtime().map_err(|e| match e {
+    bridge_cffi::get_or_init_runtime().map_err(|e| match e {
         bridge_cffi::BridgeError::NotInitialized => py_sdk_panic(
             "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
         ),

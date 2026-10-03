@@ -94,14 +94,14 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
         return await self._call_async("ai.stream.Stream.final", _baml=_baml)
 
     # `proto.py` imports `BamlStream` at module load, so the call-path
-    # imports (`get_runtime`, `encode_call_args`, `decode_call_result`)
+    # imports (`get_or_init_runtime`, `encode_call_args`, `decode_call_result`)
     # have to be method-local to avoid a circular import.
     def _call_sync(self, fqn: str, *, _baml: Any = None) -> Any:
-        from . import get_runtime
+        from . import get_or_init_runtime
         from .baml_py import new_function_call
         from .proto import decode_call_result, encode_call_args
 
-        rt = get_runtime()
+        rt = get_or_init_runtime()
         args_proto = encode_call_args(
             {"self": self},
             new_function_call(),
@@ -112,11 +112,11 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
         return decode_call_result(result_bytes)
 
     async def _call_async(self, fqn: str, *, _baml: Any = None) -> Any:
-        from . import _decode_call_result_async, cancel_function_call, get_runtime
+        from . import _decode_call_result_async, cancel_function_call, get_or_init_runtime
         from .baml_py import new_function_call
         from .proto import encode_call_args
 
-        rt = get_runtime()
+        rt = get_or_init_runtime()
         call_id = new_function_call()
         args_proto = encode_call_args(
             {"self": self},

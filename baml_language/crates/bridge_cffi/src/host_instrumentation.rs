@@ -36,7 +36,7 @@ pub fn begin(
     caller: &bex_project::HostCallSite,
     inputs: Option<&bex_project::HostCapture>,
 ) -> Result<(HostInvocation, u64), BridgeError> {
-    let owner = crate::get_runtime()?;
+    let owner = crate::get_or_init_runtime()?;
     let inherited = if inherited_key == 0 {
         None
     } else {

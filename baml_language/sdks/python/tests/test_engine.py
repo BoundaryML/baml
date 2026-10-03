@@ -25,7 +25,7 @@ from baml_bridge import (
     get_version,
     call_function,
     call_function_sync,
-    get_runtime,
+    get_or_init_runtime,
 )
 from baml_bridge.errors import BamlPanic
 
@@ -270,7 +270,7 @@ version = "{generated_toolchain}"
 
         BamlRuntime.initialize_runtime_from_blob(b"\x00", embedded_baml_toml)
         with pytest.raises(BamlPanic) as exc_info:
-            get_runtime()
+            get_or_init_runtime()
 
         message = str(exc_info.value)
         assert "BAML startup failed: version skew error." in message
