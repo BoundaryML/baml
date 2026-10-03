@@ -422,6 +422,7 @@ jobs:
       pull-requests: write
     steps:
       - name: "Download size-gate reports"
+        continue-on-error: true
         uses: actions/download-artifact@v8
         with:
           pattern: size-gate-*
