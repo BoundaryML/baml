@@ -172,7 +172,7 @@ class BamlCancelledError(BamlPanic):
 def make_sdk_panic(message: str) -> BamlPanic:
     """Build a `BamlPanic` wrapping a `baml.panics.SdkPanic` value.
 
-    Used by the Rust pre-call *handle-returning* sites (`get_runtime` /
+    Used by the Rust pre-call *handle-returning* sites (`get_or_init_runtime` /
     `initialize_runtime`) — SDK-internal *setup* failures, which are
     panic-shaped, not recoverable `baml.errors.*` (32c). When the runtime
     isn't initialized the typemap may be unavailable, so we fall back to the

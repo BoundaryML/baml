@@ -19,7 +19,7 @@ fn stage() {
 
 fn set_telemetry(value: &str) {
     // SAFETY: this file holds one test, which nextest runs in its own process,
-    // and the engine only reads the environment inside `get_runtime`.
+    // and the engine only reads the environment inside `get_or_init_runtime`.
     unsafe { std::env::set_var(TELEMETRY, value) };
 }
 
@@ -27,14 +27,14 @@ fn set_telemetry(value: &str) {
 #[tokio::test(flavor = "multi_thread")]
 async fn engine_is_constructed_on_first_use() {
     assert!(matches!(
-        bridge_cffi::get_runtime(),
+        bridge_cffi::get_or_init_runtime(),
         Err(BridgeError::NotInitialized)
     ));
 
     // Staging does not compile: a broken program fails its first use instead.
     bridge_cffi::stage_runtime(".", sources("function broken( -> int { 1 }")).unwrap();
     assert!(matches!(
-        bridge_cffi::get_runtime(),
+        bridge_cffi::get_or_init_runtime(),
         Err(BridgeError::Startup(_))
     ));
 
@@ -44,7 +44,7 @@ async fn engine_is_constructed_on_first_use() {
     stage();
     set_telemetry("not-a-level");
     for _ in 0..2 {
-        let Err(BridgeError::Startup(message)) = bridge_cffi::get_runtime() else {
+        let Err(BridgeError::Startup(message)) = bridge_cffi::get_or_init_runtime() else {
             panic!("expected engine construction to fail on the invalid telemetry level");
         };
         assert!(message.contains(TELEMETRY), "{message}");
@@ -55,16 +55,16 @@ async fn engine_is_constructed_on_first_use() {
     stage();
     set_telemetry("off");
     let threads: Vec<_> = (0..8)
-        .map(|_| std::thread::spawn(|| bridge_cffi::get_runtime().unwrap()))
+        .map(|_| std::thread::spawn(|| bridge_cffi::get_or_init_runtime().unwrap()))
         .collect();
-    let runtime = bridge_cffi::get_runtime().unwrap();
+    let runtime = bridge_cffi::get_or_init_runtime().unwrap();
     for thread in threads {
         assert!(Arc::ptr_eq(&runtime, &thread.join().unwrap()));
     }
     drop(runtime);
     bridge_cffi::shutdown_runtime(None).await.unwrap();
     assert!(matches!(
-        bridge_cffi::get_runtime(),
+        bridge_cffi::get_or_init_runtime(),
         Err(BridgeError::NotInitialized)
     ));
 
@@ -72,7 +72,7 @@ async fn engine_is_constructed_on_first_use() {
     stage();
     bridge_cffi::shutdown_runtime(None).await.unwrap();
     assert!(matches!(
-        bridge_cffi::get_runtime(),
+        bridge_cffi::get_or_init_runtime(),
         Err(BridgeError::NotInitialized)
     ));
 }

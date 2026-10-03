@@ -222,7 +222,7 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
             entered.set()
             await asyncio.Future()
 
-    monkeypatch.setattr(baml_bridge, "get_runtime", lambda: BlockingRuntime())
+    monkeypatch.setattr(baml_bridge, "get_or_init_runtime", lambda: BlockingRuntime())
     monkeypatch.setattr(
         baml_bridge,
         "cancel_function_call",
@@ -263,7 +263,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
         call_ids.append(call_id)
         raise RuntimeError("native cancellation failed")
 
-    monkeypatch.setattr(baml_bridge, "get_runtime", lambda: BlockingRuntime())
+    monkeypatch.setattr(baml_bridge, "get_or_init_runtime", lambda: BlockingRuntime())
     monkeypatch.setattr(baml_bridge, "cancel_function_call", fail_cancel)
     monkeypatch.setattr(baml_bridge.baml_py, "new_function_call", lambda: 23)
     monkeypatch.setattr(
@@ -296,7 +296,7 @@ async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatc
         decoded.append(result)
         raise asyncio.CancelledError("engine cancellation")
 
-    monkeypatch.setattr(baml_bridge, "get_runtime", lambda: CompletedRuntime())
+    monkeypatch.setattr(baml_bridge, "get_or_init_runtime", lambda: CompletedRuntime())
     monkeypatch.setattr(baml_bridge, "_decode_call_result_async", decode_async)
     monkeypatch.setattr(baml_bridge.baml_py, "new_function_call", lambda: 29)
     monkeypatch.setattr(
