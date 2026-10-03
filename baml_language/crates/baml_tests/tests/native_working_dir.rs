@@ -35,6 +35,18 @@ function shell_dir() -> string throws baml.errors.InvalidArgument | baml.errors.
 function run_local_script() -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
     baml.sys.run("./hello.sh", args = [], capture_output = true).stdout.to_string()
 }
+
+function run_script_with_cwd() -> string {
+    baml.sys.run("./hello.sh", cwd = "nested", capture_output = true).stdout.to_string()
+}
+
+function subprocess_with_cwd() -> string {
+    let child = baml.sys.subprocess("./hello.sh", cwd = "nested", stdout = "pipe");
+    defer { child.kill(); }
+    let output = (child.stdout ?? baml.sys.panic("stdout was not piped")).bytes();
+    child.wait();
+    output.to_string()
+}
 "#;
 
 async fn call(engine: &Arc<BexEngine>, name: &str) -> BexExternalValue {
@@ -130,6 +142,24 @@ async fn relative_paths_resolve_against_the_hosts_working_directory() {
             string(call(&engine, "user.run_local_script").await).trim(),
             "hello from the project"
         );
+
+        // An explicit cwd controls both the child's directory and lookup of
+        // an executable named by a relative path.
+        std::fs::create_dir(root.join("nested")).expect("nested directory");
+        let nested_script = root.join("nested/hello.sh");
+        std::fs::write(
+            &nested_script,
+            "#!/bin/sh\necho hello from the child directory\n",
+        )
+        .expect("nested script written");
+        std::fs::set_permissions(&nested_script, std::fs::Permissions::from_mode(0o755))
+            .expect("nested script executable");
+        for function in ["user.run_script_with_cwd", "user.subprocess_with_cwd"] {
+            assert_eq!(
+                string(call(&engine, function).await).trim(),
+                "hello from the child directory"
+            );
+        }
     }
 
     assert_eq!(

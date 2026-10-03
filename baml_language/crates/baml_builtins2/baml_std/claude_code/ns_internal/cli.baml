@@ -298,7 +298,6 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         stdout = "pipe",
         cwd = c.cwd,
         env = null,
-        timeout = baml.time.Duration.from_milliseconds(c.timeout_ms),
         input = null,
     ) catch_all (e) {
         _ => {
@@ -328,7 +327,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             }
         },
     };
-    let exit = p.wait() catch_all (e) {
+    let exit = p.wait(timeout = baml.time.Duration.from_milliseconds(c.timeout_ms)) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,

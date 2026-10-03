@@ -267,7 +267,7 @@ async fn subprocess_yields_stdout_before_exit() {
     let output = baml_test!(
         r#"
             function main() -> bool throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout {
-                let process = baml.sys.subprocess("sh", args = ["-c", "printf 'first\n'; while :; do :; done"], stdin = "pipe", stdout = "pipe", timeout = baml.time.Duration.from_milliseconds(2000));
+                let process = baml.sys.subprocess("sh", args = ["-c", "printf 'first\n'; while :; do :; done"], stdin = "pipe", stdout = "pipe");
                 defer { process.kill(); process.close(); }
 
                 let first = match ((process.stdout ?? baml.sys.panic("stdout is not piped")).lines().next()) {
@@ -275,7 +275,7 @@ async fn subprocess_yields_stdout_before_exit() {
                     baml.iter.Done => "",
                 };
                 process.kill();
-                let exit = process.wait();
+                let exit = process.wait(timeout = baml.time.Duration.from_seconds(2));
                 first == "first" && !exit.ok()
             }
         "#
@@ -436,7 +436,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
     let script = temp.path().join("claude-code-timeout-probe.sh");
     std::fs::write(
         &script,
-        "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"result\"}'\nexec 1>&-\nwhile :; do :; done\n",
+        "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"result\"}'\nexec 1>&-\nexec sleep 60\n",
     )
     .expect("write Claude Code timeout probe");
     let mut permissions = std::fs::metadata(&script)
@@ -470,7 +470,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
                     executable = executable,
                     // Leave room for process startup and result parsing under test load.
                     // This probe checks the subsequent process-wait timeout.
-                    timeout_ms = 1000,
+                    timeout_ms = 5000,
                 );
                 let _ = cl.invoke(timeout_provider_input()) catch_all (e) {
                     let timeout: baml.errors.Timeout => {
@@ -490,8 +490,8 @@ async fn claude_code_client_preserves_process_wait_timeout() {
         panic!("expected a string timeout result, got {:?}", output.result);
     };
     assert!(result.starts_with("Timeout:"), "{result}");
-    assert!(result.contains("timed out after 1000ms"), "{result}");
-    assert!(result.ends_with(":1000"), "{result}");
+    assert!(result.contains("timed out after 5000ms"), "{result}");
+    assert!(result.ends_with(":5000"), "{result}");
 }
 
 #[tokio::test]
@@ -674,6 +674,26 @@ async fn run_capture_drains_output_while_sending_input() {
 }
 
 #[tokio::test]
+async fn run_returns_status_when_child_closes_stdin_early() {
+    let (program, args) = if cfg!(windows) {
+        ("cmd.exe", vec!["/D", "/C", "echo done & exit /b 7"])
+    } else {
+        ("sh", vec!["-c", "printf done; exit 7"])
+    };
+    let args = serde_json::to_string(&args).unwrap();
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> bool {{
+            let result = baml.sys.run("{program}", args = {args}, input = "x".repeat(1048576),
+                timeout = baml.time.Duration.from_seconds(5), capture_output = true);
+            result.exit_code == 7 && result.stdout.to_string().trim() == "done"
+        }}
+        "#
+    ));
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 #[cfg(unix)]
 async fn run_capture_deadline_includes_blocked_stdin() {
     let started = std::time::Instant::now();
@@ -696,10 +716,10 @@ async fn binary_input_and_streaming_backpressure() {
         function main() -> bool {
             let bytes = b"\x00\xff\x80";
             let captured = baml.sys.run("cat", input = bytes, capture_output = true);
-            let process = baml.sys.subprocess("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"], stdin = "pipe", stdout = "pipe", input = "x".repeat(200000), timeout = baml.time.Duration.from_seconds(2));
+            let process = baml.sys.subprocess("sh", args = ["-c", "head -c 200000 /dev/zero; wc -c"], stdin = "pipe", stdout = "pipe", input = "x".repeat(200000));
             defer { process.kill(); process.close(); }
             let stdout = (process.stdout ?? baml.sys.panic("stdout is not piped")).bytes();
-            captured.stdout == bytes && process.wait().ok() && stdout.slice(200000, stdout.length()).to_string().trim() == "200000"
+            captured.stdout == bytes && process.wait(timeout = baml.time.Duration.from_seconds(2)).ok() && stdout.slice(200000, stdout.length()).to_string().trim() == "200000"
         }
         "#
     );
@@ -773,21 +793,29 @@ async fn subprocess_scoped_termination_and_repeated_kill() {
 }
 
 #[tokio::test]
-#[cfg(unix)]
 async fn subprocess_wait_timeout_does_not_terminate_child() {
-    let output = baml_test!(
+    let (program, args) = if cfg!(windows) {
+        ("cmd.exe", vec!["/D", "/C", "set /p ready= & exit /b 7"])
+    } else {
+        ("sh", vec!["-c", "read line; exit 7"])
+    };
+    let args = serde_json::to_string(&args).unwrap();
+    let output = baml_test!(&format!(
         r#"
-        function main() -> bool {
-            let child = baml.sys.subprocess("sh", args = ["-c", "sleep 0.2; exit 7"],
-                timeout = baml.time.Duration.from_milliseconds(50));
-            defer { child.kill(); }
+        function main() -> bool {{
+            let child = baml.sys.subprocess("{program}", args = {args}, stdin = "pipe");
+            defer {{ child.kill(); }}
             let timed_out = false;
-            { child.wait(); } catch (e) { baml.errors.Timeout => { timed_out = true; } }
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(400));
-            timed_out && child.wait().exit_code == 7
-        }
+            {{ child.wait(timeout = baml.time.Duration.from_milliseconds(50)); }} catch (e) {{ baml.errors.Timeout => {{ timed_out = true; }} }}
+            let rejected = {{ child.wait(timeout = baml.time.Duration.from_milliseconds(-1)); false }} catch (e) {{ baml.errors.InvalidArgument => true }};
+            let input = child.stdin ?? baml.sys.panic("stdin was not piped");
+            input.write("finish\n");
+            input.close();
+            let status = child.wait(timeout = baml.time.Duration.from_seconds(5));
+            timed_out && rejected && status.exit_code == 7 && child.wait(timeout = baml.time.Duration.from_milliseconds(0)).exit_code == 7
+        }}
     "#
-    );
+    ));
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
