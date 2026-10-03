@@ -173,11 +173,46 @@ function setting(t: baml.toml.Table, keys: string[], key: string) -> string? {
     }
 }
 
-function edit(path: string, keys: string[], values: map<string, string>, remove: string[]) -> void {
+function edit(path: string, keys: string[], values: map<string, string>) -> void {
     let lock = baml.fs.lock(path + ".lock", 30000);
     defer { lock.close() }
-    let text = baml.toml.edit_strings(read_text(path), keys, values, remove);
-    baml.fs.write_atomic(path, text.to_utf8());
+    let config = baml.toml.Table.parse(read_text(path));
+    let target = config;
+    for (let key in keys) {
+        target = target.table(key);
+    }
+    for (let key in values.keys()) {
+        target.set(key, values[key]);
+    }
+    baml.fs.write_atomic(path, config.to_string().to_utf8());
+}
+
+function pin_selector(path: string, key: string, value: string) -> void {
+    let lock = baml.fs.lock(path + ".lock", 30000);
+    defer { lock.close() }
+    let config = baml.toml.Table.parse(read_text(path));
+    let toolchain = config.table("toolchain");
+    // The selected key's comment follows its explicit rename. Conflicting
+    // selectors are removed before renaming, so the destination is available.
+    let original: string? = null;
+    for (let name in ["version", "channel", "path"]) {
+        if (original == null && toolchain.get(name) != null) {
+            original = name;
+        }
+    }
+    for (let name in ["version", "channel", "path"]) {
+        if (name != original) {
+            toolchain.remove(name);
+        }
+    }
+    match (original) {
+        let from: string => {
+            toolchain.rename(from, key);
+        },
+        null => {},
+    }
+    toolchain.set(key, value);
+    baml.fs.write_atomic(path, config.to_string().to_utf8());
 }
 
 function config_selector() -> string {
@@ -506,7 +541,6 @@ function install(
                 "manifest_path": manifest_path(manifest.version, base),
                 "manifest_base_url": base,
             },
-            [],
         );
     }
     baml.io.println("installed BAML toolchain " + manifest.version);
@@ -748,7 +782,7 @@ function toolchain(args: string[]) -> void {
         },
         "use" => {
             let selected = prepare(value ?? fail("usage: baml toolchain use <selector>"), base);
-            edit(join([home(), "config.toml"]), ["default"], { "selector": selected }, []);
+            edit(join([home(), "config.toml"]), ["default"], { "selector": selected });
             baml.io.println("selected BAML toolchain " + selected);
         },
         "pin" => {
@@ -765,18 +799,7 @@ function toolchain(args: string[]) -> void {
             } else {
                 "version"
             };
-            edit(
-                path,
-                ["toolchain"],
-                if (key == "channel") {
-                    { "channel": selected }
-                } else if (key == "path") {
-                    { "path": selected }
-                } else {
-                    { "version": selected }
-                },
-                ["version", "channel", "path"],
-            );
+            pin_selector(path, key, selected);
             baml.io.println("pinned BAML toolchain " + selected + " in " + path);
         },
         "install" => {
