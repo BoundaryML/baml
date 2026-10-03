@@ -112,7 +112,7 @@ public final class Baml {
                 throw new IllegalStateException("baml_sdk/inlinedbaml.b64 not found on the classpath — …");
             }
             byte[] bytecode = in.readAllBytes();
-            baml_bridge.BamlFfi.initFromBytecode(bytecode);
+            baml_bridge.BamlFfi.stageFromBytecode(bytecode);
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException("failed to read embedded BAML bytecode", e);
         }
@@ -901,11 +901,11 @@ The generated Java SDK root includes:
 
 - **`inlinedbaml.b64`** — the compiler-produced bytecode as a base64-encoded LZ4
   classpath resource, which `Baml.java`'s static initializer passes unchanged to
-  `BamlFfi.initFromBytecode` for native decoding;
+  `BamlFfi.stageFromBytecode` for native decoding;
 - **`Baml.java`** — the runtime anchor whose `static {}` block registers the type
   map (`registerClass` / `registerEnum` / `registerUnion`, carrying field
   declaration order + per-field decode descriptors) and calls
-  `BamlFfi.initFromBytecode(...)` (`lib.rs:111-306`); every `Fns` holder forces
+  `BamlFfi.stageFromBytecode(...)` (`lib.rs:111-306`); every `Fns` holder forces
   it via `static { Baml.ensure(); }`.
 
 > ⚠ **Deviation from Python:** Python ships three packaging markers — a

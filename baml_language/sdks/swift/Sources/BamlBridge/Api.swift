@@ -28,7 +28,7 @@ enum BamlApi {
     }()
 
     static let version = v1.version!
-    static let initializeRuntimeFromBlob = v1.initialize_runtime_from_blob!
+    static let stageRuntimeFromBlob = v1.stage_runtime_from_blob!
     static let freeBuffer = v1.free_buffer!
     static let registerCallback = v1.register_callback!
     static let callFunction = v1.call_function!
@@ -56,8 +56,8 @@ enum BamlApi {
     static let registerBridge = v1.register_bridge!
     static let registerUnhandledSpawnErrorCallback = v1.register_unhandled_spawn_error_callback!
     static let shutdownRuntime = v1.shutdown_runtime!
-    static let initializeRuntimeFromBlobWithMetadata =
-        v1.initialize_runtime_from_blob_with_metadata!
+    static let stageRuntimeFromBlobWithMetadata =
+        v1.stage_runtime_from_blob_with_metadata!
 
     /// Copy a runtime-owned buffer to a `Data` and release it exactly
     /// once via the table's `free_buffer`. A zero-length buffer may have

@@ -9,7 +9,7 @@ protobuf encoder/decoder and the function/method factories.
 ```python
 from baml_bridge import BamlRuntime
 
-rt = BamlRuntime.initialize_runtime(
+rt = BamlRuntime.stage_runtime(
     root_path=".",
     files={"main.baml": baml_source},
 )

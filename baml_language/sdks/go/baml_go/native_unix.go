@@ -89,7 +89,7 @@ static const char *baml_open_library(const char *path) {
 		dlclose(handle);
 		return baml_loader_error;
 	}
-	if (api->version == NULL || api->initialize_runtime_from_blob == NULL ||
+	if (api->version == NULL || api->stage_runtime_from_blob == NULL ||
 		api->free_buffer == NULL || api->register_callback == NULL ||
 		api->call_function == NULL || api->new_function_call == NULL ||
 		api->cancel_function_call == NULL ||
@@ -103,7 +103,7 @@ static const char *baml_open_library(const char *path) {
 		api->register_bridge == NULL ||
 		api->register_unhandled_spawn_error_callback == NULL ||
 		api->shutdown_runtime == NULL ||
-		api->initialize_runtime_from_blob_with_metadata == NULL ||
+		api->stage_runtime_from_blob_with_metadata == NULL ||
 		api->invocation_clock_ns == NULL || api->release_function_call == NULL ||
 		api->register_host_dispatch_v2 == NULL ||
 		api->register_host_cancel_callback == NULL || api->invocation_protocol_version == NULL || api->trace_selection == NULL || api->invocation_context == NULL) {
@@ -139,11 +139,11 @@ static BamlBuffer baml_register_go_bridge(const uint8_t *runtime_name, size_t ru
 	};
 	return baml_api->register_bridge(&info);
 }
-static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) {
-	return baml_api->initialize_runtime_from_blob(bytecode, length);
+static BamlBuffer baml_stage(const uint8_t *bytecode, size_t length) {
+	return baml_api->stage_runtime_from_blob(bytecode, length);
 }
-static BamlBuffer baml_initialize_with_metadata(const uint8_t *bytecode, size_t length, const char *baml_toml) {
-	return baml_api->initialize_runtime_from_blob_with_metadata(bytecode, length, baml_toml);
+static BamlBuffer baml_stage_with_metadata(const uint8_t *bytecode, size_t length, const char *baml_toml) {
+	return baml_api->stage_runtime_from_blob_with_metadata(bytecode, length, baml_toml);
 }
 static void baml_free_buffer(BamlBuffer buffer) { baml_api->free_buffer(buffer); }
 static void baml_register_go_callback(void) {
@@ -238,18 +238,18 @@ func nativeRegisterBridge(runtimeName string, sdkVersion string, runtimeVersion 
 	return fmt.Errorf("%s", message)
 }
 
-func nativeInitialize(bytecode []byte, embeddedBamlToml string) error {
+func nativeStage(bytecode []byte, embeddedBamlToml string) error {
 	var pointer *C.uint8_t
 	if len(bytecode) != 0 {
 		pointer = (*C.uint8_t)(unsafe.Pointer(&bytecode[0]))
 	}
 	var buffer C.BamlBuffer
 	if embeddedBamlToml == "" {
-		buffer = C.baml_initialize(pointer, C.size_t(len(bytecode)))
+		buffer = C.baml_stage(pointer, C.size_t(len(bytecode)))
 	} else {
 		manifest := C.CString(embeddedBamlToml)
 		defer C.free(unsafe.Pointer(manifest))
-		buffer = C.baml_initialize_with_metadata(pointer, C.size_t(len(bytecode)), manifest)
+		buffer = C.baml_stage_with_metadata(pointer, C.size_t(len(bytecode)), manifest)
 	}
 	defer C.baml_free_buffer(buffer)
 	if buffer.len == 0 {

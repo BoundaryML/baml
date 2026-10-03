@@ -599,7 +599,7 @@ Pinned by `decode_desc_union_bare_int_arm0`, `…_bare_string_arm1`,
 The generated SDK root installs a process-global `TypeRegistry` (the Java analog
 of Python's `BamlTypeMap` + `set_type_map`). Registration happens in the static
 initializer of the generated `baml_sdk.Baml` anchor, **before**
-`initFromBytecode`, one call per user class/enum/union
+`stageFromBytecode`, one call per user class/enum/union
 (`TypeRegistry.java:14-51`):
 
 ```java

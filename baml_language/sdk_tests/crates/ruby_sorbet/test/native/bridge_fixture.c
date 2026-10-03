@@ -225,7 +225,7 @@ static const BamlApiV1 default_api = {
     .abi_version = BAML_API_V1_ABI_VERSION,
     .struct_size = sizeof(BamlApiV1),
     .version = probe_version,
-    .initialize_runtime_from_blob = probe_initialize,
+    .stage_runtime_from_blob = probe_initialize,
     .free_buffer = probe_free,
     .register_callback = probe_register_result,
     .call_function = probe_call,
@@ -246,7 +246,7 @@ static const BamlApiV1 default_api = {
     .register_bridge = probe_register_bridge,
     .register_unhandled_spawn_error_callback = probe_register_unhandled_spawn_error,
     .shutdown_runtime = probe_shutdown_runtime,
-    .initialize_runtime_from_blob_with_metadata = probe_initialize_with_metadata,
+    .stage_runtime_from_blob_with_metadata = probe_initialize_with_metadata,
     .invocation_clock_ns = probe_clock,
     .release_function_call = probe_release_call,
     .register_host_dispatch_v2 = probe_dispatch_v2,
@@ -267,7 +267,7 @@ static void null_requested_field(const char *field) {
     return;
   }
   NULL_FIELD(version)
-  NULL_FIELD(initialize_runtime_from_blob)
+  NULL_FIELD(stage_runtime_from_blob)
   NULL_FIELD(free_buffer)
   NULL_FIELD(register_callback)
   NULL_FIELD(call_function)
@@ -288,7 +288,7 @@ static void null_requested_field(const char *field) {
   NULL_FIELD(register_bridge)
   NULL_FIELD(register_unhandled_spawn_error_callback)
   NULL_FIELD(shutdown_runtime)
-  NULL_FIELD(initialize_runtime_from_blob_with_metadata)
+  NULL_FIELD(stage_runtime_from_blob_with_metadata)
   NULL_FIELD(invocation_clock_ns)
   NULL_FIELD(release_function_call)
   NULL_FIELD(register_host_dispatch_v2)
