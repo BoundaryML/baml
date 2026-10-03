@@ -158,3 +158,15 @@ function item_from_json(json: baml.json.json) -> Item throws baml.json.DecodeErr
 class ParseError {
     message: string,
 }
+
+/// Updates string-valued keys in a table while preserving comments, formatting, and unrelated values.
+/// Creates missing tables. Removes the listed keys; the first removed key's decoration is transferred
+/// to the first inserted key, so replacing a selector also preserves its inline comment.
+function edit_strings(
+    source: string,
+    table: string[],
+    values: map<string, string>,
+    remove: string[],
+) -> string throws root.errors.Io {
+    $rust_io_function
+}
