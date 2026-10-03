@@ -12,6 +12,7 @@ from baml_sdk.ai_error_test import (
 )
 
 
+# SDK_PARITY_LINT(skip): exercises Python BamlError and generated Pydantic payloads
 def test_invalid_response_preserves_wire_diagnostics():
     with pytest.raises(BamlError) as raised:
         ThrowInvalidResponse()
@@ -24,6 +25,7 @@ def test_invalid_response_preserves_wire_diagnostics():
     assert failure.status_code == 200
 
 
+# SDK_PARITY_LINT(skip): exercises Python BamlError and generated Pydantic payloads
 def test_provider_error_preserves_native_error_metadata():
     with pytest.raises(BamlError) as raised:
         ThrowProviderError()
@@ -37,6 +39,7 @@ def test_provider_error_preserves_native_error_metadata():
     assert failure.raw_body == '{"error":{"type":"overloaded_error"}}'
 
 
+# SDK_PARITY_LINT(skip): exercises Python BamlError and generated Pydantic payloads
 def test_stream_schema_failure_is_parse_failed():
     stream = ExtractInt_stream()
     with pytest.raises(BamlError) as raised:
@@ -49,6 +52,7 @@ def test_stream_schema_failure_is_parse_failed():
     assert failure.message
 
 
+# SDK_PARITY_LINT(skip): exercises the Python asyncio streaming bridge
 async def test_async_stream_schema_failure_is_parse_failed():
     stream = await ExtractInt_stream_async()
     with pytest.raises(BamlError) as raised:
