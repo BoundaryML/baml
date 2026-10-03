@@ -129,12 +129,13 @@ class Subprocess {
         $rust_io_function
     }
 
-    /// Release local resources without terminating or waiting for the child.
+    /// Release the process handle without terminating or waiting for the child.
+    /// Stream handles have independent lifetimes; close those explicitly if needed.
     function close(self) -> null throws never {
         $rust_io_function
     }
 
-    /// Release local resources; also invoked by GC. Termination stays explicit.
+    /// Release the process handle; also invoked by GC. Termination stays explicit.
     function cleanup(self) -> void throws never {
         self.close();
     }

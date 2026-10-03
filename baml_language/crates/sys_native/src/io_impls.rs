@@ -1755,37 +1755,8 @@ impl io::IoClassSysSubprocess for NativeSysOps {
                 .expect("process control lock poisoned")
                 .take();
         }
-        for pipe in [process.stdout.as_ref(), process.stderr.as_ref()]
-            .into_iter()
-            .flatten()
-        {
-            if let Ok(handle) = downcast_read_pipe(pipe) {
-                handle.close_tx.send_replace(true);
-                if let Ok(mut reader) = handle.reader.try_lock() {
-                    reader.take();
-                } else {
-                    // A concurrent read owns the guard. Wake it above and finish
-                    // resource release asynchronously, without blocking cleanup.
-                    let handle = Arc::clone(&handle);
-                    tokio::spawn(async move {
-                        handle.reader.lock().await.take();
-                    });
-                }
-            }
-        }
-        if let Some(pipe) = process.stdin.as_ref() {
-            if let Ok(handle) = downcast_write_pipe(pipe) {
-                handle.close_tx.send_replace(true);
-                if let Ok(mut writer) = handle.writer.try_lock() {
-                    writer.take();
-                } else {
-                    let handle = Arc::clone(&handle);
-                    tokio::spawn(async move {
-                        handle.writer.lock().await.take();
-                    });
-                }
-            }
-        }
+        // Stream objects own their pipe handles independently. Releasing this
+        // process handle must not close a stream another BAML value still owns.
         SysOpOutput::ok(())
     }
 }

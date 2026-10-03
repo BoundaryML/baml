@@ -821,25 +821,44 @@ async fn subprocess_detached_creates_os_session() {
 
 #[tokio::test]
 #[cfg(unix)]
-async fn subprocess_cleanup_releases_pending_pipe_operations() {
+async fn subprocess_cleanup_preserves_owned_pipe_operations() {
     let output = baml_test!(
         r#"
-        function main() -> bool {
-            let child = baml.sys.subprocess("sleep", args = ["2"], stdin = "pipe", stdout = "pipe");
-            let read = spawn { (child.stdout ?? baml.sys.panic("stdout missing")).read(1024) };
-            let write = spawn { (child.stdin ?? baml.sys.panic("stdin missing")).write("x".repeat(200000)) };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(25));
-            let started = baml.time.Instant.now();
+        function main() -> string {
+            let child = baml.sys.subprocess("sh", args = ["-c", "sleep 0.2; printf completed"], stdout = "pipe");
+            let pipe = child.stdout ?? baml.sys.panic("stdout missing");
+            let read = spawn { pipe.bytes().to_string() };
             child.cleanup();
-            let read_closed = false;
-            let write_closed = false;
-            { await read; } catch (e) { baml.errors.Io => { read_closed = true; } }
-            { await write; } catch (e) { baml.errors.Io => { write_closed = true; } }
-            read_closed && write_closed && started.elapsed().to_milliseconds() < 1000n
+            await read
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("completed".into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn subprocess_gc_preserves_independently_owned_stdout() {
+    let output = baml_test!(
+        r#"
+        function launch() -> baml.sys.ReadPipe {
+            let child = baml.sys.subprocess("sh", args = ["-c", "sleep 0.2; printf completed"], stdout = "pipe");
+            child.stdout ?? baml.sys.panic("stdout missing")
+        }
+        function main() -> string {
+            let pipe = launch();
+            baml.sys.collect_garbage();
+            pipe.bytes().to_string()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("completed".into()))
+    );
 }
 
 #[tokio::test]
