@@ -1633,8 +1633,7 @@ test "bedrock_stream_truncated" {
     assert.equal(bedrock_stream_truncated(), "NetworkFailure")
 }
 
-// A modeled exception frame mid-stream fails the turn with the identity the
-// same HTTP status gets on `invoke`.
+// A modeled exception frame mid-stream retains its native provider identity.
 function bedrock_stream_exception(exception_type: string) -> string {
     let frames = [
         root.llm_mock.eventstream_event("messageStart", `{"role":"assistant"}`),

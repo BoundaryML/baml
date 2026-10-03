@@ -219,6 +219,7 @@ function _failed_leg_call(client_name: string?, f: Retryable) -> root.events.LLM
         usage: null,
         selected: false,
         sse_responses: null,
+        failure: f,
     }
 }
 

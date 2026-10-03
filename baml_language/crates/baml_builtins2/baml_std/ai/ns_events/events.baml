@@ -141,6 +141,9 @@ class LLMCall {
     selected: bool,
     // Streams, only when capture_wire.
     sse_responses: SseEventRecord[]?,
+    /// The typed failure on an unsuccessful retry/fallback leg. Retains
+    /// diagnostics even when there is no HTTP status or HTTP response.
+    failure: (root.errors.Failure | baml.errors.Timeout)?,
 }
 
 type Event = RunStarted

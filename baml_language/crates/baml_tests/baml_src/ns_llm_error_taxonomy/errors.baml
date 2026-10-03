@@ -104,21 +104,21 @@ function retry_reported_failure(code: string, expected_attempts: int) -> bool {
             max_attempts = 2,
             backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
         );
-        let preserved = cl.invoke(input()) catch_all (e) {
+        let preserved = {
+            cl.invoke(input());
+            false
+        } catch_all (e) {
             let reported: ai.errors.ProviderError => {
-                return reported.error_code == code
+                reported.error_code == code
                     && reported.error_type == "provider_error"
                     && reported.message == "provider diagnostic"
                     && reported.raw_body != null
                     && reported.status_code == null
-                    && mock.request_count() == expected_attempts;
+                    && mock.request_count() == expected_attempts
             },
-            _ => {
-                return false;
-            },
+            _ => false,
         };
-        let _ = preserved;
-        false
+        preserved
     })
 }
 
@@ -155,4 +155,86 @@ test "normalization retains new error identities" {
         let same: ai.errors.ProviderError => assert.equal(same.message, "after"),
         _ => assert.is_true(false),
     }
+}
+
+// The EventStream transport turns :error-code/:error-message headers into a
+// named event with plain-text data, not a modeled JSON exception payload.
+test "Bedrock unmodeled error frame preserves plain text and native code" {
+    let batch = baml.json.stringify([{ "event": "error:InternalFailure", "data": "stream failed" }]);
+    aws.internal.decode_stream_batch(batch) catch_all (e) {
+        let reported: ai.errors.ProviderError => {
+            assert.equal(reported.message, "stream failed");
+            assert.equal(reported.error_code, "InternalFailure");
+            assert.equal(reported.error_type, "error:InternalFailure");
+            assert.equal(reported.status_code, null);
+            assert.is_true(ai.clients.default_retry_judgment(reported));
+            return;
+        },
+        _ => assert.is_true(false),
+    };
+    assert.is_true(false)
+}
+
+function chat_reported_failure(streaming: bool) -> bool {
+    let raw = `{"error":{"message":"overloaded","type":"server_error","code":503}}`;
+    let result = {
+        if (streaming) {
+            let decoder = openai.internal.ChatStreamDecoder.new("openai-chat");
+            decoder.decode(baml.json.stringify([{ "data": raw }]));
+        } else {
+            let response = baml.json.from_string<openai.internal.CcResponse>(raw);
+            openai.internal.chat_parse(response, "openai-chat", raw);
+        }
+        false
+    } catch_all (e) {
+        let reported: ai.errors.ProviderError => {
+            reported.provider == "openai-chat"
+                && reported.message == "overloaded"
+                && reported.error_type == "server_error"
+                && reported.error_code == "503"
+                && reported.raw_body == raw
+                && reported.status_code == null
+        },
+        _ => false,
+    };
+    result
+}
+
+test "Chat unary in-band failure keeps provider metadata" {
+    assert.is_true(chat_reported_failure(false))
+}
+
+test "Chat stream in-band failure keeps provider metadata" {
+    assert.is_true(chat_reported_failure(true))
+}
+
+test "retry call retains status-less provider failure before success" {
+    let raw = `{"status":"failed","error":{"code":"server_error","message":"overloaded"}}`;
+    let preserved = root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(raw), root.llm_mock.MockResponse.ok(completed("ok"))], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = ai.clients.Retry.new(
+            openai.ResponsesClient.new(api_key = "test", base_url = mock.base_url()),
+            max_attempts = 2,
+            backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
+        );
+        let turn = cl.invoke(input());
+        let failed = turn.calls.at(0);
+        if let call: ai.events.LLMCall = failed {
+            assert.is_true(!call.selected);
+            assert.equal(call.http_response, null);
+            match (call.failure) {
+                let reported: ai.errors.ProviderError => {
+                    return reported.message == "overloaded"
+                        && reported.error_code == "server_error"
+                        && reported.raw_body != null;
+                },
+                _ => {
+                    return false;
+                },
+            };
+        }
+        false
+    });
+    assert.is_true(preserved)
 }

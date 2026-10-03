@@ -1717,7 +1717,16 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
             throw _stream_provider_error(exception_type, data);
         }
         if (name.starts_with("error:")) {
-            throw _stream_provider_error(name, data);
+            // Unmodeled error frames carry a plain-text :error-message header,
+            // unlike modeled exception frames with JSON payloads.
+            throw ai.errors.ProviderError {
+                provider: "aws-bedrock",
+                message: data,
+                error_type: name,
+                error_code: name.slice(6, name.length()),
+                raw_body: data,
+                status_code: null,
+            };
         }
         let decoded = decode_stream_event(name, data) catch_all (e) {
             let parse => {
