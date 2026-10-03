@@ -1296,7 +1296,7 @@ function sign(client: root.BedrockClient, request: baml.http.Request) -> baml.ht
 //
 // Every member is optional: Converse omits `usage` on some model families,
 // omits `output.message` on a guardrail intervention, and adds members over
-// time. A non-optional field here would be a `ParseFailed` waiting to happen
+// time. A non-optional field here would be an `InvalidResponse` waiting to happen
 // (PLAN §1.5).
 // ---------------------------------------------------------------------------
 
@@ -1363,13 +1363,8 @@ class ConverseResponse {
 /// could not assemble into a message) and `malformed_tool_use` (it emitted a
 /// tool call the service could not assemble into a `toolUse` block).
 ///
-/// Neither is a stop *reason* in the `ai.content.StopReason` sense — there is
-/// no answer to stop on — so `parse_response` throws `ai.errors.ParseFailed`
-/// with the whole response as `raw_output` instead of returning a turn. That
-/// is the honest identity (it IS a failure to produce parseable output), it is
-/// `RetrySafety.Safe` so a Retry policy re-asks, and it keeps the raw bytes
-/// for the caller. `MaxTokens` would falsely blame the token limit and
-/// `Refused` would falsely claim the model declined.
+/// Neither is a successful stop reason: the provider explicitly reported
+/// unusable generation. The response is delivered as ai.errors.ProviderError.
 function _is_malformed_stop(raw: string) -> bool {
     raw == "malformed_model_output" || raw == "malformed_tool_use"
 }
@@ -1407,17 +1402,23 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
     // a truncated or garbled "answer" (see `_is_malformed_stop`).
     if let raw: string = response.stopReason {
         if (_is_malformed_stop(raw)) {
-            throw ai.errors.ParseFailed {
+            throw ai.errors.ProviderError {
                 provider: "aws-bedrock",
-                raw_output: baml.json.stringify(baml.json.to_json(response)),
+                message: `the model could not produce a valid turn: ${raw}`,
+                error_type: raw,
+                error_code: null,
+                raw_body: baml.json.stringify(baml.json.to_json(response)),
+                status_code: null,
             }
         }
     }
     let message = response.output?.message;
     if (message == null) {
-        throw ai.errors.ParseFailed {
+        throw ai.errors.InvalidResponse {
             provider: "aws-bedrock",
-            raw_output: baml.json.stringify(baml.json.to_json(response)),
+            message: "the Converse response is missing output.message",
+            raw_body: baml.json.stringify(baml.json.to_json(response)),
+            status_code: null,
         }
     }
     let content: ai.content.ModelBlock[] = [];
@@ -1683,20 +1684,25 @@ class ServiceUnavailableException {
     message: string?,
 }
 
-/// (internal) The HTTP status Bedrock documents for each ConverseStream
-/// exception, so a mid-stream failure classifies (and retries) exactly like
-/// the same failure on `invoke`.
-function _stream_exception_status(exception_type: string) -> int {
-    match (exception_type) {
-        "throttlingException" => 429,
-        "serviceUnavailableException" => 503,
-        "internalServerException" => 500,
-        "modelStreamErrorException" => 424,
-        "modelTimeoutException" => 408,
-        "validationException" => 400,
-        "accessDeniedException" => 403,
-        "resourceNotFoundException" => 404,
-        _ => 500,
+// Exception frame metadata reports a provider failure, not an HTTP status.
+function _stream_provider_error(kind: string, data: string) -> ai.errors.Failure {
+    let body = baml.json.parse(data) catch_all (e) {
+        let parse => {
+            return ai.errors.InvalidResponse {
+                provider: "aws-bedrock",
+                message: parse.to_string(),
+                raw_body: data,
+                status_code: null,
+            };
+        },
+    };
+    ai.errors.ProviderError {
+        provider: "aws-bedrock",
+        message: baml.json.path_or<string>(body, ".message", kind),
+        error_type: kind,
+        error_code: null,
+        raw_body: data,
+        status_code: null,
     }
 }
 
@@ -1710,12 +1716,31 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
         let data = raw.data ?? "";
         if (name.starts_with("exception:")) {
             let exception_type = name.slice(10, name.length());
-            throw ai.errors.classify_http("aws-bedrock", _stream_exception_status(exception_type), data);
+            throw _stream_provider_error(exception_type, data);
         }
         if (name.starts_with("error:")) {
-            throw ai.errors.classify_http("aws-bedrock", 500, `${name.slice(6, name.length())}: ${data}`);
+            // Unmodeled error frames carry a plain-text :error-message header,
+            // unlike modeled exception frames with JSON payloads.
+            throw ai.errors.ProviderError {
+                provider: "aws-bedrock",
+                message: data,
+                error_type: name,
+                error_code: name.slice(6, name.length()),
+                raw_body: data,
+                status_code: null,
+            };
         }
-        match (decode_stream_event(name, data)) {
+        let decoded = decode_stream_event(name, data) catch_all (e) {
+            let parse => {
+                throw ai.errors.InvalidResponse {
+                provider: "aws-bedrock",
+                message: parse.to_string(),
+                raw_body: data,
+                status_code: null,
+            }
+            },
+        };
+        match (decoded) {
             let event: ContentBlockDeltaEvent => {
                 if let text: string = event.delta?.text {
                     out.push(ai.stream.TextDelta { text: text });
@@ -1731,7 +1756,14 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
             let event: MessageStopEvent => {
                 if let raw_stop: string = event.stopReason {
                     if (_is_malformed_stop(raw_stop)) {
-                        throw ai.errors.ParseFailed { provider: "aws-bedrock", raw_output: data }
+                        throw ai.errors.ProviderError {
+                            provider: "aws-bedrock",
+                            message: `the model could not produce a valid turn: ${raw_stop}`,
+                            error_type: raw_stop,
+                            error_code: null,
+                            raw_body: data,
+                            status_code: null,
+                        }
                     }
                     out.push(
                         ai.stream.TurnMeta {

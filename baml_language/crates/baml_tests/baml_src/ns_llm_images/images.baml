@@ -435,7 +435,7 @@ test "openai_images_exactly_one_error" {
     )
 }
 
-// An empty data[] is a parse failure, not an empty turn.
+// An empty data[] is an invalid response, not an empty turn.
 function openai_images_no_data_error() -> string {
     let canned = `{"created":1,"data":[]}`;
     root.llm_mock.mock_json_serve(
@@ -447,7 +447,7 @@ function openai_images_no_data_error() -> string {
                 base_url = mock.base_url(),
             );
             ai.Agent.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
-                let failed: ai.errors.ParseFailed => failed.raw_output,
+                let failed: ai.errors.InvalidResponse => failed.message,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
         },
@@ -737,7 +737,7 @@ function gateway_images_data_url_not_base64() -> string {
                 base_url = mock.base_url(),
             );
             ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
-                let failed: ai.errors.ParseFailed => failed.raw_output,
+                let failed: ai.errors.InvalidResponse => failed.message,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
         },
@@ -902,7 +902,7 @@ function gateway_images_no_images_error() -> string {
                 base_url = mock.base_url(),
             );
             ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
-                let failed: ai.errors.ParseFailed => failed.raw_output,
+                let failed: ai.errors.InvalidResponse => failed.message,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
         },

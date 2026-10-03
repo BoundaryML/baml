@@ -48,8 +48,8 @@ type RaisedInClient = InvokeError
 ///   Unsupported -> InvalidRequest
 ///     (request construction or client configuration bug; not retryable)
 ///   Io -> NetworkFailure (transport-adjacent; safely retryable)
-///   baml.json.ParseError / baml.json.DecodeError -> NetworkFailure
-///     (malformed provider wire payload; safely retryable)
+///   baml.json.ParseError / baml.json.DecodeError -> InvalidResponse
+///     (malformed provider wire payload)
 ///   Timeout / CompilationError / Failure / UnknownError -> as-is
 function normalize(error: RaisedInClient) -> InvokeError throws never {
     match (error) {
@@ -111,19 +111,19 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
             }
         },
         let json_parse: baml.json.ParseError => {
-            NetworkFailure {
-                status_code: null,
+            InvalidResponse {
                 provider: "client",
-                detail: json_parse.message,
+                message: json_parse.message,
                 raw_body: null,
+                status_code: null,
             }
         },
         let json_decode: baml.json.DecodeError => {
-            NetworkFailure {
-                status_code: null,
+            InvalidResponse {
                 provider: "client",
-                detail: json_decode.message,
+                message: json_decode.message,
                 raw_body: null,
+                status_code: null,
             }
         },
     }
@@ -212,9 +212,44 @@ class Refused {
     }
 }
 
+/// The model's output does not fit the requested output schema.
+/// `raw_output` is the model output; `message` preserves the parser diagnostic
+/// when available. Malformed provider envelopes raise InvalidResponse instead.
 class ParseFailed {
     provider: string,
     raw_output: string,
+    message: string?,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
+/// A provider response or event does not conform to its wire format.
+/// This is distinct from model output that fails the requested output schema.
+class InvalidResponse {
+    provider: string,
+    message: string,
+    raw_body: string?,
+    status_code: int?,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
+/// The provider explicitly reported a failure in a valid response or event.
+/// Native error metadata is retained without inventing an HTTP status for an
+/// in-band error. Retry policy can distinguish transient from permanent errors.
+class ProviderError {
+    provider: string,
+    message: string,
+    error_type: string?,
+    error_code: string?,
+    raw_body: string?,
+    status_code: int?,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
             RetrySafety.Safe
