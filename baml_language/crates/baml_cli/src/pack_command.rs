@@ -688,7 +688,7 @@ mod tests {
     /// namespaced functions (`ns_<name>/foo.baml` → `<name>.foo`). Single
     /// `engine_from_source` can't express folder-based namespaces.
     fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
-        let snapshot = baml_db::testing::compile_multi_file(files);
+        let snapshot = baml_tests::stdlib_prefix::compile_multi_file(files);
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("BexEngine::new should succeed")
     }

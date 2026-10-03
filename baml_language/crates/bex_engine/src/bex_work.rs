@@ -389,7 +389,7 @@ mod tests {
     fn engine() -> Arc<BexEngine> {
         Arc::new(
             BexEngine::new(
-                baml_db::testing::compile_source(
+                baml_test_support::compile_source(
                     r#"
                     class Node { value int }
                     function Tiny() -> Node { Node { value: 7 } }

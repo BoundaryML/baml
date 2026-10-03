@@ -1266,7 +1266,7 @@ fn trace_contract_end_to_end() {
         .build()
         .unwrap()
         .block_on(async {
-            let program = baml_db::testing::compile_source(include_str!(
+            let program = baml_test_support::compile_source(include_str!(
                 "../../../baml_tests/baml_src/ns_trace_capture/matrix.baml"
             ));
             for selected in ["default", "hidden", "timing", "span"] {

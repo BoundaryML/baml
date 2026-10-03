@@ -687,7 +687,7 @@ mod tests {
         policies: &[(&str, TelemetryPolicy)],
     ) -> Vec<String> {
         FORCE_ERROR_EVIDENCE.with(|force| force.set(evidence));
-        let program = baml_db::testing::compile_source(source);
+        let program = baml_test_support::compile_source(source);
         let callables = program.rendered_callables();
         let entry = callables["user.Main"].object.raw();
         let targets: Vec<_> = policies

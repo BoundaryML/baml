@@ -120,6 +120,7 @@ baml_lsp = { path = "crates/baml_lsp" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
+baml_test_support = { path = "crates/baml_test_support" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }

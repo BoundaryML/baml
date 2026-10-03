@@ -308,25 +308,6 @@ fn assert_program_bytes_identical(label: &str, first: &[u8], second: &[u8]) {
     }
 }
 
-/// Independent databases must agree on both the linked image and the package
-/// units/records/tails that feed the content-addressed cache.
-#[test]
-fn baml_src_emission_is_deterministic() {
-    let sources = baml_src_sources();
-    let (first_units, first_program) = corpus_emission(&baml_src_db(&sources));
-    let (second_units, second_program) = corpus_emission(&baml_src_db(&sources));
-    let diverging = diverging_parts(&first_units, &second_units);
-    assert!(
-        diverging.is_empty(),
-        "nondeterministic package artifacts: {diverging:?}"
-    );
-    assert_program_bytes_identical(
-        "nondeterministic linked program",
-        &first_program,
-        &second_program,
-    );
-}
-
 /// Every package emitted in a rayon pool of `threads` threads: one thread
 /// takes the serial code pass, more take the parallel one.
 fn emitted_bytes_with(
@@ -372,7 +353,9 @@ fn diverging_parts(serial: &[EmittedBytes], parallel: &[EmittedBytes]) -> Vec<St
 /// A unit is what the cache stores and serves, so the parallel code pass
 /// must reproduce the serial pass's UNITS, not only the program they link
 /// into: a unit that differs by thread count is a cache entry that differs
-/// by core count under one key.
+/// by core count under one key. A second fresh parallel compilation also pins
+/// determinism at the same thread count, sharing the first result between the
+/// two comparisons instead of compiling the whole corpus four times.
 #[test]
 fn parallel_units_and_program_are_byte_identical_to_serial() {
     let sources = baml_src_sources();
@@ -395,6 +378,17 @@ fn parallel_units_and_program_are_byte_identical_to_serial() {
         "parallel emit diverges from serial",
         &serial_program,
         &parallel_program,
+    );
+    let (repeated_units, repeated_program) = run_with(4);
+    let diverging = diverging_parts(&parallel_units, &repeated_units);
+    assert!(
+        diverging.is_empty(),
+        "nondeterministic package artifacts: {diverging:?}"
+    );
+    assert_program_bytes_identical(
+        "nondeterministic linked program",
+        &parallel_program,
+        &repeated_program,
     );
 }
 

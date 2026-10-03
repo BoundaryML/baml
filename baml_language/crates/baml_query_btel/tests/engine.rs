@@ -1303,7 +1303,7 @@ async fn generic_calls_record_their_type_args_by_name() {
 /// one slot, so its span would record the output type the call asked for.
 #[test]
 fn the_agent_runner_names_its_output_type() {
-    let program = baml_db::testing::compile_source(GENERICS);
+    let program = baml_test_support::compile_source(GENERICS);
     let names: Vec<&[String]> = program
         .objects
         .0

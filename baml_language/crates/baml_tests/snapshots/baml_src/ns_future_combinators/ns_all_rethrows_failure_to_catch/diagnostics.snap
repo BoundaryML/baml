@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: string
+   ╭─[all_rethrows_failure_to_catch.baml:6:36]
+ 6 │ ╭─▶ function ok() -> int throws string {
+ 7 │ │       1
+ 8 │ ╰─▶ }
+   ╰────

@@ -41,7 +41,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
-    let program = baml_db::testing::compile_source(trace_context::SOURCE);
+    let program = baml_test_support::compile_source(trace_context::SOURCE);
     let engine = Arc::new(
         BexEngine::new_with_telemetry_recording(
             program,

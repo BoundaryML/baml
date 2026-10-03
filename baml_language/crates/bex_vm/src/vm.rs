@@ -669,7 +669,7 @@ pub(crate) mod tests {
 
         // Producer events and compiler origin are invisible to a BAML test.
         // Use real compiled lambdas and both first/resumed native callbacks.
-        let mut program = baml_db::testing::compile_source(
+        let mut program = baml_test_support::compile_source(
             r#"
             function Invoke(f: (bool) -> int) -> int { f(false) }
             function F(again: bool) -> int { if (again) { Invoke(F) } else { 7 } }
@@ -774,7 +774,7 @@ pub(crate) mod tests {
                 } else {
                     "await f"
                 };
-                let program = baml_db::testing::compile_source(&format!(
+                let program = baml_test_support::compile_source(&format!(
                     "function Main(f: baml.future.Future<int, never>) -> int {{ {body} }}"
                 ));
                 let entry = program.rendered_callables()["user.Main"].object.raw();

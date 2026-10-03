@@ -1045,6 +1045,7 @@ dependencies = [
  "baml_ide",
  "baml_lsp",
  "baml_query_btel",
+ "baml_test_support",
  "baml_version",
  "base64",
  "bex_engine",
@@ -1120,8 +1121,8 @@ dependencies = [
 name = "baml_query_btel"
 version = "0.0.0-beta"
 dependencies = [
- "baml_db",
  "baml_query_btel",
+ "baml_test_support",
  "base64",
  "bex_engine",
  "bex_heap",
@@ -1177,6 +1178,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_test_support"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_db",
+ "baml_version",
+ "bex_vm_types",
+]
+
+[[package]]
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
@@ -1194,8 +1204,8 @@ dependencies = [
  "baml_fmt",
  "baml_linker",
  "baml_linker_types",
+ "baml_test_support",
  "baml_type",
- "baml_version",
  "bex_engine",
  "bex_events",
  "bex_external_types",
@@ -1321,6 +1331,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "baml_db",
+ "baml_test_support",
  "baml_type",
  "baml_type_runtime",
  "baml_version",
@@ -1510,8 +1521,8 @@ dependencies = [
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_compiler_diagnostics",
- "baml_db",
  "baml_linker_types",
+ "baml_test_support",
  "baml_type",
  "base64",
  "bex_heap",

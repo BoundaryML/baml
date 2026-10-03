@@ -29,7 +29,7 @@ const SOURCE: &str = include_str!("../../baml_tests/baml_src/ns_trace_logs/logs.
 async fn execute(recording: TelemetryRecording, name: &str, live: bool) -> Arc<BexEngine> {
     let engine = Arc::new(
         BexEngine::new_with_telemetry_recording(
-            baml_db::testing::compile_source(SOURCE),
+            baml_test_support::compile_source(SOURCE),
             Arc::new(sys_native::SysOps::native()),
             vec![],
             None,

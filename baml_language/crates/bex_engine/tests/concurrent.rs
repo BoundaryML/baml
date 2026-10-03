@@ -458,6 +458,7 @@ async fn runtime_io_preserves_concurrent_invocation_contexts() {
         "#,
     );
     let reads = Arc::new(AtomicUsize::new(0));
+    let rendezvous = Arc::new(tokio::sync::Barrier::new(2));
     let mut sys_ops = sys_native::SysOps::native();
     sys_ops.baml_env_get = {
         let reads = Arc::clone(&reads);
@@ -485,9 +486,13 @@ async fn runtime_io_preserves_concurrent_invocation_contexts() {
             assert!(!capture.state.is_cancelled());
             reads.fetch_add(1, Ordering::SeqCst);
             let cancel = ctx.cancel.clone();
+            let rendezvous = Arc::clone(&rendezvous);
             sys_types::SysOpResult::Async(Box::pin(async move {
-                // Both invocations suspend inside the generated adapter.
-                tokio::task::yield_now().await;
+                // Neither callback may finish before the other has entered
+                // the generated adapter; fail promptly if one never arrives.
+                tokio::time::timeout(std::time::Duration::from_secs(5), rendezvous.wait())
+                    .await
+                    .expect("both invocation callbacks must overlap");
                 assert!(!cancel.is_cancelled());
                 Ok(match environment {
                     1 => BexExternalValue::String("environment-project".into()),

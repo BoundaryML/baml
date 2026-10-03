@@ -58,7 +58,7 @@ fn captured_slots(root: &std::path::Path, id: proto::CasId) -> u64 {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn recorded_argument_layouts_align_with_captured_input_slots() {
     let root = tempfile::tempdir().unwrap();
-    let mut program = baml_db::testing::compile_source(SOURCE);
+    let mut program = baml_test_support::compile_source(SOURCE);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && matches!(

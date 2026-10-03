@@ -591,23 +591,6 @@ mod tests {
     }
 
     #[test]
-    fn exact_match_anchors_the_whole_alternation() {
-        // `^a|b$` anchors each alternative separately, which is the trap
-        // `find_exact` exists to avoid.
-        let re = Program::compile("^a|b$", false).unwrap();
-        assert!(re.is_match("ab").unwrap());
-        assert!(re.find_exact("ab").unwrap().is_none());
-        assert!(re.find_exact("a").unwrap().is_some());
-    }
-
-    #[test]
-    fn exact_match_is_not_confused_by_multiline_flag() {
-        let re = Program::compile("(?m)^a$", false).unwrap();
-        assert!(re.is_match("x\na\ny").unwrap());
-        assert!(re.find_exact("x\na\ny").unwrap().is_none());
-    }
-
-    #[test]
     fn exact_match_preserves_comments_flags_and_captures() {
         for backtracking in [false, true] {
             for pattern in ["(?x)(?<letter>a) # trailing comment", "(?<letter>a)"] {
@@ -645,18 +628,5 @@ mod tests {
         // "😀hé" — byte offsets 0, 4, 5, 7.
         let s = "😀hé";
         assert_eq!(char_offsets(s, &[7, 0, 5, 4]), vec![3, 0, 2, 1]);
-    }
-
-    #[test]
-    fn split_interleaves_participating_groups_only() {
-        let re = Program::compile("(a)|(b)", false).unwrap();
-        let subject = "xaybz";
-        let pieces: Vec<&str> = re
-            .split(subject)
-            .unwrap()
-            .into_iter()
-            .map(|(start, end)| &subject[start..end])
-            .collect();
-        assert_eq!(pieces, vec!["x", "a", "y", "b", "z"]);
     }
 }

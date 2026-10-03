@@ -1,4 +1,4 @@
-//! Shared by `build.rs` (producer) and `src/stdlib_prefix.rs` (consumer) so the
+//! Shared by `build.rs` (producer) and `src/lib.rs` (consumer) so the
 //! artifact header cannot drift between them.
 
 /// Optimization levels to embed as independently decoded artifacts. Every

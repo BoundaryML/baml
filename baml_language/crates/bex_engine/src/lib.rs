@@ -7454,7 +7454,7 @@ mod trace_scope_tests {
             );
             let scope = recording.id();
             let engine = BexEngine::new_with_telemetry_recording(
-                baml_db::testing::compile_source(""),
+                baml_test_support::compile_source(""),
                 Arc::new(sys_native::SysOps::native()),
                 vec![],
                 None,
@@ -7464,7 +7464,7 @@ mod trace_scope_tests {
             .unwrap();
             assert_eq!(engine.trace_scope, scope);
             let other = BexEngine::new(
-                baml_db::testing::compile_source(""),
+                baml_test_support::compile_source(""),
                 Arc::new(sys_native::SysOps::native()),
                 vec![],
             )
@@ -7544,7 +7544,7 @@ mod concurrent_tests {
 
         let engine = Arc::new(
             BexEngine::new(
-                baml_db::testing::compile_source("function Main() -> int { 1 }"),
+                baml_test_support::compile_source("function Main() -> int { 1 }"),
                 Arc::new(sys_native::SysOps::native()),
                 vec![],
             )
@@ -7636,7 +7636,7 @@ mod concurrent_tests {
 mod type_identity_tests {
     use std::sync::Arc;
 
-    use baml_db::testing::compile_source;
+    use baml_test_support::compile_source;
     use bex_heap::{HeapPermit, TlabHolder};
     use bex_vm_types::Object;
     use sys_native::SysOpsExt;

@@ -81,6 +81,14 @@ allowed_crates = [
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
+# Only the test harness imports these helpers as a regular dependency. Other
+# consumers share the embedded stdlib through dev-dependencies.
+[[dependency_rules]]
+pattern = "baml_test_support"
+allowed_crates = ["baml_tests"]
+regular_deps_only = true
+reason = "Precompiled stdlib test helpers belong in dev-dependencies."
+
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
@@ -88,7 +96,7 @@ name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
-approved_suffixes = ["artifact", "compiler2_hir_ty"]
+approved_suffixes = ["artifact", "compiler2_hir_ty", "test_support"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
@@ -136,16 +144,17 @@ reason = "baml_* crates should not depend on bex_* crates (baml_query_btel: non-
 # `baml_linker_types` carries the compilation-unit wire format over the
 # runtime's object types, and `baml_linker` folds units into a `Program`:
 # both sit on the compiler's output side, beside emit. Keep both
-# `bex_vm_types` allowlists in sync.
+# `bex_vm_types` allowlists in sync. The test-support crate also returns the
+# compiler's Program data, without importing the engine or VM implementation.
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host"]
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_test_support"]
 regular_deps_only = true
 reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer)."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel", "baml_test_support"]
 reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer; baml_query_btel: non-production dev/build dependencies only)."
 
 

@@ -129,7 +129,7 @@ const SOURCE: &str = r##"
 async fn record(directory: &Path) -> Arc<BexEngine> {
     let engine = Arc::new(
         BexEngine::new_with_telemetry_recording(
-            baml_db::testing::compile_source(SOURCE),
+            baml_test_support::compile_source(SOURCE),
             Arc::new(sys_native::SysOps::native()),
             vec![],
             None,

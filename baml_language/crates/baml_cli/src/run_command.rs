@@ -2174,13 +2174,13 @@ mod tests {
     /// supports folder-based namespaces (`ns_<name>/foo.baml`) which the
     /// single-source `compile_source` helper can't express.
     fn engine_from_files(files: &[(&str, &str)]) -> UserFunctionCatalog {
-        let snapshot = baml_db::testing::compile_multi_file(files);
+        let snapshot = baml_tests::stdlib_prefix::compile_multi_file(files);
         UserFunctionCatalog::from_program(&snapshot).unwrap()
     }
 
     #[test]
     fn signature_catalog_matches_loaded_engine() {
-        let program = baml_db::testing::compile_multi_file(&[
+        let program = baml_tests::stdlib_prefix::compile_multi_file(&[
             ("main.baml", "function Identity<T>(value: T) -> T { value }"),
             (
                 "ns_nominal/main.baml",

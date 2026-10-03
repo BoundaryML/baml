@@ -28,7 +28,7 @@ fn engine(project: &Path) -> Arc<bex_engine::BexEngine> {
 
 /// `engine` for another program, whose `Ask` is captured the same way.
 fn engine_for(project: &Path, source: &str) -> Arc<bex_engine::BexEngine> {
-    let mut program = baml_db::testing::compile_source(source);
+    let mut program = baml_test_support::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && f.name.ends_with(".Ask")

@@ -19,7 +19,7 @@ fn context() -> bex_engine::FunctionCallContext {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn baml_context_reaches_local_files_and_cas_at_entry_and_completion() {
-    let program = baml_db::testing::compile_source(trace_context::SOURCE);
+    let program = baml_test_support::compile_source(trace_context::SOURCE);
     let root = tempfile::tempdir().unwrap();
     let engine = Arc::new(
         BexEngine::new_with_telemetry_recording(
