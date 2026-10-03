@@ -67,6 +67,21 @@ class RestoreTests(unittest.TestCase):
         self.assert_outputs_exist(True)
         self.assertEqual(self.generated.stat().st_mtime, cache.BACKDATED_MTIME)
 
+    def test_interrupted_codegen_recovers_without_publishing_new_hashes(self):
+        manifest = Path(cache.MANIFEST).read_bytes()
+        self.generated.unlink()
+        cache.restore(before_codegen=True)
+        self.write(self.generated, "changed before interruption")
+        self.assert_outputs_exist(True)
+        # Failure skips the workflow's record/save steps. A later checkout
+        # still compares regenerated clients against the last validated build.
+        self.assertEqual(Path(cache.MANIFEST).read_bytes(), manifest)
+        self.generated.unlink()
+        cache.restore(before_codegen=True)
+        self.write(self.generated, "changed before interruption")
+        cache.restore()
+        self.assert_outputs_exist(False)
+
     def test_missing_clients_are_invalidated_after_codegen(self):
         self.generated.unlink()
         cache.restore(before_codegen=True)
