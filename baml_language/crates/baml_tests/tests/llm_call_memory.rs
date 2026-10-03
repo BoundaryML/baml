@@ -258,6 +258,7 @@ function main() -> string {
 
 #[tokio::test]
 async fn call_cost_does_not_grow_with_conversation_length() {
+    let _measuring = MEASURING.lock().await;
     let (_short_server, short) = engine_for(&chat_program(0), "hi").await;
     let (_long_server, long) = engine_for(&chat_program(LONG_CONVERSATION_TURNS), "hi").await;
     let short_bytes = bytes_per_call(&short, "main").await;
