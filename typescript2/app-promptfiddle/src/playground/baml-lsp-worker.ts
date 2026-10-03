@@ -176,10 +176,17 @@ interface ShellResult {
 /** Options passed from Rust as a JSON string. */
 interface ProcessOptionsJson {
   cwd?: string;
-  env?: Record<string, string>;
+  env?: Record<string, string | null>;
   timeout_ms?: number;
-  stdin?: string | number[];
+  input?: string | number[];
   clear_env?: boolean;
+  stdin: 'inherit' | 'pipe' | 'ignore';
+  stdout: 'inherit' | 'pipe' | 'ignore';
+  stderr: 'inherit' | 'pipe' | 'ignore';
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 async function executeShell(
@@ -190,31 +197,42 @@ async function executeShell(
   const options: ProcessOptionsJson | undefined = optionsJson
     ? (JSON.parse(optionsJson) as ProcessOptionsJson)
     : undefined;
-
+  const env: Record<string, string> = {};
+  const removed: string[] = [];
+  for (const [name, value] of Object.entries(options?.env ?? {})) {
+    if (value === null) removed.push(name);
+    else env[name] = value;
+  }
+  // The virtual shell exposes environment overlays; unset removed keys in the
+  // command's own environment without changing the shared Bash instance.
+  const prefix = removed.map((name) => `unset ${shellQuote(name)};`).join(' ');
   const execOptions: Parameters<Bash['exec']>[1] = {
     cwd: options?.cwd,
-    env: options?.env,
-    stdin: Array.isArray(options?.stdin)
+    env,
+    replaceEnv: options?.clear_env ?? false,
+    stdin: Array.isArray(options?.input)
       ? new TextDecoder('utf-8', { fatal: true }).decode(
-          new Uint8Array(options.stdin),
+          new Uint8Array(options.input),
         )
-      : options?.stdin,
-    ...(options?.env || options?.clear_env
-      ? { replaceEnv: options?.clear_env ?? false }
-      : {}),
+      : options?.input,
     ...(options?.timeout_ms != null
       ? { signal: AbortSignal.timeout(options.timeout_ms) }
       : {}),
   };
-
-  const result = await bash.exec(command, execOptions);
+  const result = await bash.exec(`${prefix} ${command}`, execOptions);
+  if (options?.stdout === 'inherit' && result.stdout)
+    console.log(result.stdout);
+  if (options?.stderr === 'inherit' && result.stderr)
+    console.error(result.stderr);
+  const stdout = options?.stdout === 'pipe' ? result.stdout : '';
+  const stderr = options?.stderr === 'pipe' ? result.stderr : '';
   const encoder = new TextEncoder();
   return {
     exit_code: result.exitCode,
-    stderr: result.stderr,
-    stderr_bytes: encoder.encode(result.stderr),
-    stdout: result.stdout,
-    stdout_bytes: encoder.encode(result.stdout),
+    stderr,
+    stderr_bytes: encoder.encode(stderr),
+    stdout,
+    stdout_bytes: encoder.encode(stdout),
   };
 }
 
@@ -223,43 +241,9 @@ async function executeExec(
   args: string[] | undefined,
   optionsJson: string | undefined,
 ): Promise<ShellResult> {
-  const bash = getOrCreateBash();
-  const options: ProcessOptionsJson | undefined = optionsJson
-    ? (JSON.parse(optionsJson) as ProcessOptionsJson)
-    : undefined;
-
-  // Build the command line: program + args joined. just-bash executes this
-  // as a shell script so we must quote args to prevent shell splitting.
-  const quotedArgs = (args ?? [])
-    .map((a) => `'${a.replace(/'/g, "'\\''")}'`)
-    .join(' ');
-  const commandLine = quotedArgs ? `${program} ${quotedArgs}` : program;
-
-  const execOptions: Parameters<Bash['exec']>[1] = {
-    cwd: options?.cwd,
-    env: options?.env,
-    stdin: Array.isArray(options?.stdin)
-      ? new TextDecoder('utf-8', { fatal: true }).decode(
-          new Uint8Array(options.stdin),
-        )
-      : options?.stdin,
-    ...(options?.env || options?.clear_env
-      ? { replaceEnv: options?.clear_env ?? false }
-      : {}),
-    ...(options?.timeout_ms != null
-      ? { signal: AbortSignal.timeout(options.timeout_ms) }
-      : {}),
-  };
-
-  const result = await bash.exec(commandLine, execOptions);
-  const encoder = new TextEncoder();
-  return {
-    exit_code: result.exitCode,
-    stderr: result.stderr,
-    stderr_bytes: encoder.encode(result.stderr),
-    stdout: result.stdout,
-    stdout_bytes: encoder.encode(result.stdout),
-  };
+  // A direct invocation must quote the program as well as every argument.
+  const commandLine = [program, ...(args ?? [])].map(shellQuote).join(' ');
+  return executeShell(commandLine, optionsJson);
 }
 
 /** Clear all decorations and notify the main thread. */

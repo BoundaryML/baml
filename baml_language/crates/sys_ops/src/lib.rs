@@ -1704,12 +1704,12 @@ impl io::IoNamespaceIo for DefaultIoOps {
     }
 }
 
-impl io::IoClassSysProcess for DefaultIoOps {
+impl io::IoClassSysSubprocess for DefaultIoOps {
     fn wait(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1722,7 +1722,7 @@ impl io::IoClassSysProcess for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1735,7 +1735,7 @@ impl io::IoClassSysProcess for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())
@@ -1814,49 +1814,6 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
-    fn _detach(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _program: String,
-        _args: Vec<String>,
-        _options: Option<io::owned::sys::ExecOptions>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".into(),
-            message: "Detached processes are not supported by this host".into(),
-        })
-    }
-    fn _run(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _program: String,
-        _args: Vec<String>,
-        _options: Option<io::owned::sys::ExecOptions>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn _exec(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _program: String,
-        _args: Vec<String>,
-        _options: Option<io::owned::sys::ExecOptions>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
     fn collect_garbage(
         &self,
         _h: &Arc<BexHeap>,
@@ -1868,13 +1825,13 @@ impl io::IoNamespaceSys for DefaultIoOps {
         SysOpOutput::ok(())
     }
 
-    fn _capture(
+    fn _run(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _program: String,
         _args: Vec<String>,
-        _options: Option<io::owned::sys::ProcessOptions>,
+        _options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1883,15 +1840,15 @@ impl io::IoNamespaceSys for DefaultIoOps {
         })
     }
 
-    fn _start_process(
+    fn _subprocess(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _program: String,
         _args: Vec<String>,
-        _options: Option<io::owned::sys::ProcessOptions>,
+        _options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::Process> {
+    ) -> SysOpOutput<io::owned::sys::Subprocess> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -1903,7 +1860,7 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _command: String,
-        _options: Option<io::owned::sys::ProcessOptions>,
+        _options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2653,22 +2610,22 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_sys_process_wait = {
+        self.inner.baml_sys_subprocess_wait = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_process_wait(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys_subprocess_wait(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_process_kill = {
+        self.inner.baml_sys_subprocess_kill = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_process_kill(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys_subprocess_kill(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_process_close = {
+        self.inner.baml_sys_subprocess_close = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_process_close(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys_subprocess_close(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_readpipe_close = {
@@ -2705,34 +2662,16 @@ impl IoSysOpsBuilder {
                 )
             })
         };
-        self.inner.baml_sys__detach = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys__detach(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_sys__run = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys__run(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys__exec = {
+        self.inner.baml_sys__subprocess = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys__exec(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys__capture = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys__capture(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys__start_process = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys__start_process(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__subprocess(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys__shell = {

@@ -122,7 +122,7 @@ function scan_finds_txt_files() -> string[] {
     let _ = baml.fs.write(root + "/c.rs", "c");
     let g = baml.glob.new("*.txt");
     let result = g.scan(root);
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     result
 }
 
@@ -142,7 +142,7 @@ function scan_returns_empty_for_no_match() -> string[] {
     let _ = baml.fs.write(root + "/b.rs", "rust");
     let g = baml.glob.new("*.txt");
     let result = g.scan(root);
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     result
 }
 
@@ -166,7 +166,7 @@ function scan_only_files_by_default_checks() -> bool[] {
         result.length() == 1,
         result.includes("file.txt"),
     ];
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     ok
 }
 
@@ -193,7 +193,7 @@ function scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
         result.includes(root + "/dir.txt"),
         result.includes(root + "/file.txt"),
     ];
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     ok
 }
 
@@ -209,7 +209,7 @@ function scan_matches_dot_slash_pattern() -> string[] {
     let _ = baml.fs.write(root + "/file.txt", "content");
     let g = baml.glob.new("./*.txt");
     let result = g.scan(root);
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     result
 }
 
@@ -232,7 +232,7 @@ function scan_matches_absolute_pattern_checks() -> bool[] {
         result.length() == 1,
         result.includes(root + "/file.txt"),
     ];
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     ok
 }
 
@@ -250,7 +250,7 @@ function scan_dot_pattern_matches_only_dot_files() -> string[] {
     let _ = baml.fs.write(root + "/regular.txt", "r");
     let g = baml.glob.new(".*");
     let result = g.scan(baml.glob.ScanOptions { cwd: root, dot: true });
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     result
 }
 
@@ -277,7 +277,7 @@ function scan_default_prunes_dot_directories_checks() -> bool[] {
         result.length() == 1,
         result.includes("visible.txt"),
     ];
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     ok
 }
 
@@ -296,14 +296,14 @@ function scan_follows_symlinked_directory_checks() -> bool[] {
     baml.fs.mkdir(target, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(target + "/hidden_via_link.txt", "x");
     // Create symlink: outer_root/link_dir -> target
-    let _ = baml.sys.shell("ln -s " + target + " " + outer_root + "/link_dir", options = null);
+    let _ = baml.sys.shell("ln -s " + target + " " + outer_root + "/link_dir", capture_output = true);
     let g = baml.glob.new("**/*.txt");
     let result = g.scan(baml.glob.ScanOptions { cwd: outer_root, follow_symlinks: true });
     let ok = [
         result.length() == 1,
         result.includes("link_dir/hidden_via_link.txt"),
     ];
-    let _ = baml.sys.shell("rm -rf " + outer_root + " " + target, options = null);
+    let _ = baml.sys.shell("rm -rf " + outer_root + " " + target, capture_output = true);
     ok
 }
 
@@ -320,10 +320,10 @@ function scan_skips_broken_symlinks_by_default() -> string[] {
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/real.txt", "content");
     // Create a dangling symlink pointing to a non-existent file.
-    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", options = null);
+    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", capture_output = true);
     let g = baml.glob.new("*.txt");
     let result = g.scan(baml.glob.ScanOptions { cwd: root, follow_symlinks: true });
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     result
 }
 
@@ -344,7 +344,7 @@ function scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/real.txt", "content");
     // Create a dangling symlink pointing to a non-existent file.
-    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", options = null);
+    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", capture_output = true);
     let g = baml.glob.new("*.txt");
     let threw = {
         let _ = g.scan(
@@ -358,7 +358,7 @@ function scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
     } catch (e) {
         baml.errors.Io => true
     };
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     threw
 }
 
@@ -381,8 +381,8 @@ function scan_propagates_permission_errors_fn() -> bool {
     let locked = root + "/locked";
     baml.fs.mkdir(locked, baml.fs.MkdirOptions { recursive: false });
     let _ = baml.fs.write(locked + "/inner.txt", "x");
-    let _ = baml.sys.shell("chmod 000 " + locked, options = null);
-    let still_readable = baml.sys.shell("ls " + locked, options = null).ok();
+    let _ = baml.sys.shell("chmod 000 " + locked, capture_output = true);
+    let still_readable = baml.sys.shell("ls " + locked, capture_output = true).ok();
     let threw = if (still_readable) {
         true
     } else {
@@ -394,8 +394,8 @@ function scan_propagates_permission_errors_fn() -> bool {
         }
     };
     // Restore permissions so the temp dir can be cleaned up.
-    let _ = baml.sys.shell("chmod 755 " + locked, options = null);
-    let _ = baml.sys.shell("rm -rf " + root, options = null);
+    let _ = baml.sys.shell("chmod 755 " + locked, capture_output = true);
+    let _ = baml.sys.shell("rm -rf " + root, capture_output = true);
     threw
 }
 
