@@ -241,7 +241,10 @@ function stream_parse() -> int {{
         let upto = if (end > text.length()) {{ text.length() }} else {{ end }};
         let parsed: Item[] | baml.sap._NoYield = cache._parse_partial(text.slice(0, upto));
         match (parsed) {{
-            let items: Item[] => {{ yielded = yielded + 1; }},
+            let items: Item[] => {{
+                // Only a prefix shorter than the reply shows a partial value.
+                if (upto < text.length()) {{ yielded = yielded + 1; }}
+            }},
             _ => {{}},
         }};
         end = end + {STREAM_STEP};
