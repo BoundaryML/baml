@@ -742,6 +742,11 @@ impl BexHeap {
                 if !interface.owner.as_ptr().is_null() {
                     worklist.push(interface.owner);
                 }
+                if let Some(default) = &interface.structural_default
+                    && !default.function_ptr.is_null()
+                {
+                    worklist.push(default.function_ptr);
+                }
                 worklist.extend(
                     interface
                         .methods
@@ -977,6 +982,11 @@ impl BexHeap {
             Object::Interface(interface) => {
                 if let Some(&new_ptr) = forwarding.get(&interface.owner) {
                     interface.owner = new_ptr;
+                }
+                if let Some(default) = &mut interface.structural_default
+                    && let Some(&new_ptr) = forwarding.get(&default.function_ptr)
+                {
+                    default.function_ptr = new_ptr;
                 }
                 for method in &mut interface.methods {
                     if let Some(&new_ptr) = forwarding.get(&method.default_fn) {
@@ -1350,6 +1360,12 @@ impl BexHeap {
                     && self.generation_of(interface.owner).is_young()
                 {
                     worklist.push(interface.owner);
+                }
+                if let Some(default) = &interface.structural_default
+                    && !default.function_ptr.is_null()
+                    && self.generation_of(default.function_ptr).is_young()
+                {
+                    worklist.push(default.function_ptr);
                 }
                 worklist.extend(
                     interface

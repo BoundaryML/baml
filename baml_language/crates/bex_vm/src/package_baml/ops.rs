@@ -178,25 +178,17 @@ fn dispatch_op(
         return NativeCallResult::from(unresolved_op(iface, method));
     };
     let resolver = resolve::ImplResolver::for_value(vm, args[0]);
-    let Some((rule, bound_args)) =
-        resolver.resolve_implements_rule(&self_ty.into(), op_head, iface_args)
+    let Some(implementation) =
+        resolver.resolve_implementation(&self_ty.into(), op_head, iface_args)
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
-    let resolved = match resolver.rule_method_impl(&rule, method) {
+    let (callee, type_args) = match resolver.implementation_method(&implementation, method) {
         Ok(resolved) => resolved,
         Err(e) => return NativeCallResult::from(e),
     };
-    // The resolved impl's frame realizes fully against its bound args; a failure
-    // is a broken compiler/VM invariant, surfaced rather than swallowed.
-    let type_args = match resolver.realize_frame(&resolved.method.frame, &bound_args) {
-        Ok(type_args) => type_args,
-        Err(e) => return NativeCallResult::from(e),
-    };
     NativeCallResult::YieldToCall {
-        // `fqn` is the resolved callee's heap pointer (provided row or adopted
-        // interface default).
-        callee: resolved.method.fqn,
+        callee,
         args,
         type_args,
         // The operator's value *is* the impl method's return value — forward it.
@@ -677,7 +669,12 @@ fn resolve_equals_eq(
     else {
         return Ok(None);
     };
-    let method = resolver.rule_method_impl(&rule, "eq")?.method;
+    let resolved = resolver.rule_method_impl(&rule, "eq")?;
+    // Keep defaults in this worklist so cyclic graphs share its visited set.
+    if resolved.is_default {
+        return Ok(None);
+    }
+    let method = resolved.method;
     // `fqn` is the resolved callee's heap pointer (the impl method or adopted
     // default) — invoke it directly. Its frame realizes fully against the bound
     // args (every projection reduced through the impl registry); a failure is
@@ -685,6 +682,10 @@ fn resolve_equals_eq(
     let callee = method.fqn;
     let type_args = resolver.realize_frame(&method.frame, &bound_args)?;
     Ok(Some((callee, type_args)))
+}
+
+pub(super) fn equals_structural_default(vm: &mut BexVm, a: Value, b: Value) -> NativeCallResult {
+    EqualsDriver::new(a, b).drive(vm)
 }
 
 /// The `baml.ops.Equals` interface name.

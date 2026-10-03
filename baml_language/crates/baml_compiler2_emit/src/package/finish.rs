@@ -163,6 +163,26 @@ fn fill_interface_defaults<'db>(
                     });
                 method.default = Some(object);
             }
+            let head = baml_compiler2_hir_ty::lower::interface_qualified_name(db, interface);
+            if let Some(kind) = baml_compiler2_hir_ty::impls::structural_interface(db, &head) {
+                let native = baml_compiler2_hir_ty::callable::lang_function(
+                    db,
+                    baml_base::LangPackage::Baml,
+                    &[],
+                    kind.native_function(),
+                )
+                .expect("a structural interface has its native implementation");
+                let baml_compiler2_hir::loc::DeclRef::Source(native) = native else {
+                    unreachable!("a structural interface and its native body compile together");
+                };
+                def.structural_default = Some(bex_vm_types::types::StructuralDefault {
+                    kind,
+                    function: placed
+                        .get(native)
+                        .expect("the structural native implementation was compiled"),
+                    function_ptr: bex_vm_types::HeapPtr::null(),
+                });
+            }
         }
     }
 }

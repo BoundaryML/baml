@@ -77,49 +77,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:152:5]
- 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ·     ───────────────────────────────────────────────────────────────
-     ╰────
-
-  [type] E0007
-
-  × type `string` has no member `len`
-     ╭─[chain_expr.baml:152:5]
- 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ·     ─────────────────────────────────────────────────────────────────────────────────
-     ╰────
-
-  [type] E0007
-
-  × type `string` has no member `len`
-     ╭─[chain_expr.baml:152:5]
- 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ·     ───────────────────────────────────────────────────────────────────────────────────────────────────
-     ╰────
-
-  [type] E0007
-
-  × type `string` has no member `len`
      ╭─[chain_expr.baml:155:5]
  155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
      ·     ────────────────────────────────────────────
-     ╰────
-
-  [type] E0007
-
-  × type `string` has no member `len`
-     ╭─[chain_expr.baml:155:5]
- 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     ·     ──────────────────────────────────────────────────────────────
-     ╰────
-
-  [type] E0007
-
-  × type `string` has no member `len`
-     ╭─[chain_expr.baml:155:5]
- 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     ·     ────────────────────────────────────────────────────────────────────────────────
      ╰────
 
   [type] E0007
@@ -197,40 +157,6 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0007
 
   × type `string` has no member `len`
-     ╭─[chain_expr.baml:165:5]
- 165 │ ╭─▶     user // 2 trailing
- 166 │ │       . // 3 trailing
- 167 │ │       // 4 leading
- 168 │ │       profile // 5 trailing
- 169 │ │       . // 6 trailing
- 170 │ │       // 7 leading
- 171 │ │       settings // 8 trailing
- 172 │ │       . // 9 trailing
- 173 │ │       // 10 leading
- 174 │ │       preferences // 11 trailing
- 175 │ │       . // 12 trailing
- 176 │ │       // 13 leading
- 177 │ │       color // 14 trailing
- 178 │ │       . // 15 trailing
- 179 │ │       // 16 leading
- 180 │ │       len // 17 trailing
- 181 │ │       ( // 18 trailing
- 182 │ │       ) // 19 trailing
- 183 │ │       . // 20 trailing
- 184 │ │       // 21 leading
- 185 │ │       to_string // 22 trailing
- 186 │ │       ( // 23 trailing
- 187 │ │       ) // 24 trailing
- 188 │ │       . // 25 trailing
- 189 │ │       // 26 leading
- 190 │ │       len // 27 trailing
- 191 │ │       ( // 28 trailing
- 192 │ ╰─▶     ) // 29 trailing
-     ╰────
-
-  [type] E0007
-
-  × type `string` has no member `len`
      ╭─[chain_expr.baml:197:5]
  197 │ ╭─▶     user /* 2 trailing */
  198 │ │       . /* 3 trailing */
@@ -250,40 +176,6 @@ source: crates/baml_tests/src/generated_tests.rs
  212 │ │       len /* 17 trailing */
  213 │ │       ( /* 18 trailing */
  214 │ ╰─▶     ) /* 19 trailing */
-     ╰────
-
-  [type] E0007
-
-  × type `string` has no member `len`
-     ╭─[chain_expr.baml:197:5]
- 197 │ ╭─▶     user /* 2 trailing */
- 198 │ │       . /* 3 trailing */
- 199 │ │       /* 4 leading */
- 200 │ │       profile /* 5 trailing */
- 201 │ │       . /* 6 trailing */
- 202 │ │       /* 7 leading */
- 203 │ │       settings /* 8 trailing */
- 204 │ │       . /* 9 trailing */
- 205 │ │       /* 10 leading */
- 206 │ │       preferences /* 11 trailing */
- 207 │ │       . /* 12 trailing */
- 208 │ │       /* 13 leading */
- 209 │ │       color /* 14 trailing */
- 210 │ │       . /* 15 trailing */
- 211 │ │       /* 16 leading */
- 212 │ │       len /* 17 trailing */
- 213 │ │       ( /* 18 trailing */
- 214 │ │       ) /* 19 trailing */
- 215 │ │       . /* 20 trailing */
- 216 │ │       /* 21 leading */
- 217 │ │       to_string /* 22 trailing */
- 218 │ │       ( /* 23 trailing */
- 219 │ │       ) /* 24 trailing */
- 220 │ │       . /* 25 trailing */
- 221 │ │       /* 26 leading */
- 222 │ │       len /* 27 trailing */
- 223 │ │       ( /* 28 trailing */
- 224 │ ╰─▶     ) /* 29 trailing */
      ╰────
 
   [type] E0007

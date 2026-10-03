@@ -1031,7 +1031,7 @@ pub(crate) fn synthesize_spec_build_request_body(
 }
 
 /// Synthesize the `@parse` companion body: a network-free parse of an
-/// existing JSON/SAP string into the function's return type —
+/// existing JSON/SAP string into the function's return type,
 /// `baml.sap.parse<Out>(json)`.
 pub(crate) fn synthesize_spec_parse_body(
     out_type: Option<crate::ast::TypeExpr>,

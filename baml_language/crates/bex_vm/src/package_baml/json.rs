@@ -85,7 +85,7 @@ use crate::{
 // (no GC can move `pending`/`root` mid-render), unlike a value-kind walk that
 // allocated heap arrays/maps as it descended.
 
-/// Entry point for `baml._to_json_default` / `baml._to_json_shim`. Collects the
+/// Entry point for `baml._to_json_default`. Collects the
 /// override-bearing sub-values (pass 1), dispatches `to_json` on each in order
 /// (pass 2), then renders structurally splicing in the override results (pass 3).
 pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
@@ -1576,14 +1576,11 @@ impl Continuation for IdentityFromJsonCont {
 // resolves a user `implements baml.FromJson { function from_json ... }` override
 // on the target type `T` and dispatches it; otherwise it decodes structurally.
 //
-// F1 (additive): the structural fallback delegates to `json_from_json_dispatch`
-// (the existing magic path — auto-derived per-field bodies still exist and honor
-// nested overrides). F2 will retire the magic path and move the per-field
-// override-honoring decode into the default itself.
+// Built-in implementations enter through `json_to_structural_default`,
+// bypassing dispatch only at the root. Fields and container elements use the
+// regular dispatch path, preserving nested explicit implementations.
 
-/// Reads the target type `T` from the call's type-args and dispatches
-/// `baml.json.to<T>(j)` — the `baml._from_json_shim` native.
-pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
+pub(super) fn json_to_structural_default(vm: &mut BexVm, j: Value) -> NativeCallResult {
     let ty = match vm.current_call_type_args().first().cloned() {
         Some(t) => t,
         None => {
@@ -1594,7 +1591,7 @@ pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
             ));
         }
     };
-    json_to_dispatch(vm, j, &ty)
+    json_to_dispatch_root(vm, j, &ty, true)
 }
 
 /// Dispatch `json.to<T>(j)` — the override-honoring structural decode.
@@ -1607,6 +1604,15 @@ pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
 /// - everything else (primitives, enums, media, literals, type-aliases): a
 ///   structural decode (no overrides possible).
 fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResult {
+    json_to_dispatch_root(vm, j, ty, false)
+}
+
+fn json_to_dispatch_root(
+    vm: &mut BexVm,
+    j: Value,
+    ty: &RealizedTy,
+    structural_root: bool,
+) -> NativeCallResult {
     match ty {
         RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null) => {
             if j.is_null() {
@@ -1620,10 +1626,12 @@ fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResu
         RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _)
             if vm.stdlib_heads().media_kind(*head).is_none() =>
         {
-            match try_yield_interface_from_json(vm, j, ty) {
-                Some(yld) => yld,
-                None => class_from_json_start(vm, j, *head, type_args),
+            if !structural_root {
+                if let Some(yld) = try_yield_interface_from_json(vm, j, ty) {
+                    return yld;
+                }
             }
+            class_from_json_start(vm, j, *head, type_args)
         }
         _ => structural_decode_value(vm, j, ty),
     }

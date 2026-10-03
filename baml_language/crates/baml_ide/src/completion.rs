@@ -666,8 +666,8 @@ function f() -> int throws never {
             "`?.` reads a member of the non-null payload"
         );
 
-        // And the plain dot does NOT: an optional has no members of its own,
-        // which is exactly the diagnostic the reader needs to see.
+        // The plain dot offers structural methods on the optional itself,
+        // not the non-null payload's string methods.
         let plain = CursorTest::new(
             r#"function f(a: string?) -> int throws never {
     a.<[CURSOR]
@@ -675,7 +675,9 @@ function f() -> int throws never {
 }
 "#,
         );
-        assert!(complete(&plain).is_empty());
+        let items = complete(&plain);
+        assert_eq!(labels(&items), vec!["eq", "neq", "to_json", "to_string"]);
+        assert!(items.iter().all(|item| item.kind == CompletionKind::Method));
     }
 
     #[test]
@@ -761,13 +763,28 @@ function f() -> int {
 "#,
         );
         let items = complete(&test);
-        assert_eq!(labels(&items), vec!["Active", "Done"]);
-        assert!(
-            items
-                .iter()
-                .all(|item| item.kind == CompletionKind::EnumVariant),
-            "a variant completes as a variant, not a field"
+        assert_eq!(
+            labels(&items),
+            vec![
+                "Active",
+                "Done",
+                "eq",
+                "from_json",
+                "neq",
+                "to_json",
+                "to_string",
+            ]
         );
+        for item in &items {
+            assert_eq!(
+                item.kind,
+                match item.label.as_str() {
+                    "Active" | "Done" => CompletionKind::EnumVariant,
+                    _ => CompletionKind::Method,
+                },
+                "variants and structural methods retain their own completion kinds"
+            );
+        }
     }
 
     #[test]

@@ -14,7 +14,7 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Literal, Name, normalize::TypeContext};
+use baml_type::{Literal, Name, StructuralInterface, normalize::TypeContext};
 use bex_vm_types::{
     RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
@@ -29,6 +29,30 @@ use crate::{BexVm, type_context::StructuralEquivCtx, vec_ext::VecExt};
 pub(crate) enum RuntimeImplRuleCandidate<'vm> {
     Static(&'vm RuntimeImplRule),
     Borrowed(&'vm RuntimeImplRule),
+}
+
+/// An implementation selected without adding synthetic rules to the registry.
+/// Structural defaults carry the exact `Self` type for native and shared-body frames.
+pub(crate) enum ResolvedInterfaceImpl<'vm> {
+    Explicit {
+        rule: RuntimeImplRuleCandidate<'vm>,
+        bindings: Vec<RealizedTy>,
+    },
+    Structural {
+        kind: StructuralInterface,
+        interface: TypeHead,
+        self_ty: RealizedTy,
+    },
+}
+
+impl ResolvedInterfaceImpl<'_> {
+    pub(crate) fn is_static(&self) -> bool {
+        match self {
+            Self::Explicit { rule, .. } => rule.is_static(),
+            // A dynamic explicit implementation can replace this fallback.
+            Self::Structural { .. } => false,
+        }
+    }
 }
 
 impl RuntimeImplRuleCandidate<'_> {
@@ -271,6 +295,89 @@ fn concrete_base(ty: &RealizedTy) -> Cow<'_, RealizedTy> {
 }
 
 impl<'vm> ImplResolver<'vm> {
+    pub(crate) fn resolve_implementation(
+        self,
+        self_ty: &RealizedTy,
+        interface: TypeHead,
+        args: &[RealizedTy],
+    ) -> Option<ResolvedInterfaceImpl<'vm>> {
+        if let Some((rule, bindings)) = self.resolve_implements_rule(self_ty, interface, args) {
+            return Some(ResolvedInterfaceImpl::Explicit { rule, bindings });
+        }
+        let kind = self.structural_default(interface, args)?;
+        Some(ResolvedInterfaceImpl::Structural {
+            kind,
+            interface,
+            self_ty: self_ty.clone(),
+        })
+    }
+
+    fn structural_default(
+        self,
+        interface: TypeHead,
+        args: &[RealizedTy],
+    ) -> Option<StructuralInterface> {
+        if !args.is_empty() {
+            return None;
+        }
+        let bex_vm_types::Object::Interface(declaration) = self.vm.get_object(interface.ptr())
+        else {
+            return None;
+        };
+        declaration
+            .structural_default
+            .as_ref()
+            .map(|default| default.kind)
+    }
+
+    pub(crate) fn implementation_method(
+        self,
+        implementation: &ResolvedInterfaceImpl<'_>,
+        method: &str,
+    ) -> Result<(bex_vm_types::HeapPtr, Vec<RealizedTy>), VmInternalError> {
+        match implementation {
+            ResolvedInterfaceImpl::Explicit { rule, bindings } => {
+                let resolved = self.rule_method_impl(rule, method)?;
+                Ok((
+                    resolved.method.fqn,
+                    self.realize_frame(&resolved.method.frame, bindings)?,
+                ))
+            }
+            ResolvedInterfaceImpl::Structural {
+                kind,
+                interface,
+                self_ty,
+            } => {
+                debug_assert_eq!(self.structural_default(*interface, &[]), Some(*kind));
+                if method == kind.primary_method() {
+                    let bex_vm_types::Object::Interface(declaration) =
+                        self.vm.get_object(interface.ptr())
+                    else {
+                        unreachable!()
+                    };
+                    let default = declaration
+                        .structural_default
+                        .as_ref()
+                        .expect("selected structural default");
+                    if default.function_ptr.is_null() {
+                        return Err(VmInternalError::UnboundInterfaceDefault {
+                            interface: declaration.name.render_dotted(false),
+                            method: method.to_string(),
+                        });
+                    }
+                    let frame = if kind.native_type_arg_count() == 0 {
+                        Vec::new()
+                    } else {
+                        vec![self_ty.clone()]
+                    };
+                    return Ok((default.function_ptr, frame));
+                }
+                let default_fn = self.interface_default(interface.ptr(), method)?;
+                Ok((default_fn, vec![self_ty.clone()]))
+            }
+        }
+    }
+
     /// Resolve `(Self, Iface<Args>)` to the single applicable `implements` rule, plus
     /// the impl's bound type args — its generics realized by matching `concrete_ty`
     /// against the rule's `for` pattern. That rule is the canonical handle: read the
@@ -376,14 +483,33 @@ impl<'vm> ImplResolver<'vm> {
         rule: &'r RuntimeImplRule,
         method: &str,
     ) -> Result<RuleMethodImpl<'r>, VmInternalError> {
-        use bex_vm_types::types::{MethodImpl, ObjectType};
+        use bex_vm_types::types::MethodImpl;
         if let Some(provided) = rule.methods.get(method) {
             return Ok(RuleMethodImpl {
                 method: Cow::Borrowed(provided),
                 is_default: false,
             });
         }
-        let head_object = self.vm.get_object(rule.interface_head);
+        let default_fn = self.interface_default(rule.interface_head, method)?;
+        let mut frame = Vec::with_capacity(1 + rule.interface_args.len());
+        frame.push(rule.for_ty_pattern.clone());
+        frame.extend(rule.interface_args.iter().cloned());
+        Ok(RuleMethodImpl {
+            method: Cow::Owned(MethodImpl {
+                fqn: default_fn,
+                frame,
+            }),
+            is_default: true,
+        })
+    }
+
+    fn interface_default(
+        self,
+        interface: bex_vm_types::HeapPtr,
+        method: &str,
+    ) -> Result<bex_vm_types::HeapPtr, VmInternalError> {
+        use bex_vm_types::types::ObjectType;
+        let head_object = self.vm.get_object(interface);
         let bex_vm_types::Object::Interface(iface) = head_object else {
             return Err(VmInternalError::ImplRuleHeadNotInterface {
                 found: ObjectType::of(head_object),
@@ -415,16 +541,7 @@ impl<'vm> ImplResolver<'vm> {
                 },
             });
         }
-        let mut frame = Vec::with_capacity(1 + rule.interface_args.len());
-        frame.push(rule.for_ty_pattern.clone());
-        frame.extend(rule.interface_args.iter().cloned());
-        Ok(RuleMethodImpl {
-            method: Cow::Owned(MethodImpl {
-                fqn: default_fn,
-                frame,
-            }),
-            is_default: true,
-        })
+        Ok(default_fn)
     }
 
     /// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De
@@ -518,17 +635,20 @@ impl<'vm> ImplResolver<'vm> {
         // `rules_for` borrows `self.vm` immutably while `stack` is borrowed
         // mutably inside the predicate, so the candidates are collected first.
         let candidates = self.rules_for(iface);
-        let proven = candidates.into_iter().any(|rule| {
-            self.rule_applies(&rule, concrete_ty, requested_args, stack)
-                .is_some_and(|bindings| {
-                    self.interface_request_matches(
-                        &rule,
-                        &bindings,
-                        requested_args,
-                        requested_assoc,
-                    )
-                })
+        let selected = candidates.into_iter().find_map(|rule| {
+            let bindings = self.rule_applies(&rule, concrete_ty, requested_args, stack)?;
+            self.interface_request_matches(&rule, &bindings, requested_args, &[])
+                .then_some((rule, bindings))
         });
+        let proven = match selected {
+            Some((rule, bindings)) => {
+                self.interface_request_matches(&rule, &bindings, requested_args, requested_assoc)
+            }
+            None => {
+                requested_assoc.is_empty()
+                    && self.structural_default(iface, requested_args).is_some()
+            }
+        };
         // SAFETY: this call pushed its goal, and recursive calls remove only theirs.
         #[allow(unsafe_code)]
         unsafe {
@@ -930,5 +1050,63 @@ mod tests {
         let mut binds: Vec<Option<RealizedTy>> = Vec::new();
         assert!(resolver.match_template(&pattern, &one, &mut binds));
         assert!(!resolver.match_template(&pattern, &RealizedTy::int(), &mut binds));
+    }
+
+    #[test]
+    fn explicit_rules_override_implicit_defaults_without_overlapping() {
+        use bex_heap::TlabHolder;
+        use bex_vm_types::{HeapPtr, Object, types::InterfaceDef};
+
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        let interface = vm.alloc(Object::Interface(Box::new(InterfaceDef {
+            name: baml_type::QualifiedTypeName::local(Name::new("Defaulted")),
+            structural_default: Some(bex_vm_types::types::StructuralDefault {
+                kind: baml_type::StructuralInterface::ToString,
+                function: bex_vm_types::ObjectIndex::from_raw(0),
+                function_ptr: HeapPtr::null(),
+            }),
+            type_tag,
+            args: Vec::new(),
+            requires: Vec::new(),
+            assoc: Vec::new(),
+            fields: Vec::new(),
+            methods: Vec::new(),
+            owner: HeapPtr::null(),
+        })));
+        let head = TypeHead::new(interface, type_tag);
+        let explicit = RuntimeImplRule {
+            interface_head: interface,
+            for_ty_pattern: TyTemplate::Int,
+            generic_param_bounds: Vec::new(),
+            interface_args: Vec::new(),
+            interface_assoc: Vec::new(),
+            methods: indexmap::IndexMap::new(),
+            field_links: Box::default(),
+        };
+        {
+            let rules = [explicit.clone()];
+            let resolver = ImplResolver::new(&vm).with_staged_rules(&rules);
+            let selected = resolver
+                .resolve_implementation(&RealizedTy::Int, head, &[])
+                .expect("explicit rule applies");
+            assert!(matches!(selected, ResolvedInterfaceImpl::Explicit { .. }));
+            assert!(
+                resolver
+                    .check_sole_implementation(&RealizedTy::Int, interface, &[])
+                    .is_ok()
+            );
+            let selected = resolver
+                .resolve_implementation(&RealizedTy::String, head, &[])
+                .expect("default applies to other types");
+            assert!(matches!(selected, ResolvedInterfaceImpl::Structural { .. }));
+        }
+        let overlapping = [explicit.clone(), explicit];
+        assert!(
+            ImplResolver::new(&vm)
+                .with_staged_rules(&overlapping)
+                .check_sole_implementation(&RealizedTy::Int, interface, &[])
+                .is_err()
+        );
     }
 }

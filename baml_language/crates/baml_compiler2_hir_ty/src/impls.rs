@@ -1016,14 +1016,22 @@ pub fn impl_views_for_type(
     let Some(interned) = try_interned_ty(concrete) else {
         return Vec::new();
     };
-    impls_for_type(db, viewer, concrete)
+    let mut views: Vec<_> = impls_for_type(db, viewer, concrete)
         .into_iter()
         .map(|resolved| {
             let view = resolved.implemented_view(db, &interned);
             baml_type::Interface::try_from(&view)
                 .unwrap_or_else(|_| unreachable!("realized view of a closed receiver is closed"))
         })
-        .collect()
+        .collect();
+    for interface in structural_interface_roots(db) {
+        let view =
+            baml_type::Interface::try_from(&interface).expect("structural interface is closed");
+        if !views.contains(&view) {
+            views.push(view);
+        }
+    }
+    views
 }
 
 /// The `requires`-closure traversal budget every consumer shares - one
@@ -1085,7 +1093,8 @@ pub fn impls_for_type<'db>(
             baml_type::Ty::from_primitive(baml_type::PrimitiveType::from_literal(literal));
         return impls_for_type(db, viewer, &widened);
     }
-    impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
+    let key = ImplTypeKey::new(db, viewer, concrete.clone());
+    let implementations: Vec<_> = impls_for_type_cached(db, key)
         .iter()
         .map(|cached| ResolvedImpl {
             facts: matched_impl_facts(db, cached.block),
@@ -1103,7 +1112,8 @@ pub fn impls_for_type<'db>(
             // arguments and never touches the name.
             provides_concrete_members(lang_roots(db), &resolved.facts.interface().name)
         })
-        .collect()
+        .collect();
+    implementations
 }
 
 /// Whether an implemented interface contributes members to an unqualified
@@ -1358,21 +1368,101 @@ pub(crate) fn all_impl_facts(
     out
 }
 
-/// Whether realized `concrete` implements realized `interface`. The
-/// public fact: searches the root packages derivable from every
-/// qualified name on both sides (a single guessed root misses
-/// orphan-legal placements like `implement dep.I for LocalEnum`).
-/// Unrealized inputs answer `false` - the conservative direction; the
-/// symbolic resolvers join with I4.
+const STRUCTURAL_INTERFACES: &[(&[&str], &str, baml_type::StructuralInterface)] = &[
+    (&[], "ToString", baml_type::StructuralInterface::ToString),
+    (&[], "ToJson", baml_type::StructuralInterface::ToJson),
+    (&[], "FromJson", baml_type::StructuralInterface::FromJson),
+    (&["ops"], "Equals", baml_type::StructuralInterface::Equals),
+];
+
+/// Recognize trusted language declarations, never user interfaces with the same spelling.
+pub fn structural_interface(
+    db: &dyn baml_compiler2_hir::Db,
+    name: &DeclName,
+) -> Option<baml_type::StructuralInterface> {
+    if !lang_roots(db).is(baml_base::LangPackage::Baml, name.root()) {
+        return None;
+    }
+    STRUCTURAL_INTERFACES
+        .iter()
+        .find_map(|(namespace, item, kind)| {
+            (name
+                .namespace()
+                .iter()
+                .map(Name::as_str)
+                .eq(namespace.iter().copied())
+                && name.name().as_str() == *item)
+                .then_some(*kind)
+        })
+}
+
+pub(crate) fn structural_interface_roots(db: &dyn baml_compiler2_hir::Db) -> Vec<InferInterface> {
+    let Some(root) = lang_roots(db).get(baml_base::LangPackage::Baml) else {
+        return Vec::new();
+    };
+    STRUCTURAL_INTERFACES
+        .iter()
+        .map(|(namespace, item, _)| {
+            InferInterface::new(
+                DeclName::in_root(
+                    root,
+                    namespace.iter().map(Name::new).collect(),
+                    Name::new(item),
+                ),
+                Box::new([]),
+                Box::new([]),
+            )
+        })
+        .collect()
+}
+
+pub(crate) fn is_structural_interface(
+    db: &dyn baml_compiler2_hir::Db,
+    interface: &InferInterface,
+) -> bool {
+    interface.generics.is_empty()
+        && interface.associated_types.is_empty()
+        && structural_interface(db, &interface.name).is_some()
+}
+
+/// Whether `concrete` implements `interface`. Searches the root packages
+/// derivable from qualified names on both sides, including orphan-legal
+/// placements like `implement dep.I for LocalEnum`.
 pub fn implements_interface(
     db: &dyn baml_compiler2_hir::Db,
     concrete: &Ty,
     interface: &InferInterface,
 ) -> bool {
-    resolve_impl(db, concrete, interface).is_some()
+    resolve_implementation(db, concrete, interface).is_some()
 }
 
-/// The unique impl by which realized `concrete` implements realized
+/// An implementation witness without inventing a source block for builtin behavior.
+pub enum ResolvedImplementation<'db> {
+    Explicit(ResolvedImpl<'db>),
+    StructuralDefault(baml_type::StructuralInterface),
+}
+
+/// Select explicit implementations before the language-provided structural default.
+/// A symbolic witness proves membership, not that runtime overrides can be bypassed.
+pub fn resolve_implementation<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    concrete: &Ty,
+    interface: &InferInterface,
+) -> Option<ResolvedImplementation<'db>> {
+    if let Some(implementation) = resolve_impl(db, concrete, interface) {
+        return Some(ResolvedImplementation::Explicit(implementation));
+    }
+    if concrete.has_infer()
+        || concrete.has_error()
+        || !interface.generics.is_empty()
+        || !interface.associated_types.is_empty()
+    {
+        return None;
+    }
+    structural_interface(db, &interface.name).map(ResolvedImplementation::StructuralDefault)
+}
+
+/// The unique explicit impl by which realized `concrete` implements realized
 /// `interface`, with bindings.
 pub fn resolve_impl<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
@@ -2009,8 +2099,9 @@ fn bounds_hold(
             if !is_realized(actual) || !bound.generics.iter().all(is_realized) {
                 continue;
             }
-            if depth == 0
-                || resolve_within_depth(db, actual, &bound, depth - 1, in_progress).is_none()
+            if !is_structural_interface(db, &bound)
+                && (depth == 0
+                    || resolve_within_depth(db, actual, &bound, depth - 1, in_progress).is_none())
             {
                 return false;
             }
