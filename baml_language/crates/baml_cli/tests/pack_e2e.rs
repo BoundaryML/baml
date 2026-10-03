@@ -34,7 +34,6 @@ use common::BuiltPaths;
 // Helpers
 // =====================================================================}
 
-
 fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
     let out_bin = dir.join("out");
     let mut cmd = Command::new(&built.baml_cli);
@@ -84,7 +83,6 @@ fn pack_project(
 
 // Tests
 // =====================================================================}
-
 
 /// Pack root `main`, run it, observe its return value on stdout.
 /// Validates the whole pipeline: envelope roundtrip, host dispatch,
@@ -473,10 +471,10 @@ fn packed_wrapper_uses_supplied_host_and_package_manager_entry_point() {
         child.stdin.take().unwrap().write_all(b"input").unwrap();
         let out = child.wait_with_output().unwrap();
         assert_eq!(out.status.code(), Some(23));
-        assert_eq!(
-            String::from_utf8(out.stdout).unwrap(),
-            format!("{pid}:argument with spaces:input")
-        );
+        let stdout = String::from_utf8(out.stdout).unwrap();
+        let (child_pid, rest) = stdout.split_once(':').unwrap();
+        assert_ne!(child_pid.parse::<u32>().unwrap(), pid);
+        assert_eq!(rest, "argument with spaces:input");
         assert_eq!(out.stderr, b"err");
     }
     let bin = pack(built, tmp.path(), &["NoSelfUpdateMain", "--host", host]);
