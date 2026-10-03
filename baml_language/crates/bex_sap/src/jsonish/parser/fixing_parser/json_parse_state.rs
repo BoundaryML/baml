@@ -338,6 +338,21 @@ impl<'s> JsonParseState<'s> {
                                         }
                                     }
                                     _ => {
+                                        // A numeric value followed by ",<digit>" is
+                                        // likely a thousands/decimal separator
+                                        // (e.g. -2,000.00): keep gluing.
+                                        let comma_in_number =
+                                            is_numeric && next_c.is_ascii_digit();
+                                        if is_possible_value && !comma_in_number {
+                                            // Compact separators: a value that already
+                                            // parses as a number/bool/null or a single
+                                            // identifier is finished; the ',' introduces
+                                            // the next key.
+                                            return CloseStringResult::Close(
+                                                idx,
+                                                CompletionState::Complete,
+                                            );
+                                        }
                                         let _ = self.consume(c);
                                     }
                                 }
