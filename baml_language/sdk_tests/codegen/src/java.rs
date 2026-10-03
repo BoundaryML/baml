@@ -8,7 +8,7 @@
 //!
 //! `sdkgen_java::to_source_code_with_bytecode` runs directly: the emitter has
 //! landed, so a panic is a real bug and should abort loudly. Which fixtures'
-//! `javac` / `junit` gates actually run — as opposed to staying `#[ignore]`d
+//! compile-and-JUnit gates actually run — as opposed to staying `#[ignore]`d
 //! while the generated API fills in — is declared in
 //! `crates/java/src/lib.rs`, next to the tests themselves.
 //!

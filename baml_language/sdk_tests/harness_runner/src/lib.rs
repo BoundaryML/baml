@@ -741,22 +741,20 @@ macro_rules! __java_gate {
 
 /// Java generator's test-side glue. Invoked from `crates/java/src/lib.rs`.
 pub mod java {
-    /// Declare the Java suite: a `javac` and a `junit` gate per fixture, plus
-    /// the shared setup guard and fixture-manifest oracle.
+    /// Declare one compile-and-test gate per Java fixture, plus the shared
+    /// setup guard and fixture-manifest oracle. Gradle's `test` task compiles
+    /// both the generated SDK and test sources before running JUnit.
     ///
     /// Each gate is marked `on` or `later`. `later` emits the test `#[ignore]`d
-    /// — the generated API is not complete enough for that fixture yet, and
-    /// un-ignoring is the signal that its parity tests are expected to pass.
-    /// A green `junit` requires a green `javac`: the `test` task compiles the
-    /// test sources first.
+    /// until the generated API supports that fixture.
     ///
     /// ```text
-    /// fixture type_shapes      { javac: on,    junit: on    }
-    /// fixture unsupported_only { javac: later, junit: later }
+    /// fixture type_shapes      { junit: on    }
+    /// fixture unsupported_only { junit: later }
     /// ```
     #[macro_export]
     macro_rules! java_test_suite {
-        ( $( fixture $name:ident { javac: $javac:ident, junit: $junit:ident } )+ ) => {
+        ( $( fixture $name:ident { junit: $junit:ident } )+ ) => {
             $crate::setup_guard!("SDK_TEST_JAVA_SETUP");
             $crate::fixture_manifest!( $( $name ),+ );
 
@@ -774,17 +772,14 @@ pub mod java {
                         );
                     }
 
-                    $crate::__java_gate!($javac, javac, {
-                        cmd("gradle --no-daemon --console=plain compileTestJava");
-                    });
-
                     $crate::__java_gate!($junit, junit, {
-                        // A fixture whose overlay has no `.java` sources has
-                        // nothing for `gradle test` to compile or run.
+                        // Fixtures without test sources still check that the
+                        // generated SDK compiles.
                         if !$crate::has_file_with_suffix(
                             &$crate::fixture_path(stringify!($name), "customizable"),
                             ".java",
                         ) {
+                            cmd("gradle --no-daemon --console=plain compileTestJava");
                             return;
                         }
                         $crate::run_java_test_cmd(
@@ -881,8 +876,9 @@ pub mod swift {
 
 /// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs`.
 pub mod cpp {
-    /// Declare the C++ suite: two toolchain checks per fixture, plus the
-    /// shared setup guard and fixture-manifest oracle.
+    /// Declare one compile-and-run check per C++ fixture, plus the shared
+    /// setup guard and fixture-manifest oracle. Run mode also compiles SDKs
+    /// for fixtures that have no executable tests yet.
     ///
     /// The fixture list is source rather than build-script output because
     /// `sdk_test_codegen` runs from `setup.sh`, which nextest fires *after*
@@ -912,14 +908,8 @@ pub mod cpp {
                         );
                     }
 
-                    #[test]
-                    fn compile() {
-                        cmd("bash test.sh compile");
-                    }
-
-                    /// Recompiles rather than reusing `compile`'s output:
-                    /// nextest runs each test in its own process, so the two
-                    /// cannot share state or assume an order.
+                    /// Compile and execute in one process so nextest does
+                    /// not build the same SDK and protobuf stack twice.
                     #[test]
                     fn run() {
                         cmd("bash test.sh run");
