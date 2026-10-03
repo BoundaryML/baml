@@ -81,7 +81,6 @@ tokio-tungstenite = { workspace = true, optional = true, features = [
   "connect",
   "rustls-tls-native-roots",
 ] }
-toml_edit = { workspace = true }
 tracing = { workspace = true }
 walkdir = { workspace = true }
 zip = { workspace = true }

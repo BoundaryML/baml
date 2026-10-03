@@ -361,8 +361,7 @@ namespace baml.time:
 namespace baml.toml:
   type Item
   class ParseError { methods: [] }
-  class Table { methods: [parse] }
-  function edit_strings
+  class Table { methods: [new, get, set, remove, table, rename, _to_string_impl, parse] }
   function item_from_json
   function item_to_json
   function table_from_json
