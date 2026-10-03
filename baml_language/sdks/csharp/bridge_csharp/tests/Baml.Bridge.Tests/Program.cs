@@ -1258,7 +1258,7 @@ internal static unsafe class Program
             (nameof(BamlApiV1.AbiVersion), 0),
             (nameof(BamlApiV1.StructSize), 8),
             (nameof(BamlApiV1.Version), 16),
-            (nameof(BamlApiV1.InitializeRuntimeFromBlob), 24),
+            (nameof(BamlApiV1.StageRuntimeFromBlob), 24),
             (nameof(BamlApiV1.FreeBuffer), 32),
             (nameof(BamlApiV1.RegisterCallback), 40),
             (nameof(BamlApiV1.CallFunction), 48),
@@ -1279,7 +1279,7 @@ internal static unsafe class Program
             (nameof(BamlApiV1.RegisterBridge), 168),
             (nameof(BamlApiV1.RegisterUnhandledSpawnErrorCallback), 176),
             (nameof(BamlApiV1.ShutdownRuntime), 184),
-            (nameof(BamlApiV1.InitializeRuntimeFromBlobWithMetadata), 192),
+            (nameof(BamlApiV1.StageRuntimeFromBlobWithMetadata), 192),
             (nameof(BamlApiV1.InvocationProtocolVersion), 200),
             (nameof(BamlApiV1.InvocationClockNs), 208),
             (nameof(BamlApiV1.ReleaseFunctionCall), 216),
@@ -2735,7 +2735,7 @@ internal static unsafe class Program
         AbiVersion = 3,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
-        InitializeRuntimeFromBlob = &Initialize,
+        StageRuntimeFromBlob = &Initialize,
         FreeBuffer = &FreeBuffer,
         RegisterCallback = &RegisterResult,
         CallFunction = &Call,
@@ -2756,7 +2756,7 @@ internal static unsafe class Program
         RegisterBridge = &RegisterBridge,
         RegisterUnhandledSpawnErrorCallback = &RegisterUnhandledSpawnError,
         ShutdownRuntime = &Shutdown,
-        InitializeRuntimeFromBlobWithMetadata = &InitializeWithMetadata,
+        StageRuntimeFromBlobWithMetadata = &InitializeWithMetadata,
         InvocationProtocolVersion = &ProtocolVersion,
         InvocationClockNs = &InvocationClock,
         ReleaseFunctionCall = &ReleaseCall,
@@ -2783,7 +2783,7 @@ internal static unsafe class Program
         switch (field)
         {
             case 0: table.Version = null; break;
-            case 1: table.InitializeRuntimeFromBlob = null; break;
+            case 1: table.StageRuntimeFromBlob = null; break;
             case 2: table.FreeBuffer = null; break;
             case 3: table.RegisterCallback = null; break;
             case 4: table.CallFunction = null; break;
@@ -2804,7 +2804,7 @@ internal static unsafe class Program
             case 19: table.RegisterBridge = null; break;
             case 20: table.RegisterUnhandledSpawnErrorCallback = null; break;
             case 21: table.ShutdownRuntime = null; break;
-            case 22: table.InitializeRuntimeFromBlobWithMetadata = null; break;
+            case 22: table.StageRuntimeFromBlobWithMetadata = null; break;
             case 23: table.InvocationProtocolVersion = null; break;
             case 24: table.InvocationClockNs = null; break;
             case 25: table.ReleaseFunctionCall = null; break;

@@ -59,18 +59,19 @@ type pendingCall struct {
 	result chan []byte
 }
 
-// Initialize replaces the process-wide BAML runtime with the supplied
-// serialized program. Generated projects normally call this through their
-// internal bootstrap package exactly once.
-func Initialize(bytecode []byte) error {
-	return InitializeWithMetadata(bytecode, "")
+// Stage replaces the process-wide BAML runtime with the supplied serialized
+// program. The program is validated, and the engine built, on the first BAML
+// call. Generated projects normally call this through their internal
+// bootstrap package exactly once.
+func Stage(bytecode []byte) error {
+	return StageWithMetadata(bytecode, "")
 }
 
-func InitializeWithMetadata(bytecode []byte, embeddedBamlToml string) error {
+func StageWithMetadata(bytecode []byte, embeddedBamlToml string) error {
 	if err := ensureNativeRuntime(context.Background()); err != nil {
 		return err
 	}
-	return nativeInitialize(bytecode, embeddedBamlToml)
+	return nativeStage(bytecode, embeddedBamlToml)
 }
 
 func ensureNativeRuntime(ctx context.Context) error {

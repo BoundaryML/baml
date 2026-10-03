@@ -16,7 +16,7 @@ func nativeRuntimeTarget() (string, error) {
 	return "", unsupportedNativeOperation()
 }
 
-func nativeInitialize([]byte, string) error       { return unsupportedNativeOperation() }
+func nativeStage([]byte, string) error       { return unsupportedNativeOperation() }
 func nativeRegisterCallback()                     {}
 func nativeRegisterUnhandledSpawnErrorCallback()  {}
 func nativeShutdown() error                       { return unsupportedNativeOperation() }

@@ -85,15 +85,16 @@ public final class BamlRuntime: @unchecked Sendable {
         BamlBridgeIdentity.bridgeRuntimeVersion
     }
 
-    /// Load compiled BAML bytecode into the (process-global) native
-    /// runtime, register this bridge's identity, and register the
-    /// completion callback. Idempotent; generated SDK roots call this
-    /// from their `_initialized` once.
+    /// Stage compiled BAML bytecode as the (process-global) native runtime,
+    /// register this bridge's identity, and register the completion
+    /// callback. The bytecode is validated, and the engine built, on the
+    /// first BAML call. Idempotent; generated SDK roots call this from
+    /// their `_initialized` once.
     ///
     /// `sdkVersion` remains as a compatibility argument for older generated
     /// SDKs. Registration uses the bridge's stamped toolchain and package
     /// identities, while new generated SDKs provide `embeddedBamlToml`.
-    public func initialize(
+    public func stage(
         bytecode: Data,
         sdkVersion: String? = nil,
         embeddedBamlToml: String? = nil
@@ -133,14 +134,14 @@ public final class BamlRuntime: @unchecked Sendable {
         let errorBuffer = bytecode.withUnsafeBytes { buf -> BamlBuffer in
             if let embeddedBamlToml {
                 return embeddedBamlToml.withCString { manifest in
-                    BamlApi.initializeRuntimeFromBlobWithMetadata(
+                    BamlApi.stageRuntimeFromBlobWithMetadata(
                         buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
                         buf.count,
                         manifest
                     )
                 }
             }
-            return BamlApi.initializeRuntimeFromBlob(
+            return BamlApi.stageRuntimeFromBlob(
                 buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count)
         }
         let initError = String(decoding: BamlApi.takeBuffer(errorBuffer), as: UTF8.self)

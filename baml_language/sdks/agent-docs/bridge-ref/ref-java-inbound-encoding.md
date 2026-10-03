@@ -514,7 +514,7 @@ guarded by a per-instance atomic latch, and skips the `HOST_VALUE_*` keyspaces
 
 Java's analog of Python's process-global typemap is the static `TypeRegistry`,
 populated by the generated `baml_sdk.Baml` anchor's static initializer (before
-`initFromBytecode`), one call per user class/enum/union
+`stageFromBytecode`), one call per user class/enum/union
 (`TypeRegistry.java:14-51`):
 
 ```java

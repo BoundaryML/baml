@@ -5106,7 +5106,7 @@ fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String
     out.push_str("package bootstrap\n\n");
     out.push_str("import (\n\t\"sync\"\n\n");
     let _ = writeln!(out, "\t\"{BAML_GO_MODULE}\"\n)\n");
-    out.push_str("var (\n\tonce          sync.Once\n\tinitializeErr error\n)\n\n");
+    out.push_str("var (\n\tonce     sync.Once\n\tstageErr error\n)\n\n");
     // One line of encoded bytecode, passed to the runtime as bytes; the
     // bridge decodes it natively.
     let _ = writeln!(
@@ -5119,13 +5119,11 @@ fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String
     }
     out.push_str("func Ensure() error {\n");
     if embedded_baml_toml.is_some() {
-        out.push_str("\tonce.Do(func() { initializeErr = baml_go.InitializeWithMetadata([]byte(bytecode), embeddedBamlToml) })\n");
+        out.push_str("\tonce.Do(func() { stageErr = baml_go.StageWithMetadata([]byte(bytecode), embeddedBamlToml) })\n");
     } else {
-        out.push_str(
-            "\tonce.Do(func() { initializeErr = baml_go.Initialize([]byte(bytecode)) })\n",
-        );
+        out.push_str("\tonce.Do(func() { stageErr = baml_go.Stage([]byte(bytecode)) })\n");
     }
-    out.push_str("\treturn initializeErr\n}\n");
+    out.push_str("\treturn stageErr\n}\n");
     out
 }
 

@@ -6,7 +6,7 @@
 //! that same envelope via `bridge_cffi::error_to_outbound`.
 //!
 //! What's left here is only the *handle-returning* pre-call sites
-//! (`get_or_init_runtime` / `initialize_runtime`), which can't hand back envelope
+//! (`get_or_init_runtime` / `stage_runtime`), which can't hand back envelope
 //! bytes — they `raise`. By the 32c decision these SDK-internal *setup*
 //! failures (e.g. runtime not initialized) are panic-shaped, so they surface
 //! as a `baml.panics.SdkPanic` wrapped in `BamlPanic`, built by the pure-Python

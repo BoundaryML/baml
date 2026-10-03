@@ -81,7 +81,7 @@ __version__ = "0.20.1"
 
 def get_or_init_runtime() -> BamlRuntime:
     """Return the process-global `BamlRuntime` singleton, or raise
-    `BamlError` if `BamlRuntime.initialize_runtime(...)` has not run yet."""
+    `BamlError` if `BamlRuntime.stage_runtime(...)` has not run yet."""
     return _rust_get_or_init_runtime()
 
 
@@ -134,7 +134,7 @@ async def call_function(rt, function_name, kwargs, *, _baml=None):
 # Every factory captures `param_names` by closure; no runtime lookup on
 # the call path (09b2 §2). The runtime is fetched lazily via
 # `get_or_init_runtime()`, so constructing a factory has no sequencing constraint
-# relative to `BamlRuntime.initialize_runtime(...)`.
+# relative to `BamlRuntime.stage_runtime(...)`.
 # ---------------------------------------------------------------------------
 
 Mode = Literal["sync", "async"]
