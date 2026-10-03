@@ -40,9 +40,9 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-musl
             static: true
-          - os: macos-14
+          - os: macos-15
             target: x86_64-apple-darwin
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
             # If you change the windows version, change the rest of the script to match
           - os: windows-2022
