@@ -1,3 +1,4 @@
+#![warn(clippy::disallowed_methods)]
 // This crate provides the BAML CLI: project build/check/test commands and
 // standalone execution via `baml run`.
 #![allow(

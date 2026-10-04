@@ -591,6 +591,7 @@ name = "baml"
 version = "0.2.5"
 dependencies = [
  "anyhow",
+ "baml_env",
  "baml_release",
  "console",
  "reqwest",
@@ -1050,6 +1051,7 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_visualization",
  "baml_db",
+ "baml_env",
  "baml_ide",
  "baml_lsp",
  "baml_query_btel",
@@ -1342,6 +1344,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "baml_db",
+ "baml_env",
  "baml_test_support",
  "baml_type",
  "baml_type_runtime",
@@ -2003,6 +2006,9 @@ dependencies = [
 [[package]]
 name = "btel_settings"
 version = "0.0.0-beta"
+dependencies = [
+ "baml_env",
+]
 
 [[package]]
 name = "btel_snapshot"
@@ -7424,6 +7430,7 @@ dependencies = [
 name = "sys_native"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_type",
  "bex_external_types",
  "bex_heap",

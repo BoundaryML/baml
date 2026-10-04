@@ -83,7 +83,7 @@ fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
             Err(_) => return Ok(SkillStatus::Missing),
         },
     };
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = baml_env::os_var("HOME").map(PathBuf::from);
 
     loop {
         let statuses = [".agents/skills", ".claude/skills"]

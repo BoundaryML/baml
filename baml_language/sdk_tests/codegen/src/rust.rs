@@ -27,6 +27,7 @@
 //! `CARGO_TARGET_DIR` (the same `run_test_cmd` plumbing python uses for
 //! `UV_CACHE_DIR`), so that stack compiles once, not per fixture.
 //! `crates/rust/setup.sh` pre-warms it serially before nextest fans out.
+#![allow(clippy::disallowed_methods)]
 
 use std::{env, fs, path::Path};
 

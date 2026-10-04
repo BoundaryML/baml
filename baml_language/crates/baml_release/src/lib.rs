@@ -1,3 +1,4 @@
+#![warn(clippy::disallowed_methods)]
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod manifest;

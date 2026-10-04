@@ -1,5 +1,6 @@
 //! Build script that generates tests from the projects/ directory.
 //! Each folder becomes a test module with comprehensive compiler phase tests.
+#![allow(clippy::disallowed_methods)]
 
 use std::{
     env, fs,

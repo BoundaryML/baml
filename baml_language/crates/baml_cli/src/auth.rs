@@ -52,8 +52,7 @@ pub(crate) fn http_client() -> reqwest::blocking::Client {
 }
 
 fn env_or(var: &str, default: &str) -> String {
-    std::env::var(var)
-        .ok()
+    baml_env::raw_var(var)
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| default.to_string())
 }
@@ -70,8 +69,7 @@ fn api_domain() -> String {
 /// Errors:
 /// - When neither source provides a non-blank value.
 fn client_id() -> Result<String> {
-    std::env::var("BAML_AUTH_CLIENT_ID")
-        .ok()
+    baml_env::raw_var("BAML_AUTH_CLIENT_ID")
         .filter(|v| !v.trim().is_empty())
         .or_else(|| {
             BUILD_CLIENT_ID

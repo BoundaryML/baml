@@ -68,6 +68,7 @@
 //!   padding requires contention measurements; hash changes require workload data.
 //! - [`identity::ID_RANGE_SIZE`] amortizes rare global refills. A larger range
 //!   cannot remove per-allocation TLS access; tune only if refills are material.
+#![warn(clippy::disallowed_methods)]
 pub mod clock;
 pub mod encoding;
 pub mod identity;

@@ -5,3 +5,9 @@ disallowed-types = [
     { path = "std::time::SystemTime", reason = "use web_time::SystemTime for WASM compatibility", replacement = "web_time::SystemTime" },
     { path = "std::time::Instant", reason = "use web_time::Instant for WASM compatibility", replacement = "web_time::Instant" },
 ]
+disallowed-methods = [
+    { path = "std::env::var", reason = "read the environment through baml_env" },
+    { path = "std::env::var_os", reason = "read the environment through baml_env" },
+    { path = "std::env::vars", reason = "read the environment through baml_env" },
+    { path = "std::env::vars_os", reason = "read the environment through baml_env" },
+]

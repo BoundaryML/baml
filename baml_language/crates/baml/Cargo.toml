@@ -26,6 +26,7 @@ self-update = [ "baml_release/self-update" ]
 no-self-update = [ "baml_release/no-self-update" ]
 
 [dependencies]
+baml_env = { workspace = true }
 baml_release = { workspace = true }
 anyhow = { workspace = true }
 console = { workspace = true }

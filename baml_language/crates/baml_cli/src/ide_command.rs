@@ -217,7 +217,7 @@ fn active_toolchain_vsix() -> Result<PathBuf> {
 }
 
 fn command_on_path(command: &str) -> Option<OsString> {
-    let path = env::var_os("PATH")?;
+    let path = baml_env::os_var("PATH")?;
     for dir in env::split_paths(&path) {
         #[cfg(windows)]
         {

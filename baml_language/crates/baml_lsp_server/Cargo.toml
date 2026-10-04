@@ -35,6 +35,7 @@ native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]
 baml_builtins2 = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_db = { workspace = true }
+baml_env = { workspace = true }
 baml_ide = { workspace = true }
 baml_lsp = { workspace = true }
 baml_query_btel = { workspace = true }

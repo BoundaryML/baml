@@ -16,6 +16,8 @@
 //! failure path in [`BytecodeCache::load`] returns `None` (recompile) and
 //! [`BytecodeCache::store`] is best-effort.
 
+#![warn(clippy::disallowed_methods)]
+
 use std::{
     fs,
     io::{self, Read, Write},

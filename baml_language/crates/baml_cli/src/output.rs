@@ -330,11 +330,11 @@ fn auto_color(term: &console::Term) -> bool {
 }
 
 fn env_equals(var: &str, expected: &str) -> bool {
-    std::env::var(var).is_ok_and(|value| value == expected)
+    baml_env::raw_var(var).is_some_and(|value| value == expected)
 }
 
 fn env_truthy(var: &str) -> bool {
-    std::env::var(var).is_ok_and(|value| !value.is_empty() && value != "0")
+    baml_env::raw_var(var).is_some_and(|value| !value.is_empty() && value != "0")
 }
 
 /// Environment variables that identify a known coding-agent process.

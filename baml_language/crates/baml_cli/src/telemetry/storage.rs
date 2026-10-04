@@ -446,12 +446,12 @@ fn env_disables() -> bool {
 }
 
 pub(crate) fn env_is_truthy(name: &str) -> bool {
-    match std::env::var(name) {
-        Ok(value) => {
+    match baml_env::raw_var(name) {
+        Some(value) => {
             let v = value.trim().to_ascii_lowercase();
             !v.is_empty() && !matches!(v.as_str(), "0" | "false" | "no" | "off")
         }
-        Err(_) => false,
+        None => false,
     }
 }
 
@@ -684,7 +684,7 @@ mod tests {
     impl EnvGuard {
         #[allow(unsafe_code)] // `env::set_var` is `unsafe` on 2024 edition; scoped to test guard.
         fn set(name: &'static str, value: &str) -> Self {
-            let prior = std::env::var(name).ok();
+            let prior = baml_env::raw_var(name);
             // SAFETY: callers hold `env_lock()`; no other test thread is
             // reading env vars during this guard's lifetime.
             unsafe {

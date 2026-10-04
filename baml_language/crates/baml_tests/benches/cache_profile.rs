@@ -6,6 +6,7 @@
 //! Usage:
 //!   cargo build --bench cache_profile --profile profiling
 //!   sudo ./target/profiling/cache_profile [--output path.json]
+#![allow(clippy::disallowed_methods)]
 
 #[cfg(not(target_os = "macos"))]
 fn main() {

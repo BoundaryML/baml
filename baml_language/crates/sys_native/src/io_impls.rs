@@ -81,10 +81,10 @@ impl io::IoNamespaceEnv for NativeSysOps {
         key: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        match std::env::var(&key) {
-            Ok(val) => SysOpOutput::ok(Some(val)),
-            Err(std::env::VarError::NotPresent) => SysOpOutput::ok(None),
-            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(VmBamlError::ParseError {
+        match baml_env::os_var(&key).map(std::ffi::OsString::into_string) {
+            Some(Ok(val)) => SysOpOutput::ok(Some(val)),
+            None => SysOpOutput::ok(None),
+            Some(Err(_)) => SysOpOutput::err(VmBamlError::ParseError {
                 message: format!("Environment variable '{key}' is not valid UTF-8"),
             }),
         }

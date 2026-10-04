@@ -16,3 +16,6 @@ doctest = false
 
 [lints]
 workspace = true
+
+[dependencies]
+baml_env = { workspace = true }

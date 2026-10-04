@@ -20,6 +20,7 @@
 //!
 //! The rows are source rather than generated because `sdk_test_codegen` runs
 //! from `setup.sh`, which nextest fires *after* these test binaries are built.
+#![allow(clippy::disallowed_methods)]
 
 use std::{
     env, fs,

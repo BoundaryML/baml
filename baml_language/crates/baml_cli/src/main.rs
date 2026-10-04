@@ -1,3 +1,4 @@
+#![warn(clippy::disallowed_methods)]
 // TODO: This file has been simplified to remove baml_runtime/baml_log dependencies.
 
 // TODO: baml_runtime is disabled for now

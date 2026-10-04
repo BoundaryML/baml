@@ -23,6 +23,8 @@
 //!  stdout ◀── writer thread ◀── OutboundBudget ◀── responder / ClientSender
 //! ```
 
+#![warn(clippy::disallowed_methods)]
+
 mod deadlock_watchdog;
 pub mod engine;
 pub mod lsp_ingress;

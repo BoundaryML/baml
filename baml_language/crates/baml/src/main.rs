@@ -1,3 +1,4 @@
+#![warn(clippy::disallowed_methods)]
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{
@@ -502,7 +503,7 @@ fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String
 }
 
 fn active_selector() -> Result<ResolvedSelector> {
-    if let Ok(value) = env::var("BAML_TOOLCHAIN") {
+    if let Some(value) = baml_env::raw_var("BAML_TOOLCHAIN") {
         if !value.trim().is_empty() {
             return Ok(ResolvedSelector {
                 selector: normalize_selector(value.trim(), &env::current_dir()?),
@@ -540,7 +541,7 @@ fn active_selector() -> Result<ResolvedSelector> {
 
 fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
     let mut dir = env::current_dir()?;
-    let home = env::var_os("HOME").map(PathBuf::from);
+    let home = baml_env::os_var("HOME").map(PathBuf::from);
     loop {
         let candidate = dir.join("baml.toml");
         if candidate.exists() {
@@ -570,7 +571,7 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
 
 fn find_project_manifest(start: &Path) -> Option<PathBuf> {
     let mut dir = start.to_path_buf();
-    let home = env::var_os("HOME").map(PathBuf::from);
+    let home = baml_env::os_var("HOME").map(PathBuf::from);
     loop {
         let candidate = dir.join("baml.toml");
         if candidate.exists() {
@@ -716,8 +717,8 @@ fn resolve_selector_path(raw: &str, base: &Path) -> PathBuf {
 }
 
 fn home_dir() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
+    baml_env::os_var("HOME")
+        .or_else(|| baml_env::os_var("USERPROFILE"))
         .map(PathBuf::from)
 }
 
