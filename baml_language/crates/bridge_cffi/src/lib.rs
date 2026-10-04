@@ -187,6 +187,29 @@ fn prepare_runtime_from_blob(
     };
     let runtime = bex_project::prepare_from_bytecode(&bytecode, sys_ops)
         .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
+    let runtime = match embedded_baml_toml {
+        Some(manifest) => {
+            let manifest: toml::Value = toml::from_str(manifest)
+                .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
+            let policy = manifest
+                .get("__baml_codegen")
+                .and_then(|metadata| metadata.get("telemetry"))
+                .map(|value| {
+                    value
+                        .clone()
+                        .try_into::<btel_settings::artifact::ArtifactTelemetry>()
+                })
+                .transpose()
+                .map_err(|error| {
+                    BridgeError::Startup(format!(
+                        "{context}invalid artifact telemetry policy: {error}"
+                    ))
+                })?
+                .unwrap_or_default();
+            runtime.with_artifact_telemetry(policy)
+        }
+        None => runtime,
+    };
     Ok(PreparedRuntime {
         runtime,
         error_context: Some(context),

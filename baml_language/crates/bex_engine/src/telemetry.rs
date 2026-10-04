@@ -4,8 +4,11 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use bcs_api::diagnostics::{Context as AuthorizationContext, CredentialSource, Operation, Outcome};
+use bcs_api::diagnostics::{
+    Context as AuthorizationContext, CredentialSource, Operation, Outcome, RecordingOverride,
+};
 use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
+use btel_settings::artifact::{ArtifactTelemetry, InitialFailureAction, InitialFailurePolicy};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
@@ -24,6 +27,8 @@ pub struct TelemetryRecording {
     host: String,
     sources: Vec<(String, String)>,
     exit: Arc<btel_types::ProcessExitSlot>,
+    initial_failure: Option<InitialFailurePolicy>,
+    recording_override: RecordingOverride,
 }
 enum Destination {
     InvalidConfiguration(Box<bcs_api::diagnostics::Diagnostic>),
@@ -47,6 +52,8 @@ pub(crate) enum RecordingDelivery {
         initial_auth_cancel: crate::CancellationToken,
         authorization_context: AuthorizationContext,
         initial_auth_error: Arc<OnceLock<EngineError>>,
+        initial_failure: InitialFailurePolicy,
+        recording_override: RecordingOverride,
     },
 }
 
@@ -89,22 +96,47 @@ impl RecordingDelivery {
                 delivery,
                 authorization_context,
                 initial_auth_error,
+                initial_failure,
+                recording_override,
                 ..
-            } => match delivery.initial_authorization() {
-                btel_bcs::delivery::InitialAuthorization::Rejected(failure) => Some(
-                    initial_auth_error
-                        .get_or_init(|| {
-                            EngineError::CloudAuthorization(Box::new(
-                                authorization_context
-                                    .rejected_failure(&failure, Outcome::ExecutionCancelled),
-                            ))
-                        })
-                        .clone(),
-                ),
-                _ => None,
-            },
-            Self::Local(_) => None,
+            } if initial_failure.action == InitialFailureAction::Abort => {
+                match delivery.initial_authorization() {
+                    btel_bcs::delivery::InitialAuthorization::Rejected(failure) => Some(
+                        initial_auth_error
+                            .get_or_init(|| {
+                                EngineError::CloudAuthorization(Box::new(
+                                    authorization_context
+                                        .rejected_failure(&failure, Outcome::ExecutionCancelled)
+                                        .with_recording_override(recording_override.clone()),
+                                ))
+                            })
+                            .clone(),
+                    ),
+                    btel_bcs::delivery::InitialAuthorization::Failed(error) => Some(
+                        initial_auth_error
+                            .get_or_init(|| {
+                                EngineError::CloudAuthorization(Box::new(
+                                    initial_diagnostic(
+                                        authorization_context,
+                                        &error,
+                                        Outcome::ExecutionCancelled,
+                                    )
+                                    .with_recording_override(recording_override.clone()),
+                                ))
+                            })
+                            .clone(),
+                    ),
+                    _ => None,
+                }
+            }
+            _ => None,
         }
+    }
+
+    pub(crate) fn initial_failure_handled(&self) -> bool {
+        matches!(self, Self::Cloud { delivery, initial_failure, .. }
+            if initial_failure.action != InitialFailureAction::Abort
+                && matches!(delivery.initial_authorization(), btel_bcs::delivery::InitialAuthorization::Rejected(_) | btel_bcs::delivery::InitialAuthorization::Failed(_)))
     }
 
     fn directory(&self) -> Option<&Path> {
@@ -225,6 +257,8 @@ impl TelemetryRecording {
                 delivery: Box::new(delivery),
                 authorization_context,
             },
+            initial_failure: None,
+            recording_override: RecordingOverride::default(),
         }
     }
 
@@ -249,6 +283,8 @@ impl TelemetryRecording {
                     .as_ref()
                     .join(btel_settings::local_files::CAS_DIRECTORY),
             },
+            initial_failure: None,
+            recording_override: RecordingOverride::default(),
         }
     }
 
@@ -266,6 +302,8 @@ impl TelemetryRecording {
             sources: Vec::new(),
             exit: Arc::default(),
             destination: Destination::LocalFiles { recordings, cas },
+            initial_failure: None,
+            recording_override: RecordingOverride::default(),
         }
     }
 
@@ -282,11 +320,22 @@ impl TelemetryRecording {
             sources: Vec::new(),
             exit: Arc::default(),
             destination: Destination::UserFiles,
+            initial_failure: None,
+            recording_override: RecordingOverride::default(),
         }
     }
 
     pub fn id(&self) -> RecordingId {
         self.id
+    }
+
+    #[must_use]
+    pub fn with_artifact_telemetry(mut self, policy: ArtifactTelemetry) -> Self {
+        self.recording_override = policy
+            .recording_level_envvar
+            .map_or(RecordingOverride::Fixed, RecordingOverride::EnvVar);
+        self.initial_failure = Some(policy.initial_failure);
+        self
     }
 
     /// What runs this engine: `baml` (the CLI), `lsp`, `pack`, `python`, ...
@@ -380,6 +429,8 @@ impl TelemetryRecording {
                     publisher,
                     *delivery,
                     &authorization_context,
+                    self.initial_failure.as_ref(),
+                    &self.recording_override,
                     source_snapshot,
                     functions,
                     transport,
@@ -446,6 +497,8 @@ impl TelemetryRecording {
         publisher_config: btel_bcs::CloudPublisherConfig,
         mut delivery_config: btel_bcs::delivery::DeliveryConfig,
         authorization_context: &AuthorizationContext,
+        initial_failure: Option<&InitialFailurePolicy>,
+        recording_override: &RecordingOverride,
         source_snapshot: Option<[u8; 32]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
         transport: btel_settings::transport::ChunkConfig,
@@ -458,25 +511,43 @@ impl TelemetryRecording {
         EngineError,
     > {
         delivery_config.initial_recording_id = Some(id);
+        delivery_config.terminal_initial_connection = initial_failure.is_some();
+        let initial_failure = initial_failure.cloned().unwrap_or_default();
         let initial_auth_cancel = crate::CancellationToken::new();
         let mut delivery = None;
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
                 let failure = control.clone();
                 let cancel = initial_auth_cancel.clone();
+                let policy = initial_failure.clone();
+                let context = authorization_context.clone();
+                let warning_override = recording_override.clone();
                 let handle = match btel_bcs::delivery::BcsDelivery::new(
                     delivery_config.clone(),
                     move |error| {
                         if matches!(
                             error,
                             btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
+                                | btel_bcs::delivery::DeliveryError::InitialConnection(_)
                         ) {
-                            cancel.cancel();
+                            match policy.action {
+                                InitialFailureAction::Abort => cancel.cancel(),
+                                InitialFailureAction::Warn => {
+                                    emit_initial_warning(
+                                        &policy,
+                                        &context,
+                                        &error,
+                                        &warning_override,
+                                    );
+                                }
+                                InitialFailureAction::Ignore => {}
+                            }
                         }
                         failure.disable(btel_processor::RuntimeError(error.to_string()));
                         if !matches!(
                             error,
                             btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
+                                | btel_bcs::delivery::DeliveryError::InitialConnection(_)
                         ) {
                             tracing::warn!(%error, "cloud telemetry disabled");
                         }
@@ -489,6 +560,8 @@ impl TelemetryRecording {
                             initial_auth_cancel: initial_auth_cancel.clone(),
                             authorization_context: authorization_context.clone(),
                             initial_auth_error: Arc::new(OnceLock::new()),
+                            initial_failure: initial_failure.clone(),
+                            recording_override: recording_override.clone(),
                         });
                         handle
                     }
@@ -508,6 +581,38 @@ impl TelemetryRecording {
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
         Ok((runtime, delivery))
+    }
+}
+
+#[allow(clippy::print_stderr)]
+fn emit_initial_warning(
+    policy: &InitialFailurePolicy,
+    context: &AuthorizationContext,
+    failure: &btel_bcs::delivery::DeliveryError,
+    recording_override: &RecordingOverride,
+) {
+    let message = policy.warning_message.clone().unwrap_or_else(|| {
+        initial_diagnostic(context, failure, Outcome::TelemetryDisabled)
+            .with_recording_override(recording_override.clone())
+            .to_string()
+    });
+    eprintln!("warning: {message}");
+}
+
+fn initial_diagnostic(
+    context: &AuthorizationContext,
+    failure: &btel_bcs::delivery::DeliveryError,
+    outcome: Outcome,
+) -> bcs_api::diagnostics::Diagnostic {
+    match failure {
+        btel_bcs::delivery::DeliveryError::InitialAuthorization(failure)
+        | btel_bcs::delivery::DeliveryError::Api(failure) => {
+            context.rejected_failure(failure, outcome)
+        }
+        btel_bcs::delivery::DeliveryError::InitialConnection(error) => {
+            initial_diagnostic(context, error, outcome)
+        }
+        _ => context.connection_failed(outcome),
     }
 }
 
@@ -613,6 +718,15 @@ impl BexEngine {
             .delivery
             .as_ref()?
             .initial_auth_error()
+    }
+
+    /// The artifact already warned or deliberately ignored an initial failure.
+    /// Delivery errors remain inspectable through `telemetry_result`.
+    pub fn initial_telemetry_failure_handled(&self) -> bool {
+        self.telemetry
+            .as_ref()
+            .and_then(|telemetry| telemetry.delivery.as_ref())
+            .is_some_and(RecordingDelivery::initial_failure_handled)
     }
 
     pub(crate) fn initial_cloud_auth_cancel(&self) -> Option<&crate::CancellationToken> {

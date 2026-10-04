@@ -79,6 +79,32 @@ fn main() -> ExitCode {
     }
 }
 
+fn new_engine(
+    program: bex_vm_types::Program,
+    argv: Vec<String>,
+    telemetry: btel_settings::artifact::ArtifactTelemetry,
+) -> Result<BexEngine, bex_engine::EngineError> {
+    BexEngine::new_with_config(
+        program,
+        Arc::new(sys_native::SysOps::native()),
+        argv,
+        bex_engine::EngineConfig {
+            runtime_compiler: Some(bex_project::runtime_compiler()),
+            artifact_telemetry: Some(telemetry),
+            recording: Some(
+                bex_engine::TelemetryRecording::from_boundary_env()
+                    .unwrap_or_else(|| {
+                        bex_engine::TelemetryRecording::user_files(
+                            btel_settings::publisher::RecordingConfig::default(),
+                        )
+                    })
+                    .with_host("pack"),
+            ),
+            ..Default::default()
+        },
+    )
+}
+
 /// Single-target dispatch: the binary acts like a one-shot CLI; flags on
 /// the binary bind directly to the target's parameters.
 fn run_single(envelope: PackEnvelope) -> ExitCode {
@@ -91,20 +117,7 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
 
     let argv = build_argv(&target.subcommand_name);
 
-    let engine = match BexEngine::new_with_telemetry_recording(
-        envelope.program,
-        Arc::new(sys_native::SysOps::native()),
-        argv.clone(),
-        Some(bex_project::runtime_compiler()),
-        btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::from_boundary_env()
-            .unwrap_or_else(|| {
-                bex_engine::TelemetryRecording::user_files(
-                    btel_settings::publisher::RecordingConfig::default(),
-                )
-            })
-            .with_host("pack"),
-    ) {
+    let engine = match new_engine(envelope.program, argv.clone(), envelope.telemetry) {
         Ok(e) => Arc::new(e),
         Err(e) => {
             print_error(format_args!("failed to initialize engine: {e}"));
@@ -173,20 +186,7 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
     bootstrap_argv.push(String::new());
     bootstrap_argv.extend(trailing.iter().cloned());
 
-    let mut engine = match BexEngine::new_with_telemetry_recording(
-        envelope.program,
-        Arc::new(sys_native::SysOps::native()),
-        bootstrap_argv,
-        Some(bex_project::runtime_compiler()),
-        btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::from_boundary_env()
-            .unwrap_or_else(|| {
-                bex_engine::TelemetryRecording::user_files(
-                    btel_settings::publisher::RecordingConfig::default(),
-                )
-            })
-            .with_host("pack"),
-    ) {
+    let mut engine = match new_engine(envelope.program, bootstrap_argv, envelope.telemetry) {
         Ok(e) => e,
         Err(e) => {
             print_error(format_args!("failed to initialize engine: {e}"));
@@ -290,7 +290,9 @@ fn finalize_dispatch(
         print_error(format_args!("{error}"));
         return ExitCode::FAILURE;
     }
-    if let Some(Err(error)) = engine.telemetry_result() {
+    if !engine.initial_telemetry_failure_handled()
+        && let Some(Err(error)) = engine.telemetry_result()
+    {
         eprintln!("Warning: telemetry recording failed: {error}");
     }
     let mut unhandled_spawn_failed = false;

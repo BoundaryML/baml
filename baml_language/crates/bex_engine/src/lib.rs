@@ -871,6 +871,8 @@ pub struct EngineConfig {
     pub launch_context: btel_types::context::Context,
     pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     pub clock_mode: btel_clock::ClockMode,
+    /// Publisher-owned artifact settings; absent for ordinary source execution.
+    pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
 }
@@ -881,6 +883,7 @@ impl Default for EngineConfig {
             launch_context: btel_types::context::Context::default(),
             runtime_compiler: None,
             clock_mode: btel_settings::clock::DEFAULT_MODE,
+            artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
         }
@@ -1738,11 +1741,22 @@ impl BexEngine {
             launch_context,
             runtime_compiler,
             clock_mode,
+            artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
             recording,
         } = config;
-        let auto_telemetry_level = btel_settings::mode::from_env()
-            .map_err(|error| EngineError::Other(error.to_string()))?;
+        let auto_telemetry_level = match &artifact_telemetry {
+            Some(policy) => policy
+                .resolve_level()
+                .map_err(|error| EngineError::Other(error.to_string()))?,
+            None => btel_settings::mode::from_env()
+                .map_err(|error| EngineError::Other(error.to_string()))?,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let recording = recording.map(|recording| match artifact_telemetry {
+            Some(policy) => recording.with_artifact_telemetry(policy),
+            None => recording,
+        });
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
@@ -2740,6 +2754,7 @@ impl BexEngine {
                 .await
                 {
                     Ok(Ok(())) => {}
+                    Ok(Err(_)) if self.initial_telemetry_failure_handled() => {}
                     Ok(Err(error)) => tracing::error!(%error, "telemetry shutdown failed"),
                     Err(error) => tracing::error!(%error, "telemetry shutdown task failed"),
                 }

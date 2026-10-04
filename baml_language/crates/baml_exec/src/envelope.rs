@@ -67,4 +67,6 @@ pub struct PackEnvelope {
 
     /// Output serialization format, baked in at pack time.
     pub output_format: OutputFormat,
+    /// Recording defaults and the runtime overrides permitted by the publisher.
+    pub telemetry: btel_settings::artifact::ArtifactTelemetry,
 }

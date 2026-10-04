@@ -135,6 +135,18 @@ enum SavedLogin {
     Unreadable,
 }
 
+/// The artifact's permitted recording-level override, used in recovery suggestions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecordingOverride {
+    Fixed,
+    EnvVar(String),
+}
+impl Default for RecordingOverride {
+    fn default() -> Self {
+        Self::EnvVar("BAML_TELEMETRY".to_owned())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Diagnostic {
     pub kind: FailureKind,
@@ -143,9 +155,13 @@ pub struct Diagnostic {
     saved_login: SavedLogin,
     api_error: Option<Arc<crate::ApiErrorBody>>,
     credential_store: Option<crate::auth::CredentialStoreLocation>,
+    recording_override: RecordingOverride,
 }
 
 impl Context {
+    pub fn connection_failed(&self, outcome: Outcome) -> Diagnostic {
+        self.diagnostic(FailureKind::Transport, outcome)
+    }
     pub fn rejected(&self, status: u16, outcome: Outcome) -> Diagnostic {
         self.diagnostic(FailureKind::from_status(status), outcome)
     }
@@ -188,6 +204,7 @@ impl Context {
             saved_login,
             api_error: None,
             credential_store: None,
+            recording_override: RecordingOverride::default(),
         }
     }
 }
@@ -202,6 +219,12 @@ pub struct ReportedError {
 }
 
 impl Diagnostic {
+    #[must_use]
+    pub fn with_recording_override(mut self, policy: RecordingOverride) -> Self {
+        self.recording_override = policy;
+        self
+    }
+
     fn authentication_choices(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.context.source {
             CredentialSource::ApiKey => {
@@ -420,7 +443,9 @@ impl fmt::Display for Diagnostic {
                     f,
                     "    • Record locally: rerun with BOUNDARY_API_KEY=local."
                 )?;
-                writeln!(f, "    • Disable recording: rerun with BAML_TELEMETRY=off.")?;
+                if let RecordingOverride::EnvVar(name) = &self.recording_override {
+                    writeln!(f, "    • Disable recording: rerun with {name}=off.")?;
+                }
             }
             Operation::Query => writeln!(
                 f,
@@ -488,6 +513,43 @@ mod tests {
     }
 
     #[test]
+    fn ingestion_recovery_respects_the_artifacts_recording_override() {
+        for (policy, expected) in [
+            (
+                RecordingOverride::Fixed,
+                r#"Boundary rejected your saved login (401).
+
+  To continue, choose one:
+    • Run `baml auth login` again.
+    • Set BOUNDARY_API_KEY to a valid API key.
+    • Record locally: rerun with BOUNDARY_API_KEY=local.
+
+  Execution cancelled."#,
+            ),
+            (
+                RecordingOverride::EnvVar("ACME_TELEMETRY".into()),
+                r#"Boundary rejected your saved login (401).
+
+  To continue, choose one:
+    • Run `baml auth login` again.
+    • Set BOUNDARY_API_KEY to a valid API key.
+    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with ACME_TELEMETRY=off.
+
+  Execution cancelled."#,
+            ),
+        ] {
+            assert_eq!(
+                context(Operation::Ingest, CredentialSource::SavedLogin)
+                    .rejected(401, Outcome::ExecutionCancelled)
+                    .with_recording_override(policy)
+                    .to_string(),
+                expected,
+            );
+        }
+    }
+
+    #[test]
     fn rejected_key_suggests_the_correct_login_recovery() {
         for (saved_login, expected) in [
             (
@@ -534,6 +596,7 @@ mod tests {
                 saved_login,
                 api_error: None,
                 credential_store: None,
+                recording_override: RecordingOverride::default(),
             }
             .to_string();
             assert_eq!(message, expected, "saved login: {saved_login:?}");

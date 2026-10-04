@@ -26,6 +26,7 @@ baml_env = { workspace = true }
 baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
+btel_settings = { workspace = true }
 btel_types = { workspace = true }
 sys_ops = { workspace = true }
 futures = { workspace = true }
@@ -55,6 +56,7 @@ cbindgen = { workspace = true }
 
 [dev-dependencies]
 baml_artifact = { workspace = true, features = [ "test-support" ] }
+baml_test_support = { workspace = true }
 cc = { workspace = true }
 
 [package.metadata.ci]

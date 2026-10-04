@@ -148,10 +148,43 @@ pub fn new(
 pub struct PreparedRuntime {
     program: Program,
     sys_ops: SysOps,
+    artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
 }
 
 impl PreparedRuntime {
+    #[must_use]
+    pub fn with_artifact_telemetry(
+        mut self,
+        policy: btel_settings::artifact::ArtifactTelemetry,
+    ) -> Self {
+        self.artifact_telemetry = Some(policy);
+        self
+    }
+
     pub fn build(self) -> Result<Arc<BexEngine>, RuntimeError> {
+        if let Some(policy) = self.artifact_telemetry {
+            let config = bex_engine::EngineConfig {
+                runtime_compiler: Some(runtime_compiler()),
+                artifact_telemetry: Some(policy),
+                #[cfg(not(target_arch = "wasm32"))]
+                recording: Some(
+                    bex_engine::TelemetryRecording::from_boundary_env()
+                        .unwrap_or_else(|| {
+                            bex_engine::TelemetryRecording::user_files(
+                                btel_settings::publisher::RecordingConfig::default(),
+                            )
+                        })
+                        .with_host("bridge"),
+                ),
+                ..Default::default()
+            };
+            return Ok(Arc::new(BexEngine::new_with_config(
+                self.program,
+                Arc::new(self.sys_ops),
+                Vec::new(),
+                config,
+            )?));
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(recording) = bex_engine::TelemetryRecording::from_boundary_env() {
             let engine = BexEngine::new_with_telemetry_recording(
@@ -224,7 +257,11 @@ pub fn prepare(
             message: e.to_string(),
         })?;
 
-    Ok(PreparedRuntime { program, sys_ops })
+    Ok(PreparedRuntime {
+        program,
+        sys_ops,
+        artifact_telemetry: None,
+    })
 }
 
 /// Initialize a runtime from a versioned BAML program artifact rather than
@@ -249,7 +286,11 @@ pub fn prepare_from_bytecode(
                 message: format!("Failed to deserialize BAML bytecode: {e}"),
             }
         })?;
-    Ok(PreparedRuntime { program, sys_ops })
+    Ok(PreparedRuntime {
+        program,
+        sys_ops,
+        artifact_telemetry: Some(btel_settings::artifact::ArtifactTelemetry::default()),
+    })
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

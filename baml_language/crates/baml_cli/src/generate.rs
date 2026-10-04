@@ -645,11 +645,26 @@ fn build_embedded_baml_toml(project_root: &Path) -> Result<String> {
     if !embedded.ends_with('\n') {
         embedded.push('\n');
     }
-    embedded.push_str(
-        "\n[__baml_codegen]\nmetadata_version = 1\n\n[__baml_codegen.toolchain]\nversion = ",
-    );
-    embedded.push_str(&format!("{:?}", baml_version::CANONICAL_VERSION));
+    let manifest: toml::Value = toml::from_str(&embedded)?;
+    let telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
+        &manifest,
+        btel_settings::artifact::ArtifactKind::Bridge,
+    )?;
+    let metadata = toml::Table::from_iter([
+        ("metadata_version".to_owned(), toml::Value::Integer(1)),
+        (
+            "toolchain".to_owned(),
+            toml::Value::Table(toml::Table::from_iter([(
+                "version".to_owned(),
+                toml::Value::String(baml_version::CANONICAL_VERSION.to_owned()),
+            )])),
+        ),
+        ("telemetry".to_owned(), toml::Value::try_from(telemetry)?),
+    ]);
+    let owned =
+        toml::Table::from_iter([("__baml_codegen".to_owned(), toml::Value::Table(metadata))]);
     embedded.push('\n');
+    embedded.push_str(&toml::to_string(&owned)?);
     Ok(embedded)
 }
 
@@ -1038,12 +1053,19 @@ mod tests {
         let embedded = build_embedded_baml_toml(directory.path()).unwrap();
 
         assert!(embedded.starts_with(original));
-        assert!(embedded.contains("\n[__baml_codegen]\nmetadata_version = 1\n"));
-        assert!(embedded.contains(&format!(
-            "\n[__baml_codegen.toolchain]\nversion = {:?}\n",
-            baml_version::CANONICAL_VERSION
-        )));
         let parsed = embedded.parse::<toml_edit::DocumentMut>().unwrap();
+        assert_eq!(
+            parsed["__baml_codegen"]["metadata_version"].as_integer(),
+            Some(1)
+        );
+        assert_eq!(
+            parsed["__baml_codegen"]["toolchain"]["version"].as_str(),
+            Some(baml_version::CANONICAL_VERSION)
+        );
+        assert_eq!(
+            parsed["__baml_codegen"]["telemetry"]["recording_level"].as_str(),
+            Some("medium")
+        );
         assert_eq!(parsed["package"]["name"].as_str(), Some("test"));
         assert_eq!(
             fs::read_to_string(directory.path().join("baml.toml")).unwrap(),
@@ -1063,6 +1085,51 @@ mod tests {
         let error = build_embedded_baml_toml(directory.path()).unwrap_err();
 
         assert!(error.to_string().contains("uses reserved table"));
+    }
+
+    #[test]
+    fn embedded_manifest_bakes_the_bridge_policy_independently_of_pack() {
+        use btel_settings::artifact::{
+            ArtifactTelemetry, InitialFailureAction, InitialFailurePolicy,
+        };
+
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            r#"
+[package]
+name = "test"
+[pack]
+on_initial_telemetry_failure = "abort"
+[pack.env_var_names]
+BAML_TELEMETRY = "PACK_TELEMETRY"
+[bridge]
+on_initial_telemetry_failure = "warn"
+initial_telemetry_warning_message = "Telemetry unavailable; continuing."
+[bridge.env_var_names]
+BAML_TELEMETRY = "ACME_TELEMETRY"
+"#,
+        )
+        .unwrap();
+        let embedded: toml::Value = build_embedded_baml_toml(directory.path())
+            .unwrap()
+            .parse()
+            .unwrap();
+        let policy: ArtifactTelemetry = embedded["__baml_codegen"]["telemetry"]
+            .clone()
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            policy,
+            ArtifactTelemetry {
+                recording_level_envvar: Some("ACME_TELEMETRY".into()),
+                initial_failure: InitialFailurePolicy {
+                    action: InitialFailureAction::Warn,
+                    warning_message: Some("Telemetry unavailable; continuing.".into()),
+                },
+                ..Default::default()
+            }
+        );
     }
 
     #[test]

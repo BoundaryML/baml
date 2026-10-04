@@ -142,6 +142,7 @@ impl PackArgs {
 
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         self.validate_flags()?;
+        let telemetry = self.artifact_telemetry()?;
 
         let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
         let _ = db;
@@ -181,6 +182,7 @@ impl PackArgs {
                 })
                 .collect(),
             output_format: self.output_format,
+            telemetry,
         };
         let serialized =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
@@ -276,6 +278,29 @@ impl PackArgs {
             return Ok((db, program, needs_format_hint));
         }
         self.load_and_compile_project(reporter)
+    }
+
+    fn artifact_telemetry(&self) -> Result<btel_settings::artifact::ArtifactTelemetry> {
+        use btel_settings::artifact::{ArtifactKind, ArtifactTelemetry};
+        if self.file.is_some() {
+            return Ok(ArtifactTelemetry::default());
+        }
+        let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
+            return Ok(ArtifactTelemetry::default());
+        };
+        let path = root.join("baml.toml");
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(ArtifactTelemetry::default());
+            }
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to read {}", path.display()));
+            }
+        };
+        let manifest: toml::Value = toml::from_str(&content)?;
+        ArtifactTelemetry::from_manifest(&manifest, ArtifactKind::Pack)
+            .with_context(|| format!("Invalid artifact telemetry settings in {}", path.display()))
     }
 
     /// Project-mode load + compile through the bytecode cache — the same warm
@@ -1177,6 +1202,7 @@ mod tests {
                 subcommand_name: "main".to_string(),
             }],
             output_format: OutputFormat::Json,
+            telemetry: Default::default(),
         };
         let bytes =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();
