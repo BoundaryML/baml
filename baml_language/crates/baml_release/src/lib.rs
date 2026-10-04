@@ -158,6 +158,12 @@ impl Fetcher {
         manifest
             .validate()
             .map_err(|err| FetchError::InvalidManifest(format!("{url}: {err}")))?;
+        if manifest.version != spec.version {
+            return Err(FetchError::InvalidManifest(format!(
+                "{url}: manifest version {} does not match requested version {}",
+                manifest.version, spec.version
+            )));
+        }
         let artifact = manifest
             .artifacts
             .get(&spec.target)
@@ -181,7 +187,13 @@ impl Fetcher {
     /// the checksum is what guarantees authenticity.
     fn download_and_verify(&self) -> Result<Vec<u8>, FetchError> {
         let url = self.artifact_url();
-        let archive = download_bytes(&url)?;
+        let archive = download_bytes(&url).map_err(|err| match err {
+            FetchError::ManifestNotFound { .. } => FetchError::HttpStatus {
+                url: url.clone(),
+                status: reqwest::StatusCode::NOT_FOUND,
+            },
+            other => other,
+        })?;
         verify_sha256(&archive, &url, &self.artifact.sha256)?;
         Ok(archive)
     }

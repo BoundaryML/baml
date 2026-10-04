@@ -518,15 +518,16 @@ class _TestPool {
     }
 }
 
+/// (internal) The per-test deadline when the caller does not choose one: 5 minutes.
+function _default_test_timeout_ms() -> int {
+    300000
+}
+
 /// (internal) A pool admitting `max_concurrency` leaves at once, each with a
 /// `timeout_ms` deadline. A zero or negative `max_concurrency` means
 /// "no explicit budget": fall back to a bound that keeps a pathological
 /// fan-out from creating thousands of live VM threads while staying above any
 /// real machine's core count (the CLI always passes an explicit budget).
-/// (internal) The per-test deadline when the caller does not choose one: 5 minutes.
-function _default_test_timeout_ms() -> int {
-    300000
-}
 
 function _test_pool(max_concurrency: int, timeout_ms: int) -> _TestPool {
     let limit = if (max_concurrency > 0) {

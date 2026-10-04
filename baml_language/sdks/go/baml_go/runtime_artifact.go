@@ -136,7 +136,11 @@ func currentRuntimeConfig() (RuntimeConfig, error) {
 	// The toolchain-version skip itself is applied by the native library when
 	// the bridge registers; this only enforces that it is used with an
 	// explicit library.
-	if skip := envString("DEV_BAML_BRIDGE_SKIP_VERSION_CHECK"); skip != "" && config.LibraryPath == "" {
+	skip, _, err := envBool("DEV_BAML_BRIDGE_SKIP_VERSION_CHECK")
+	if err != nil {
+		return RuntimeConfig{}, err
+	}
+	if skip && config.LibraryPath == "" {
 		return RuntimeConfig{}, errors.New("DEV_BAML_BRIDGE_SKIP_VERSION_CHECK requires BAML_BRIDGE_PATH")
 	}
 	return config, nil
