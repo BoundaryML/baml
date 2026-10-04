@@ -458,7 +458,9 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
 /// `enum` of their variant names, `uint8array` to `string`, and `unknown` to
 /// the empty schema `{}`. A nullable type becomes a `["T", "null"]` type list
-/// where it can, and `anyOf` otherwise.
+/// where it can, and `anyOf` otherwise. A nullable enum also lists `null` in
+/// its `enum`, and a nullable literal uses `anyOf`, because `enum` and `const`
+/// restrict the value whatever `type` says.
 ///
 /// This pass *does* respect `@alias` and `@skip`, where the value conversions
 /// do not — a schema is read by something outside BAML, so it must describe

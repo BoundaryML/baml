@@ -353,11 +353,20 @@ mod schema {
             Ok(json!({ "anyOf": schemas }))
         }
 
+        /// Widens a schema to accept `null`. A plain `type` becomes a type
+        /// list. `enum` and `const` restrict the value whatever `type` says:
+        /// an `enum` also gains a `null` member, and a `const`, which has room
+        /// for one value only, becomes one side of an `anyOf`.
         fn with_null(base: Value) -> Value {
             if let Value::Object(mut object) = base {
-                if let Some(Value::String(kind)) = object.get("type") {
+                if !object.contains_key("const")
+                    && let Some(Value::String(kind)) = object.get("type")
+                {
                     let widened = json!([kind, "null"]);
                     object.insert("type".to_string(), widened);
+                    if let Some(Value::Array(values)) = object.get_mut("enum") {
+                        values.push(Value::Null);
+                    }
                     return Value::Object(object);
                 }
                 return json!({ "anyOf": [Value::Object(object), { "type": "null" }] });
@@ -913,9 +922,38 @@ mod schema {
                 schema["properties"]["gym_type"],
                 json!({
                     "type": ["string", "null"],
-                    "enum": ["COMMERCIAL", "garage", "CUSTOM"],
+                    "enum": ["COMMERCIAL", "garage", "CUSTOM", null],
                     "description": "Where the user trains.\n\n- COMMERCIAL: Commercial gym\n- garage: Garage gym A gym at home.",
                 })
+            );
+        }
+
+        #[test]
+        fn nullable_enum_and_literal_accept_null() {
+            let gym_type = type_name("pkg.GymType");
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(key(&gym_type), gym_type_enum());
+            let mut ctx = SysOpContext::empty();
+            ctx.enum_definitions = Arc::new(enums);
+
+            let nullable_enum =
+                json_schema(&RuntimeTy::optional(RuntimeTy::Enum(key(&gym_type))), &ctx)
+                    .expect("schema should lower");
+            assert_eq!(nullable_enum["type"], json!(["string", "null"]));
+            assert_eq!(
+                nullable_enum["enum"],
+                json!(["COMMERCIAL", "garage", "CUSTOM", null])
+            );
+
+            let literal = RuntimeTy::Literal(
+                baml_type::Literal::String("auto".to_string()),
+                baml_type::Freshness::Regular,
+            );
+            let nullable_literal =
+                json_schema(&RuntimeTy::optional(literal), &ctx).expect("schema should lower");
+            assert_eq!(
+                nullable_literal,
+                json!({ "anyOf": [{ "type": "string", "const": "auto" }, { "type": "null" }] })
             );
         }
 
