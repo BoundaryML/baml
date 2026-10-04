@@ -272,10 +272,10 @@ function         baml.time.system_timezone        <builtin>/baml/ns_time/timezon
 class            baml.time.ZonedDateTime          <builtin>/baml/ns_time/zoneddatetime.baml:19
 type             baml.toml.Item                   <builtin>/baml/ns_toml/toml.baml:12
 class            baml.toml.Table                  <builtin>/baml/ns_toml/toml.baml:35
-function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.baml:181
-function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:211
-function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:235
-class            baml.toml.ParseError             <builtin>/baml/ns_toml/toml.baml:251
+function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.baml:190
+function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:220
+function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:244
+class            baml.toml.ParseError             <builtin>/baml/ns_toml/toml.baml:260
 class            baml.ws.WebSocket                <builtin>/baml/ns_ws/ws.baml:4
 class            baml.ws.CloseEvent               <builtin>/baml/ns_ws/ws.baml:51
 function         baml.ws.connect                  <builtin>/baml/ns_ws/ws.baml:66

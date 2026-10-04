@@ -243,3 +243,37 @@ async fn empty_arrays_of_tables_keep_their_keys() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+#[tokio::test]
+async fn removed_and_reintroduced_keys_do_not_reuse_source_comments() {
+    let output = baml_test!(
+        r##"
+        function main() -> bool {
+            let replaced = baml.toml.Table.parse("key = 1 # removed\n");
+            replaced.remove("key");
+            replaced.set("key", 2);
+            let replaced_text = replaced.to_string();
+
+            let reused = baml.toml.Table.parse("a = 1 # original\n");
+            reused.rename("a", "b");
+            reused.set("a", 2);
+            reused.rename("a", "c");
+            reused.rename("b", "d");
+            let reused_text = reused.to_string();
+
+            let nested = baml.toml.Table.parse("[server] # removed table\nport = 8080 # removed port\n");
+            nested.remove("server");
+            nested.table("server").set("port", 9090);
+            let nested_text = nested.to_string();
+
+            !replaced_text.includes("# removed") &&
+                baml.toml.Table.parse(replaced_text).get("key") == 2 &&
+                reused_text.includes("d = 1 # original") &&
+                baml.toml.Table.parse(reused_text).get("c") == 2 &&
+                !nested_text.includes("# removed") &&
+                baml.toml.Table.parse(nested_text).table("server").get("port") == 9090
+        }
+    "##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

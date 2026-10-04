@@ -199,7 +199,7 @@ enum Node {
     Array(Vec<Node>),
     Table {
         items: IndexMap<String, Node>,
-        renamed: IndexMap<String, String>,
+        renamed: IndexMap<String, Option<String>>,
     },
 }
 
@@ -248,7 +248,14 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
                 } else {
                     vm.as_map(&names)?
                         .iter()
-                        .map(|(k, v)| Ok((k.to_string(), vm.as_string(v)?.to_string())))
+                        .map(|(k, v)| {
+                            let source = if v.is_null() {
+                                None
+                            } else {
+                                Some(vm.as_string(v)?.to_string())
+                            };
+                            Ok((k.to_string(), source))
+                        })
                         .collect::<Result<IndexMap<_, _>, VmRustFnError>>()?
                 };
                 Ok(Node::Table { items, renamed })
@@ -325,18 +332,26 @@ fn scalar_eq(left: &toml_edit::Value, right: &toml_edit::Value) -> bool {
 fn reconcile_table(
     table: &mut dyn TableLike,
     items: &IndexMap<String, Node>,
-    renamed: &IndexMap<String, String>,
+    renamed: &IndexMap<String, Option<String>>,
     inline: bool,
 ) {
     // Capture all original entries before inserting destinations. Otherwise
     // a key swap overwrites the next source and loses its comments/formatting.
     let mut moved = Vec::new();
     for (to, from) in renamed {
-        if to != from
+        if let Some(from) = from
+            && to != from
             && let Some(key) = table.key(from).cloned()
             && let Some(item) = table.remove(from)
         {
             moved.push((to, key, item));
+        }
+    }
+    // New entries must not inherit an earlier, removed entry's comments.
+    // Do this after capturing moves so a reused source name cannot erase them.
+    for (key, source) in renamed {
+        if source.is_none() {
+            table.remove(key);
         }
     }
     for (to, key, item) in moved {

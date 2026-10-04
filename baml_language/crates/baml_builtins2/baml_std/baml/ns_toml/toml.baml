@@ -36,8 +36,8 @@ class Table {
     items: map<string, Item>,
     /// (internal) Original document text, retained by parse for serialization.
     _source: string?,
-    /// (internal) Original key names for explicit renames in this table.
-    _renamed: map<string, string>?,
+    /// (internal) Source keys for edited entries; null marks a newly inserted key.
+    _renamed: map<string, string?>?,
 
     /// Creates an empty table. Values can also be edited directly through `items`.
     function new() -> Table throws never {
@@ -51,13 +51,18 @@ class Table {
 
     /// Sets any TOML value: scalars, datetimes, arrays, or nested tables.
     function set(self, key: string, value: Item) -> void throws never {
+        if (!self.items.has(key)) {
+            let renamed: map<string, string?> = self._renamed ?? map {};
+            renamed[key] = null;
+            self._renamed = renamed;
+        }
         self.items[key] = value;
     }
 
     /// Removes and returns a value, or null when the key is absent.
     function remove(self, key: string) -> Item? throws never {
         let removed = self.items.delete(key);
-        let renamed: map<string, string> = self._renamed ?? map {};
+        let renamed: map<string, string?> = self._renamed ?? map {};
         renamed.delete(key);
         self._renamed = renamed;
         removed
@@ -70,7 +75,7 @@ class Table {
             let child: Table => child,
             null => {
                 let child = Table.new();
-                self.items[key] = child;
+                self.set(key, child);
                 child
             },
             _ => throw root.errors.InvalidArgument { message: "Expected TOML table: " + key },
@@ -92,8 +97,12 @@ class Table {
         }
         let value = self.items.delete(from) ?? root.sys.panic("TOML key disappeared during rename");
         self.items[to] = value;
-        let renamed: map<string, string> = self._renamed ?? map {};
-        let original = renamed.delete(from) ?? from;
+        let renamed: map<string, string?> = self._renamed ?? map {};
+        let original = if (renamed.has(from)) {
+            renamed.delete(from)
+        } else {
+            from
+        };
         renamed[to] = original;
         self._renamed = renamed;
         true
