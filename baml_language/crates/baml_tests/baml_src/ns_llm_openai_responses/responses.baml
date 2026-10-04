@@ -88,15 +88,15 @@ function _oai_sparse_usage_response() -> string {
     body
 }
 
-// The shape gpt-6-luna returns when it splits one answer: a reasoning item, the
-// answer in a `commentary` message, then a `final_answer` message.
-function _oai_commentary_response(final_answer: string) -> string {
+// The shape gpt-6-luna returns when it splits one answer: a reasoning item, a
+// `commentary` message, then a `final_answer` message.
+function _oai_commentary_response(commentary_text: string, final_answer: string) -> string {
     let reasoning: map<string, unknown> = { "type": "reasoning", "content": [], "summary": [] };
     let commentary: map<string, unknown> = {
         "type": "message",
         "phase": "commentary",
         "role": "assistant",
-        "content": [{ "type": "output_text", "text": "{\"tool\": \"search_workouts\"} \n" }],
+        "content": [{ "type": "output_text", "text": commentary_text }],
     };
     let final_message: map<string, unknown> = {
         "type": "message",
@@ -683,11 +683,38 @@ test "oai_sparse_usage" {
     assert.equal(oai_sparse_usage(), "pong|0|0")
 }
 
-// Every message's text reaches the turn, and the runner parses the
-// `final_answer` when it fits the output type, else the `commentary` before it.
-function oai_commentary_answer(final_answer: string) -> string {
+// Every message's text reaches the turn with its phase.
+function oai_commentary_phases() -> string {
     root.llm_mock.mock_json_serve(
-        [root.llm_mock.MockResponse.ok(_oai_commentary_response(final_answer))],
+        [root.llm_mock.MockResponse.ok(_oai_commentary_response("Let me look.", "Done."))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let turn = cl.invoke(_oai_input(spec, ai.Journal.new(spec), ai.tools.Toolbox.new([])));
+            let blocks: string[] = [];
+            for (let block in turn.content) {
+                if let text: ai.content.Text = block {
+                    blocks.push(`${text.phase ?? "none"}:${text.text}`);
+                }
+            }
+            blocks.join("|")
+        },
+    )
+}
+
+test "oai_commentary_phases" {
+    assert.equal(oai_commentary_phases(), "commentary:Let me look.|final_answer:Done.")
+}
+
+// For a structured output the runner parses the `commentary` message when it
+// fits, else the `final_answer`.
+function oai_commentary_answer(commentary_text: string, final_answer: string) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_commentary_response(commentary_text, final_answer))],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ResponsesClient.new(
                 model = "gpt-4o-mini",
@@ -700,8 +727,10 @@ function oai_commentary_answer(final_answer: string) -> string {
 }
 
 test "oai_commentary_answer" {
-    assert.equal(oai_commentary_answer(""), "search_workouts");
-    assert.equal(oai_commentary_answer(`{"tool": "none"}`), "none")
+    let tool_call = "{\"tool\": \"search_workouts\"} \n";
+    assert.equal(oai_commentary_answer(tool_call, ""), "search_workouts");
+    assert.equal(oai_commentary_answer(tool_call, `{"tool": "none"}`), "search_workouts");
+    assert.equal(oai_commentary_answer("Let me look that up.", `{"tool": "none"}`), "none")
 }
 
 // Malformed `arguments` on a function_call item is PROVIDER-malformed output:

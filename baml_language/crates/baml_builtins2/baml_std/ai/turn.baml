@@ -52,27 +52,6 @@ class ModelTurn {
         out
     }
 
-    /// The texts the runner parses, in the order it tries them: every
-    /// non-blank Text block, from the last to the first. A provider can split
-    /// one answer over several messages (OpenAI Responses models send
-    /// `commentary` messages before the `final_answer`), so an earlier message
-    /// is the fallback when the final one is blank or does not parse. A turn
-    /// without a non-blank Text block yields its terminal text, or "".
-    function text_candidates(self) -> string[] {
-        let out: string[] = [];
-        for (let b in self.content) {
-            if let t: root.content.Text = b {
-                if (!t.text.trim().is_empty()) {
-                    out.push(t.text);
-                }
-            }
-        }
-        if (out.length() == 0) {
-            return [self.terminal_text() ?? ""];
-        }
-        out.reverse()
-    }
-
     /// The media payloads the turn produced, in order. A media-shaped output
     /// type is built from these instead of from the turn's text.
     function media(self) -> MediaPart[] {

@@ -9,6 +9,10 @@
 /// envelope.
 class Text {
     text: string,
+    // The phase of the message this text came from, when the provider labels
+    // it: OpenAI Responses models send intermediate `commentary` messages
+    // before the `final_answer`. Null when the provider does not label messages.
+    phase: ("commentary" | "final_answer")?,
 }
 
 class Reasoning {

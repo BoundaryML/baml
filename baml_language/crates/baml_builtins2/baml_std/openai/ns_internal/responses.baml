@@ -158,6 +158,8 @@ class OaOutputItem {
     // message / reasoning
     content: OaContentPart[]?,
     summary: OaContentPart[]?,
+    // message: "commentary" or "final_answer" on models that split an answer
+    phase: string?,
     // image_generation_call
     result: string?,
     revised_prompt: string?,
@@ -878,6 +880,17 @@ function _response_failure(resp: OaResponse) -> ai.errors.Failure {
 }
 
 /// One decoded response -> canonical content blocks and a stop reason.
+/// The canonical phase of a message item: one of the two values OpenAI
+/// documents, or null for an unlabeled message or a value this client does not
+/// know.
+function _message_phase(phase: string?) -> ("commentary" | "final_answer")? {
+    match (phase) {
+        "commentary" => "commentary",
+        "final_answer" => "final_answer",
+        _ => null,
+    }
+}
+
 function parse(resp: OaResponse) -> ai.ModelTurn {
     // A 200 whose response object failed (background mode, and every
     // `response.failed` stream event) is an error, not an empty turn.
@@ -910,17 +923,18 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
                 null
             },
             "message" => {
+                let phase = _message_phase(item.phase);
                 let parts: OaContentPart[] = item.content ?? [];
                 for (let part in parts) {
                     let kind = part.type ?? "";
                     match (kind) {
                         "output_text" => {
-                            content.push(ai.content.Text { text: part.text ?? "" });
+                            content.push(ai.content.Text { text: part.text ?? "", phase: phase });
                             null
                         },
                         "refusal" => {
                             refused = true;
-                            content.push(ai.content.Text { text: part.refusal ?? "" });
+                            content.push(ai.content.Text { text: part.refusal ?? "", phase: phase });
                             null
                         },
                         _ => null,

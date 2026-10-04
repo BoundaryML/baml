@@ -241,11 +241,57 @@ class Agent {
         ParsedOutput { value: value }
     }
 
-    /// (internal) The first of the turn's text candidates
-    /// (`ModelTurn.text_candidates`) that parses into an `Out`, or `null` when
-    /// none does.
+    /// (internal) Whether any text parses as an `Out`: `string`, or a union
+    /// with a `string` member (`string?` included).
+    function _text_shaped<Out>(self) -> bool {
+        let out = reflect.Type.of<Out>();
+        let text = reflect.Type.of<string>();
+        if (out == text) {
+            return true;
+        }
+        if let union: reflect.union.Type = out.as_union() {
+            return union.member_types().some((member) -> {
+                member == text
+            });
+        }
+        false
+    }
+
+    /// (internal) The turn's texts to parse into an `Out`, in the order to try
+    /// them. OpenAI Responses models can split one answer over several
+    /// messages: `commentary` messages that hold the model's next step (its
+    /// tool calls), then a `final_answer` written as if that step had run. For
+    /// a structured `Out` the commentary messages come first, in order, then
+    /// the other Text blocks from the last to the first. A text-shaped `Out`
+    /// tries every block from the last to the first: any text parses as a
+    /// string, so a commentary preamble would always beat the answer. Blank
+    /// blocks are skipped; a turn without a non-blank block yields its terminal
+    /// text, or "".
+    function _text_candidates<Out>(self, turn: ModelTurn) -> string[] {
+        let text_shaped = self._text_shaped<Out>();
+        let commentary: string[] = [];
+        let rest: string[] = [];
+        for (let b in turn.content) {
+            if let t: root.content.Text = b {
+                if (!t.text.trim().is_empty()) {
+                    if (t.phase == "commentary" && !text_shaped) {
+                        commentary.push(t.text);
+                    } else {
+                        rest.push(t.text);
+                    }
+                }
+            }
+        }
+        if (commentary.length() == 0 && rest.length() == 0) {
+            return [turn.terminal_text() ?? ""];
+        }
+        commentary.concat(rest.reverse())
+    }
+
+    /// (internal) The first of the turn's text candidates (`_text_candidates`)
+    /// that parses into an `Out`, or `null` when none does.
     function _parse_turn_text<Out>(self, turn: ModelTurn) -> ParsedOutput? {
-        for (let candidate in turn.text_candidates()) {
+        for (let candidate in self._text_candidates<Out>(turn)) {
             if let parsed: ParsedOutput = self._parse_text<Out>(candidate) {
                 return parsed;
             }
