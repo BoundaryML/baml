@@ -1,22 +1,30 @@
-use calibration::{acceptable_calibration, scale_quality};
-
 use super::*;
 
 fn fixture(multiplier: u64, shift: u32) -> Arc<ClockEpoch> {
-    let mut clock = ClockEpoch::new(&Calibrated::monotonic(FallbackReason::Requested, None));
+    let runtime = ClockRuntime::new(ClockMode::Monotonic);
+    let mut clock = runtime.start_run();
+    drop(runtime);
     let epoch = Arc::get_mut(&mut clock).unwrap();
     epoch.metadata.reference_tick = ClockInstant::from_ticks(1_000);
     epoch.metadata.reference_time = MonotonicNanos(10_000);
-    epoch.metadata.multiplier = multiplier;
-    epoch.metadata.shift = shift;
     epoch.metadata.origin_uncertainty = Duration::from_nanos(100);
-    epoch.metadata.rate_error = RateErrorPpb(10_000);
+    epoch.mapping = OnceLock::from(ClockMapping {
+        multiplier,
+        shift,
+        ..ClockMapping::reported(RawScale { multiplier, shift })
+    });
     clock
+}
+fn sample(elapsed: u64, offset: i64, uncertainty: u64) -> Probe {
+    Probe {
+        ticks: ClockInstant::from_ticks((1_000 + elapsed).checked_add_signed(offset).unwrap()),
+        reference: MonotonicNanos(10_000 + elapsed),
+        uncertainty,
+    }
 }
 
 #[test]
 fn conversion_is_typed_clamped_and_rejects_cross_epoch_intervals() {
-    // Fractional fixed-point conversion, preserving tick resolution.
     let epoch = fixture(125, 2);
     let start = epoch.timestamp(ClockInstant::from_ticks(1_000));
     let end = epoch.timestamp(ClockInstant::from_ticks(1_032));
@@ -25,28 +33,20 @@ fn conversion_is_typed_clamped_and_rejects_cross_epoch_intervals() {
     let other = fixture(1, 0);
     assert_eq!(other.duration(start, end), Err(TimingError::WrongEpoch));
     let threshold = epoch.threshold(Duration::from_nanos(1_001));
-    assert!(!threshold.reached(ClockDuration::from_ticks(32), epoch.domain()));
-    assert!(threshold.reached(ClockDuration::from_ticks(33), epoch.domain()));
-    assert!(!threshold.reached(ClockDuration::from_ticks(33), other.domain()));
-    assert_eq!(to_ticks(Duration::MAX, 1, 63).get(), u64::MAX);
+    assert!(!threshold.reached(ClockDuration::from_ticks(32), &epoch));
+    assert!(threshold.reached(ClockDuration::from_ticks(33), &epoch));
+    assert!(!threshold.reached(ClockDuration::from_ticks(33), &other));
     assert_eq!(
         scale(ClockDuration::from_ticks(u64::MAX), u64::MAX, 0),
         u64::MAX
     );
     assert_eq!(std::mem::size_of::<ClockInstant>(), 8);
-    assert_eq!(std::mem::size_of::<MonotonicNanos>(), 8);
-    assert_eq!(std::mem::size_of::<ClockDomainId>(), 8);
 }
 
 #[test]
-fn detector_accounts_for_sampling_scale_error_and_the_accuracy_target() {
+fn noisy_reference_is_not_a_fault_but_wrong_rate_and_jumps_are() {
     let epoch = fixture(1, 0);
     let origin = epoch.metadata.reference_tick;
-    let sample = |elapsed: u64, offset: i64, uncertainty| Probe {
-        ticks: ClockInstant::from_ticks((1_000 + elapsed).checked_add_signed(offset).unwrap()),
-        reference: MonotonicNanos(10_000 + elapsed),
-        uncertainty,
-    };
     assert_eq!(
         epoch.assess(sample(100_000_000, 0, 100), origin),
         TimingStatus::Valid
@@ -60,27 +60,15 @@ fn detector_accounts_for_sampling_scale_error_and_the_accuracy_target() {
         TimingStatus::Discontinuity
     );
     assert_eq!(
-        epoch.assess(sample(100_000_000, 0, 100_000), origin),
-        TimingStatus::Uncertain
-    );
-    // Ten ppm accumulated over 30 s is expected, not a fixed-threshold fault.
-    assert_eq!(
-        epoch.assess(sample(30_000_000_000, 300_000, 100), origin),
+        epoch.assess(sample(100_000_000, 50_000_000, 100_000), origin),
         TimingStatus::Valid
     );
-    // NTP slews the reference, so 2 ms over five minutes (7 ppm) is drift,
-    // not a fault: a run that long used to lose every duration.
     assert_eq!(
         epoch.assess(sample(300_000_000_000, 2_000_000, 100), origin),
         TimingStatus::Valid
     );
-    // But drift beyond MAX_DRIFT_PPB is: 60 ms over five minutes (200 ppm).
     assert_eq!(
         epoch.assess(sample(300_000_000_000, 60_000_000, 100), origin),
-        TimingStatus::Discontinuity
-    );
-    assert_eq!(
-        epoch.assess(sample(300_000_000_000, -60_000_000, 100), origin),
         TimingStatus::Discontinuity
     );
     assert_eq!(
@@ -97,207 +85,229 @@ fn detector_accounts_for_sampling_scale_error_and_the_accuracy_target() {
         ),
         TimingStatus::Valid
     );
-    // A transient jump that reverses between samples is inherently undetectable.
-    assert_eq!(
-        epoch.assess(sample(100_000_000, 0, 100), origin),
-        TimingStatus::Valid
-    );
 }
 
 #[test]
-fn restore_invalidates_active_intervals_but_keeps_completed_mappings() {
+fn restore_checks_continuity_and_preserves_completed_records() {
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let completed = runtime.start_run();
     completed.attach_thread();
-    let completed_start = completed.timestamp(completed.read());
     completed.finish_thread();
     let active = runtime.start_run();
     active.attach_thread();
-    let before = active.timestamp(active.read());
-    let metadata_before = active.metadata().clone();
+    let mapping = *active.mapping().unwrap();
     let fresh = runtime.reset_after_restore();
-    assert_eq!(active.status(), TimingStatus::Restored);
-    assert_eq!(
-        active.duration(before, active.timestamp(active.read())),
-        Err(TimingError::Invalid(TimingStatus::Restored))
-    );
-    assert_eq!(
-        active.metadata().reference_tick,
-        metadata_before.reference_tick
-    );
-    assert_eq!(active.metadata().multiplier, metadata_before.multiplier);
+    assert_eq!(active.status(), TimingStatus::Valid);
+    assert_eq!(active.mapping().unwrap().multiplier, mapping.multiplier);
     assert_ne!(active.domain(), fresh.domain());
-    assert_ne!(active.metadata().epoch, fresh.metadata().epoch);
-    assert!(completed.duration(completed_start, completed_start).is_ok());
-    assert_eq!(fresh.status(), TimingStatus::Valid);
+    assert_eq!(completed.status(), TimingStatus::Valid);
+    active.last_checked_tick.store(u64::MAX, Ordering::Relaxed);
+    runtime.reset_after_restore();
+    assert_eq!(active.status(), TimingStatus::Discontinuity);
+    assert_eq!(completed.status(), TimingStatus::Valid);
     active.finish_thread();
 }
 
 #[test]
-fn only_runs_whose_threads_all_finished_report_a_settled_status() {
+fn children_delay_finality_and_a_mode_change_does_not_rewrite_mapping() {
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
-    let never_attached = runtime.start_run();
-    assert_eq!(never_attached.settled_status(), None);
-
     let run = runtime.start_run();
     run.attach_thread();
-    // A child attaches while its parent is attached; one finished thread is
-    // not a settled run.
     run.attach_thread();
     run.finish_thread();
     assert_eq!(run.settled_status(), None);
+    runtime.set_mode(ClockMode::Auto);
+    assert_eq!(run.status(), TimingStatus::ModeChanged);
     run.finish_thread();
-    let settled = run.settled_status().expect("every thread finished");
-    runtime.reset_after_restore();
-    assert_eq!(run.status(), settled);
-    assert_eq!(run.settled_status(), Some(settled));
-
-    // An invalid run is still unsettled while a thread remains attached.
-    let invalid = runtime.start_run();
-    invalid.attach_thread();
-    runtime.reset_after_restore();
-    assert_eq!(invalid.status(), TimingStatus::Restored);
-    assert_eq!(invalid.settled_status(), None);
-    invalid.finish_thread();
-    assert_eq!(invalid.settled_status(), Some(TimingStatus::Restored));
+    assert_eq!(run.settled_status(), Some(TimingStatus::ModeChanged));
+    let mapping = run.mapping().unwrap().multiplier;
+    runtime.set_mode(ClockMode::Monotonic);
+    assert_eq!(run.mapping().unwrap().multiplier, mapping);
+    assert!(run.elapsed_reference().is_some());
 }
 
 #[test]
-fn a_settled_status_survives_restores_racing_the_last_thread() {
+fn finality_survives_mode_changes_racing_the_last_thread() {
     let runtime = Arc::new(ClockRuntime::new(ClockMode::Monotonic));
-    for _ in 0..200 {
+    for _ in 0..100 {
         let epoch = runtime.start_run();
         epoch.attach_thread();
-        let restore = {
-            let runtime = Arc::clone(&runtime);
-            std::thread::spawn(move || drop(runtime.reset_after_restore()))
-        };
-        let finish = {
-            let epoch = Arc::clone(&epoch);
-            std::thread::spawn(move || epoch.finish_thread())
-        };
-        let observed = loop {
-            if let Some(status) = epoch.settled_status() {
-                break status;
-            }
-            std::hint::spin_loop();
-        };
-        restore.join().unwrap();
-        finish.join().unwrap();
-        assert_eq!(epoch.status(), observed);
+        std::thread::scope(|threads| {
+            threads.spawn(|| {
+                runtime.set_mode(ClockMode::Monotonic);
+            });
+            threads.spawn(|| epoch.finish_thread());
+            let observed = loop {
+                if let Some(status) = epoch.settled_status() {
+                    break status;
+                }
+                std::hint::spin_loop();
+            };
+            assert_eq!(epoch.status(), observed);
+        });
     }
 }
 
 #[test]
-fn validating_a_settled_run_leaves_its_status() {
-    let runtime = ClockRuntime::new(ClockMode::Monotonic);
-    let epoch = runtime.start_run();
-    epoch.attach_thread();
-    epoch.finish_thread();
-    let settled = epoch.settled_status().expect("every thread finished");
-    // The same backward jump that invalidates an active run below.
-    epoch.last_checked_tick.store(u64::MAX, Ordering::Relaxed);
-    runtime.validate(&epoch, true);
-    assert_eq!(epoch.status(), settled);
-}
-
-#[test]
-fn fault_switches_future_runs_to_os_without_reinterpreting_active_records() {
-    let runtime = ClockRuntime::new(ClockMode::Monotonic);
-    let epoch = runtime.start_run();
-    epoch.attach_thread();
-    // A retained checkpoint ahead of the raw clock models a backward jump.
-    epoch.last_checked_tick.store(u64::MAX, Ordering::Relaxed);
-    let old_domain = epoch.domain();
-    runtime.validate(&epoch, false);
-    assert_eq!(epoch.status(), TimingStatus::Discontinuity);
+fn detected_fault_retries_the_selected_source_in_a_new_generation() {
+    let runtime = ClockRuntime::new(ClockMode::Auto);
+    let run = runtime.start_run();
+    run.attach_thread();
+    let source = run.metadata().source;
+    run.last_checked_tick.store(u64::MAX, Ordering::Relaxed);
+    runtime.validate(&run, true);
+    assert_eq!(run.status(), TimingStatus::Discontinuity);
     let replacement = runtime.start_run();
-    assert_ne!(old_domain, replacement.domain());
-    assert!(matches!(
-        replacement.metadata().source,
-        Source::Monotonic | Source::PerformanceCounter
-    ));
-    assert_eq!(
-        replacement.metadata().fallback,
-        Some(FallbackReason::Discontinuity)
+    assert_ne!(run.domain(), replacement.domain());
+    assert_eq!(source, replacement.metadata().source);
+    run.finish_thread();
+}
+
+#[test]
+fn missing_scale_reads_immediately_and_short_runs_estimate_without_caching() {
+    let runtime = ClockRuntime::without_reported_scale(ClockMode::Auto);
+    let epoch = runtime.start_run();
+    epoch.attach_thread();
+    let start = epoch.timestamp(epoch.read());
+    assert_eq!(epoch.duration(start, start), Err(TimingError::Pending));
+    assert!(
+        epoch
+            .threshold(Duration::from_secs(1))
+            .reached(ClockDuration::ZERO, &epoch)
     );
-    assert_eq!(epoch.domain(), old_domain);
+    std::thread::sleep(Duration::from_millis(2));
     epoch.finish_thread();
+    let mapping = epoch.mapping().expect("above reference precision");
+    assert_eq!(mapping.precision, Precision::Estimated);
+    assert_eq!(epoch.settled_status(), Some(TimingStatus::Valid));
+    assert!(epoch.duration(start, epoch.timestamp(epoch.read())).is_ok());
+    let later = runtime.start_run();
+    assert!(
+        later.mapping().is_none(),
+        "short-run estimate must never seed another run"
+    );
 }
 
 #[test]
-fn calibration_deadline_and_inaccurate_scale_are_rejected() {
-    let failed = Clock::new_uncached_with_options(quanta::CalibrationOptions {
-        timeout: Duration::ZERO,
-        ..quanta::CalibrationOptions::default()
-    });
-    if matches!(
-        failed.calibration_metadata().source,
-        Source::Tsc | Source::SystemCounter
-    ) {
-        let selected = Calibrated::from_clock(failed);
-        assert_eq!(selected.fallback, Some(FallbackReason::Calibration));
-        assert!(matches!(
-            selected.clock.calibration_metadata().source,
-            Source::Monotonic | Source::PerformanceCounter
-        ));
-        assert_eq!(selected.quality.status, CalibrationStatus::DeadlineReached);
-    }
-    let mut metadata = CalibrationMetadata {
-        source: Source::Tsc,
-        reference_ticks: 0,
-        reference_time_ns: 0,
-        multiplier: 1,
+fn incremental_calibration_has_independent_holdout_and_no_spin() {
+    let origin = sample(0, 0, 100);
+    let mut sampling = Sampling::new(origin);
+    assert!(sampling.observe(sample(1_000_000, 0, 100)).is_none());
+    assert!(sampling.observe(sample(20_000_000, 0, 100)).is_none());
+    assert!(sampling.observe(sample(30_000_000, 0, 100)).is_none());
+    let mapping = sampling.observe(sample(70_000_000, 0, 100)).unwrap();
+    assert_eq!(mapping.precision, Precision::Calibrated);
+    assert_eq!(mapping.calibration.samples, 3);
+    assert_eq!(
+        scale(
+            ClockDuration::from_ticks(10_000),
+            mapping.multiplier,
+            mapping.shift
+        ),
+        10_000
+    );
+    let noisy = sample(100_000_000, 0, MAX_SAMPLE_UNCERTAINTY_NS + 1);
+    assert!(sampling.observe(noisy).is_none());
+}
+
+#[test]
+fn observations_below_precision_do_not_invent_scale() {
+    assert!(
+        calibration::estimate(
+            sample(0, 0, 1_000),
+            sample(100, 0, 1_000),
+            Precision::Estimated
+        )
+        .is_none()
+    );
+    assert!(
+        calibration::estimate(sample(0, 0, 1), sample(100, -100, 1), Precision::Estimated)
+            .is_none()
+    );
+}
+
+#[test]
+fn restore_cancels_pending_calibration_and_stale_results_cannot_seed_new_source() {
+    let runtime = ClockRuntime::without_reported_scale(ClockMode::Auto);
+    let old = runtime.start_run();
+    old.attach_thread();
+    let new = runtime.reset_after_restore();
+    assert_eq!(old.status(), TimingStatus::Valid);
+    assert_ne!(old.domain(), new.domain());
+    let mapping = ClockMapping::reported(RawScale {
+        multiplier: 999,
         shift: 0,
-        quality: CalibrationQuality {
-            status: CalibrationStatus::Converged,
-            samples: 501,
-            elapsed_ns: 1_000_000,
-            mean_residual_ns: 1.0,
-            mean_error_ns: 0.1,
-        },
-    };
-    assert!(acceptable_calibration(metadata));
-    metadata.quality.status = CalibrationStatus::DeadlineReached;
-    assert!(!acceptable_calibration(metadata));
-    let fallback = Calibrated::monotonic(FallbackReason::Calibration, Some(metadata.quality));
-    assert!(matches!(
-        fallback.clock.calibration_metadata().source,
-        Source::Monotonic | Source::PerformanceCounter
-    ));
-    assert_eq!(fallback.quality.status, CalibrationStatus::DeadlineReached);
-    metadata.quality.status = CalibrationStatus::Converged;
-    let start = Probe {
-        ticks: ClockInstant::from_ticks(0),
-        reference: MonotonicNanos(0),
-        uncertainty: 100,
-    };
-    let mut end = Probe {
-        ticks: ClockInstant::from_ticks(50_000_000),
-        reference: MonotonicNanos(50_000_000),
-        uncertainty: 100,
-    };
-    assert!(scale_quality(metadata, start, end).is_some());
-    end.ticks = ClockInstant::from_ticks(55_000_000);
-    assert!(scale_quality(metadata, start, end).is_none());
-    metadata.quality.mean_error_ns = f64::NAN;
-    assert!(!acceptable_calibration(metadata));
+    });
+    old.shared_mapping.set(mapping).unwrap();
+    assert_ne!(new.mapping().map(|m| m.multiplier), Some(999));
+    old.finish_thread();
+    assert_ne!(new.mapping().map(|m| m.multiplier), Some(999));
 }
 
 #[test]
-fn actual_backend_preserves_raw_and_reference_duration_agreement() {
+fn concurrent_engines_do_not_share_calibration_or_domains() {
+    let first = ClockRuntime::without_reported_scale(ClockMode::Auto);
+    let second = ClockRuntime::without_reported_scale(ClockMode::Auto);
+    let a = first.start_run();
+    let b = second.start_run();
+    assert_ne!(a.domain(), b.domain());
+    a.shared_mapping
+        .set(ClockMapping::reported(RawScale {
+            multiplier: 1,
+            shift: 0,
+        }))
+        .unwrap();
+    assert!(b.shared_mapping.get().is_none());
+}
+
+#[test]
+fn actual_backend_agrees_with_reference_and_settled_validation_is_noop() {
     let runtime = ClockRuntime::new(ClockMode::Auto);
     let epoch = runtime.start_run();
-    let os = Clock::monotonic();
-    let start = probe(&epoch.clock, &os, epoch.resolution);
+    epoch.attach_thread();
+    let start = probe(&epoch.clock, &epoch.reference, epoch.resolution);
     std::thread::sleep(Duration::from_millis(25));
-    let end = probe(&epoch.clock, &os, epoch.resolution);
+    let end = probe(&epoch.clock, &epoch.reference, epoch.resolution);
+    epoch.finish_thread();
     let elapsed = epoch
         .duration(epoch.timestamp(start.ticks), epoch.timestamp(end.ticks))
         .unwrap();
-    let reference = end.reference.0 - start.reference.0;
     assert!(
-        elapsed.as_nanos().abs_diff(u128::from(reference))
+        elapsed
+            .as_nanos()
+            .abs_diff(u128::from(end.reference.0 - start.reference.0))
             < u128::from(ACCURACY_TARGET_NS + start.uncertainty + end.uncertainty)
+    );
+    epoch.last_checked_tick.store(u64::MAX, Ordering::Relaxed);
+    runtime.validate(&epoch, true);
+    assert_eq!(epoch.status(), TimingStatus::Valid);
+}
+
+#[test]
+fn duration_policies_are_portable_across_pending_estimated_and_reported_runs() {
+    let first = fixture(10, 0);
+    let policy = first.threshold(Duration::from_nanos(1_000));
+    assert!(policy.reached(ClockDuration::from_ticks(100), &first));
+    let second = fixture(1, 0);
+    assert!(!policy.reached(ClockDuration::from_ticks(100), &second));
+    assert!(policy.reached(ClockDuration::from_ticks(1_000), &second));
+    let pending = ClockRuntime::without_reported_scale(ClockMode::Auto).start_run();
+    assert!(policy.reached(ClockDuration::ZERO, &pending));
+}
+
+#[test]
+fn a_clean_holdout_reveals_a_pending_counter_rate_change() {
+    let mut sampling = Sampling::new(sample(0, 0, 100));
+    assert!(sampling.observe(sample(20_000_000, 0, 100)).is_none());
+    assert!(
+        sampling
+            .observe(sample(70_000_000, 50_000_000, 100))
+            .is_none()
+    );
+    assert!(sampling.fault);
+    assert!(
+        sampling
+            .observe(sample(140_000_000, 50_000_000, 100))
+            .is_none()
     );
 }

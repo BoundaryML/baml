@@ -112,6 +112,7 @@ pub struct RecordingBuilder {
     pending_span_reservation: usize,
     span_credit: usize,
     metadata_replay: bool,
+    replay_minor: u32,
     ended: bool,
 }
 impl RecordingBuilder {
@@ -135,6 +136,7 @@ impl RecordingBuilder {
             pending_span_reservation: 0,
             span_credit: 0,
             metadata_replay: false,
+            replay_minor: 0,
             ended: false,
         })
     }
@@ -241,6 +243,23 @@ impl RecordingBuilder {
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
         let ready = self.buffer.take();
+        let clock_minor = if !ready.definitions.clock_anchors.is_empty()
+            || ready.definitions.clock_epochs.iter().any(|epoch| {
+                epoch.precision != proto::ClockPrecision::Unspecified as i32
+                    || epoch.source == proto::ClockSource::MachAbsolute as i32
+            })
+            || ready.clock_states.states.iter().any(|state| {
+                state.elapsed_reference_ns.is_some() || state.elapsed_uncertainty_ns.is_some()
+            }) {
+            btel_settings::encoding::CLOCK_MAPPING_FORMAT_MINOR
+        } else {
+            0
+        };
+        if self.metadata_replay {
+            // A dropped file's metadata can be replayed into any later file.
+            // Keep its feature requirement even when this file has no new map.
+            self.replay_minor = self.replay_minor.max(clock_minor);
+        }
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
@@ -248,6 +267,8 @@ impl RecordingBuilder {
                     .buffer
                     .spans
                     .format_minor()
+                    .max(clock_minor)
+                    .max(self.replay_minor)
                     .max(if self.process.is_some() {
                         btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
                     } else {

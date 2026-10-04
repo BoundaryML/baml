@@ -663,7 +663,7 @@ impl TelemetryState {
             }
         }
         let policy = self.policy_by_id(policy_id);
-        let mode = mode_override.unwrap_or_else(|| {
+        let mut mode = mode_override.unwrap_or_else(|| {
             if policy_id == btel_types::TelemetryPolicyId::NONE {
                 InvocationMode::Span
             } else {
@@ -673,6 +673,16 @@ impl TelemetryState {
 
         if mode == InvocationMode::Hidden {
             return None;
+        }
+        // Pending duration policies capture now: the VM values are gone once
+        // the clock's scale becomes available. The ordinary policy-zero path
+        // does not consult clock calibration or mapping state.
+        if policy_id != btel_types::TelemetryPolicyId::NONE
+            && policy
+                .promotion_duration_threshold
+                .is_some_and(|threshold| threshold.reached(ClockDuration::ZERO, &self.clock))
+        {
+            mode = InvocationMode::Span;
         }
 
         let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
@@ -1074,7 +1084,7 @@ impl TelemetryState {
                 ),
             }
             self.thread.active_id = telemetry.saved_parent_id;
-        } else if policy::promotes(policy, elapsed, outcome, self.clock.domain()) {
+        } else if policy::promotes(policy, elapsed, outcome, &self.clock) {
             let captured_value =
                 capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
             match (outcome, telemetry.is_reentry()) {
@@ -1534,6 +1544,67 @@ mod tests {
                 |_, _| (None, function.telemetry_function_id.unwrap()),
             )
         }
+    }
+
+    #[test]
+    fn pending_duration_policy_captures_inputs_and_output_from_entry() {
+        let runtime =
+            btel_clock::ClockRuntime::without_reported_scale(btel_clock::ClockMode::Monotonic);
+        let clock = runtime.start_run();
+        let function = function(FunctionKind::Bytecode, None);
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), Arc::clone(&clock));
+        state
+            .set_policy(
+                &function,
+                TelemetryPolicy {
+                    promotion_duration_threshold: Some(
+                        clock.threshold(std::time::Duration::from_secs(10)),
+                    ),
+                    capture_inputs: true,
+                    capture_output: true,
+                    ..TelemetryPolicy::NONE
+                },
+            )
+            .unwrap();
+        let frame = trace_entry(&mut state, &function, None).unwrap();
+        assert!(frame.span_id().is_some());
+        // SAFETY: immediate values, and the function remains live in this test.
+        unsafe {
+            state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(9)));
+        }
+        let records = state.span_records();
+        let inputs = records
+            .iter()
+            .find_map(|r| match r {
+                SpanRecord::FunctionSpanAnnouncement {
+                    captured_inputs: Some(inputs),
+                    ..
+                } => Some(inputs),
+                _ => None,
+            })
+            .expect("capture while VM arguments are live");
+        assert!(matches!(
+            inputs.roots()[0],
+            btel_snapshot::SnapshotValue::Int(7)
+        ));
+        let output = records
+            .iter()
+            .find_map(|r| match r {
+                SpanRecord::FunctionSpanCompletionOk {
+                    captured_value: Some(output),
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                    captured_value: Some(output),
+                    ..
+                } => Some(output),
+                _ => None,
+            })
+            .expect("requested output survives pending calibration");
+        assert!(matches!(
+            output.roots()[0],
+            btel_snapshot::SnapshotValue::Int(9)
+        ));
     }
 
     #[test]

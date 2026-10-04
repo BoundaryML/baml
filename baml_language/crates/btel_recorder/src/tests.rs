@@ -535,18 +535,12 @@ fn clock_snapshots_are_owned_immutable_and_final_only_once_settled() {
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let epoch = runtime.start_run();
     epoch.attach_thread();
-    let before = clock::definition(epoch.metadata());
+    let before = clock::definition(&epoch).unwrap();
     let status_before = clock::state(&epoch);
     let fresh = runtime.reset_after_restore();
-    assert_eq!(clock::definition(epoch.metadata()), before);
+    assert_eq!(clock::definition(&epoch).unwrap(), before);
     assert_ne!(fresh.metadata().epoch.get(), before.epoch_id);
-    let expected_status = if status_before.status == proto::TimingStatus::Valid as i32 {
-        proto::TimingStatus::Restored as i32
-    } else {
-        // A heavily descheduled origin probe may already be uncertain. Reset
-        // preserves that invalid status rather than rewriting its first cause.
-        status_before.status
-    };
+    let expected_status = status_before.status;
     assert_eq!(clock::state(&epoch).status, expected_status);
     assert!(!status_before.r#final);
     let bytes = before.encode_to_vec();
@@ -828,4 +822,37 @@ fn snapshot() -> btel_snapshot::Snapshot {
         btel_snapshot::SnapshotValue::Int(42),
         &mut btel_snapshot::Shaper::default(),
     )
+}
+
+#[test]
+fn pending_anchor_survives_until_one_final_estimated_mapping() {
+    let runtime = ClockRuntime::without_reported_scale(ClockMode::Auto);
+    let epoch = runtime.start_run();
+    epoch.attach_thread();
+    epoch.attach_thread();
+    let id = allocate_telemetry_id();
+    let mut buffer = ConversionBuffer::default();
+    buffer.thread_definition(id, None, CallPathId::ROOT, epoch.read(), &epoch, None);
+    let first = buffer.take();
+    assert_eq!(first.definitions.clock_anchors.len(), 1);
+    assert!(first.definitions.clock_epochs.is_empty());
+    epoch.finish_thread();
+    assert!(!buffer.observe_unsettled_clocks(true));
+    assert!(buffer.take().definitions.clock_epochs.is_empty());
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    epoch.finish_thread();
+    assert!(buffer.observe_unsettled_clocks(true));
+    let last = buffer.take();
+    assert_eq!(last.definitions.clock_epochs.len(), 1);
+    assert_eq!(
+        last.definitions.clock_epochs[0].precision,
+        proto::ClockPrecision::Estimated as i32
+    );
+    assert!(last.clock_states.states[0].r#final);
+    assert!(last.clock_states.states[0].elapsed_reference_ns.is_some());
+    buffer.observe_unsettled_clocks(true);
+    assert!(
+        buffer.take().definitions.clock_epochs.is_empty(),
+        "mapping is never rewritten"
+    );
 }

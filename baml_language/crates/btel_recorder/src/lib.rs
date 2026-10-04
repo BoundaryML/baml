@@ -63,7 +63,7 @@ struct ConversionBuffer {
     functions: functions::FunctionDefinitions,
     // Referenced epochs not yet observed settled, released once final. Bounded
     // by live runs plus runs settled since the last sealed file.
-    unsettled_clocks: BTreeMap<u64, Arc<btel_clock::ClockEpoch>>,
+    unsettled_clocks: BTreeMap<u64, (Arc<btel_clock::ClockEpoch>, bool)>,
     // Cached repeated-message bytes. Span bytes are already materialized.
     pending_encoded_bytes: usize,
     // Unwinds in progress, at most one per telemetry thread. Empty unless an
@@ -103,18 +103,30 @@ impl ConversionBuffer {
             },
         );
         push_message(
-            &mut self.pending.definitions.clock_epochs,
+            &mut self.pending.definitions.clock_anchors,
             &mut self.pending_encoded_bytes,
-            4,
-            clock::definition(clock.metadata()),
+            5,
+            clock::anchor(clock.metadata()),
         );
+        let emitted = if let Some(definition) = clock::definition(clock) {
+            push_message(
+                &mut self.pending.definitions.clock_epochs,
+                &mut self.pending_encoded_bytes,
+                4,
+                definition,
+            );
+            true
+        } else {
+            false
+        };
         let state = clock::state(clock);
         if state.r#final {
             self.unsettled_clocks.remove(&state.epoch_id);
         } else {
             self.unsettled_clocks
                 .entry(state.epoch_id)
-                .or_insert_with(|| Arc::clone(clock));
+                .or_insert_with(|| (Arc::clone(clock), emitted))
+                .1 |= emitted;
         }
         push_message(
             &mut self.pending.clock_states.states,
@@ -130,7 +142,18 @@ impl ConversionBuffer {
     fn observe_unsettled_clocks(&mut self, latest: bool) -> bool {
         let states = &mut self.pending.clock_states.states;
         let bytes = &mut self.pending_encoded_bytes;
-        self.unsettled_clocks.retain(|_, epoch| {
+        self.unsettled_clocks.retain(|_, (epoch, emitted)| {
+            if !*emitted {
+                if let Some(definition) = clock::definition(epoch) {
+                    push_message(
+                        &mut self.pending.definitions.clock_epochs,
+                        bytes,
+                        4,
+                        definition,
+                    );
+                    *emitted = true;
+                }
+            }
             let state = clock::state(epoch);
             let settled = state.r#final;
             if settled || latest {

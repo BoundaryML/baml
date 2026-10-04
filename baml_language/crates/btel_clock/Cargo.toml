@@ -17,6 +17,9 @@ doctest = false
 [lints]
 workspace = true
 
+[features]
+test-support = [  ]
+
 [dependencies]
 btel_settings = { workspace = true }
 btel_types = { workspace = true }

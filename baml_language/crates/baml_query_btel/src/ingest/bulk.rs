@@ -310,17 +310,15 @@ impl ThreadRow {
 }
 
 struct EpochDef {
-    domain: u64,
-    source: i32,
     multiplier: Option<i64>,
     shift: i64,
-    utc_ticks: Option<i64>,
-    utc_unix_ns: Option<i64>,
     definition: Vec<u8>,
+    precision: i32,
 }
 
 #[derive(Default)]
 struct EpochRow {
+    anchor: Option<proto::ClockEpochAnchor>,
     def: Option<EpochDef>,
     conflict: bool,
 }
@@ -394,7 +392,7 @@ pub(super) struct Bulk {
     threads: Table<u64, ThreadRow>,
     epochs: FxHashMap<u64, EpochRow>,
     /// Most severe status and finality per epoch.
-    epoch_states: FxHashMap<u64, (i64, bool)>,
+    epoch_states: FxHashMap<u64, (i64, bool, Option<i64>, Option<i64>)>,
     aggregates: Table<u64, SmallTotals>,
     /// Nodes whose sums outgrew `SmallTotals`, summed exactly.
     large_aggregates: FxHashMap<u64, Totals>,
@@ -564,6 +562,9 @@ impl Bulk {
             for path in &definitions.call_paths {
                 self.call_path(sequence, path);
             }
+            for anchor in &definitions.clock_anchors {
+                self.anchor(sequence, anchor);
+            }
             for epoch in &definitions.clock_epochs {
                 self.epoch(sequence, epoch);
             }
@@ -577,12 +578,16 @@ impl Bulk {
                 let Some(status) = EpochStatus::from_wire(state.status) else {
                     continue;
                 };
-                let entry = self
-                    .epoch_states
-                    .entry(state.epoch_id)
-                    .or_insert((status.code(), state.r#final));
+                let entry = self.epoch_states.entry(state.epoch_id).or_insert((
+                    status.code(),
+                    state.r#final,
+                    None,
+                    None,
+                ));
                 entry.0 = entry.0.max(status.code());
                 entry.1 |= state.r#final;
+                entry.2 = entry.2.max(state.elapsed_reference_ns.and_then(quantity));
+                entry.3 = entry.3.max(state.elapsed_uncertainty_ns.and_then(quantity));
             }
         }
         if let Some(batch) = &file.aggregates {
@@ -994,7 +999,25 @@ impl Bulk {
         }
     }
 
+    fn anchor(&mut self, sequence: u64, anchor: &proto::ClockEpochAnchor) {
+        let row = self.epochs.entry(anchor.epoch_id).or_default();
+        match &row.anchor {
+            Some(first) if first != anchor => {
+                row.conflict = true;
+                push_issue(
+                    &mut self.issues,
+                    sequence,
+                    "clock_anchor_conflict",
+                    Some(format!("c{}", anchor.epoch_id)),
+                    "two different anchors for one clock epoch; timings using it are unavailable",
+                );
+            }
+            None => row.anchor = Some(*anchor),
+            _ => {}
+        }
+    }
     fn epoch(&mut self, sequence: u64, epoch: &proto::ClockEpochDefinition) {
+        self.anchor(sequence, &btel_reader::timing::epoch_anchor(epoch));
         let definition = epoch.encode_to_vec();
         let row = self.epochs.entry(epoch.epoch_id).or_default();
         match &row.def {
@@ -1010,18 +1033,11 @@ impl Bulk {
                 );
             }
             None => {
-                let utc = epoch
-                    .utc
-                    .as_ref()
-                    .and_then(btel_reader::timing::UtcAnchor::from_wire);
                 row.def = Some(EpochDef {
-                    domain: epoch.domain_id,
-                    source: epoch.source,
                     multiplier: quantity(epoch.multiplier),
                     shift: i64::from(epoch.shift),
-                    utc_ticks: utc.and_then(|u| quantity(u.ticks)),
-                    utc_unix_ns: utc.and_then(|u| i64::try_from(u.unix_ns).ok()),
                     definition,
+                    precision: epoch.precision,
                 });
             }
         }
@@ -1160,7 +1176,13 @@ impl Bulk {
                     def.multiplier,
                     Some(def.shift),
                     self.epoch_states.get(epoch).map(|state| state.0),
-                    1 + i64::from(row.conflict),
+                    if row.conflict {
+                        2
+                    } else if def.precision == 3 {
+                        3
+                    } else {
+                        1
+                    },
                 );
                 Some((*epoch, clock))
             })
@@ -1539,8 +1561,8 @@ impl Bulk {
         insert_rows(
             tx,
             "epoch (rec, epoch_id, defined, domain_id, source, multiplier, shift, utc_ticks,
-               utc_unix_ns, definition, conflict)",
-            11,
+               utc_unix_ns, definition, conflict, precision, anchor)",
+            13,
             &ids,
             |b, epoch| {
                 let row = &self.epochs[&epoch];
@@ -1548,29 +1570,38 @@ impl Bulk {
                 b.bind(rec)?;
                 b.bind(id(epoch))?;
                 b.bind(def.is_some())?;
-                b.bind(def.map(|d| id(d.domain)))?;
-                b.bind(def.map(|d| d.source))?;
+                b.bind(row.anchor.as_ref().map(|a| id(a.domain_id)))?;
+                b.bind(row.anchor.as_ref().map(|a| a.source))?;
                 b.bind(def.and_then(|d| d.multiplier))?;
                 b.bind(def.map(|d| d.shift))?;
-                b.bind(def.and_then(|d| d.utc_ticks))?;
-                b.bind(def.and_then(|d| d.utc_unix_ns))?;
+                let utc = row
+                    .anchor
+                    .as_ref()
+                    .and_then(|a| a.utc.as_ref())
+                    .and_then(btel_reader::timing::UtcAnchor::from_wire);
+                b.bind(utc.and_then(|u| quantity(u.ticks)))?;
+                b.bind(utc.and_then(|u| i64::try_from(u.unix_ns).ok()))?;
                 b.bind(def.map(|d| d.definition.as_slice()))?;
-                b.bind(row.conflict)
+                b.bind(row.conflict)?;
+                b.bind(def.map_or(0, |d| d.precision))?;
+                b.bind(row.anchor.as_ref().map(prost::Message::encode_to_vec))
             },
         )?;
         let mut ids: Vec<u64> = self.epoch_states.keys().copied().collect();
         ids.sort_unstable();
         insert_rows(
             tx,
-            "epoch_state (rec, epoch_id, status, final)",
-            4,
+            "epoch_state (rec, epoch_id, status, final, elapsed_reference_ns, elapsed_uncertainty_ns)",
+            6,
             &ids,
             |b, epoch| {
-                let (status, r#final) = self.epoch_states[&epoch];
+                let (status, r#final, elapsed, uncertainty) = self.epoch_states[&epoch];
                 b.bind(rec)?;
                 b.bind(id(epoch))?;
                 b.bind(status)?;
-                b.bind(r#final)
+                b.bind(r#final)?;
+                b.bind(elapsed)?;
+                b.bind(uncertainty)
             },
         )
     }
