@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>The native library ({@code libbridge_java.so} — the {@code bridge_java}
  * Rust cdylib) is loaded once via {@link NativeLibraryLoader}, following a
  * first-hit-wins ladder: (1) the system property {@code baml.bridge.lib} (dev
- * override), (2) the environment variable {@code BAML_JAVA_BRIDGE_LIB} (dev/test
+ * override), (2) the environment variable {@code BAML_BRIDGE_PATH} (dev/test
  * override), then (3) the bundled per-platform classpath resource
  * {@code /native/{os}-{arch}/{libname}} (extracted to a temp file and loaded) —
  * so a published {@code baml-bridge} + its {@code natives-*} jar is
@@ -45,7 +45,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class BamlFfi {
     /** Env var / system property naming the native library to {@code System.load}. */
-    public static final String LIB_ENV_VAR = "BAML_JAVA_BRIDGE_LIB";
+    public static final String LIB_ENV_VAR = "BAML_BRIDGE_PATH";
     public static final String LIB_PROPERTY = "baml.bridge.lib";
 
     /**

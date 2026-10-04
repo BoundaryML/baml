@@ -43,7 +43,7 @@ if (Get-Command gradle -ErrorAction SilentlyContinue) {
 }
 
 # 1. Native bridge library the fixtures load at runtime (Windows:
-#    target\debug\bridge_java.dll; BAML_JAVA_BRIDGE_LIB must point at it).
+#    target\debug\bridge_java.dll; BAML_BRIDGE_PATH must point at it).
 Write-Host "==> cargo build -p bridge_java (native bridge library)"
 Push-Location $WorkspaceRoot
 try {

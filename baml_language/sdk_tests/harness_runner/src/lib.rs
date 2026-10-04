@@ -220,7 +220,7 @@ pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cach
 }
 
 /// Java-fixture variant of [`run_test_cmd`]: injects
-/// `BAML_JAVA_BRIDGE_LIB` pointing at the workspace-built
+/// `BAML_BRIDGE_PATH` pointing at the workspace-built
 /// `bridge_java` cdylib (produced by `crates/java/setup.sh`), so the
 /// generated `Baml` anchor can `System.load` the engine during tests.
 pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
@@ -244,7 +244,7 @@ pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env
         cmd,
         cache_subdir,
         cache_env_var,
-        &[("BAML_JAVA_BRIDGE_LIB", lib_str.as_str())],
+        &[("BAML_BRIDGE_PATH", lib_str.as_str())],
     );
 }
 

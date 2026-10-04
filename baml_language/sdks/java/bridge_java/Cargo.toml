@@ -7,7 +7,7 @@ license.workspace = true
 
 [lib]
 # Produces `libbridge_java.so` / `.dylib` / `bridge_java.dll`. Loaded by the
-# JVM via `System.load(BAML_JAVA_BRIDGE_LIB)` (see sdks/java/baml_bridge).
+# JVM via `System.load(BAML_BRIDGE_PATH)` (see sdks/java/baml_bridge).
 name = "bridge_java"
 crate-type = [ "cdylib" ]
 
