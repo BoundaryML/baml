@@ -1034,6 +1034,69 @@ impl io::IoClassFsFile for DefaultIoOps {
 }
 
 impl io::IoNamespaceFs for DefaultIoOps {
+    fn metadata(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::fs::Metadata> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "fs".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn rename(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _source: String,
+        _destination: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "fs".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn canonicalize(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "fs".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn write_atomic(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _content: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "fs".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn lock(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _timeout_ms: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::fs::Lock> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "fs".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
     fn open(
         &self,
         _h: &Arc<BexHeap>,
@@ -1815,6 +1878,61 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn current_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "sys".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn current_exe(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "sys".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn home_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "sys".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn platform(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "sys".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn host_target(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "sys".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
     fn collect_garbage(
         &self,
         _h: &Arc<BexHeap>,
@@ -2244,6 +2362,42 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
     ) -> Self {
+        self.inner.baml_fs_metadata = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_metadata(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_rename = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_rename(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_canonicalize = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_canonicalize(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_write_atomic = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_write_atomic(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_lock = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_lock(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_lock_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_lock_close(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_fs_open = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
@@ -2663,6 +2817,36 @@ impl IoSysOpsBuilder {
                 )
             })
         };
+        self.inner.baml_sys_current_dir = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_current_dir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_current_exe = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_current_exe(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_home_dir = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_home_dir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_platform = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_platform(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_host_target = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_host_target(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_sys__run = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
@@ -2792,6 +2976,116 @@ pub use io::SysOps;
 /// with `baml.panics.HostUnavailable`, then allows selectively overriding
 /// namespaces.
 pub type SysOpsBuilder = IoSysOpsBuilder;
+
+impl io::IoNamespacePath for DefaultIoOps {
+    fn join(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _parts: Vec<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "path".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn parent(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "path".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn is_absolute(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "path".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn _absolute(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _base: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "path".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+}
+
+impl io::IoNamespaceCrypto for DefaultIoOps {
+    fn sha256(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "crypto".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+}
+
+impl io::IoNamespaceArchive for DefaultIoOps {
+    fn extract(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _data: Vec<u8>,
+        _format: BexExternalValue,
+        _destination: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "archive".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+    fn read_file(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _data: Vec<u8>,
+        _format: BexExternalValue,
+        _name: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "archive".into(),
+            message: "Operation not supported on this platform".into(),
+        })
+    }
+}
+
+impl io::IoClassFsLock for DefaultIoOps {
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _lock: io::owned::fs::Lock,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
+    }
+}
 
 #[cfg(test)]
 mod tests {

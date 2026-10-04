@@ -25,8 +25,110 @@ type Item = Table
 ///
 /// A parsed document is itself a `Table`. Nested tables — `[a.b]`, inline
 /// `{ ... }`, and array-of-table entries — are `Table` values inside `items`.
+///
+/// ```baml
+/// let config = baml.toml.Table.parse(source);
+/// config.table("server").set("port", 3000);
+/// config.table("server").set("enabled", true);
+/// let text = config.to_string();
+/// ```
 class Table {
     items: map<string, Item>,
+    /// (internal) Original document text, retained by parse for serialization.
+    _source: string?,
+    /// (internal) Source keys for edited entries; null marks a newly inserted key.
+    _renamed: map<string, string?>?,
+
+    /// Creates an empty table. Values can also be edited directly through `items`.
+    function new() -> Table throws never {
+        Table { items: map {} }
+    }
+
+    /// Returns a value, or null when the key is absent.
+    function get(self, key: string) -> Item? throws never {
+        self.items.get(key)
+    }
+
+    /// Sets any TOML value: scalars, datetimes, arrays, or nested tables.
+    function set(self, key: string, value: Item) -> void throws never {
+        if (!self.items.has(key)) {
+            let renamed: map<string, string?> = self._renamed ?? map {};
+            renamed[key] = null;
+            self._renamed = renamed;
+        }
+        self.items[key] = value;
+    }
+
+    /// Removes and returns a value, or null when the key is absent.
+    function remove(self, key: string) -> Item? throws never {
+        let removed = self.items.delete(key);
+        let renamed: map<string, string?> = self._renamed ?? map {};
+        renamed.delete(key);
+        self._renamed = renamed;
+        removed
+    }
+
+    /// Returns a child table, creating it when absent. Throws if the existing
+    /// value is not a table. Chain calls to work with nested configuration.
+    function table(self, key: string) -> Table throws root.errors.InvalidArgument {
+        match (self.items.get(key)) {
+            let child: Table => child,
+            null => {
+                let child = Table.new();
+                self.set(key, child);
+                child
+            },
+            _ => throw root.errors.InvalidArgument { message: "Expected TOML table: " + key },
+        }
+    }
+
+    /// Renames a key together with its value and comments. Returns false when
+    /// absent; throws if the destination already exists. Renaming to the same
+    /// name is a no-op. No comments move implicitly when removing/adding keys.
+    function rename(self, from: string, to: string) -> bool throws root.errors.InvalidArgument {
+        if (!self.items.has(from)) {
+            return false;
+        }
+        if (from == to) {
+            return true;
+        }
+        if (self.items.has(to)) {
+            throw root.errors.InvalidArgument { message: "TOML key already exists: " + to };
+        }
+        let value = self.items.delete(from) ?? root.sys.panic("TOML key disappeared during rename");
+        self.items[to] = value;
+        let renamed: map<string, string?> = self._renamed ?? map {};
+        let original = if (renamed.has(from)) {
+            renamed.delete(from)
+        } else {
+            from
+        };
+        renamed[to] = original;
+        self._renamed = renamed;
+        true
+    }
+
+    /// Serializes the table to TOML. For a parsed document, untouched values,
+    /// comments, and formatting are preserved; changed values keep their key's
+    /// comments. Edits through `items` and nested tables are included. Panics
+    /// for cyclic values or datetimes outside TOML's supported range.
+    /// Named timezones serialize as UTC because TOML stores offsets rather
+    /// than zone identifiers. Fixed offsets must be whole minutes.
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl() catch (e) {
+                root.errors.InvalidArgument { message } => {
+                    root.sys.panic("TOML serialization: " + message)
+                },
+            }
+        }
+    }
+
+    /// (internal) Fallible TOML encoder used by ToString.
+    //baml:mut_vm
+    function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
+        $rust_function
+    }
 
     implements baml.ToJson {
         /// Renders the table as a JSON object.
