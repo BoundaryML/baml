@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Configure, build, and run the bridge_cpp core smoke against a locally built
-# cdylib. Uses BAML_RUNTIME_PATH when provided; otherwise builds bridge_cffi if
+# cdylib. Uses BAML_BRIDGE_PATH when provided; otherwise builds bridge_cffi if
 # the release-profile library is missing. CMake drives the build; the pinned
 # protobuf/abseil sources are cloned once into target/cpp-protobuf-src and
 # target/cpp-absl-src (shared with the sdk-test harness) and passed via
@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 bridge_cpp_dir="$PWD"
 cd ../../..
 
-runtime_path="${BAML_RUNTIME_PATH:-}"
+runtime_path="${BAML_BRIDGE_PATH:-}"
 if [[ -z "$runtime_path" ]]; then
     target="${BAML_CPP_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
     libdir="target/$target/release"
@@ -49,4 +49,4 @@ cmake -B "$build_dir" -S "$bridge_cpp_dir/tests" \
 cmake --build "$build_dir" --target runtime_smoke \
     -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" > /dev/null
 
-BAML_RUNTIME_PATH="$runtime_path" "$build_dir/runtime_smoke"
+BAML_BRIDGE_PATH="$runtime_path" "$build_dir/runtime_smoke"

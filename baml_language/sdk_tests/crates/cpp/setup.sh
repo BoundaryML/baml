@@ -59,7 +59,7 @@ case "$(uname -s)" in
     *) RUNTIME_LIB="libbridge_cffi.so" ;;
 esac
 echo "==> run bridge_cpp core consumer smoke"
-BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
+BAML_BRIDGE_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
     "$WORKSPACE_ROOT/sdks/cpp/bridge_cpp/tests/run.sh"
 
 # Per-run breadcrumb for the in-test guard; see setup_guard in

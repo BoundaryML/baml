@@ -14,7 +14,7 @@ target_link_libraries(app PRIVATE baml::sdk)
 ```
 
 ```sh
-BAML_RUNTIME_PATH=/path/to/libbridge_cffi.dylib ./app
+BAML_BRIDGE_PATH=/path/to/libbridge_cffi.dylib ./app
 ```
 
 The SDK's wire layer uses protobuf-lite, built from source at a pinned
@@ -75,12 +75,12 @@ At the first BAML call the bridge locates the shared runtime
 order:
 
 1. `baml::SetRuntimePath(path)` (programmatic, before first use)
-2. `BAML_RUNTIME_PATH` (compatibility alias: `BAML_LIBRARY_PATH`)
+2. `BAML_BRIDGE_PATH` (absolute path; if set, a missing or invalid library is
+   an error with no fallback)
 3. Next to the executable (application-bundled deployment)
 4. The shared BAML cache:
-   `~/.baml/runtimes/prod/<version>/abi-v1/<target>/<filename>`
-   (roots overridable via `BAML_RUNTIME_CACHE_DIR` / `BAML_HOME`; the cache
-   probe uses `BAML_RUNTIME_VERSION` when set)
+   `$BAML_HOME/bridges/<version>/<target>/<filename>` (`BAML_HOME` defaults to
+   `~/.baml`; `<version>` is always the version compiled into the bridge)
 
 The bridge itself **never downloads anything**. A resolution miss throws a
 structured `baml::RuntimeError` (stable code, searched paths, remediation).
@@ -90,19 +90,22 @@ application, or set an explicit path.
 The loader resolves a single symbol (`baml_get_api_v1`), validates the ABI
 table, and registers the bridge (language `cpp`, the SDK's canonical BAML
 version) before initialization; a version mismatch between the generated
-SDK and the loaded runtime fails closed with both versions named.
+SDK and the loaded runtime fails closed with both versions named. For testing
+a locally built runtime of a different version, set
+`DEV_BAML_BRIDGE_SKIP_VERSION_CHECK=1` together with `BAML_BRIDGE_PATH`; it
+skips only the toolchain-version match, never the ABI check.
 
 ## Deployment
 
 Ship the runtime library with your application (copy it next to the binary
-or set `BAML_RUNTIME_PATH`). In containers, install it at image-build time.
+or set `BAML_BRIDGE_PATH`). In containers, install it at image-build time.
 The runtime artifact for each target is published with every BAML release.
 
 ## Errors
 
 Runtime-loading failures carry stable codes (`BAML_RUNTIME_NOT_FOUND`,
 `BAML_RUNTIME_LOAD_FAILED`, `BAML_RUNTIME_ABI_MISMATCH`,
-`BAML_RUNTIME_VERSION_MISMATCH`, `BAML_RUNTIME_CONFIG_CONFLICT`, ...) on
+`BAML_RUNTIME_VERSION_MISMATCH`, `BAML_RUNTIME_CONFIG_INVALID`, ...) on
 `baml::RuntimeError::code()`. BAML-level failures surface as
 `baml::BamlError` / `baml::BamlPanic` / `baml::BamlCancelled` with typed
 payload access (`is<T>()` / `get<T>()`).
