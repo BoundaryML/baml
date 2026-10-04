@@ -134,9 +134,9 @@ fn run_baml_posthog(
     let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"));
     cmd.args(args)
         .env("BAML_HOME", home)
-        .env("BAML_WORKOS_API_DOMAIN", workos)
-        .env("BAML_WORKOS_CLIENT_ID", "client_test")
-        .env("BAML_POSTHOG_HOST", posthog)
+        .env("BAML_AUTH_API_DOMAIN", workos)
+        .env("BAML_AUTH_CLIENT_ID", "client_test")
+        .env("BAML_FEEDBACK_HOST", posthog)
         // Keep ordinary invocation telemetry quiet so /capture/ sees only
         // feedback + identify events.
         .env("DO_NOT_TRACK", "1")

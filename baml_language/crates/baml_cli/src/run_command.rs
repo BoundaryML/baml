@@ -298,6 +298,9 @@ pub struct RunArgs {
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
 
+    #[command(flatten)]
+    pub shutdown: crate::shutdown::ShutdownArgs,
+
     /// Include compiler-synthesized functions in `--list` output.
     #[arg(long, help_heading = "Run output options")]
     pub include_generated: bool,
@@ -817,7 +820,12 @@ impl RunArgs {
         };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
+            crate::shutdown::shutdown_engine_future(
+                &engine,
+                reporter,
+                status,
+                self.shutdown.shutdown_timeout,
+            ),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -1246,7 +1254,12 @@ impl RunArgs {
         };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
+            crate::shutdown::shutdown_engine_future(
+                &engine,
+                reporter,
+                status,
+                self.shutdown.shutdown_timeout,
+            ),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -2274,6 +2287,7 @@ mod tests {
             output_format: OutputFormat::Debug,
             log: RunLogLevel::Off,
             log_file: None,
+            shutdown: crate::shutdown::ShutdownArgs::default(),
             include_generated: false,
             from: None,
             target_args: Vec::new(),

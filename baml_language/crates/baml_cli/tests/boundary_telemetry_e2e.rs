@@ -26,7 +26,7 @@ fn run(project: &Path, boundary_url: &str, telemetry: &str) {
         .env("BAML_HOME", project.join("home"))
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("DO_NOT_TRACK", "1")
         .output()
         .unwrap();

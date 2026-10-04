@@ -50,7 +50,7 @@ let playgroundDir: string | undefined;
 // ── The `baml` wrapper ───────────────────────────────────────────────────
 //
 // The extension never runs a toolchain binary directly: it runs the `baml`
-// wrapper, which picks the toolchain (`BAML_VERSION`, else the nearest
+// wrapper, which picks the toolchain (`BAML_TOOLCHAIN`, else the nearest
 // `baml.toml` `[toolchain]` pin above its working directory, else the
 // machine default) and execs it.
 
@@ -84,7 +84,7 @@ let wrapper: Wrapper = { path: 'baml', source: 'PATH' };
  * server serves the whole window, and the wrapper reads its toolchain pin by
  * walking up from its cwd, so the first folder (VS Code's primary) is the
  * pin that applies to every folder. Reordering folders takes effect on the
- * next start; `BAML_VERSION` overrides any pin outright.
+ * next start; `BAML_TOOLCHAIN` overrides any pin outright.
  */
 function serverWorkingDirectory(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

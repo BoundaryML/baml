@@ -214,19 +214,15 @@ pub(crate) enum Commands {
     #[command(about = "Display documentation for a command")]
     Help(crate::help_command::HelpArgs),
 
-    // Hidden from `baml --help` by default: the first-run notice + the
-    // `boundaryml.com/telemetry` docs page cover discovery for users who
-    // want to opt out, and hiding keeps the top-level command list from
-    // reading like an ops-console. Still fully functional (`baml
-    // telemetry`, `baml telemetry disable`, etc.) and re-listed
-    // automatically by `parse_from_smart` when `BAML_INTERNAL=1`.
-    #[command(about = "Show or change BAML CLI telemetry preferences", hide = true)]
+    #[command(
+        about = "Show or change BAML CLI telemetry preferences",
+        after_long_help = "Examples:\n  Show the current setting:\n    baml telemetry\n\n  Opt out:\n    baml telemetry disable"
+    )]
     Telemetry(crate::telemetry_command::TelemetryArgs),
 
     // The detached telemetry flush child (see `telemetry::queue`). Spawned
-    // by the CLI itself on exit / rotation; hidden even from
-    // `BAML_INTERNAL=1` listings by the `__` naming convention being
-    // self-explanatory, but marked hide for good measure.
+    // by the CLI itself on exit / rotation; hidden from help but callable
+    // by name.
     #[command(
         name = "__flush-telemetry",
         about = "(internal) drain the on-disk telemetry queue",
@@ -242,32 +238,12 @@ pub(crate) enum Commands {
 
 impl RuntimeCli {
     pub(crate) fn command() -> clap::Command {
-        Self::command_with_internal(baml_internal_env_is_truthy())
-    }
-
-    pub(crate) fn command_with_internal(include_internal: bool) -> clap::Command {
         let mut command = <Self as CommandFactory>::command();
         configure_help_hints(&mut command, &[]);
-
-        if include_internal {
-            for subcommand in command
-                .get_subcommands_mut()
-                .filter(|subcommand| subcommand.is_hide_set())
-            {
-                let mut new_subcommand = std::mem::take(subcommand);
-                new_subcommand = new_subcommand.hide(false);
-                if let Some(about) = new_subcommand.get_about() {
-                    let new_about = format!("(internal-only) {about}");
-                    new_subcommand = new_subcommand.about(new_about);
-                }
-                *subcommand = new_subcommand;
-            }
-        }
-
         command
     }
 
-    /// Parse CLI arguments and optionally unhide internal subcommands.
+    /// Parse CLI arguments.
     ///
     /// Parameters:
     /// - `argv`: Raw process argument vector (`argv[0]` program name followed by CLI tokens).
@@ -346,12 +322,12 @@ impl RuntimeCli {
             return args.run();
         }
         if let Commands::Help(args) = &self.command {
-            crate::output::init(self.output);
+            crate::output::init(self.output)?;
             return args.run(crate::output::policy().stdout.color);
         }
 
         // Resolve every output dial once, before any subcommand writes.
-        crate::output::init(self.output);
+        crate::output::init(self.output)?;
 
         if self.command.requires_agent_skill() {
             crate::skill_check::check(self.command.agent_skill_project_path())?;
@@ -503,12 +479,6 @@ fn configure_help_hints(command: &mut clap::Command, path: &[String]) {
     }
 }
 
-fn baml_internal_env_is_truthy() -> bool {
-    std::env::var("BAML_INTERNAL")
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
-        .unwrap_or(false)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -536,6 +506,7 @@ mod tests {
         &["playground"],
         &["lsp"],
         &["help"],
+        &["telemetry"],
     ];
 
     #[test]
@@ -709,22 +680,20 @@ mod tests {
     }
 
     #[test]
-    fn output_dials_expose_documented_environment_variables() {
+    fn output_dials_have_no_environment_mirrors() {
         let command = RuntimeCli::command();
-        let expected = [
-            ("preset", "BAML_OUTPUT_PRESET"),
-            ("color", "BAML_COLOR"),
-            ("hyperlinks", "BAML_HYPERLINKS"),
-            ("diagnostic_format", "BAML_DIAGNOSTIC_FORMAT"),
-            ("agent_skill_check", "BAML_AGENT_SKILL_CHECK"),
-        ];
-
-        for (id, env) in expected {
+        for id in [
+            "preset",
+            "color",
+            "hyperlinks",
+            "diagnostic_format",
+            "agent_skill_check",
+        ] {
             let arg = command
                 .get_arguments()
                 .find(|arg| arg.get_id() == id)
                 .unwrap_or_else(|| panic!("missing argument {id}"));
-            assert_eq!(arg.get_env(), Some(std::ffi::OsStr::new(env)));
+            assert_eq!(arg.get_env(), None, "{id} must not read an env var");
         }
     }
 

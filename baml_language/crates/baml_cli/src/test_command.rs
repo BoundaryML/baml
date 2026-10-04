@@ -128,6 +128,32 @@ pub struct TestArgs {
     /// direct scalar value can override the selected profile's value.
     #[arg(skip)]
     pub(crate) cli_log: Option<TestLogLevel>,
+
+    /// Fail any single test that runs longer than this.
+    ///
+    /// Accepts durations such as `500ms`, `30s` or `15m`; `none` disables the
+    /// per-test deadline.
+    #[arg(
+        long = "test-timeout",
+        value_name = "DURATION",
+        default_value = "5m",
+        help_heading = "Execution options"
+    )]
+    test_timeout: crate::optional_duration::OptionalDuration,
+
+    /// Run at most this many test bodies at once.
+    ///
+    /// Defaults to twice the available CPU parallelism.
+    #[arg(
+        long = "max-concurrency",
+        value_name = "N",
+        value_parser = clap::value_parser!(u32).range(1..),
+        help_heading = "Execution options"
+    )]
+    max_concurrency: Option<u32>,
+
+    #[command(flatten)]
+    shutdown: crate::shutdown::ShutdownArgs,
 }
 
 #[derive(Debug, Default)]
@@ -259,6 +285,9 @@ struct RunCtx<'a> {
     cancel: &'a CancellationToken,
     unhandled_spawn_failures: &'a AtomicUsize,
     logs: TestLogLevel,
+    shutdown_timeout: crate::optional_duration::OptionalDuration,
+    test_timeout: crate::optional_duration::OptionalDuration,
+    max_concurrency: Option<u32>,
 }
 
 impl RunCtx<'_> {
@@ -282,7 +311,7 @@ fn finish_engine(
     reporter: &Reporter,
     status: bex_engine::ProcessStatus,
 ) -> usize {
-    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter, status);
+    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter, status, ctx.shutdown_timeout);
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
@@ -296,7 +325,7 @@ impl TestArgs {
         )?;
         let invocation =
             self.resolve_invocation(session.resolved.manifest.as_deref(), session.root())?;
-        crate::output::init(invocation.output);
+        crate::output::init(invocation.output)?;
         if session.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -437,6 +466,9 @@ impl TestArgs {
             cancel: &cancel,
             unhandled_spawn_failures: &unhandled_spawn_failures,
             logs: invocation.logs,
+            shutdown_timeout: self.shutdown.shutdown_timeout,
+            test_timeout: self.test_timeout,
+            max_concurrency: self.max_concurrency,
         };
 
         // ── 5. Resolve the testset registry handle ─────────────────────────
@@ -836,14 +868,24 @@ fn run_filtered_report(
     invocation: &TestInvocation,
 ) -> Result<BexExternalValue> {
     let (call_ctx, logs) = ctx.call_context(CallId::next());
-    // Cap concurrently RUNNING test bodies at twice the core count. The
-    // runner admits a leaf only when a slot is free, so a five-thousand-test
-    // corpus holds ~2N live VM threads instead of five thousand — which keeps
-    // per-thread GC costs bounded and keeps wall-clock timing assertions
-    // meaningful under full-corpus load.
-    let max_concurrency =
-        i64::try_from(std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2)
-            .unwrap_or(16);
+    // Cap concurrently RUNNING test bodies, by default at twice the core
+    // count. The runner admits a leaf only when a slot is free, so a
+    // five-thousand-test corpus holds ~2N live VM threads instead of five
+    // thousand, which keeps per-thread GC costs bounded and keeps wall-clock
+    // timing assertions meaningful under full-corpus load.
+    let max_concurrency = ctx.max_concurrency.map_or_else(
+        || {
+            i64::try_from(
+                std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2,
+            )
+            .unwrap_or(16)
+        },
+        i64::from,
+    );
+    // The stdlib treats a non-positive timeout as "no deadline".
+    let test_timeout_ms = ctx.test_timeout.0.map_or(0, |limit| {
+        i64::try_from(limit.as_millis()).unwrap_or(i64::MAX).max(1)
+    });
     let result = ctx.block_on_with_logs(
         ctx.engine.call_function(
             "testing.TestRegistry.run_filtered",
@@ -854,6 +896,7 @@ fn run_filtered_report(
                 string_array(&invocation.cli_include),
                 string_array(&invocation.cli_exclude),
                 BexExternalValue::Int(max_concurrency),
+                BexExternalValue::Int(test_timeout_ms),
             ],
             call_ctx,
             true,

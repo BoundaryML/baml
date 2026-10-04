@@ -32,11 +32,10 @@ fn run_list(
     cmd.args(args);
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
-    // Pin the human output preset: under a coding agent the inherited
-    // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
-    // `agent`, which disables the progress lines some assertions read.
-    cmd.env("BAML_OUTPUT_PRESET", "human");
-    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
+    // Ignore the inherited CLAUDECODE/AI_AGENT/… environment: it flips
+    // `--output-preset auto` to `agent`, which disables the progress lines some
+    // assertions read.
+    cmd.env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1");
     cmd.env("BAML_HOME", &home);
     cmd.env("BAML_CACHE_DIR", cache_dir);
     cmd.env("BAML_CACHE_DEBUG", "1");

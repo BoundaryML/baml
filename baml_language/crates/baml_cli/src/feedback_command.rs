@@ -39,7 +39,7 @@ const MAX_SYNC_PER_RUN: usize = 25;
 
 /// PostHog ingestion host, overridable for tests and self-hosted setups.
 fn posthog_host() -> String {
-    std::env::var("BAML_POSTHOG_HOST")
+    std::env::var("BAML_FEEDBACK_HOST")
         .ok()
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| crate::telemetry::posthog_host().to_string())

@@ -160,8 +160,6 @@ jobs:
       # bridge built from it: the same commit throughout.
       - name: Generate the SDK and build the formatter
         working-directory: typescript2/app-type-quiz
-        env:
-          BAML_AGENT_SKILL_CHECK: "off"
         run: |
           set -euo pipefail
           pnpm generate
@@ -184,8 +182,6 @@ jobs:
 
       - name: Drive it in a browser
         working-directory: typescript2/app-type-quiz
-        env:
-          BAML_AGENT_SKILL_CHECK: "off"
         run: |
           set -euo pipefail
           pnpm exec playwright install --with-deps chromium

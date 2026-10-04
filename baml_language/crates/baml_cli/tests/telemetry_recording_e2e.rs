@@ -14,7 +14,7 @@ fn cli(cwd: &Path, home: &Path) -> Command {
         .env("USERPROFILE", home)
         .env("BAML_HOME", home.join(".baml"))
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_CACHE_DIR", home.join("cache"))
         .env_remove("BOUNDARY_URL")
         .env_remove("BOUNDARY_API_KEY")

@@ -561,7 +561,7 @@ baml query [SQL] [--schema [--table <NAME>]] [--format table|json|jsonl]
 - Exit codes (IN-Q2-3, kept): 0 complete · 1 evidence-incomplete · 2
   invalid SQL / unknown table / authorization · 3 budget · 4 cancelled · 5
   internal or dependency (no store, bind failure, corrupt artifact).
-- Respects `OutputArgs` (`--output-preset agent`, `BAML_COLOR`), `--project`
+- Respects `OutputArgs` (`--output-preset agent`, `--color`), `--project`
   via `project_load::find_project_root_from` (same resolution as `baml clean`).
 - Table renderer: fixed width, 60-char cell truncation with explicit `…`
   elision marker, Binary as `0x…`, `--budget`-style soft truncation of row

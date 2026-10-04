@@ -34,7 +34,7 @@ fn piped_cli(project: &Path, args: &[&str], input: Option<&str>) -> Output {
     let mut child = Command::new(common::baml_cli())
         .args(args)
         .current_dir(project)
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_TELEMETRY", "high")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())

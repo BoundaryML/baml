@@ -593,24 +593,14 @@ fn host_binary_name(target_triple: &str) -> String {
 }
 
 fn download_host_binary_from_release(target: &str, host_name: &str) -> Result<Vec<u8>> {
-    let version = release_version_for_download();
-    let fetcher = baml_release::Fetcher::default_for(
-        baml_release::ReleaseSpec {
-            version,
-            target: target.to_string(),
-        },
-        baml_release::Product::Toolchain,
-    );
+    let fetcher = baml_release::Fetcher::from_toolchain_manifest(baml_release::ReleaseSpec {
+        version: release_version().to_string(),
+        target: target.to_string(),
+    })
+    .map_err(|err| anyhow!("{err}"))?;
     fetcher
         .fetch_binary(host_name)
         .map_err(|err| anyhow!("{err}"))
-}
-
-fn release_version_for_download() -> String {
-    std::env::var("BAML_PACK_HOST_RELEASE_VERSION")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| release_version().to_string())
 }
 
 fn release_host_target_triple() -> Result<&'static str> {

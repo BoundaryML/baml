@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "cd ../../baml_language && cargo run -q -p baml_cli -- generate --project tools/type_quiz --output-dir ../typescript2/app-type-quiz/src/baml_sdk",
+    "generate": "cd ../../baml_language && cargo run -q -p baml_cli -- --agent-skill-check off generate --project tools/type_quiz --output-dir ../typescript2/app-type-quiz/src/baml_sdk",
     "build:wasm": "wasm-pack build ../../baml_language/crates/baml_fmt_wasm --target web --out-dir ../../../typescript2/app-type-quiz/wasm --release",
     "prepare:deps": "pnpm build:bridge && pnpm generate && pnpm build:wasm",
     "dev": "vite",

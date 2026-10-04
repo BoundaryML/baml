@@ -41,11 +41,10 @@ fn run_baml_cli_with_env(built: &Path, dir: &Path, args: &[&str], env: &[(&str, 
     cmd.current_dir(dir);
     cmd.env("HOME", dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
-    // Pin the human output preset: under a coding agent the inherited
-    // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
-    // `agent`, which disables the progress lines some assertions read.
-    cmd.env("BAML_OUTPUT_PRESET", "human");
-    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
+    // Ignore the inherited CLAUDECODE/AI_AGENT/… environment: it flips
+    // `--output-preset auto` to `agent`, which disables the progress lines some
+    // assertions read.
+    cmd.env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1");
     cmd.env("BAML_HOME", &home);
     // Tests are quiet unless they explicitly exercise the inherited log level.
     cmd.env_remove("BAML_LOG");
@@ -708,6 +707,50 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+/// `--test-timeout` fails a test that outlives it; `none` removes the deadline.
+#[test]
+fn test_timeout_flag_bounds_each_test() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+test "slow" {
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(1500n));
+  assert.is_true(true)
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "--test-timeout", "100ms"],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "stderr: {stderr}");
+    assert!(stderr.contains("timed out after 100ms"), "stderr: {stderr}");
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "--test-timeout", "none"],
+    );
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "--test-timeout", "soon"],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid duration"));
+}
+
 /// The `--project <DIR>` invocation recommended by project discovery accepts
 /// an explicit source directory outside a marked project.
 #[test]
@@ -1007,10 +1050,9 @@ test "streams" {
         .args(["test", "--from", ".", "--log", "INFO"])
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
-        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
-        .env("BAML_OUTPUT_PRESET", "human")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would flip
+        // `--output-preset auto` to `agent` and hide progress lines.
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .stdout(Stdio::piped())
@@ -2020,7 +2062,7 @@ fn run_file_script_mode_passes_args_after_separator_as_argv() {
     let output = Command::new(&script)
         .args(["--", "alpha", "--beta", "gamma"])
         .current_dir(tmp.path())
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
@@ -2074,7 +2116,7 @@ fn shebang_can_name_a_specific_function() {
 
     let output = Command::new(&script)
         .current_dir(tmp.path())
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");

@@ -61,7 +61,6 @@ fn baml_home_from(baml_home: Option<OsString>, home_dir: Option<PathBuf>) -> Pat
 
 pub const MANIFEST_SCHEMA: u32 = 1;
 pub const DEFAULT_MANIFEST_BASE_URL: &str = "https://pkg.boundaryml.com/manifest/v1";
-pub const DEFAULT_RELEASE_REPO: &str = "BoundaryML/baml";
 
 pub const SUPPORTED_RELEASE_TARGETS: &[&str] = &[
     "aarch64-apple-darwin",
@@ -120,6 +119,8 @@ pub enum FetchError {
     BinaryNotInArchive { name: String },
     #[error("archive contains unsafe path {path}")]
     UnsafeArchivePath { path: String },
+    #[error("invalid release manifest: {0}")]
+    InvalidManifest(String),
     #[error("disk error: {0}")]
     Io(#[from] std::io::Error),
     #[error("zip archive error: {0}")]
@@ -130,49 +131,54 @@ pub enum FetchError {
 pub struct Fetcher {
     pub spec: ReleaseSpec,
     pub product: Product,
-    pub manifest_base_url: String,
-    pub release_repo: String,
-    artifact: Option<Artifact>,
+    artifact: Artifact,
 }
 
 impl Fetcher {
-    pub fn default_for(spec: ReleaseSpec, product: Product) -> Self {
-        Self {
-            spec,
-            product,
-            manifest_base_url: manifest_base_url(),
-            release_repo: release_repo(),
-            artifact: None,
-        }
-    }
-
     pub fn from_artifact(spec: ReleaseSpec, product: Product, artifact: Artifact) -> Self {
         Self {
             spec,
             product,
-            manifest_base_url: manifest_base_url(),
-            release_repo: release_repo(),
-            artifact: Some(artifact),
+            artifact,
         }
     }
 
+    /// Resolve the toolchain archive for `spec` through the release manifest
+    /// (`$BAML_MANIFEST_BASE_URL/version/<version>.json`), the same source the
+    /// wrapper installs toolchains from. That archive also carries the pack
+    /// host binary.
+    pub fn from_toolchain_manifest(spec: ReleaseSpec) -> Result<Self, FetchError> {
+        let url = format!("{}/version/{}.json", manifest_base_url(), spec.version);
+        let bytes = download_bytes(&url).map_err(|err| match err {
+            FetchError::ManifestNotFound { .. } => FetchError::ManifestNotFound {
+                version: spec.version.clone(),
+            },
+            other => other,
+        })?;
+        let manifest: ToolchainManifest = serde_json::from_slice(&bytes)
+            .map_err(|err| FetchError::InvalidManifest(format!("{url}: {err}")))?;
+        if manifest.schema > MANIFEST_SCHEMA {
+            return Err(FetchError::ManifestSchemaTooNew {
+                got: manifest.schema,
+                max: MANIFEST_SCHEMA,
+            });
+        }
+        manifest
+            .validate()
+            .map_err(|err| FetchError::InvalidManifest(format!("{url}: {err}")))?;
+        let artifact = manifest
+            .artifacts
+            .get(&spec.target)
+            .cloned()
+            .ok_or_else(|| FetchError::TargetNotInManifest {
+                target: spec.target.clone(),
+                version: spec.version.clone(),
+            })?;
+        Ok(Self::from_artifact(spec, Product::Toolchain, artifact))
+    }
+
     pub fn artifact_url(&self) -> String {
-        if let Some(artifact) = &self.artifact {
-            return artifact.url.clone();
-        }
-        if let Ok(base_url) = std::env::var("BAML_PACK_HOST_RELEASE_BASE_URL") {
-            let base = base_url.trim_end_matches('/');
-            return format!(
-                "{base}/{}",
-                release_archive_filename(self.product, &self.spec.version, &self.spec.target)
-            );
-        }
-        release_archive_url_for_repo(
-            self.product,
-            &self.spec.version,
-            &self.spec.target,
-            &self.release_repo,
-        )
+        self.artifact.url.clone()
     }
 
     /// Download the release archive and verify its checksum, *without*
@@ -184,17 +190,7 @@ impl Fetcher {
     fn download_and_verify(&self) -> Result<Vec<u8>, FetchError> {
         let url = self.artifact_url();
         let archive = download_bytes(&url)?;
-        if let Some(artifact) = &self.artifact {
-            verify_sha256(&archive, &url, &artifact.sha256)?;
-        } else {
-            let checksum_url = format!("{url}.sha256");
-            let checksum = download_bytes(&checksum_url)?;
-            let checksum_text =
-                std::str::from_utf8(&checksum).map_err(|_| FetchError::UnsafeArchivePath {
-                    path: format!("{checksum_url} was not valid UTF-8"),
-                })?;
-            verify_release_archive_checksum_text(&archive, &url, checksum_text)?;
-        }
+        verify_sha256(&archive, &url, &self.artifact.sha256)?;
         Ok(archive)
     }
 
@@ -287,19 +283,11 @@ impl Drop for InstallLock {
 }
 
 pub fn manifest_base_url() -> String {
-    std::env::var("BAML_MANIFEST_BASE_URL")
-        .ok()
+    baml_env::raw_var("BAML_MANIFEST_BASE_URL")
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_MANIFEST_BASE_URL.to_string())
         .trim_end_matches('/')
         .to_string()
-}
-
-pub fn release_repo() -> String {
-    std::env::var("BAML_PACK_HOST_RELEASE_REPO")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_RELEASE_REPO.to_string())
 }
 
 pub fn release_host_target_triple() -> Result<&'static str> {
@@ -342,19 +330,6 @@ pub fn release_archive_filename(product: Product, version: &str, target: &str) -
         "tar.gz"
     };
     format!("{}-{version}-{target}.{ext}", product.tag_prefix())
-}
-
-pub fn release_archive_url_for_repo(
-    product: Product,
-    version: &str,
-    target: &str,
-    repo: &str,
-) -> String {
-    format!(
-        "https://github.com/{repo}/releases/download/{}-{version}/{}",
-        product.tag_prefix(),
-        release_archive_filename(product, version, target)
-    )
 }
 
 pub fn validate_sha256(hash: &str) -> Result<String> {
@@ -790,20 +765,6 @@ mod tests {
         assert_eq!(
             release_archive_filename(Product::Wrapper, "0.1.0", "aarch64-pc-windows-msvc"),
             "baml-wrapper-0.1.0-aarch64-pc-windows-msvc.zip"
-        );
-    }
-
-    #[test]
-    fn test_release_archive_url_defaults_to_github_release_asset() {
-        let url = release_archive_url_for_repo(
-            Product::Toolchain,
-            "1.2.3-nightly.20260602.a",
-            "x86_64-unknown-linux-gnu",
-            "BoundaryML/baml",
-        );
-        assert_eq!(
-            url,
-            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-nightly.20260602.a/baml-language-1.2.3-nightly.20260602.a-x86_64-unknown-linux-gnu.tar.gz"
         );
     }
 

@@ -73,6 +73,7 @@ sources = ["**/*.rs", "**/Cargo.toml"]
 
 [tasks.fmt-stdlib]
 description = "Run the BAML formatter on the standard library packages"
+env = { DEV_BAML_CLI_DISABLE_AGENT_DETECTION = "1" }
 run = "cargo run -p baml_cli -- fmt"
 dir = "crates/baml_builtins2/baml_std"
 sources = ["crates/baml_builtins2/baml_std/**/*.baml"]
@@ -100,22 +101,21 @@ set -euo pipefail
 home="$PWD/target/baml-type-quiz-home"
 mkdir -p "$home"
 printf '[update]\nauto_check = false\n' > "$home/config.toml"
-# Profiling ships default-ON and this suite is the worst shape for it:
-# millions of small BAML calls, every one traced, for timings nobody reads.
-# Measured at 47% of the CPU on one learner test, and about 1.5 GB written a
-# run — which, unlike CI's throwaway directory, accumulates here under
-# target/ and slows every later run. The benchmarks pin it off for the same
-# reason. Set BAML_PROFILE=1 to get it back when profiling is the point.
+# Telemetry recording ships default-ON and this suite is the worst shape for
+# it: millions of small BAML calls, every one traced, for timings nobody
+# reads. It costs a large share of the CPU and writes gigabytes under
+# $BAML_HOME, which, unlike CI's throwaway directory, accumulates here and
+# slows every later run. The benchmarks pin it off for the same reason.
 BAML_CLI_ALLOW_DIRECT=1 \
-BAML_PROFILE="${BAML_PROFILE:-0}" \
+DEV_BAML_CLI_DISABLE_AGENT_DETECTION=1 \
+BAML_TELEMETRY=off \
 BAML_HOME="$home" \
 BAML_CACHE_DIR="$PWD/target/baml-type-quiz-cache" \
-BAML_PROFILE_DIR="$PWD/target/baml-type-quiz-profiles" \
-BAML_TEST_TIMEOUT_MS=900000 \
-    cargo run -p baml_cli -- test --from tools/type_quiz
+    cargo run -p baml_cli -- test --test-timeout 15m --from tools/type_quiz
 '''
 
 [tasks.fmt-type-quiz]
 description = "Run the BAML formatter on tools/type_quiz"
+env = { DEV_BAML_CLI_DISABLE_AGENT_DETECTION = "1" }
 run = "cargo run -p baml_cli -- fmt --project tools/type_quiz"
 sources = ["tools/type_quiz/**/*.baml"]

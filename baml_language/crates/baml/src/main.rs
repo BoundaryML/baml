@@ -132,7 +132,7 @@ Local toolchains:
 
     baml toolchain use ~/repos/baml/target/debug/baml-cli
     baml toolchain pin ./target/debug/baml-cli
-    BAML_VERSION=./target/debug/baml-cli baml check
+    BAML_TOOLCHAIN=./target/debug/baml-cli baml check
 
 Network behavior:
   list is local-only.
@@ -266,7 +266,7 @@ fn print_version() {
 /// built-in fallback, which need no annotation.
 fn selector_origin(source: &SelectorSource) -> Option<String> {
     match source {
-        SelectorSource::Env => Some("from $BAML_VERSION".to_string()),
+        SelectorSource::Env => Some("from $BAML_TOOLCHAIN".to_string()),
         SelectorSource::Project(path) => Some(format!("from {}", path.display())),
         SelectorSource::Config | SelectorSource::Fallback => None,
     }
@@ -441,8 +441,7 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
 
     let mut command = Command::new(cli);
     command.args(args);
-    command.env("BAML_WRAPPER_EXEC", "1");
-    command.env("BAML_WRAPPER_RESOLVED_TOOLCHAIN", &version);
+    command.env("BAML_CLI_ALLOW_DIRECT", "1");
 
     let Some(refresh) = refresh else {
         // Common case: nothing to refresh, so the wrapper can hand the
@@ -482,11 +481,7 @@ fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String
 
     let mut command = Command::new(cli);
     command.args(args);
-    command.env("BAML_WRAPPER_EXEC", "1");
-    // Deliberately not BAML_WRAPPER_RESOLVED_TOOLCHAIN: that carries a version,
-    // and a local build has none. A separate variable also lets the toolchain
-    // binary tell the two situations apart, which `baml ide install` needs.
-    command.env("BAML_WRAPPER_LOCAL_TOOLCHAIN", cli);
+    command.env("BAML_CLI_ALLOW_DIRECT", "1");
 
     // Anything verify_path_toolchain could not rule out (wrong architecture,
     // a noexec mount, a missing interpreter) surfaces here, so this message
@@ -507,7 +502,7 @@ fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String
 }
 
 fn active_selector() -> Result<ResolvedSelector> {
-    if let Ok(value) = env::var("BAML_VERSION") {
+    if let Ok(value) = env::var("BAML_TOOLCHAIN") {
         if !value.trim().is_empty() {
             return Ok(ResolvedSelector {
                 selector: normalize_selector(value.trim(), &env::current_dir()?),
@@ -832,7 +827,7 @@ fn normalize_selector(selector: &str, base: &Path) -> String {
 /// question is which forgotten setting picked this binary.
 fn path_source_label(source: &SelectorSource) -> String {
     match source {
-        SelectorSource::Env => "set by $BAML_VERSION".to_string(),
+        SelectorSource::Env => "set by $BAML_TOOLCHAIN".to_string(),
         SelectorSource::Project(path) => format!("set by {}", path.display()),
         SelectorSource::Config | SelectorSource::Fallback => {
             format!("set by default.selector in {}", config_path().display())
@@ -859,8 +854,7 @@ fn local_toolchain_version(cli: &Path) -> Option<String> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .env("BAML_WRAPPER_EXEC", "1")
-        .env("BAML_WRAPPER_LOCAL_TOOLCHAIN", cli)
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
         .spawn()
         .ok()?;
 
@@ -1728,7 +1722,7 @@ mod tests {
     fn annotation_reports_env_override() {
         assert_eq!(
             selector_annotation(&resolved("nightly", SelectorSource::Env)),
-            " (nightly, from $BAML_VERSION)"
+            " (nightly, from $BAML_TOOLCHAIN)"
         );
     }
 
@@ -2010,7 +2004,7 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("toolchain binary not found"), "{err}");
-        assert!(err.contains("set by $BAML_VERSION"), "{err}");
+        assert!(err.contains("set by $BAML_TOOLCHAIN"), "{err}");
     }
 
     #[test]
