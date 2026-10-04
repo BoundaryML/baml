@@ -174,3 +174,72 @@ async fn table_rejects_invalid_operations_without_changing_values() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+#[tokio::test]
+async fn table_key_swaps_preserve_each_values_comments() {
+    let output = baml_test!(
+        r##"
+        function main() -> bool {
+            let doc = baml.toml.Table.parse("a = 1 # first\nb = 2 # second\n");
+            doc.rename("a", "temporary");
+            doc.rename("b", "a");
+            doc.rename("temporary", "b");
+            let text = doc.to_string();
+            let source = "\"quoted\" = 'value' # unchanged\nother = 0x10\n";
+            let identity = baml.toml.Table.parse(source);
+            identity.rename("quoted", "temporary");
+            identity.rename("temporary", "quoted");
+            text.includes("a = 2 # second") && text.includes("b = 1 # first") &&
+                identity.to_string() == source
+        }
+    "##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn removed_renamed_key_does_not_donate_comments_to_a_new_key() {
+    let output = baml_test!(
+        r##"
+        function main() -> bool {
+            let doc = baml.toml.Table.parse("old = 1 # removed\nkeep = 2 # retained\n");
+            doc.rename("old", "new");
+            let removed = doc.remove("new") == 1;
+            doc.set("new", 9);
+            let text = doc.to_string();
+            removed && !text.includes("# removed") && text.includes("keep = 2 # retained") &&
+                baml.toml.Table.parse(text).get("new") == 9
+        }
+    "##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn empty_arrays_of_tables_keep_their_keys() {
+    let output = baml_test!(
+        r##"
+        function main() -> bool {
+            let doc = baml.toml.Table.parse("[[servers]]\nport = 8080\n[[cluster.nodes]]\nname = 'primary'\n");
+            let empty: baml.toml.Item[] = [];
+            doc.set("servers", empty);
+            doc.table("cluster").set("nodes", empty);
+            let text = doc.to_string();
+            let parsed = baml.toml.Table.parse(text);
+            let servers = match (parsed.get("servers")) {
+                let values: baml.toml.Item[] => values.length() == 0,
+                _ => false,
+            };
+            let nodes = match (parsed.table("cluster").get("nodes")) {
+                let values: baml.toml.Item[] => values.length() == 0,
+                _ => false,
+            };
+            if (!servers || !nodes) {
+                baml.sys.panic("Empty table arrays did not roundtrip: " + text);
+            }
+            true
+        }
+    "##
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}

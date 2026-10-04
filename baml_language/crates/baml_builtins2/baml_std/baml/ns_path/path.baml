@@ -14,7 +14,9 @@ function is_absolute(path: string) -> bool throws never {
 }
 
 /// Expands a leading ~/ and resolves relative paths against base (or the program's working directory).
-/// Preserves symlinks, including paths whose meaning depends on a symlink followed by .. .
+/// The path does not have to exist. A relative base is resolved against the working directory.
+/// Uses the host's absolute-path rules without resolving symlinks. On Unix, `..`
+/// is retained so paths through symlinks keep their meaning, even for new files.
 function absolute(path: string, base: string? = null) -> string throws root.errors.Io {
     _absolute(path, base)
 }

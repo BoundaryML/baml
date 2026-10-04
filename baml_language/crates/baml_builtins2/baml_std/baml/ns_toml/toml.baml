@@ -56,7 +56,11 @@ class Table {
 
     /// Removes and returns a value, or null when the key is absent.
     function remove(self, key: string) -> Item? throws never {
-        self.items.delete(key)
+        let removed = self.items.delete(key);
+        let renamed: map<string, string> = self._renamed ?? map {};
+        renamed.delete(key);
+        self._renamed = renamed;
+        removed
     }
 
     /// Returns a child table, creating it when absent. Throws if the existing

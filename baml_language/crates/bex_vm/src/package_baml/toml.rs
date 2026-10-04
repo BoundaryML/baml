@@ -328,15 +328,22 @@ fn reconcile_table(
     renamed: &IndexMap<String, String>,
     inline: bool,
 ) {
+    // Capture all original entries before inserting destinations. Otherwise
+    // a key swap overwrites the next source and loses its comments/formatting.
+    let mut moved = Vec::new();
     for (to, from) in renamed {
-        if let Some(key) = table.key(from).cloned() {
-            if let Some(item) = table.remove(from) {
-                let mut new_key = toml_edit::Key::new(to);
-                *new_key.leaf_decor_mut() = key.leaf_decor().clone();
-                table.remove(to);
-                table.entry_format(&new_key).or_insert(item);
-            }
+        if to != from
+            && let Some(key) = table.key(from).cloned()
+            && let Some(item) = table.remove(from)
+        {
+            moved.push((to, key, item));
         }
+    }
+    for (to, key, item) in moved {
+        let mut new_key = toml_edit::Key::new(to);
+        *new_key.leaf_decor_mut() = key.leaf_decor().clone();
+        table.remove(to);
+        table.entry_format(&new_key).or_insert(item);
     }
     let removed: Vec<_> = table
         .iter()
@@ -379,7 +386,7 @@ fn reconcile(item: &mut Item, node: &Node) {
         }
         Node::Array(values) => {
             if let Some(tables) = item.as_array_of_tables_mut() {
-                if values.iter().all(|v| matches!(v, Node::Table { .. })) {
+                if !values.is_empty() && values.iter().all(|v| matches!(v, Node::Table { .. })) {
                     while tables.len() > values.len() {
                         tables.remove(tables.len() - 1);
                     }
