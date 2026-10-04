@@ -48,8 +48,8 @@ pub(crate) fn sys_current_exe(_: &NativeSysOps) -> SysOpOutput<String> {
 }
 pub(crate) fn sys_home_dir(_: &NativeSysOps) -> SysOpOutput<Option<String>> {
     SysOpOutput::Ready(
-        std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
+        baml_env::os_var("HOME")
+            .or_else(|| baml_env::os_var("USERPROFILE"))
             .map(|p| path_string(PathBuf::from(p)))
             .transpose(),
     )
@@ -109,7 +109,7 @@ impl io::IoNamespacePath for NativeSysOps {
             let mut path = PathBuf::from(&path);
             if path == Path::new("~") || path.starts_with("~/") {
                 if let Some(home) =
-                    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+                    baml_env::os_var("HOME").or_else(|| baml_env::os_var("USERPROFILE"))
                 {
                     path =
                         PathBuf::from(home).join(path.strip_prefix("~").unwrap_or(Path::new("")));
