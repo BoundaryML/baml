@@ -340,8 +340,8 @@ impl TestArgs {
         // Program, cached under its key. On a hit we render + select directly
         // and skip engine boot, `$init`/`$init_test`, and in-VM testset
         // expansion entirely — the whole `--list` discovery floor. Gated off
-        // under BAML_CACHE_VERIFY (the oracle must run honest discovery) and
-        // BAML_NO_DISCOVERY_CACHE; any miss/corruption falls through to the
+        // under DEV_BAML_BUILD_CACHE_VERIFY=always (the oracle must run honest
+        // discovery); any miss/corruption falls through to the
         // honest path below.
         if invocation.list {
             if let Some(exit) = self.try_cached_list(&reporter, session.cache.as_ref(), &invocation)
@@ -362,12 +362,7 @@ impl TestArgs {
                 crate::runtime_telemetry::session_sources(&session),
             ) {
                 Ok(engine) => Some(Arc::new(engine)),
-                Err(error) => {
-                    crate::bytecode_cache::cache_debug(format_args!(
-                        "cached program rejected by VM; recompiling: {error:?}"
-                    ));
-                    None
-                }
+                Err(_) => None,
             }
         });
 
@@ -423,17 +418,6 @@ impl TestArgs {
                     stdlib_interface_hit,
                 )?;
             }
-            // Warm-run evidence: with the stdlib interface seeded this is 0 (the
-            // seed served every stdlib package); a cold run reports up to 6.
-            crate::bytecode_cache::cache_debug(format_args!(
-                "stdlib interface: {} honest derivation(s) this process",
-                baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
-            ));
-            // Warm evidence: with the check rows served this is 0.
-            crate::bytecode_cache::cache_debug(format_args!(
-                "body inferences: {} this process",
-                baml_db::baml_compiler2_hir_ty::infer::body_inferences()
-            ));
 
             Arc::new(
                 crate::runtime_telemetry::create_engine(
@@ -540,7 +524,7 @@ impl TestArgs {
                 return Ok(crate::ExitCode::TestFailure);
             }
 
-            // Write-through the discovery cache (+ BAML_CACHE_VERIFY oracle) so a
+            // Write-through the discovery cache (+ DEV_BAML_BUILD_CACHE_VERIFY=always oracle) so a
             // later `--list` skips engine boot entirely. The cached datum is the
             // UNFILTERED flattened list, so any -i/-x is served from one entry;
             // with no filters the display list above already IS the unfiltered
@@ -805,7 +789,7 @@ impl TestArgs {
     /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
     /// `testing.leaf_selected` used on the honest path, so the selection (and
     /// hence stdout) is byte-identical to a cold run. Returns `None` when the
-    /// cache is absent/disabled, under `BAML_CACHE_VERIFY`, or on a discovery
+    /// cache is absent/disabled, under `DEV_BAML_BUILD_CACHE_VERIFY=always`, or on a discovery
     /// miss/corruption — every case falls through to honest discovery.
     fn try_cached_list(
         &self,
@@ -822,10 +806,6 @@ impl TestArgs {
             .into_iter()
             .filter(|name| invocation.includes_id(name))
             .collect();
-        crate::bytecode_cache::cache_debug(format_args!(
-            "served `test --list` from discovery cache ({} test leaf(s) selected); engine boot skipped",
-            testset_names.len(),
-        ));
         Some(render_test_list(reporter, &testset_names))
     }
 }

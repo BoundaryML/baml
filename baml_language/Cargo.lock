@@ -1314,6 +1314,7 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 name = "bex_cache"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_linker_types",
  "baml_type",
  "baml_version",

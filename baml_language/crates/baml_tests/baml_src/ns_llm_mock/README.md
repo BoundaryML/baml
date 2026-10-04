@@ -53,8 +53,8 @@ id (`root.<ns>::<testset>::<test>`); with `*` it is an anchored glob. Excludes
 always beat includes, and a CLI `-i` **narrows** the profile's selection rather
 than OR-ing with it.
 
-Set `BAML_CACHE_DIR` / `BAML_HOME` to a temp dir when scripting, so the CLI does
-not write `.baml/cache` into the source tree that the snapshot tests scan.
+Set `BAML_HOME` to a temp dir when scripting, so the CLI keeps its build cache
+(`$BAML_HOME/build/cache`) out of your real home.
 
 ---
 

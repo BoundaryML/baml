@@ -73,7 +73,7 @@ impl ProjectSession {
     /// commands own their empty-project error text.
     pub(crate) fn open(from: Option<&Path>, cache_use: CacheUse) -> Result<Self> {
         let resolved = resolve_project_sources(from)?;
-        Ok(Self::from_resolved(resolved, cache_use))
+        Self::from_resolved(resolved, cache_use)
     }
 
     /// Lenient open for introspection commands (`describe`, once it returns
@@ -85,7 +85,7 @@ impl ProjectSession {
     /// *something* to work with.
     pub(crate) fn open_lenient(from: Option<&Path>, cache_use: CacheUse) -> Result<Self> {
         match crate::project_load::resolve_project_sources_lenient(from)? {
-            Some(resolved) => Ok(Self::from_resolved(resolved, cache_use)),
+            Some(resolved) => Self::from_resolved(resolved, cache_use),
             None => {
                 let root = crate::project_load::projectless_search_dir(from)?;
                 let (db, package) = workspace_db(&root);
@@ -103,23 +103,26 @@ impl ProjectSession {
         }
     }
 
-    fn from_resolved(resolved: ResolvedProject, cache_use: CacheUse) -> Self {
-        let (db, package) = build_db_from_sources(&resolved, |_| {});
+    fn from_resolved(resolved: ResolvedProject, cache_use: CacheUse) -> Result<Self> {
         let cache = match cache_use {
             CacheUse::Off => None,
-            _ => CacheContext::open(&resolved),
+            _ => {
+                crate::bytecode_cache::validate_env()?;
+                CacheContext::open(&resolved)
+            }
         };
-        Self {
+        let (db, package) = build_db_from_sources(&resolved, |_| {});
+        Ok(Self {
             resolved,
             db,
             package,
             cache,
-        }
+        })
     }
 
     /// The whole-program cache hit, for commands that execute or package the
     /// compiled program. Call before [`Self::warm_prep`]: a hit makes the
-    /// warm preamble unnecessary. Gated off under `BAML_CACHE_VERIFY` so the
+    /// warm preamble unnecessary. Gated off under `DEV_BAML_BUILD_CACHE_VERIFY=always` so the
     /// verify tripwire always exercises the full compile path.
     pub(crate) fn try_cached_program(&self) -> Option<bex_vm_types::Program> {
         if CacheContext::verify_enabled() {

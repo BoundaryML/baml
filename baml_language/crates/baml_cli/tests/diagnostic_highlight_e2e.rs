@@ -42,7 +42,7 @@ fn forced_color_malformed_diagnostic_fragment_falls_back_and_reports() {
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_HOME", home)
-        .env("BAML_NO_BYTECODE_CACHE", "1")
+        .env("BAML_BUILD_CACHE", "false")
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .output()
         .expect("run baml check");

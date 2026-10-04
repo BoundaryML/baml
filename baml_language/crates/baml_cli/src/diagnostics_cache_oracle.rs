@@ -6,7 +6,7 @@
 //! has two arms: an identical reopen serves every row and must match honest;
 //! any edit serves nothing and checks honestly. Plus the degradation and
 //! verify cases: a corrupt row is re-checked, a faithful cache passes the
-//! `BAML_CACHE_VERIFY` oracle, a stale one bails.
+//! `DEV_BAML_BUILD_CACHE_VERIFY=always` oracle, a stale one bails.
 //!
 //! These round-trip through the on-disk cache on every supported platform.
 
@@ -16,7 +16,7 @@ use baml_db::{ProjectDatabase, SourceRoot};
 
 use crate::{
     bytecode_cache::CacheContext,
-    cache_test_support::{cache_disabled, compile_and_store_v1, resolved, unique_root},
+    cache_test_support::{cache_disabled, compile_and_store_v1, open, resolved, unique_root},
     check_command::render_project_diagnostics,
     project_load,
 };
@@ -56,7 +56,7 @@ fn run_scenario_with(
     // Served path: the warm preamble (seeds + rows) then the gate.
     let r2 = resolved(&root, edited);
     let (mut db2, pkg2) = project_load::build_db_from_sources(&r2, |_| {});
-    let ctx2 = CacheContext::open(&r2).expect("cache reopens");
+    let ctx2 = open(&r2).expect("cache reopens");
     let served = ctx2.prepare_warm_db(&mut db2, pkg2).served;
     let diagnostics = match serve_path {
         ServePath::RunTest => {
@@ -193,7 +193,7 @@ fn check_corrupt_row_degrades_to_honest_file_check() {
 
 /// Store a manifest for `files` (a warning-bearing file), then hand the
 /// reopened context + a fresh database to `check`. Uses the env-independent
-/// core so no `BAML_CACHE_VERIFY` mutation is needed (parallel-test safe).
+/// core so no `DEV_BAML_BUILD_CACHE_VERIFY=always` mutation is needed (parallel-test safe).
 fn with_stored_manifest(
     files: &[(&str, &str)],
     check: impl FnOnce(&CacheContext, &mut ProjectDatabase, SourceRoot),
@@ -203,7 +203,7 @@ fn with_stored_manifest(
 
     let r1 = resolved(&root, files);
     let (mut db2, pkg2) = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx2 = CacheContext::open(&r1).expect("cache reopens");
+    let ctx2 = open(&r1).expect("cache reopens");
     check(&ctx2, &mut db2, pkg2);
     let _ = std::fs::remove_dir_all(&root);
 }

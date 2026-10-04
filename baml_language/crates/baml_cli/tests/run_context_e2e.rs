@@ -37,7 +37,7 @@ fn piped_cli(project: &Path, args: &[&str], input: Option<&str>) -> Output {
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_TELEMETRY", "high")
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        .env("BAML_HOME", common::shared_baml_home())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

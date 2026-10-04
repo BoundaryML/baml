@@ -816,12 +816,6 @@ pub fn content_hash(text: &str) -> [u8; 32] {
     Sha256::digest(text.as_bytes()).into()
 }
 
-/// Whether environment variable `name` is set to exactly `"1"` — the shared
-/// spelling of every `BAML_*` cache opt-out flag.
-pub fn env_flag(name: &str) -> bool {
-    std::env::var_os(name).is_some_and(|value| value == "1")
-}
-
 /// `path` relative to `root` as a display string, falling back to the full path
 /// when it is not under `root`. Manifests and cache keys store this
 /// project-root-relative form to stay location-independent; the CLI writer and
@@ -1190,8 +1184,8 @@ mod tests {
 /// the cache, developer machines read it. This mirrors Go's `GOCACHEPROG`
 /// split of "cache policy in the tool, storage anywhere".
 ///
-/// Configured via `BAML_CACHE_REMOTE=<base-url>` (entries live at
-/// `<base-url>/<key-hex>`) and optional `BAML_CACHE_REMOTE_TOKEN` (sent as a
+/// Configured via `BAML_BUILD_CACHE_REMOTE=<base-url>` (entries live at
+/// `<base-url>/<key-hex>`) and optional `BAML_BUILD_CACHE_REMOTE_TOKEN` (sent as a
 /// bearer token). Only immutable entries — Program blobs and per-package
 /// outputs — are shared; the per-project manifest is a mutable local-latest
 /// pointer and deliberately stays local.
@@ -1219,10 +1213,10 @@ fn remote_url_allowed(url: &reqwest::Url) -> bool {
 }
 
 impl RemoteCache {
-    /// Build from `BAML_CACHE_REMOTE` / `BAML_CACHE_REMOTE_TOKEN`; `None`
+    /// Build from `BAML_BUILD_CACHE_REMOTE` / `BAML_BUILD_CACHE_REMOTE_TOKEN`; `None`
     /// when unset or the HTTP client cannot be constructed.
     pub fn from_env() -> Option<RemoteCache> {
-        let base_url = std::env::var("BAML_CACHE_REMOTE").ok()?;
+        let base_url = baml_env::raw_var("BAML_BUILD_CACHE_REMOTE")?;
         if base_url.is_empty() {
             return None;
         }
@@ -1230,7 +1224,9 @@ impl RemoteCache {
         if !remote_url_allowed(&parsed) {
             #[allow(clippy::print_stderr)]
             {
-                eprintln!("warning: BAML_CACHE_REMOTE ignored — use https or a loopback http URL");
+                eprintln!(
+                    "warning: BAML_BUILD_CACHE_REMOTE ignored — use https or a loopback http URL"
+                );
             }
             return None;
         }
@@ -1243,7 +1239,7 @@ impl RemoteCache {
             .build()
             .ok()?;
         let base_url = base_url.trim_end_matches('/').to_string();
-        let token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
+        let token = baml_env::raw_var("BAML_BUILD_CACHE_REMOTE_TOKEN");
         Some(RemoteCache {
             base_url,
             token,

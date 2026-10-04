@@ -131,8 +131,8 @@ fn type_quiz_formatted() {
 
 #[test]
 fn type_quiz_conformance() {
-    // Same isolation as the corpus runner: the CLI's cache and home live
-    // outside the source tree, and the bytecode cache is content-addressed
+    // Same isolation as the corpus runner: the CLI's home lives outside the
+    // source tree, and the build cache is content-addressed
     // with the compiler fingerprint so a stale hit is impossible.
     let tmp = tempfile::tempdir().expect("tempdir for quiz cache");
     let workspace_root = workspace_root();
@@ -150,6 +150,17 @@ fn type_quiz_conformance() {
     let home = tmp.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
+    // Keep the build cache warm across runs: point `$BAML_HOME/build/cache`
+    // at the persistent directory (the symlink is skipped where unavailable,
+    // leaving a cold per-run cache).
+    #[cfg(unix)]
+    {
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        std::fs::create_dir_all(home.join("build")).unwrap();
+        std::os::unix::fs::symlink(&cache_dir, home.join("build").join("cache")).unwrap();
+    }
+    #[cfg(not(unix))]
+    let _ = &cache_dir;
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         // Most of the suite compiles programs through the real compiler, and on
         // a shared runner with the rest of `baml_tests` alongside, the CLI's
@@ -164,7 +175,6 @@ fn type_quiz_conformance() {
         // It needs their results, not telemetry or recording files.
         .env("BAML_TELEMETRY", "off")
         .env("BAML_HOME", &home)
-        .env("BAML_CACHE_DIR", &cache_dir)
         .status()
         .expect("baml_cli test should not fail");
     assert!(status.success());

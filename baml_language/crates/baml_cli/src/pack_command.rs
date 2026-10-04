@@ -303,9 +303,6 @@ impl PackArgs {
         let needs_format_hint = session.needs_format_hint();
 
         if let Some(program) = session.try_cached_program() {
-            crate::bytecode_cache::cache_debug(format_args!(
-                "pack: bytecode cache hit — skipping compile"
-            ));
             return Ok((session.db, program, needs_format_hint));
         }
 

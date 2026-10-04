@@ -34,6 +34,9 @@ fn run_baml_cli_with_env(built: &Path, dir: &Path, args: &[&str], env: &[(&str, 
     let home = dir.join(".baml-home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
+    // Share the build cache across the suite so only the first invocation pays
+    // the stdlib compile; see `common::shared_baml_home`.
+    common::share_build_cache(&home);
     let mut cmd = Command::new(built);
     for arg in args {
         cmd.arg(arg);
@@ -49,9 +52,6 @@ fn run_baml_cli_with_env(built: &Path, dir: &Path, args: &[&str], env: &[(&str, 
     // Tests are quiet unless they explicitly exercise the inherited log level.
     cmd.env_remove("BAML_LOG");
     cmd.envs(env.iter().copied());
-    // Share the bytecode cache across the suite so only the first invocation
-    // pays the stdlib compile; see `common::shared_cache_dir`.
-    cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -707,6 +707,50 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+/// A malformed build-cache variable is an error, never a silently different
+/// cache mode; a well-formed one is accepted.
+#[test]
+fn build_cache_env_is_validated() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+
+    for (name, value) in [
+        ("BAML_BUILD_CACHE", "maybe"),
+        ("DEV_BAML_BUILD_CACHE_VERIFY", "sometimes"),
+    ] {
+        let output = run_baml_cli_with_env(
+            built,
+            tmp.path(),
+            &["check", "--from", "."],
+            &[(name, value)],
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{name}={value}: {stderr}");
+        assert!(stderr.contains(name), "{name}={value}: {stderr}");
+    }
+
+    for (name, value) in [
+        ("BAML_BUILD_CACHE", "off"),
+        ("DEV_BAML_BUILD_CACHE_VERIFY", "always"),
+    ] {
+        let output = run_baml_cli_with_env(
+            built,
+            tmp.path(),
+            &["check", "--from", "."],
+            &[(name, value)],
+        );
+        assert!(
+            output.status.success(),
+            "{name}={value}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 /// `--test-timeout` fails a test that outlives it; `none` removes the deadline.
 #[test]
 fn test_timeout_flag_bounds_each_test() {
@@ -1046,6 +1090,7 @@ test "streams" {
     );
 
     let home = tmp.path().join(".baml-home");
+    common::share_build_cache(&home);
     let mut child = Command::new(built)
         .args(["test", "--from", ".", "--log", "INFO"])
         .current_dir(tmp.path())
@@ -1054,7 +1099,6 @@ test "streams" {
         // `--output-preset auto` to `agent` and hide progress lines.
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_HOME", &home)
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -2063,7 +2107,7 @@ fn run_file_script_mode_passes_args_after_separator_as_argv() {
         .args(["--", "alpha", "--beta", "gamma"])
         .current_dir(tmp.path())
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        .env("BAML_HOME", common::shared_baml_home())
         .output()
         .expect("execute the shebang script directly");
 
@@ -2117,7 +2161,7 @@ fn shebang_can_name_a_specific_function() {
     let output = Command::new(&script)
         .current_dir(tmp.path())
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        .env("BAML_HOME", common::shared_baml_home())
         .output()
         .expect("execute the shebang script directly");
 

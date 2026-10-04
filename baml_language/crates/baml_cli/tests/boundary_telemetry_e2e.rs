@@ -17,6 +17,7 @@ const KEY: &str = "bml_cli_test_key";
 const RECORDINGS: &str = ".baml/btel/recordings";
 
 fn run(project: &Path, boundary_url: &str, telemetry: &str) {
+    common::share_build_cache(&project.join("home"));
     let output = Command::new(common::baml_cli())
         .args(["run", "main"])
         .current_dir(project)
@@ -24,7 +25,6 @@ fn run(project: &Path, boundary_url: &str, telemetry: &str) {
         .env("BOUNDARY_API_KEY", KEY)
         .env("BAML_TELEMETRY", telemetry)
         .env("BAML_HOME", project.join("home"))
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("DO_NOT_TRACK", "1")
