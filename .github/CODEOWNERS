@@ -3,3 +3,4 @@
 /baml_language/crates/baml_builtins2/baml_std/ @hellovai @aaronvg @2kai2kai2
 
 /baml_language/ENV_VARS.md @hellovai @aaronvg
+/baml_language/crates/baml_env/ @hellovai @aaronvg
