@@ -181,7 +181,7 @@ typedef struct BamlBuffer {
 
 typedef struct BamlBuffer (*BamlVersionFn)(void);
 
-typedef struct BamlBuffer (*BamlInitializeRuntimeFromBlobFn)(const uint8_t *bytecode, size_t length);
+typedef struct BamlBuffer (*BamlStageRuntimeFromBlobFn)(const uint8_t *bytecode, size_t length);
 
 typedef void (*BamlFreeBufferFn)(struct BamlBuffer buffer);
 
@@ -300,9 +300,9 @@ typedef void (*BamlRegisterUnhandledSpawnErrorCallbackFn)(BamlUnhandledSpawnErro
 
 typedef struct BamlBuffer (*BamlShutdownRuntimeFn)(void);
 
-typedef struct BamlBuffer (*BamlInitializeRuntimeFromBlobWithMetadataFn)(const uint8_t *bytecode,
-                                                                         size_t length,
-                                                                         const char *baml_toml);
+typedef struct BamlBuffer (*BamlStageRuntimeFromBlobWithMetadataFn)(const uint8_t *bytecode,
+                                                                    size_t length,
+                                                                    const char *baml_toml);
 
 typedef uint32_t (*BamlInvocationProtocolVersionFn)(void);
 
@@ -373,7 +373,7 @@ typedef struct BamlApiV1 {
    * calls are serialized only while replacing the global runtime; calls
    * already in progress retain their previous runtime instance.
    */
-  BamlInitializeRuntimeFromBlobFn initialize_runtime_from_blob;
+  BamlStageRuntimeFromBlobFn stage_runtime_from_blob;
   /**
    * Release exactly one runtime-owned buffer returned through this table.
    *
@@ -506,7 +506,7 @@ typedef struct BamlApiV1 {
   /**
    * Replace the runtime from bytecode after validating embedded generation metadata.
    */
-  BamlInitializeRuntimeFromBlobWithMetadataFn initialize_runtime_from_blob_with_metadata;
+  BamlStageRuntimeFromBlobWithMetadataFn stage_runtime_from_blob_with_metadata;
   /**
    * Native invocation contract; protobuf carries no version negotiation.
    */
@@ -569,9 +569,9 @@ BamlCffiStatus __testonly_seed_heap_handle(uint64_t slab_key,
  * against this bridge on the first use of the runtime.
  */
 BAML_CFFI_API
-struct BamlBuffer initialize_runtime_from_blob_with_metadata(const uint8_t *bytecode,
-                                                             size_t length,
-                                                             const char *baml_toml);
+struct BamlBuffer stage_runtime_from_blob_with_metadata(const uint8_t *bytecode,
+                                                        size_t length,
+                                                        const char *baml_toml);
 
 #ifdef __cplusplus
 }  // extern "C"

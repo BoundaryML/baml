@@ -89,7 +89,7 @@ internal sealed unsafe partial class NativeBridge : IDisposable
         fixed (byte* pointer = bytes)
         {
             string diagnostic = ConsumeUtf8(
-                api->InitializeRuntimeFromBlob(
+                api->StageRuntimeFromBlob(
                     pointer,
                     (nuint)bytes.Length));
             Require(
@@ -418,8 +418,8 @@ internal sealed unsafe partial class NativeBridge : IDisposable
     {
         Require(api->Version is not null, "version is null");
         Require(
-            api->InitializeRuntimeFromBlob is not null,
-            "initialize_runtime_from_blob is null");
+            api->StageRuntimeFromBlob is not null,
+            "stage_runtime_from_blob is null");
         Require(api->FreeBuffer is not null, "free_buffer is null");
         Require(api->RegisterCallback is not null, "register_callback is null");
         Require(api->CallFunction is not null, "call_function is null");
@@ -539,7 +539,7 @@ internal sealed unsafe partial class NativeBridge : IDisposable
         public readonly delegate* unmanaged[Cdecl]<
             byte*,
             nuint,
-            BamlBuffer> InitializeRuntimeFromBlob;
+            BamlBuffer> StageRuntimeFromBlob;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
         public readonly delegate* unmanaged[Cdecl]<
             delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>,

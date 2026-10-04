@@ -58,7 +58,7 @@ function MakeCounter(start: int) -> () -> int throws never {
 `;
 
 function makeRuntime(bamlSource: string): BamlRuntime {
-    return BamlRuntime.initializeRuntime('.', { 'main.baml': bamlSource });
+    return BamlRuntime.stageRuntime('.', { 'main.baml': bamlSource });
 }
 
 describe('Basics', () => {
@@ -74,7 +74,7 @@ describe('Basics', () => {
     });
 
     test('getOrInitRuntime returns initialized runtime', () => {
-        // initializeRuntime sets the process-global singleton; getOrInitRuntime fetches it.
+        // stageRuntime sets the process-global singleton; getOrInitRuntime fetches it.
         makeRuntime(BAML_SOURCE);
         const rt = getOrInitRuntime();
         expect(callFunctionSync(rt, 'ReturnOne', {}).result()).toBe(1);

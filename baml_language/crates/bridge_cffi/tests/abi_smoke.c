@@ -53,7 +53,7 @@ static void baml_close_library(BamlLibrary library) {
 #endif
 
 static int baml_required_functions_exist(const BamlApiV1 *api) {
-  return api->version != NULL && api->initialize_runtime_from_blob != NULL &&
+  return api->version != NULL && api->stage_runtime_from_blob != NULL &&
          api->free_buffer != NULL && api->register_callback != NULL &&
          api->call_function != NULL && api->new_function_call != NULL &&
          api->cancel_function_call != NULL && api->register_host_dispatch_callback != NULL &&

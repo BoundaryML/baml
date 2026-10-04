@@ -520,7 +520,7 @@ fn render_runtime_module() -> String {
 
             pub(crate) fn ensure_init() -> ::std::result::Result<(), ::baml_bridge::SdkError> {
                 INIT.get_or_init(|| {
-                    ::baml_bridge::runtime::initialize_from_bytecode_with_metadata(
+                    ::baml_bridge::runtime::stage_from_bytecode_with_metadata(
                         crate::_inlinedbaml::BYTECODE,
                         crate::_inlinedbaml::EMBEDDED_BAML_TOML,
                     )

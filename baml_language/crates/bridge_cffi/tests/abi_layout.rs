@@ -250,7 +250,7 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!("BamlApiV1", BamlApiV1, abi_version);
     field!("BamlApiV1", BamlApiV1, struct_size);
     field!("BamlApiV1", BamlApiV1, version);
-    field!("BamlApiV1", BamlApiV1, initialize_runtime_from_blob);
+    field!("BamlApiV1", BamlApiV1, stage_runtime_from_blob);
     field!("BamlApiV1", BamlApiV1, free_buffer);
     field!("BamlApiV1", BamlApiV1, register_callback);
     field!("BamlApiV1", BamlApiV1, call_function);
@@ -278,7 +278,7 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!(
         "BamlApiV1",
         BamlApiV1,
-        initialize_runtime_from_blob_with_metadata
+        stage_runtime_from_blob_with_metadata
     );
 
     field!("BamlApiV1", BamlApiV1, invocation_protocol_version);
