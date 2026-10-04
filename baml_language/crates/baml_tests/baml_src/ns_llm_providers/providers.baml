@@ -52,23 +52,23 @@ function CachedReference(nonce: string, reference: string, question: string) -> 
     `
 }
 
-// Filler for a cached prefix, about 20 tokens a line. 600 lines is three times
-// Claude Haiku 4.5's 4,096-token minimum; OpenAI's is 1,024.
-function cache_reference(count: int) -> string {
+// About 12,000 tokens of filler for a cached prefix: three times Claude Haiku
+// 4.5's 4,096-token minimum, and well over OpenAI's 1,024.
+function cache_reference() -> string {
     let lines: string[] = [];
     let i = 0;
-    while (i < count) {
+    while (i < 600) {
         lines.push(`Entry ${i}: the quick brown fox jumps over the lazy dog, item ${i * 7}.`);
         i += 1;
     }
     lines.join("\n")
 }
 
-// Two calls sharing a fresh prefix of `lines` lines, the first answering "one"
-// and the second "two". Returns the two calls' usage, logged under `name`.
-function cache_round_trip(name: string, client: ai.Client, lines: int = 600) -> ai.events.Usage[] {
+// Two calls sharing a fresh prefix, the first answering "one" and the second
+// "two". Returns the two calls' usage, logged under `name`.
+function cache_round_trip(name: string, client: ai.Client) -> ai.events.Usage[] {
     let nonce = baml.time.Instant.now().to_string();
-    let reference = cache_reference(lines);
+    let reference = cache_reference();
     let agent = ai.Agent.new(client = client);
 
     let first = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: one"));
@@ -137,25 +137,33 @@ function check_OpenAIResponsesGpt56Cache() -> void {
     check_openai_cache("OpenAIResponsesGpt56Cache", cl)
 }
 
-// The resource's only deployment is gpt-5-mini, which rejects
-// `prompt_cache_breakpoint`. The deployment is named after its model, so
-// `${cache()}` sends no marker and both calls go through. Nothing is asserted
-// about the cache: with no marker, Azure's implicit cache is all there is, and
-// it misses often enough on the second call to flake. The deployment allows
-// 10,000 tokens a minute, so the prefix is 100 lines (about 2,000 tokens) and
-// reasoning is minimal.
-function check_AzureChatGpt5MiniCache() -> void {
+// A deployment on the resource behind AZURE_OPENAI_RESPONSES_BASE_URL, through
+// the chat completions client. Each deployment is named after its model.
+function azure_chat(deployment: string) -> openai.AzureClient {
     let resource = baml.env.get_or_panic("AZURE_OPENAI_RESPONSES_BASE_URL").replace("/openai/v1", "");
-    let cl = openai.AzureClient.new(
-        model = "gpt-5-mini",
-        base_url = `${resource}/openai/deployments/gpt-5-mini`,
+    openai.AzureClient.new(
+        model = deployment,
+        base_url = `${resource}/openai/deployments/${deployment}`,
         api_key = env.AZURE_OPENAI_API_KEY,
-        // gpt-5-mini rejects the `max_tokens` Azure would otherwise default to.
+        // GPT-5 models reject the `max_tokens` Azure would otherwise default to.
         max_completion_tokens = 1024,
-        request_body = { "reasoning_effort": "minimal" },
-    );
+    )
+}
+
+function check_AzureChatGpt56Cache() -> void {
+    let cl = azure_chat("gpt-5.6-luna");
+    assert.equal(cl.default_cache_args(), { "mode": "explicit" });
+    check_openai_cache("AzureChatGpt56Cache", cl)
+}
+
+// gpt-5-mini rejects `prompt_cache_breakpoint`, so `${cache()}` sends no marker
+// and both calls go through. Nothing is asserted about the cache: with no
+// marker, Azure's implicit cache is all there is, and it misses often enough
+// on the second call to flake.
+function check_AzureChatGpt5MiniCache() -> void {
+    let cl = azure_chat("gpt-5-mini");
     assert.equal(cl.default_cache_args(), null);
-    let _ = cache_round_trip("AzureChatGpt5MiniCache", cl, lines = 100);
+    let _ = cache_round_trip("AzureChatGpt5MiniCache", cl);
 }
 
 function check_BedrockGptOss20b() -> void {
@@ -239,6 +247,9 @@ testset "live" with testing.Sequential() {
     }
     test "OpenAIResponsesGpt56Cache" {
         check_OpenAIResponsesGpt56Cache()
+    }
+    test "AzureChatGpt56Cache" {
+        check_AzureChatGpt56Cache()
     }
     test "AzureChatGpt5MiniCache" {
         check_AzureChatGpt5MiniCache()
