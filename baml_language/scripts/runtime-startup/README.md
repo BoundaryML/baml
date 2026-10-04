@@ -178,3 +178,82 @@ Measured 2,700 fresh launches across 27 variants, plus 81 warmups and 12 separat
 The compiler-free experiment does **not** deliver a substantial latency reduction. Matched execution-ready empty programs take 16.15 → 15.86 ms with telemetry off, and 18.19 → 17.59 ms with local recording. Wrapper version commands take 19.15 → 18.90 ms off and 21.15 → 20.76 ms local. These are separate fresh interleaved measurements, not the earlier profiling run.
 
 [Compiler linkage and native loading](compiler-linkage.md) contains the full tables, phase attribution, runtime-compilation capability check and historical methodology. It retains 4,800 compiler-linkage samples and 800 minimal native-library controls. The compiler-free implementation has been removed; the shipping host keeps its compiler.
+
+
+## Graph allocation and image follow-up
+
+**Result: arena allocation and LZ4 compression do not produce a consistent large startup win.** The empty program's arena control improves slightly, but printing, the larger program and wrapper generally regress. A raw native-layout graph image failed exact graph verification and was excluded from timings. Its implementation has been discarded. No supported runtime/artifact behavior changes.
+
+The earlier execution-ready bytecode preparation still helps in this new interleaved run: original release-built empty programs take 21.06 → 15.59 ms median with telemetry off; original packed wrapper version commands take 24.66 → 18.61 ms. Those are separate original-host controls. The table below compares alternative decoders in identical rebuilt diagnostic hosts, with the full runtime compiler included.
+
+### Matched loading comparisons
+
+Median / p95 milliseconds, 100 fresh launches per cell. Ordinary uses the execution-ready Borsh payload; arena decodes the same payload into one backing allocation; LZ4 decompresses a compressed payload before ordinary Borsh decoding. The wrapper runs the same native CLI fixture.
+
+| Program / telemetry | Ordinary Borsh | Arena | LZ4 + Borsh |
+| --- | --- | --- | --- |
+| Empty Main, off | 16.47 / 17.95 | 15.89 / 17.85 | 16.16 / 18.20 |
+| Empty Main, local | 18.40 / 21.27 | 17.74 / 19.18 | 17.95 / 19.27 |
+| Print ready, off | 15.81 / 17.59 | 16.09 / 17.46 | 16.20 / 17.60 |
+| Print ready, local | 17.80 / 18.88 | 17.88 / 19.39 | 18.17 / 19.27 |
+| 1,000 extra functions, off | 18.73 / 20.70 | 19.08 / 20.70 | 19.06 / 20.86 |
+| 1,000 extra functions, local | 20.87 / 23.01 | 22.02 / 23.80 | 21.40 / 25.11 |
+| Wrapper version, off | 18.83 / 21.13 | 19.04 / 20.42 | 19.14 / 20.80 |
+| Wrapper version, local | 20.55 / 22.88 | 20.95 / 23.39 | 20.86 / 22.47 |
+
+The arena is not a frozen executable image: it still reconstructs every declaration and the engine still builds its indexes, package bindings and rendering schemas. It makes allocations sequential and releases their backing together. All object destructors still run; resources are not abandoned to process exit. The arena stays alive until normal engine shutdown and destruction finish. Engine/runtime allocations outside artifact decoding continue using the system allocator.
+
+LZ4 reduces the empty embedded section from **2,265,825 to 909,696 bytes (59.9%)**, and the diagnostic executable from 33,339,858 to 31,952,850 bytes. It retains artifact kind/build-fingerprint checking and SHA-256 integrity validation. Its additional decompression and copy work does not consistently improve launch time.
+
+### Where the work moves
+
+Mean milliseconds for the instrumented empty host. These are diagnostic-host phases, not a partition of the uninstrumented medians above. Source/module layout and instrumentation can perturb timing, so independent medians/p95 must not be added or subtracted as a phase accounting identity.
+
+| Phase / telemetry | Ordinary Borsh | Arena | LZ4 + Borsh |
+| --- | ---: | ---: | ---: |
+| Decode, off | 4.152 | 4.624 | 4.409 |
+| Build engine, off | 3.324 | 3.527 | 3.377 |
+| Destroy engine/host state, off | 1.673 | 1.016 | 1.711 |
+| **Total wall, off** | **15.978** | **15.973** | **16.313** |
+| Decode, local | 4.104 | 4.663 | 4.488 |
+| Build engine, local | 4.804 | 5.291 | 4.879 |
+| Destroy engine/host state, local | 1.706 | 1.052 | 1.694 |
+| **Total wall, local** | **17.845** | **18.362** | **18.254** |
+
+For empty/off, arena destruction saves 0.657 ms, while decode plus engine construction adds 0.675 ms. Mean total wall changes 15.978 → 15.973 ms. That does not justify a runtime/allocator redesign for latency.
+
+A separate capture of the empty execution-ready template counts **55,600 allocation requests and 8,632,546 requested bytes** during Borsh decoding, including temporary buffers, growth and one root box. This is allocation traffic, not live retained memory or OS footprint. The bump experiment reserves 64 MiB of virtual backing, initializes requested allocations, and keeps their storage until host cleanup.
+
+### CPU and memory counters
+
+Medians from uninstrumented controls. RSS and footprint use the same macOS parent-helper counters as earlier experiments; they describe these diagnostic binaries and are not cross-platform memory claims.
+
+| Program, telemetry off | Mode | CPU ms | Peak RSS MiB | Peak footprint MiB | Root instructions, millions |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Empty Main | Ordinary | 14.83 | 22.54 | 14.88 | 125.58 |
+| Empty Main | Arena | 14.83 | 26.14 | 18.53 | 115.71 |
+| Empty Main | LZ4 | 15.27 | 23.26 | 14.69 | 134.33 |
+| Wrapper version | Ordinary | 17.58 | 24.72 | 15.50 | 131.67 |
+| Wrapper version | Arena | 17.80 | 28.67 | 19.59 | 121.52 |
+| Wrapper version | LZ4 | 17.99 | 25.65 | 15.54 | 140.79 |
+| 1,000 extra functions | Ordinary | 17.71 | 27.62 | 19.17 | 158.87 |
+| 1,000 extra functions | Arena | 17.98 | 32.73 | 24.37 | 147.18 |
+| 1,000 extra functions | LZ4 | 17.99 | 28.48 | 19.12 | 168.40 |
+
+### Correctness and rejected image
+
+The accepted modes pass 102 recorded checks: complete Borsh graph round-trips; identical stdout/exit status/error source locations for empty, printing, JSON/defaults/callbacks/floats/catch, 1,000 functions, typed arguments, source errors, reflection/docstrings and runtime compilation; plus typed help and wrapper child forwarding. Both controls and instrumented hosts are checked. The runtime-compilation fixture returns 42, so the compiler remains usable. No cloud traffic is generated.
+
+The attempted native image copied a decoded graph, inferred pointer sites from address ranges, and tried both whole-arena and compacted live-block storage. It failed exact graph round-tripping; some attempts crashed during verification. A broad host-address scan also changed nine serialized bytes that should have stayed unchanged. **There are no native-image timing results.** A debugger frame in regex code came from the corrupted graph; it was not evidence that the program's type declarations contain compiled regex state.
+
+This rejects that pointer-inference prototype, not a typed archived format. A production image needs explicit field/offset semantics and structural validation. The substantial target remains avoiding whole-graph materialization and repeated index/schema construction, with reflection/debug data available on demand and shared backing ownership. Plain compression or replacing malloc with a bump allocator does not do that. The measurements do not establish the saving or feasibility of a future archived format.
+
+### Methodology and retained evidence
+
+Same Apple M2 Max / macOS 15.6.1 / native aarch64 / Rust 1.98.0 setup and unchanged release settings: opt-level 3, fat LTO, one codegen unit, stripped symbols, unwind panics. Existing execution-ready libraries are selected by the same Cargo dependency fingerprints as the preceding host profile; the full compiler is linked. The diagnostic embeds the real packed-host control/instrumented sources and changes the decode boundary, not target execution.
+
+There are **5,200 timed fresh launches across 52 variants**, **156 warmups**, **102 correctness checks** and **1,200 instrumented timelines**. A separate 1,040-launch exploratory run is excluded from these statistics. Timed batches run after experiment builds/tests finish; desktop background activity remains uncontrolled. Fixed-seed shuffled interleaving (2026100404), warmed file/executable caches, synthetic HOME/BAML_HOME, disabled update checks, fixed native child, no inherited cloud credentials. Local is default disk recording; off sets BAML_TELEMETRY=off. No Linux/Windows/iOS/Wasm or cold-cache conclusion.
+
+[graph-allocation-results-20261004.json](graph-allocation-results-20261004.json) retains all 5,200 scalar samples, every instrumented timestamp/phase, 52 summaries, checks, exact source snapshots/build commands/dependency fingerprints and artifact/source hashes. Samples are lossless column-oriented rows; every reconstructed sample and recomputed summary matches the original output. Every instrumented timeline is ordered and sums to parent wall time within 0.001 ms.
+
+The generated implementation files and rejected image executables have been removed. Frozen diagnostic sources remain only as historical measurement data in that JSON, so the recorded comparison can be audited/replayed without adding an unsupported runtime feature. Recover image.rs, control.rs and profile.rs from diagnostic_sources into an ignored output directory; build with the recorded fingerprint-matched rustc commands, adjusting source/output/dependency paths to that directory. The recorded graph_image.py harness expects the earlier compare.py fixture directory (with baseline/candidate binaries) and profile_host.py output. Restore it inside scripts/runtime-startup and pass **--modes borsh arena compressed_borsh** when preparing/measuring; rejected native modes are not part of this comparison. Library preparation follows the earlier prototype.patch reproduction instructions.
