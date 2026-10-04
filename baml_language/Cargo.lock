@@ -1698,6 +1698,7 @@ name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
  "baml_artifact",
+ "baml_env",
  "baml_version",
  "bex_events",
  "bex_project",
