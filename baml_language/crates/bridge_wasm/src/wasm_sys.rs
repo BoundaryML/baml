@@ -76,8 +76,8 @@ fn options_to_js(options: &io::owned::sys::ProcessOptions) -> Result<JsValue, Vm
     }
     let _ = Reflect::set(
         &obj,
-        &"clear_env".into(),
-        &JsValue::from_bool(options.clear_env),
+        &"inherit_env".into(),
+        &JsValue::from_bool(options.inherit_env),
     );
     if let Some(ref env) = options.env {
         let env_obj = js_sys::Object::new();

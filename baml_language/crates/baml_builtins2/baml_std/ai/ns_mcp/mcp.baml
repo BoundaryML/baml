@@ -43,7 +43,6 @@ class Connection {
             stdin = "pipe",
             stdout = "pipe",
             cwd = null,
-            env = null,
             input = null,
         ) catch_all (e) {
             _ => {

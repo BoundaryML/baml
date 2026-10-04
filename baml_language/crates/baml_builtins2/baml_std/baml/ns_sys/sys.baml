@@ -7,9 +7,10 @@ type Stdio = "inherit" | "pipe" | "ignore";
 /// (internal) Resolved arguments for the native process operations.
 class _ProcessOptions {
     cwd: string?,
-    /// Overlay the inherited environment; null removes a variable.
+    /// Set environment overrides; null removes a variable.
     env: map<string, string?>?,
-    clear_env: bool,
+    /// Start with the parent environment before applying overrides.
+    inherit_env: bool,
     timeout: root.time.Duration?,
     input: ProcessInput?,
     stdin: Stdio,
@@ -191,12 +192,14 @@ class WritePipe {
 /// collects both stdout and stderr. Nonzero exit codes are returned normally.
 /// A timeout terminates this command; cancelling the call releases the child
 /// handle without killing the process. Explicit `input` is written to a pipe.
+/// The parent environment is inherited by default. `env` overrides variables;
+/// null values remove them. `inherit_env = false` starts with an empty environment.
 function run(
     program: string,
     args: string[] = [],
     cwd: string? = null,
     env: map<string, string?>? = null,
-    clear_env: bool = false,
+    inherit_env: bool = true,
     timeout: root.time.Duration? = null,
     input: ProcessInput? = null,
     stdin: Stdio = "inherit",
@@ -207,7 +210,7 @@ function run(
     let options = _ProcessOptions {
         cwd: cwd,
         env: env,
-        clear_env: clear_env,
+        inherit_env: inherit_env,
         timeout: timeout,
         input: input,
         stdin: stdin,
@@ -233,12 +236,13 @@ function _run(
 
 /// Interpret a command string in the host's shell and wait for its result.
 /// Supports pipes, redirection and other shell syntax. Output and timeout
-/// behavior are the same as `run`; this function always uses a shell.
+/// behavior and environment options are the same as `run`; this function
+/// always uses a shell.
 function shell(
     command: string,
     cwd: string? = null,
     env: map<string, string?>? = null,
-    clear_env: bool = false,
+    inherit_env: bool = true,
     timeout: root.time.Duration? = null,
     input: ProcessInput? = null,
     stdin: Stdio = "inherit",
@@ -249,7 +253,7 @@ function shell(
     let options = _ProcessOptions {
         cwd: cwd,
         env: env,
-        clear_env: clear_env,
+        inherit_env: inherit_env,
         timeout: timeout,
         input: input,
         stdin: stdin,
@@ -278,12 +282,14 @@ function _shell(
 /// process. Use `child.wait(timeout = ...)` to limit a wait without terminating it.
 /// `detached = true` creates a new session on Unix or detaches from the
 /// Windows console. It does not change GC behavior or stream configuration.
+/// Environment options are the same as `run`: inheritance is enabled by
+/// default, then `env` overrides are applied.
 function subprocess(
     program: string,
     args: string[] = [],
     cwd: string? = null,
     env: map<string, string?>? = null,
-    clear_env: bool = false,
+    inherit_env: bool = true,
     input: ProcessInput? = null,
     stdin: Stdio = "inherit",
     stdout: Stdio = "inherit",
@@ -296,7 +302,7 @@ function subprocess(
         _ProcessOptions {
             cwd: cwd,
             env: env,
-            clear_env: clear_env,
+            inherit_env: inherit_env,
             timeout: null,
             input: input,
             stdin: stdin,

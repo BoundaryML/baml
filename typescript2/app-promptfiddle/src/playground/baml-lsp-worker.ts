@@ -179,7 +179,7 @@ interface ProcessOptionsJson {
   env?: Record<string, string | null>;
   timeout_ms?: number;
   input?: string | number[];
-  clear_env?: boolean;
+  inherit_env?: boolean;
   stdin: 'inherit' | 'pipe' | 'ignore';
   stdout: 'inherit' | 'pipe' | 'ignore';
   stderr: 'inherit' | 'pipe' | 'ignore';
@@ -209,7 +209,7 @@ async function executeShell(
   const execOptions: Parameters<Bash['exec']>[1] = {
     cwd: options?.cwd,
     env,
-    replaceEnv: options?.clear_env ?? false,
+    replaceEnv: !(options?.inherit_env ?? true),
     stdin: Array.isArray(options?.input)
       ? new TextDecoder('utf-8', { fatal: true }).decode(
           new Uint8Array(options.input),

@@ -13,12 +13,12 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[ns_mcp/mcp.baml:143:13]
- 143 │ ╭─▶             throw root.errors.NetworkFailure { status_code: null,
- 144 │ │                   provider: `mcp/${self.server_name}`,
- 145 │ │                   detail: `no response for ${method}`,
- 146 │ │                   raw_body: null,
- 147 │ ╰─▶             }
+     ╭─[ns_mcp/mcp.baml:142:13]
+ 142 │ ╭─▶             throw root.errors.NetworkFailure { status_code: null,
+ 143 │ │                   provider: `mcp/${self.server_name}`,
+ 144 │ │                   detail: `no response for ${method}`,
+ 145 │ │                   raw_body: null,
+ 146 │ ╰─▶             }
      ╰────
 
   [type] E0146

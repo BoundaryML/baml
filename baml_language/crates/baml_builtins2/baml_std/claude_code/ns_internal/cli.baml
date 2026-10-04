@@ -297,7 +297,6 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         stdin = "pipe",
         stdout = "pipe",
         cwd = c.cwd,
-        env = null,
         input = null,
     ) catch_all (e) {
         _ => {

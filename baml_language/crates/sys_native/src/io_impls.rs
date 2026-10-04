@@ -1332,7 +1332,7 @@ fn configure_process(
     if let Some(dir) = working_dir.for_child(options.cwd.as_deref()) {
         cmd.current_dir(dir);
     }
-    if options.clear_env {
+    if !options.inherit_env {
         cmd.env_clear();
     }
     if let Some(env) = &options.env {

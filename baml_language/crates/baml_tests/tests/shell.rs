@@ -620,13 +620,36 @@ async fn subprocess_stderr_modes_without_pipe() {
 
 #[tokio::test]
 #[cfg(unix)]
-async fn process_environment_overlay_and_clear() {
+async fn process_environment_inheritance_and_overrides() {
     let output = baml_test!(
         r#"
+        function require(condition: bool, message: string) -> void {
+            if (!condition) { baml.sys.panic(message); }
+        }
+
         function main() -> bool {
-            let inherited = baml.sys.run("env", args = [], env = map { "BAML_PROCESS_TEST": "1" }, capture_output = true).stdout.to_string();
-            let cleared = baml.sys.run("env", args = [], clear_env = true, env = map { "BAML_PROCESS_TEST": "1" }, capture_output = true).stdout.to_string();
-            inherited.includes("PATH=") && cleared == "BAML_PROCESS_TEST=1\n"
+            let inherited = baml.sys.run("env", capture_output = true).stdout.to_string();
+            let overridden = baml.sys.run("env", env = map { "BAML_PROCESS_TEST": "1" }, capture_output = true).stdout.to_string();
+            let isolated = baml.sys.run("env", inherit_env = false, env = map { "BAML_PROCESS_TEST": "1" }, capture_output = true).stdout.to_string();
+            let removed = baml.sys.run("env", env = map { "PATH": null }, capture_output = true).stdout.to_string();
+            let shell_inherited = baml.sys.shell("env", inherit_env = true, env = map { "BAML_PROCESS_TEST": "2" }, capture_output = true).stdout.to_string();
+            let shell_isolated = baml.sys.shell("printf '%s' $BAML_PROCESS_TEST", inherit_env = false, env = map { "BAML_PROCESS_TEST": "3" }, capture_output = true).stdout.to_string();
+            let child = baml.sys.subprocess("env", inherit_env = false, env = map { "BAML_PROCESS_TEST": "4" }, stdout = "pipe");
+            defer { child.kill(); child.close(); }
+            let child_env = "";
+            for (let line in (child.stdout ?? baml.sys.panic("stdout was not piped")).lines()) {
+                child_env += line;
+            }
+            require(("\n" + inherited).includes("\nPATH="), "run inherits by default without overrides");
+            require(("\n" + overridden).includes("\nPATH="), "overrides preserve inherited variables");
+            require(overridden.includes("BAML_PROCESS_TEST=1\n"), "run applies overrides");
+            require(isolated == "BAML_PROCESS_TEST=1\n", "run can disable inheritance");
+            require(!("\n" + removed).includes("\nPATH="), "null removes an inherited variable");
+            require(("\n" + shell_inherited).includes("\nPATH="), "shell can explicitly inherit");
+            require(shell_inherited.includes("BAML_PROCESS_TEST=2\n"), "shell applies overrides");
+            require(shell_isolated == "3", "shell can disable inheritance");
+            require(child_env == "BAML_PROCESS_TEST=4", "subprocess can disable inheritance");
+            child.wait().ok()
         }
     "#
     );
