@@ -80,7 +80,7 @@ class BamlFunctionSpec(Generic[TOut]):
         return await self._call_async("ai.FunctionSpec.call", kwargs, _baml=_baml)
 
     def _call_sync(self, fqn: str, kwargs: dict[str, Any] | None = None, *, _baml: Any = None) -> Any:
-        from . import get_runtime
+        from . import get_or_init_runtime
         from .baml_py import new_function_call
         from .proto import decode_call_result, encode_call_args
 
@@ -92,10 +92,10 @@ class BamlFunctionSpec(Generic[TOut]):
             function_name=fqn,
             _baml=_baml,
         )
-        return decode_call_result(get_runtime().call_function_sync(encoded))
+        return decode_call_result(get_or_init_runtime().call_function_sync(encoded))
 
     async def _call_async(self, fqn: str, kwargs: dict[str, Any] | None = None, *, _baml: Any = None) -> Any:
-        from . import _decode_call_result_async, cancel_function_call, get_runtime
+        from . import _decode_call_result_async, cancel_function_call, get_or_init_runtime
         from .baml_py import new_function_call
         from .proto import encode_call_args
 
@@ -104,7 +104,7 @@ class BamlFunctionSpec(Generic[TOut]):
         call_id = new_function_call()
         encoded = encode_call_args(values, call_id, function_name=fqn, _baml=_baml)
         try:
-            result = await get_runtime().call_function(encoded)
+            result = await get_or_init_runtime().call_function(encoded)
         except asyncio.CancelledError:
             try:
                 cancel_function_call(call_id)

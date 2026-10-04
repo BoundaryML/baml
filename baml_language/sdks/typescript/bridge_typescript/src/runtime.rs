@@ -1,7 +1,7 @@
 //! BamlRuntime napi class.
 //!
 //! A zero-sized handle: the single source of truth for the `Arc<dyn Bex>`
-//! singleton is `bridge_cffi`, fetched via `bridge_cffi::get_runtime()`
+//! singleton is `bridge_cffi`, fetched via `bridge_cffi::get_or_init_runtime()`
 //! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
 //! longer caches its own clone.
 
@@ -19,7 +19,7 @@ impl BamlRuntime {
     /// Initialize the process-global runtime from in-memory BAML source
     /// files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
     /// a second call replaces the prior runtime; the result is also reachable
-    /// via the module-level `getRuntime()`. Renamed from `fromFiles` for
+    /// via the module-level `getOrInitRuntime()`. Renamed from `fromFiles` for
     /// parity with `bridge_python`'s sole `initialize_runtime` constructor and
     /// the `initializeRuntime(...)` import the spec docs use.
     #[napi(factory, js_name = "initializeRuntime")]
@@ -103,10 +103,10 @@ impl BamlRuntime {
 /// Return the process-global `BamlRuntime`, or a `BamlError`-shaped
 /// `napi::Error` if `initializeRuntime` has not run yet. The handle is
 /// zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
-/// `bridge_python`'s module-level `get_runtime()`.
-#[napi(js_name = "getRuntime")]
-pub fn get_runtime() -> napi::Result<BamlRuntime> {
-    bridge_cffi::get_runtime().map_err(|e| match e {
+/// `bridge_python`'s module-level `get_or_init_runtime()`.
+#[napi(js_name = "getOrInitRuntime")]
+pub fn get_or_init_runtime() -> napi::Result<BamlRuntime> {
+    bridge_cffi::get_or_init_runtime().map_err(|e| match e {
         bridge_cffi::BridgeError::NotInitialized => napi::Error::new(
             napi::Status::GenericFailure,
             "BamlError: BAML runtime has not been initialized — call BamlRuntime.initializeRuntime first.",

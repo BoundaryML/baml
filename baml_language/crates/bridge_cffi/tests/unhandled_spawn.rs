@@ -35,7 +35,7 @@ async fn unhandled_spawn_error_reaches_registered_bridge_callback() {
         )]),
     )
     .unwrap();
-    let runtime = bridge_cffi::get_runtime().unwrap();
+    let runtime = bridge_cffi::get_or_init_runtime().unwrap();
     runtime
         .call_function(
             "main",

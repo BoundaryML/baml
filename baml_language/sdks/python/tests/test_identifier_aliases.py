@@ -124,7 +124,7 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
         return b"encoded"
 
     monkeypatch.setattr(baml_bridge, "new_function_call", lambda: 42)
-    monkeypatch.setattr(baml_bridge, "get_runtime", lambda: FakeRuntime())
+    monkeypatch.setattr(baml_bridge, "get_or_init_runtime", lambda: FakeRuntime())
     monkeypatch.setattr(baml_bridge, "encode_call_args", fake_encode)
     monkeypatch.setattr(baml_bridge, "decode_call_result", lambda _value: "stream")
     monkeypatch.setattr(

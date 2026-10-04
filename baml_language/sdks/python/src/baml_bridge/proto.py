@@ -30,7 +30,7 @@ from .baml_py import (
     BamlPyHandle,
     BamlVideo,
     cancel_function_call,
-    get_runtime as _get_runtime,
+    get_or_init_runtime as _get_or_init_runtime,
     new_function_call,
     release_function_call,
     register_host_callable,
@@ -261,10 +261,10 @@ def _safe_sdk_root() -> str:
     """
     try:
         from . import (
-            get_runtime,
+            get_or_init_runtime,
         )  # local import: avoids circular binding at module load
 
-        return get_runtime()._sdk_root or ""
+        return get_or_init_runtime()._sdk_root or ""
     except Exception:
         return ""
 
@@ -1241,7 +1241,7 @@ class BamlClosure:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         _, args_proto = self._encode_args(args, kwargs)
-        result_bytes = _get_runtime().call_function_sync(args_proto)
+        result_bytes = _get_or_init_runtime().call_function_sync(args_proto)
         return decode_call_result(result_bytes)
 
     async def call_async(self, *args: Any, **kwargs: Any) -> Any:
@@ -1250,7 +1250,7 @@ class BamlClosure:
 
         call_id, args_proto = self._encode_args(args, kwargs)
         try:
-            result_bytes = await _get_runtime().call_function(args_proto)
+            result_bytes = await _get_or_init_runtime().call_function(args_proto)
         except asyncio.CancelledError:
             cancel_function_call(call_id)
             raise
