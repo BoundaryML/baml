@@ -50,9 +50,14 @@ class Tool {
 /// string, a list as a list of json. `reflect.call_any` takes typed values and
 /// rejects those. Schema-aligned parsing decodes them, because it reads the
 /// names the tool's schema advertises (`@alias` included), where
-/// `baml.json.to` reads declared names only. An argument passes through as it
-/// arrived when it names no parameter, or when the parser cannot model the
-/// parameter's type (`unknown`); `reflect.call_any` then judges it.
+/// `baml.json.to` reads declared names only.
+///
+/// An argument passes through as it arrived in three cases: it names no
+/// parameter; the parser cannot model the parameter's type (`unknown`); or it
+/// is already a value of the parameter's type, which is what BAML code passes
+/// when it calls a tool itself. Decoding that one would write it as JSON under
+/// its declared names and then fail to read an `@alias` field back.
+/// `reflect.call_any` judges every argument that passed through.
 function _typed_arguments(
     tool: string,
     handler: reflect.AnyFunction,
@@ -65,7 +70,11 @@ function _typed_arguments(
         let _ = typed.set(name, args.get(name));
     }
     for (let param in params) {
-        if (args.has(param.name) && baml.sap.can_parse(param.type)) {
+        if (
+            args.has(param.name)
+                && baml.sap.can_parse(param.type)
+                && !_is_value_of(param.type, args.get(param.name))
+        ) {
             let written = baml.json.to_string(args.get(param.name)) catch_all (e) {
                 _ => {
                     throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${param.name}: ${e.to_string()}` }
@@ -80,6 +89,12 @@ function _typed_arguments(
         }
     }
     typed
+}
+
+/// (internal) Whether `value` is already a value of the runtime type `t`.
+function _is_value_of(t: reflect.Type, value: unknown) -> bool throws never {
+    type T = unreflect(t);
+    value is T
 }
 
 /// The explicit constructor. `tools: [f]` normalizes through this.

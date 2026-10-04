@@ -136,6 +136,47 @@ test "an argument that does not fit its parameter is an InvalidArgument naming i
     assert.is_true(extra.starts_with("InvalidArgument: invalid arguments for tool_arg_string: "))
 }
 
+// BAML code that calls a tool itself passes values that are already typed. They
+// reach the handler as they are: written as JSON they would carry declared
+// field names, which the decoder does not read for an `@alias` field.
+
+function tool_arg_typed_class() -> string {
+    let gym = ToolArgGym {
+        name: "Home",
+        gym_type: ToolArgGymType.GARAGE,
+        address: ToolArgAddress { city: "Oslo" },
+        tags: ["x"],
+    };
+    let args: map<string, unknown> = { "gym": gym };
+    ai.tools.tool(tool_arg_class).call(args)
+}
+
+function tool_arg_typed_list_and_enum() -> string {
+    let gyms = [ToolArgGym { name: "A", gym_type: ToolArgGymType.COMMERCIAL, address: null, tags: [] }];
+    let list_args: map<string, unknown> = { "gyms": gyms };
+    let enum_args: map<string, unknown> = { "kind": ToolArgGymType.GARAGE };
+    `${ai.tools.tool(tool_arg_classes).call(list_args)}|${ai.tools.tool(tool_arg_enum).call(enum_args)}`
+}
+
+function tool_arg_two_gyms(first: ToolArgGym, second: ToolArgGym) -> string {
+    `${first.name},${second.name}`
+}
+
+/// One argument is a typed value and one is the model's JSON.
+function tool_arg_typed_and_written() -> string {
+    let args = baml.json.from_string<map<string, unknown>>(
+        `{"second": {"label": "Written", "gym_type": "garage-gym", "tags": []}}`,
+    );
+    let _ = args.set("first", ToolArgGym { name: "Typed", gym_type: ToolArgGymType.COMMERCIAL, address: null, tags: [] });
+    ai.tools.tool(tool_arg_two_gyms).call(args)
+}
+
+test "an argument that is already a value of its parameter's type is passed as it is" {
+    assert.equal(tool_arg_typed_class(), `"Home|GARAGE|Oslo|x"`);
+    assert.equal(tool_arg_typed_list_and_enum(), `"A"|"GARAGE"`);
+    assert.equal(tool_arg_typed_and_written(), `"Typed,Written"`)
+}
+
 // The runner's path: a model's tool call reaches a handler that takes a class.
 
 class ToolArgProbe {
