@@ -221,6 +221,11 @@ class AzureClient {
         /// and earlier, which reject the field. Azure routes on the
         /// deployment, not `model`, so this is only as good as `model`'s
         /// name for what the deployment serves.
+        ///
+        /// Provisioned (PTU-M) deployments are not supported: Azure rejects
+        /// `prompt_cache_breakpoint` on them, and nothing here can tell one
+        /// from a Standard deployment, so a `${cache()}` on a GPT-5.6 PTU-M
+        /// deployment is a 400.
         function default_cache_args(self) -> baml.json.json {
             openai.internal.default_cache_breakpoint(self.model)
         }
