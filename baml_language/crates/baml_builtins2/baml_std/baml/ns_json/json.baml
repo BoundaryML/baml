@@ -464,6 +464,13 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// do not — a schema is read by something outside BAML, so it must describe
 /// the wire names. That is also why an enum variant lowers under its alias.
 ///
+/// Documentation becomes `description`, with the text the output format
+/// shows: a class's or a field's `@description`, then its `///` docstring. A
+/// field's `description` sits beside the `$ref` when the field is a class. An
+/// enum's `description` holds its own documentation and one
+/// `- <variant>: <documentation>` line per documented variant, because JSON
+/// Schema has no description per `enum` value.
+///
 /// The root type is emitted inline, and every class and named alias beneath it
 /// goes into `$defs` to be reached by `$ref`. That is what lets a recursive
 /// graph terminate: a recursive root is emitted both inline and into `$defs`,
