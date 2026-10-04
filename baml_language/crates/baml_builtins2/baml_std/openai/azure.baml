@@ -10,17 +10,19 @@
 ///     through `request_body`). Passing `request_body = {"max_tokens": null}`
 ///     removes it again — the merge runs after the default is applied.
 ///
-/// Supply either `base_url` OR both `resource_name` and `deployment_id`.
+/// Supply either `base_url`, which names the deployment in its path, OR
+/// `deployment_id` (with `resource_name` or `AZURE_OPENAI_ENDPOINT`). There is
+/// no `"azure/<model>"` shorthand: Azure serves only the deployments created on
+/// a resource, under whatever names they were given, so a model name does not
+/// identify one.
 class AzureClient {
-    // The model name reported in `id()` and sent in the body. Azure routes on
-    // the deployment, so this is usually the same string as deployment_id.
+    // The model the deployment serves, reported in `id()` and sent in the
+    // body. Azure routes on the deployment and ignores this.
     model: string,
     // Azure resource name — the `{name}` in `{name}.openai.azure.com`.
     resource_name: string?,
-    // The deployment to call. Unset defaults to `model`: Azure deployments are
-    // overwhelmingly named after the model they serve, and that convention is
-    // what lets `client: "azure/gpt-4o"` — which can only carry a model —
-    // reach a real deployment.
+    // The deployment to call: the name it was given when it was created. It
+    // never defaults to `model`.
     deployment_id: string?,
     // The `api-version` query parameter. Defaults to the current GA dated
     // version, `2024-10-21`: every preview before `2024-09-01-preview` predates
@@ -113,27 +115,17 @@ class AzureClient {
         ai.wire.resolve_credential(self.api_key, "AZURE_OPENAI_API_KEY")
     }
 
-    /// The deployment segment: the caller's `deployment_id`, else the model.
-    function resolved_deployment_id(self) -> string {
-        self.deployment_id ?? self.model
-    }
-
     /// The deployment base this client posts to, resolved in the order Azure
     /// users actually configure things:
     ///
     ///   1. an explicit `base_url` (a literal or an `env.NAME` ref), used
     ///      verbatim — it already names the deployment;
-    ///   2. `resource_name`, which builds
+    ///   2. `deployment_id` with `resource_name`, which builds
     ///      `https://{resource}.openai.azure.com/openai/deployments/{deployment}`;
-    ///   3. `AZURE_OPENAI_ENDPOINT` — the variable the official Azure OpenAI
-    ///      SDKs read — treated as the resource ORIGIN and given the same
-    ///      `/openai/deployments/{deployment}` path as rung 2.
-    ///
-    /// Rung 3 is what makes the `"azure/<model>"` shorthand viable. The
-    /// shorthand can only supply a model, and every other provider's shorthand
-    /// works off ambient credentials; without an endpoint fallback this client
-    /// could never send. With `deployment_id` defaulting to `model`, ambient
-    /// `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` is a complete config.
+    ///   3. `deployment_id` with `AZURE_OPENAI_ENDPOINT` — the variable the
+    ///      official Azure OpenAI SDKs read — treated as the resource ORIGIN
+    ///      and given the same `/openai/deployments/{deployment}` path as
+    ///      rung 2.
     ///
     /// The engine reports the mutually-exclusive shapes at compile time with
     /// per-key spans; a BAML constructor can only report at request time, so
@@ -149,7 +141,11 @@ class AzureClient {
             }
             return explicit;
         }
-        let deployment = self.resolved_deployment_id();
+        let deployment: string = self.deployment_id else {
+            throw root.internal._azure_reject(
+                "openai.AzureClient needs a deployment: set deployment_id to the deployment's name, or base_url to its full URL",
+            )
+        };
         if let resource_name: string = self.resource_name {
             return `https://${resource_name}.openai.azure.com/openai/deployments/${deployment}`;
         }
@@ -164,7 +160,7 @@ class AzureClient {
             return `${origin}/openai/deployments/${deployment}`;
         }
         throw root.internal._azure_reject(
-            "openai.AzureClient needs a deployment endpoint: set base_url, or resource_name, or the AZURE_OPENAI_ENDPOINT environment variable",
+            "openai.AzureClient needs the resource for deployment_id: set resource_name, or the AZURE_OPENAI_ENDPOINT environment variable, or base_url instead of deployment_id",
         )
     }
 

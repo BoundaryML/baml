@@ -633,31 +633,32 @@ test "chat_azure_deployment_url" {
     )
 }
 
-// An Azure deployment is almost always named after the model it serves, so an
-// unset `deployment_id` falls back to `model`. Without that the `"azure/…"`
-// shorthand — which can only carry a model — could never name a deployment.
-function chat_azure_deployment_defaults_to_model() -> string {
+// `deployment_id` never defaults to `model`: a deployment is named whatever its
+// creator chose, so without base_url or deployment_id there is nothing to call.
+function chat_azure_requires_deployment() -> string {
     let cl = openai.AzureClient.new(model = "gpt-4o", resource_name = "my-resource");
-    cl.compat().base_url
+    cl.resolved_base_url() catch (e) {
+        ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
+    }
 }
 
-test "chat_azure_deployment_defaults_to_model" {
+test "chat_azure_requires_deployment" {
     assert.equal(
-        chat_azure_deployment_defaults_to_model(),
-        "https://my-resource.openai.azure.com/openai/deployments/gpt-4o",
+        chat_azure_requires_deployment(),
+        "azure|openai.AzureClient needs a deployment: set deployment_id to the deployment's name, or base_url to its full URL",
     )
 }
 
-// With no base_url, no resource_name and no `AZURE_OPENAI_ENDPOINT`, the client
-// cannot send — and the error has to name the endpoint variable, because that
-// is the one the `"azure/<model>"` shorthand expects the deployment to come
-// from. It is a TYPED `ai.errors.InvalidRequest`, so an `ai.Fallback` can skip
-// this member rather than abort (see `chat_fallback_skips_misconfigured_member`).
+// With a deployment_id but no resource_name and no `AZURE_OPENAI_ENDPOINT`, the
+// client cannot send — and the error names the endpoint variable, the one the
+// official Azure SDKs read. It is a TYPED `ai.errors.InvalidRequest`, so an
+// `ai.Fallback` can skip this member rather than abort (see
+// `chat_fallback_skips_misconfigured_member`).
 //
 // A corpus test cannot set environment variables, so the env rung itself is
 // covered by the message naming it plus the URL composition asserted above.
 function chat_azure_missing_endpoint_names_env() -> string {
-    let cl = openai.AzureClient.new(model = "gpt-4o");
+    let cl = openai.AzureClient.new(model = "gpt-4o", deployment_id = "gpt-4o");
     cl.resolved_base_url() catch (e) {
         ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
     }
@@ -712,7 +713,7 @@ test "chat_generic_config_error_survives_normalize" {
 }
 
 function chat_azure_config_error_survives_normalize() -> string {
-    openai.AzureClient.new(model = "gpt-4o").resolved_base_url() catch_all (e) {
+    openai.AzureClient.new(model = "gpt-4o", deployment_id = "gpt-4o").resolved_base_url() catch_all (e) {
         _ => _config_failure_class(e),
     }
 }

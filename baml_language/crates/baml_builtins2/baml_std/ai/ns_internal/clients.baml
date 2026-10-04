@@ -21,6 +21,15 @@ function _from_shorthand(
         let model = shorthand.slice(index + 1, shorthand.length());
         if let built: root.Client = providers(prefix, model) {
             built
+        } else if (prefix == "azure") {
+            // The compiler rejects a literal `"azure/…"` the same way
+            // (`AZURE_SHORTHAND_REMOVED` in `lower_cst.rs`).
+            throw root.errors.InvalidRequest {
+                provider: "ai.clients",
+                status_code: null,
+                detail: `client "${shorthand}": there is no "azure/<model>" shorthand: an Azure request goes to a deployment, which a model name does not identify; build openai.AzureClient.new(model = "${model}", deployment_id = ..., resource_name = ...)`,
+                raw_body: null,
+            }
         } else {
             throw root.errors.InvalidRequest {
                 provider: "ai.clients",
