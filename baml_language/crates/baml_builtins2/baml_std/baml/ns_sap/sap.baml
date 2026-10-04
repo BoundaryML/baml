@@ -48,8 +48,10 @@ function _can_parse<T>() -> bool throws never {
 /// Whether schema-aligned parsing can model the runtime type `t`.
 ///
 /// `parse` and `parse_type` panic for a type they cannot model: `unknown`,
-/// `uint8array`, a function, or a type that holds one of those. Code that
-/// receives its types as data asks here first.
+/// `uint8array`, a function, or a type that holds one of those. They also
+/// panic when they build a class with a `@skip` field whose type has no empty
+/// value to fill in (media, a function). Code that receives its types as data
+/// asks here first: `false` covers both.
 function can_parse(t: reflect.Type) -> bool throws never {
     type T = unreflect(t);
     _can_parse<T>()

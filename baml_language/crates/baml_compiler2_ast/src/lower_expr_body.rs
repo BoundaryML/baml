@@ -3529,8 +3529,9 @@ impl LoweringContext {
     /// synthesized from `SHORTHAND_PROVIDERS`, the one table the literal
     /// `client "provider/model"` lowering reads too — and then the calling
     /// package (`reflect.Package.current()`), whose `client Name = ...`
-    /// declarations a selector may name. A call that already passes them is
-    /// left alone.
+    /// declarations a selector may name. A call that passes its own provider
+    /// table still gets the package, and a call that passes all four is left
+    /// alone.
     fn complete_client_resolve_call(
         &mut self,
         callee: ExprId,
@@ -3545,13 +3546,21 @@ impl LoweringContext {
                     && segments[1].as_str() == "clients"
                     && segments[2].as_str() == "resolve"
         );
-        if is_resolve && args.len() == 1 {
+        if !is_resolve {
+            return args;
+        }
+        if args.len() == 1 {
             let providers = synthesize_shorthand_providers(self, span);
             args.push(CallArg::positional(providers));
             let prefixes = synthesize_shorthand_prefixes(self, span);
             args.push(CallArg::positional(prefixes));
+        }
+        // By name: a call that wrote `providers` and `prefixes` itself may
+        // have written them by name, and no positional argument follows a
+        // named one.
+        if args.len() == 3 {
             let package = synthesize_current_package(self, span);
-            args.push(CallArg::positional(package));
+            args.push(CallArg::named("package", package));
         }
         args
     }

@@ -216,3 +216,45 @@ function tool_arg_can_parse() -> string {
 test "schema-aligned parsing reports the types it can model" {
     assert.equal(tool_arg_can_parse(), "true,true,true,true,true,false,false,false,false")
 }
+
+// A `@skip` field is not parsed: an instance gets the empty value of the
+// field's type. A type without one (an image) makes the parse panic, so
+// `can_parse` is false and the tool does not decode the argument.
+
+class ToolArgSkipsText {
+    label: string,
+    note: string @skip,
+}
+
+class ToolArgSkipsImage {
+    label: string,
+    picture: image @skip,
+}
+
+function tool_arg_can_parse_skipped_fields() -> string {
+    [
+        baml.sap.can_parse(reflect.Type.of<ToolArgSkipsText>()),
+        baml.sap.can_parse(reflect.Type.of<ToolArgSkipsImage>()),
+        baml.sap.can_parse(reflect.Type.of<ToolArgSkipsImage[]>()),
+    ]
+        .map((able) -> { `${able}` })
+        .join(",")
+}
+
+test "schema-aligned parsing cannot model a class whose skipped field has no empty value" {
+    assert.equal(tool_arg_can_parse_skipped_fields(), "true,false,false")
+}
+
+function tool_arg_skips_text(item: ToolArgSkipsText) -> string {
+    `${item.label}|${item.note}`
+}
+
+function tool_arg_skips_image(item: ToolArgSkipsImage) -> string {
+    item.label
+}
+
+test "an argument the parser cannot model is an InvalidArgument, not a panic" {
+    assert.equal(tool_arg_call(tool_arg_skips_text, `{"item": {"label": "x"}}`), `"x|"`);
+    let unmodelled = tool_arg_call(tool_arg_skips_image, `{"item": {"label": "x"}}`);
+    assert.is_true(unmodelled.starts_with("InvalidArgument: invalid arguments for tool_arg_skips_image: "))
+}

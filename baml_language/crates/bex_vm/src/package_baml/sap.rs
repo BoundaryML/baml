@@ -66,7 +66,10 @@ impl BamlNamespaceSap for PackageBamlImpl {
 
     fn _can_parse(vm: &mut BexVm) -> Result<bool, VmRustFnError> {
         let target = parse_target(vm)?;
-        Ok(build_model(vm, &target).is_ok())
+        if build_model(vm, &target).is_err() {
+            return Ok(false);
+        }
+        skipped_fields_have_values(vm, &target)
     }
 }
 
@@ -364,7 +367,7 @@ fn skipped_field_default(
     field: &str,
     field_type: &RuntimeTy,
 ) -> Result<Value, VmRustFnError> {
-    let no_default = |ty: &str| -> VmRustFnError {
+    skipped_field_value(vm, field_type)?.map_err(|ty| {
         VmPanic::UserPanic {
             message: format!(
                 "the `@skip` field `{class}.{field}` has type {ty}, which has no default value \
@@ -372,10 +375,40 @@ fn skipped_field_default(
             ),
         }
         .into()
+    })
+}
+
+/// The empty value of a `@skip` field's type, or, when the type has none, how
+/// to name the type in a message.
+fn skipped_field_value(
+    vm: &mut BexVm,
+    field_type: &RuntimeTy,
+) -> Result<Result<Value, String>, VmRustFnError> {
+    let Ok(realized) = RealizedTy::try_from(field_type.clone()) else {
+        return Ok(Err("of a generic parameter".to_string()));
     };
-    let realized = RealizedTy::try_from(field_type.clone())
-        .map_err(|_| no_default("of a generic parameter"))?;
-    empty_value(vm, &realized, &mut Vec::new())?.ok_or_else(|| no_default(&realized.to_string()))
+    Ok(empty_value(vm, &realized, &mut Vec::new())?.ok_or_else(|| realized.to_string()))
+}
+
+/// Whether every `@skip` field of a class that a parse of `target` can build
+/// has a value to hold. A parse that builds a class with one that has none
+/// panics (`skipped_field_default`).
+fn skipped_fields_have_values(vm: &mut BexVm, target: &RealizedTy) -> Result<bool, VmRustFnError> {
+    let skipped: Vec<RuntimeTy> = parsed_declarations(vm, target)
+        .into_iter()
+        .filter_map(|ptr| match vm.get_object(ptr) {
+            Object::Class(class) => Some(class),
+            _ => None,
+        })
+        .flat_map(|class| class.fields.iter().filter(|field| field.skip))
+        .map(|field| field.field_type.clone())
+        .collect();
+    for field_type in &skipped {
+        if skipped_field_value(vm, field_type)?.is_err() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// The empty value of `ty`: `null` for a nullable type, the zero of a number,

@@ -452,6 +452,22 @@ test "resolve_of_a_name_chosen_at_run_time" {
     assert.equal(resolve_named("env_ref_clients.EnvRefNamedSmart"), EnvRefNamedSmart.id())
 }
 
+// A call that passes its own provider table, by position or by name, still
+// resolves a name against the calling package.
+function resolve_with_an_explicit_provider_table() -> string {
+    let providers = (prefix: string, model: string) -> ai.Client? { null };
+    let by_position = ai.clients.resolve("env_ref_clients.EnvRefNamedFast", providers, ["none"]);
+    let by_name = ai.clients.resolve("env_ref_clients.EnvRefNamedSmart", providers = providers, prefixes = ["none"]);
+    `${by_position.id()}|${by_name.id()}`
+}
+
+test "resolve_with_an_explicit_provider_table" {
+    assert.equal(
+        resolve_with_an_explicit_provider_table(),
+        `${EnvRefNamedFast.id()}|${EnvRefNamedSmart.id()}`,
+    )
+}
+
 // A name that is declared, but not as a client, is not a client either.
 test "resolve_of_an_undeclared_name_is_typed" {
     assert.contains(resolve_named("EnvRefNamedFast"), "no `client EnvRefNamedFast = ...` is declared");
