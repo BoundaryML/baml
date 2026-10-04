@@ -40,5 +40,5 @@ dotnet build \
 
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
   echo "SDK_TEST_CSHARP_SETUP=1" >> "$NEXTEST_ENV"
-  echo "BAML_BRIDGE_CSHARP_NATIVE_LIBRARY=$native_library" >> "$NEXTEST_ENV"
+  echo "BAML_BRIDGE_PATH=$native_library" >> "$NEXTEST_ENV"
 fi

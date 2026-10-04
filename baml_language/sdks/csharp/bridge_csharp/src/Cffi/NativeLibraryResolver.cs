@@ -6,7 +6,7 @@ namespace Baml.Cffi;
 
 internal static class NativeLibraryResolver
 {
-    private const string OverrideVariable = "BAML_BRIDGE_CSHARP_NATIVE_LIBRARY";
+    private const string OverrideVariable = "BAML_BRIDGE_PATH";
 
     private static readonly Lazy<string?> ConfiguredOverride = new(
         () => Environment.GetEnvironmentVariable(OverrideVariable),
