@@ -235,6 +235,62 @@ function f() -> string {
 }
 
 #[test]
+fn enum_variant_path_member_reports_like_a_binding_of_the_variant() {
+    // `Mood.Happy.shout()` is one flat path. The variant is a value, so a
+    // member it does not have is a missing member of the variant's type, the
+    // report a `let` binding of the variant gets, and not an unresolved name
+    // that blames the variant. A path whose variant does not exist still
+    // reports the name.
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        "\
+enum Mood {
+  Happy
+  Sad
+}
+function on_path() -> string {
+  return Mood.Happy.shout();
+}
+function on_binding() -> string {
+  let mood = Mood.Happy;
+  return mood.shout();
+}
+function as_value() -> string {
+  return Mood.Sad.label;
+}
+function no_such_variant() -> string {
+  return Mood.Angry.to_string();
+}
+function resolves() -> string {
+  return Mood.Happy.to_string();
+}",
+    );
+
+    let output = render_tir(&db, file);
+    assert_eq!(
+        output
+            .matches("type `Mood.Happy` has no member `shout`")
+            .count(),
+        2,
+        "the path and the binding report the same missing member:\n{output}"
+    );
+    assert!(
+        output.contains("type `Mood.Sad` has no member `label`"),
+        "a member read off a variant path as a value reports the member:\n{output}"
+    );
+    assert!(
+        output.contains("unresolved name: Angry"),
+        "a path with no such variant still reports the name:\n{output}"
+    );
+    assert_eq!(
+        output.matches("!! ").count(),
+        4,
+        "`Mood.Happy.to_string()` resolves, and nothing else reports:\n{output}"
+    );
+}
+
+#[test]
 fn unknown_field_access_uses_narrowing_diagnostic() {
     let mut db = make_db();
     let file = db.file(
