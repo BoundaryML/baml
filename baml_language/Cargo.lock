@@ -1053,6 +1053,7 @@ name = "baml_exec"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_artifact",
  "baml_tests",
  "baml_type",
  "bex_engine",
@@ -1895,6 +1896,7 @@ dependencies = [
  "toml 0.8.23",
  "vfs",
  "wasm-bindgen-futures",
+ "wiremock",
 ]
 
 [[package]]
@@ -2180,6 +2182,7 @@ dependencies = [
  "baml_env",
  "borsh",
  "serde",
+ "sha2",
  "thiserror 2.0.18",
  "toml 0.8.23",
 ]

@@ -163,19 +163,14 @@ impl PreparedRuntime {
 
     pub fn build(self) -> Result<Arc<BexEngine>, RuntimeError> {
         if let Some(policy) = self.artifact_telemetry {
+            #[cfg(not(target_arch = "wasm32"))]
+            let recording =
+                bex_engine::TelemetryRecording::from_artifact(&policy)?.with_host("bridge");
             let config = bex_engine::EngineConfig {
                 runtime_compiler: Some(runtime_compiler()),
                 artifact_telemetry: Some(policy),
                 #[cfg(not(target_arch = "wasm32"))]
-                recording: Some(
-                    bex_engine::TelemetryRecording::from_boundary_env()
-                        .unwrap_or_else(|| {
-                            bex_engine::TelemetryRecording::user_files(
-                                btel_settings::publisher::RecordingConfig::default(),
-                            )
-                        })
-                        .with_host("bridge"),
-                ),
+                recording: Some(recording),
                 ..Default::default()
             };
             return Ok(Arc::new(BexEngine::new_with_config(

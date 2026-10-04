@@ -5,6 +5,8 @@
 
 #[cfg(feature = "auth")]
 pub mod auth;
+#[cfg(feature = "auth")]
+pub mod builds;
 pub mod credentials;
 pub mod response;
 pub use response::{ApiErrorBody, HttpFailure};

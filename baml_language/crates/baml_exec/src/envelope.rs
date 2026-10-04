@@ -70,3 +70,32 @@ pub struct PackEnvelope {
     /// Recording defaults and the runtime overrides permitted by the publisher.
     pub telemetry: btel_settings::artifact::ArtifactTelemetry,
 }
+
+impl PackEnvelope {
+    /// Dispatch metadata and the complete versioned program are part of the build.
+    pub fn telemetry_digest(
+        &self,
+    ) -> Result<btel_settings::artifact::BytecodeDigest, btel_settings::artifact::PolicyError> {
+        let mut unsigned = self.clone();
+        unsigned.telemetry.embedded = None;
+        let payload = baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &unsigned)
+            .map_err(|_| {
+                btel_settings::artifact::PolicyError(
+                    "Could not encode telemetry build fingerprint.".into(),
+                )
+            })?;
+        btel_settings::artifact::build_digest(&payload, &unsigned.telemetry)
+    }
+    pub fn verify_telemetry(&self) -> Result<(), btel_settings::artifact::PolicyError> {
+        if let Some(embedded) = &self.telemetry.embedded {
+            if embedded.bytecode_digest != self.telemetry_digest()? {
+                return Err(btel_settings::artifact::PolicyError("Embedded telemetry does not match this packed artifact. Rebuild with `baml pack --embed-telemetry`.".into()));
+            }
+            if !embedded.token.expose().starts_with("bdry_public_") || embedded.build_id.is_empty()
+            {
+                return Err(btel_settings::artifact::PolicyError("The embedded telemetry credential is invalid. Rebuild with `baml pack --embed-telemetry`.".into()));
+            }
+        }
+        Ok(())
+    }
+}

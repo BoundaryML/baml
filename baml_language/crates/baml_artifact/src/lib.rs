@@ -76,7 +76,9 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// interface, used when no explicit implementation applies.
 ///
 /// Version 14 adds publisher-owned telemetry policy to the packed dispatch envelope.
-pub const FORMAT_VERSION: u32 = 14;
+///
+/// Version 15 carries embedded public ingestion registration and destination bindings.
+pub const FORMAT_VERSION: u32 = 15;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

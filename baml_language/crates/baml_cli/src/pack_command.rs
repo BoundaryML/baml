@@ -64,6 +64,8 @@ Examples:
     baml pack --file script.baml main")]
 pub struct PackArgs {
     #[command(flatten)]
+    pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
+    #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
 
     /// Function to package as the executable's only entry point.
@@ -142,7 +144,24 @@ impl PackArgs {
 
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         self.validate_flags()?;
-        let telemetry = self.artifact_telemetry()?;
+        let manifest = self.artifact_manifest()?;
+        let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
+            &manifest,
+            btel_settings::artifact::ArtifactKind::Pack,
+        )?;
+        let default_environment = manifest
+            .get("pack")
+            .and_then(|table| table.get("telemetry_environment"));
+        let default_environment = default_environment
+            .map(|value| {
+                value
+                    .as_str()
+                    .context("pack.telemetry_environment must be a string.")
+            })
+            .transpose()?;
+        let provisioning = self
+            .telemetry
+            .prepare(&mut telemetry, default_environment, "pack")?;
 
         let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
         let _ = db;
@@ -170,7 +189,7 @@ impl PackArgs {
         let label = label_for(&targets);
         reporter.spin("Packaging", &label);
 
-        let envelope = PackEnvelope {
+        let mut envelope = PackEnvelope {
             program,
             mode: mode.clone(),
             targets: targets
@@ -184,12 +203,17 @@ impl PackArgs {
             output_format: self.output_format,
             telemetry,
         };
+        let target_triple = self.resolved_target_triple()?;
+        let host_bytes = read_host_binary(target_triple, reporter)?;
+        if let Some(provisioning) = provisioning {
+            reporter.spin("Provisioning", "embedded telemetry");
+            envelope.telemetry.embedded =
+                Some(Box::new(provisioning.mint(envelope.telemetry_digest()?)?));
+        }
         let serialized =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
                 .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
-        let target_triple = self.resolved_target_triple()?;
-        let host_bytes = read_host_binary(target_triple, reporter)?;
         let basename = self.resolve_output_basename()?;
         let output_path = self
             .output
@@ -280,27 +304,24 @@ impl PackArgs {
         self.load_and_compile_project(reporter)
     }
 
-    fn artifact_telemetry(&self) -> Result<btel_settings::artifact::ArtifactTelemetry> {
-        use btel_settings::artifact::{ArtifactKind, ArtifactTelemetry};
+    fn artifact_manifest(&self) -> Result<toml::Value> {
         if self.file.is_some() {
-            return Ok(ArtifactTelemetry::default());
+            return Ok(toml::Value::Table(toml::Table::new()));
         }
         let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
-            return Ok(ArtifactTelemetry::default());
+            return Ok(toml::Value::Table(toml::Table::new()));
         };
         let path = root.join("baml.toml");
-        let content = match std::fs::read_to_string(&path) {
-            Ok(content) => content,
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                Ok(toml::from_str(&content)
+                    .with_context(|| format!("Invalid {}", path.display()))?)
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(ArtifactTelemetry::default());
+                Ok(toml::Value::Table(toml::Table::new()))
             }
-            Err(error) => {
-                return Err(error).with_context(|| format!("failed to read {}", path.display()));
-            }
-        };
-        let manifest: toml::Value = toml::from_str(&content)?;
-        ArtifactTelemetry::from_manifest(&manifest, ArtifactKind::Pack)
-            .with_context(|| format!("Invalid artifact telemetry settings in {}", path.display()))
+            Err(error) => Err(error).with_context(|| format!("failed to read {}", path.display())),
+        }
     }
 
     /// Project-mode load + compile through the bytecode cache — the same warm
@@ -707,6 +728,7 @@ mod tests {
 
     fn pack_args() -> PackArgs {
         PackArgs {
+            telemetry: Default::default(),
             compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),

@@ -155,6 +155,130 @@ impl RecordingDelivery {
 }
 
 impl TelemetryRecording {
+    /// Resolve an artifact's explicitly permitted bindings without changing process
+    /// environment. Embedded credentials never fall back to an ambient login or key.
+    pub fn from_artifact(policy: &ArtifactTelemetry) -> Result<Self, EngineError> {
+        use btel_settings::artifact::IngestionSelection;
+        if policy
+            .resolve_level()
+            .map_err(|error| EngineError::Other(error.to_string()))?
+            .is_none()
+        {
+            return Ok(Self::user_files(RecordingConfig::default()));
+        }
+        let selection = policy
+            .select_ingestion_with(baml_env::os_var)
+            .map_err(|error| EngineError::Other(error.to_string()))?;
+        if matches!(&selection, IngestionSelection::Caller { api_key: Some(key), .. } if key == bcs_api::credentials::LOCAL_API_KEY)
+        {
+            return Ok(Self::user_files(RecordingConfig::default()));
+        }
+        let endpoint =
+            bcs_api::Endpoint::with_default(policy.api_url.as_deref()).map_err(|error| {
+                artifact_configuration_error(policy, None, CredentialSource::Configured, error)
+            })?;
+        let (credential, target, source, build_id) = match selection {
+            IngestionSelection::Embedded(embedded) => (
+                embedded.token.expose().to_owned(),
+                bcs_api::credentials::Target {
+                    org_id: Some(embedded.destination.org_id.clone()),
+                    project_id: Some(embedded.destination.project_id.clone()),
+                    environment_id: Some(embedded.destination.environment_id.clone()),
+                    ..Default::default()
+                },
+                CredentialSource::Embedded,
+                Some(embedded.build_id.clone()),
+            ),
+            IngestionSelection::Caller { project, api_key } => {
+                let (credential, source) = match api_key {
+                    Some(key) => {
+                        if key.starts_with(bcs_api::credentials::PUBLIC_PREFIX) {
+                            return Err(EngineError::Other("A public telemetry credential must be embedded with its build registration. Supply a Boundary API key or use `baml auth login`.".into()));
+                        }
+                        (key, CredentialSource::ApiKey)
+                    }
+                    None => {
+                        let saved =
+                            match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
+                                Ok(saved) => saved,
+                                Err(_) if policy.embedded.is_none() => {
+                                    return Ok(Self::user_files(RecordingConfig::default()));
+                                }
+                                Err(error) => {
+                                    return Err(artifact_configuration_error(
+                                        policy,
+                                        Some(endpoint),
+                                        CredentialSource::SavedLogin,
+                                        error,
+                                    ));
+                                }
+                            };
+                        match saved {
+                            Some(saved) => (
+                                saved.refresh_token.expose().to_owned(),
+                                CredentialSource::SavedLogin,
+                            ),
+                            None if policy.embedded.is_none() => {
+                                return Ok(Self::user_files(RecordingConfig::default()));
+                            }
+                            None => {
+                                return Err(artifact_configuration_error(
+                                    policy,
+                                    Some(endpoint),
+                                    CredentialSource::SavedLogin,
+                                    bcs_api::Error::MissingCredentials,
+                                ));
+                            }
+                        }
+                    }
+                };
+                (
+                    credential,
+                    bcs_api::credentials::Target {
+                        project,
+                        ..Default::default()
+                    },
+                    source,
+                    None,
+                )
+            }
+        };
+        let authentication = match build_id {
+            Some(build) => bcs_api::credentials::Authentication::for_build(
+                endpoint.as_str(),
+                bcs_api::Secret::new(credential),
+                build,
+            ),
+            None => bcs_api::credentials::Authentication::shared(
+                endpoint.as_str(),
+                bcs_api::Secret::new(credential),
+            ),
+        };
+        let mut delivery = btel_bcs::delivery::DeliveryConfig::new(
+            endpoint
+                .as_str()
+                .parse()
+                .map_err(|_| EngineError::Other("Invalid Boundary API URL.".into()))?,
+        );
+        delivery.authorization = Some(bcs_api::credentials::RequestAuthorization {
+            authentication,
+            target: Some(target),
+        });
+        let mut recording = Self::cloud(
+            RecordingConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
+            delivery,
+        );
+        if let Destination::Cloud {
+            authorization_context,
+            ..
+        } = &mut recording.destination
+        {
+            authorization_context.source = source;
+        }
+        Ok(recording)
+    }
+
     /// Resolve the selected endpoint and credential without making a network request.
     pub fn from_boundary_env() -> Option<Self> {
         if baml_env::string_var(BOUNDARY_API_KEY).ok()?.as_deref()
@@ -331,9 +455,7 @@ impl TelemetryRecording {
 
     #[must_use]
     pub fn with_artifact_telemetry(mut self, policy: ArtifactTelemetry) -> Self {
-        self.recording_override = policy
-            .recording_level_envvar
-            .map_or(RecordingOverride::Fixed, RecordingOverride::EnvVar);
+        self.recording_override = artifact_recovery(&policy);
         self.initial_failure = Some(policy.initial_failure);
         self
     }
@@ -582,6 +704,40 @@ impl TelemetryRecording {
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
         Ok((runtime, delivery))
     }
+}
+
+fn artifact_recovery(policy: &ArtifactTelemetry) -> RecordingOverride {
+    let names = match &policy.destination_overrides {
+        btel_settings::artifact::DestinationOverrides::Default if policy.embedded.is_none() => {
+            Some(("BOUNDARY_PROJECT".to_owned(), "BOUNDARY_API_KEY".to_owned()))
+        }
+        btel_settings::artifact::DestinationOverrides::Named { project, api_key } => {
+            Some((project.clone(), api_key.clone()))
+        }
+        _ => None,
+    };
+    RecordingOverride::Artifact {
+        level: policy.recording_level_envvar.clone(),
+        project: names.as_ref().map(|names| names.0.clone()),
+        api_key: names.map(|names| names.1),
+    }
+}
+
+fn artifact_configuration_error(
+    policy: &ArtifactTelemetry,
+    endpoint: Option<bcs_api::Endpoint>,
+    source: CredentialSource,
+    error: bcs_api::Error,
+) -> EngineError {
+    let diagnostic = AuthorizationContext {
+        endpoint,
+        source,
+        operation: Operation::Ingest,
+    }
+    .report(error, Outcome::ExecutionCancelled)
+    .diagnostic
+    .with_recording_override(artifact_recovery(policy));
+    EngineError::CloudAuthorization(Box::new(diagnostic))
 }
 
 #[allow(clippy::print_stderr)]

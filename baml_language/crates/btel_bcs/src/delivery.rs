@@ -1098,6 +1098,10 @@ async fn prepare(
         serde_json::to_writer(
             &mut writer,
             &bcs_api::credentials::Targeted {
+                build_id: config
+                    .authorization
+                    .as_ref()
+                    .and_then(|auth| auth.authentication.build_id()),
                 target: config
                     .authorization
                     .as_ref()

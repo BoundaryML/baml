@@ -206,6 +206,9 @@ fn prepare_runtime_from_blob(
                     ))
                 })?
                 .unwrap_or_default();
+            policy
+                .verify_build(&bytecode)
+                .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
             runtime.with_artifact_telemetry(policy)
         }
         None => runtime,

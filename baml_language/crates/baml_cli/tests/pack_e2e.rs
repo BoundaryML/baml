@@ -128,7 +128,9 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
         .unwrap();
     assert!(
         output.status.success(),
-        "{}",
+        "status: {}; stdout: {}; stderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");

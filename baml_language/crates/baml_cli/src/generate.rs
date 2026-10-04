@@ -90,6 +90,8 @@ Examples:
   Override the output directory:
     baml generate --output-dir ./generated")]
 pub struct GenerateArgs {
+    #[command(flatten)]
+    pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
     #[command(subcommand)]
     pub command: Option<GenerateCommand>,
 
@@ -281,6 +283,11 @@ impl GenerateArgs {
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
+        if self.command.is_some() && self.telemetry.embed_telemetry {
+            anyhow::bail!(
+                "`--embed-telemetry` applies to `baml generate`, which produces the SDK. Add the generator first, then run `baml generate --embed-telemetry`."
+            );
+        }
         match &self.command {
             Some(GenerateCommand::Add(args)) => args.run(),
             None => self.run_generate(),
@@ -388,7 +395,23 @@ impl GenerateArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        let embedded_baml_toml = build_embedded_baml_toml(&from)?;
+        let mut embedded_baml_toml = build_embedded_baml_toml(&from)?;
+        let mut manifest: toml::Value = toml::from_str(&embedded_baml_toml)?;
+        let default_environment = manifest
+            .get("bridge")
+            .and_then(|table| table.get("telemetry_environment"));
+        let default_environment = default_environment
+            .map(|value| {
+                value
+                    .as_str()
+                    .context("bridge.telemetry_environment must be a string.")
+            })
+            .transpose()?;
+        let mut telemetry: btel_settings::artifact::ArtifactTelemetry =
+            manifest["__baml_codegen"]["telemetry"].clone().try_into()?;
+        let provisioning = self
+            .telemetry
+            .prepare(&mut telemetry, default_environment, "bridge")?;
 
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_ide::build_symbol_pool(&db);
@@ -399,6 +422,19 @@ impl GenerateArgs {
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
+        if let Some(provisioning) = provisioning {
+            reporter.spin("Provisioning", "embedded telemetry");
+            let digest = btel_settings::artifact::build_digest(&baml_bytecode, &telemetry)?;
+            telemetry.embedded = Some(Box::new(provisioning.mint(digest)?));
+            manifest["__baml_codegen"]["telemetry"] = toml::Value::try_from(telemetry)?;
+            // Replace only owned metadata; preserve the publisher's original manifest bytes.
+            let original = std::fs::read_to_string(from.join("baml.toml"))?;
+            let owned = toml::Table::from_iter([(
+                "__baml_codegen".to_owned(),
+                manifest["__baml_codegen"].clone(),
+            )]);
+            embedded_baml_toml = format!("{original}\n{}", toml::to_string(&owned)?);
+        }
         let source_root = from.join("baml_src");
         let user_baml_files = source_files
             .iter()

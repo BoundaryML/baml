@@ -36,8 +36,13 @@ fn extract_envelope() -> Result<PackEnvelope, String> {
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
         .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
 
-    baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, section)
-        .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
+    let envelope: PackEnvelope =
+        baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, section)
+            .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))?;
+    envelope
+        .verify_telemetry()
+        .map_err(|error| error.to_string())?;
+    Ok(envelope)
 }
 
 /// Build `baml.argv` per BEP-027 §"baml.argv in packaged binaries".
@@ -84,6 +89,7 @@ fn new_engine(
     argv: Vec<String>,
     telemetry: btel_settings::artifact::ArtifactTelemetry,
 ) -> Result<BexEngine, bex_engine::EngineError> {
+    let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
     BexEngine::new_with_config(
         program,
         Arc::new(sys_native::SysOps::native()),
@@ -91,15 +97,7 @@ fn new_engine(
         bex_engine::EngineConfig {
             runtime_compiler: Some(bex_project::runtime_compiler()),
             artifact_telemetry: Some(telemetry),
-            recording: Some(
-                bex_engine::TelemetryRecording::from_boundary_env()
-                    .unwrap_or_else(|| {
-                        bex_engine::TelemetryRecording::user_files(
-                            btel_settings::publisher::RecordingConfig::default(),
-                        )
-                    })
-                    .with_host("pack"),
-            ),
+            recording: Some(recording),
             ..Default::default()
         },
     )

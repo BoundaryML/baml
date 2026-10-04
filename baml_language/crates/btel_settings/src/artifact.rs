@@ -10,10 +10,11 @@
 //! [pack.env_var_names]
 //! BAML_TELEMETRY = "ACME_TELEMETRY"
 //! ```
-use std::ffi::OsString;
+use std::{ffi::OsString, fmt};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::mode::AutoTelemetryLevel;
 
@@ -98,6 +99,107 @@ pub struct ArtifactTelemetry {
     pub recording_level: RecordingLevel,
     pub recording_level_envvar: Option<String>,
     pub initial_failure: InitialFailurePolicy,
+    #[serde(default)]
+    pub project: Option<String>,
+    #[serde(default)]
+    pub api_url: Option<String>,
+    #[serde(default)]
+    pub destination_overrides: DestinationOverrides,
+    #[serde(default)]
+    pub embedded: Option<Box<EmbeddedIngestion>>,
+}
+
+/// An omitted binding follows credential-dependent defaults: embedded credentials
+/// are fixed, while ordinary artifacts accept the standard Boundary variables.
+#[derive(
+    Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
+)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DestinationOverrides {
+    #[default]
+    Default,
+    Disabled,
+    Named {
+        project: String,
+        api_key: String,
+    },
+}
+
+/// Public, distributable ingestion credential. Debug output still redacts it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(transparent)]
+pub struct PublicCredential(String);
+impl PublicCredential {
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+impl fmt::Debug for PublicCredential {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[REDACTED]")
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BytecodeDigest {
+    pub version: u32,
+    pub algorithm: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct IngestionDestination {
+    pub org_id: String,
+    pub project_id: String,
+    pub environment_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EmbeddedIngestion {
+    pub token: PublicCredential,
+    pub token_id: String,
+    pub build_id: String,
+    pub product_id: String,
+    pub destination: IngestionDestination,
+    pub bytecode_digest: BytecodeDigest,
+}
+
+/// The public credential is never reused when the caller selects a destination.
+#[derive(Debug, PartialEq, Eq)]
+pub enum IngestionSelection<'a> {
+    Embedded(&'a EmbeddedIngestion),
+    Caller {
+        project: Option<String>,
+        api_key: Option<String>,
+    },
+}
+
+/// Fingerprint v1 covers the exact versioned program/dispatch bytes and publisher
+/// policy. Credentials are excluded; fresh tokens can identify the same build.
+pub fn build_digest(
+    payload: &[u8],
+    policy: &ArtifactTelemetry,
+) -> Result<BytecodeDigest, PolicyError> {
+    let mut unsigned = policy.clone();
+    unsigned.embedded = None;
+    let policy_bytes = borsh::to_vec(&unsigned)
+        .map_err(|_| PolicyError("Could not encode artifact telemetry policy.".into()))?;
+    let mut hash = Sha256::new();
+    hash.update(b"baml-telemetry-build-v1\0");
+    hash.update((payload.len() as u64).to_le_bytes());
+    hash.update(payload);
+    hash.update(policy_bytes);
+    Ok(BytecodeDigest {
+        version: 1,
+        algorithm: "sha256".into(),
+        value: format!("{:x}", hash.finalize()),
+    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -123,13 +225,34 @@ impl ArtifactTelemetry {
     /// Resolve only publisher settings; ambient runtime values are never baked in.
     pub fn from_manifest(manifest: &toml::Value, kind: ArtifactKind) -> Result<Self, PolicyError> {
         let name = kind.table();
+        let mut policy = Self::default();
+        if let Some(boundary) = manifest.get("boundary") {
+            if !boundary.is_table() {
+                return Err(PolicyError("[boundary] must be a table.".into()));
+            }
+            for (field, output) in [
+                ("project", &mut policy.project),
+                ("api_url", &mut policy.api_url),
+            ] {
+                if let Some(value) = boundary.get(field) {
+                    *output = Some(
+                        value
+                            .as_str()
+                            .filter(|value| !value.is_empty())
+                            .ok_or_else(|| {
+                                PolicyError(format!("boundary.{field} must be a non-empty string."))
+                            })?
+                            .to_owned(),
+                    );
+                }
+            }
+        }
         let Some(value) = manifest.get(name) else {
-            return Ok(Self::default());
+            return Ok(policy);
         };
         let table = value
             .as_table()
             .ok_or_else(|| PolicyError(format!("[{name}] must be a table.")))?;
-        let mut policy = Self::default();
         if let Some(value) = table.get("on_initial_telemetry_failure") {
             policy.initial_failure.action = match value.as_str() {
                 Some("abort") => InitialFailureAction::Abort,
@@ -158,6 +281,42 @@ impl ArtifactTelemetry {
             let names = names
                 .as_table()
                 .ok_or_else(|| PolicyError(format!("[{name}.env_var_names] must be a table.")))?;
+            for binding in names.keys() {
+                if !matches!(
+                    binding.as_str(),
+                    "BAML_TELEMETRY" | "BOUNDARY_PROJECT" | "BOUNDARY_API_KEY"
+                ) {
+                    return Err(PolicyError(format!(
+                        "Unknown {name}.env_var_names binding {binding}. Expected BAML_TELEMETRY, BOUNDARY_PROJECT, or BOUNDARY_API_KEY."
+                    )));
+                }
+            }
+            policy.destination_overrides = match (
+                names.get("BOUNDARY_PROJECT"),
+                names.get("BOUNDARY_API_KEY"),
+            ) {
+                (None, None) => DestinationOverrides::Default,
+                (Some(toml::Value::Boolean(false)), Some(toml::Value::Boolean(false))) => {
+                    DestinationOverrides::Disabled
+                }
+                (Some(toml::Value::String(project)), Some(toml::Value::String(api_key)))
+                    if valid_envvar(project)
+                        && valid_envvar(api_key)
+                        && project != api_key
+                        && project != "BOUNDARY_API_URL"
+                        && api_key != "BOUNDARY_API_URL" =>
+                {
+                    DestinationOverrides::Named {
+                        project: project.clone(),
+                        api_key: api_key.clone(),
+                    }
+                }
+                _ => {
+                    return Err(PolicyError(format!(
+                        "{name}.env_var_names.BOUNDARY_PROJECT and BOUNDARY_API_KEY must both be false or distinct valid environment-variable names."
+                    )));
+                }
+            };
             if let Some(value) = names.get("BAML_TELEMETRY") {
                 policy.recording_level_envvar = match value {
                     toml::Value::Boolean(false) => None,
@@ -170,7 +329,83 @@ impl ArtifactTelemetry {
                 };
             }
         }
+        if let Some(level) = &policy.recording_level_envvar {
+            if level == "BOUNDARY_API_URL"
+                || matches!(&policy.destination_overrides, DestinationOverrides::Named { project, api_key } if level == project || level == api_key)
+            {
+                return Err(PolicyError(format!(
+                    "{name}.env_var_names.BAML_TELEMETRY must use a name distinct from the destination bindings and BOUNDARY_API_URL."
+                )));
+            }
+        }
         Ok(policy)
+    }
+
+    pub fn select_ingestion_with(
+        &self,
+        mut read: impl FnMut(&str) -> Option<OsString>,
+    ) -> Result<IngestionSelection<'_>, PolicyError> {
+        let names = match &self.destination_overrides {
+            DestinationOverrides::Default if self.embedded.is_none() => {
+                Some(("BOUNDARY_PROJECT", "BOUNDARY_API_KEY"))
+            }
+            DestinationOverrides::Named { project, api_key } => {
+                Some((project.as_str(), api_key.as_str()))
+            }
+            DestinationOverrides::Default | DestinationOverrides::Disabled => None,
+        };
+        let read_value = |read: &mut dyn FnMut(&str) -> Option<OsString>,
+                          name: &str|
+         -> Result<Option<String>, PolicyError> {
+            read(name)
+                .map(|value| {
+                    value
+                        .into_string()
+                        .ok()
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| {
+                            PolicyError(format!("{name} must be a non-empty UTF-8 value."))
+                        })
+                })
+                .transpose()
+        };
+        let (project, api_key) = if let Some((project, api_key)) = names {
+            (
+                read_value(&mut read, project)?,
+                read_value(&mut read, api_key)?,
+            )
+        } else {
+            (None, None)
+        };
+        if project.is_none()
+            && api_key.is_none()
+            && let Some(embedded) = &self.embedded
+        {
+            return Ok(IngestionSelection::Embedded(embedded));
+        }
+        // A supplied key owns its destination; an omitted project can be inferred
+        // from its fixed ingestion scope instead of borrowing the publisher's target.
+        let project = project.or_else(|| {
+            if api_key.is_none() {
+                self.project.clone()
+            } else {
+                None
+            }
+        });
+        Ok(IngestionSelection::Caller { project, api_key })
+    }
+
+    pub fn verify_build(&self, payload: &[u8]) -> Result<(), PolicyError> {
+        if let Some(embedded) = &self.embedded {
+            if embedded.bytecode_digest != build_digest(payload, self)? {
+                return Err(PolicyError("Embedded telemetry does not match this artifact. Rebuild with `baml pack --embed-telemetry` or `baml generate --embed-telemetry`.".into()));
+            }
+            if !embedded.token.expose().starts_with("bdry_public_") || embedded.build_id.is_empty()
+            {
+                return Err(PolicyError("The embedded telemetry credential is invalid. Rebuild the artifact with `--embed-telemetry`.".into()));
+            }
+        }
+        Ok(())
     }
 
     pub fn resolve_level(&self) -> Result<Option<AutoTelemetryLevel>, PolicyError> {
@@ -322,6 +557,166 @@ on_initial_telemetry_failure = "required""#,
                 .unwrap_err()
                 .to_string(),
             r#"bridge.on_initial_telemetry_failure must be abort, warn, or ignore."#
+        );
+    }
+}
+
+#[cfg(test)]
+mod ingestion_tests {
+    use super::*;
+    fn embedded(policy: &ArtifactTelemetry, payload: &[u8]) -> Box<EmbeddedIngestion> {
+        Box::new(EmbeddedIngestion {
+            token: PublicCredential::new(format!("bdry_public_{}", "a".repeat(64))),
+            token_id: "token".into(),
+            build_id: "build".into(),
+            product_id: "product".into(),
+            destination: IngestionDestination {
+                org_id: "o".into(),
+                project_id: "p".into(),
+                environment_id: "e".into(),
+            },
+            bytecode_digest: build_digest(payload, policy).unwrap(),
+        })
+    }
+    #[test]
+    fn embedded_defaults_do_not_read_ambient_identity_or_destination() {
+        for overrides in [
+            DestinationOverrides::Default,
+            DestinationOverrides::Disabled,
+        ] {
+            let mut policy = ArtifactTelemetry {
+                destination_overrides: overrides,
+                ..Default::default()
+            };
+            policy.embedded = Some(embedded(&policy, b"program"));
+            assert_eq!(
+                policy
+                    .select_ingestion_with(|_| panic!("publisher credentials are fixed"))
+                    .unwrap(),
+                IngestionSelection::Embedded(policy.embedded.as_deref().unwrap())
+            );
+        }
+    }
+    #[test]
+    fn explicit_bindings_select_caller_credentials_without_reusing_public_token() {
+        let mut policy = ArtifactTelemetry {
+            project: Some("publisher/app".into()),
+            destination_overrides: DestinationOverrides::Named {
+                project: "ACME_PROJECT".into(),
+                api_key: "ACME_KEY".into(),
+            },
+            ..Default::default()
+        };
+        policy.embedded = Some(embedded(&policy, b"program"));
+        for (project, key, expected_project) in [
+            (
+                Some("customer/app"),
+                Some("bdry_secret_customer"),
+                Some("customer/app"),
+            ),
+            (Some("customer/app"), None, Some("customer/app")),
+            (None, Some("bdry_secret_customer"), None),
+            (None, Some("local"), None),
+        ] {
+            assert_eq!(
+                policy
+                    .select_ingestion_with(|name| match name {
+                        "ACME_PROJECT" => project.map(Into::into),
+                        "ACME_KEY" => key.map(Into::into),
+                        _ => panic!("unpermitted variable {name}"),
+                    })
+                    .unwrap(),
+                IngestionSelection::Caller {
+                    project: expected_project.map(Into::into),
+                    api_key: key.map(Into::into)
+                }
+            );
+        }
+        assert_eq!(
+            policy.select_ingestion_with(|_| None).unwrap(),
+            IngestionSelection::Embedded(policy.embedded.as_deref().unwrap())
+        );
+    }
+    #[test]
+    fn ordinary_artifacts_use_standard_bindings_and_manifest_project() {
+        let policy = ArtifactTelemetry {
+            project: Some("org/app".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            policy.select_ingestion_with(|_| None).unwrap(),
+            IngestionSelection::Caller {
+                project: Some("org/app".into()),
+                api_key: None
+            }
+        );
+        assert_eq!(
+            policy
+                .select_ingestion_with(
+                    |name| (name == "BOUNDARY_API_KEY").then(|| "bdry_secret_customer".into())
+                )
+                .unwrap(),
+            IngestionSelection::Caller {
+                project: None,
+                api_key: Some("bdry_secret_customer".into())
+            }
+        );
+    }
+    #[test]
+    fn destination_bindings_are_a_pair_and_errors_are_actionable() {
+        for table in ["pack", "bridge"] {
+            let manifest: toml::Value =
+                format!("[{table}.env_var_names]\nBOUNDARY_PROJECT = \"CUSTOM_PROJECT\"")
+                    .parse()
+                    .unwrap();
+            let kind = if table == "pack" {
+                ArtifactKind::Pack
+            } else {
+                ArtifactKind::Bridge
+            };
+            assert_eq!(
+                ArtifactTelemetry::from_manifest(&manifest, kind)
+                    .unwrap_err()
+                    .to_string(),
+                format!(
+                    r#"{table}.env_var_names.BOUNDARY_PROJECT and BOUNDARY_API_KEY must both be false or distinct valid environment-variable names."#
+                )
+            );
+        }
+        let policy = ArtifactTelemetry::default();
+        assert_eq!(
+            policy
+                .select_ingestion_with(|_| Some("".into()))
+                .unwrap_err()
+                .to_string(),
+            r#"BOUNDARY_PROJECT must be a non-empty UTF-8 value."#
+        );
+    }
+    #[test]
+    fn fingerprint_excludes_credentials_and_rejects_other_programs_or_policy() {
+        let mut policy = ArtifactTelemetry::default();
+        let original = build_digest(b"complete bytecode", &policy).unwrap();
+        policy.embedded = Some(embedded(&policy, b"complete bytecode"));
+        assert_eq!(
+            original,
+            build_digest(b"complete bytecode", &policy).unwrap()
+        );
+        policy.verify_build(b"complete bytecode").unwrap();
+        assert_eq!(
+            policy
+                .verify_build(b"other bytecode")
+                .unwrap_err()
+                .to_string(),
+            r#"Embedded telemetry does not match this artifact. Rebuild with `baml pack --embed-telemetry` or `baml generate --embed-telemetry`."#
+        );
+        policy.recording_level = RecordingLevel::Off;
+        assert_ne!(
+            original,
+            build_digest(b"complete bytecode", &policy).unwrap()
+        );
+        assert_eq!(
+            format!("{:?}", policy.embedded.unwrap().token),
+            "[REDACTED]"
         );
     }
 }

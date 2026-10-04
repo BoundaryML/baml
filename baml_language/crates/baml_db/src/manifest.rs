@@ -84,7 +84,7 @@ pub struct TestProfileManifest {
 /// [`BamlToml::unknown`].
 /// The wrapper reads `toolchain` to choose the executable; the CLI's cloud
 /// configuration reads `boundary`. Matching is by top-level key name.
-const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] = &["toolchain", "boundary"];
+const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] = &["toolchain", "boundary", "pack", "bridge"];
 
 #[derive(Debug, Deserialize)]
 pub struct Package {

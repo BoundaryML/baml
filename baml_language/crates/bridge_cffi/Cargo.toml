@@ -58,6 +58,7 @@ cbindgen = { workspace = true }
 baml_artifact = { workspace = true, features = [ "test-support" ] }
 baml_test_support = { workspace = true }
 cc = { workspace = true }
+wiremock = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = true
