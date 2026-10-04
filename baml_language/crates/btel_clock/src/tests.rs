@@ -88,6 +88,24 @@ fn noisy_reference_is_not_a_fault_but_wrong_rate_and_jumps_are() {
 }
 
 #[test]
+fn duration_policy_retains_eligible_values_after_an_observed_clock_fault() {
+    let epoch = fixture(1, 0);
+    let policy = epoch.threshold(Duration::from_secs(1));
+    assert!(!policy.reached(ClockDuration::from_ticks(1), &epoch));
+
+    epoch.invalidate_if_fault(
+        sample(100_000_000, 5_000_000, 100),
+        epoch.metadata.reference_tick,
+    );
+    assert_eq!(epoch.status(), TimingStatus::Discontinuity);
+    assert!(epoch.mapping().is_some(), "the conversion stays immutable");
+    assert!(policy.reached(ClockDuration::ZERO, &epoch));
+
+    let fresh = fixture(1, 0);
+    assert!(!policy.reached(ClockDuration::from_ticks(1), &fresh));
+}
+
+#[test]
 fn restore_checks_continuity_and_preserves_completed_records() {
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let completed = runtime.start_run();

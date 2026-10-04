@@ -63,6 +63,8 @@ results cannot populate a new generation's cache.
 
 Explicit duration-based capture policies retain eligible inputs/outputs from
 entry while scale is pending, since VM values cannot be recovered afterwards.
+They also retain eligible values conservatively after an observed clock fault;
+an invalid conversion cannot reliably decide whether a duration rule was met.
 The default policy-zero timestamp path does not inspect the mapping.
 
 ## Measurement methodology

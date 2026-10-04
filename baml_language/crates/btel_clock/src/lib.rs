@@ -105,10 +105,11 @@ pub struct ClockThreshold {
 impl ClockThreshold {
     #[inline(always)]
     pub fn reached(self, elapsed: ClockDuration, epoch: &ClockEpoch) -> bool {
-        epoch.mapping().is_none_or(|m| {
-            ((u128::from(elapsed.get()) * u128::from(m.multiplier)) >> m.shift)
-                >= self.duration.as_nanos()
-        })
+        epoch.status() != TimingStatus::Valid
+            || epoch.mapping().is_none_or(|m| {
+                ((u128::from(elapsed.get()) * u128::from(m.multiplier)) >> m.shift)
+                    >= self.duration.as_nanos()
+            })
     }
 }
 
@@ -298,8 +299,8 @@ impl ClockEpoch {
         )))
     }
 
-    /// Pending duration policies conservatively capture eligible calls now;
-    /// values cannot be captured after calibration has finished.
+    /// Pending or invalid timing conservatively captures eligible calls now;
+    /// values cannot be recovered after the call has finished.
     pub fn threshold(&self, duration: Duration) -> ClockThreshold {
         ClockThreshold { duration }
     }
