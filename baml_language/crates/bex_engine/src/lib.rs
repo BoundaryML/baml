@@ -1907,13 +1907,10 @@ impl BexEngine {
                         None,
                     ),
                 };
-                let http_bodies = btel_settings::network::bodies_from_env()
-                    .map_err(|error| EngineError::Other(error.to_string()))?;
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(
-                        bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
-                            .with_http_bodies(http_bodies),
-                    ),
+                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
+                        auto_level,
+                    )),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]

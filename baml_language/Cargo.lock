@@ -675,6 +675,7 @@ dependencies = [
  "baml_artifact",
  "baml_builtins2",
  "baml_db",
+ "baml_env",
  "baml_exec",
  "baml_fmt",
  "baml_ide",

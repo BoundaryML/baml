@@ -139,7 +139,7 @@ fn run_baml_posthog(
         .env("BAML_POSTHOG_HOST", posthog)
         // Keep ordinary invocation telemetry quiet so /capture/ sees only
         // feedback + identify events.
-        .env("BAML_TELEMETRY_DISABLED", "1")
+        .env("DO_NOT_TRACK", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     if stdin.is_some() {
