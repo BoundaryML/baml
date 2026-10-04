@@ -15,6 +15,7 @@ function         baml.deep_copy                   <builtin>/baml/core.baml:11
 interface        baml.Concrete                    <builtin>/baml/core.baml:19
 class            baml.TaggedString                <builtin>/baml/core.baml:33
 class            baml.Float                       <builtin>/baml/float.baml:17
+interface        baml.Hash                        <builtin>/baml/hashing.baml:15
 class            baml.Int                         <builtin>/baml/int.baml:33
 class            baml.Null                        <builtin>/baml/null.baml:2
 interface        baml.Sortable                    <builtin>/baml/sortable.baml:22
@@ -105,6 +106,8 @@ function         baml.future.with_timeout         <builtin>/baml/ns_future/futur
 class            baml.glob.ScanOptions            <builtin>/baml/ns_glob/glob.baml:2
 class            baml.glob.Glob                   <builtin>/baml/ns_glob/glob.baml:18
 function         baml.glob.new                    <builtin>/baml/ns_glob/glob.baml:41
+interface        baml.hash.Hasher                 <builtin>/baml/ns_hash/hash.baml:5
+class            baml.hash.DefaultHasher          <builtin>/baml/ns_hash/hash.baml:32
 function         baml.host.call_host_value        <builtin>/baml/ns_host/host.baml:20
 class            baml.host.Value                  <builtin>/baml/ns_host/host.baml:26
 class            baml.http.Request                <builtin>/baml/ns_http/http.baml:14

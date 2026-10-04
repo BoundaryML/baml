@@ -9,6 +9,7 @@ pub enum StructuralInterface {
     ToJson,
     FromJson,
     Equals,
+    Hash,
 }
 
 impl StructuralInterface {
@@ -18,6 +19,7 @@ impl StructuralInterface {
             Self::ToJson => "to_json",
             Self::FromJson => "from_json",
             Self::Equals => "eq",
+            Self::Hash => "hash",
         }
     }
 
@@ -27,12 +29,13 @@ impl StructuralInterface {
             Self::ToJson => "_to_json_default",
             Self::FromJson => "_from_json_structural_default",
             Self::Equals => "_equals_structural_default",
+            Self::Hash => "_hash_structural_default",
         }
     }
 
     pub const fn native_type_arg_count(self) -> usize {
         match self {
-            Self::Equals => 0,
+            Self::Equals | Self::Hash => 0,
             Self::ToString | Self::ToJson | Self::FromJson => 1,
         }
     }

@@ -305,6 +305,11 @@ impl<'vm> ImplResolver<'vm> {
             return Some(ResolvedInterfaceImpl::Explicit { rule, bindings });
         }
         let kind = self.structural_default(interface, args)?;
+        if kind == StructuralInterface::Hash
+            && !self.hash_eligible(self_ty, interface, &mut Vec::new(), &mut Vec::new())
+        {
+            return None;
+        }
         Some(ResolvedInterfaceImpl::Structural {
             kind,
             interface,
@@ -328,6 +333,108 @@ impl<'vm> ImplResolver<'vm> {
             .structural_default
             .as_ref()
             .map(|default| default.kind)
+    }
+
+    fn hash_eligible(
+        self,
+        ty: &RealizedTy,
+        interface: TypeHead,
+        active: &mut Vec<RealizedTy>,
+        obligations: &mut Vec<Obligation>,
+    ) -> bool {
+        if self
+            .rules_for(interface)
+            .iter()
+            .any(|rule| self.rule_applies(rule, ty, &[], obligations).is_some())
+        {
+            return true;
+        }
+        let ty = concrete_base(ty).into_owned();
+        if active.contains(&ty) {
+            return true;
+        }
+        if active.len() >= 64 {
+            return false;
+        }
+        if matches!(ty, RealizedTy::Class(..) | RealizedTy::Enum(_))
+            && let Some(equals) =
+                self.vm
+                    .declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
+                        "baml.ops.Equals",
+                    ))
+            && self.rules_for(equals).iter().any(|rule| {
+                // Unproven bounds cannot establish the absence of custom
+                // equality: those bounds may depend on Hash itself.
+                rule.methods.contains_key("eq")
+                    && self.match_template(
+                        &rule.for_ty_pattern,
+                        &ty,
+                        &mut vec![None; rule.generic_param_bounds.len()],
+                    )
+            })
+        {
+            return false;
+        }
+        active.push(ty.clone());
+        let eligible = match &ty {
+            RealizedTy::Int
+            | RealizedTy::Bigint
+            | RealizedTy::Float
+            | RealizedTy::Bool
+            | RealizedTy::String
+            | RealizedTy::Null
+            | RealizedTy::Uint8Array
+            | RealizedTy::Enum(_)
+            | RealizedTy::Never => true,
+            RealizedTy::Interface(head, _, _) => self.interface_requires_hash(*head, interface),
+            RealizedTy::List(element) => {
+                self.hash_eligible(element, interface, active, obligations)
+            }
+            RealizedTy::Map { key, value } => {
+                self.hash_eligible(key, interface, active, obligations)
+                    && self.hash_eligible(value, interface, active, obligations)
+            }
+            RealizedTy::Union(members) => members
+                .iter()
+                .all(|member| self.hash_eligible(member, interface, active, obligations)),
+            RealizedTy::Class(head, args) => match self.vm.get_object(head.ptr()) {
+                bex_vm_types::Object::Class(class) => class.fields.iter().all(|field| {
+                    field
+                        .field_template
+                        .substitute(args, self.vm)
+                        .is_ok_and(|field_ty| {
+                            self.hash_eligible(&field_ty, interface, active, obligations)
+                        })
+                }),
+                _ => false,
+            },
+            RealizedTy::TypeAlias(head) => match self.vm.get_object(head.ptr()) {
+                bex_vm_types::Object::TypeAlias(alias) => {
+                    self.hash_eligible(&alias.definition, interface, active, obligations)
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        active.pop();
+        eligible
+    }
+
+    fn interface_requires_hash(self, head: TypeHead, hash: TypeHead) -> bool {
+        let mut pending = vec![head];
+        let mut seen = std::collections::HashSet::new();
+        while let Some(head) = pending.pop() {
+            if head == hash {
+                return true;
+            }
+            if !seen.insert(head) {
+                continue;
+            }
+            if let bex_vm_types::Object::Interface(interface) = self.vm.get_object(head.ptr()) {
+                pending.extend(interface.requires.iter().map(|required| required.name));
+            }
+        }
+        false
     }
 
     pub(crate) fn implementation_method(
@@ -646,7 +753,12 @@ impl<'vm> ImplResolver<'vm> {
             }
             None => {
                 requested_assoc.is_empty()
-                    && self.structural_default(iface, requested_args).is_some()
+                    && self
+                        .structural_default(iface, requested_args)
+                        .is_some_and(|kind| {
+                            kind != StructuralInterface::Hash
+                                || self.hash_eligible(concrete_ty, iface, &mut Vec::new(), stack)
+                        })
             }
         };
         // SAFETY: this call pushed its goal, and recursive calls remove only theirs.

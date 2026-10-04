@@ -1756,7 +1756,10 @@ fn check_head_args(
             let admissible = crate::impls::is_structural_interface(
                 db,
                 &baml_type::interned::InferInterface::from_constraint(&bound),
-            ) || arg.is_concrete()
+            ) || (crate::impls::structural_interface(db, &bound.name)
+                == Some(baml_type::StructuralInterface::Hash)
+                && normalized_arg_implements_bound(facts, &arg, &bound))
+                || arg.is_concrete()
                 || matches!(
                     arg,
                     Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. } | Ty::Error

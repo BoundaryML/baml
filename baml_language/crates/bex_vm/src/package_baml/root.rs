@@ -126,6 +126,10 @@ impl BamlPackageBaml for PackageBamlImpl {
         super::ops::equals_structural_default(vm, *a, *b)
     }
 
+    fn _hash_structural_default(vm: &mut BexVm, value: &Value, state: &Value) -> NativeCallResult {
+        super::hashing::hash_structural_default(vm, *value, *state)
+    }
+
     /// `baml._cleanup_begin(value)` — BEP-042 `cleanup` run-once guard.
     ///
     /// Atomically test-and-sets `value`'s per-instance "cleaned" latch and

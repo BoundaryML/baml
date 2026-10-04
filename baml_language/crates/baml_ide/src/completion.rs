@@ -676,7 +676,10 @@ function f() -> int throws never {
 "#,
         );
         let items = complete(&plain);
-        assert_eq!(labels(&items), vec!["eq", "neq", "to_json", "to_string"]);
+        assert_eq!(
+            labels(&items),
+            vec!["eq", "hash", "neq", "to_json", "to_string"]
+        );
         assert!(items.iter().all(|item| item.kind == CompletionKind::Method));
     }
 
@@ -770,6 +773,7 @@ function f() -> int {
                 "Done",
                 "eq",
                 "from_json",
+                "hash",
                 "neq",
                 "to_json",
                 "to_string",
@@ -785,6 +789,34 @@ function f() -> int {
                 "variants and structural methods retain their own completion kinds"
             );
         }
+    }
+
+    #[test]
+    fn hash_completion_requires_compatible_equality() {
+        let structural = CursorTest::new(
+            r#"class Key { id int }
+function f(value: Key) -> void {
+    value.<[CURSOR]
+}
+"#,
+        );
+        assert!(labels(&complete(&structural)).contains(&"hash"));
+
+        let custom_equals = CursorTest::new(
+            r#"class Key {
+    id int
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never { self.id == other.id }
+    }
+}
+function f(value: Key) -> void {
+    value.<[CURSOR]
+}
+"#,
+        );
+        let items = complete(&custom_equals);
+        assert!(!labels(&items).contains(&"hash"));
+        assert!(labels(&items).contains(&"to_string"));
     }
 
     #[test]

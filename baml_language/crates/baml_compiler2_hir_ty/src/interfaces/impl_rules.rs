@@ -1840,12 +1840,12 @@ pub fn implements_interface(
     aliases: &HashMap<DeclName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
-    // The blanket stdlib impl supplies AnyClass's default-method dispatch, but
-    // membership is compiler-derived and narrower. Reuse the normalizer's
-    // class-only rule so `requires AnyClass` cannot observe the blanket.
+    // Derived capabilities have no source impl block to find. The normalizer
+    // proves their membership using the caller's parameter environment.
     if interface
         .name
         .is_lang_root_type(lang_roots(db), baml_base::LangPackage::Reflect, "AnyClass")
+        || crate::impls::structural_interface(db, &interface.name).is_some()
     {
         return is_subtype(concrete, &interface.to_ty());
     }

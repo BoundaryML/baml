@@ -1073,7 +1073,9 @@ pub fn impl_views_for_type(
                 .unwrap_or_else(|_| unreachable!("realized view of a closed receiver is closed"))
         })
         .collect();
-    for interface in structural_interface_roots(db) {
+    for interface in
+        applicable_structural_interface_roots(db, &crate::facts::Facts::new(db), &interned)
+    {
         let view =
             baml_type::Interface::try_from(&interface).expect("structural interface is closed");
         if !views.contains(&view) {
@@ -1421,6 +1423,7 @@ const STRUCTURAL_INTERFACES: &[(&[&str], &str, baml_type::StructuralInterface)] 
     (&[], "ToJson", baml_type::StructuralInterface::ToJson),
     (&[], "FromJson", baml_type::StructuralInterface::FromJson),
     (&["ops"], "Equals", baml_type::StructuralInterface::Equals),
+    (&[], "Hash", baml_type::StructuralInterface::Hash),
 ];
 
 /// Recognize trusted language declarations, never user interfaces with the same spelling.
@@ -1444,12 +1447,14 @@ pub fn structural_interface(
         })
 }
 
+/// The unconditional defaults. Conditional defaults must prove receiver eligibility.
 pub(crate) fn structural_interface_roots(db: &dyn baml_compiler2_hir::Db) -> Vec<InferInterface> {
     let Some(root) = lang_roots(db).get(baml_base::LangPackage::Baml) else {
         return Vec::new();
     };
     STRUCTURAL_INTERFACES
         .iter()
+        .filter(|(_, _, kind)| *kind != baml_type::StructuralInterface::Hash)
         .map(|(namespace, item, _)| {
             InferInterface::new(
                 DeclName::in_root(
@@ -1464,13 +1469,280 @@ pub(crate) fn structural_interface_roots(db: &dyn baml_compiler2_hir::Db) -> Vec
         .collect()
 }
 
+/// Whether every admissible type implements this interface without a bound.
 pub(crate) fn is_structural_interface(
     db: &dyn baml_compiler2_hir::Db,
     interface: &InferInterface,
 ) -> bool {
     interface.generics.is_empty()
         && interface.associated_types.is_empty()
-        && structural_interface(db, &interface.name).is_some()
+        && structural_interface(db, &interface.name)
+            .is_some_and(|kind| kind != baml_type::StructuralInterface::Hash)
+}
+
+pub(crate) fn applicable_structural_interface_roots(
+    db: &dyn baml_compiler2_hir::Db,
+    facts: &crate::facts::Facts<'_>,
+    receiver: &Ty,
+) -> Vec<InferInterface> {
+    let mut roots = structural_interface_roots(db);
+    if let Some(root) = lang_roots(db).get(baml_base::LangPackage::Baml) {
+        let hash = InferInterface::new(
+            DeclName::in_root(root, vec![], Name::new("Hash")),
+            Box::new([]),
+            Box::new([]),
+        );
+        if hash_eligible(db, facts, receiver, &hash) {
+            roots.push(hash);
+        }
+    }
+    roots
+}
+
+/// Prove data eligibility coinductively, while preserving explicit implementations.
+pub(crate) fn hash_eligible(
+    db: &dyn baml_compiler2_hir::Db,
+    facts: &crate::facts::Facts<'_>,
+    concrete: &Ty,
+    hash: &InferInterface,
+) -> bool {
+    hash_eligible_within_depth(
+        db,
+        facts,
+        concrete,
+        hash,
+        BLANKET_IMPL_BOUND_DEPTH,
+        &mut Vec::new(),
+    )
+}
+
+fn hash_eligible_within_depth(
+    db: &dyn baml_compiler2_hir::Db,
+    facts: &crate::facts::Facts<'_>,
+    concrete: &Ty,
+    hash: &InferInterface,
+    depth: u32,
+    in_progress: &mut Vec<(Ty, InferInterface)>,
+) -> bool {
+    fn visit(
+        db: &dyn baml_compiler2_hir::Db,
+        facts: &crate::facts::Facts<'_>,
+        ty: &Ty,
+        hash: &InferInterface,
+        active: &mut Vec<Ty>,
+        depth: u32,
+        in_progress: &mut Vec<(Ty, InferInterface)>,
+    ) -> bool {
+        use baml_type::normalize::TypeContext as _;
+        if ty.has_infer() || ty.has_error() {
+            return false;
+        }
+        if let InferTy::EnumVariant(name, _) = ty.kind() {
+            return visit(
+                db,
+                facts,
+                &Ty::intern(InferTy::Enum(name.clone())),
+                hash,
+                active,
+                depth,
+                in_progress,
+            );
+        }
+        if let Some(resolved) = resolve_within_depth(db, ty, hash, depth, in_progress) {
+            in_progress.push((ty.clone(), hash.clone()));
+            let proven = resolved
+                .facts
+                .generic_params()
+                .iter()
+                .all(|(param, bounds)| {
+                    let Some(actual) = resolved.bindings.get(param) else {
+                        return true;
+                    };
+                    if !actual.has_typevar() && !actual.has_projection() {
+                        return true;
+                    }
+                    bounds.iter().all(|bound| {
+                        let bound = bound.as_reference().substitute_bindings(&resolved.bindings);
+                        if structural_interface(db, &bound.name)
+                            == Some(baml_type::StructuralInterface::Hash)
+                        {
+                            depth > 0
+                                && visit(
+                                    db,
+                                    facts,
+                                    actual,
+                                    &bound,
+                                    &mut Vec::new(),
+                                    depth - 1,
+                                    in_progress,
+                                )
+                        } else {
+                            crate::interfaces::normalized_arg_implements_bound(
+                                facts,
+                                &ClosedTy::try_from(actual.clone())
+                                    .expect("rigid subject is closed")
+                                    .to_plain(),
+                                &baml_type::Interface::try_from(&bound)
+                                    .expect("rigid bound is closed"),
+                            )
+                        }
+                    })
+                });
+            in_progress.pop();
+            if proven {
+                return true;
+            }
+        }
+        let equals = InferInterface::new(
+            DeclName::in_root(
+                hash.name.root(),
+                vec![Name::new("ops")],
+                Name::new("Equals"),
+            ),
+            Box::new([]),
+            Box::new([]),
+        );
+        if matches!(
+            ty.kind(),
+            InferTy::Class(..) | InferTy::Enum(..) | InferTy::EnumVariant(..)
+        ) && has_potential_custom_equals(db, ty, &equals)
+        {
+            return false;
+        }
+        if active.contains(ty) {
+            return true;
+        }
+        // Expanding generic recursion need not repeat an identical realization.
+        if active.len() >= REQUIRES_CLOSURE_FUEL as usize {
+            return false;
+        }
+        active.push(ty.clone());
+        let result = match ty.kind() {
+            InferTy::Int
+            | InferTy::Bigint
+            | InferTy::Float
+            | InferTy::Bool
+            | InferTy::String
+            | InferTy::Null
+            | InferTy::Uint8Array
+            | InferTy::Literal(..)
+            | InferTy::Enum(..)
+            | InferTy::EnumVariant(..)
+            | InferTy::Never => true,
+            InferTy::List(inner) => visit(db, facts, inner, hash, active, depth, in_progress),
+            InferTy::Map { key, value } => {
+                visit(db, facts, key, hash, active, depth, in_progress)
+                    && visit(db, facts, value, hash, active, depth, in_progress)
+            }
+            InferTy::Union(arms) => arms
+                .iter()
+                .all(|arm| visit(db, facts, arm, hash, active, depth, in_progress)),
+            InferTy::Class(name, args) => {
+                if let Some(class) = crate::layout::class_ref_of(db, name) {
+                    let params = crate::layout::class_generic_params(db, class);
+                    if params.len() != args.len() {
+                        false
+                    } else {
+                        let bindings: FxHashMap<_, _> =
+                            params.into_iter().zip(args.iter().cloned()).collect();
+                        crate::layout::class_fields(db, class)
+                            .iter()
+                            .all(|(_, field)| {
+                                visit(
+                                    db,
+                                    facts,
+                                    &interned_ty(field).substitute_bindings(&bindings),
+                                    hash,
+                                    active,
+                                    depth,
+                                    in_progress,
+                                )
+                            })
+                    }
+                } else {
+                    false
+                }
+            }
+            InferTy::TypeAlias(name) => facts.alias_def(name).is_some_and(|body| {
+                visit(
+                    db,
+                    facts,
+                    &interned_ty(&body),
+                    hash,
+                    active,
+                    depth,
+                    in_progress,
+                )
+            }),
+            InferTy::TypeVar(param) => facts.type_var_bound(param).iter().any(|bound| {
+                let bound = InferInterface::from_constraint(bound);
+                head_matches(&bound, hash, &AliasOnlyFacts::new(db))
+                    || interface_requires(db, &bound, hash, ty, REQUIRES_CLOSURE_FUEL)
+            }),
+            InferTy::Interface(name, args, pins) => {
+                let bound = InferInterface::new(name.clone(), args.clone(), pins.clone());
+                head_matches(&bound, hash, &AliasOnlyFacts::new(db))
+                    || interface_requires(db, &bound, hash, ty, REQUIRES_CLOSURE_FUEL)
+            }
+            InferTy::AssociatedTypeProjection {
+                interface, member, ..
+            } => {
+                let interface = baml_type::Interface::try_from(interface)
+                    .expect("admissible projection is closed");
+                facts
+                    .associated_type_bound(&interface, member.clone())
+                    .iter()
+                    .any(|bound| {
+                        let bound = InferInterface::from_constraint(bound);
+                        head_matches(&bound, hash, &AliasOnlyFacts::new(db))
+                            || interface_requires(db, &bound, hash, ty, REQUIRES_CLOSURE_FUEL)
+                    })
+            }
+            _ => false,
+        };
+        active.pop();
+        result
+    }
+    visit(
+        db,
+        facts,
+        concrete,
+        hash,
+        &mut Vec::new(),
+        depth,
+        in_progress,
+    )
+}
+
+/// Bounds cannot establish the absence of an override: doing so would require
+/// negative trait solving and can recurse from `Equals` back into `Hash`.
+fn has_potential_custom_equals(
+    db: &dyn baml_compiler2_hir::Db,
+    concrete: &Ty,
+    equals: &InferInterface,
+) -> bool {
+    let concrete = ClosedTy::try_from(concrete).expect("eligibility receiver is closed");
+    search_roots(db, &concrete, equals)
+        .into_iter()
+        .any(|package| {
+            package_impl_candidates(db, package)
+                .into_iter()
+                .any(|facts| {
+                    facts.interface().name == equals.name
+                        && ResolvedImpl {
+                            facts: facts.clone(),
+                            bindings: FxHashMap::default(),
+                        }
+                        .provided_method(db, &Name::new("eq"))
+                        .is_some()
+                        && crate::coherence::heads_may_overlap(
+                            db,
+                            package,
+                            facts.for_ty_pattern(),
+                            &concrete,
+                        )
+                })
+        })
 }
 
 /// Whether `concrete` implements `interface`. Searches the root packages
@@ -1507,7 +1779,13 @@ pub fn resolve_implementation<'db>(
     {
         return None;
     }
-    structural_interface(db, &interface.name).map(ResolvedImplementation::StructuralDefault)
+    let kind = structural_interface(db, &interface.name)?;
+    if kind == baml_type::StructuralInterface::Hash
+        && !hash_eligible(db, &crate::facts::Facts::new(db), concrete, interface)
+    {
+        return None;
+    }
+    Some(ResolvedImplementation::StructuralDefault(kind))
 }
 
 /// The unique explicit impl by which realized `concrete` implements realized
@@ -2145,6 +2423,21 @@ fn bounds_hold(
         for bound in bounds {
             let bound = bound.as_reference().substitute_bindings(bindings);
             if !is_realized(actual) || !bound.generics.iter().all(is_realized) {
+                continue;
+            }
+            if structural_interface(db, &bound.name) == Some(baml_type::StructuralInterface::Hash) {
+                if depth == 0
+                    || !hash_eligible_within_depth(
+                        db,
+                        &crate::facts::Facts::new(db),
+                        actual,
+                        &bound,
+                        depth - 1,
+                        in_progress,
+                    )
+                {
+                    return false;
+                }
                 continue;
             }
             if !is_structural_interface(db, &bound)

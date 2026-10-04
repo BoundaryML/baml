@@ -329,6 +329,9 @@ impl<'db> InferenceContext<'db> {
                 if purpose == GoalPurpose::Bound
                     && is_abstract_head(ty.kind())
                     && !crate::impls::is_structural_interface(self.db, &interface)
+                    && !(crate::impls::structural_interface(self.db, &interface.name)
+                        == Some(baml_type::StructuralInterface::Hash)
+                        && crate::impls::hash_eligible(self.db, &self.facts, &ty, &interface))
                 {
                     self.pending_diags
                         .push(super::PendingDiag::BoundedArgNotConcrete {
@@ -449,7 +452,11 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let Some(facts) = applicable else {
-            if crate::impls::is_structural_interface(self.db, interface) {
+            if crate::impls::is_structural_interface(self.db, interface)
+                || (crate::impls::structural_interface(self.db, &interface.name)
+                    == Some(baml_type::StructuralInterface::Hash)
+                    && crate::impls::hash_eligible(self.db, &self.facts, subject, interface))
+            {
                 return Selection::Confirmed;
             }
             return Selection::NoCandidate;
@@ -867,18 +874,19 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let Some(facts) = applicable else {
-            let mut candidates = crate::impls::structural_interface_roots(self.db)
-                .into_iter()
-                .filter_map(|interface| {
-                    crate::method_resolution::member_on_interface(
-                        self.db,
-                        &self.facts,
-                        &interface,
-                        receiver,
-                        name,
-                        false,
-                    )
-                });
+            let mut candidates =
+                crate::impls::applicable_structural_interface_roots(self.db, &self.facts, receiver)
+                    .into_iter()
+                    .filter_map(|interface| {
+                        crate::method_resolution::member_on_interface(
+                            self.db,
+                            &self.facts,
+                            &interface,
+                            receiver,
+                            name,
+                            false,
+                        )
+                    });
             let member = candidates.next()?;
             return candidates.next().is_none().then_some(member);
         };
@@ -953,6 +961,11 @@ impl<'db> InferenceContext<'db> {
     fn implements_holds(&mut self, ty: &Ty, interface: &InferInterface) -> bool {
         if crate::impls::is_structural_interface(self.db, interface) {
             return true;
+        }
+        if crate::impls::structural_interface(self.db, &interface.name)
+            == Some(baml_type::StructuralInterface::Hash)
+        {
+            return crate::impls::hash_eligible(self.db, &self.facts, ty, interface);
         }
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);

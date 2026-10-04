@@ -31,6 +31,8 @@ mod csv;
 mod error_context;
 mod float;
 mod future;
+mod hasher;
+mod hashing;
 mod int;
 pub mod json;
 mod map;

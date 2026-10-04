@@ -247,7 +247,7 @@ pub(crate) fn member_roots<'db>(
     receiver: &Ty,
 ) -> Option<(Vec<InferInterface>, bool)> {
     let (mut roots, existential) = declared_member_roots(db, facts, receiver)?;
-    for interface in crate::impls::structural_interface_roots(db) {
+    for interface in crate::impls::applicable_structural_interface_roots(db, facts, receiver) {
         if !roots.contains(&interface) {
             roots.push(interface);
         }
@@ -653,7 +653,7 @@ fn lookup_impl_member<'db>(
         }
     }
     if providers.is_empty() && !receiver.has_error() {
-        for interface in crate::impls::structural_interface_roots(db) {
+        for interface in crate::impls::applicable_structural_interface_roots(db, facts, receiver) {
             if let Some(member) = member_on_interface(db, facts, &interface, receiver, name, false)
             {
                 providers.push((interface, member));
@@ -827,7 +827,11 @@ fn extend_from_impls<'db>(
     let explicit = impls_of_type(db, viewer, self_ty)
         .into_iter()
         .map(|resolved| resolved.implemented());
-    for implemented in explicit.chain(crate::impls::structural_interface_roots(db)) {
+    for implemented in explicit.chain(crate::impls::applicable_structural_interface_roots(
+        db,
+        &facts,
+        &Ty::from_plain(self_ty),
+    )) {
         for (name, is_method, is_static, decl) in
             interface_member_rows(db, &facts, &implemented, false)
         {
@@ -954,6 +958,11 @@ fn env_proves<'db>(
 ) -> bool {
     if crate::impls::is_structural_interface(db, goal) {
         return true;
+    }
+    if crate::impls::structural_interface(db, &goal.name)
+        == Some(baml_type::StructuralInterface::Hash)
+    {
+        return crate::impls::hash_eligible(db, facts, actual, goal);
     }
     let InferTy::TypeVar(param) = actual.kind() else {
         return crate::impls::implements_interface(db, actual, goal);
@@ -1355,7 +1364,9 @@ pub fn member_candidates<'db>(
                 let implemented = resolved.implemented();
                 extend_from_interface(db, facts, &mut out, &implemented, false);
             }
-            for interface in crate::impls::structural_interface_roots(db) {
+            for interface in
+                crate::impls::applicable_structural_interface_roots(db, facts, receiver)
+            {
                 extend_from_interface(db, facts, &mut out, &interface, false);
             }
         }
@@ -1813,7 +1824,7 @@ fn union_arm_interfaces<'db>(
             out
         }
     };
-    for interface in crate::impls::structural_interface_roots(db) {
+    for interface in crate::impls::applicable_structural_interface_roots(db, facts, arm) {
         if !interfaces.contains(&interface) {
             interfaces.push(interface);
         }
