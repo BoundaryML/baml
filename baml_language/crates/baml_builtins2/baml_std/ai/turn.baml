@@ -29,7 +29,7 @@ class ModelTurn {
     // retry/fallback wrappers, then the selected call (selected: true).
     calls: root.events.LLMCall[],
 
-    /// The last Text block; null when the turn has none.
+    /// The terminal Text block — the final candidate the runner parses.
     function terminal_text(self) -> string? {
         let out: string? = null;
         for (let b in self.content) {
@@ -40,20 +40,8 @@ class ModelTurn {
         out
     }
 
-    /// Every Text block, joined in order: the turn's whole text output. Null
-    /// when the turn has none.
-    function text(self) -> string? {
-        let out: string? = null;
-        for (let b in self.content) {
-            if let t: root.content.Text = b {
-                out = `${out ?? ""}${t.text}`;
-            }
-        }
-        out
-    }
-
     /// The media payloads the turn produced, in order. A media-shaped output
-    /// type is built from these instead of from the turn's text.
+    /// type is built from these instead of from the terminal text.
     function media(self) -> MediaPart[] {
         let out: MediaPart[] = [];
         for (let b in self.content) {

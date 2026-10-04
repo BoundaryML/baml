@@ -2,7 +2,7 @@
 // is part of the public ai surface.
 //
 // A declared output type made of media is produced from the turn's content
-// blocks, never from SAP-parsing the turn's text (SAP refuses media). This
+// blocks, never from SAP-parsing the terminal text (SAP refuses media). This
 // is a port of sys_llm's `parse_llm_output_for_target`
 // (crates/sys_llm/src/lib.rs), error messages included: they are the
 // documented UX for "you asked for an image and the model also talked".

@@ -18,9 +18,9 @@ class RunResult<Out> {
     usage: root.events.Usage,
 }
 
-/// (internal) A turn `Agent._attempt_turn` accepted. When parsing its text is
-/// what accepted it, `text_output` holds that parse, so `Agent.run` does not
-/// parse the same text a second time.
+/// (internal) A turn `Agent._attempt_turn` accepted. When parsing its terminal
+/// text is what accepted it, `text_output` holds that parse, so `Agent.run`
+/// does not parse the same text a second time.
 class _AcceptedTurn {
     turn: ModelTurn,
     text_output: ParsedOutput?,
@@ -208,7 +208,7 @@ class Agent {
 
     /// (internal) Whether the turn answers with an `Out` without parsing its
     /// text: the provider-decoded output decides, or the turn's media does.
-    /// `null` when only parsing its text can tell.
+    /// `null` when only parsing the terminal text can tell.
     function _fits_without_text<Out>(self, turn: ModelTurn) -> bool? {
         if let parsed: ParsedOutput = turn.parsed_output {
             return match (parsed.value) {
@@ -230,8 +230,8 @@ class Agent {
         null
     }
 
-    /// (internal) `candidate` parsed into an `Out`, or `null` when it does not
-    /// parse.
+    /// (internal) The terminal text parsed into an `Out`, or `null` when it does
+    /// not parse.
     function _parse_text<Out>(self, candidate: string) -> ParsedOutput? {
         let value = baml.sap.parse<Out>(candidate) catch_all (e) {
             _ => {
@@ -239,64 +239,6 @@ class Agent {
             },
         };
         ParsedOutput { value: value }
-    }
-
-    /// (internal) Whether any text parses as an `Out`: `string`, or a union
-    /// with a `string` member (`string?` included).
-    function _text_shaped<Out>(self) -> bool {
-        let out = reflect.Type.of<Out>();
-        let text = reflect.Type.of<string>();
-        if (out == text) {
-            return true;
-        }
-        if let union: reflect.union.Type = out.as_union() {
-            return union.member_types().some((member) -> {
-                member == text
-            });
-        }
-        false
-    }
-
-    /// (internal) The turn's texts to parse into an `Out`, in the order to try
-    /// them. OpenAI Responses models can split one answer over several
-    /// messages: `commentary` messages that hold the model's next step (its
-    /// tool calls), then a `final_answer` written as if that step had run. For
-    /// a structured `Out` the commentary messages come first, in order, then
-    /// the other Text blocks from the last to the first. A text-shaped `Out`
-    /// tries every block from the last to the first: any text parses as a
-    /// string, so a commentary preamble would always beat the answer. Blank
-    /// blocks are skipped; a turn without a non-blank block yields its terminal
-    /// text, or "".
-    function _text_candidates<Out>(self, turn: ModelTurn) -> string[] {
-        let text_shaped = self._text_shaped<Out>();
-        let commentary: string[] = [];
-        let rest: string[] = [];
-        for (let b in turn.content) {
-            if let t: root.content.Text = b {
-                if (!t.text.trim().is_empty()) {
-                    if (t.phase == "commentary" && !text_shaped) {
-                        commentary.push(t.text);
-                    } else {
-                        rest.push(t.text);
-                    }
-                }
-            }
-        }
-        if (commentary.length() == 0 && rest.length() == 0) {
-            return [turn.terminal_text() ?? ""];
-        }
-        commentary.concat(rest.reverse())
-    }
-
-    /// (internal) The first of the turn's text candidates (`_text_candidates`)
-    /// that parses into an `Out`, or `null` when none does.
-    function _parse_turn_text<Out>(self, turn: ModelTurn) -> ParsedOutput? {
-        for (let candidate in self._text_candidates<Out>(turn)) {
-            if let parsed: ParsedOutput = self._parse_text<Out>(candidate) {
-                return parsed;
-            }
-        }
-        null
     }
 
     /// (internal) One accepted model turn, with the within-turn repair loop: when a
@@ -349,6 +291,7 @@ class Agent {
         if let u: root.events.Usage = turn.usage {
             batch.push(u);
         }
+        let candidate = turn.terminal_text() ?? "";
         let text_output: ParsedOutput? = null;
         let accepted = if (
             turn.tool_uses().length() > 0
@@ -360,7 +303,7 @@ class Agent {
             match (self._fits_without_text<Out>(turn)) {
                 let fits: bool => fits,
                 null => {
-                    text_output = self._parse_turn_text<Out>(turn);
+                    text_output = self._parse_text<Out>(candidate);
                     text_output != null
                 },
             }
@@ -373,7 +316,7 @@ class Agent {
                     throw root.errors.FinishReasonError {
                         provider: c.id(),
                         finish_reason: turn.stop_reason,
-                        raw_output: turn.text() ?? "",
+                        raw_output: candidate,
                     }
                 },
                 root.content.StopReason.Refused => {
@@ -392,7 +335,7 @@ class Agent {
             self._attempt_turn<Out>(c, spec, j, total, attempts_left - 1)
         } else {
             j.append_all(batch);
-            throw root.errors.ParseFailed { provider: c.id(), raw_output: turn.text() ?? "" }
+            throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
         }
     }
 
@@ -488,15 +431,16 @@ class Agent {
                         i = i + 1;
                     }
                 } else {
+                    let candidate = turn.terminal_text() ?? "";
                     // `_attempt_turn` accepted this turn for exactly one of three
-                    // reasons: the provider decoded the output, one of its text
-                    // candidates parsed (it kept that value), or the turn carries
-                    // the media a media-shaped Out is built from. A media Out the
-                    // turn produced no media for went through the text parse,
-                    // which is how absence is expressed (`_fits_without_text`).
+                    // reasons: the provider decoded the output, the terminal text
+                    // parsed (it kept that value), or the turn carries the media
+                    // a media-shaped Out is built from. A media Out the turn
+                    // produced no media for went through the text parse, which is
+                    // how absence is expressed (`_fits_without_text`).
                     let value = if let parsed: ParsedOutput = turn.parsed_output ?? accepted.text_output {
                         let typed: Out = parsed.value else {
-                            throw root.errors.ParseFailed { provider: selected.id(), raw_output: turn.text() ?? "" }
+                            throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
                         };
                         typed
                     } else {
