@@ -102,7 +102,6 @@ pub(crate) struct GlobalArgs {
     #[arg(
         long,
         value_name = "PATH",
-        global = true,
         help_heading = "Global options",
         display_order = 60
     )]
@@ -239,6 +238,21 @@ pub(crate) enum Commands {
 impl RuntimeCli {
     pub(crate) fn command() -> clap::Command {
         let mut command = <Self as CommandFactory>::command();
+        // Query owns `--project` as a cloud handle. Before the subcommand, the root flag
+        // still selects a source path; other subcommands inherit the source-path flag.
+        let project = command
+            .get_arguments()
+            .find(|arg| arg.get_id() == "project")
+            .expect("the source project argument exists")
+            .clone()
+            .global(true);
+        command = command.mut_subcommands(|subcommand| {
+            if subcommand.get_name() == "query" {
+                subcommand
+            } else {
+                subcommand.arg(project.clone())
+            }
+        });
         configure_help_hints(&mut command, &[]);
         command
     }
@@ -599,6 +613,49 @@ mod tests {
         let help = help_for(&["baml-cli", "check", "--help"]);
         assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
         assert!(help.contains("--project <PATH>"), "{help}");
+    }
+
+    #[test]
+    fn query_keeps_cloud_project_separate_from_source_project_path() {
+        let cli = RuntimeCli::parse_from_smart(
+            [
+                "baml",
+                "query",
+                "SELECT 1",
+                "--project",
+                "acme/app",
+                "--environment",
+                "staging",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+        );
+        assert!(cli.global.project.is_none());
+        let Commands::Query(args) = cli.command else {
+            panic!("expected query");
+        };
+        assert_eq!(args.project.as_deref(), Some("acme/app"));
+        assert_eq!(args.environment.as_deref(), Some("staging"));
+        assert!(args.from.is_none());
+
+        let cli = RuntimeCli::parse_from_smart(
+            [
+                "baml",
+                "--project",
+                "/tmp/source-app",
+                "query",
+                "SELECT 1",
+                "--project",
+                "acme/app",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+        );
+        let Commands::Query(args) = cli.command else {
+            panic!("expected query");
+        };
+        assert_eq!(args.project.as_deref(), Some("acme/app"));
+        assert_eq!(args.from.as_deref(), Some(Path::new("/tmp/source-app")));
     }
 
     #[test]

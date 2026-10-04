@@ -49,7 +49,7 @@ pub struct QueryArgs {
     pub local: bool,
 
     /// Boundary cloud project in org_handle/project_name form.
-    #[arg(long, conflicts_with = "local")]
+    #[arg(long, id = "boundary_project", conflicts_with = "local")]
     pub project: Option<String>,
 
     /// Boundary cloud environment; defaults to your personal environment.
