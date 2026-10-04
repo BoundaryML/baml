@@ -2,14 +2,48 @@
 """Isolate native library loading with minimal matched Rust executables on macOS."""
 
 import argparse
+import hashlib
 import json
 import random
+import statistics
 import subprocess
 import sys
 from itertools import pairwise
 from pathlib import Path
 
-from compiler_linkage import digest, run, summarize
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run(command, env):
+    return subprocess.run(command, env=env, capture_output=True, check=False)
+
+
+def summarize(samples):
+    result = {"n": len(samples)}
+    for key in samples[0]:
+        if key in ("marks", "phases_ms") or key.endswith("_ns"):
+            continue
+        values = sorted(sample[key] for sample in samples)
+        result[key] = {
+            "median": statistics.median(values),
+            "p95": values[(len(values) * 95 + 99) // 100 - 1],
+            "mean": statistics.mean(values),
+            "min": values[0],
+            "max": values[-1],
+        }
+    if "phases_ms" in samples[0]:
+        result["phases_ms"] = {
+            key: {
+                "mean": statistics.mean(sample["phases_ms"][key] for sample in samples),
+                "median": statistics.median(
+                    sample["phases_ms"][key] for sample in samples
+                ),
+            }
+            for key in samples[0]["phases_ms"]
+        }
+    return result
 
 
 def main():

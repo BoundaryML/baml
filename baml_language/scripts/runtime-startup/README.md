@@ -177,4 +177,4 @@ Measured 2,700 fresh launches across 27 variants, plus 81 warmups and 12 separat
 
 The compiler-free experiment does **not** deliver a substantial latency reduction. Matched execution-ready empty programs take 16.15 → 15.86 ms with telemetry off, and 18.19 → 17.59 ms with local recording. Wrapper version commands take 19.15 → 18.90 ms off and 21.15 → 20.76 ms local. These are separate fresh interleaved measurements, not the earlier profiling run.
 
-[Compiler linkage and native loading](compiler-linkage.md) contains the full tables, phase attribution, runtime-compilation capability check and reproduction. It retains 4,800 compiler-linkage samples and 800 minimal native-library controls. The shipping runtime remains unchanged.
+[Compiler linkage and native loading](compiler-linkage.md) contains the full tables, phase attribution, runtime-compilation capability check and historical methodology. It retains 4,800 compiler-linkage samples and 800 minimal native-library controls. The compiler-free implementation has been removed; the shipping host keeps its compiler.

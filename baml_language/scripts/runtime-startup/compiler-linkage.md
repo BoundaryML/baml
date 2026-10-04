@@ -10,6 +10,8 @@ On the execution-ready prototype, this program takes 16.15 ms with the compiler 
 
 **Recommendation:** keep runtime compilation available and prioritize artifact decoding, engine construction, and executable-graph ownership. Their measured cost remains substantial. This experiment does not justify removing `reflect.Package.compile` or building a separate compiler loader for latency alone.
 
+The compiler-free builder and comparison harness have been removed. The measured results and methodology remain as a record of the rejected optimization; the shipping host keeps its compiler.
+
 ## End-to-end comparison
 
 Milliseconds, median / p95. Each cell contains 100 fresh process launches. Full and compiler-free hosts use matching release dependencies and the same program bytes. “Normal” is the supported artifact representation; “execution-ready” is the earlier experimental representation, with its existing verification/debugging limitations.
@@ -101,9 +103,9 @@ No supported runtime source, package behavior, telemetry API, or artifact format
 
 Apple M2 Max, 64 GiB RAM, macOS 15.6.1, native ARM, Rust 1.98.0. Unchanged release settings: opt-level 3, fat LTO, one codegen unit, stripped symbols, unwind panics. Reuse the normal and execution-ready compiler/host libraries from the [main experiment](README.md); normal host fingerprint `baml_pack_host-c2085387d94da70b`, execution-ready `baml_pack_host-654baeda5263d170`. The facade/bridge/provider library rebuilds embed bitcode for final fat LTO and preserve the original library feature selections. Exact commands, dependencies, generated schema hash and runtime source hashes are retained with the samples.
 
+The compiler-free experiment's historical builder and comparison harness are available at [commit 782c8c6d89](https://github.com/BoundaryML/baml/commit/782c8c6d893d0be02782155d2be00f06c79a0535). They are not part of the current implementation. Exact build commands remain in the recorded data. The separate native-library control remains runnable:
+
 ```sh
-python3 scripts/runtime-startup/build_compiler_free.py target/compiler-free-hosts --full-hosts target/host-startup-profile-20261004 --jobs 4
-python3 scripts/runtime-startup/compiler_linkage.py target/compiler-linkage-measurements --full-hosts target/host-startup-profile-20261004 --without-compiler-hosts target/compiler-free-hosts --baseline target/runtime-startup-experiment-20261004/baseline --candidate target/runtime-startup-experiment-20261004/candidate --fixtures target/runtime-startup-experiment-20261004 --runs 100
 python3 scripts/runtime-startup/native_loader.py target/native-loader-measurements --profile-hosts target/host-startup-profile-20261004 --runs 200
 ```
 
@@ -115,8 +117,6 @@ The existing C helper measures from posix_spawn through EOF/counter sampling/wai
 
 - [Compiler-linkage samples, hashes, source/library selections and behavior checks](compiler-linkage-results-20261004.json)
 - [Native-library samples, commands, library lists and hashes](native-loader-results-20261004.json)
-- [Compiler-free diagnostic builder](build_compiler_free.py)
-- [Matched compiler-linkage measurement harness](compiler_linkage.py)
 - [Minimal native-library control harness](native_loader.py)
 
-Local binaries, generated facade/host sources, logs and Mach-O inspection output remain under target/compiler-free-host-experiment-20261004, target/compiler-linkage-measurements-20261004 and target/native-loader-experiment-20261004.
+Compiler-free generated source, libraries and binaries have been removed. Retained local measurement logs/data and native-library controls remain under target/compiler-linkage-measurements-20261004 and target/native-loader-experiment-20261004.
