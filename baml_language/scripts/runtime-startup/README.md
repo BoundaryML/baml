@@ -98,3 +98,77 @@ python3 -u scripts/runtime-startup/compare.py target/runtime-startup-experiment 
 Use separate Cargo target directories across different checkouts/revisions. compare.py generates the wrapper and fixture executables, verifies output and error locations, then runs the timings. It is macOS-only because the C measurement helper uses libproc.
 
 [results-20261004.json](results-20261004.json) contains artifact hashes, all summary counters, every timed launch as lossless column-oriented samples, and raw phase/decode probes. Full local artifacts, pack logs, and recordings remain under target/runtime-startup-experiment-20261004.
+
+## Full packed-host launch profile
+
+**The earlier missing time is mostly before Rust main.** In the execution-ready prototype, process launch, native loader/initializers, and Rust setup take about 6.5 ms mean. Decoding plus engine construction still take about 7.5 ms, and engine/host-state destruction takes about 1.7 ms. These are two substantial startup targets plus a smaller teardown target.
+
+The diagnostic now uses the real `baml_pack_host` main, `run_single`, and `finalize_dispatch` code paths, with boundary timestamps. A constructor and the C parent share macOS CLOCK_MONOTONIC, covering before-main work and termination/reaping. This replaces the earlier partial thin-LTO probe for attribution.
+
+### Complete timeline
+
+Mean milliseconds from 100 fresh processes per column. Groups sum to the corresponding instrumented mean wall time; individual medians/p95 do not sum. The final trace/exit group includes diagnostic emission overhead and parent observation.
+
+| Phase | Normal empty, off | Prototype empty, off | Prototype empty, local | Prototype wrapper version, off |
+| --- | --- | --- | --- | --- |
+| Process launch, loader/initializers, Rust setup | 6.376 | 6.514 | 6.427 | 6.218 |
+| Find embedded section | 0.004 | 0.004 | 0.004 | 0.004 |
+| Decode artifact | 5.833 | 4.052 | 4.107 | 4.182 |
+| Build argv, native ops, compiler handle, recording config | 0.015 | 0.014 | 0.014 | 0.015 |
+| Build engine | 6.932 | 3.401 | 5.007 | 3.426 |
+| Lookup function, parse argv and JSON | 0.018 | 0.019 | 0.020 | 0.048 |
+| Create/destroy Tokio runtime | 0.408 | 0.397 | 0.385 | 0.398 |
+| Execute target | 0.085 | 0.088 | 0.104 | 2.963 |
+| Record exit, shutdown, drain tasks | 0.208 | 0.172 | 0.595 | 0.188 |
+| Destroy engine and host state | 2.685 | 1.682 | 1.674 | 1.762 |
+| Trace emission, remaining cleanup, EOF observation | 0.507 | 0.440 | 0.454 | 0.429 |
+| Parent counter query and reaping | 0.020 | 0.011 | 0.013 | 0.011 |
+| **Total mean wall time** | 23.092 | 16.793 | 18.804 | 19.643 |
+
+The parent counter query takes about 0.002 ms mean and reaping about 0.009 ms. The 6.5 ms before main is not measurement-counter overhead. The embedded-section lookup takes about 0.004 ms on this ARM Mac; there is no sizeable file-read stage hidden there. Empty-target execution is about 0.09 ms, and Tokio creation plus destruction about 0.40 ms.
+
+Default local recording adds about 1.6 ms to engine construction and 0.42 ms to shutdown in these mean phase comparisons. This run does not measure cloud delivery.
+
+### Controls and end-to-end timings
+
+Median / p95 milliseconds, 100 fresh launches per cell. Original is the previously measured Cargo-built host. Control rebuilds the unchanged host sources in the same module layout used by the instrumented host. Profile adds the constructor, boundary timestamps, and one stderr trace after host cleanup.
+
+| Program / telemetry | Original | Rebuilt control | Instrumented |
+| --- | --- | --- | --- |
+| Normal empty, off | 21.34 / 24.51 | 21.93 / 27.94 | 22.04 / 24.90 |
+| Normal empty, local | 23.41 / 26.04 | 23.89 / 28.87 | 23.95 / 26.53 |
+| Normal wrapper --version, off | 25.25 / 27.96 | 25.50 / 29.42 | 25.62 / 32.38 |
+| Normal wrapper --version, local | 27.25 / 30.89 | 27.26 / 32.33 | 27.79 / 31.45 |
+| Prototype empty, off | 15.89 / 18.03 | 16.07 / 18.69 | 16.21 / 18.61 |
+| Prototype empty, local | 17.62 / 19.40 | 18.14 / 21.55 | 18.18 / 19.75 |
+| Prototype wrapper --version, off | 18.77 / 21.12 | 19.36 / 21.45 | 19.06 / 21.23 |
+| Prototype wrapper --version, local | 20.71 / 22.89 | 20.94 / 23.70 | 21.27 / 25.88 |
+
+The rebuilt/profiling variants are somewhat slower than the originals. For prototype empty/off, original → control adds 0.19 ms median and control → profile adds 0.14 ms. Other control/profile differences range up to roughly 0.7 ms median. Attribution uses the instrumented host’s timeline, not an exact partition of the original executable. These perturbations are materially smaller than the 3–6 ms groups.
+
+Minimal native controls launch and exit in 1.77 ms median (Rust) and 1.59 ms (C). The Rust wrapper’s explicit-local-path version command is 17.94 ms here, matching the prior 17.77 ms version_local control. The earlier ~5.30 ms Rust number used an installed version. Those cases include different work; they are not interchangeable startup floors.
+
+### What to investigate next
+
+1. **Native host loading and initialization.** The packed host links the runtime compiler even when Main never uses runtime compilation. Its compiler stack includes Salsa inventory registrations. Mach-O inspection finds 133 static initializer slots and 36,467 loader fixups in the ordinary host, versus two initializer slots and 8,580 fixups in the Rust wrapper, and zero initializer slots/593 fixups in the minimal Rust executable. The packed host and Rust wrapper link the same four system libraries. This makes compiler inclusion and executable layout strong suspects, but does not establish how much of the 6.5 ms they cause. A matched compiler-free measurement host would test this; a production design must preserve runtime reflection/compilation, potentially through deferred loading. Constructing the runtime-compiler handle itself takes effectively zero time after main, so timing that constructor alone misses its native load cost.
+
+2. **Decode and reconstruct the executable graph.** About 7.5 ms remains in artifact decoding and engine initialization, plus about 1.7 ms destroying the resulting graph. A verified image with borrowed metadata/arena ownership could remove whole-table allocation, relocation, rendering-schema reconstruction, and per-object destruction. This is a design direction, not a measured implementation or a promised saving. Debugging, reflection, telemetry metadata, package boundaries, and malformed-artifact rejection must keep working.
+
+These costs affect ordinary packed BAML applications. The wrapper adds about 2.6 ms of target execution here, including the native child/version handling; most of its elapsed time is shared runtime cost.
+
+### Reproduction and retained evidence
+
+All runtime source files remain unchanged. The standalone diagnostic reads the actual host sources and generates temporary instrumented/control sources in the ignored output directory. Existing release libraries are selected by the host’s Cargo dependency fingerprints, rather than guessing library filename hashes. Both use opt-level 3, fat LTO, one codegen unit, stripped symbols, and unwind panics.
+
+For the recorded builds, the normal host library is baml_pack_host-c2085387d94da70b and the prototype is baml_pack_host-654baeda5263d170. Build both library sets first using the matching normal/prototype source as described above, then run:
+
+```sh
+python3 scripts/runtime-startup/profile_host.py build target/host-startup-profile --release-dir target/release
+python3 scripts/runtime-startup/profile_host.py measure target/host-startup-profile --baseline /absolute/path/to/baseline --candidate /absolute/path/to/candidate --fixtures /absolute/path/to/comparison-fixtures --rust-wrapper /absolute/path/to/rust-wrapper --runs 100
+```
+
+Use --baseline-fingerprint and --candidate-fingerprint on build to select explicit existing host library fingerprints. The directories passed to measure contain baml-cli plus the previously packed empty-packed and baml-packed originals. --fixtures points at compare.py’s output containing projects/empty and the native child. Finish builds and tests before measuring.
+
+Measured 2,700 fresh launches across 27 variants, plus 81 warmups and 12 separate stdout correctness checks. Eight instrumented variants supply 800 complete timelines. Every timeline’s monotonic timestamps are ordered and its phase intervals sum to that sample’s parent wall time within 0.001 ms. Fixed shuffle seed 2026100402; synthetic HOME/BAML_HOME and disabled update checks; fixture child; no inherited credentials/cloud destination. No Linux/Windows/iOS/Wasm or cold-cache performance claim.
+
+[profile_host.py](profile_host.py) reproduces the builds/measurement. [host-profile-results-20261004.json](host-profile-results-20261004.json) retains every counter, absolute parent timestamp, child trace, artifact/source hash, matched library selection, and summary. Local generated sources, executables, logs and loader inspection output remain under target/host-startup-profile-20261004.
