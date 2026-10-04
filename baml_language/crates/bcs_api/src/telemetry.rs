@@ -77,14 +77,35 @@ async fn send_control(
             request = request.bearer_auth(token);
         }
         let response = request.send().await?;
-        if let (Some(auth), Some(sent)) = (authorization, sent) {
-            let retry = attempt == 0
+        let retry = if let (Some(auth), Some(sent)) = (authorization, sent.as_ref()) {
+            attempt == 0
                 && response.status() == reqwest::StatusCode::UNAUTHORIZED
-                && auth.authentication.rejected(sent.token());
-            sent.complete(response.status(), response.headers());
-            if retry {
-                continue;
+                && auth.authentication.rejected(sent.token())
+        } else {
+            false
+        };
+        if retry {
+            if let Some(sent) = sent {
+                sent.complete(response.status(), response.headers());
             }
+            continue;
+        }
+        if !response.status().is_success() {
+            let secrets: Vec<_> = sent
+                .as_ref()
+                .map(|attempt| attempt.token().expose())
+                .into_iter()
+                .chain(bearer_token)
+                .chain(authorization.map(|auth| auth.authentication.original_credential()))
+                .collect();
+            let failure = crate::HttpFailure::asynchronous(response, &secrets).await;
+            if let Some(sent) = sent {
+                sent.complete_failure(failure.clone());
+            }
+            return Err(ControlError::Api(failure));
+        }
+        if let Some(sent) = sent {
+            sent.complete(response.status(), response.headers());
         }
         return Ok(response);
     }
@@ -122,14 +143,23 @@ pub enum ControlError {
     EndpointMismatch,
     Renewal(RenewalError),
     Http(reqwest::Error),
+    Api(crate::HttpFailure),
 }
 impl ControlError {
     /// Preserve a shared renewal's refusal so delivery/heartbeat can stop on revoked access.
     pub fn status(&self) -> Option<reqwest::StatusCode> {
         match self {
-            Self::Renewal(RenewalError::Rejected(status)) => Some(*status),
+            Self::Api(failure) | Self::Renewal(RenewalError::Rejected(failure)) => {
+                Some(failure.status)
+            }
             Self::Http(error) => error.status(),
             Self::EndpointMismatch | Self::Renewal(_) => None,
+        }
+    }
+    pub fn http_failure(&self) -> Option<&crate::HttpFailure> {
+        match self {
+            Self::Api(failure) | Self::Renewal(RenewalError::Rejected(failure)) => Some(failure),
+            _ => None,
         }
     }
 }
@@ -140,7 +170,11 @@ impl From<reqwest::Error> for ControlError {
 }
 impl std::fmt::Display for ControlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Boundary telemetry control request failed")
+        match self {
+            Self::Api(failure) => failure.fmt(f),
+            Self::Renewal(error) => error.fmt(f),
+            _ => f.write_str("Boundary telemetry control request failed"),
+        }
     }
 }
 impl std::error::Error for ControlError {
@@ -148,6 +182,7 @@ impl std::error::Error for ControlError {
         match self {
             Self::Http(error) => Some(error),
             Self::Renewal(error) => Some(error),
+            Self::Api(failure) => Some(failure),
             Self::EndpointMismatch => None,
         }
     }

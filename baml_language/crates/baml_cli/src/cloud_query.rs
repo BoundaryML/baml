@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use bcs_api::{
     Client, Endpoint, Secret,
     credentials::{Authentication, RequestAuthorization},
+    diagnostics::{Context as DiagnosticContext, CredentialSource, Operation, Outcome},
     query::{Budgets, Record, Target},
 };
 use serde_json::Value;
@@ -21,6 +22,7 @@ pub(crate) fn run(
     args: &QueryArgs,
     endpoint: Endpoint,
     credential: Secret,
+    source: CredentialSource,
     project: Option<String>,
     sql: String,
 ) -> Result<ExitCode> {
@@ -28,6 +30,11 @@ pub(crate) fn run(
         !args.explain && !args.internal && !args.verify && !args.no_refresh,
         "--explain, --internal, --verify and --no-refresh require --local"
     );
+    let diagnostic_context = DiagnosticContext {
+        endpoint: Some(endpoint.clone()),
+        source,
+        operation: Operation::Query,
+    };
     let authorization = RequestAuthorization {
         authentication: Authentication::shared(endpoint.as_str(), credential),
         target: Some(Target {
@@ -36,7 +43,8 @@ pub(crate) fn run(
             ..Target::default()
         }),
     };
-    let client = Client::new(endpoint)?;
+    let client = Client::new(endpoint)
+        .map_err(|error| diagnostic_context.report(error, Outcome::QueryFailed))?;
     let query_id = uuid::Uuid::new_v4().simple().to_string();
     let budgets = Budgets {
         max_rows: args.max_rows,
@@ -49,21 +57,23 @@ pub(crate) fn run(
     let mut columns = Vec::new();
     let mut rows = Vec::new();
     let mut outcome = Value::Null;
-    client.query(&authorization, &query_id, &sql, budgets, |record| {
-        if args.format == QueryFormat::Jsonl {
-            println!("{}", serde_json::to_string(&record)?);
-        }
-        match record {
-            Record::Columns(value) => columns = value,
-            Record::Row(value) => {
-                if args.format != QueryFormat::Jsonl {
-                    rows.push(value);
-                }
+    client
+        .query(&authorization, &query_id, &sql, budgets, |record| {
+            if args.format == QueryFormat::Jsonl {
+                println!("{}", serde_json::to_string(&record)?);
             }
-            Record::QueryOutcome(value) => outcome = value,
-        }
-        Ok(())
-    })?;
+            match record {
+                Record::Columns(value) => columns = value,
+                Record::Row(value) => {
+                    if args.format != QueryFormat::Jsonl {
+                        rows.push(value);
+                    }
+                }
+                Record::QueryOutcome(value) => outcome = value,
+            }
+            Ok(())
+        })
+        .map_err(|error| diagnostic_context.report(error, Outcome::QueryFailed))?;
 
     match args.format {
         QueryFormat::Jsonl => {}

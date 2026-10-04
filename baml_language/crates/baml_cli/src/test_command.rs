@@ -312,6 +312,13 @@ fn finish_engine(
     status: bex_engine::ProcessStatus,
 ) -> usize {
     crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter, status, ctx.shutdown_timeout);
+    if let Some(error) = ctx.engine.initial_cloud_authorization_error() {
+        crate::reporter::print_error(format_args!("{error}"));
+        return ctx
+            .unhandled_spawn_failures
+            .load(Ordering::SeqCst)
+            .saturating_add(1);
+    }
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 

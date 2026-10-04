@@ -28,6 +28,8 @@ fn from_boundary_env() {
             true,
         ),
         (Some(URL), Some("invalid\nheader"), true),
+        (Some(URL), Some("local"), true),
+        (Some("not a URL"), Some("local"), true),
     ];
     let Some(case) = baml_env::raw_var(CASE) else {
         for (index, (url, key, _)) in cases.iter().enumerate() {
@@ -70,6 +72,11 @@ fn from_boundary_env() {
     let recording = TelemetryRecording::from_boundary_env();
     assert_eq!(recording.is_some(), enabled);
     if let Some(recording) = recording {
+        if key == Some("local") {
+            assert!(matches!(recording.destination, Destination::UserFiles));
+            assert!(TelemetryRecording::from_boundary_defaults(None, url).is_none());
+            return;
+        }
         if let Destination::InvalidConfiguration { reason } = &recording.destination {
             let expected = bcs_api::auth::Endpoint::parse(url.unwrap())
                 .unwrap_err()

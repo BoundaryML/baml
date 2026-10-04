@@ -1,9 +1,10 @@
 //! Engine integration for the chunk processor and recording publisher.
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
+use bcs_api::diagnostics::{Context as AuthorizationContext, CredentialSource, Operation, Outcome};
 use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
@@ -11,9 +12,11 @@ use crate::{BexEngine, EngineError, RuntimeCompiler};
 const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
 
 /// One recording per engine, delivered to local files or BCS. Cloud payload
-/// failures discard that payload and allow later delivery. Local storage and
-/// fatal worker failures disable recording. Errors remain available through
-/// `BexEngine::telemetry_result`; they do not fail BAML execution.
+/// failures discard that payload and allow later delivery. Initial cloud authorization
+/// rejection cancels execution; later revocation only disables recording. Local storage
+/// and fatal worker failures disable recording. Delivery errors remain available through
+/// `BexEngine::telemetry_result` and initial refusal through
+/// `BexEngine::initial_cloud_authorization_error`.
 pub struct TelemetryRecording {
     id: RecordingId,
     config: RecordingConfig,
@@ -34,13 +37,19 @@ enum Destination {
     Cloud {
         publisher: btel_bcs::CloudPublisherConfig,
         delivery: Box<btel_bcs::delivery::DeliveryConfig>,
+        authorization_context: AuthorizationContext,
     },
 }
 
 #[derive(Clone)]
 pub(crate) enum RecordingDelivery {
     Local(Arc<btel_file::LocalDelivery>),
-    Cloud(Arc<btel_bcs::delivery::BcsDelivery>),
+    Cloud {
+        delivery: Arc<btel_bcs::delivery::BcsDelivery>,
+        initial_auth_cancel: crate::CancellationToken,
+        authorization_context: AuthorizationContext,
+        initial_auth_error: Arc<OnceLock<EngineError>>,
+    },
 }
 
 impl RecordingDelivery {
@@ -49,7 +58,7 @@ impl RecordingDelivery {
             Self::Local(delivery) => delivery
                 .finish()
                 .map_err(|error| btel_processor::RuntimeError(error.to_string())),
-            Self::Cloud(delivery) => delivery
+            Self::Cloud { delivery, .. } => delivery
                 .finish()
                 .map_err(|error| btel_processor::RuntimeError(error.to_string())),
         }
@@ -60,23 +69,57 @@ impl RecordingDelivery {
             Self::Local(delivery) => delivery
                 .result()
                 .map(|result| result.map_err(|e| btel_processor::RuntimeError(e.to_string()))),
-            Self::Cloud(delivery) => delivery
+            Self::Cloud { delivery, .. } => delivery
                 .result()
                 .map(|result| result.map_err(|e| btel_processor::RuntimeError(e.to_string()))),
+        }
+    }
+
+    pub(crate) fn initial_auth_cancel(&self) -> Option<&crate::CancellationToken> {
+        match self {
+            Self::Cloud {
+                initial_auth_cancel,
+                ..
+            } => Some(initial_auth_cancel),
+            Self::Local(_) => None,
+        }
+    }
+
+    fn initial_auth_error(&self) -> Option<EngineError> {
+        match self {
+            Self::Cloud {
+                delivery,
+                authorization_context,
+                initial_auth_error,
+                ..
+            } => match delivery.initial_authorization() {
+                btel_bcs::delivery::InitialAuthorization::Rejected(failure) => Some(
+                    initial_auth_error
+                        .get_or_init(|| {
+                            EngineError::CloudAuthorization(Box::new(
+                                authorization_context
+                                    .rejected_failure(&failure, Outcome::ExecutionCancelled),
+                            ))
+                        })
+                        .clone(),
+                ),
+                _ => None,
+            },
+            Self::Local(_) => None,
         }
     }
 
     fn directory(&self) -> Option<&Path> {
         match self {
             Self::Local(delivery) => Some(delivery.directory()),
-            Self::Cloud(_) => None,
+            Self::Cloud { .. } => None,
         }
     }
 
     fn heartbeat_error(&self) -> Option<btel_bcs::liveness::HeartbeatError> {
         match self {
             Self::Local(_) => None,
-            Self::Cloud(delivery) => delivery.heartbeat_error(),
+            Self::Cloud { delivery, .. } => delivery.heartbeat_error(),
         }
     }
 }
@@ -84,13 +127,23 @@ impl RecordingDelivery {
 impl TelemetryRecording {
     /// Resolve the selected endpoint and credential without making a network request.
     pub fn from_boundary_env() -> Option<Self> {
+        if baml_env::string_var(BOUNDARY_API_KEY).ok()?.as_deref()
+            == Some(bcs_api::credentials::LOCAL_API_KEY)
+        {
+            return Some(Self::user_files(RecordingConfig::default()));
+        }
         Self::from_boundary_defaults(None, None)
     }
 
     /// Hosts pass artifact/project defaults; process environment variables take precedence.
     /// Invalid cloud configuration fails engine startup rather than falling back to
-    /// local files. `None` means no cloud credential.
+    /// local files. `None` selects the host's local default, either because there
+    /// is no cloud credential or the key is `local`.
     pub fn from_boundary_defaults(project: Option<&str>, api_url: Option<&str>) -> Option<Self> {
+        let api_key = baml_env::string_var(BOUNDARY_API_KEY).ok()?;
+        if api_key.as_deref() == Some(bcs_api::credentials::LOCAL_API_KEY) {
+            return None;
+        }
         let endpoint = match bcs_api::Endpoint::with_default(api_url) {
             Ok(endpoint) => endpoint,
             Err(error) => {
@@ -101,7 +154,12 @@ impl TelemetryRecording {
                 return Some(recording);
             }
         };
-        let key = match baml_env::string_var(BOUNDARY_API_KEY).ok()? {
+        let source = if api_key.is_some() {
+            CredentialSource::ApiKey
+        } else {
+            CredentialSource::SavedLogin
+        };
+        let key = match api_key {
             Some(key) => key,
             None => bcs_api::Store::new(&endpoint)
                 .ok()?
@@ -125,11 +183,19 @@ impl TelemetryRecording {
             ),
             target: Some(target),
         });
-        Some(Self::cloud(
+        let mut recording = Self::cloud(
             RecordingConfig::default(),
             btel_bcs::CloudPublisherConfig::default(),
             delivery,
-        ))
+        );
+        if let Destination::Cloud {
+            authorization_context,
+            ..
+        } = &mut recording.destination
+        {
+            authorization_context.source = source;
+        }
+        Some(recording)
     }
 
     /// Deliver through the proposed BCS prepare protocol and presigned PUTs.
@@ -139,6 +205,11 @@ impl TelemetryRecording {
         publisher: btel_bcs::CloudPublisherConfig,
         delivery: btel_bcs::delivery::DeliveryConfig,
     ) -> Self {
+        let authorization_context = AuthorizationContext {
+            endpoint: bcs_api::Endpoint::parse(delivery.prepare_base_url.as_str()).ok(),
+            source: CredentialSource::Configured,
+            operation: Operation::Ingest,
+        };
         Self {
             id: RecordingId::generate(),
             config,
@@ -148,6 +219,7 @@ impl TelemetryRecording {
             destination: Destination::Cloud {
                 publisher,
                 delivery: Box::new(delivery),
+                authorization_context,
             },
         }
     }
@@ -294,12 +366,14 @@ impl TelemetryRecording {
             Destination::Cloud {
                 publisher,
                 delivery,
+                authorization_context,
             } => {
                 return Self::start_cloud(
                     self.id,
                     self.config,
                     publisher,
                     *delivery,
+                    &authorization_context,
                     source_snapshot,
                     functions,
                     transport,
@@ -364,7 +438,8 @@ impl TelemetryRecording {
         id: RecordingId,
         config: RecordingConfig,
         publisher_config: btel_bcs::CloudPublisherConfig,
-        delivery_config: btel_bcs::delivery::DeliveryConfig,
+        mut delivery_config: btel_bcs::delivery::DeliveryConfig,
+        authorization_context: &AuthorizationContext,
         source_snapshot: Option<[u8; 32]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
         transport: btel_settings::transport::ChunkConfig,
@@ -376,20 +451,39 @@ impl TelemetryRecording {
         ),
         EngineError,
     > {
+        delivery_config.initial_recording_id = Some(id);
+        let initial_auth_cancel = crate::CancellationToken::new();
         let mut delivery = None;
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
                 let failure = control.clone();
+                let cancel = initial_auth_cancel.clone();
                 let handle = match btel_bcs::delivery::BcsDelivery::new(
                     delivery_config.clone(),
                     move |error| {
+                        if matches!(
+                            error,
+                            btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
+                        ) {
+                            cancel.cancel();
+                        }
                         failure.disable(btel_processor::RuntimeError(error.to_string()));
-                        tracing::warn!(%error, "cloud telemetry disabled");
+                        if !matches!(
+                            error,
+                            btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
+                        ) {
+                            tracing::warn!(%error, "cloud telemetry disabled");
+                        }
                     },
                 ) {
                     Ok(worker) => {
                         let handle = worker.handle();
-                        delivery = Some(RecordingDelivery::Cloud(Arc::new(worker)));
+                        delivery = Some(RecordingDelivery::Cloud {
+                            delivery: Arc::new(worker),
+                            initial_auth_cancel: initial_auth_cancel.clone(),
+                            authorization_context: authorization_context.clone(),
+                            initial_auth_error: Arc::new(OnceLock::new()),
+                        });
                         handle
                     }
                     Err(error) => {
@@ -505,6 +599,24 @@ impl BexEngine {
             .and_then(super::telemetry_state::EngineTelemetry::result)
     }
 
+    /// Initial ingestion refusal is fatal to the host execution, unlike later revocation.
+    /// Shutdown joins the initial request even when the program produces no recordings.
+    pub fn initial_cloud_authorization_error(&self) -> Option<EngineError> {
+        self.telemetry
+            .as_ref()?
+            .delivery
+            .as_ref()?
+            .initial_auth_error()
+    }
+
+    pub(crate) fn initial_cloud_auth_cancel(&self) -> Option<&crate::CancellationToken> {
+        self.telemetry
+            .as_ref()?
+            .delivery
+            .as_ref()?
+            .initial_auth_cancel()
+    }
+
     /// Number of discarded cloud prepare groups or upload targets, not events or
     /// retry attempts. Zero for local recording or when telemetry is off.
     pub fn telemetry_delivery_loss_count(&self) -> u64 {
@@ -513,7 +625,7 @@ impl BexEngine {
             .as_ref()
             .and_then(|state| state.delivery.as_ref())
         {
-            Some(RecordingDelivery::Cloud(delivery)) => delivery.handle().loss_count(),
+            Some(RecordingDelivery::Cloud { delivery, .. }) => delivery.handle().loss_count(),
             _ => 0,
         }
     }
@@ -526,7 +638,7 @@ impl BexEngine {
             .as_ref()
             .and_then(|state| state.delivery.as_ref())
         {
-            Some(RecordingDelivery::Cloud(delivery)) => {
+            Some(RecordingDelivery::Cloud { delivery, .. }) => {
                 delivery.handle().metadata_replay_evictions()
             }
             _ => 0,

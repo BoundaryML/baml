@@ -152,8 +152,8 @@ pub(crate) enum Commands {
     #[command(
         subcommand,
         about = "Manage authentication",
-        long_about = "Manage the identity used by BAML services.\n\nUse `baml auth login` to authenticate, `baml auth whoami` to inspect the current identity, and `baml auth logout` to remove the authenticated session.",
-        after_long_help = "Examples:\n  Log in:\n    baml auth login\n\n  Show the current identity:\n    baml auth whoami\n\n  Log out:\n    baml auth logout"
+        long_about = "Manage the identity used by BAML services.\n\nUse `baml auth login` to authenticate, `baml auth status` to verify authentication and inspect the selected project, and `baml auth logout` to remove the authenticated session.",
+        after_long_help = "Examples:\n  Log in:\n    baml auth login\n\n  Verify authentication and show the selected project:\n    baml auth status\n\n  Log out:\n    baml auth logout"
     )]
     Auth(crate::auth::AuthCommands),
 
@@ -503,7 +503,7 @@ mod tests {
         &["describe"],
         &["auth"],
         &["auth", "login"],
-        &["auth", "whoami"],
+        &["auth", "status"],
         &["auth", "logout"],
         &["feedback"],
         &["fmt"],
@@ -857,7 +857,7 @@ mod tests {
         let examples: &[&[&str]] = &[
             &["baml", "check"],
             &["baml", "check", "--project", "./my-project"],
-            &["baml", "auth", "whoami"],
+            &["baml", "auth", "status"],
             &["baml", "auth", "logout"],
             &["baml", "auth", "login"],
             &["baml", "auth", "login", "--no-open"],

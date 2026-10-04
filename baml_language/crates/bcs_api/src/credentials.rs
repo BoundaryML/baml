@@ -14,6 +14,8 @@ pub const SESSION_PREFIX: &str = "bdry_session_";
 pub const ACCESS_PREFIX: &str = "bdry_access_";
 pub const SECRET_PREFIX: &str = "bdry_secret_";
 pub const PUBLIC_PREFIX: &str = "bdry_public_";
+/// Reserved host selection value; it must never be sent as a bearer credential.
+pub const LOCAL_API_KEY: &str = "local";
 pub const ACCESS_TOKEN_HEADER: &str = "boundary-access-token";
 pub const ACCESS_EXPIRY_HEADER: &str = "boundary-access-expires-at";
 
@@ -105,6 +107,9 @@ impl Authentication {
     pub fn endpoint(&self) -> &str {
         &self.0.endpoint
     }
+    pub(crate) fn original_credential(&self) -> &str {
+        self.0.credential.expose()
+    }
     pub fn accepts_url(&self, url: &reqwest::Url) -> bool {
         url.as_str()
             .strip_prefix(&self.0.endpoint)
@@ -190,7 +195,7 @@ impl Authentication {
         };
         // Waking tasks can execute arbitrary caller code; never wake them under the cache lock.
         for waiter in waiters {
-            let _ = waiter.send(outcome);
+            let _ = waiter.send(outcome.clone());
         }
     }
     /// Accept headers only from a successful response from this client's selected gateway.
@@ -263,16 +268,16 @@ enum Acquisition {
 
 /// A failed shared renewal does not trigger another bootstrap for every waiting operation.
 /// Subsequent operations may try again; the original operation retains its own response/error.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RenewalError {
-    Rejected(reqwest::StatusCode),
+    Rejected(crate::HttpFailure),
     MissingAccessToken,
     Aborted,
 }
 impl fmt::Display for RenewalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Rejected(status) => write!(f, "Boundary credential renewal failed ({status})"),
+            Self::Rejected(failure) => write!(f, "Boundary credential renewal failed: {failure}"),
             Self::MissingAccessToken => {
                 f.write_str("Boundary credential renewal returned no usable access token")
             }
@@ -308,8 +313,17 @@ impl AuthorizationAttempt {
         self.authentication.observe(status, headers);
         if self.renewing {
             self.renewing = false;
+            self.authentication.complete_renewal(
+                (!status.is_success())
+                    .then(|| RenewalError::Rejected(crate::HttpFailure::new(status))),
+            );
+        }
+    }
+    pub(crate) fn complete_failure(mut self, failure: crate::HttpFailure) {
+        if self.renewing {
+            self.renewing = false;
             self.authentication
-                .complete_renewal((!status.is_success()).then_some(RenewalError::Rejected(status)));
+                .complete_renewal(Some(RenewalError::Rejected(failure)));
         }
     }
 }
@@ -438,10 +452,10 @@ mod tests {
             let expected = if status.is_success() {
                 RenewalError::MissingAccessToken
             } else {
-                RenewalError::Rejected(status)
+                RenewalError::Rejected(crate::HttpFailure::new(status))
             };
             for task in tasks {
-                assert_eq!(task.await.unwrap(), Some(expected));
+                assert_eq!(task.await.unwrap(), Some(expected.clone()));
             }
             {
                 let cache = auth.0.cache.lock().unwrap();
@@ -482,6 +496,37 @@ mod tests {
             &headers("bdry_access_recovered", now() + 250),
         );
         assert_eq!(auth.bearer().expose(), "bdry_access_recovered");
+    }
+
+    #[tokio::test]
+    async fn failed_renewal_keeps_the_public_error_for_every_waiter() {
+        let auth = Authentication::shared(
+            "https://public-error.example.test",
+            Secret::new("bdry_session_public-error".into()),
+        );
+        let leader = auth.acquire_async().await.unwrap();
+        let blocking = auth.clone();
+        let blocked = tokio::task::spawn_blocking(move || blocking.acquire_blocking().err());
+        let asynchronous = auth.clone();
+        let waiting = tokio::spawn(async move { asynchronous.acquire_async().await.err() });
+        wait_for_waiters(&auth, 2).await;
+        let failure = crate::HttpFailure {
+            status: StatusCode::FORBIDDEN,
+            body: Some(Arc::new(crate::ApiErrorBody {
+                code: "ACCESS_REQUIRED".into(),
+                retryable: false,
+                message: Some("This credential cannot query this environment.".into()),
+            })),
+        };
+        leader.complete_failure(failure.clone());
+        assert_eq!(
+            blocked.await.unwrap(),
+            Some(RenewalError::Rejected(failure.clone()))
+        );
+        assert_eq!(
+            waiting.await.unwrap(),
+            Some(RenewalError::Rejected(failure))
+        );
     }
 
     #[test]

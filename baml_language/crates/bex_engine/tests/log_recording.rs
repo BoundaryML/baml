@@ -279,8 +279,14 @@ async fn log_data_and_event_time_context_reach_local_cas() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn log_data_and_context_use_existing_cloud_uploads() {
     let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
     let base = server.uri();
     Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
         .respond_with(move |request: &Request| {
             ResponseTemplate::new(200).set_body_json(cloud_protocol::response(request, &base, &[]))
         })

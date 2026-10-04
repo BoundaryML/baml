@@ -627,7 +627,7 @@ impl CloudPublisher {
                 }
             }
         }
-        if let Some(error) = self.failure {
+        if let Some(error) = self.failure.clone() {
             self.delivery.disable(error);
         }
     }

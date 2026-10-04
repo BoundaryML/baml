@@ -31,12 +31,12 @@ impl Boundary {
             })
             .unwrap_or_else(|| Ok(Self::default()))
     }
-    pub fn endpoint(&self) -> Result<bcs_api::Endpoint> {
-        Ok(bcs_api::Endpoint::with_default(self.api_url.as_deref())?)
+    pub fn endpoint(&self) -> bcs_api::error::Result<bcs_api::Endpoint> {
+        bcs_api::Endpoint::with_default(self.api_url.as_deref())
     }
 }
 pub(crate) fn login_endpoint() -> Result<bcs_api::Endpoint> {
     let root =
         crate::project_load::find_project_root_from(None)?.unwrap_or(std::env::current_dir()?);
-    Boundary::read(&root)?.endpoint()
+    Ok(Boundary::read(&root)?.endpoint()?)
 }

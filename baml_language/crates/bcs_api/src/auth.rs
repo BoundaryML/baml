@@ -70,7 +70,7 @@ impl From<&Session> for StoredSession {
 }
 
 /// Canonical endpoint: credentials for one origin are never sent to another.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Endpoint(String);
 impl Endpoint {
     pub fn from_env() -> Result<Self> {
@@ -88,18 +88,21 @@ impl Endpoint {
     pub fn parse(value: &str) -> Result<Self> {
         let url = Url::parse(value)?;
         let loopback = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
-        require(
-            url.scheme() == "https" || (url.scheme() == "http" && loopback),
-            "Boundary API URL must use HTTPS, or HTTP on loopback",
-        )?;
-        require(
-            url.host_str().is_some()
-                && url.username().is_empty()
-                && url.password().is_none()
-                && url.query().is_none()
-                && url.fragment().is_none(),
-            "Boundary API URL must be a base URL without credentials, query or fragment",
-        )?;
+        if !(url.scheme() == "https" || (url.scheme() == "http" && loopback)) {
+            return Err(Error::Endpoint(
+                "Boundary API URL must use HTTPS, or HTTP on loopback",
+            ));
+        }
+        if !(url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none())
+        {
+            return Err(Error::Endpoint(
+                "Boundary API URL must be a base URL without credentials, query or fragment",
+            ));
+        }
         Ok(Self(url.as_str().trim_end_matches('/').to_owned()))
     }
     pub fn as_str(&self) -> &str {
@@ -107,16 +110,7 @@ impl Endpoint {
     }
 }
 
-/// A refused HTTP operation. Responses stay out of diagnostics because they may
-/// contain credentials; callers can distinguish revocation from a network outage.
-#[derive(Debug)]
-pub struct HttpFailure(pub reqwest::StatusCode);
-impl fmt::Display for HttpFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Boundary request failed with HTTP {}", self.0)
-    }
-}
-impl std::error::Error for HttpFailure {}
+pub use crate::response::HttpFailure;
 
 pub struct Client {
     pub(crate) endpoint: Endpoint,
@@ -148,6 +142,22 @@ impl Client {
             &serde_json::json!({"refreshToken":stored.refresh_token}),
         )
     }
+    /// Verify an API key without requiring any query or ingestion permission.
+    pub fn verify_api_key(&self, key: &Secret) -> Result<()> {
+        let response = self
+            .http
+            .post(format!("{}/v1/auth/verify", self.endpoint.0))
+            .bearer_auth(key.expose())
+            .send()
+            .map_err(Error::transport)?;
+        if !response.status().is_success() {
+            return Err(HttpFailure::blocking(response, &[key.expose()]).into());
+        }
+        require(
+            response.status() == reqwest::StatusCode::NO_CONTENT,
+            "Invalid Boundary credential verification response",
+        )
+    }
     pub fn logout(&self, stored: &StoredSession) -> Result<()> {
         let _: serde_json::Value = self.post(
             "/v1/auth/logout",
@@ -167,9 +177,12 @@ impl Client {
             .send()
             .map_err(Error::transport)?;
         let status = response.status();
-        // Never include an error body: a gateway/provider might echo a credential.
         if !status.is_success() {
-            return Err(HttpFailure(status).into());
+            let secrets: Vec<_> = ["refreshToken", "deviceCode"]
+                .into_iter()
+                .filter_map(|key| body.get(key).and_then(serde_json::Value::as_str))
+                .collect();
+            return Err(HttpFailure::blocking(response, &secrets).into());
         }
         let mut bytes = Vec::new();
         response
@@ -187,24 +200,58 @@ impl Client {
 
 /// A single OS-keyring entry makes replacing a refresh credential atomic. `BAML_HOME`
 /// contributes a namespace so isolated installations do not share credentials.
-pub struct Store(keyring::Entry);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CredentialStoreLocation {
+    pub(crate) backend: &'static str,
+    pub(crate) service: &'static str,
+    pub(crate) account: String,
+}
+impl fmt::Display for CredentialStoreLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} (service {:?}, account {:?})",
+            self.backend, self.service, self.account
+        )
+    }
+}
+
+pub struct Store {
+    entry: keyring::Entry,
+    location: CredentialStoreLocation,
+}
 impl Store {
     pub fn new(endpoint: &Endpoint) -> Result<Self> {
         let namespace = baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir());
         let account = hex::encode(Sha256::digest(
             format!("{}\n{}", endpoint.0, namespace.display()).as_bytes(),
         ));
-        Ok(Self(
-            keyring::Entry::new("Boundary BAML login", &account).map_err(|source| {
+        let location = CredentialStoreLocation {
+            backend: if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
+                "Apple Keychain"
+            } else if cfg!(target_os = "windows") {
+                "Windows Credential Manager"
+            } else if cfg!(target_os = "linux") {
+                "Secret Service"
+            } else {
+                "platform credential store"
+            },
+            service: "Boundary BAML login",
+            account,
+        };
+        Ok(Self {
+            entry: keyring::Entry::new(location.service, &location.account).map_err(|source| {
                 Error::Storage {
                     operation: "open",
+                    location: location.clone(),
                     source,
                 }
             })?,
-        ))
+            location,
+        })
     }
     pub fn read(&self) -> Result<Option<StoredSession>> {
-        match self.0.get_password() {
+        match self.entry.get_password() {
             Ok(json) => {
                 let mut session: StoredSession = serde_json::from_str(&json)
                     .map_err(|_| Error::Protocol("Invalid stored Boundary login"))?;
@@ -224,23 +271,26 @@ impl Store {
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(Error::Storage {
                 operation: "read",
+                location: self.location.clone(),
                 source: error,
             }),
         }
     }
     pub fn write(&self, session: &StoredSession) -> Result<()> {
-        self.0
+        self.entry
             .set_password(&serde_json::to_string(session)?)
             .map_err(|source| Error::Storage {
                 operation: "save",
+                location: self.location.clone(),
                 source,
             })
     }
     pub fn clear(&self) -> Result<()> {
-        match self.0.delete_credential() {
+        match self.entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(error) => Err(Error::Storage {
                 operation: "remove",
+                location: self.location.clone(),
                 source: error,
             }),
         }

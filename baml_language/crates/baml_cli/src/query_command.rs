@@ -155,10 +155,11 @@ impl QueryArgs {
         &self,
         endpoint: bcs_api::Endpoint,
         credential: bcs_api::Secret,
+        source: bcs_api::diagnostics::CredentialSource,
         project: Option<String>,
         sql: String,
     ) -> anyhow::Result<crate::ExitCode> {
-        crate::cloud_query::run(self, endpoint, credential, project, sql)
+        crate::cloud_query::run(self, endpoint, credential, source, project, sql)
     }
 
     pub fn run(&self) -> anyhow::Result<crate::ExitCode> {
@@ -181,12 +182,34 @@ impl QueryArgs {
                 None => std::env::current_dir()?,
             },
         };
-        if !self.local {
+        let api_key = if self.local {
+            None
+        } else {
+            baml_env::string_var("BOUNDARY_API_KEY")?
+        };
+        let local_from_env = api_key.as_deref() == Some(bcs_api::credentials::LOCAL_API_KEY);
+        anyhow::ensure!(
+            !local_from_env || (self.project.is_none() && self.environment.is_none()),
+            "BOUNDARY_API_KEY=local selects local recordings; unset BOUNDARY_API_KEY to use --project or --environment for a cloud query"
+        );
+        if !self.local && !local_from_env {
             let settings = crate::cloud_config::Boundary::read(&root)?;
-            let endpoint = settings.endpoint()?;
+            let endpoint = settings.endpoint().map_err(|error| {
+                bcs_api::diagnostics::Context {
+                    endpoint: None,
+                    source: bcs_api::diagnostics::CredentialSource::Configured,
+                    operation: bcs_api::diagnostics::Operation::Query,
+                }
+                .report(error, bcs_api::diagnostics::Outcome::QueryFailed)
+            })?;
+            let source = if api_key.is_some() {
+                bcs_api::diagnostics::CredentialSource::ApiKey
+            } else {
+                bcs_api::diagnostics::CredentialSource::SavedLogin
+            };
             // TOML is trusted endpoint configuration: API keys authenticate
             // against it without requiring a separate environment override.
-            let credential = match baml_env::string_var("BOUNDARY_API_KEY")? {
+            let credential = match api_key {
                 Some(key) => Some(bcs_api::Secret::new(key)),
                 // Optional saved login must not block local queries on hosts without a keyring.
                 // Explicit cloud selection below still requires a credential.
@@ -196,13 +219,22 @@ impl QueryArgs {
                     .map(|session| session.refresh_token),
             };
             if credential.is_some() || self.project.is_some() || self.environment.is_some() {
-                let credential = credential
-                    .ok_or_else(|| anyhow::anyhow!("not logged in; run baml auth login"))?;
+                let credential = credential.ok_or_else(|| {
+                    bcs_api::diagnostics::Context {
+                        endpoint: Some(endpoint.clone()),
+                        source,
+                        operation: bcs_api::diagnostics::Operation::Query,
+                    }
+                    .report(
+                        bcs_api::Error::MissingCredentials,
+                        bcs_api::diagnostics::Outcome::QueryFailed,
+                    )
+                })?;
                 let project = match self.project.clone() {
                     Some(project) => Some(project),
                     None => baml_env::string_var("BOUNDARY_PROJECT")?.or(settings.project),
                 };
-                return self.run_cloud(endpoint, credential, project, sql);
+                return self.run_cloud(endpoint, credential, source, project, sql);
             }
         }
         let mut options = IndexOptions::default();
