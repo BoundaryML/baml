@@ -72,6 +72,43 @@ test "a reflected tool schema carries class, field and enum documentation" {
   )
 }
 
+class ProviderSchemaAddress {
+  city string
+}
+
+class ProviderSchemaVenue {
+  name string
+  address ProviderSchemaAddress?
+}
+
+/// Books a venue.
+function provider_schema_book(
+  venue: ProviderSchemaVenue,
+  backup: ProviderSchemaVenue?,
+  billing: ProviderSchemaAddress,
+) -> string {
+  venue.name
+}
+
+// Each parameter is lowered by `baml.json.schema`, whose `$ref`s point at the
+// schema root. The definitions they name must be at the tool schema's root,
+// once, and not under the parameter that reached them.
+function provider_schema_tool_definitions() -> string {
+  let schema = baml.json.to_json(ai.tools.tool(provider_schema_book).input_schema)
+  let reference = baml.json.path<string>(schema, ".properties.venue.properties.address.anyOf[0].$ref")
+  let name = reference.replace("#/$defs/", "")
+  let root_definitions = baml.json.path_or<map<string, unknown>>(schema, ".$defs", {})
+  let resolved = baml.json.to_json(root_definitions.get(name))
+  let nested = baml.json.path_or<map<string, unknown>>(schema, ".properties.venue.$defs", {}).length()
+    + baml.json.path_or<map<string, unknown>>(schema, ".properties.backup.$defs", {}).length()
+    + baml.json.path_or<map<string, unknown>>(schema, ".properties.billing.$defs", {}).length()
+  `${reference.starts_with("#/$defs/")}|${root_definitions.length()}|${baml.json.path_or<string>(resolved, ".properties.city.type", "unresolved")}|${nested}`
+}
+
+test "a reflected tool schema keeps its definitions at the root" {
+  assert.equal(provider_schema_tool_definitions(), "true|2|string|0")
+}
+
 test "provider stdlib JSON paths preserve brackets in quoted keys" {
   let value: json = {
     "key[part]": {

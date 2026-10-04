@@ -2,15 +2,39 @@
 
 /// (internal) One JSON Schema object for a function's parameters, derived from the
 /// signature: every parameter typed via baml.json.schema.
+///
+/// `baml.json.schema` puts the classes and aliases a type reaches in `$defs`
+/// at the root of the schema it returns, and its `$ref`s point there
+/// (`#/$defs/Name`). A parameter's schema is a property of this object, so
+/// its `$defs` move to this object's root, where those `$ref`s resolve. A
+/// definition is keyed by its declaration's name, so two parameters that
+/// reach one declaration contribute the same entry.
 function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unknown> {
     let sig = reflect.signature(handler);
     let props: map<string, unknown> = {};
     let required: string[] = [];
+    let definitions: map<string, unknown> = {};
     for (let a in sig.args) {
-        let _ = props.set(a.name, baml.json.schema(a.type));
+        let lowered = baml.json.schema(a.type);
+        let property = baml.json.from_json<map<string, unknown>>(lowered);
+        let reached = baml.json.path_or<map<string, unknown>>(lowered, ".$defs", {});
+        for (let name in reached.keys()) {
+            let _ = definitions.set(name, reached.get(name));
+        }
+        let _ = property.delete("$defs");
+        let _ = props.set(a.name, property);
         required.push(a.name);
     }
-    { "type": "object", "properties": props, "required": required, "additionalProperties": false }
+    let schema: map<string, unknown> = {
+        "type": "object",
+        "properties": props,
+        "required": required,
+        "additionalProperties": false,
+    };
+    if (definitions.length() > 0) {
+        let _ = schema.set("$defs", definitions);
+    }
+    schema
 }
 
 /// Bound as `ctx` inside a compiler-desugared `@spec` prompt template.
