@@ -171,7 +171,7 @@ pub fn run_go_test(fixture: &str) {
             // target tree behind. `-modcacherw` keeps those directories
             // writable, which is exactly what this flag exists for.
             .env("GOFLAGS", "-modcacherw")
-            .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root)),
+            .env("BAML_BRIDGE_PATH", go_runtime_library(workspace_root)),
         &format!("fixture `{fixture}` `{}` test ./...", go.display()),
     );
 }

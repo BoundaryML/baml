@@ -14,14 +14,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	runtimeABIVersion              = 1
 	maximumManifestSizeBytes       = int64(4 << 20)
 	maximumRuntimeArchiveSizeBytes = int64(256 << 20)
 	maximumRuntimeSizeBytes        = int64(1 << 30)
@@ -41,9 +39,12 @@ type RuntimeArtifact struct {
 
 // RuntimeConfig controls how the native BAML runtime is resolved. Configure
 // it before the first generated BAML call. Zero values inherit environment
-// defaults.
+// defaults: BAML_BRIDGE_PATH, BAML_BRIDGE_DISABLE_DOWNLOAD and
+// BAML_MANIFEST_BASE_URL. Artifact, Version and Target have no environment
+// form.
 type RuntimeConfig struct {
-	LibraryPath     string
+	LibraryPath string
+	// CacheDir overrides the derived cache root, $BAML_HOME/bridges.
 	CacheDir        string
 	Version         string
 	Target          string
@@ -104,19 +105,14 @@ func currentRuntimeConfig() (RuntimeConfig, error) {
 		}
 	}
 	if config.LibraryPath == "" {
-		config.LibraryPath = os.Getenv("BAML_RUNTIME_PATH")
-	}
-	if config.CacheDir == "" {
-		config.CacheDir = os.Getenv("BAML_CACHE_DIR")
-	}
-	if config.Version == "" {
-		config.Version = os.Getenv("BAML_RUNTIME_VERSION")
+		path := envString("BAML_BRIDGE_PATH")
+		if path != "" && !filepath.IsAbs(path) {
+			return RuntimeConfig{}, fmt.Errorf("BAML_BRIDGE_PATH must be an absolute path, got %q", path)
+		}
+		config.LibraryPath = path
 	}
 	if config.Version == "" {
 		config.Version = requiredRuntimeVersion()
-	}
-	if config.Target == "" {
-		config.Target = os.Getenv("BAML_RUNTIME_TARGET")
 	}
 	if config.Target == "" {
 		var err error
@@ -126,45 +122,56 @@ func currentRuntimeConfig() (RuntimeConfig, error) {
 		}
 	}
 	if config.ManifestBaseURL == "" {
-		config.ManifestBaseURL = os.Getenv("BAML_RUNTIME_MANIFEST_BASE_URL")
+		config.ManifestBaseURL = envString("BAML_MANIFEST_BASE_URL")
 	}
 	if config.ManifestBaseURL == "" {
 		config.ManifestBaseURL = defaultRuntimeManifestBaseURL
 	}
 	config.ManifestBaseURL = strings.TrimRight(config.ManifestBaseURL, "/")
-	if disabled, present := os.LookupEnv("BAML_DISABLE_DOWNLOAD"); present {
-		value, err := strconv.ParseBool(disabled)
-		if err != nil {
-			return RuntimeConfig{}, fmt.Errorf("parse BAML_DISABLE_DOWNLOAD: %w", err)
-		}
-		config.DisableDownload = config.DisableDownload || value
+	disabled, _, err := envBool("BAML_BRIDGE_DISABLE_DOWNLOAD")
+	if err != nil {
+		return RuntimeConfig{}, err
 	}
-	if config.Artifact == nil && os.Getenv("BAML_RUNTIME_URL") != "" {
-		filename := os.Getenv("BAML_RUNTIME_FILENAME")
-		if filename == "" {
-			filename = defaultRuntimeFilename()
-		}
-		config.Artifact = &RuntimeArtifact{
-			Version:       config.Version,
-			Target:        config.Target,
-			URL:           os.Getenv("BAML_RUNTIME_URL"),
-			SHA256:        os.Getenv("BAML_RUNTIME_SHA256"),
-			ArchiveSHA256: os.Getenv("BAML_RUNTIME_ARCHIVE_SHA256"),
-			Format:        os.Getenv("BAML_RUNTIME_FORMAT"),
-			Filename:      filename,
-		}
+	config.DisableDownload = config.DisableDownload || disabled
+	// The toolchain-version skip itself is applied by the native library when
+	// the bridge registers; this only enforces that it is used with an
+	// explicit library.
+	if skip := envString("DEV_BAML_BRIDGE_SKIP_VERSION_CHECK"); skip != "" && config.LibraryPath == "" {
+		return RuntimeConfig{}, errors.New("DEV_BAML_BRIDGE_SKIP_VERSION_CHECK requires BAML_BRIDGE_PATH")
 	}
 	return config, nil
+}
+
+// envString returns the trimmed value of an environment variable; unset and
+// empty both mean unset.
+func envString(name string) string {
+	return strings.TrimSpace(os.Getenv(name))
+}
+
+// envBool parses a boolean environment variable with the shared BAML rules:
+// case-insensitive 1/true/yes/on or 0/false/no/off, empty means unset, and
+// anything else is an error.
+func envBool(name string) (value bool, present bool, err error) {
+	raw := envString(name)
+	switch strings.ToLower(raw) {
+	case "":
+		return false, false, nil
+	case "1", "true", "yes", "on":
+		return true, true, nil
+	case "0", "false", "no", "off":
+		return false, true, nil
+	}
+	return false, false, fmt.Errorf("%s must be a boolean (1/true/yes/on or 0/false/no/off), got %q", name, raw)
 }
 
 func resolveRuntime(ctx context.Context, config RuntimeConfig) (string, string, error) {
 	if config.LibraryPath != "" {
 		path, err := filepath.Abs(config.LibraryPath)
 		if err != nil {
-			return "", "", fmt.Errorf("resolve BAML_RUNTIME_PATH: %w", err)
+			return "", "", fmt.Errorf("resolve BAML_BRIDGE_PATH: %w", err)
 		}
 		if err := requireFile(path); err != nil {
-			return "", "", fmt.Errorf("resolve BAML_RUNTIME_PATH: %w", err)
+			return "", "", fmt.Errorf("resolve BAML_BRIDGE_PATH: %w", err)
 		}
 		return path, "", nil
 	}
@@ -208,7 +215,7 @@ func resolveRuntime(ctx context.Context, config RuntimeConfig) (string, string, 
 	if err := validateArtifact(artifact); err != nil {
 		return "", "", err
 	}
-	path := filepath.Join(config.CacheDir, artifact.Version, fmt.Sprintf("abi-v%d", runtimeABIVersion), artifact.Target, artifact.Filename)
+	path := filepath.Join(config.CacheDir, artifact.Version, artifact.Target, artifact.Filename)
 
 	lockValue, _ := artifactLocks.LoadOrStore(path, &sync.Mutex{})
 	lock := lockValue.(*sync.Mutex)
@@ -252,7 +259,7 @@ func resolveManifestArtifact(ctx context.Context, config RuntimeConfig) (Runtime
 	if !safePathSegment(config.Version) {
 		return RuntimeArtifact{}, fmt.Errorf("BAML runtime version %q is not a safe path segment", config.Version)
 	}
-	manifestPath := filepath.Join(config.CacheDir, "manifests", config.Version+".json")
+	manifestPath := filepath.Join(config.CacheDir, config.Version, "manifest.json")
 	contents, err := os.ReadFile(manifestPath)
 	if err != nil && !os.IsNotExist(err) {
 		return RuntimeArtifact{}, fmt.Errorf("read cached BAML runtime manifest: %w", err)
@@ -351,15 +358,21 @@ func safePathSegment(value string) bool {
 	return value != "." && value != ".." && filepath.Base(value) == value
 }
 
+// bamlHome resolves the BAML root the same way baml_release does: BAML_HOME
+// when non-empty, else .baml under the user's home directory (HOME, or
+// USERPROFILE on Windows), else a relative .baml.
+func bamlHome() string {
+	if home := envString("BAML_HOME"); home != "" {
+		return home
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".baml")
+	}
+	return ".baml"
+}
+
 func defaultRuntimeCacheDir() (string, error) {
-	if home := strings.TrimSpace(os.Getenv("BAML_HOME")); home != "" {
-		return filepath.Join(home, "runtimes"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("locate home directory for BAML runtime cache: %w", err)
-	}
-	return filepath.Join(home, ".baml", "runtimes"), nil
+	return filepath.Join(bamlHome(), "bridges"), nil
 }
 
 func requireFile(path string) error {
