@@ -36,7 +36,7 @@ impl Fixture {
     }
     fn script(path: &Path) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, "#!/bin/sh\nprintf '%s|%s\\n' \"$BAML_CLI_ALLOW_DIRECT\" \"${BAML_WRAPPER_TEST-unset}\"\nprintf '%s\\n' \"$@\"\ncat\nexit 19\n").unwrap();
+        fs::write(path, "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$BAML_CLI_ALLOW_DIRECT\" \"${BAML_WRAPPER_TEST-unset}\" \"$0\"\nprintf '%s\\n' \"$@\"\ncat\nexit 19\n").unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }
     fn install(&self, version: &str) {
@@ -50,6 +50,7 @@ impl Fixture {
             .current_dir(&self.project)
             .env("BAML_HOME", &self.home)
             .env("HOME", &self.root)
+            .env_remove("BAML_WRAPPER_TEST")
             .env_remove("BAML_TOOLCHAIN")
             .env_remove("BAML_MANIFEST_BASE_URL");
         cmd
@@ -89,7 +90,10 @@ fn selector_precedence_and_child_preserve_arguments_streams_and_status() {
     assert_eq!(out.status.code(), Some(19));
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
-        "1|inherited\nhello\n--literal\na b\n"
+        format!(
+            "1|inherited|{}\nhello\n--literal\na b\n",
+            f.home.join("toolchains/0.12.0/bin/baml-cli").display()
+        )
     );
     let local = f.project.join("local-cli");
     Fixture::script(&local);
@@ -113,7 +117,10 @@ fn selector_precedence_and_child_preserve_arguments_streams_and_status() {
     assert_eq!(out.status.code(), Some(19));
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
-        "1|local-inherited\nhello\n--flag\na b\nstdin payload"
+        format!(
+            "1|local-inherited|{}\nhello\n--flag\na b\nstdin payload",
+            local.display()
+        )
     );
     assert!(out.stderr.is_empty());
 }
@@ -240,7 +247,10 @@ fn project_search_stops_at_a_symlinked_home_boundary() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(19));
-    assert!(String::from_utf8_lossy(&out.stdout).starts_with("1|0.11.0|unset\n"));
+    assert!(String::from_utf8_lossy(&out.stdout).starts_with(&format!(
+        "1|unset|{}\n",
+        f.home.join("toolchains/0.11.0/bin/baml-cli").display()
+    )));
 }
 
 #[test]
