@@ -111,7 +111,7 @@ pub use platform::*;
 /// Get a clone of the target's global runtime, initializing it from the staged
 /// program on first use. Errors if nothing was staged, or if initialization
 /// failed.
-pub fn get_or_init_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
+pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     platform::get_or_init_runtime()
 }
 
@@ -368,7 +368,7 @@ pub fn new_function_call_id() -> u64 {
 /// Allocate a runtime-bound call while preserving the startup error for
 /// exception-capable bindings. The native ABI represents failure as zero.
 pub fn allocate_function_call() -> Result<u64, BridgeError> {
-    CALL_ALLOCATIONS.allocate(get_or_init_runtime()?)
+    CALL_ALLOCATIONS.allocate(get_runtime()?)
 }
 
 pub fn invocation_clock_by_id(id: u64) -> Result<u64, BridgeError> {

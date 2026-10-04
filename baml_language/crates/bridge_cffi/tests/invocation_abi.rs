@@ -164,7 +164,7 @@ async fn raw_invocation_and_callback_lifecycles() {
         .unwrap();
     let reservation_key = HANDLE_TABLE.insert(CffiHandleTableEntry::TraceReservation(
         TraceReservationHandle {
-            owner: bridge_cffi::get_or_init_runtime().unwrap(),
+            owner: bridge_cffi::get_runtime().unwrap(),
             reservation,
         },
     ));

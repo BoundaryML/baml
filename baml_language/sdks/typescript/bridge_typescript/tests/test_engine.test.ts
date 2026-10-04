@@ -1,7 +1,7 @@
 // test_engine.test.ts — mirrors bridge_python/tests/test_engine.py
 
 import { BamlRuntime, callFunctionSync, callFunction,
-         getOrInitRuntime, getVersion } from '../dist/index.js';
+         getRuntime, getVersion } from '../dist/index.js';
 
 const BAML_SOURCE = `
 function ReturnOne() -> int {
@@ -73,10 +73,10 @@ describe('Basics', () => {
         expect(rt).toBeDefined();
     });
 
-    test('getOrInitRuntime returns initialized runtime', () => {
-        // initializeRuntime sets the process-global singleton; getOrInitRuntime fetches it.
+    test('getRuntime returns initialized runtime', () => {
+        // initializeRuntime sets the process-global singleton; getRuntime fetches it.
         makeRuntime(BAML_SOURCE);
-        const rt = getOrInitRuntime();
+        const rt = getRuntime();
         expect(callFunctionSync(rt, 'ReturnOne', {}).result()).toBe(1);
     });
 });

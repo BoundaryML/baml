@@ -401,7 +401,7 @@ export class BamlRuntime {
 let runtime: BamlRuntime | undefined;
 let hostRelease: ((key: HandleKey) => void) | undefined;
 
-export function getOrInitRuntime(): BamlRuntime {
+export function getRuntime(): BamlRuntime {
   if (!runtime) throw new BamlClientError("BAML runtime has not been initialized");
   return runtime;
 }

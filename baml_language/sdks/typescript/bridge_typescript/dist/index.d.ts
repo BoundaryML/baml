@@ -6,7 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { BamlRuntime } from './native.js';
-export { BamlRuntime, BamlHandle, getOrInitRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
+export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
@@ -23,7 +23,7 @@ export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
  * `BamlRuntime.initializeRuntime` factory (which sets the process-global
- * singleton reachable via `getOrInitRuntime()`).
+ * singleton reachable via `getRuntime()`).
  */
 export declare function initializeRuntime(srcDir: string, files: Record<string, string>): void;
 /**

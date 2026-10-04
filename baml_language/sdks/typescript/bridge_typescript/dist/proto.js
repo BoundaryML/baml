@@ -11,7 +11,7 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 import { baml_bridge } from './proto/baml_cffi.js';
-import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, _releaseWireHandle, getOrInitRuntime, newFunctionCall, releaseFunctionCall, invocationClockNs, _traceSelection, } from './native.js';
+import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, _releaseWireHandle, getRuntime, newFunctionCall, releaseFunctionCall, invocationClockNs, _traceSelection, } from './native.js';
 import { attachInvocation } from './call_context.js';
 import { BamlStream } from './stream.js';
 import { BamlFunctionSpec } from './function_spec.js';
@@ -104,7 +104,7 @@ export class BamlPrompt {
         const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId, functionName: fqn, baml: options?.$baml });
         const callCtxBinding = attachInvocation(argsProto, callId);
         try {
-            return decodeCallResult(getOrInitRuntime().callFunctionSync(argsProto));
+            return decodeCallResult(getRuntime().callFunctionSync(argsProto));
         }
         finally {
             callCtxBinding.detach();
@@ -115,7 +115,7 @@ export class BamlPrompt {
         const argsProto = encodeCallArgs({ self: this }, { callId, functionName: fqn, baml: options?.$baml });
         const callCtxBinding = attachInvocation(argsProto, callId);
         try {
-            return decodeCallResult(await getOrInitRuntime().callFunction(argsProto));
+            return decodeCallResult(await getRuntime().callFunction(argsProto));
         }
         finally {
             callCtxBinding.detach();
@@ -491,7 +491,7 @@ export function invokeTarget(target, args, options, asynchronous) {
     const binding = attachInvocation(encoded, callId);
     if (asynchronous) {
         try {
-            return getOrInitRuntime().callFunction(encoded).then(decodeCallResult).finally(() => binding.detach());
+            return getRuntime().callFunction(encoded).then(decodeCallResult).finally(() => binding.detach());
         }
         catch (error) {
             binding.detach();
@@ -499,7 +499,7 @@ export function invokeTarget(target, args, options, asynchronous) {
         }
     }
     try {
-        return decodeCallResult(getOrInitRuntime().callFunctionSync(encoded));
+        return decodeCallResult(getRuntime().callFunctionSync(encoded));
     }
     finally {
         binding.detach();

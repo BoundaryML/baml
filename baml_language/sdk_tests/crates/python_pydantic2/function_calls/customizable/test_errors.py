@@ -32,7 +32,7 @@ import traceback
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-from baml_bridge import BamlCancelledError, call_function, get_or_init_runtime
+from baml_bridge import BamlCancelledError, call_function, get_runtime
 from baml_sdk.baml.spawn import CancelToken
 from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
@@ -110,7 +110,7 @@ def test_errors_user_panic_surfaces_as_baml_panic():
 
 async def test_errors_cancellation_surfaces_as_baml_panic():
     """Async cancellation maps to `asyncio.CancelledError` with BAML reason."""
-    rt = get_or_init_runtime()
+    rt = get_runtime()
     ctx = CancelToken.new()
 
     async def _abort_soon():

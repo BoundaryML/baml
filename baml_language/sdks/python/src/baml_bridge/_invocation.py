@@ -113,21 +113,21 @@ def _dynamic_args(target, arguments, types, options):
 
 
 def invoke(target, arguments, *, _types=None, _baml=None):
-    from . import get_or_init_runtime
+    from . import get_runtime
     from .proto import decode_call_result
 
     _, encoded = _dynamic_args(target, arguments, _types, _baml)
-    return decode_call_result(get_or_init_runtime().call_function_sync(encoded))
+    return decode_call_result(get_runtime().call_function_sync(encoded))
 
 
 async def invoke_async(target, arguments, *, _types=None, _baml=None):
     import asyncio
-    from . import _decode_call_result_async, get_or_init_runtime
+    from . import _decode_call_result_async, get_runtime
     from .baml_py import cancel_function_call
 
     call_id, encoded = _dynamic_args(target, arguments, _types, _baml)
     try:
-        result = await get_or_init_runtime().call_function(encoded)
+        result = await get_runtime().call_function(encoded)
     except asyncio.CancelledError:
         cancel_function_call(call_id)
         raise

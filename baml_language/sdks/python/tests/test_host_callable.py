@@ -25,7 +25,7 @@ from baml_bridge import (
     BamlRuntime,
     call_function_sync,
     call_function,
-    get_or_init_runtime,
+    get_runtime,
 )
 from baml_bridge.baml_py import (
     _live_handle_count,
@@ -55,7 +55,7 @@ def _make_runtime() -> BamlRuntime:
     # Build the engine now rather than inside the first call: tests here compare
     # the process-wide handle count around a call, and the previous test's
     # runtime is still releasing its handles while this one is built.
-    get_or_init_runtime()
+    get_runtime()
     return runtime
 
 

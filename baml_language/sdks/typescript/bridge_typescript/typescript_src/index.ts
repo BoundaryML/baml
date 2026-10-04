@@ -14,7 +14,7 @@ import { attachInvocation } from './call_context.js';
 export {
     BamlRuntime,
     BamlHandle,
-    getOrInitRuntime,
+    getRuntime,
     getBridgeRuntimeVersion,
     getToolchainVersion,
     getVersion,
@@ -42,7 +42,7 @@ export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
  * `BamlRuntime.initializeRuntime` factory (which sets the process-global
- * singleton reachable via `getOrInitRuntime()`).
+ * singleton reachable via `getRuntime()`).
  */
 export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
     BamlRuntime.initializeRuntime(srcDir, files);

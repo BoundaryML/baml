@@ -13,7 +13,7 @@ __all__ = [
     "FunctionResult",
     "cancel_function_call",
     "get_bridge_runtime_version",
-    "get_or_init_runtime",
+    "get_runtime",
     "get_toolchain_version",
     "get_version",
     "invocation_clock_ns",
@@ -124,7 +124,7 @@ class BamlRuntime:
     r"""
     The main BAML runtime. A zero-sized handle: the single source of truth for
     the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
-    `bridge_cffi::get_or_init_runtime()` at each call site (31e-phase4), so this
+    `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
     no longer caches its own clone.
     """
     @staticmethod
@@ -274,7 +274,7 @@ def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def get_bridge_runtime_version() -> builtins.str: ...
 
-def get_or_init_runtime() -> BamlRuntime:
+def get_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.

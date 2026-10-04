@@ -1,10 +1,10 @@
-import { BamlRuntime, cancelFunctionCall as nativeCancelFunctionCall, getOrInitRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall } from "./native.js";
+import { BamlRuntime, cancelFunctionCall as nativeCancelFunctionCall, getRuntime, installHostCallableDispatchFactory, newFunctionCall as nativeNewFunctionCall } from "./native.js";
 import { decodeCallResult, encodeCallArgs, makeHostCallableDispatch } from "./shared/proto.js";
 import { attachInvocation } from "./shared/call_context.js";
 
 installHostCallableDispatchFactory(makeHostCallableDispatch);
 
-export { BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _seedFunctionRefHandle, _seedGenericMediaHandle, getBridgeRuntimeVersion, getOrInitRuntime, getToolchainVersion, getVersion, newFunctionCall } from "./native.js";
+export { BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _seedFunctionRefHandle, _seedGenericMediaHandle, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, newFunctionCall } from "./native.js";
 export { BamlStream } from "./shared/stream.js";
 export { BamlFunctionSpec } from "./shared/function_spec.js";
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from "./shared/function_spec.js";

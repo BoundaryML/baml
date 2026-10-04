@@ -42,7 +42,7 @@ const packageRootExports = [
   "defineInstanceFunction",
   "encodeCallArgs",
   "getBridgeRuntimeVersion",
-  "getOrInitRuntime",
+  "getRuntime",
   "getToolchainVersion",
   "getTypeMap",
   "getVersion",

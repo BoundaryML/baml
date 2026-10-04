@@ -99,7 +99,7 @@ export declare class BamlRuntime {
    * Initialize the process-global runtime from in-memory BAML source
    * files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
    * a second call replaces the prior runtime; the result is also reachable
-   * via the module-level `getOrInitRuntime()`. Renamed from `fromFiles` for
+   * via the module-level `getRuntime()`. Renamed from `fromFiles` for
    * parity with `bridge_python`'s sole `initialize_runtime` constructor and
    * the `initializeRuntime(...)` import the spec docs use.
    */
@@ -227,9 +227,9 @@ export declare function getBridgeRuntimeVersion(): string
  * Return the process-global `BamlRuntime`, or a `BamlError`-shaped
  * `napi::Error` if `initializeRuntime` has not run yet. The handle is
  * zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
- * `bridge_python`'s module-level `get_or_init_runtime()`.
+ * `bridge_python`'s module-level `get_runtime()`.
  */
-export declare function getOrInitRuntime(): BamlRuntime
+export declare function getRuntime(): BamlRuntime
 
 export declare function getToolchainVersion(): string
 

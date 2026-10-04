@@ -11,7 +11,7 @@ import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installShutdownOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
 import { attachInvocation } from './call_context.js';
-export { BamlRuntime, BamlHandle, getOrInitRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
+export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
@@ -30,7 +30,7 @@ export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
  * `BamlRuntime.initializeRuntime` factory (which sets the process-global
- * singleton reachable via `getOrInitRuntime()`).
+ * singleton reachable via `getRuntime()`).
  */
 export function initializeRuntime(srcDir, files) {
     BamlRuntime.initializeRuntime(srcDir, files);

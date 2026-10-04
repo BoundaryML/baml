@@ -12,7 +12,7 @@
 // encodes it, calls the runtime, and decodes the result.
 
 import {
-    getOrInitRuntime,
+    getRuntime,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
@@ -224,7 +224,7 @@ export function defineFunction(
         return (...args: unknown[]): unknown => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getOrInitRuntime();
+            const rt = getRuntime();
             const callId = newFunctionCall();
             const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn, baml: built.baml });
             const callCtxBinding = attachInvocation(argsProto, callId);
@@ -240,7 +240,7 @@ export function defineFunction(
         return async (...args: unknown[]): Promise<unknown> => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getOrInitRuntime();
+            const rt = getRuntime();
             const callId = newFunctionCall();
             const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn, baml: built.baml });
             const callCtxBinding = attachInvocation(argsProto, callId);
@@ -294,7 +294,7 @@ export function defineInstanceFunction(
                 return (...args: unknown[]): unknown => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getOrInitRuntime();
+                    const rt = getRuntime();
                     const callId = newFunctionCall();
                     const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn, baml: built.baml });
                     const callCtxBinding = attachInvocation(argsProto, callId);
@@ -310,7 +310,7 @@ export function defineInstanceFunction(
                 return async (...args: unknown[]): Promise<unknown> => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getOrInitRuntime();
+                    const rt = getRuntime();
                     const callId = newFunctionCall();
                     const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn, baml: built.baml });
                     const callCtxBinding = attachInvocation(argsProto, callId);
