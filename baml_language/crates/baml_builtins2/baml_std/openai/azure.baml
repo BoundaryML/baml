@@ -215,14 +215,14 @@ class AzureClient {
     }
 
     implements ai.Client {
-        /// A `${cache()}` sends nothing on Azure. `model` is a deployment
-        /// name, so whether the model behind it takes
-        /// `prompt_cache_breakpoint` (GPT-5.6 and later) or rejects it cannot
-        /// be told from here, and a default must not turn a working request
-        /// into a 400. For a deployment that takes it, write
-        /// `${cache({ "mode": "explicit" })}`, which is sent as written.
+        /// What a `${cache()}` sends as `prompt_cache_breakpoint` on the part
+        /// before it, judged from `model` by the same rules as
+        /// `openai.ChatClient`: `{"mode": "explicit"}`, or null for GPT-5.5
+        /// and earlier, which reject the field. Azure routes on the
+        /// deployment, not `model`, so this is only as good as `model`'s
+        /// name for what the deployment serves.
         function default_cache_args(self) -> baml.json.json {
-            null
+            openai.internal.default_cache_breakpoint(self.model)
         }
 
         function id(self) -> string {
