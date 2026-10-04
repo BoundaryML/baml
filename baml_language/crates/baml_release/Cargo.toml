@@ -22,6 +22,7 @@ self-update = [  ]
 no-self-update = [  ]
 
 [dependencies]
+baml_env = { workspace = true }
 anyhow = { workspace = true }
 dirs = { workspace = true }
 flate2 = { workspace = true }

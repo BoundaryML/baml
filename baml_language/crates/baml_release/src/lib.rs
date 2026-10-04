@@ -27,7 +27,28 @@ use sha2::{Digest, Sha256};
 /// This is the single source of truth shared by the `baml` wrapper and the
 /// `baml-cli` toolchain binary; don't reimplement it.
 pub fn baml_home() -> PathBuf {
-    baml_home_from(std::env::var_os("BAML_HOME"), dirs::home_dir())
+    baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir())
+}
+
+/// Downloaded bridge libraries, shared by every language:
+/// `<bridges_dir>/<version>/<target>/<lib>`.
+pub fn bridges_dir() -> PathBuf {
+    baml_home().join("bridges")
+}
+
+/// Content-addressed build cache shared by all projects.
+pub fn build_cache_dir() -> PathBuf {
+    baml_home().join("build").join("cache")
+}
+
+/// Local telemetry recordings.
+pub fn btel_dir() -> PathBuf {
+    baml_home().join("btel")
+}
+
+/// Installed toolchains: `<toolchain_dir>/<version>/bin/baml-cli`.
+pub fn toolchain_dir() -> PathBuf {
+    baml_home().join("toolchains")
 }
 
 fn baml_home_from(baml_home: Option<OsString>, home_dir: Option<PathBuf>) -> PathBuf {

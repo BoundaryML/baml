@@ -298,7 +298,7 @@ fn state_path() -> PathBuf {
 }
 
 fn toolchains_dir() -> PathBuf {
-    baml_home().join("toolchains")
+    baml_release::toolchain_dir()
 }
 
 fn manifest_cache_dir(base_url: &str) -> PathBuf {
