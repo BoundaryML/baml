@@ -77,6 +77,7 @@ async fn hash_and_path_primitives() {
             let cwd = baml.sys.current_dir();
             baml.crypto.sha256(b"abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" &&
                 baml.path.is_absolute(cwd) && baml.path.absolute(".") == cwd &&
+                baml.path.absolute("note", base = "notes") == baml.path.join([cwd, "notes", "note"]) &&
                 baml.path.parent(baml.path.join([cwd, "child"])) == cwd
         }
     "##
@@ -126,4 +127,57 @@ async fn absolute_paths_preserve_symlink_parent_semantics() {
         output.result,
         Ok(BexExternalValue::String("selected".into()))
     );
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn absolute_paths_preserve_symlink_parents_for_new_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(tmp.path().join("real/inner")).unwrap();
+    std::os::unix::fs::symlink("real/inner", tmp.path().join("link")).unwrap();
+    let base = serde_json::to_string(&tmp.path().to_string_lossy()).unwrap();
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> bool {{
+            let destination = baml.path.absolute("link/../new", base = {base});
+            baml.fs.write(destination, "created");
+            baml.fs.read(destination) == "created"
+        }}
+    "#
+    ));
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("real/new")).unwrap(),
+        "created"
+    );
+    assert!(!tmp.path().join("new").exists());
+}
+
+#[tokio::test]
+async fn archives_accept_runtime_format_values() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = serde_json::to_string(&tmp.path().to_string_lossy()).unwrap();
+    let output = baml_test!(&format!(
+        r#"
+        function format(compressed: bool) -> "tar.gz" | "zip" {{
+            if (compressed) {{ "tar.gz" }} else {{ "zip" }}
+        }}
+        function main() -> bool {{
+            let zip = uint8array.from_base64("UEsDBBQAAAAIAE4AQ11y/dtsBAAAAAIAAAAHAAAAYmluL2NsaWP4DwBQSwECFAMUAAAACABOAENdcv3bbAQAAAACAAAABwAAAAAAAAAAAAAAgAEAAAAAYmluL2NsaVBLBQYAAAAAAQABADUAAAApAAAAAAA=");
+            let tar = uint8array.from_base64("H4sIAAAAAAAC/+3NTQpAYBgE4O8obkBKzoOVkoWf8/Oykj0lz7OZaTbT9mPeDX16UhHqqjoz3DOUl37sdRlTVqQXrPPSTHGZfmpLAAAAAAAAAAAAfNAOmyzhUQAoAAA=");
+            for (let compressed in [false, true]) {{
+                let data = if (compressed) {{ tar }} else {{ zip }};
+                let selected = format(compressed);
+                let destination = baml.path.join([{root}, if (compressed) {{ "tar" }} else {{ "zip" }}]);
+                if (baml.archive.read_file(data, selected, "bin/cli") != b"\x00\xff") {{ return false; }}
+                baml.archive.extract(data, selected, destination);
+                let file = baml.fs.open(baml.path.join([destination, "bin", "cli"]), "r");
+                defer {{ file.close(); }}
+                if (file.bytes() != b"\x00\xff") {{ return false; }}
+            }}
+            true
+        }}
+    "#
+    ));
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

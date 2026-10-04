@@ -114,32 +114,10 @@ impl io::IoNamespacePath for NativeSysOps {
                         PathBuf::from(home).join(path.strip_prefix("~").unwrap_or(Path::new("")));
                 }
             }
-            let joined = base.join(path);
-            let mut tidy = PathBuf::new();
-            for component in joined.components() {
-                use std::path::Component;
-                match component {
-                    Component::CurDir => {}
-                    Component::ParentDir => match tidy.components().next_back() {
-                        Some(Component::Normal(_)) => {
-                            tidy.pop();
-                        }
-                        Some(Component::RootDir | Component::Prefix(_)) => {}
-                        _ => tidy.push(component),
-                    },
-                    _ => tidy.push(component),
-                }
-            }
-            // Preserve filesystem meaning when lexical normalization crosses a symlink.
-            let physical_joined = joined.canonicalize().ok();
-            let physical_tidy = tidy.canonicalize().ok();
-            path_string(
-                if physical_joined.is_some() && physical_joined != physical_tidy {
-                    joined
-                } else {
-                    tidy
-                },
-            )
+            // Keep `..` on Unix: resolving it lexically changes the meaning
+            // of symlink paths, including paths to files that do not yet exist.
+            // Also make an explicitly relative base absolute in process mode.
+            path_string(std::path::absolute(base.join(path)).map_err(error)?)
         })();
         SysOpOutput::Ready(result)
     }
@@ -161,6 +139,7 @@ fn archive_suffix(format: BexExternalValue) -> Result<&'static str, VmRustFnErro
     match format {
         BexExternalValue::String(s) if s.as_str() == "zip" => Ok("zip"),
         BexExternalValue::String(s) if s.as_str() == "tar.gz" => Ok("tar.gz"),
+        BexExternalValue::Union { value, .. } => archive_suffix(*value),
         _ => Err(error("Unsupported archive format").into()),
     }
 }
@@ -342,6 +321,11 @@ pub(crate) fn fs_write_atomic(
         }
         tmp.as_file().sync_all().map_err(error)?;
         tmp.persist(&path).map_err(error)?;
+        // Persist the renamed directory entry as well as the file contents.
+        #[cfg(unix)]
+        std::fs::File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(error)?;
         Ok(())
     })
 }
