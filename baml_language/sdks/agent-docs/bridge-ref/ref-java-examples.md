@@ -830,7 +830,8 @@ public static java.lang.String call_with_typed_throws_propagating(
 ```
 
 > ⚠ **Deviation from Python:** Python renders a callable param as
-> `typing.Callable[[int], str]`; Java maps by arity/return onto the concrete
+> `typing.Callable[[int], str | Coroutine[Any, Any, str]]` (a plain function or an
+> `async def`); Java maps by arity/return onto the concrete
 > `Runnable` / `Supplier` / `Consumer` / `Function` / `BiConsumer` / `BiFunction`
 > shapes. A callable with **optional params or arity > 2** — which has no
 > `java.util.function` equivalent — is emitted as a **generated

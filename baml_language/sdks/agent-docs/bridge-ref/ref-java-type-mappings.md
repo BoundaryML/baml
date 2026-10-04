@@ -289,7 +289,8 @@ Params and return are boxed. Verified `Function<java.lang.Long, java.lang.String
 `BiFunction<…>` in generated `Fns.java` and `Array.generate(…, Function<java.lang.Long, T> f)`.
 
 > ⚠ **Deviation from Python (callables):** Python renders `typing.Callable[[...], ret]` and widens
-> to `typing.Callable[..., ret]` when **any** parameter is optional. Java has no variadic callable
+> to `typing.Callable[..., ret]` when **any** parameter is optional (for a host callback, `ret` also
+> admits the coroutine of an `async def`). Java has no variadic callable
 > type, so it maps by concrete arity to `java.util.function.*`.
 
 > **LANDED (`202883518`, decision E1):** a callable **with any optional parameter or arity > 2**

@@ -31,6 +31,10 @@ not retain its registration environment.
 | Synchronous | Coroutine result | Bridge-owned worker loop, with copied caller context |
 | Asynchronous | Synchronous or coroutine result | Originating application loop, with copied entry context |
 
+The generated type of a callback parameter or class field accepts both forms:
+`typing.Callable[[...], typing.Union[R, typing.Coroutine[typing.Any, typing.Any, R]]]`,
+so a type checker takes a plain function and an `async def` for it.
+
 Each dispatch of an async entry receives a separate copy of its application
 `ContextVars`. Callback writes do not change the awaiting task's context or
 another dispatch's context. An async callback need not run in the caller's
