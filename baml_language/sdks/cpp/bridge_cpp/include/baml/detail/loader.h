@@ -186,7 +186,9 @@ inline bool file_exists(const std::string& path) {
 }
 
 // BAML_HOME when non-empty, else <home>/.baml, else a relative .baml
-// (mirrors baml_release::baml_home).
+// (mirrors baml_release::baml_home). Deliberately duplicated: this header-only
+// SDK cannot call into Rust before the native library is located. Keep it in
+// sync with baml_release::baml_home and the Go and Rust bridge loaders.
 inline std::string baml_home() {
   const std::string home = env_or_empty("BAML_HOME");
   if (!home.empty()) {

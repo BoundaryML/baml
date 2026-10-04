@@ -210,7 +210,10 @@ impl LoaderEnv {
             "HOME"
         };
         // Same rule as `baml_release::baml_home`: `BAML_HOME` when non-empty,
-        // else `<home>/.baml`, else a relative `.baml`.
+        // else `<home>/.baml`, else a relative `.baml`. Deliberately duplicated
+        // (as is the env parsing in this module): this crate is published to
+        // crates.io and cannot depend on the workspace-only `baml_release` or
+        // `baml_env`. Keep in sync with those and the Go and C++ copies.
         let baml_home = string_var("BAML_HOME")?
             .map(PathBuf::from)
             .or_else(|| {

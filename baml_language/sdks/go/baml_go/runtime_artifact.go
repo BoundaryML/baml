@@ -361,6 +361,10 @@ func safePathSegment(value string) bool {
 // bamlHome resolves the BAML root the same way baml_release does: BAML_HOME
 // when non-empty, else .baml under the user's home directory (HOME, or
 // USERPROFILE on Windows), else a relative .baml.
+//
+// This is deliberately duplicated: the Go SDK cannot call into Rust before the
+// native library is located. Keep it in sync with baml_release::baml_home and
+// the copies in the Rust and C++ bridge loaders.
 func bamlHome() string {
 	if home := envString("BAML_HOME"); home != "" {
 		return home

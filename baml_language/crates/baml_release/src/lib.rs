@@ -26,7 +26,9 @@ use sha2::{Digest, Sha256};
 ///   3. A relative `.baml` as a last resort when no home directory is known.
 ///
 /// This is the single source of truth shared by the `baml` wrapper and the
-/// `baml-cli` toolchain binary; don't reimplement it.
+/// `baml-cli` toolchain binary. The Go, Rust and C++ bridge loaders keep
+/// deliberate copies because they run before the native library is available;
+/// change them together with this.
 pub fn baml_home() -> PathBuf {
     baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir())
 }
