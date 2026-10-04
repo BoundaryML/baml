@@ -11,12 +11,12 @@
 
 ## Where state lives
 
-Everything is under `BAML_HOME` (default `~/.baml`). There are no other directory variables.
+BAML files are under `BAML_HOME` (default `~/.baml`). Login credentials live in the OS credential store, scoped to the Boundary API endpoint and `BAML_HOME`.
 
 ```
 ~/.baml/
 ├── config.toml, state.toml       wrapper
-├── creds.json, feedback.json     baml auth, baml feedback
+├── creds.json, feedback.json     anonymous feedback state (no login credentials)
 ├── telemetry.toml                CLI analytics opt-out
 ├── toolchains/<version>/         installed baml-cli
 ├── manifest-cache/
@@ -35,10 +35,12 @@ Everything is under `BAML_HOME` (default `~/.baml`). There are no other director
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
 | `BAML_LOG` | Level for `log.*` output and bridge loader messages: `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
 | `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. |
-| `BOUNDARY_API_KEY`, `BOUNDARY_URL` | Send telemetry to Boundary cloud. Need both. |
+| `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.cloud.boundaryml.com`. |
+| `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |
+| `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
+| `BOUNDARY_URL` | Fallback telemetry endpoint when `[boundary].api_url` and `BOUNDARY_API_URL` are unset. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
 | `BAML_FEEDBACK_HOST` | Where `baml feedback` sends reports. Staging and tests. |
-| `BAML_AUTH_API_DOMAIN`, `BAML_AUTH_CLIENT_ID` | Identity provider for `baml auth`. Staging and tests. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |
 
 ## Bridges

@@ -70,6 +70,9 @@ license = "Apache-2.0"
 version = "0.0.0-beta"
 
 [workspace.dependencies]
+# BCS (bcs_*): shared cloud API contracts and clients.
+bcs_api = { path = "crates/bcs_api", default-features = false }
+
 #  Internal dependencies (baml_*)
 btel_bcs = { path = "crates/btel_bcs", default-features = false }
 btel_snapshot = { path = "crates/btel_snapshot" }
@@ -199,6 +202,7 @@ fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
+keyring = { version = "3.6.3", features = [ "apple-native", "windows-native", "sync-secret-service", "crypto-rust", "vendored" ] }
 hmac = "0.12"
 http-body-util = "0.1"
 hyper = { version = "1", features = [ "server", "http1", "http2" ] }

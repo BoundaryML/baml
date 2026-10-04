@@ -350,8 +350,7 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         assert_eq!(file.sequence, sequence);
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, recording_id.as_bytes());
-        // The project's sources are a capture like any other.
-        references.insert(snapshot_hex(header.source_cas_id.unwrap()));
+        assert!(header.source_cas_id.is_none(), "cloud sources stay local");
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
         for definition in file.definitions.unwrap_or_default().functions {

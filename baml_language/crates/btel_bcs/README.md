@@ -1,5 +1,7 @@
 # Btel cloud delivery
 
+Cloud contracts and single-attempt HTTP calls live in `bcs_api`. This crate owns recording assembly, bounded delivery, retries, heartbeat scheduling and flush.
+
 This crate implements the runtime side of a proposed BCS direct-upload contract.
 It does not imply that the BCS server already supports this protocol.
 
@@ -58,7 +60,7 @@ on retry; conflicting immutable contents must fail. Process liveness fields are
 fresh on each attempt and excluded from that idempotency comparison. There is
 no URL-renewal operation.
 
-`wire.rs` is the JSON schema's source of truth. Proposed and returned targets use
+`bcs_api::wire` is the JSON schema's source of truth. Proposed and returned targets use
 `kind`: `recording`, `cas_batch`, or `cas_object`, with ordered
 `candidate_indices`. Each response disposition uses a nested `disposition` with
 `kind`: `inline_with_recording`, `member_of_batch`, `separate_object`, or
@@ -71,7 +73,7 @@ target even if every snapshot is already available. Availability means validated
 content within the authorized organization, not merely an existing S3 object.
 
 Each surviving target is an ordinary HTTP PUT containing a
-`btel.cloud.v1.CloudUploadEnvelope` from `proto/cloud.proto`, format version 1.
+`btel.cloud.v1.CloudUploadEnvelope` from `bcs_api/proto/cloud.proto`, format version 1.
 It embeds the exact recording bytes and the canonical CAS v3 blobs. The blob
 SHA-256 is an integrity check separate from the snapshot identity. The body is
 sent with a fixed `Content-Length`, never chunk-encoded.

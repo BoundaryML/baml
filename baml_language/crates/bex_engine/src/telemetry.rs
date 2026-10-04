@@ -24,6 +24,9 @@ pub struct TelemetryRecording {
     exit: Arc<btel_types::ProcessExitSlot>,
 }
 enum Destination {
+    Disabled {
+        reason: String,
+    },
     LocalFiles {
         recordings: PathBuf,
         cas: PathBuf,
@@ -80,17 +83,50 @@ impl RecordingDelivery {
 }
 
 impl TelemetryRecording {
-    /// Configure cloud delivery when both Boundary environment variables are
-    /// non-empty and the URL parses. Delivery validates the URL and bearer
-    /// header at engine construction; a rejected config disables recording.
+    /// Resolve the selected endpoint and credential without making a network request.
     pub fn from_boundary_env() -> Option<Self> {
-        let url = baml_env::raw_var(BOUNDARY_URL)?;
-        let key = baml_env::raw_var(BOUNDARY_API_KEY)?;
-        if url.is_empty() || key.is_empty() {
-            return None;
-        }
-        let mut delivery = btel_bcs::delivery::DeliveryConfig::new(url.parse().ok()?);
-        delivery.bearer_token = Some(key);
+        Self::from_boundary_defaults(None, None)
+    }
+
+    /// Hosts pass artifact/project defaults; process environment variables take precedence.
+    /// Invalid cloud configuration selects disabled recording, preserving its error rather
+    /// than allowing hosts to fall back to local files. `None` means no cloud credential.
+    pub fn from_boundary_defaults(project: Option<&str>, api_url: Option<&str>) -> Option<Self> {
+        let legacy_url = baml_env::string_var(BOUNDARY_URL).ok()?;
+        let endpoint = match bcs_api::Endpoint::with_default(api_url.or(legacy_url.as_deref())) {
+            Ok(endpoint) => endpoint,
+            Err(error) => {
+                let mut recording = Self::user_files(RecordingConfig::default());
+                recording.destination = Destination::Disabled {
+                    reason: error.to_string(),
+                };
+                return Some(recording);
+            }
+        };
+        let key = match baml_env::string_var(BOUNDARY_API_KEY).ok()? {
+            Some(key) => key,
+            None => bcs_api::Store::new(&endpoint)
+                .ok()?
+                .read()
+                .ok()??
+                .refresh_token
+                .expose()
+                .to_owned(),
+        };
+        let target = bcs_api::credentials::Target {
+            project: baml_env::string_var("BOUNDARY_PROJECT")
+                .ok()?
+                .or_else(|| project.map(str::to_owned)),
+            ..Default::default()
+        };
+        let mut delivery = btel_bcs::delivery::DeliveryConfig::new(endpoint.as_str().parse().ok()?);
+        delivery.authorization = Some(bcs_api::credentials::RequestAuthorization {
+            authentication: bcs_api::credentials::Authentication::shared(
+                endpoint.as_str(),
+                bcs_api::Secret::new(key),
+            ),
+            target: Some(target),
+        });
         Some(Self::cloud(
             RecordingConfig::default(),
             btel_bcs::CloudPublisherConfig::default(),
@@ -220,13 +256,16 @@ impl TelemetryRecording {
                 },
                 started_at_unix_ns: process_started_at_unix_ns(),
             },
-            sources: (!self.sources.is_empty())
-                .then(|| {
-                    let pool =
-                        btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
-                    btel_snapshot::string_map(&pool, &self.sources, SOURCES_MAX_BYTES)
-                })
-                .flatten(),
+            // Cloud source uploads are a separate feature; local recordings retain their code.
+            sources: (matches!(
+                self.destination,
+                Destination::LocalFiles { .. } | Destination::UserFiles
+            ) && !self.sources.is_empty())
+            .then(|| {
+                let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+                btel_snapshot::string_map(&pool, &self.sources, SOURCES_MAX_BYTES)
+            })
+            .flatten(),
             context: btel_snapshot::context::capture(
                 launch_context,
                 &btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default()),
@@ -253,6 +292,7 @@ impl TelemetryRecording {
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
         let root = match self.destination {
+            Destination::Disabled { reason } => Err(std::io::Error::other(reason)),
             Destination::Cloud {
                 publisher,
                 delivery,
@@ -310,7 +350,7 @@ impl TelemetryRecording {
                         // prevent application startup. No automatic retry.
                         tracing::warn!(%error, "telemetry recording startup disabled");
                         control.disable(btel_processor::RuntimeError(format!(
-                            "telemetry file startup: {error}"
+                            "telemetry recording startup: {error}"
                         )));
                         btel_file::LocalPublisher::disabled(builder)
                     }
@@ -510,3 +550,39 @@ mod failure_tests;
 
 #[cfg(test)]
 mod boundary_env_tests;
+
+#[cfg(test)]
+mod source_privacy_tests {
+    use super::*;
+
+    #[test]
+    fn cloud_recordings_exclude_sources_while_local_recordings_remain_readable() {
+        let sources = vec![(
+            "main.baml".to_owned(),
+            "function Secret() -> int { 42 }".to_owned(),
+        )];
+        let local =
+            TelemetryRecording::local_files("/tmp/baml-source-privacy", RecordingConfig::default())
+                .with_sources(sources.clone());
+        let cloud = TelemetryRecording::cloud(
+            RecordingConfig::default(),
+            btel_bcs::CloudPublisherConfig::default(),
+            btel_bcs::delivery::DeliveryConfig::new(
+                "https://boundary.example.test".parse().unwrap(),
+            ),
+        )
+        .with_sources(sources);
+        assert!(
+            local
+                .process(&btel_types::context::Context::default())
+                .sources
+                .is_some()
+        );
+        assert!(
+            cloud
+                .process(&btel_types::context::Context::default())
+                .sources
+                .is_none()
+        );
+    }
+}

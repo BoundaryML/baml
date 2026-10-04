@@ -44,6 +44,18 @@ pub struct QueryArgs {
     #[arg(long, value_enum, default_value_t = QueryFormat::Table)]
     pub format: QueryFormat,
 
+    /// Query this project's local recordings explicitly.
+    #[arg(long)]
+    pub local: bool,
+
+    /// Boundary cloud project in org_handle/project_name form.
+    #[arg(long, conflicts_with = "local")]
+    pub project: Option<String>,
+
+    /// Boundary cloud environment; defaults to your personal environment.
+    #[arg(long, conflicts_with = "local")]
+    pub environment: Option<String>,
+
     /// Project directory (defaults to the current directory's project).
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
@@ -139,6 +151,16 @@ impl QueryArgs {
         Ok(crate::ExitCode::Success)
     }
 
+    fn run_cloud(
+        &self,
+        endpoint: bcs_api::Endpoint,
+        credential: bcs_api::Secret,
+        project: Option<String>,
+        sql: String,
+    ) -> anyhow::Result<crate::ExitCode> {
+        crate::cloud_query::run(self, endpoint, credential, project, sql)
+    }
+
     pub fn run(&self) -> anyhow::Result<crate::ExitCode> {
         if self.schema {
             return self.print_schema();
@@ -159,6 +181,28 @@ impl QueryArgs {
                 None => std::env::current_dir()?,
             },
         };
+        if !self.local {
+            let settings = crate::cloud_config::Boundary::read(&root)?;
+            let endpoint = settings.endpoint()?;
+            let credential = match baml_env::string_var("BOUNDARY_API_KEY")? {
+                Some(key) => Some(bcs_api::Secret::new(key)),
+                // Optional saved login must not block local queries on hosts without a keyring.
+                // Explicit cloud selection below still requires a credential.
+                None => bcs_api::Store::new(&endpoint)
+                    .and_then(|store| store.read())
+                    .unwrap_or(None)
+                    .map(|session| session.refresh_token),
+            };
+            if credential.is_some() || self.project.is_some() || self.environment.is_some() {
+                let credential = credential
+                    .ok_or_else(|| anyhow::anyhow!("not logged in; run baml auth login"))?;
+                let project = match self.project.clone() {
+                    Some(project) => Some(project),
+                    None => baml_env::string_var("BOUNDARY_PROJECT")?.or(settings.project),
+                };
+                return self.run_cloud(endpoint, credential, project, sql);
+            }
+        }
         let mut options = IndexOptions::default();
         options.refresh.verify_contents = self.verify;
         let request = QueryRequest {
