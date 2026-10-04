@@ -5,7 +5,6 @@ pub mod manifest;
 pub mod platforms;
 
 use std::{
-    ffi::OsString,
     fs::{self, OpenOptions},
     io::{Cursor, Read},
     path::{Path, PathBuf},
@@ -26,11 +25,9 @@ use sha2::{Digest, Sha256};
 ///   3. A relative `.baml` as a last resort when no home directory is known.
 ///
 /// This is the single source of truth shared by the `baml` wrapper and the
-/// `baml-cli` toolchain binary. The Go, Rust and C++ bridge loaders keep
-/// deliberate copies because they run before the native library is available;
-/// change them together with this.
+/// `baml-cli` toolchain binary. The rule lives in `baml_env::baml_home_from`.
 pub fn baml_home() -> PathBuf {
-    baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir())
+    baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir())
 }
 
 /// Downloaded bridge libraries, shared by every language:
@@ -52,14 +49,6 @@ pub fn btel_dir() -> PathBuf {
 /// Installed toolchains: `<toolchain_dir>/<version>/bin/baml-cli`.
 pub fn toolchain_dir() -> PathBuf {
     baml_home().join("toolchains")
-}
-
-fn baml_home_from(baml_home: Option<OsString>, home_dir: Option<PathBuf>) -> PathBuf {
-    baml_home
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| home_dir.map(|home| home.join(".baml")))
-        .unwrap_or_else(|| PathBuf::from(".baml"))
 }
 
 pub const MANIFEST_SCHEMA: u32 = 1;
@@ -721,12 +710,14 @@ fn extract_zip_to_dir(archive_bytes: &[u8], dest: &Path) -> Result<(), FetchErro
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+
     use super::*;
 
     #[test]
     fn baml_home_uses_non_empty_environment_value() {
         assert_eq!(
-            baml_home_from(
+            baml_env::baml_home_from(
                 Some(OsString::from("/custom/baml")),
                 Some(PathBuf::from("/home/tester")),
             ),
@@ -737,7 +728,7 @@ mod tests {
     #[test]
     fn baml_home_ignores_empty_environment_value() {
         assert_eq!(
-            baml_home_from(Some(OsString::new()), Some(PathBuf::from("/home/tester"))),
+            baml_env::baml_home_from(Some(OsString::new()), Some(PathBuf::from("/home/tester"))),
             PathBuf::from("/home/tester/.baml")
         );
     }
@@ -745,14 +736,14 @@ mod tests {
     #[test]
     fn baml_home_uses_home_directory_when_environment_value_is_absent() {
         assert_eq!(
-            baml_home_from(None, Some(PathBuf::from("/home/tester"))),
+            baml_env::baml_home_from(None, Some(PathBuf::from("/home/tester"))),
             PathBuf::from("/home/tester/.baml")
         );
     }
 
     #[test]
     fn baml_home_uses_relative_directory_when_no_home_is_available() {
-        assert_eq!(baml_home_from(None, None), PathBuf::from(".baml"));
+        assert_eq!(baml_env::baml_home_from(None, None), PathBuf::from(".baml"));
     }
 
     #[test]

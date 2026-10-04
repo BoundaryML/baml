@@ -28,11 +28,7 @@
 mod download;
 pub(crate) mod log;
 
-use std::{
-    ffi::OsString,
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::{ffi::OsString, path::PathBuf, sync::Mutex};
 
 const LIBRARY_PATH_ENV: &str = "BAML_BRIDGE_PATH";
 const DISABLE_DOWNLOAD_ENV: &str = "BAML_BRIDGE_DISABLE_DOWNLOAD";
@@ -163,37 +159,18 @@ impl LoaderEnv {
         explicit_path: Option<PathBuf>,
         lookup: &dyn Fn(&str) -> Option<OsString>,
     ) -> Result<Self, LoaderError> {
+        let config = |e: crate::baml_env::EnvError| LoaderError::Config(e.to_string());
         let string_var = |name: &str| -> Result<Option<String>, LoaderError> {
-            let Some(raw) = lookup(name) else {
-                return Ok(None);
-            };
-            let value = raw
-                .into_string()
-                .map_err(|_| LoaderError::Config(format!("{name} is not valid unicode")))?;
-            let value = value.trim();
-            Ok((!value.is_empty()).then(|| value.to_string()))
+            crate::baml_env::string_from(name, lookup(name)).map_err(config)
         };
         let bool_var = |name: &str| -> Result<bool, LoaderError> {
-            let Some(value) = string_var(name)? else {
-                return Ok(false);
-            };
-            match value.to_ascii_lowercase().as_str() {
-                "1" | "true" | "yes" | "on" => Ok(true),
-                "0" | "false" | "no" | "off" => Ok(false),
-                _ => Err(LoaderError::Config(format!(
-                    "{name} must be a boolean (1/true/yes/on or 0/false/no/off), got {value:?}"
-                ))),
-            }
+            Ok(crate::baml_env::bool_from(name, lookup(name))
+                .map_err(config)?
+                .unwrap_or(false))
         };
 
-        let env_path = match string_var(LIBRARY_PATH_ENV)? {
-            Some(value) if !Path::new(&value).is_absolute() => {
-                return Err(LoaderError::Config(format!(
-                    "{LIBRARY_PATH_ENV} must be an absolute path, got {value:?}"
-                )));
-            }
-            value => value.map(PathBuf::from),
-        };
+        let env_path = crate::baml_env::path_from(LIBRARY_PATH_ENV, lookup(LIBRARY_PATH_ENV))
+            .map_err(config)?;
         let skip_version_check = bool_var(SKIP_VERSION_CHECK_ENV)?;
         if skip_version_check && env_path.is_none() && explicit_path.is_none() {
             return Err(LoaderError::Config(format!(
@@ -209,20 +186,10 @@ impl LoaderEnv {
         } else {
             "HOME"
         };
-        // Same rule as `baml_release::baml_home`: `BAML_HOME` when non-empty,
-        // else `<home>/.baml`, else a relative `.baml`. Deliberately duplicated
-        // (as is the env parsing in this module): this crate is published to
-        // crates.io and cannot depend on the workspace-only `baml_release` or
-        // `baml_env`. Keep in sync with those and the Go and C++ copies.
-        let baml_home = string_var("BAML_HOME")?
-            .map(PathBuf::from)
-            .or_else(|| {
-                string_var(home_var)
-                    .ok()
-                    .flatten()
-                    .map(|h| Path::new(&h).join(".baml"))
-            })
-            .unwrap_or_else(|| PathBuf::from(".baml"));
+        let baml_home = crate::baml_env::baml_home_from(
+            lookup("BAML_HOME"),
+            string_var(home_var).ok().flatten().map(PathBuf::from),
+        );
         Ok(Self {
             explicit_path,
             env_path,
@@ -377,7 +344,10 @@ pub(crate) fn lib_filename() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Read, Write};
+    use std::{
+        io::{Read, Write},
+        path::Path,
+    };
 
     use super::*;
 

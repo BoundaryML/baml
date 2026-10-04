@@ -363,8 +363,8 @@ func safePathSegment(value string) bool {
 // USERPROFILE on Windows), else a relative .baml.
 //
 // This is deliberately duplicated: the Go SDK cannot call into Rust before the
-// native library is located. Keep it in sync with baml_release::baml_home and
-// the copies in the Rust and C++ bridge loaders.
+// native library is located. Keep it in sync with baml_env::baml_home_from and
+// the copy in the C++ bridge loader (the Rust loader compiles that function).
 func bamlHome() string {
 	if home := envString("BAML_HOME"); home != "" {
 		return home

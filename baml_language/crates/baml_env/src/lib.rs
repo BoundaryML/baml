@@ -86,7 +86,9 @@ pub fn path_var(name: &str) -> Result<Option<PathBuf>, EnvError> {
     path_from(name, env::var_os(name))
 }
 
-fn string_from(name: &str, raw: Option<OsString>) -> Result<Option<String>, EnvError> {
+/// Like the `*_var` accessor, over an already-read value (for callers with an
+/// injectable environment).
+pub fn string_from(name: &str, raw: Option<OsString>) -> Result<Option<String>, EnvError> {
     let Some(raw) = raw else { return Ok(None) };
     let value = raw.into_string().map_err(|_| EnvError::NotUnicode {
         name: name.to_string(),
@@ -95,7 +97,7 @@ fn string_from(name: &str, raw: Option<OsString>) -> Result<Option<String>, EnvE
     Ok((!value.is_empty()).then(|| value.to_string()))
 }
 
-fn bool_from(name: &str, raw: Option<OsString>) -> Result<Option<bool>, EnvError> {
+pub fn bool_from(name: &str, raw: Option<OsString>) -> Result<Option<bool>, EnvError> {
     let Some(value) = string_from(name, raw)? else {
         return Ok(None);
     };
@@ -130,7 +132,7 @@ fn choice_from<T: Copy>(
     }
 }
 
-fn path_from(name: &str, raw: Option<OsString>) -> Result<Option<PathBuf>, EnvError> {
+pub fn path_from(name: &str, raw: Option<OsString>) -> Result<Option<PathBuf>, EnvError> {
     let Some(value) = string_from(name, raw)? else {
         return Ok(None);
     };
@@ -142,6 +144,19 @@ fn path_from(name: &str, raw: Option<OsString>) -> Result<Option<PathBuf>, EnvEr
             value,
         })
     }
+}
+
+/// The BAML root: `baml_home` when non-empty, else `<home_dir>/.baml`, else a
+/// relative `.baml`. The one definition of the rule; the Go and C++ bridge
+/// loaders keep copies because they run before the native library is
+/// available, so change them together with this. The Rust bridge loader
+/// compiles this file through a symlink.
+pub fn baml_home_from(baml_home: Option<OsString>, home_dir: Option<PathBuf>) -> PathBuf {
+    baml_home
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| home_dir.map(|home| home.join(".baml")))
+        .unwrap_or_else(|| PathBuf::from(".baml"))
 }
 
 #[cfg(test)]
