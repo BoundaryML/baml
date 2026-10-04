@@ -267,7 +267,7 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
       ...(cwd ? { cwd } : {}),
       env: {
         ...process.env,
-        ...(playgroundDir ? { BAML_PLAYGROUND_DIR: playgroundDir } : {}),
+        ...(playgroundDir ? { DEV_BAML_PLAYGROUND_DIR: playgroundDir } : {}),
       },
     },
   };

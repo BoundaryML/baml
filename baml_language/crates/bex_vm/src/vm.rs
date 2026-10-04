@@ -7399,7 +7399,7 @@ impl BexVm {
         // exec (for example, to spawn a child) does not necessarily release
         // the heap permit. The checker resets its own counter when it polls.
 
-        // BAML_KPERF: read PMCs around this exec() on the current worker thread.
+        // DEV_BAML_VM_KPERF: read PMCs around this exec() on the current worker thread.
         let kp = crate::kperf::enabled();
         let (kp_start, ops_start) = if kp {
             (crate::kperf::exec_start(), self.op_count)

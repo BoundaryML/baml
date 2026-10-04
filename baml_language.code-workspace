@@ -29,7 +29,7 @@
 				"env": {
 				  "VSCODE_DEBUG_MODE": "true",
 				  "BAML_CLI_PATH": "${workspaceFolder:baml_language}/target/debug/baml-cli",
-				  "BAML_PLAYGROUND_DEV_PORT": "4000"
+				  "DEV_BAML_PLAYGROUND_PORT": "4000"
 				}
 			  }
 		]

@@ -127,8 +127,8 @@ fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathB
 }
 
 fn resolve_playground_assets() -> Result<Option<PathBuf>> {
-    if std::env::var_os("BAML_PLAYGROUND_DEV_PORT").is_some()
-        || std::env::var_os("BAML_PLAYGROUND_DIR").is_some()
+    if std::env::var_os("DEV_BAML_PLAYGROUND_PORT").is_some()
+        || std::env::var_os("DEV_BAML_PLAYGROUND_DIR").is_some()
     {
         return Ok(None);
     }
@@ -140,7 +140,7 @@ fn resolve_playground_assets() -> Result<Option<PathBuf>> {
     anyhow::bail!(
         "could not find packaged playground assets. For local debugging, run \
          `pnpm --filter app-vscode-webview dev -- --host 127.0.0.1 --port 4000` \
-         and set `BAML_PLAYGROUND_DEV_PORT=4000`, or set `BAML_PLAYGROUND_DIR` \
+         and set `DEV_BAML_PLAYGROUND_PORT=4000`, or set `DEV_BAML_PLAYGROUND_DIR` \
          to a built app-vscode-webview/dist directory."
     );
 }

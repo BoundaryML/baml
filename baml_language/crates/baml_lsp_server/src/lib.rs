@@ -353,27 +353,9 @@ pub fn version() -> &'static str {
 // ---------------------------------------------------------------------------
 
 /// Locate legacy stdlib files so incoming file URIs can alias embedded sources.
-/// Checks `BAML_STDLIB_DIR`, then `<exe dir>/../stdlib` from older installs,
-/// then the build-time `baml_std/` checkout. Clients can override this through
+/// Uses the build-time `baml_std/` checkout. Clients can override this through
 /// `initializationOptions.bamlClient.stdlibDir`.
 fn resolve_stdlib_dir() -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os("BAML_STDLIB_DIR") {
-        let dir = PathBuf::from(dir);
-        if dir.is_dir() {
-            return Some(std::fs::canonicalize(&dir).unwrap_or(dir));
-        }
-        tracing::warn!(
-            path = %dir.display(),
-            "BAML_STDLIB_DIR is not a directory; ignoring it"
-        );
-    }
-    let toolchain = std::env::current_exe()
-        .ok()
-        .and_then(|exe| Some(exe.parent()?.join("..").join("stdlib")))
-        .filter(|candidate| candidate.is_dir());
-    if let Some(candidate) = toolchain {
-        return Some(std::fs::canonicalize(&candidate).unwrap_or(candidate));
-    }
     let checkout = PathBuf::from(baml_builtins2::BAML_STD_DIR);
     checkout
         .is_dir()

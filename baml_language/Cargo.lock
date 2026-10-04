@@ -1129,6 +1129,7 @@ dependencies = [
 name = "baml_query_btel"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_query_btel",
  "baml_test_support",
  "base64",
@@ -1419,6 +1420,7 @@ dependencies = [
 name = "bex_heap"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_type",
  "bex_external_types",
  "bex_str",
@@ -1530,6 +1532,7 @@ dependencies = [
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_compiler_diagnostics",
+ "baml_env",
  "baml_linker_types",
  "baml_test_support",
  "baml_type",
@@ -7396,6 +7399,7 @@ name = "sys_auth"
 version = "0.0.0-beta"
 dependencies = [
  "async-trait",
+ "baml_env",
  "forked_aws_config",
  "forked_aws_sigv4",
  "forked_google_cloud_auth",
