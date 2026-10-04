@@ -95,7 +95,7 @@ fn initialization_in_progress() -> BridgeError {
     BridgeError::Startup("BAML runtime initialization is already in progress".to_string())
 }
 
-pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
+pub(crate) fn get_or_init_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     RUNTIME.with(|slot| {
         let pending = {
             let mut state = slot.borrow_mut();

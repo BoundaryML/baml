@@ -56,13 +56,13 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
 
 /// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
 ///
-/// Initialize the process-global runtime from serialized BAML bytecode
-/// (`bridge_cffi::initialize_runtime_from_blob`, the same path
-/// `bridge_python` uses). Idempotent in the same sense as Python: the
-/// single-slot singleton is replaced, so a second call swaps the runtime.
-/// A setup failure is thrown as an unchecked `RuntimeException` (this is a
-/// handle-returning site with no envelope to ride, like Python's
-/// `initialize_runtime_from_blob` raising).
+/// Stage serialized BAML bytecode as the process-global runtime
+/// (`bridge_cffi::stage_runtime_from_blob`, the same path `bridge_python`
+/// uses); the first BAML call validates it and builds the engine. Idempotent
+/// in the same sense as Python: the single-slot singleton is replaced, so a
+/// second call swaps the runtime. A setup failure is thrown as an unchecked
+/// `RuntimeException` (this is a handle-returning site with no envelope to
+/// ride, like Python's `initialize_runtime_from_blob` raising).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     mut env: JNIEnv<'_>,
@@ -145,8 +145,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
         }
     };
 
-    if let Err(e) = bridge_cffi::initialize_runtime_from_blob(&bytes, embedded_baml_toml.as_deref())
-    {
+    if let Err(e) = bridge_cffi::stage_runtime_from_blob(&bytes, embedded_baml_toml.as_deref()) {
         throw_runtime_exception_exact(&mut env, &e.to_string());
     }
 }
