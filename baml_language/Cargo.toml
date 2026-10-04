@@ -143,6 +143,7 @@ bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
 sys_wasm = { path = "crates/sys_wasm" }
 baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
+baml_pack_host = { path = "crates/baml_pack_host" }
 bex_events = { path = "crates/bex_events" }
 baml_query = { path = "crates/baml_query" }
 baml_query_btel = { path = "crates/baml_query_btel" }

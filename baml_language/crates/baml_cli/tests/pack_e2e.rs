@@ -29,9 +29,10 @@ use std::{
 
 use common::BuiltPaths;
 
-// ============================================================================
+// =====================================================================}
+
 // Helpers
-// ============================================================================
+// =====================================================================}
 
 fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
     let out_bin = dir.join("out");
@@ -78,9 +79,10 @@ fn pack_project(
     (tmp, bin)
 }
 
-// ============================================================================
+// =====================================================================}
+
 // Tests
-// ============================================================================
+// =====================================================================}
 
 /// Pack root `main`, run it, observe its return value on stdout.
 /// Validates the whole pipeline: envelope roundtrip, host dispatch,
@@ -420,4 +422,66 @@ fn pack_child_survives_cleanup_and_runtime_shutdown() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     assert_eq!(std::fs::read_to_string(marker).unwrap(), "completed");
+}
+
+/// The wrapper release command uses a supplied platform host and ordinary BAML
+/// sources. Test both entry points through embedding, rather than the Cargo shim.
+#[test]
+fn packed_wrapper_uses_supplied_host_and_package_manager_entry_point() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../baml/baml_src");
+    for file in ["main.baml", "version.baml", "baml.toml"] {
+        std::fs::copy(source.join(file), tmp.path().join(file)).unwrap();
+    }
+    let host = built.baml_pack_host.to_str().unwrap();
+    let bin = pack(built, tmp.path(), &["Main", "--host", host]);
+    let mut version = Command::new(&bin);
+    version
+        .args(["--version"])
+        .env("BAML_HOME", tmp.path().join("home"))
+        .env("BAML_VERSION", "1.2.3");
+    let out = version.output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("baml wrapper 0.2.5"));
+
+    #[cfg(unix)]
+    {
+        use std::{io::Write as _, os::unix::fs::PermissionsExt as _, process::Stdio};
+        let cli = tmp.path().join("local-cli");
+        std::fs::write(
+            &cli,
+            "#!/bin/sh\nprintf '%s:%s:' $$ \"$1\"; cat; printf err >&2; exit 23\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut child = Command::new(&bin)
+            .arg("argument with spaces")
+            .env("BAML_VERSION", cli)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        child.stdin.take().unwrap().write_all(b"input").unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert_eq!(out.status.code(), Some(23));
+        let stdout = String::from_utf8(out.stdout).unwrap();
+        let (child_pid, rest) = stdout.split_once(':').unwrap();
+        assert_ne!(child_pid.parse::<u32>().unwrap(), pid);
+        assert_eq!(rest, "argument with spaces:input");
+        assert_eq!(out.stderr, b"err");
+    }
+    let bin = pack(built, tmp.path(), &["NoSelfUpdateMain", "--host", host]);
+    let out = run(&bin, &["self-update"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "self-update is disabled in this build.\nUpdate BAML with your package manager.\n"
+    );
 }

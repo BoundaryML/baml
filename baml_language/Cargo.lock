@@ -590,15 +590,13 @@ dependencies = [
 name = "baml"
 version = "0.2.5"
 dependencies = [
- "anyhow",
- "baml_release",
- "console",
- "reqwest",
- "serde",
+ "baml_artifact",
+ "baml_db",
+ "baml_exec",
+ "baml_pack_host",
  "serde_json",
  "tempfile",
  "toml 0.8.23",
- "toml_edit 0.22.27",
 ]
 
 [[package]]
