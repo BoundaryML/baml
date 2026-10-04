@@ -105,7 +105,7 @@ run_sidecar() {
   if [[ "$single_file" == true ]]; then
     assert_single_file_inventory "$output" true
   fi
-  env -u BAML_BRIDGE_CSHARP_NATIVE_LIBRARY \
+  env -u BAML_BRIDGE_PATH \
     "$output/Baml.Bridge.NuGetPackageSmoke" \
     | grep -Fx 'csharp_nuget_package_smoke=ok'
 }
@@ -118,7 +118,7 @@ run_self_extract() {
   test "${#bundled_output_native[@]}" -eq 0
   assert_single_file_inventory "$output" false
   mkdir -p "$extraction_root"
-  env -u BAML_BRIDGE_CSHARP_NATIVE_LIBRARY \
+  env -u BAML_BRIDGE_PATH \
     DOTNET_BUNDLE_EXTRACT_BASE_DIR="$extraction_root" \
     "$output/Baml.Bridge.NuGetPackageSmoke" \
     | grep -Fx 'csharp_nuget_package_smoke=ok'

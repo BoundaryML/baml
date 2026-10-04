@@ -18,6 +18,7 @@ workspace = true
 fault-injection = [  ]
 
 [dependencies]
+baml_env = { workspace = true }
 btel_reader = { workspace = true }
 btel_recorder = { workspace = true }
 btel_snapshot = { workspace = true }

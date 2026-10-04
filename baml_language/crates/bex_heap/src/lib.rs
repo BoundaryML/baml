@@ -58,6 +58,8 @@
 //! (internal)       (FFI boundary)         (memory)     (exec)     (async)
 //! ```
 
+#![warn(clippy::disallowed_methods)]
+
 mod accessor;
 pub(crate) mod card_table;
 mod chunked_vec;

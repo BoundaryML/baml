@@ -91,6 +91,15 @@ Run output options:
       --include-generated
           Include compiler-synthesized functions in `--list` output
 
+Shutdown options:
+      --shutdown-timeout <DURATION>
+          Wait at most this long at exit for in-flight calls and background futures.
+
+          Accepts durations such as `500ms`, `15s` or `2m`; `none` waits forever. Ctrl+C still
+          cancels immediately.
+
+          [default: 15s]
+
 Global options:
   -q, --quiet...
           Suppress nonessential output

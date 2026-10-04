@@ -66,6 +66,7 @@
 //!
 //! Safety is ensured by the permit/guard coordination system described above.
 
+#![warn(clippy::disallowed_methods)]
 #![allow(unsafe_code)]
 
 mod bex_work;
@@ -1907,13 +1908,10 @@ impl BexEngine {
                         None,
                     ),
                 };
-                let http_bodies = btel_settings::network::bodies_from_env()
-                    .map_err(|error| EngineError::Other(error.to_string()))?;
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(
-                        bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
-                            .with_http_bodies(http_bodies),
-                    ),
+                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
+                        auto_level,
+                    )),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]
@@ -7425,7 +7423,7 @@ mod trace_scope_tests {
         use sys_native::SysOpsExt;
 
         const CHILD: &str = "BAML_TEST_TRACE_SCOPE_CHILD";
-        if std::env::var_os(CHILD).is_none() {
+        if !baml_env::has_var(CHILD) {
             for mode in ["off", "medium"] {
                 let output = std::process::Command::new(std::env::current_exe().unwrap())
                     .args([
@@ -7596,7 +7594,7 @@ mod concurrent_tests {
     async fn test_concurrent_calls_safe() {
         // Note: This requires a test BAML program to be available
         // Skip if test infrastructure not set up
-        if std::env::var("BAML_TEST_CONCURRENT").is_err() {
+        if !baml_env::has_var("BAML_TEST_CONCURRENT") {
             return;
         }
 

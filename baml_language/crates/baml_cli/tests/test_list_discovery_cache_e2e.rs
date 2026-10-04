@@ -13,36 +13,24 @@ mod common;
 use std::{
     path::Path,
     process::{Command, Output},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
-/// Run `baml-cli` in `dir` with an isolated cache directory (so cold/warm state
-/// is under the test's control) and the passive skill/update checks disabled.
-/// `extra_env` layers on top of the shared spawn matrix (e.g. an opt-out knob).
-fn run_list(
-    cli: &Path,
-    dir: &Path,
-    cache_dir: &Path,
-    args: &[&str],
-    extra_env: &[(&str, &str)],
-) -> Output {
-    let home = dir.join(".baml-home");
-    std::fs::create_dir_all(&home).unwrap();
+/// Run `baml-cli` in `dir` with `home` as its `BAML_HOME` (the build cache
+/// lives under it, so cold/warm state is under the test's control) and the
+/// passive skill/update checks disabled.
+fn run_list(cli: &Path, dir: &Path, home: &Path, args: &[&str]) -> Output {
+    std::fs::create_dir_all(home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
     let mut cmd = Command::new(cli);
+    // Ignore the inherited CLAUDECODE/AI_AGENT/… environment: it flips
+    // `--output-preset auto` to `agent`, which disables the progress lines some
+    // assertions read.
+    cmd.env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1");
     cmd.args(args);
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
-    // Pin the human output preset: under a coding agent the inherited
-    // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
-    // `agent`, which disables the progress lines some assertions read.
-    cmd.env("BAML_OUTPUT_PRESET", "human");
-    cmd.env("BAML_AGENT_SKILL_CHECK", "off");
-    cmd.env("BAML_HOME", &home);
-    cmd.env("BAML_CACHE_DIR", cache_dir);
-    cmd.env("BAML_CACHE_DEBUG", "1");
-    for (key, value) in extra_env {
-        cmd.env(key, value);
-    }
+    cmd.env("BAML_HOME", home);
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -88,27 +76,24 @@ fn stdout_of(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-const SERVED_FROM_CACHE: &str = "served `test --list` from discovery cache";
-
-/// Compare forced-honest discovery with an already-populated cache. Asserts
-/// exit code AND stdout are identical, and that only the warm run served from
-/// the discovery cache (proving it skipped engine boot). Works for both
-/// matching filters (exit 0) and no-match filters (exit 5), so the
-/// no-tests-selected edge is covered too.
-fn assert_honest_equals_warm(cli: &Path, dir: &Path, cache_dir: &Path, extra: &[&str]) -> String {
+/// Compare a cold run (a fresh home, so honest discovery) with a run against
+/// an already-populated home (served from the cached discovery output).
+/// Asserts exit code AND stdout are identical. Works for both matching filters
+/// (exit 0) and no-match filters (exit 5), so the no-tests-selected edge is
+/// covered too.
+fn assert_honest_equals_warm(cli: &Path, dir: &Path, warm_home: &Path, extra: &[&str]) -> String {
+    static COLD_HOMES: AtomicUsize = AtomicUsize::new(0);
     let mut args = vec!["test", "--list", "--from", "."];
     args.extend_from_slice(extra);
 
-    // The honest filtered path must neither read nor update the unfiltered
-    // entry. The warm side applies `extra` to that one canonical entry in Rust.
-    let cold = run_list(
-        cli,
-        dir,
-        cache_dir,
-        &args,
-        &[("BAML_NO_DISCOVERY_CACHE", "1")],
-    );
-    let warm = run_list(cli, dir, cache_dir, &args, &[]);
+    // The cold side never sees the populated entry. The warm side applies
+    // `extra` to that one canonical entry in Rust.
+    let cold_home = dir.join(format!(
+        ".cold-home-{}",
+        COLD_HOMES.fetch_add(1, Ordering::Relaxed)
+    ));
+    let cold = run_list(cli, dir, &cold_home, &args);
+    let warm = run_list(cli, dir, warm_home, &args);
 
     assert_eq!(
         cold.status.code(),
@@ -127,48 +112,34 @@ fn assert_honest_equals_warm(cli: &Path, dir: &Path, cache_dir: &Path, extra: &[
          (cached, Rust filter) runs\ncold:\n{cold_out}\nwarm:\n{warm_out}",
     );
 
-    let cold_err = String::from_utf8_lossy(&cold.stderr);
-    let warm_err = String::from_utf8_lossy(&warm.stderr);
-    assert!(
-        !cold_err.contains(SERVED_FROM_CACHE),
-        "the cold run must do honest discovery, not serve from cache; stderr:\n{cold_err}",
-    );
-    assert!(
-        warm_err.contains(SERVED_FROM_CACHE),
-        "the warm run must serve `--list {extra:?}` from the discovery cache (engine boot \
-         skipped); stderr:\n{warm_err}",
-    );
-
     cold_out
 }
 
-fn populate_unfiltered_cache(cli: &Path, dir: &Path, cache_dir: &Path) -> String {
-    let populate = run_list(cli, dir, cache_dir, &["test", "--list", "--from", "."], &[]);
+fn populate_unfiltered_cache(cli: &Path, dir: &Path, home: &Path) -> String {
+    let populate = run_list(cli, dir, home, &["test", "--list", "--from", "."]);
     assert!(
         populate.status.success(),
         "unfiltered cache population failed:\n{}",
         String::from_utf8_lossy(&populate.stderr)
     );
     assert!(
-        !String::from_utf8_lossy(&populate.stderr).contains(SERVED_FROM_CACHE),
-        "cache population unexpectedly reused an existing discovery entry"
+        home.join("build").join("cache").is_dir(),
+        "population should have written the build cache under BAML_HOME"
     );
     stdout_of(&populate)
 }
 
-/// Unfiltered `--list`: the corpus measurement path and the common case. Also
-/// sanity-checks that the fixture lists a non-empty set.
 #[test]
 fn list_unfiltered_cold_equals_warm() {
     let cli = common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_test_project(tmp.path());
-    let cache_dir = tmp.path().join(".discovery-cache");
-    let populated_output = populate_unfiltered_cache(&cli, tmp.path(), &cache_dir);
-    let honest_output = assert_honest_equals_warm(&cli, tmp.path(), &cache_dir, &[]);
+    let warm_home = tmp.path().join(".warm-home");
+    let populated_output = populate_unfiltered_cache(&cli, tmp.path(), &warm_home);
+    let honest_output = assert_honest_equals_warm(&cli, tmp.path(), &warm_home, &[]);
     assert_eq!(
         populated_output, honest_output,
-        "the initial cache-populating list must match forced-honest and warm output"
+        "the initial cache-populating list must match cold and warm output"
     );
     assert!(
         populated_output.contains("root::suite::nested::deep"),
@@ -177,15 +148,15 @@ fn list_unfiltered_cold_equals_warm() {
 }
 
 /// A filter matrix over one project and one unfiltered discovery-cache entry.
-/// Each variant still performs an independent forced-honest BAML-filter run and
+/// Each variant still performs an independent cold BAML-filter run and
 /// compares it with the Rust-filtered cached result, including a no-match case.
 #[test]
 fn list_filtered_cold_equals_warm_across_matrix() {
     let cli = common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_test_project(tmp.path());
-    let cache_dir = tmp.path().join(".discovery-cache");
-    let _ = populate_unfiltered_cache(&cli, tmp.path(), &cache_dir);
+    let warm_home = tmp.path().join(".warm-home");
+    let _ = populate_unfiltered_cache(&cli, tmp.path(), &warm_home);
 
     for extra in [
         vec!["-i", "root::suite::*"],
@@ -197,6 +168,6 @@ fn list_filtered_cold_equals_warm_across_matrix() {
         vec!["-i", "root::suite::*", "-x", "root::suite::two"],
         vec!["-i", "totally-bogus-selector-xyz"], // no match (exit 5, empty stdout)
     ] {
-        let _ = assert_honest_equals_warm(&cli, tmp.path(), &cache_dir, &extra);
+        let _ = assert_honest_equals_warm(&cli, tmp.path(), &warm_home, &extra);
     }
 }

@@ -15,6 +15,8 @@
 //! `baml_builtins2/baml_std/ai/ns_internal/auth.baml`), which the `google` and
 //! `aws` client packages wrap.
 
+#![warn(clippy::disallowed_methods)]
+
 use std::sync::Arc;
 
 use sys_types::runtime_io::RuntimeIo;

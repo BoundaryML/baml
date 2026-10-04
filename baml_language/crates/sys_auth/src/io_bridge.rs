@@ -242,10 +242,15 @@ impl aws_config::CredentialIo for BamlAuthIo {
             // The opt-in is read through `RuntimeIo`, so the host's env policy
             // is what decides — the same gate that governs everything else
             // credential resolution can see.
-            let opted_in = self
-                .env_var(CREDENTIAL_PROCESS_OPT_IN)
-                .await
-                .is_some_and(|v| matches!(v.trim(), "1" | "true" | "TRUE" | "yes"));
+            let opted_in = match self.env_var(CREDENTIAL_PROCESS_OPT_IN).await {
+                Some(v) if !v.trim().is_empty() => baml_env::parse_bool(&v).ok_or_else(|| {
+                    aws_config::ConfigError::Io(format!(
+                        "{CREDENTIAL_PROCESS_OPT_IN} must be a boolean \
+                         (1/true/yes/on or 0/false/no/off), got {v:?}"
+                    ))
+                })?,
+                _ => false,
+            };
             if !opted_in {
                 return Err(aws_config::ConfigError::Io(format!(
                     "credential_process is disabled: it runs an arbitrary command outside BAML's \

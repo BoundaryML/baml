@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 use std::{fmt::Write as _, path::PathBuf};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};

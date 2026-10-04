@@ -18,9 +18,9 @@
 #      the per-fixture build.gradle.kts links with `implementation(files(...))`.
 #
 # NOTE: the fixtures load the native lib from the env var
-# BAML_JAVA_BRIDGE_LIB, which must point at target/debug/libbridge_java.so.
+# BAML_BRIDGE_PATH, which must point at target/debug/libbridge_java.so.
 # We deliberately export nothing here — env propagation happens at test
-# invocation (the fixture build.gradle.kts forwards BAML_JAVA_BRIDGE_LIB
+# invocation (the fixture build.gradle.kts forwards BAML_BRIDGE_PATH
 # into the Test task). Teaching harness_runner to set that var on the test
 # command's environment is a follow-up.
 

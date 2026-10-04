@@ -20,6 +20,7 @@
 //!
 //! The rows are source rather than generated because `sdk_test_codegen` runs
 //! from `setup.sh`, which nextest fires *after* these test binaries are built.
+#![allow(clippy::disallowed_methods)]
 
 use std::{
     env, fs,
@@ -171,7 +172,7 @@ pub fn run_go_test(fixture: &str) {
             // target tree behind. `-modcacherw` keeps those directories
             // writable, which is exactly what this flag exists for.
             .env("GOFLAGS", "-modcacherw")
-            .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root)),
+            .env("BAML_BRIDGE_PATH", go_runtime_library(workspace_root)),
         &format!("fixture `{fixture}` `{}` test ./...", go.display()),
     );
 }
@@ -220,7 +221,7 @@ pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cach
 }
 
 /// Java-fixture variant of [`run_test_cmd`]: injects
-/// `BAML_JAVA_BRIDGE_LIB` pointing at the workspace-built
+/// `BAML_BRIDGE_PATH` pointing at the workspace-built
 /// `bridge_java` cdylib (produced by `crates/java/setup.sh`), so the
 /// generated `Baml` anchor can `System.load` the engine during tests.
 pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
@@ -244,7 +245,7 @@ pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env
         cmd,
         cache_subdir,
         cache_env_var,
-        &[("BAML_JAVA_BRIDGE_LIB", lib_str.as_str())],
+        &[("BAML_BRIDGE_PATH", lib_str.as_str())],
     );
 }
 
@@ -937,7 +938,7 @@ pub mod rust {
     /// intentionally not checked — the emitter's pretty-printer is its
     /// canonical format), `clippy` lints the generated library, and
     /// `cargo_test` compiles and runs the enabled ports. Only `cargo_test`
-    /// gets `BAML_LIBRARY_PATH`: `baml_bridge` is dylib-only, so the fixture's
+    /// gets `BAML_BRIDGE_PATH`: `baml_bridge` is dylib-only, so the fixture's
     /// tests load the engine cdylib at run time, while fmt and clippy never
     /// execute it.
     #[macro_export]
@@ -1002,10 +1003,10 @@ pub mod rust {
                             "cargo test --manifest-path Cargo.toml",
                             &[
                                 (
-                                    "BAML_LIBRARY_PATH",
+                                    "BAML_BRIDGE_PATH",
                                     engine.to_str().expect("engine path is valid UTF-8"),
                                 ),
-                                ("BAML_LIBRARY_DISABLE_DOWNLOAD", "true"),
+                                ("BAML_BRIDGE_DISABLE_DOWNLOAD", "true"),
                             ],
                         );
                     }

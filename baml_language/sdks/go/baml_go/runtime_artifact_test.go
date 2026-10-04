@@ -163,26 +163,94 @@ func TestManifestVersionCannotEscapeCacheDirectory(t *testing.T) {
 }
 
 func TestDisableDownloadEnvironmentCannotBeOverridden(t *testing.T) {
-	t.Setenv("BAML_DISABLE_DOWNLOAD", "true")
-	t.Setenv("BAML_RUNTIME_TARGET", "aarch64-apple-darwin")
-
-	configuredRuntime.Lock()
-	previous := configuredRuntime.value
-	configuredRuntime.value = &RuntimeConfig{DisableDownload: false}
-	configuredRuntime.Unlock()
-	t.Cleanup(func() {
-		configuredRuntime.Lock()
-		configuredRuntime.value = previous
-		configuredRuntime.Unlock()
-	})
+	t.Setenv("BAML_BRIDGE_DISABLE_DOWNLOAD", "true")
+	setConfiguredRuntime(t, &RuntimeConfig{DisableDownload: false})
 
 	config, err := currentRuntimeConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !config.DisableDownload {
-		t.Fatal("BAML_DISABLE_DOWNLOAD=true was overridden by programmatic configuration")
+		t.Fatal("BAML_BRIDGE_DISABLE_DOWNLOAD=true was overridden by programmatic configuration")
 	}
+}
+
+func TestDisableDownloadRejectsInvalidBool(t *testing.T) {
+	t.Setenv("BAML_BRIDGE_DISABLE_DOWNLOAD", "maybe")
+	setConfiguredRuntime(t, nil)
+	if _, err := currentRuntimeConfig(); err == nil || !strings.Contains(err.Error(), "BAML_BRIDGE_DISABLE_DOWNLOAD") {
+		t.Fatalf("got error %v, want boolean parse error naming the variable", err)
+	}
+}
+
+func TestBridgePathEnvironment(t *testing.T) {
+	setConfiguredRuntime(t, nil)
+	absolute := filepath.Join(t.TempDir(), defaultRuntimeFilename())
+
+	t.Setenv("BAML_BRIDGE_PATH", absolute)
+	config, err := currentRuntimeConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.LibraryPath != absolute {
+		t.Fatalf("got library path %q, want %q", config.LibraryPath, absolute)
+	}
+
+	t.Setenv("BAML_BRIDGE_PATH", "relative/libbridge_cffi.so")
+	if _, err := currentRuntimeConfig(); err == nil || !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("got error %v, want absolute-path error", err)
+	}
+}
+
+func TestSkipVersionCheckRequiresBridgePath(t *testing.T) {
+	setConfiguredRuntime(t, nil)
+	t.Setenv("BAML_BRIDGE_PATH", "")
+	t.Setenv("DEV_BAML_BRIDGE_SKIP_VERSION_CHECK", "1")
+	if _, err := currentRuntimeConfig(); err == nil || !strings.Contains(err.Error(), "requires BAML_BRIDGE_PATH") {
+		t.Fatalf("got error %v, want requires-path error", err)
+	}
+
+	t.Setenv("BAML_BRIDGE_PATH", filepath.Join(t.TempDir(), defaultRuntimeFilename()))
+	if _, err := currentRuntimeConfig(); err != nil {
+		t.Fatalf("skip with explicit path failed: %v", err)
+	}
+}
+
+func TestManifestBaseURLEnvironment(t *testing.T) {
+	setConfiguredRuntime(t, nil)
+	t.Setenv("BAML_MANIFEST_BASE_URL", "https://mirror.example.invalid/manifest/v1/")
+	config, err := currentRuntimeConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ManifestBaseURL != "https://mirror.example.invalid/manifest/v1" {
+		t.Fatalf("got manifest base URL %q", config.ManifestBaseURL)
+	}
+}
+
+func TestDefaultCacheDirDerivesFromBamlHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("BAML_HOME", home)
+	dir, err := defaultRuntimeCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, "bridges"); dir != want {
+		t.Fatalf("got cache dir %q, want %q", dir, want)
+	}
+}
+
+func setConfiguredRuntime(t *testing.T, value *RuntimeConfig) {
+	t.Helper()
+	configuredRuntime.Lock()
+	previous := configuredRuntime.value
+	configuredRuntime.value = value
+	configuredRuntime.Unlock()
+	t.Cleanup(func() {
+		configuredRuntime.Lock()
+		configuredRuntime.value = previous
+		configuredRuntime.Unlock()
+	})
 }
 
 func TestProcessLockSerializesInstallers(t *testing.T) {
@@ -232,7 +300,7 @@ func TestResolveRuntimeRejectsBadDownloadChecksum(t *testing.T) {
 	if _, _, err := resolveRuntime(context.Background(), RuntimeConfig{CacheDir: cache, Artifact: &artifact}); err == nil {
 		t.Fatal("checksum mismatch unexpectedly succeeded")
 	}
-	destination := filepath.Join(cache, artifact.Version, "abi-v1", artifact.Target, artifact.Filename)
+	destination := filepath.Join(cache, artifact.Version, artifact.Target, artifact.Filename)
 	if _, err := os.Stat(destination); !os.IsNotExist(err) {
 		t.Fatalf("bad download was installed at %s", destination)
 	}
@@ -293,7 +361,7 @@ func TestResolveRuntimeRepairsCorruptCacheWhenOnline(t *testing.T) {
 
 	artifact := testRuntimeArtifact(server.URL, payload)
 	cache := t.TempDir()
-	destination := filepath.Join(cache, artifact.Version, "abi-v1", artifact.Target, artifact.Filename)
+	destination := filepath.Join(cache, artifact.Version, artifact.Target, artifact.Filename)
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		t.Fatal(err)
 	}

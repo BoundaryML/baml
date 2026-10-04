@@ -84,13 +84,6 @@ impl CheckArgs {
             // re-derivation is Salsa-memoized against the check just performed.
             cache.store_stdlib_diagnostics(db);
         }
-        // Warm evidence (mirrors run/test): with the check rows served and the
-        // stdlib blob serving builtins, this is 0; a cold check walks every
-        // scope.
-        crate::bytecode_cache::cache_debug(format_args!(
-            "body inferences: {} this process",
-            baml_db::baml_compiler2_hir_ty::infer::body_inferences()
-        ));
         if !diagnostics.is_empty() {
             let rendered = render_project_diagnostics(db, &diagnostics);
             reporter.suspend(|| {
@@ -115,28 +108,24 @@ impl CheckArgs {
         // manifest: a project whose rows were served is the one the manifest
         // already describes, so there is nothing to store, and skipping keeps
         // the no-op check emit-free. Seeding is an optimization: a failed
-        // emit on a diagnostics-clean project is logged, never surfaced as a
-        // check failure.
+        // emit on a diagnostics-clean project is never surfaced as a check
+        // failure.
         if let Some(ctx) = cache {
             if served.is_none() {
-                match crate::bytecode_cache::compile_program(db, package, cache.as_ref()) {
-                    Ok(program) => {
-                        let fresh = fresh_diagnostics
-                            .as_ref()
-                            .expect("a cache is present, so fresh diagnostics were computed");
-                        ctx.verify_and_store(
-                            &session,
-                            &program,
-                            fresh,
-                            served.as_ref(),
-                            stdlib_interface_hit,
-                        )?;
-                    }
-                    Err(err) => {
-                        crate::bytecode_cache::cache_debug(format_args!(
-                            "check: cache seeding skipped (emit failed): {err:?}"
-                        ));
-                    }
+                // A failed emit leaves the cache cold and is not an error.
+                if let Ok(program) =
+                    crate::bytecode_cache::compile_program(db, package, cache.as_ref())
+                {
+                    let fresh = fresh_diagnostics
+                        .as_ref()
+                        .expect("a cache is present, so fresh diagnostics were computed");
+                    ctx.verify_and_store(
+                        &session,
+                        &program,
+                        fresh,
+                        served.as_ref(),
+                        stdlib_interface_hit,
+                    )?;
                 }
             }
         }

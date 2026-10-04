@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 fn main() {
     let target = std::env::var("TARGET").expect("Cargo target triple");
     println!("cargo:rustc-env=BAML_CFFI_TARGET={target}");

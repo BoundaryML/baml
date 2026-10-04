@@ -377,7 +377,7 @@ fn rehydrate_builtin_span(
 
 /// Run `check_file` over every builtin (stdlib) file and return the honest
 /// diagnostics. Called only off the warm serve path — the cold/miss store and
-/// the `BAML_CACHE_VERIFY` oracle. On a database that already checked the
+/// the `DEV_BAML_BUILD_CACHE_VERIFY=always` oracle. On a database that already checked the
 /// builtins (the same compile's honest pass) every scope is Salsa-memoized, so
 /// this re-walk pulls no fresh inference.
 pub(crate) fn collect_builtin_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {

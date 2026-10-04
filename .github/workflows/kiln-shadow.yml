@@ -968,7 +968,7 @@ jobs:
         env:
           # Require full diagnostics for both valid and intentionally invalid
           # examples. Do not seed disposable projects during the check pass.
-          BAML_NO_BYTECODE_CACHE: "1"
+          BAML_BUILD_CACHE: "false"
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
         run: pnpm --filter app-developer-docs docs:snippets:validate
         working-directory: typescript2
@@ -977,7 +977,7 @@ jobs:
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
           # Content-addressed keys include the compiler fingerprint and project
           # inputs. Reuse the stdlib across examples without writing into source.
-          BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
+          BAML_HOME: ${{ runner.temp }}/baml-documentation-home
         run: pnpm --filter app-developer-docs docs:book:validate
         working-directory: typescript2
       # The full baml_cli::baml_corpus test above already executes
@@ -2149,7 +2149,7 @@ jobs:
         env:
           # Require full diagnostics for both valid and intentionally invalid
           # examples. Do not seed disposable projects during the check pass.
-          BAML_NO_BYTECODE_CACHE: "1"
+          BAML_BUILD_CACHE: "false"
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
         run: pnpm --filter app-developer-docs docs:snippets:validate
         working-directory: typescript2
@@ -2158,7 +2158,7 @@ jobs:
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
           # Content-addressed keys include the compiler fingerprint and project
           # inputs. Reuse the stdlib across examples without writing into source.
-          BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
+          BAML_HOME: ${{ runner.temp }}/baml-documentation-home
         run: pnpm --filter app-developer-docs docs:book:validate
         working-directory: typescript2
       # The full baml_cli::baml_corpus test above already executes

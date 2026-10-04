@@ -91,8 +91,9 @@ function PassRate(threshold: float) -> TestSetRunner {
 
     return (children) -> TestSetReport {
         // Runner middleware runs outside the CLI's shared pool (the closure
-        // cannot capture it); a local fallback pool still bounds the fan-out.
-        let report = root._run_children_parallel(children, root._test_pool(0));
+        // cannot capture it); a local fallback pool still bounds the fan-out. The
+        // pool's deadline is unused: each child closure already carries its own.
+        let report = root._run_children_parallel(children, root._test_pool(0, 0));
         let outcome: Outcome = if (report.total == 0) {
             "pass"
         } else if ((report.passed + 0.0) / (report.total + 0.0) >= threshold) {

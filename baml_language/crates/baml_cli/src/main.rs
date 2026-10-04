@@ -1,3 +1,4 @@
+#![warn(clippy::disallowed_methods)]
 // TODO: This file has been simplified to remove baml_runtime/baml_log dependencies.
 
 // TODO: baml_runtime is disabled for now
@@ -10,7 +11,7 @@ use std::io::Write as _;
 /// remaining single-threaded CPU in the cold-compile audit. Installing
 /// mimalloc as the global allocator substantially cuts cold `baml check` /
 /// `baml build` wall time. This affects allocation only, not any rendered
-/// bytes, so it is safe with respect to `BAML_CACHE_VERIFY`.
+/// bytes, so it is safe with respect to `DEV_BAML_BUILD_CACHE_VERIFY`.
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -18,7 +19,10 @@ fn main() {
     // TODO: baml_log is disabled for now
     // baml_log::init()?;
 
-    warn_if_direct_invocation();
+    if let Err(error) = warn_if_direct_invocation() {
+        let _ = writeln!(std::io::stderr(), "error: {error}");
+        std::process::exit(baml_cli::ExitCode::Other.into());
+    }
 
     let argv: Vec<String> = std::env::args().collect();
 
@@ -37,18 +41,13 @@ fn main() {
     std::process::exit(exit_code.into());
 }
 
-fn warn_if_direct_invocation() {
-    if env_flag("BAML_WRAPPER_EXEC") || env_flag("BAML_CLI_ALLOW_DIRECT") {
-        return;
+fn warn_if_direct_invocation() -> Result<(), baml_env::EnvError> {
+    if baml_env::bool_var("BAML_CLI_ALLOW_DIRECT")? == Some(true) {
+        return Ok(());
     }
     let _ = writeln!(
         std::io::stderr(),
         "warning: using the internal BAML toolchain binary directly is not recommended. Use `baml` instead."
     );
-}
-
-fn env_flag(name: &str) -> bool {
-    std::env::var(name)
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
-        .unwrap_or(false)
+    Ok(())
 }

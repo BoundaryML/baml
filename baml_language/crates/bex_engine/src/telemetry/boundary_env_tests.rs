@@ -25,7 +25,7 @@ fn from_boundary_env() {
         ),
         (Some(URL), Some("invalid\nheader"), true),
     ];
-    let Ok(case) = std::env::var(CASE) else {
+    let Some(case) = baml_env::raw_var(CASE) else {
         for (index, (url, key, _)) in cases.iter().enumerate() {
             let mut command = Command::new(std::env::current_exe().unwrap());
             command.args([

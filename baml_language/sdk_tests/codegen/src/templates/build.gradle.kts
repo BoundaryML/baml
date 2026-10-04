@@ -89,7 +89,7 @@ tasks.withType<Test> {
     // The generated `Baml` anchor loads the native `bridge_java` library from
     // this path; propagate it from the test invocation's environment so tests
     // reach the real engine. Must point at target/debug/libbridge_java.so.
-    environment("BAML_JAVA_BRIDGE_LIB", System.getenv("BAML_JAVA_BRIDGE_LIB") ?: "")
+    environment("BAML_BRIDGE_PATH", System.getenv("BAML_BRIDGE_PATH") ?: "")
     testLogging {
         events("failed", "skipped")
         showExceptions = true

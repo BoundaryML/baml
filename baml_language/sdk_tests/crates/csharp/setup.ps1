@@ -58,5 +58,5 @@ try {
 
 if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value "SDK_TEST_CSHARP_SETUP=1"
-    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_BRIDGE_CSHARP_NATIVE_LIBRARY=$NativeLibrary"
+    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_BRIDGE_PATH=$NativeLibrary"
 }

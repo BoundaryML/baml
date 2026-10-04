@@ -132,8 +132,8 @@ const ERRORS_SQL: &str = "
 ";
 
 /// Resolve the store a project's profiles are written to. Producer and
-/// reader share this precedence (`BAML_PROFILE_DIR` wins), so the two sides
-/// cannot disagree about where the data is.
+/// reader share this resolution, so the two sides cannot disagree about where
+/// the data is.
 #[must_use]
 pub fn store_root_for_project(project_root: &Path) -> PathBuf {
     ProfilerSession::resolve_store_root(project_root)

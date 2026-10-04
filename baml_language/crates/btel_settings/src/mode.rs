@@ -18,11 +18,11 @@ pub enum AutoTelemetryLevel {
 
 /// Read once per engine. `None` disables all telemetry, including explicit policies.
 pub fn from_env() -> Result<Option<AutoTelemetryLevel>, InvalidTelemetryLevel> {
-    match std::env::var(ENV_VAR) {
-        Ok(value) if value == "off" => Ok(None),
-        Ok(value) => value.parse().map(Some),
-        Err(std::env::VarError::NotPresent) => Ok(Some(AutoTelemetryLevel::default())),
-        Err(std::env::VarError::NotUnicode(_)) => Err(InvalidTelemetryLevel),
+    match baml_env::os_var(ENV_VAR).map(std::ffi::OsString::into_string) {
+        None => Ok(Some(AutoTelemetryLevel::default())),
+        Some(Ok(value)) if value == "off" => Ok(None),
+        Some(Ok(value)) => value.parse().map(Some),
+        Some(Err(_)) => Err(InvalidTelemetryLevel),
     }
 }
 

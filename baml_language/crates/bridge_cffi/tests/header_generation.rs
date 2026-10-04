@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_methods)]
 #![cfg(not(target_os = "windows"))]
 
 use std::{fs, path::PathBuf};

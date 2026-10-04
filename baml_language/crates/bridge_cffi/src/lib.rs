@@ -7,6 +7,8 @@
 //! details live in `lib_native.rs`, while Wasm implementation details live
 //! in `lib_wasm.rs`.
 
+#![warn(clippy::disallowed_methods)]
+
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "lib_native.rs"]
 mod platform;
