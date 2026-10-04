@@ -7,6 +7,9 @@
 CHANGELOG.md
 RELEASING.md
 
+# Environment variable reference
+ENV_VARS.md
+
 # Test documentation
 crates/baml_tests/BENCHMARKS.md
 crates/baml_tests/NATIVE_BAML_TEST_MIGRATION_SURVEY.md
