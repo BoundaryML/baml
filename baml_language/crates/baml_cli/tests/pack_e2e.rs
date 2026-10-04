@@ -443,7 +443,7 @@ fn packed_wrapper_uses_supplied_host_and_package_manager_entry_point() {
     version
         .args(["--version"])
         .env("BAML_HOME", tmp.path().join("home"))
-        .env("BAML_VERSION", "1.2.3");
+        .env("BAML_TOOLCHAIN", "1.2.3");
     let out = version.output().unwrap();
     assert!(
         out.status.success(),
@@ -464,7 +464,7 @@ fn packed_wrapper_uses_supplied_host_and_package_manager_entry_point() {
         std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
         let mut child = Command::new(&bin)
             .arg("argument with spaces")
-            .env("BAML_VERSION", cli)
+            .env("BAML_TOOLCHAIN", cli)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

@@ -36,7 +36,7 @@ impl Fixture {
     }
     fn script(path: &Path) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$BAML_WRAPPER_EXEC\" \"${BAML_WRAPPER_RESOLVED_TOOLCHAIN-unset}\" \"${BAML_WRAPPER_LOCAL_TOOLCHAIN-unset}\"\nprintf '%s\\n' \"$@\"\ncat\nexit 19\n").unwrap();
+        fs::write(path, "#!/bin/sh\nprintf '%s|%s\\n' \"$BAML_CLI_ALLOW_DIRECT\" \"${BAML_WRAPPER_TEST-unset}\"\nprintf '%s\\n' \"$@\"\ncat\nexit 19\n").unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }
     fn install(&self, version: &str) {
@@ -50,7 +50,7 @@ impl Fixture {
             .current_dir(&self.project)
             .env("BAML_HOME", &self.home)
             .env("HOME", &self.root)
-            .env_remove("BAML_VERSION")
+            .env_remove("BAML_TOOLCHAIN")
             .env_remove("BAML_MANIFEST_BASE_URL");
         cmd
     }
@@ -82,20 +82,22 @@ fn selector_precedence_and_child_preserve_arguments_streams_and_status() {
     .unwrap();
     let out = f
         .command(&["hello", "--literal", "a b"])
-        .env("BAML_WRAPPER_LOCAL_TOOLCHAIN", "stale")
+        .env("BAML_CLI_ALLOW_DIRECT", "false")
+        .env("BAML_WRAPPER_TEST", "inherited")
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(19));
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
-        "1|0.12.0|unset\nhello\n--literal\na b\n"
+        "1|inherited\nhello\n--literal\na b\n"
     );
     let local = f.project.join("local-cli");
     Fixture::script(&local);
     let mut child = f
         .command(&["hello", "--flag", "a b"])
-        .env("BAML_VERSION", "  ./local-cli  ")
-        .env("BAML_WRAPPER_RESOLVED_TOOLCHAIN", "stale")
+        .env("BAML_TOOLCHAIN", "  ./local-cli  ")
+        .env("BAML_CLI_ALLOW_DIRECT", "false")
+        .env("BAML_WRAPPER_TEST", "local-inherited")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -111,10 +113,7 @@ fn selector_precedence_and_child_preserve_arguments_streams_and_status() {
     assert_eq!(out.status.code(), Some(19));
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
-        format!(
-            "1|unset|{}\nhello\n--flag\na b\nstdin payload",
-            local.display()
-        )
+        "1|local-inherited\nhello\n--flag\na b\nstdin payload"
     );
     assert!(out.stderr.is_empty());
 }
@@ -208,7 +207,7 @@ fn invalid_toolchains_and_self_recursion_fail_before_launch() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("--force"));
     let out = f
         .command(&["hello"])
-        .env("BAML_VERSION", env!("CARGO_BIN_EXE_baml"))
+        .env("BAML_TOOLCHAIN", env!("CARGO_BIN_EXE_baml"))
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
@@ -256,7 +255,7 @@ fn local_version_uses_successful_first_line_and_handles_failure() {
     .unwrap();
     let out = f
         .command(&["--version"])
-        .env("BAML_VERSION", &local)
+        .env("BAML_TOOLCHAIN", &local)
         .output()
         .unwrap();
     assert!(out.status.success());
@@ -266,7 +265,7 @@ fn local_version_uses_successful_first_line_and_handles_failure() {
     fs::write(&local, "#!/bin/sh\nprintf 'baml-cli invalid\\n'\nexit 1\n").unwrap();
     let out = f
         .command(&["--version"])
-        .env("BAML_VERSION", &local)
+        .env("BAML_TOOLCHAIN", &local)
         .output()
         .unwrap();
     assert!(out.status.success());

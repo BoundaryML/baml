@@ -273,9 +273,9 @@ function project_manifest() -> string? {
 }
 
 function active() -> Selector {
-    let env = (baml.env.get("BAML_VERSION") ?? "").trim();
+    let env = (baml.env.get("BAML_TOOLCHAIN") ?? "").trim();
     if (env != "") {
-        return Selector { value: normalize(env, baml.sys.current_dir()), origin: "from $BAML_VERSION" };
+        return Selector { value: normalize(env, baml.sys.current_dir()), origin: "from $BAML_TOOLCHAIN" };
     }
     // Walk past manifests without a selector, stopping at the user's home/root.
     let dir = baml.sys.current_dir();
@@ -598,11 +598,7 @@ function passthrough(args: string[]) -> never {
         let status = baml.sys.run(
             selected.value,
             args = args,
-            env = {
-                "BAML_WRAPPER_EXEC": "1",
-                "BAML_WRAPPER_LOCAL_TOOLCHAIN": selected.value,
-                "BAML_WRAPPER_RESOLVED_TOOLCHAIN": null,
-            },
+            env = { "BAML_CLI_ALLOW_DIRECT": "1" },
         );
         baml.sys.exit(status.exit_code);
     }
@@ -628,11 +624,7 @@ function passthrough(args: string[]) -> never {
         let status = baml.sys.run(
             cli_path(version),
             args = args,
-            env = {
-                "BAML_WRAPPER_EXEC": "1",
-                "BAML_WRAPPER_RESOLVED_TOOLCHAIN": version,
-                "BAML_WRAPPER_LOCAL_TOOLCHAIN": null,
-            },
+            env = { "BAML_CLI_ALLOW_DIRECT": "1" },
         );
         await refresh;
         outdated(selected.value, version, base);
@@ -641,11 +633,7 @@ function passthrough(args: string[]) -> never {
     let status = baml.sys.run(
         cli_path(version),
         args = args,
-        env = {
-            "BAML_WRAPPER_EXEC": "1",
-            "BAML_WRAPPER_RESOLVED_TOOLCHAIN": version,
-            "BAML_WRAPPER_LOCAL_TOOLCHAIN": null,
-        },
+        env = { "BAML_CLI_ALLOW_DIRECT": "1" },
     );
     baml.sys.exit(status.exit_code)
 }
@@ -655,6 +643,7 @@ function local_version(path: string) -> string {
         let output = baml.sys.run(
             path,
             args = ["--version"],
+            env = { "BAML_CLI_ALLOW_DIRECT": "1" },
             timeout = baml.time.Duration.from_seconds(3),
             capture_output = true,
         );
