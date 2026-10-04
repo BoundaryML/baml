@@ -3,6 +3,10 @@ Rust `baml-cli` toolchains and edits configuration. It launches the selected CLI
 with inherited standard streams, waits for its status, and then shuts down the
 wrapper runtime normally. The CLI itself stays in Rust.
 
+The [matched Rust vs packed-wrapper measurements](BENCHMARKS.md) record startup,
+CPU, memory, process/thread counts, binary sizes, export shutdown, and reproduction
+instructions after fast telemetry clock startup.
+
 To build an ordinary packed wrapper from this checkout:
 
 ```sh
