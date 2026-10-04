@@ -48,6 +48,18 @@ function OaiSystemLook(pic: image) -> string {
     `
 }
 
+class OaiPickedTool {
+    tool: string,
+}
+
+function OaiPickTool() -> OaiPickedTool {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        Pick the tool to run.
+        ${ctx.output_format()}
+    `
+}
+
 // A per-message directive, authored on the role marker.
 function OaiMetaEcho(question: string) -> string {
     client: "openai/gpt-4o-mini"
@@ -74,6 +86,33 @@ function _oai_image_response() -> string {
 function _oai_sparse_usage_response() -> string {
     let body = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{}}`;
     body
+}
+
+// The shape gpt-6-luna returns when it splits one answer: a reasoning item, the
+// answer in a `commentary` message, then a `final_answer` message.
+function _oai_commentary_response(final_answer: string) -> string {
+    let reasoning: map<string, unknown> = { "type": "reasoning", "content": [], "summary": [] };
+    let commentary: map<string, unknown> = {
+        "type": "message",
+        "phase": "commentary",
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": "{\"tool\": \"search_workouts\"} \n" }],
+    };
+    let final_message: map<string, unknown> = {
+        "type": "message",
+        "phase": "final_answer",
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": final_answer }],
+    };
+    _oai_json(
+        {
+            "id": "resp_commentary",
+            "model": "gpt-6-luna",
+            "status": "completed",
+            "output": [reasoning, commentary, final_message],
+            "usage": { "input_tokens": 3, "output_tokens": 1, "total_tokens": 4 },
+        },
+    )
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -642,6 +681,27 @@ function oai_sparse_usage() -> string {
 
 test "oai_sparse_usage" {
     assert.equal(oai_sparse_usage(), "pong|0|0")
+}
+
+// Every message's text reaches the turn, and the runner parses the
+// `final_answer` when it fits the output type, else the `commentary` before it.
+function oai_commentary_answer(final_answer: string) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_commentary_response(final_answer))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            ai.Agent.new(client = cl).run(OaiPickTool@spec()).value.tool
+        },
+    )
+}
+
+test "oai_commentary_answer" {
+    assert.equal(oai_commentary_answer(""), "search_workouts");
+    assert.equal(oai_commentary_answer(`{"tool": "none"}`), "none")
 }
 
 // Malformed `arguments` on a function_call item is PROVIDER-malformed output:
