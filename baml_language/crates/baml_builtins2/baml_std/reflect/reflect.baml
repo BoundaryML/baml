@@ -344,6 +344,17 @@ class Package {
         $rust_function
     }
 
+    /// The value of the exported top-level binding called `name` (a
+    /// `client Name = ...` declaration), or `null` if the package exports
+    /// none. `name` is the binding's path in the package, as for `get_class`:
+    /// `Name`, or `ns.Name` for one declared in namespace `ns`. The binding's
+    /// type is not known here: narrow the value before use, for example
+    /// `let client: ai.Client = value else { ... }`.
+    //baml:mut_vm
+    function get_let(self, name: string) -> unknown throws never {
+        $rust_function
+    }
+
     /// Exported class types, keyed by package-local name.
     //baml:mut_vm
     function classes(self) -> map<string, reflect.class.Type> throws never {

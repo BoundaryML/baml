@@ -38,6 +38,23 @@ function _new_parse_cache<T>() -> _ParseCache<T> throws never {
     $rust_function
 }
 
+//baml:mut_vm
+//baml:fallible
+/// (internal) Whether schema-aligned parsing can model `T`.
+function _can_parse<T>() -> bool throws never {
+    $rust_function
+}
+
+/// Whether schema-aligned parsing can model the runtime type `t`.
+///
+/// `parse` and `parse_type` panic for a type they cannot model: `unknown`,
+/// `uint8array`, a function, or a type that holds one of those. Code that
+/// receives its types as data asks here first.
+function can_parse(t: reflect.Type) -> bool throws never {
+    type T = unreflect(t);
+    _can_parse<T>()
+}
+
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
 ///
 /// # Throws

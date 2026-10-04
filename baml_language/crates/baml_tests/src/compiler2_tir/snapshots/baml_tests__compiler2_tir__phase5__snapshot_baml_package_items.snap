@@ -287,7 +287,9 @@ namespace baml.regex:
 namespace baml.sap:
   class _NoYield { methods: [] }
   class _ParseCache<T> { methods: [_parse_final, _parse_partial] }
+  function _can_parse<T>
   function _new_parse_cache<T>
+  function can_parse
   function parse<T>
   function parse_type
 namespace baml.spawn:

@@ -5,22 +5,32 @@
 // Dynamic client selection.
 //
 // A `client:` position accepts more than a constructed client: the same
-// "provider/model" shorthand the compiler understands, and a late-bound
-// `baml.env.Ref` so a deployment can pick its model with an environment
-// variable that is read at CALL time rather than snapshotted during `$init`.
+// "provider/model" shorthand the compiler understands, the name of a declared
+// client, and a late-bound `baml.env.Ref` so a deployment can pick its model
+// with an environment variable that is read at CALL time rather than
+// snapshotted during `$init`.
 
-/// What a `client:` position accepts: an already-built client, a
-/// `"provider/model"` shorthand string, or a `baml.env.Ref` naming a variable
-/// that holds one. `ai.clients.resolve` turns any of them into a `ai.Client`.
+/// What a `client:` position accepts: an already-built client, a string that
+/// names one (a `"provider/model"` shorthand, or the name of a
+/// `client Name = ...` declaration), or a `baml.env.Ref` naming a variable
+/// that holds such a string. `ai.clients.resolve` turns any of them into a
+/// `ai.Client`.
 type Selector = root.Client | string | baml.env.Ref;
 
 /// Resolve a `Selector` to the client to call, at CALL time.
 ///
 ///   * a `ai.Client` is returned unchanged (identity);
-///   * a string is the `"provider/model"` shorthand, constructed through
-///     `providers` — the runtime twin of the compiler's literal-`client:`
-///     lowering. An unknown prefix throws `ai.errors.InvalidRequest` listing
-///     the valid ones;
+///   * a string with a "/" is the `"provider/model"` shorthand, constructed
+///     through `providers` — the runtime twin of the compiler's
+///     literal-`client:` lowering. An unknown prefix throws
+///     `ai.errors.InvalidRequest` listing the valid ones;
+///   * a string without a "/" is the name of a client the calling package
+///     declares (`client Fast = ...` resolves from `"Fast"`), which is how a
+///     host or a feature flag picks one of the project's clients by name. The
+///     name is the client's path in the package, wherever the call is: a
+///     client declared in namespace `billing` is `"billing.Fast"` (or
+///     `"root.billing.Fast"`), and no namespace is searched for a bare name.
+///     A name the package does not declare throws `ai.errors.InvalidRequest`;
 ///   * a `baml.env.Ref` is read now and its value takes the string path. An
 ///     UNSET variable is a typed `ai.errors.InvalidRequest` naming it — not
 ///     a panic, so a `catch_all` at the call boundary can still fall back.
@@ -31,7 +41,8 @@ type Selector = root.Client | string | baml.env.Ref;
 /// appends `providers` — constructing the client for a prefix and model, or
 /// `null` for a prefix it does not know — and `prefixes`, the prefixes it
 /// knows, both synthesized from the one provider table the literal
-/// `client "provider/model"` lowering reads.
+/// `client "provider/model"` lowering reads. It also appends `package`, the
+/// package of the call site, whose declared clients a name resolves against.
 ///
 /// This is what makes `client: env.MODEL.get() ?? "openai/gpt-4o-mini"` work:
 /// nothing about the selection is decided until the call happens.
@@ -39,17 +50,18 @@ function resolve(
     selector: Selector,
     providers: (string, string) -> root.Client?,
     prefixes: string[],
+    package: reflect.Package,
 ) -> root.Client {
     match (selector) {
-        let shorthand: string => root.internal._from_shorthand(shorthand, providers, prefixes),
-        let named: baml.env.Ref => {
-            if let value: string = named.get() {
-                root.internal._from_shorthand(value, providers, prefixes)
+        let named: string => root.internal._from_string(named, providers, prefixes, package),
+        let variable: baml.env.Ref => {
+            if let value: string = variable.get() {
+                root.internal._from_string(value, providers, prefixes, package)
             } else {
                 throw root.errors.InvalidRequest {
                     provider: "ai.clients",
                     status_code: null,
-                    detail: `client selector env.${named.name} is not set: point it at a "provider/model" string (valid prefixes are ${prefixes.join(", ")}), or give the client: position a value with a fallback — env.${named.name}.get() ?? "openai/gpt-4o-mini"`,
+                    detail: `client selector env.${variable.name} is not set: point it at a "provider/model" string (valid prefixes are ${prefixes.join(", ")}) or the name of a declared client, or give the client: position a value with a fallback — env.${variable.name}.get() ?? "openai/gpt-4o-mini"`,
                     raw_body: null,
                 }
             }

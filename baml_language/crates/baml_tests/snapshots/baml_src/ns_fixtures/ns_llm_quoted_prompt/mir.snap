@@ -141,7 +141,8 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@spec(topic: string) -> ai.Functi
     let _6: ai.Client
     let _7: (string, string) -> null | ai.Client throws never
     let _8: string[]
-    let _9: reflect.Type
+    let _9: reflect.Package
+    let _10: reflect.Type
 
     bb0: {
         _2 = { const "topic": copy _1 }: map<string, unknown>;
@@ -153,16 +154,21 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@spec(topic: string) -> ai.Functi
     bb1: {
         _7 = make_closure lambda[1]();
         _8 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
-        _9 = load_type(never);
-        _6 = call const fn ai.clients.resolve<copy _9>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _7, copy _8) -> [bb2];
+        _9 = current_package(user);
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "QuotedPrompt", copy _2, copy _3, copy _4, copy _6 };
-        goto -> bb3;
+        _10 = load_type(never);
+        _6 = call const fn ai.clients.resolve<copy _10>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _7, copy _8, copy _9) -> [bb3];
     }
 
     bb3: {
+        _0 = ai.FunctionSpec<string> { const "QuotedPrompt", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -562,7 +568,8 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@spec(topic: string) -> ai.Func
     let _7: ai.Client
     let _8: (string, string) -> null | ai.Client throws never
     let _9: string[]
-    let _10: reflect.Type
+    let _10: reflect.Package
+    let _11: reflect.Type
 
     bb0: {
         _3 = copy *_1;
@@ -575,16 +582,21 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@spec(topic: string) -> ai.Func
     bb1: {
         _8 = make_closure lambda[1]();
         _9 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
-        _10 = load_type(never);
-        _7 = call const fn ai.clients.resolve<copy _10>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _8, copy _9) -> [bb2];
+        _10 = current_package(user);
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "BacktickPrompt", copy _2, copy _4, copy _5, copy _7 };
-        goto -> bb3;
+        _11 = load_type(never);
+        _7 = call const fn ai.clients.resolve<copy _11>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _8, copy _9, copy _10) -> [bb3];
     }
 
     bb3: {
+        _0 = ai.FunctionSpec<string> { const "BacktickPrompt", copy _2, copy _4, copy _5, copy _7 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }

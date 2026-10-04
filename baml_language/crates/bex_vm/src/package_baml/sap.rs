@@ -63,6 +63,11 @@ impl BamlNamespaceSap for PackageBamlImpl {
         )));
         Ok(Value::object(cache))
     }
+
+    fn _can_parse(vm: &mut BexVm) -> Result<bool, VmRustFnError> {
+        let target = parse_target(vm)?;
+        Ok(build_model(vm, &target).is_ok())
+    }
 }
 
 impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
@@ -93,8 +98,8 @@ enum Completion {
     Partial,
 }
 
-/// The `T` of the current `_new_parse_cache<T>` or `_ParseCache<T>` method
-/// call: the first type argument either way.
+/// The `T` of the current `_new_parse_cache<T>`, `_can_parse<T>` or
+/// `_ParseCache<T>` method call: the first type argument in each.
 fn parse_target(vm: &BexVm) -> Result<RealizedTy, VmRustFnError> {
     vm.current_call_type_args().first().cloned().ok_or_else(|| {
         VmInternalError::SapValue {
