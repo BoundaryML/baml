@@ -173,7 +173,7 @@ def make_sdk_panic(message: str) -> BamlPanic:
     """Build a `BamlPanic` wrapping a `baml.panics.SdkPanic` value.
 
     Used by the Rust pre-call *handle-returning* sites (`get_or_init_runtime` /
-    `stage_runtime`) — SDK-internal *setup* failures, which are
+    `initialize_runtime`) — SDK-internal *setup* failures, which are
     panic-shaped, not recoverable `baml.errors.*` (32c). When the runtime
     isn't initialized the typemap may be unavailable, so we fall back to the
     plain string as `.value` rather than letting construction fail.

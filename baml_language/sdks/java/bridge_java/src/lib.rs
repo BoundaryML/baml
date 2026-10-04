@@ -54,7 +54,7 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
     rt.block_on(bridge_cffi::execute_invocation(request))
 }
 
-/// `baml_bridge.BamlFfi.nativeStageFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
+/// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
 ///
 /// Stage serialized BAML bytecode as the process-global runtime
 /// (`bridge_cffi::stage_runtime_from_blob`, the same path `bridge_python`
@@ -62,9 +62,9 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
 /// in the same sense as Python: the single-slot singleton is replaced, so a
 /// second call swaps the runtime. A setup failure is thrown as an unchecked
 /// `RuntimeException` (this is a handle-returning site with no envelope to
-/// ride, like Python's `stage_runtime_from_blob` raising).
+/// ride, like Python's `initialize_runtime_from_blob` raising).
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeStageFromBytecode(
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     mut env: JNIEnv<'_>,
     class: JClass<'_>,
     bytecode: JByteArray<'_>,
@@ -233,7 +233,7 @@ const UNHANDLED_SPAWN_ERROR_METHOD: &str = "unhandledSpawnError";
 const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
 
 /// Guards the one-time `register_host_{dispatch,release}_callback` install so a
-/// runtime re-init (`nativeStageFromBytecode` replaces the runtime) does not
+/// runtime re-init (`nativeInitFromBytecode` replaces the runtime) does not
 /// re-register — `register_host_release_callback` logs a diagnostic on a second
 /// call, which would be spurious noise on every re-init.
 static REGISTER_HOST_CALLBACKS: Once = Once::new();

@@ -131,7 +131,7 @@ public final class BamlFfi {
     // ---- Native methods (implemented in sdks/java/bridge_java) --------------
 
     /** Initialize the process-global runtime from serialized BAML bytecode. */
-    static native void nativeStageFromBytecode(
+    static native void nativeInitFromBytecode(
             byte[] bytecode,
             String embeddedBamlToml,
             String bridgeRuntimeVersion,
@@ -250,20 +250,17 @@ public final class BamlFfi {
 
     // ---- Public surface the generated SDK targets --------------------------
 
-    /**
-     * Stage embedded bytecode as the runtime (idempotent; replaces). It is
-     * validated, and the engine built, on the first BAML call.
-     */
-    public static void stageFromBytecode(byte[] bytecode) {
-        nativeStageFromBytecode(
+    /** Initialize the runtime from embedded bytecode (idempotent; replaces). */
+    public static void initFromBytecode(byte[] bytecode) {
+        nativeInitFromBytecode(
                 bytecode,
                 null,
                 BamlVersion.BRIDGE_RUNTIME_VERSION,
                 BamlVersion.TOOLCHAIN_VERSION);
     }
 
-    public static void stageFromBytecode(byte[] bytecode, String embeddedBamlToml) {
-        nativeStageFromBytecode(
+    public static void initFromBytecode(byte[] bytecode, String embeddedBamlToml) {
+        nativeInitFromBytecode(
                 bytecode,
                 embeddedBamlToml,
                 BamlVersion.BRIDGE_RUNTIME_VERSION,

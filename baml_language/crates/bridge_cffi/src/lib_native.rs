@@ -39,10 +39,10 @@ pub use ffi::{
         register_host_dispatch_callback, register_host_dispatch_v2, register_host_release_callback,
     },
     runtime::{
-        BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli,
-        register_bridge_ffi, shutdown_runtime as shutdown_runtime_ffi,
-        stage_runtime_from_blob as stage_runtime_from_blob_ffi,
-        stage_runtime_from_blob_with_metadata, version,
+        BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
+        initialize_runtime_from_blob as initialize_runtime_from_blob_ffi,
+        initialize_runtime_from_blob_with_metadata, invoke_runtime_cli, register_bridge_ffi,
+        shutdown_runtime as shutdown_runtime_ffi, version,
     },
     unhandled_spawn::register_unhandled_spawn_error_callback,
 };

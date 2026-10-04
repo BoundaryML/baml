@@ -362,7 +362,7 @@ export function _setCallCancellationObserverForTest(observer: ((callId: bigint) 
 }
 
 export class BamlRuntime {
-  static stageRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+  static initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
       stageRuntimeBytecode(bytecode, embeddedBamlToml);
@@ -372,7 +372,7 @@ export class BamlRuntime {
     runtime = new BamlRuntime();
     return runtime;
   }
-  static stageRuntime(rootPath: string, files: Record<string, string>): BamlRuntime {
+  static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
       stageRuntimeSources(rootPath, files);

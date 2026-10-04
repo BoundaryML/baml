@@ -69,7 +69,7 @@ end
 
 def initialize_fixture(program = VALID_PROGRAM)
   use_fixture
-  Baml::Bridge.stage!(program)
+  Baml::Bridge.initialize!(program)
 end
 
 def terminal_failure(mode: nil, null_field: nil, path: FIXTURE)
@@ -77,14 +77,14 @@ def terminal_failure(mode: nil, null_field: nil, path: FIXTURE)
   ENV["BAML_FAKE_NATIVE_MODE"] = mode
   ENV["BAML_FAKE_NULL_FIELD"] = null_field
   first = assert_raises(Baml::Bridge::IncompatibleRuntimeError) do
-    Baml::Bridge.stage!(VALID_PROGRAM)
+    Baml::Bridge.initialize!(VALID_PROGRAM)
   end
 
   ENV["BAML_RUNTIME_PATH"] = FIXTURE
   ENV.delete("BAML_FAKE_NATIVE_MODE")
   ENV.delete("BAML_FAKE_NULL_FIELD")
   second = assert_raises(Baml::Bridge::IncompatibleRuntimeError) do
-    Baml::Bridge.stage!(VALID_PROGRAM)
+    Baml::Bridge.initialize!(VALID_PROGRAM)
   end
   assert_equal(first.message, second.message)
 
@@ -104,15 +104,15 @@ case ARGV.fetch(0)
 when "configuration_retry"
   ENV.delete("BAML_RUNTIME_PATH")
   assert_raises(Baml::Bridge::RuntimeConfigurationError) do
-    Baml::Bridge.stage!(VALID_PROGRAM)
+    Baml::Bridge.initialize!(VALID_PROGRAM)
   end
   ENV["BAML_RUNTIME_PATH"] = "relative/library"
   assert_raises(Baml::Bridge::RuntimeConfigurationError) do
-    Baml::Bridge.stage!(VALID_PROGRAM)
+    Baml::Bridge.initialize!(VALID_PROGRAM)
   end
   ENV["BAML_RUNTIME_PATH"] = File.join(Dir.tmpdir, "missing-baml-runtime")
   assert_raises(Baml::Bridge::RuntimeConfigurationError) do
-    Baml::Bridge.stage!(VALID_PROGRAM)
+    Baml::Bridge.initialize!(VALID_PROGRAM)
   end
   initialize_fixture
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
@@ -120,7 +120,7 @@ when "configuration_retry"
 when "open_retry"
   ENV["BAML_RUNTIME_PATH"] = INVALID_LIBRARY
   assert_raises(Baml::Bridge::RuntimeLoadError) do
-    Baml::Bridge.stage!(VALID_PROGRAM)
+    Baml::Bridge.initialize!(VALID_PROGRAM)
   end
 
   if Process.respond_to?(:fork)
@@ -174,7 +174,7 @@ when "concurrent_open_failure_preserves_claim"
   first_error = Queue.new
   first = Thread.new do
     Thread.current[:baml_test_runtime_path] = INVALID_LIBRARY
-    runtime.stage!(VALID_PROGRAM)
+    runtime.initialize!(VALID_PROGRAM)
   rescue Exception => error
     first_error << error
     first_open_failed << true
@@ -184,7 +184,7 @@ when "concurrent_open_failure_preserves_claim"
   second_error = Queue.new
   second = Thread.new do
     Thread.current[:baml_test_runtime_path] = FIXTURE
-    runtime.stage!(VALID_PROGRAM)
+    runtime.initialize!(VALID_PROGRAM)
   rescue Exception => error
     second_error << error
   end
@@ -200,7 +200,7 @@ when "concurrent_open_failure_preserves_claim"
     child = fork do
       read_pipe.close
       error = assert_raises(Baml::Bridge::ForkSafetyError) do
-        runtime.stage!(VALID_PROGRAM)
+        runtime.initialize!(VALID_PROGRAM)
       end
       write_pipe.write(error.message)
       exit! 0
@@ -225,13 +225,13 @@ when "invalid_bytecode_retry_and_identity"
   use_fixture
   original = VALID_PROGRAM.dup
   assert_raises(Baml::Bridge::ProgramInitializationError) do
-    Baml::Bridge.stage!("invalid".b)
+    Baml::Bridge.initialize!("invalid".b)
   end
-  Baml::Bridge.stage!(original)
+  Baml::Bridge.initialize!(original)
   original.replace("changed-program")
-  Baml::Bridge.stage!(VALID_PROGRAM.dup)
+  Baml::Bridge.initialize!(VALID_PROGRAM.dup)
   assert_raises(Baml::Bridge::ProgramConflictError) do
-    Baml::Bridge.stage!(original)
+    Baml::Bridge.initialize!(original)
   end
   assert_equal(2, fixture_inspection.count("baml_test_initialize_count"))
   assert_equal(1, fixture_inspection.count("baml_test_register_count"))
@@ -242,7 +242,7 @@ when "concurrent_initialization"
   errors = Queue.new
   threads = Array.new(12) do
     Thread.new do
-      Baml::Bridge.stage!(VALID_PROGRAM.dup)
+      Baml::Bridge.initialize!(VALID_PROGRAM.dup)
     rescue Exception => error
       errors << error
     end
@@ -282,7 +282,7 @@ when "fork_after_native_use"
   child = fork do
     read_pipe.close
     error = assert_raises(Baml::Bridge::ForkSafetyError) do
-      Baml::Bridge.stage!(VALID_PROGRAM)
+      Baml::Bridge.initialize!(VALID_PROGRAM)
     end
     write_pipe.write(error.message)
     exit! 0
@@ -292,7 +292,7 @@ when "fork_after_native_use"
   message = read_pipe.read
   assert(status.success?, message)
   assert(message.include?("must exec before using BAML"), message)
-  Baml::Bridge.stage!(VALID_PROGRAM.dup)
+  Baml::Bridge.initialize!(VALID_PROGRAM.dup)
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
 when "fork_during_initialization"
   unless Process.respond_to?(:fork)
@@ -302,7 +302,7 @@ when "fork_during_initialization"
   ENV["BAML_FAKE_INIT_DELAY_MS"] = "750"
   worker_errors = Queue.new
   worker = Thread.new do
-    Baml::Bridge.stage!(VALID_PROGRAM)
+    Baml::Bridge.initialize!(VALID_PROGRAM)
   rescue Exception => error
     worker_errors << error
   end
@@ -317,7 +317,7 @@ when "fork_during_initialization"
   child = fork do
     read_pipe.close
     error = assert_raises(Baml::Bridge::ForkSafetyError) do
-      Baml::Bridge.stage!(VALID_PROGRAM)
+      Baml::Bridge.initialize!(VALID_PROGRAM)
     end
     write_pipe.write(error.message)
     exit! 0
@@ -329,7 +329,7 @@ when "fork_during_initialization"
   assert(message.include?("must exec before using BAML"), message)
   worker.join
   assert(worker_errors.empty?, "parent initialization failed")
-  Baml::Bridge.stage!(VALID_PROGRAM.dup)
+  Baml::Bridge.initialize!(VALID_PROGRAM.dup)
   assert_equal(1, fixture_inspection.count("baml_test_initialize_count"))
 when "fork_during_open_failure"
   unless Process.respond_to?(:fork)
@@ -360,7 +360,7 @@ when "fork_during_open_failure"
   ENV["BAML_RUNTIME_PATH"] = INVALID_LIBRARY
   worker_error = Queue.new
   worker = Thread.new do
-    runtime.stage!(VALID_PROGRAM)
+    runtime.initialize!(VALID_PROGRAM)
   rescue Exception => error
     worker_error << error
   end
@@ -370,7 +370,7 @@ when "fork_during_open_failure"
   child = fork do
     read_pipe.close
     error = assert_raises(Baml::Bridge::ForkSafetyError) do
-      runtime.stage!(VALID_PROGRAM)
+      runtime.initialize!(VALID_PROGRAM)
     end
     write_pipe.write(error.message)
     exit! 0
@@ -388,7 +388,7 @@ when "fork_during_open_failure"
   child = fork do
     read_pipe.close
     begin
-      runtime.stage!(VALID_PROGRAM)
+      runtime.initialize!(VALID_PROGRAM)
       write_pipe.write("ok")
       exit! 0
     rescue Exception => error
@@ -472,10 +472,10 @@ when "foreign_thread_callback"
 when "real_runtime_initialization"
   ENV["BAML_RUNTIME_PATH"] = REAL_RUNTIME
   bytecode = File.binread(REAL_BYTECODE).freeze
-  Baml::Bridge.stage!(bytecode)
-  Baml::Bridge.stage!(bytecode.dup)
+  Baml::Bridge.initialize!(bytecode)
+  Baml::Bridge.initialize!(bytecode.dup)
 when "type_validation"
-  assert_raises(TypeError) { Baml::Bridge.stage!(Object.new) }
+  assert_raises(TypeError) { Baml::Bridge.initialize!(Object.new) }
 else
   raise "unknown scenario #{ARGV.first.inspect}"
 end

@@ -30,7 +30,7 @@ module Baml
       class ApiV1 < FFI::Struct
         FUNCTION_FIELDS = %i[
           version
-          stage_runtime_from_blob
+          initialize_runtime_from_blob
           free_buffer
           register_callback
           call_function
@@ -51,7 +51,7 @@ module Baml
           register_bridge
           register_unhandled_spawn_error_callback
           shutdown_runtime
-          stage_runtime_from_blob_with_metadata
+          initialize_runtime_from_blob_with_metadata
           invocation_protocol_version
           invocation_clock_ns
           release_function_call
@@ -66,7 +66,7 @@ module Baml
 
       FUNCTION_SIGNATURES = {
         version: [Buffer.by_value, []],
-        stage_runtime_from_blob: [
+        initialize_runtime_from_blob: [
           Buffer.by_value,
           %i[pointer size_t],
           { blocking: true }
@@ -99,11 +99,11 @@ module Baml
           function(:register_callback).call(callback)
         end
 
-        def stage_runtime(bytecode)
+        def initialize_runtime(bytecode)
           pointer = memory_for(bytecode)
           diagnostic = read_owned_utf8(
-            function(:stage_runtime_from_blob).call(pointer, bytecode.bytesize),
-            "stage_runtime_from_blob"
+            function(:initialize_runtime_from_blob).call(pointer, bytecode.bytesize),
+            "initialize_runtime_from_blob"
           )
           return if diagnostic.empty?
 

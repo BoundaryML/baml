@@ -28,21 +28,21 @@ export { defineFunction, defineInstanceFunction, UNSET } from './define_function
 export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
- * `stageRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
- * `BamlRuntime.stageRuntime` factory (which sets the process-global
+ * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
+ * `BamlRuntime.initializeRuntime` factory (which sets the process-global
  * singleton reachable via `getOrInitRuntime()`).
  */
-export function stageRuntime(srcDir, files) {
-    BamlRuntime.stageRuntime(srcDir, files);
+export function initializeRuntime(srcDir, files) {
+    BamlRuntime.initializeRuntime(srcDir, files);
 }
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function stageRuntimeFromBlob(bytecode, embeddedBamlToml) {
+export function initializeRuntimeFromBlob(bytecode, embeddedBamlToml) {
     // Generated SDKs pass their embedded bytecode string through untouched;
     // the native bridge decodes it.
-    BamlRuntime.stageRuntimeFromBlob(typeof bytecode === "string" ? bytecode : Buffer.from(bytecode), embeddedBamlToml);
+    BamlRuntime.initializeRuntimeFromBlob(typeof bytecode === "string" ? bytecode : Buffer.from(bytecode), embeddedBamlToml);
 }
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export function newFunctionCall() {

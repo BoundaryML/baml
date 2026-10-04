@@ -39,7 +39,7 @@ impl BamlRuntime {
     /// * `root_path` - Root path for BAML files
     /// * `files` - Map of filename to file content
     #[staticmethod]
-    fn stage_runtime(
+    fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
@@ -63,7 +63,7 @@ impl BamlRuntime {
     /// * `bytecode` - borsh-encoded BAML bytecode program
     #[staticmethod]
     #[pyo3(signature = (bytecode, embedded_baml_toml=None))]
-    fn stage_runtime_from_blob(
+    fn initialize_runtime_from_blob(
         bytecode: Vec<u8>,
         embedded_baml_toml: Option<String>,
     ) -> PyResult<Self> {
@@ -188,7 +188,7 @@ impl BamlRuntime {
 }
 
 /// Return the process-global `BamlRuntime`, or raise `BamlError` if
-/// `BamlRuntime.stage_runtime(...)` has not been called yet.
+/// `BamlRuntime.initialize_runtime(...)` has not been called yet.
 ///
 /// Used by the pure-Python factories in `baml_bridge` so generated
 /// leaves don't have to thread a runtime reference through every call

@@ -330,7 +330,7 @@ Notes:
   (`TranslatedType { expr, imports }`) collapses to a plain `String` (translate_ty.rs:1–7).
 - **Runtime init via a root-holder static initializer.** Loading any generated class triggers
   idempotent runtime initialization from **embedded bytecode** (a base64-encoded LZ4 resource whose
-  raw bytes go to `BamlFfi.stageFromBytecode`, which decodes them natively), the Java analog of Python's root-package import side effect
+  raw bytes go to `BamlFfi.initFromBytecode`, which decodes them natively), the Java analog of Python's root-package import side effect
   (conventions doc:84–87). There is no `_inlinedbaml.py` / `_typemap.py` / `py.typed` triplet; the
   BAML source and the FQN⇄class map live in `TypeRegistry` registrations run at init.
 - **Free functions → static methods on a per-namespace `Fns` holder** (`baml_sdk.<ns>.Fns.<fn>()`;

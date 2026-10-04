@@ -8,7 +8,7 @@ test('unhandled_spawn_error_uses_host_default', () => {
         } from './dist/index.js';
         import { shutdownRuntime } from './dist/native.js';
 
-        const runtime = BamlRuntime.stageRuntime('.', {
+        const runtime = BamlRuntime.initializeRuntime('.', {
             'main.baml': \`
                 function bad() -> int throws string { throw "boom" }
                 function main() -> int {

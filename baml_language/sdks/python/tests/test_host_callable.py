@@ -51,7 +51,7 @@ function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
 
 
 def _make_runtime() -> BamlRuntime:
-    runtime = BamlRuntime.stage_runtime(".", {"main.baml": CALLBACK_BAML})
+    runtime = BamlRuntime.initialize_runtime(".", {"main.baml": CALLBACK_BAML})
     # Build the engine now rather than inside the first call: tests here compare
     # the process-wide handle count around a call, and the previous test's
     # runtime is still releasing its handles while this one is built.

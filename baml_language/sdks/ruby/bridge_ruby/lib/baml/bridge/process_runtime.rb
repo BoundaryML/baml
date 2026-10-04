@@ -20,7 +20,7 @@ module Baml
         @terminal_error = nil
       end
 
-      def stage!(compiled_program_bytes)
+      def initialize!(compiled_program_bytes)
         program = owned_program_bytes(compiled_program_bytes)
         ensure_not_forked!
 
@@ -43,7 +43,7 @@ module Baml
 
           load_api!(candidate_path) unless @api
           begin
-            @api.stage_runtime(program)
+            @api.initialize_runtime(program)
           rescue IncompatibleRuntimeError => error
             @terminal_error = error
             raise

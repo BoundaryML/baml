@@ -248,7 +248,7 @@ fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> Stri
     // `baml_sdkgen_types::embedded_bytecode_base64`) rather than a decimal
     // `new Uint8Array([...])` literal, which cost up to 5 source characters
     // per byte (~3.8 on average, measured). BYTECODE is passed to
-    // `stageRuntimeFromBlob` as a string, and the bridge decodes it
+    // `initializeRuntimeFromBlob` as a string, and the bridge decodes it
     // natively.
     //
     // Size matters here beyond disk: bundlers and the Cloudflare Workers test
@@ -366,7 +366,9 @@ mod tests {
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
         assert!(
-            root.contains("stageRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);")
+            root.contains(
+                "initializeRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+            )
         );
         assert!(root.contains("setTypeMap(_TYPE_MAP);"));
         assert!(root.contains("export * as baml from \"./baml/index.js\";"));

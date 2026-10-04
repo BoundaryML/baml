@@ -644,9 +644,9 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
-        out.push_str("BamlRuntime.stage_runtime_from_blob(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
+        out.push_str("BamlRuntime.initialize_runtime_from_blob(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
     } else {
-        out.push_str("BamlRuntime.stage_runtime(\n");
+        out.push_str("BamlRuntime.initialize_runtime(\n");
         out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
         out.push_str(")\n\n");
     }
@@ -1704,7 +1704,7 @@ mod tests {
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let root = &out[&PathBuf::from("__init__.py")];
-        assert!(root.contains("BamlRuntime.stage_runtime("));
+        assert!(root.contains("BamlRuntime.initialize_runtime("));
         // Body appended after the runtime init + re-exports.
         assert!(root.contains("class Foo(pydantic.BaseModel):\n"));
         assert!(root.contains("__all__ = [\n    \"Foo\",\n]"));
@@ -1791,9 +1791,9 @@ mod tests {
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("BamlRuntime.stage_runtime_from_blob(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)")
+            root.contains("BamlRuntime.initialize_runtime_from_blob(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)")
         );
-        assert!(!root.contains("BamlRuntime.stage_runtime("));
+        assert!(!root.contains("BamlRuntime.initialize_runtime("));
         assert!(root.contains("def get_baml_source_files() -> dict[str, str]:"));
 
         let inl = &out[&PathBuf::from("_inlinedbaml.py")];
@@ -3904,7 +3904,7 @@ mod tests {
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
             root.contains(
-                "BamlRuntime.stage_runtime(\n    \
+                "BamlRuntime.initialize_runtime(\n    \
                  \"baml_src\", _inlinedbaml.FILES\n)"
             ),
             "root was:\n{root}"

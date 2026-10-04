@@ -13,16 +13,16 @@ use prost::Message as _;
 
 use crate::{BamlValue, Error, SdkError, capi, completion, decode, wire};
 
-/// Stage (or replace) the process-global runtime with the borsh-encoded
-/// bytecode a generated SDK embeds. The bytecode is validated, and the engine
-/// built, on the first BAML call.
+/// Initialize (or replace) the process-global runtime from the
+/// borsh-encoded bytecode a generated SDK embeds.
 ///
-/// Generated SDKs call this lazily on first use.
-pub fn stage_from_bytecode(bytecode: &[u8]) -> Result<(), SdkError> {
-    stage_from_bytecode_with_metadata(bytecode, None)
+/// Generated SDKs call this lazily on first use; it is public for hosts
+/// that want eager, fallible startup.
+pub fn initialize_from_bytecode(bytecode: &[u8]) -> Result<(), SdkError> {
+    initialize_from_bytecode_with_metadata(bytecode, None)
 }
 
-pub fn stage_from_bytecode_with_metadata(
+pub fn initialize_from_bytecode_with_metadata(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
 ) -> Result<(), SdkError> {
@@ -37,12 +37,12 @@ pub fn stage_from_bytecode_with_metadata(
     #[expect(unsafe_code)]
     let status = unsafe {
         match manifest.as_ref() {
-            Some(manifest) => (api.stage_runtime_from_blob_with_metadata)(
+            Some(manifest) => (api.initialize_runtime_from_blob_with_metadata)(
                 bytecode.as_ptr(),
                 bytecode.len(),
                 manifest.as_ptr(),
             ),
-            None => (api.stage_runtime_from_blob)(bytecode.as_ptr(), bytecode.len()),
+            None => (api.initialize_runtime_from_blob)(bytecode.as_ptr(), bytecode.len()),
         }
     };
     api.take_status(status).map_err(SdkError::new)

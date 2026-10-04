@@ -128,7 +128,7 @@ class BamlRuntime:
     no longer caches its own clone.
     """
     @staticmethod
-    def stage_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
+    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
 
@@ -143,7 +143,7 @@ class BamlRuntime:
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def stage_runtime_from_blob(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
+    def initialize_runtime_from_blob(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
 
@@ -277,7 +277,7 @@ def get_bridge_runtime_version() -> builtins.str: ...
 def get_or_init_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
-    `BamlRuntime.stage_runtime(...)` has not been called yet.
+    `BamlRuntime.initialize_runtime(...)` has not been called yet.
 
     Used by the pure-Python factories in `baml_bridge` so generated
     leaves don't have to thread a runtime reference through every call

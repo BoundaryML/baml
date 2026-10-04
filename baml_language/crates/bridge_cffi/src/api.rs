@@ -98,8 +98,9 @@ pub type BamlUnhandledSpawnErrorCallback =
     extern "C" fn(content: *const i8, length: usize, cancelled: i32);
 
 pub type BamlVersionFn = extern "C" fn() -> Buffer;
-pub type BamlStageRuntimeFromBlobFn = extern "C" fn(bytecode: *const u8, length: usize) -> Buffer;
-pub type BamlStageRuntimeFromBlobWithMetadataFn =
+pub type BamlInitializeRuntimeFromBlobFn =
+    extern "C" fn(bytecode: *const u8, length: usize) -> Buffer;
+pub type BamlInitializeRuntimeFromBlobWithMetadataFn =
     extern "C" fn(bytecode: *const u8, length: usize, baml_toml: *const libc::c_char) -> Buffer;
 pub type BamlFreeBufferFn = extern "C" fn(buffer: Buffer);
 pub type BamlRegisterCallbackFn = extern "C" fn(callback: BamlResultCallback);
@@ -186,7 +187,7 @@ pub struct BamlApiV1 {
     /// failure and must always be passed once to `free_buffer`. Concurrent
     /// calls are serialized only while replacing the global runtime; calls
     /// already in progress retain their previous runtime instance.
-    pub stage_runtime_from_blob: BamlStageRuntimeFromBlobFn,
+    pub initialize_runtime_from_blob: BamlInitializeRuntimeFromBlobFn,
     /// Release exactly one runtime-owned buffer returned through this table.
     ///
     /// Do not use a different library instance's function, release a copied
@@ -277,7 +278,7 @@ pub struct BamlApiV1 {
     /// Wait for spawned work, report unreachable errors, and release the runtime.
     pub shutdown_runtime: BamlShutdownRuntimeFn,
     /// Replace the runtime from bytecode after validating embedded generation metadata.
-    pub stage_runtime_from_blob_with_metadata: BamlStageRuntimeFromBlobWithMetadataFn,
+    pub initialize_runtime_from_blob_with_metadata: BamlInitializeRuntimeFromBlobWithMetadataFn,
     /// Native invocation contract; protobuf carries no version negotiation.
     pub invocation_protocol_version: BamlInvocationProtocolVersionFn,
     /// Read the allocated call's original runtime clock, in nanoseconds.
@@ -300,7 +301,7 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     abi_version: BAML_API_V1_ABI_VERSION,
     struct_size: std::mem::size_of::<BamlApiV1>(),
     version: crate::version,
-    stage_runtime_from_blob: crate::stage_runtime_from_blob_ffi,
+    initialize_runtime_from_blob: crate::initialize_runtime_from_blob_ffi,
     free_buffer: crate::free_buffer,
     register_callback: crate::register_callback,
     call_function: crate::call_function,
@@ -321,7 +322,7 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     register_bridge: crate::register_bridge_ffi,
     register_unhandled_spawn_error_callback: crate::register_unhandled_spawn_error_callback,
     shutdown_runtime: crate::shutdown_runtime_ffi,
-    stage_runtime_from_blob_with_metadata: crate::stage_runtime_from_blob_with_metadata,
+    initialize_runtime_from_blob_with_metadata: crate::initialize_runtime_from_blob_with_metadata,
     invocation_protocol_version: crate::invocation_protocol_version,
     invocation_clock_ns: crate::invocation_clock_ns,
     release_function_call: crate::release_function_call,
@@ -368,8 +369,8 @@ mod tests {
         let api = unsafe { &*baml_get_api_v1() };
         assert_same_function!(api.version, crate::version);
         assert_same_function!(
-            api.stage_runtime_from_blob,
-            crate::stage_runtime_from_blob_ffi
+            api.initialize_runtime_from_blob,
+            crate::initialize_runtime_from_blob_ffi
         );
         assert_same_function!(api.free_buffer, crate::free_buffer);
         assert_same_function!(api.register_callback, crate::register_callback);
@@ -401,8 +402,8 @@ mod tests {
         );
         assert_same_function!(api.shutdown_runtime, crate::shutdown_runtime_ffi);
         assert_same_function!(
-            api.stage_runtime_from_blob_with_metadata,
-            crate::stage_runtime_from_blob_with_metadata
+            api.initialize_runtime_from_blob_with_metadata,
+            crate::initialize_runtime_from_blob_with_metadata
         );
     }
 
@@ -410,7 +411,7 @@ mod tests {
     fn every_v1_field_retains_its_declared_function_type() {
         let api = unsafe { &*baml_get_api_v1() };
         let _: BamlVersionFn = api.version;
-        let _: BamlStageRuntimeFromBlobFn = api.stage_runtime_from_blob;
+        let _: BamlInitializeRuntimeFromBlobFn = api.initialize_runtime_from_blob;
         let _: BamlFreeBufferFn = api.free_buffer;
         let _: BamlRegisterCallbackFn = api.register_callback;
         let _: BamlCallFunctionFn = api.call_function;
@@ -432,7 +433,8 @@ mod tests {
         let _: BamlRegisterUnhandledSpawnErrorCallbackFn =
             api.register_unhandled_spawn_error_callback;
         let _: BamlShutdownRuntimeFn = api.shutdown_runtime;
-        let _: BamlStageRuntimeFromBlobWithMetadataFn = api.stage_runtime_from_blob_with_metadata;
+        let _: BamlInitializeRuntimeFromBlobWithMetadataFn =
+            api.initialize_runtime_from_blob_with_metadata;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 

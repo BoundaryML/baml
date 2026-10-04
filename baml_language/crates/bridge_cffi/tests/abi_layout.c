@@ -69,7 +69,7 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, abi_version);
   PRINT_OFFSET(BamlApiV1, struct_size);
   PRINT_OFFSET(BamlApiV1, version);
-  PRINT_OFFSET(BamlApiV1, stage_runtime_from_blob);
+  PRINT_OFFSET(BamlApiV1, initialize_runtime_from_blob);
   PRINT_OFFSET(BamlApiV1, free_buffer);
   PRINT_OFFSET(BamlApiV1, register_callback);
   PRINT_OFFSET(BamlApiV1, call_function);
@@ -90,7 +90,7 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, register_bridge);
   PRINT_OFFSET(BamlApiV1, register_unhandled_spawn_error_callback);
   PRINT_OFFSET(BamlApiV1, shutdown_runtime);
-  PRINT_OFFSET(BamlApiV1, stage_runtime_from_blob_with_metadata);
+  PRINT_OFFSET(BamlApiV1, initialize_runtime_from_blob_with_metadata);
   PRINT_OFFSET(BamlApiV1, invocation_protocol_version);
   PRINT_OFFSET(BamlApiV1, invocation_clock_ns);
   PRINT_OFFSET(BamlApiV1, release_function_call);

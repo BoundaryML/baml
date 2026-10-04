@@ -31,7 +31,7 @@ static void TestBytecodeInitRejectsGarbage() {
   // them, so that is where the failure appears.
   const uint8_t garbage[] = {0xde, 0xad, 0xbe, 0xef};
   const std::string v = baml::version();
-  baml::stage_runtime_from_blob(garbage, sizeof(garbage), v.c_str());
+  baml::initialize_runtime_from_blob(garbage, sizeof(garbage), v.c_str());
   bool threw = false;
   try {
     baml::detail::args_encoder first_call;

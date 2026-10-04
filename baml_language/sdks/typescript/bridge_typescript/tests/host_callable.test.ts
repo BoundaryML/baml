@@ -47,7 +47,7 @@ function CallFloatCb(callback: () -> float) -> float {
 `;
 
 function makeRuntime(): BamlRuntime {
-    return BamlRuntime.stageRuntime('.', { 'main.baml': CALLBACK_BAML });
+    return BamlRuntime.initializeRuntime('.', { 'main.baml': CALLBACK_BAML });
 }
 
 describe('host-callable round-trip', () => {

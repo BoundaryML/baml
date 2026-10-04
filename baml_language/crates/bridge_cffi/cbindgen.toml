@@ -80,7 +80,7 @@ include = [
   "BamlHostReleaseCallback",
   "BamlUnhandledSpawnErrorCallback",
   "BamlVersionFn",
-  "BamlStageRuntimeFromBlobFn",
+  "BamlInitializeRuntimeFromBlobFn",
   "BamlFreeBufferFn",
   "BamlRegisterCallbackFn",
   "BamlCallFunctionFn",
@@ -131,7 +131,7 @@ exclude = [
   "free_buffer",
   "version",
   "create_baml_runtime",
-  "stage_runtime_from_blob",
+  "initialize_runtime_from_blob",
   "destroy_baml_runtime",
   "invoke_runtime_cli",
 ]

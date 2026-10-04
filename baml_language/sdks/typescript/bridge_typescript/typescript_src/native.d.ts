@@ -90,19 +90,19 @@ export declare class BamlPdf {
 export declare class BamlRuntime {
   /**
    * Initialize the process-global runtime from in-memory BAML source
-   * files. `bridge_cffi::stage_runtime` is a single-slot singleton, so
+   * files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
    * a second call replaces the prior runtime; the result is also reachable
    * via the module-level `getOrInitRuntime()`. Renamed from `fromFiles` for
-   * parity with `bridge_python`'s sole `stage_runtime` constructor and
-   * the `stageRuntime(...)` import the spec docs use.
+   * parity with `bridge_python`'s sole `initialize_runtime` constructor and
+   * the `initializeRuntime(...)` import the spec docs use.
    */
-  static stageRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
+  static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
   /**
    * Initialize the process-global runtime from precompiled BAML bytecode:
    * a raw artifact, or the encoded string generated SDKs embed (decoded
    * natively, never in JavaScript).
    */
-  static stageRuntimeFromBlob(bytecode: string | Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
+  static initializeRuntimeFromBlob(bytecode: string | Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(argsProto: Buffer): Buffer
   /** Call a BAML function asynchronously. */
@@ -218,7 +218,7 @@ export declare function getBridgeRuntimeVersion(): string
 
 /**
  * Return the process-global `BamlRuntime`, or a `BamlError`-shaped
- * `napi::Error` if `stageRuntime` has not run yet. The handle is
+ * `napi::Error` if `initializeRuntime` has not run yet. The handle is
  * zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
  * `bridge_python`'s module-level `get_or_init_runtime()`.
  */
