@@ -25,9 +25,8 @@ def _source_block(text):
     return "\n".join([first, *(line.removeprefix("    ") for line in rest)])
 
 
-def build(args):
-    root = Path(__file__).resolve().parents[2]
-    out = args.output.resolve()
+def render_sources(root, out):
+    """Generate the controls and boundary probe without compiling either."""
     out.mkdir(parents=True, exist_ok=True)
     lib = (root / "crates/baml_pack_host/src/lib.rs").read_text()
     main = (root / "crates/baml_pack_host/src/main.rs").read_text()
@@ -231,6 +230,11 @@ def build(args):
         module(lib) + main.replace("baml_pack_host::run", "host::run")
     )
 
+
+def build(args):
+    root = Path(__file__).resolve().parents[2]
+    out = args.output.resolve()
+    render_sources(root, out)
     fingerprints = args.release_dir.resolve() / ".fingerprint"
 
     def artifact(name, wanted=None, experimental=False):

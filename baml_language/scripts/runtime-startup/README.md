@@ -1,4 +1,10 @@
-# Execution-ready artifact startup experiment
+# Packed BAML startup experiments
+
+**Latest follow-up:** [doing less startup work](less-work.md) measures lazy validation diagnostics and schema lookup. The matched prototype saves roughly 1.5–2 ms for empty/scalar/wrapper programs on top of the prepared-bytecode experiment below; empty startup executes 16.7% fewer instructions. The compiler remains available. Other checkouts compiled during much of the run; the report retains all samples and a 23-round quieter subset. These are prototype measurements, with the supported runtime sources unchanged.
+
+[less-work.patch](less-work.patch) preserves the full prototype and [less-work-results-20261004.json](less-work-results-20261004.json) retains 6,400 final launch samples, 2,400 timelines, pass attribution, allocation counts, correctness checks and replay sources.
+
+## Execution-ready bytecode experiment
 
 **Result:** prebuilding executable bytecode removes about 5–6.5 ms (22–27%) from packed-program launch in these fixtures. This is a measured prototype, not a production runtime change.
 
@@ -150,7 +156,7 @@ Minimal native controls launch and exit in 1.77 ms median (Rust) and 1.59 ms (C)
 
 ### What to investigate next
 
-1. **Decode and reconstruct the executable graph.** About 7.5 ms remains in artifact decoding and engine initialization, plus about 1.7 ms destroying the resulting graph. A verified image with borrowed metadata/arena ownership could remove whole-table allocation, relocation, rendering-schema reconstruction, and per-object destruction. This is a design direction, not a measured implementation or a promised saving. Debugging, reflection, telemetry metadata, package boundaries, and malformed-artifact rejection must keep working.
+1. **Remove measured unused work before changing storage.** The [pass-by-pass follow-up](less-work.md) finds that successful validation creates 11,583 allocation requests for error context; making diagnostics lazy reduces this to 31 with matching validation results. Deferring unused schema projections and looking them up only when coercion needs them saves additional startup work. The combined prototype improves empty/scalar/wrapper launches roughly 1.5–2 ms. Production should first make validation diagnostics lazy, then give schema caches a deliberate ownership/lookup boundary. Borsh graph deserialization and native loading remain substantial. The [arena/compression experiment](#graph-allocation-and-image-follow-up) does not establish a consistent large win; a borrowed/archived representation remains unmeasured.
 
 2. **Native loading, with the compiler hypothesis now measured.** The [compiler-linkage follow-up](compiler-linkage.md) removes the compiler through both the packed host and the native bridge dependency. Initializers fall from 133 to six and bare host size from about 28.7 to 19.5 MiB, but median launch improves only 0.21–0.68 ms across fixtures, with about 6 ms still before main. This does not justify removing runtime compilation for latency. A minimal Rust system-library control shows a larger native-platform cost: linking the host's Security/CoreFoundation/libiconv/libSystem set changes empty launch from 1.69 to 4.40 ms median. It does not fully partition the packed-host launch cost or establish a safe production change. The executable-graph work above remains the main cross-platform target.
 
