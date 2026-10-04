@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * The generated SDK's type map: BAML fully-qualified name (FQN) &harr; generated
  * Java class, with the field/variant order the wire codec needs. Populated by the
  * static initializer of the generated {@code baml_sdk.Baml} anchor (before
- * {@code stageFromBytecode}) via {@link #registerClass} / {@link #registerEnum},
+ * {@code initFromBytecode}) via {@link #registerClass} / {@link #registerEnum},
  * one call per user class/enum:
  *
  * <pre>{@code

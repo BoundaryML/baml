@@ -35,7 +35,7 @@ internal static class ProgramRegistrar
             try
             {
                 NativeApi api = NativeApi.Instance;
-                api.StageRuntime(bytecode, embeddedBamlToml);
+                api.InitializeRuntime(bytecode, embeddedBamlToml);
                 registeredState = new ProgramNativeState(api, fingerprint);
                 return registeredState;
             }

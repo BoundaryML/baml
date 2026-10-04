@@ -362,7 +362,7 @@ export function _setCallCancellationObserverForTest(observer: ((callId: bigint) 
 }
 
 export class BamlRuntime {
-  static stageRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+  static initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
       stageRuntimeBytecode(bytecode, embeddedBamlToml);
@@ -372,7 +372,7 @@ export class BamlRuntime {
     runtime = new BamlRuntime();
     return runtime;
   }
-  static stageRuntime(rootPath: string, files: Record<string, string>): BamlRuntime {
+  static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
       stageRuntimeSources(rootPath, files);
@@ -401,7 +401,7 @@ export class BamlRuntime {
 let runtime: BamlRuntime | undefined;
 let hostRelease: ((key: HandleKey) => void) | undefined;
 
-export function getOrInitRuntime(): BamlRuntime {
+export function getRuntime(): BamlRuntime {
   if (!runtime) throw new BamlClientError("BAML runtime has not been initialized");
   return runtime;
 }

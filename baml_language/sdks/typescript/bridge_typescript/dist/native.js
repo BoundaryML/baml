@@ -596,7 +596,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getOrInitRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
+const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
 export { _HostExecution }
 export { HostExecution }
 export { BamlAudio }
@@ -628,7 +628,7 @@ export { _watchInvocationCancellation }
 export { cancelFunctionCall }
 export { completeHostCall }
 export { getBridgeRuntimeVersion }
-export { getOrInitRuntime }
+export { getRuntime }
 export { getToolchainVersion }
 export { getVersion }
 export { invocationClockNs }

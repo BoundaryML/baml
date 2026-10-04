@@ -632,7 +632,7 @@ fn render_root(root_decls: &BTreeMap<String, String>) -> String {
          \t/// native library's version.\n\
          \tpublic static let sdkVersion = \"{version}\"\n\n\
          \tstatic let _initialized: Bool = {{\n\
-         \t\tBamlRuntime.shared.stage(\n\
+         \t\tBamlRuntime.shared.initialize(\n\
          \t\t\tbytecode: _BamlInlined.bytecode,\n\
          \t\t\tsdkVersion: sdkVersion,\n\
          \t\t\tembeddedBamlToml: _BamlInlined.embeddedBamlToml\n\

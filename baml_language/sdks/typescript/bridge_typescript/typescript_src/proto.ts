@@ -16,7 +16,7 @@ import {
     releaseHostCallable,
     completeHostCall,
     _releaseWireHandle,
-    getOrInitRuntime,
+    getRuntime,
     newFunctionCall,
     releaseFunctionCall,
     invocationClockNs,
@@ -186,7 +186,7 @@ export class BamlPrompt {
         );
         const callCtxBinding = attachInvocation(argsProto, callId);
         try {
-            return decodeCallResult(getOrInitRuntime().callFunctionSync(argsProto));
+            return decodeCallResult(getRuntime().callFunctionSync(argsProto));
         } finally {
             callCtxBinding.detach();
         }
@@ -200,7 +200,7 @@ export class BamlPrompt {
         );
         const callCtxBinding = attachInvocation(argsProto, callId);
         try {
-            return decodeCallResult(await getOrInitRuntime().callFunction(argsProto));
+            return decodeCallResult(await getRuntime().callFunction(argsProto));
         } finally {
             callCtxBinding.detach();
         }
@@ -562,10 +562,10 @@ export function invokeTarget(target: string | ((...args: any[]) => unknown), arg
     const encoded = encodeCallArgs(args, { callId, typeArgs, baml: options?.$baml, syncMode: !asynchronous, ...(handle ? { functionHandle: handle.key } : { functionName: target as string }) });
     const binding = attachInvocation(encoded, callId);
     if (asynchronous) {
-        try { return getOrInitRuntime().callFunction(encoded).then(decodeCallResult).finally(() => binding.detach()); }
+        try { return getRuntime().callFunction(encoded).then(decodeCallResult).finally(() => binding.detach()); }
         catch (error) { binding.detach(); throw error; }
     }
-    try { return decodeCallResult(getOrInitRuntime().callFunctionSync(encoded)); }
+    try { return decodeCallResult(getRuntime().callFunctionSync(encoded)); }
     finally { binding.detach(); }
 }
 

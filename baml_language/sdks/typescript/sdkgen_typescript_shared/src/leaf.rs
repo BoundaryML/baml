@@ -610,14 +610,14 @@ fn write_preamble_ts(
     if is_root {
         out.push_str(&runtime_import_line(
             state,
-            &["stageRuntimeFromBlob", "setTypeMap"],
+            &["initializeRuntimeFromBlob", "setTypeMap"],
             runtime_package,
         ));
         out.push_str("import * as _inlinedbaml from \"./_inlinedbaml.js\";\n");
         out.push_str("import { _TYPE_MAP } from \"./_typemap.js\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
-        out.push_str("stageRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n");
+        out.push_str("initializeRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);\n");
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
@@ -1391,11 +1391,13 @@ mod tests {
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
         assert!(
-            ts.contains("stageRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);")
+            ts.contains(
+                "initializeRuntimeFromBlob(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+            )
         );
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, setTypeMap, stageRuntimeFromBlob } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBlob, setTypeMap } from \"@boundaryml/baml-bridge\";"));
     }
 }

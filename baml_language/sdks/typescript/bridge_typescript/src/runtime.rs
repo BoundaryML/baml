@@ -1,7 +1,7 @@
 //! BamlRuntime napi class.
 //!
 //! A zero-sized handle: the single source of truth for the `Arc<dyn Bex>`
-//! singleton is `bridge_cffi`, fetched via `bridge_cffi::get_or_init_runtime()`
+//! singleton is `bridge_cffi`, fetched via `bridge_cffi::get_runtime()`
 //! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
 //! longer caches its own clone.
 
@@ -17,20 +17,20 @@ pub struct BamlRuntime {}
 #[napi]
 impl BamlRuntime {
     /// Initialize the process-global runtime from in-memory BAML source
-    /// files. `bridge_cffi::stage_runtime` is a single-slot singleton, so
+    /// files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
     /// a second call replaces the prior runtime; the result is also reachable
-    /// via the module-level `getOrInitRuntime()`. Renamed from `fromFiles` for
-    /// parity with `bridge_python`'s sole `stage_runtime` constructor and
-    /// the `stageRuntime(...)` import the spec docs use.
-    #[napi(factory, js_name = "stageRuntime")]
-    pub fn stage_runtime(
+    /// via the module-level `getRuntime()`. Renamed from `fromFiles` for
+    /// parity with `bridge_python`'s sole `initialize_runtime` constructor and
+    /// the `initializeRuntime(...)` import the spec docs use.
+    #[napi(factory, js_name = "initializeRuntime")]
+    pub fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> napi::Result<Self> {
-        // bridge_cffi's singleton owns the runtime, and initializes it on the
-        // first call; we don't keep our own copy.
-        match bridge_cffi::stage_runtime(&root_path, files) {
-            Ok(()) => Ok(BamlRuntime {}),
+        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
+        // singleton; we don't keep our own copy.
+        match bridge_cffi::initialize_runtime(&root_path, files) {
+            Ok(_bex) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }
@@ -38,8 +38,8 @@ impl BamlRuntime {
     /// Initialize the process-global runtime from precompiled BAML bytecode:
     /// a raw artifact, or the encoded string generated SDKs embed (decoded
     /// natively, never in JavaScript).
-    #[napi(factory, js_name = "stageRuntimeFromBlob")]
-    pub fn stage_runtime_from_blob(
+    #[napi(factory, js_name = "initializeRuntimeFromBlob")]
+    pub fn initialize_runtime_from_blob(
         bytecode: Either<String, Buffer>,
         embedded_baml_toml: Option<String>,
     ) -> napi::Result<Self> {
@@ -47,8 +47,8 @@ impl BamlRuntime {
             Either::A(encoded) => encoded.as_bytes(),
             Either::B(bytes) => bytes.as_ref(),
         };
-        match bridge_cffi::stage_runtime_from_blob(bytecode, embedded_baml_toml.as_deref()) {
-            Ok(()) => Ok(BamlRuntime {}),
+        match bridge_cffi::initialize_runtime_from_blob(bytecode, embedded_baml_toml.as_deref()) {
+            Ok(_bex) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }
@@ -101,15 +101,15 @@ impl BamlRuntime {
 }
 
 /// Return the process-global `BamlRuntime`, or a `BamlError`-shaped
-/// `napi::Error` if `stageRuntime` has not run yet. The handle is
+/// `napi::Error` if `initializeRuntime` has not run yet. The handle is
 /// zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
-/// `bridge_python`'s module-level `get_or_init_runtime()`.
-#[napi(js_name = "getOrInitRuntime")]
-pub fn get_or_init_runtime() -> napi::Result<BamlRuntime> {
-    bridge_cffi::get_or_init_runtime().map_err(|e| match e {
+/// `bridge_python`'s module-level `get_runtime()`.
+#[napi(js_name = "getRuntime")]
+pub fn get_runtime() -> napi::Result<BamlRuntime> {
+    bridge_cffi::get_runtime().map_err(|e| match e {
         bridge_cffi::BridgeError::NotInitialized => napi::Error::new(
             napi::Status::GenericFailure,
-            "BamlError: BAML runtime has not been initialized — call BamlRuntime.stageRuntime first.",
+            "BamlError: BAML runtime has not been initialized — call BamlRuntime.initializeRuntime first.",
         ),
         other => bridge_error_to_napi(other),
     })?;

@@ -18,17 +18,15 @@ fn bridge_surfaces_bytecode_skew_without_generated_metadata() {
     // Raw artifacts and the embedded encoding generated SDKs carry decode to
     // the same program, so both surface the same skew.
     let embedded = baml_artifact::encode_embedded(&bytecode);
-    // Staging only stores the payload; the first use of the runtime validates it.
     for payload in [bytecode.as_slice(), embedded.as_bytes()] {
-        bridge_cffi::stage_runtime_from_blob(payload, None).unwrap();
-        let Err(error) = bridge_cffi::get_or_init_runtime() else {
+        let Err(error) = bridge_cffi::initialize_runtime_from_blob(payload, None) else {
             panic!("format-skewed bytecode must fail");
         };
         assert_eq!(error.to_string(), expected_skew_error());
     }
 
-    bridge_cffi::stage_runtime_from_blob(b"not an embedded program", None).unwrap();
-    let Err(error) = bridge_cffi::get_or_init_runtime() else {
+    let Err(error) = bridge_cffi::initialize_runtime_from_blob(b"not an embedded program", None)
+    else {
         panic!("corrupt embedded bytecode must fail");
     };
     assert!(

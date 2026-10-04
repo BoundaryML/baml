@@ -276,7 +276,7 @@ jobs:
           # GNU/Linux invocation; on macOS the functional smokes above already
           # prove the ABI (the consumer calls through every symbol).
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            for sym in version free_buffer create_baml_runtime stage_runtime_from_blob \
+            for sym in version free_buffer create_baml_runtime initialize_runtime_from_blob \
                        register_callback new_function_call call_function; do
               nm -D "${{ steps.art.outputs.dylib }}" | grep -qw "$sym" || {
                 echo "::error::dylib missing exported symbol $sym"; exit 1; }

@@ -2,7 +2,7 @@
 #
 # Everything generated `baml_sdk.*` code imports from the bridge lives here:
 # PyO3 runtime classes (re-exported from `baml_bridge.baml_py`), the protobuf
-# encoder/decoder, the three factory entry points, and `get_or_init_runtime()`.
+# encoder/decoder, the three factory entry points, and `get_runtime()`.
 
 import atexit
 import asyncio
@@ -20,7 +20,7 @@ from .baml_py import (
     BamlRuntime,
     FunctionResult,
     cancel_function_call,
-    get_or_init_runtime as _rust_get_or_init_runtime,
+    get_runtime as _rust_get_runtime,
     get_bridge_runtime_version as get_bridge_runtime_version,
     get_toolchain_version as get_toolchain_version,
     get_version,
@@ -79,10 +79,10 @@ __version__ = "0.20.1"
 # ---------------------------------------------------------------------------
 
 
-def get_or_init_runtime() -> BamlRuntime:
+def get_runtime() -> BamlRuntime:
     """Return the process-global `BamlRuntime` singleton, or raise
-    `BamlError` if `BamlRuntime.stage_runtime(...)` has not run yet."""
-    return _rust_get_or_init_runtime()
+    `BamlError` if `BamlRuntime.initialize_runtime(...)` has not run yet."""
+    return _rust_get_runtime()
 
 
 _CANCELLED_PANIC_CLASS = "baml.panics.Cancelled"
@@ -107,7 +107,7 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 # ---------------------------------------------------------------------------
 # call_function / call_function_sync — explicit-runtime helpers kept for
 # the bridge tests. Generated code uses the three-arg factories below
-# instead, which fetch the runtime lazily via `get_or_init_runtime()`.
+# instead, which fetch the runtime lazily via `get_runtime()`.
 # ---------------------------------------------------------------------------
 
 
@@ -133,8 +133,8 @@ async def call_function(rt, function_name, kwargs, *, _baml=None):
 # Factories consumed by generated `baml_sdk.*` leaves.
 # Every factory captures `param_names` by closure; no runtime lookup on
 # the call path (09b2 §2). The runtime is fetched lazily via
-# `get_or_init_runtime()`, so constructing a factory has no sequencing constraint
-# relative to `BamlRuntime.stage_runtime(...)`.
+# `get_runtime()`, so constructing a factory has no sequencing constraint
+# relative to `BamlRuntime.initialize_runtime(...)`.
 # ---------------------------------------------------------------------------
 
 Mode = Literal["sync", "async"]
@@ -424,7 +424,7 @@ def define_function(
                 if is_generic
                 else None
             )
-            rt = get_or_init_runtime()
+            rt = get_runtime()
             call_id = new_function_call()
             args_proto = encode_call_args(
                 call_kwargs,
@@ -461,7 +461,7 @@ def define_function(
                 if is_generic
                 else None
             )
-            rt = get_or_init_runtime()
+            rt = get_runtime()
             call_id = new_function_call()
             args_proto = encode_call_args(
                 call_kwargs,
@@ -497,7 +497,7 @@ __all__ = [
     "BamlPanic",
     "make_sdk_panic",
     "shutdown_runtime",
-    "get_or_init_runtime",
+    "get_runtime",
     "get_version",
     "new_function_call",
     "cancel_function_call",

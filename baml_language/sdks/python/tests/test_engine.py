@@ -25,9 +25,7 @@ from baml_bridge import (
     get_version,
     call_function,
     call_function_sync,
-    get_or_init_runtime,
 )
-from baml_bridge.errors import BamlPanic
 
 
 # ============================================================================
@@ -99,7 +97,7 @@ function MakeCounter(start: int) -> () -> int throws never {
 
 def make_runtime(baml_source: str) -> BamlRuntime:
     """Create a BamlRuntime from a single BAML source string."""
-    return BamlRuntime.stage_runtime(
+    return BamlRuntime.initialize_runtime(
         ".", {"main.baml": baml_source}
     )
 
@@ -120,7 +118,7 @@ function main() -> int {
     1
 }
 '''
-runtime = BamlRuntime.stage_runtime(".", {"main.baml": source})
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
 assert call_function_sync(runtime, "main", {}).result() == 1
 shutdown_runtime()
 raise SystemExit(42)
@@ -151,7 +149,7 @@ function slow_cleanup() -> int {
     0
 }
 '''
-runtime = BamlRuntime.stage_runtime(".", {"main.baml": source})
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
 threading.Thread(
     target=lambda: call_function_sync(runtime, "slow_cleanup", {}),
     daemon=True,
@@ -227,35 +225,31 @@ class TestBasics:
         assert isinstance(v, str)
         assert len(v) > 0
 
-    def test_stage_runtime_valid(self):
-        """stage_runtime succeeds with valid BAML source."""
+    def test_initialize_runtime_valid(self):
+        """initialize_runtime succeeds with valid BAML source."""
         rt = make_runtime(EXPR_FUNCS_BAML)
         assert rt is not None
 
     @pytest.mark.xfail(
         reason="bex_engine does not validate BAML at initialization time"
     )
-    def test_stage_runtime_invalid_baml(self):
-        """stage_runtime raises on invalid BAML source (type error)."""
+    def test_initialize_runtime_invalid_baml(self):
+        """initialize_runtime raises on invalid BAML source (type error)."""
         bad_baml = 'function Bad() -> int { "not an int" }'
         with pytest.raises(Exception):
-            BamlRuntime.stage_runtime(
+            BamlRuntime.initialize_runtime(
                 ".", {"bad.baml": bad_baml}
             )
 
-    def test_stage_runtime_empty(self):
-        """stage_runtime succeeds with empty source (no functions)."""
-        rt = BamlRuntime.stage_runtime(
+    def test_initialize_runtime_empty(self):
+        """initialize_runtime succeeds with empty source (no functions)."""
+        rt = BamlRuntime.initialize_runtime(
             ".", {"empty.baml": ""}
         )
         assert rt is not None
 
     def test_generated_bytecode_version_skew_fails_before_deserialization(self):
-        """Generated SDKs report bridge skew instead of a bytecode panic.
-
-        Staging at import only stores the bytecode; the first use of the
-        runtime checks it and reports the skew.
-        """
+        """Generated SDK imports report bridge skew instead of a bytecode panic."""
         generated_toolchain = "999.0.0"
         embedded_baml_toml = f"""\
 [package]
@@ -268,12 +262,13 @@ metadata_version = 1
 version = "{generated_toolchain}"
 """
 
-        BamlRuntime.stage_runtime_from_blob(b"\x00", embedded_baml_toml)
-        with pytest.raises(BamlPanic) as exc_info:
-            get_or_init_runtime()
+        with pytest.raises(RuntimeError) as exc_info:
+            BamlRuntime.initialize_runtime_from_blob(
+                b"\x00", embedded_baml_toml
+            )
 
         message = str(exc_info.value)
-        assert "BAML startup failed: version skew error." in message
+        assert message.startswith("BAML startup failed: version skew error.")
         assert f"generated using BAML toolchain {generated_toolchain}" in message
         assert f"baml-bridge is installed at {get_bridge_runtime_version()}" in message
         assert (

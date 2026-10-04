@@ -72,7 +72,7 @@ fn assert_cancelled(bytes: &[u8]) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn raw_invocation_and_callback_lifecycles() {
-    bridge_cffi::stage_runtime(".", HashMap::from([("main.baml".into(), "function identity() -> int throws never { 7 }\nfunction through_host(callback: () -> int) -> int { callback() }\nfunction reserve() -> trace.ReservedSpan throws never { trace.span().reserve() }".into())])).unwrap();
+    bridge_cffi::initialize_runtime(".", HashMap::from([("main.baml".into(), "function identity() -> int throws never { 7 }\nfunction through_host(callback: () -> int) -> int { callback() }\nfunction reserve() -> trace.ReservedSpan throws never { trace.span().reserve() }".into())])).unwrap();
 
     let id = bridge_cffi::new_function_call_id();
     assert_ne!(id, 0);
@@ -164,7 +164,7 @@ async fn raw_invocation_and_callback_lifecycles() {
         .unwrap();
     let reservation_key = HANDLE_TABLE.insert(CffiHandleTableEntry::TraceReservation(
         TraceReservationHandle {
-            owner: bridge_cffi::get_or_init_runtime().unwrap(),
+            owner: bridge_cffi::get_runtime().unwrap(),
             reservation,
         },
     ));
@@ -256,7 +256,7 @@ async fn raw_invocation_and_callback_lifecycles() {
 
     // A replacement runtime must reject a capability from the old one.
     let allocated_old = request("identity");
-    bridge_cffi::stage_runtime(
+    bridge_cffi::initialize_runtime(
         ".",
         HashMap::from([(
             "main.baml".into(),

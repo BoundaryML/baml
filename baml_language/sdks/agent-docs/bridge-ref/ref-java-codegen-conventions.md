@@ -204,7 +204,7 @@ rules digest, not the rationale log).
   static/instance method bindings emits the same block so its first invoked
   entrypoint (e.g. `Greeter.create()`) boots the runtime. The anchor name is
   `Baml`, or `Baml$` when a user root-level type already claims `Baml`.
-  `nativeStageFromBytecode` also
+  `nativeInitFromBytecode` also
   **registers the bridge with the versioned C ABI** —
   `BridgeLanguage::Java = 7` (telemetry id `"java"`) at
   `baml_version::CANONICAL_VERSION`, mirroring `bridge_python`

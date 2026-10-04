@@ -6,7 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { BamlRuntime } from './native.js';
-export { BamlRuntime, BamlHandle, getOrInitRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
+export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
@@ -21,16 +21,16 @@ export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
 export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
- * `stageRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
- * `BamlRuntime.stageRuntime` factory (which sets the process-global
- * singleton reachable via `getOrInitRuntime()`).
+ * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
+ * `BamlRuntime.initializeRuntime` factory (which sets the process-global
+ * singleton reachable via `getRuntime()`).
  */
-export declare function stageRuntime(srcDir: string, files: Record<string, string>): void;
+export declare function initializeRuntime(srcDir: string, files: Record<string, string>): void;
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export declare function stageRuntimeFromBlob(bytecode: string | Buffer | Uint8Array, embeddedBamlToml?: string): void;
+export declare function initializeRuntimeFromBlob(bytecode: string | Buffer | Uint8Array, embeddedBamlToml?: string): void;
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;

@@ -13,7 +13,7 @@ __all__ = [
     "FunctionResult",
     "cancel_function_call",
     "get_bridge_runtime_version",
-    "get_or_init_runtime",
+    "get_runtime",
     "get_toolchain_version",
     "get_version",
     "invocation_clock_ns",
@@ -124,33 +124,29 @@ class BamlRuntime:
     r"""
     The main BAML runtime. A zero-sized handle: the single source of truth for
     the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
-    `bridge_cffi::get_or_init_runtime()` at each call site (31e-phase4), so this
+    `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
     no longer caches its own clone.
     """
     @staticmethod
-    def stage_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
+    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
 
-        Stages the files with `bridge_cffi::stage_runtime`: the same
+        Mirrors `bridge_cffi::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
-        runtime. Nothing is compiled here; the first BAML call compiles the
-        files, builds the engine, and reads telemetry settings from the
-        environment.
+        runtime.
 
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def stage_runtime_from_blob(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
+    def initialize_runtime_from_blob(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
 
-        Generated SDKs call this while `baml_sdk` is imported. It only stores
-        the bytecode and `embedded_baml_toml`; the first BAML call validates
-        them, builds the engine, and reads telemetry settings from the
-        environment.
+        Generated SDKs use this path so importing `baml_sdk` can skip parsing
+        and compiling the inlined BAML source files.
 
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
@@ -274,10 +270,10 @@ def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def get_bridge_runtime_version() -> builtins.str: ...
 
-def get_or_init_runtime() -> BamlRuntime:
+def get_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
-    `BamlRuntime.stage_runtime(...)` has not been called yet.
+    `BamlRuntime.initialize_runtime(...)` has not been called yet.
 
     Used by the pure-Python factories in `baml_bridge` so generated
     leaves don't have to thread a runtime reference through every call

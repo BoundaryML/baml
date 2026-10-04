@@ -307,7 +307,7 @@ inline const loaded_api& load_api() {
                               " bytes from " + chosen);
     }
     if (table->version == nullptr ||
-        table->stage_runtime_from_blob == nullptr ||
+        table->initialize_runtime_from_blob == nullptr ||
         table->free_buffer == nullptr || table->register_callback == nullptr ||
         table->call_function == nullptr ||
         table->new_function_call == nullptr ||
@@ -323,7 +323,7 @@ inline const loaded_api& load_api() {
         table->register_bridge == nullptr ||
         table->register_unhandled_spawn_error_callback == nullptr ||
         table->shutdown_runtime == nullptr ||
-        table->stage_runtime_from_blob_with_metadata == nullptr ||
+        table->initialize_runtime_from_blob_with_metadata == nullptr ||
         table->invocation_protocol_version == nullptr ||
         table->invocation_clock_ns == nullptr ||
         table->release_function_call == nullptr ||

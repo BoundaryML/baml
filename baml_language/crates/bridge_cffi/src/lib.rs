@@ -14,9 +14,10 @@ mod platform;
 #[path = "lib_wasm.rs"]
 mod platform;
 
-#[cfg(target_arch = "wasm32")]
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
 use bex_project::Bex;
 #[cfg(target_arch = "wasm32")]
@@ -84,6 +85,11 @@ fn source_vfs_root() -> vfs::VfsPath {
     vfs::VfsPath::new(WasmSourceRootFs)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn source_vfs_root() -> vfs::VfsPath {
+    vfs::VfsPath::new(vfs::MemoryFS::new())
+}
+
 pub(crate) static CALL_ALLOCATIONS: LazyLock<Arc<call_allocation::CallAllocationTable>> =
     LazyLock::new(|| Arc::new(call_allocation::CallAllocationTable::default()));
 
@@ -108,11 +114,9 @@ pub use identity::{
 };
 pub use platform::*;
 
-/// Get a clone of the target's global runtime, initializing it from the staged
-/// program on first use. Errors if nothing was staged, or if initialization
-/// failed.
-pub fn get_or_init_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
-    platform::get_or_init_runtime()
+/// Get a clone of the target's global runtime, or error if not initialized.
+pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
+    platform::get_runtime()
 }
 
 struct PreparedRuntime {
@@ -134,15 +138,26 @@ impl PreparedRuntime {
     }
 }
 
-/// Validate and decode serialized BAML bytecode into a runtime ready to build.
+/// Initialize the global runtime from serialized BAML bytecode.
 ///
 /// The payload is a versioned artifact containing `bex_vm_types::Program`,
 /// either raw or in the embedded encoding generated SDKs carry
 /// (`baml_artifact::encode_embedded`), which is decoded here so host languages
-/// pass it through untouched. Validation and decoding live behind
+/// pass it through untouched. Validation, decoding, and engine construction
+/// live behind
 /// `bex_project::prepare_from_bytecode` so the bridge stays on the `bex_project`
 /// surface rather than reaching into bex internals. Artifact validation runs
 /// even when the optional generated `baml.toml` metadata is absent.
+pub fn initialize_runtime_from_blob_with_sys_ops(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let runtime = prepare_runtime_from_blob(bytecode, embedded_baml_toml, sys_ops)?.build()?;
+    platform::replace_runtime(runtime.clone())?;
+    Ok(runtime)
+}
+
 fn prepare_runtime_from_blob(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
@@ -282,7 +297,22 @@ fn format_version_skew(generated: &str, bridge: &BridgeInfo) -> String {
     )
 }
 
-#[cfg(target_arch = "wasm32")]
+/// Initialize the global runtime from an in-memory BAML source map.
+///
+/// The candidate runtime is fully compiled before the process-global slot is
+/// replaced, so a path or compilation failure leaves the previous runtime
+/// usable. The memory filesystem supplies a platform-neutral project root;
+/// source contents continue to enter through `bex_project::new`'s source map.
+pub fn initialize_runtime_from_files_with_sys_ops(
+    root_path: &str,
+    src_files: HashMap<String, String>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let runtime = prepare_runtime_from_files(root_path, src_files, sys_ops)?.build()?;
+    platform::replace_runtime(runtime.clone())?;
+    Ok(runtime)
+}
+
 fn prepare_runtime_from_files(
     root_path: &str,
     src_files: HashMap<String, String>,
@@ -360,6 +390,21 @@ pub async fn shutdown_runtime(grace: Option<std::time::Duration>) -> Result<(), 
     Ok(())
 }
 
+/// Initialize the native process-global runtime from serialized BAML bytecode.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn initialize_runtime_from_blob(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    use sys_native::SysOpsExt as _;
+
+    initialize_runtime_from_blob_with_sys_ops(
+        bytecode,
+        embedded_baml_toml,
+        sys_ops::SysOps::native(),
+    )
+}
+
 /// Allocate and retain a call against the installed runtime. Zero is failure.
 pub fn new_function_call_id() -> u64 {
     allocate_function_call().unwrap_or(0)
@@ -368,7 +413,7 @@ pub fn new_function_call_id() -> u64 {
 /// Allocate a runtime-bound call while preserving the startup error for
 /// exception-capable bindings. The native ABI represents failure as zero.
 pub fn allocate_function_call() -> Result<u64, BridgeError> {
-    CALL_ALLOCATIONS.allocate(get_or_init_runtime()?)
+    CALL_ALLOCATIONS.allocate(get_runtime()?)
 }
 
 pub fn invocation_clock_by_id(id: u64) -> Result<u64, BridgeError> {

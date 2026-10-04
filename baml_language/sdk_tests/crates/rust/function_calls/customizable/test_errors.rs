@@ -21,9 +21,9 @@ use std::time::Duration;
 
 use baml_bridge::Map;
 // SPECULATIVE: the low-level bridge surface mirrors python's `baml_bridge`
-// (`get_or_init_runtime`, `call_function`, `BamlCallContext`); provisional until the
+// (`get_runtime`, `call_function`, `BamlCallContext`); provisional until the
 // Rust bridge pins it.
-use baml_bridge::runtime::{BamlCallContext, call_function, get_or_init_runtime};
+use baml_bridge::runtime::{BamlCallContext, call_function, get_runtime};
 use baml_sdk::baml::json;
 // SPECULATIVE: `LoadDocError`, the generated error type for the union
 // `throws ParseError | TimeoutError` contract, is a provisional name — the
@@ -133,7 +133,7 @@ async fn test_errors_cancellation_surfaces_as_baml_panic() {
     // DIVERGENCE(rust): tokio has no cross-task cancellation exception — the
     // aborted call itself resolves to `Err(Error::Panic)` (the cancellation
     // panic) instead of a `CancelledError` carrying a `reason`.
-    let rt = get_or_init_runtime();
+    let rt = get_runtime();
     let ctx = BamlCallContext::new();
 
     let _abort_soon = async {

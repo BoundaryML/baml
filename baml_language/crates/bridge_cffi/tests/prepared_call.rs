@@ -39,7 +39,7 @@ fn ok_value(bytes: &[u8]) -> baml_outbound_value::Value {
 
 #[tokio::test]
 async fn prepared_handle_call_survives_release_of_its_key() {
-    bridge_cffi::stage_runtime(
+    bridge_cffi::initialize_runtime(
         ".",
         HashMap::from([(
             "main.baml".to_string(),

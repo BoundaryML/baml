@@ -17,6 +17,8 @@ complete_host_call
 create_baml_runtime
 destroy_baml_runtime
 free_buffer
+initialize_runtime_from_blob
+initialize_runtime_from_blob_with_metadata
 invocation_clock_ns
 invocation_context_ffi
 invocation_protocol_version
@@ -30,7 +32,5 @@ register_host_release_callback
 register_unhandled_spawn_error_callback
 release_function_call
 shutdown_runtime
-stage_runtime_from_blob
-stage_runtime_from_blob_with_metadata
 trace_selection_ffi
 version

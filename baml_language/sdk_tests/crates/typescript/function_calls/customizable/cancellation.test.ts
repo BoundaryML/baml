@@ -5,7 +5,7 @@ import {
   BamlCancelledError,
   callFunction,
   callFunctionSync,
-  getOrInitRuntime,
+  getRuntime,
 } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { Greeter } from "./baml_sdk/methods_on_classes/index.js";
@@ -79,7 +79,7 @@ describe(
 
       try {
         callFunctionSync(
-          getOrInitRuntime(),
+          getRuntime(),
           SLEEP_FQN,
           { ms: 60000 },
           { cancel: ctx },
@@ -97,7 +97,7 @@ describe(
       const ctx = CancelToken.new();
       const host = pendingIntCallback();
       const pending = callFunction(
-        getOrInitRuntime(),
+        getRuntime(),
         HOST_CALLBACK_FQN,
         { callback: host.callback, x: 1 },
         { cancel: ctx },
@@ -123,7 +123,7 @@ describe(
 
       try {
         await callFunction(
-          getOrInitRuntime(),
+          getRuntime(),
           HOST_CALLBACK_FQN,
           { callback: (value: number) => `${value}`, x: 1 },
           { cancel: ctx },
@@ -143,13 +143,13 @@ describe(
       const second = pendingIntCallback();
       const pending = Promise.all([
         callFunction(
-          getOrInitRuntime(),
+          getRuntime(),
           HOST_CALLBACK_FQN,
           { callback: first.callback, x: 1 },
           { cancel: ctx },
         ),
         callFunction(
-          getOrInitRuntime(),
+          getRuntime(),
           HOST_CALLBACK_FQN,
           { callback: second.callback, x: 2 },
           { cancel: ctx },
@@ -173,7 +173,7 @@ describe(
       const ctx = CancelToken.new();
       const host = pendingIntCallback();
       const pending = callFunction(
-        getOrInitRuntime(),
+        getRuntime(),
         HOST_CALLBACK_FQN,
         { callback: host.callback, x: 1 },
         { cancel: ctx },

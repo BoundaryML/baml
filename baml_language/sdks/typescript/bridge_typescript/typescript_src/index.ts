@@ -14,7 +14,7 @@ import { attachInvocation } from './call_context.js';
 export {
     BamlRuntime,
     BamlHandle,
-    getOrInitRuntime,
+    getRuntime,
     getBridgeRuntimeVersion,
     getToolchainVersion,
     getVersion,
@@ -40,22 +40,22 @@ export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
- * `stageRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
- * `BamlRuntime.stageRuntime` factory (which sets the process-global
- * singleton reachable via `getOrInitRuntime()`).
+ * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
+ * `BamlRuntime.initializeRuntime` factory (which sets the process-global
+ * singleton reachable via `getRuntime()`).
  */
-export function stageRuntime(srcDir: string, files: Record<string, string>): void {
-    BamlRuntime.stageRuntime(srcDir, files);
+export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
+    BamlRuntime.initializeRuntime(srcDir, files);
 }
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function stageRuntimeFromBlob(bytecode: string | Buffer | Uint8Array, embeddedBamlToml?: string): void {
+export function initializeRuntimeFromBlob(bytecode: string | Buffer | Uint8Array, embeddedBamlToml?: string): void {
     // Generated SDKs pass their embedded bytecode string through untouched;
     // the native bridge decodes it.
-    BamlRuntime.stageRuntimeFromBlob(
+    BamlRuntime.initializeRuntimeFromBlob(
         typeof bytecode === "string" ? bytecode : Buffer.from(bytecode),
         embeddedBamlToml,
     );
