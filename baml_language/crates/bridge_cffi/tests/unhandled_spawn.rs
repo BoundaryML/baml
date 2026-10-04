@@ -20,7 +20,7 @@ extern "C" fn capture(content: *const i8, length: usize, _cancelled: i32) {
 async fn unhandled_spawn_error_reaches_registered_bridge_callback() {
     REPORTED.lock().unwrap().clear();
     bridge_cffi::register_unhandled_spawn_error_callback(capture);
-    bridge_cffi::stage_runtime(
+    bridge_cffi::initialize_runtime(
         ".",
         HashMap::from([(
             "main.baml".to_string(),

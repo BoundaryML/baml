@@ -29,11 +29,9 @@ pub struct BamlRuntime;
 impl BamlRuntime {
     /// Initialize the process-global runtime from in-memory BAML source files.
     ///
-    /// Stages the files with `bridge_cffi::stage_runtime`: the same
+    /// Mirrors `bridge_cffi::initialize_runtime`: the same
     /// single-slot singleton is used, so a second call replaces the prior
-    /// runtime. Nothing is compiled here; the first BAML call compiles the
-    /// files, builds the engine, and reads telemetry settings from the
-    /// environment.
+    /// runtime.
     ///
     /// # Arguments
     /// * `root_path` - Root path for BAML files
@@ -43,9 +41,10 @@ impl BamlRuntime {
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
-        // bridge_cffi's singleton owns the runtime; we don't keep our own copy.
-        match bridge_cffi::stage_runtime(&root_path, files) {
-            Ok(()) => Ok(BamlRuntime),
+        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
+        // singleton; we don't keep our own copy.
+        match bridge_cffi::initialize_runtime(&root_path, files) {
+            Ok(_bex) => Ok(BamlRuntime),
             // Handle-returning site: can't hand back envelope bytes, so an
             // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
             Err(e) => Err(bridge_error_to_sdk_panic(e)),
@@ -54,10 +53,8 @@ impl BamlRuntime {
 
     /// Initialize the process-global runtime from serialized BAML bytecode.
     ///
-    /// Generated SDKs call this while `baml_sdk` is imported. It only stores
-    /// the bytecode and `embedded_baml_toml`; the first BAML call validates
-    /// them, builds the engine, and reads telemetry settings from the
-    /// environment.
+    /// Generated SDKs use this path so importing `baml_sdk` can skip parsing
+    /// and compiling the inlined BAML source files.
     ///
     /// # Arguments
     /// * `bytecode` - borsh-encoded BAML bytecode program
@@ -67,8 +64,8 @@ impl BamlRuntime {
         bytecode: Vec<u8>,
         embedded_baml_toml: Option<String>,
     ) -> PyResult<Self> {
-        match bridge_cffi::stage_runtime_from_blob(&bytecode, embedded_baml_toml.as_deref()) {
-            Ok(()) => Ok(BamlRuntime),
+        match bridge_cffi::initialize_runtime_from_blob(&bytecode, embedded_baml_toml.as_deref()) {
+            Ok(_bex) => Ok(BamlRuntime),
             Err(e) => Err(crate::errors::bridge_error_to_initialization_error(e)),
         }
     }

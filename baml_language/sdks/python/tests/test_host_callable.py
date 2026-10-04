@@ -25,7 +25,6 @@ from baml_bridge import (
     BamlRuntime,
     call_function_sync,
     call_function,
-    get_runtime,
 )
 from baml_bridge.baml_py import (
     _live_handle_count,
@@ -51,12 +50,7 @@ function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
 
 
 def _make_runtime() -> BamlRuntime:
-    runtime = BamlRuntime.initialize_runtime(".", {"main.baml": CALLBACK_BAML})
-    # Build the engine now rather than inside the first call: tests here compare
-    # the process-wide handle count around a call, and the previous test's
-    # runtime is still releasing its handles while this one is built.
-    get_runtime()
-    return runtime
+    return BamlRuntime.initialize_runtime(".", {"main.baml": CALLBACK_BAML})
 
 
 def test_sync_callable_round_trip():

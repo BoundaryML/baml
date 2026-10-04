@@ -26,15 +26,12 @@ static void TestVersion() {
 
 static void TestBytecodeInitRejectsGarbage() {
   // The happy path is exercised once generated SDKs embed bytecode; here we
-  // pin that the export exists and that bad bytecode surfaces as a catchable
-  // error. Initialization only stages the bytes; the first call validates
-  // them, so that is where the failure appears.
+  // pin that the export exists and reports failure as a catchable error.
   const uint8_t garbage[] = {0xde, 0xad, 0xbe, 0xef};
-  const std::string v = baml::version();
-  baml::initialize_runtime_from_blob(garbage, sizeof(garbage), v.c_str());
   bool threw = false;
   try {
-    baml::detail::args_encoder first_call;
+    const std::string v = baml::version();
+    baml::initialize_runtime_from_blob(garbage, sizeof(garbage), v.c_str());
   } catch (const baml::error&) {
     threw = true;
   }
