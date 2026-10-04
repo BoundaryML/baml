@@ -937,7 +937,7 @@ pub mod rust {
     /// intentionally not checked — the emitter's pretty-printer is its
     /// canonical format), `clippy` lints the generated library, and
     /// `cargo_test` compiles and runs the enabled ports. Only `cargo_test`
-    /// gets `BAML_LIBRARY_PATH`: `baml_bridge` is dylib-only, so the fixture's
+    /// gets `BAML_BRIDGE_PATH`: `baml_bridge` is dylib-only, so the fixture's
     /// tests load the engine cdylib at run time, while fmt and clippy never
     /// execute it.
     #[macro_export]
@@ -1002,10 +1002,10 @@ pub mod rust {
                             "cargo test --manifest-path Cargo.toml",
                             &[
                                 (
-                                    "BAML_LIBRARY_PATH",
+                                    "BAML_BRIDGE_PATH",
                                     engine.to_str().expect("engine path is valid UTF-8"),
                                 ),
-                                ("BAML_LIBRARY_DISABLE_DOWNLOAD", "true"),
+                                ("BAML_BRIDGE_DISABLE_DOWNLOAD", "true"),
                             ],
                         );
                     }

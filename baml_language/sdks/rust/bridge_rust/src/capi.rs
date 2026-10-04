@@ -129,9 +129,9 @@ fn load() -> Result<Api, LoaderError> {
             tokio::runtime::RuntimeFlavor::MultiThread
         )
     {
-        return tokio::task::block_in_place(|| load_inner(&loader::LoaderEnv::from_process()));
+        return tokio::task::block_in_place(|| load_inner(&loader::LoaderEnv::from_process()?));
     }
-    load_inner(&loader::LoaderEnv::from_process())
+    load_inner(&loader::LoaderEnv::from_process()?)
 }
 
 /// The `bridge_cffi` versioned `BamlApiV1` table returned by
@@ -351,7 +351,11 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let version_buffer = unsafe { version() };
     let loaded_version = String::from_utf8_lossy(&api.copy_and_free(version_buffer)).into_owned();
     let expected = crate::get_version();
-    if loaded_version != expected {
+    // DEV_BAML_BRIDGE_SKIP_VERSION_CHECK skips only the toolchain-version
+    // match (this check; the library skips its own inside `register_bridge`
+    // by reading the same variable). The ABI table check above is never
+    // skipped.
+    if !env.skip_version_check && loaded_version != expected {
         // Dropping `library` here unloads it (Go parity).
         return Err(LoaderError::VersionMismatch(format!(
             "baml_bridge expects {expected}, but loaded library {} reports {loaded_version}",
@@ -429,11 +433,10 @@ mod tests {
         let env = LoaderEnv {
             explicit_path: Some(path.clone()),
             env_path: None,
-            cache_dir_override: None,
-            user_cache_dir: None,
+            baml_home: std::env::temp_dir(),
             disable_download: true,
-            download_base: None,
-            system_paths: Vec::new(),
+            skip_version_check: false,
+            manifest_base_url: String::new(),
             version: crate::get_version().to_string(),
         };
         let Err(err) = load_inner(&env) else {
