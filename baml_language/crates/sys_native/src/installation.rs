@@ -1,5 +1,6 @@
 //! Native filesystem, path, archive and configuration primitives for BAML applications.
 use std::{
+    collections::HashSet,
     io::{Cursor, Read, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -158,12 +159,20 @@ fn archive_path(path: &Path) -> Result<PathBuf, VmRustFnError> {
 fn zip_is_regular(mode: Option<u32>) -> bool {
     matches!(mode.unwrap_or(0) & 0o170_000, 0 | 0o100_000)
 }
+fn unique_archive_path(path: &Path, seen: &mut HashSet<PathBuf>) -> Result<PathBuf, VmRustFnError> {
+    let normalized = archive_path(path)?;
+    if !seen.insert(normalized.clone()) {
+        return Err(error(format!("Duplicate archive path: {}", path.display())).into());
+    }
+    Ok(normalized)
+}
 fn extract_archive(data: &[u8], format: &str, dest: &Path) -> Result<(), VmRustFnError> {
+    let mut seen = HashSet::new();
     if format == "zip" {
         let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
         for i in 0..archive.len() {
             let mut file = archive.by_index(i).map_err(error)?;
-            let path = archive_path(Path::new(file.name()))?;
+            let path = unique_archive_path(Path::new(file.name()), &mut seen)?;
             let out = dest.join(path);
             if file.is_dir() {
                 std::fs::create_dir_all(out).map_err(error)?;
@@ -185,7 +194,7 @@ fn extract_archive(data: &[u8], format: &str, dest: &Path) -> Result<(), VmRustF
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
         for entry in archive.entries().map_err(error)? {
             let mut entry = entry.map_err(error)?;
-            let path = archive_path(&entry.path().map_err(error)?)?;
+            let path = unique_archive_path(&entry.path().map_err(error)?, &mut seen)?;
             let out = dest.join(path);
             if entry.header().entry_type().is_dir() {
                 std::fs::create_dir_all(out).map_err(error)?;
@@ -202,31 +211,37 @@ fn extract_archive(data: &[u8], format: &str, dest: &Path) -> Result<(), VmRustF
 fn read_archive_file(data: &[u8], format: &str, name: &str) -> Result<Vec<u8>, VmRustFnError> {
     let wanted = archive_path(Path::new(name))?;
     let mut bytes = Vec::new();
+    let mut seen = HashSet::new();
+    let mut found = false;
     if format == "zip" {
         let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
         for i in 0..archive.len() {
             let mut file = archive.by_index(i).map_err(error)?;
-            if archive_path(Path::new(file.name()))? == wanted
+            if unique_archive_path(Path::new(file.name()), &mut seen)? == wanted
                 && !file.is_dir()
                 && zip_is_regular(file.unix_mode())
             {
                 file.read_to_end(&mut bytes).map_err(error)?;
-                return Ok(bytes);
+                found = true;
             }
         }
     } else {
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
         for entry in archive.entries().map_err(error)? {
             let mut entry = entry.map_err(error)?;
-            if archive_path(&entry.path().map_err(error)?)? == wanted
+            if unique_archive_path(&entry.path().map_err(error)?, &mut seen)? == wanted
                 && entry.header().entry_type().is_file()
             {
                 entry.read_to_end(&mut bytes).map_err(error)?;
-                return Ok(bytes);
+                found = true;
             }
         }
     }
-    Err(error(format!("Archive does not contain file {name}")).into())
+    if found {
+        Ok(bytes)
+    } else {
+        Err(error(format!("Archive does not contain file {name}")).into())
+    }
 }
 impl io::IoNamespaceArchive for NativeSysOps {
     fn extract(

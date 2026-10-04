@@ -181,3 +181,42 @@ async fn archives_accept_runtime_format_values() {
     ));
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
+
+#[tokio::test]
+async fn archives_reject_duplicate_normalized_paths() {
+    let tmp = tempfile::tempdir().unwrap();
+    let fixtures = [
+        (
+            "zip",
+            "UEsDBBQAAAAAAAAAIQBH3dx5AgAAAAIAAAAGAAAAbWFya2Vyb2tQSwMEFAAAAAAAAAAhABn/RQ8IAAAACAAAAAcAAABiaW4vY2xpdmVyaWZpZWRQSwMEFAAAAAAAAAAhAPdiZ54IAAAACAAAAAkAAABiaW4vLi9jbGlyZXBsYWNlZFBLAQIUAxQAAAAAAAAAIQBH3dx5AgAAAAIAAAAGAAAAAAAAAAAAAACkgQAAAABtYXJrZXJQSwECFAMUAAAAAAAAACEAGf9FDwgAAAAIAAAABwAAAAAAAAAAAAAApIEmAAAAYmluL2NsaVBLAQIUAxQAAAAAAAAAIQD3YmeeCAAAAAgAAAAJAAAAAAAAAAAAAACkgVMAAABiaW4vLi9jbGlQSwUGAAAAAAMAAwCgAAAAggAAAAAA",
+        ),
+        (
+            "tar.gz",
+            "H4sIAAAAAAAC/+3TPQ6DMAxAYR+FGzSpIjhPgFSKoIDMz/mbdqpghqrK+xZbXjy9p9cuqJzKJKVzn5nsZ3L/2t/3yjorhZELrPPiNb2UPI2dIGN1HG5NH3/bvzWH/quS/q+wBY2PGFpKoH/6z4+GqfcN/QMAAAAAAAAAAADAv3sBE4hQtwAoAAA=",
+        ),
+        (
+            "tar.gz",
+            "H4sIAAAAAAAC/+3UTQ7CIBBA4TlKT6AgpD0PVkxIa9uMP+cXXRndmRRjeN9mJmxYvTkFHaLKqkzWev+c2fvMdi/7472z3kpjpIDr+RI0fyl1mgdBxfZp2vZj+m3/1nz037X0X8ItajqmeKCEevvfrHwBvujfOUf/JWhcxtDTPwAAAAAAAAAAAAD8uzv1ORb2ACgAAA==",
+        ),
+    ];
+    for (i, (format, archive)) in fixtures.iter().enumerate() {
+        let destination =
+            serde_json::to_string(&tmp.path().join(i.to_string()).to_string_lossy()).unwrap();
+        let output = baml_test!(&format!(
+            r#"
+            function main() -> bool {{
+                let data = uint8array.from_base64("{archive}");
+                let member_rejected = {{ baml.archive.read_file(data, "{format}", "bin/cli"); false }} catch (e) {{ baml.errors.Io => true }};
+                let unrelated_rejected = {{ baml.archive.read_file(data, "{format}", "marker"); false }} catch (e) {{ baml.errors.Io => true }};
+                let extraction_rejected = {{ baml.archive.extract(data, "{format}", {destination}); false }} catch (e) {{ baml.errors.Io => true }};
+                member_rejected && unrelated_rejected && extraction_rejected
+            }}
+        "#
+        ));
+        assert_eq!(
+            output.result,
+            Ok(BexExternalValue::Bool(true)),
+            "fixture {i}: {format}"
+        );
+    }
+}
