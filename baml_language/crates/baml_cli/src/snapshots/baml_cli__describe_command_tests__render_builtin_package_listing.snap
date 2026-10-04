@@ -217,8 +217,8 @@ class            baml.regex.Regex                 <builtin>/baml/ns_regex/regex.
 function         baml.regex.new                   <builtin>/baml/ns_regex/regex.baml:244
 function         baml.regex.escape                <builtin>/baml/ns_regex/regex.baml:268
 function         baml.sap.can_parse               <builtin>/baml/ns_sap/sap.baml:55
-function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:64
-function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:77
+function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:70
+function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:83
 class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:23
 interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.baml:60
 class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:78

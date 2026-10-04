@@ -59,6 +59,12 @@ function can_parse(t: reflect.Type) -> bool throws never {
 
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
 ///
+/// A list in the text must hold only values of its element type. An item that
+/// does not fit fails the parse, and the error names the item's position and
+/// the reason: the result is never the list without that item. One value where
+/// a list is expected is a list of that value when it fits, and fails the
+/// parse when it does not. `null` and a missing field read as an empty list.
+///
 /// # Throws
 /// - `baml.errors.ParseError` if parsing fails.
 function parse<T>(text: string) -> T throws root.errors.ParseError {

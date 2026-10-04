@@ -52,6 +52,11 @@ class Tool {
 /// names the tool's schema advertises (`@alias` included), where
 /// `baml.json.to` reads declared names only.
 ///
+/// An argument that does not decode is an `InvalidArgument` that names its
+/// parameter. A list decodes as a whole: an element that does not fit the
+/// element type fails the argument, and the handler never receives the list
+/// without it.
+///
 /// An argument passes through as it arrived in three cases: it names no
 /// parameter; the parser cannot model the parameter's type (`unknown`); or it
 /// is already a value of the parameter's type, which is what BAML code passes

@@ -2,7 +2,8 @@
 // model's arguments, which arrive as JSON: a class is a map, an enum is a
 // string, a list holds json. `Tool.call` decodes each argument into its
 // parameter's type before it calls the function, reading the same names the
-// tool's schema advertises (`@alias` included).
+// tool's schema advertises (`@alias` included). A list argument decodes as a
+// whole: one element that does not fit fails the argument.
 //
 // Per the corpus convention every case body is a top-level `function` and the
 // `test` block only asserts.
@@ -57,6 +58,10 @@ function tool_arg_class(gym: ToolArgGym) -> string {
 
 function tool_arg_classes(gyms: ToolArgGym[]) -> string {
     gyms.map((gym) -> { gym.name }).join(",")
+}
+
+function tool_arg_enums(kinds: ToolArgGymType[]) -> string {
+    kinds.map((kind) -> { kind.to_string() }).join(",")
 }
 
 function tool_arg_unknown(payload: unknown) -> string {
@@ -134,6 +139,24 @@ test "an argument that does not fit its parameter is an InvalidArgument naming i
     assert.is_true(missing.starts_with("InvalidArgument: invalid arguments for tool_arg_string: "));
     let extra = tool_arg_call(tool_arg_string, `{"note": "hi", "other": 1}`);
     assert.is_true(extra.starts_with("InvalidArgument: invalid arguments for tool_arg_string: "))
+}
+
+test "a list argument with an element that does not fit is an InvalidArgument naming the element" {
+    // The second gym has no `gym_type`. The handler must not run with the
+    // first gym alone.
+    let wrong_class = tool_arg_call(
+        tool_arg_classes,
+        `{"gyms": [{"label": "A", "gym_type": "COMMERCIAL", "tags": []}, {"label": "B", "tags": []}]}`,
+    );
+    assert.is_true(wrong_class.starts_with("InvalidArgument: invalid arguments for tool_arg_classes: gyms: "));
+    assert.is_true(wrong_class.includes("Failed to parse list item 1 as"));
+    let wrong_enum = tool_arg_call(tool_arg_enums, `{"kinds": ["COMMERCIAL", "rooftop"]}`);
+    assert.is_true(wrong_enum.starts_with("InvalidArgument: invalid arguments for tool_arg_enums: kinds: "));
+    assert.is_true(wrong_enum.includes("Failed to parse list item 1 as"));
+    // One value where the list is expected is a list of it only when it fits.
+    assert.equal(tool_arg_call(tool_arg_enums, `{"kinds": "garage-gym"}`), `"GARAGE"`);
+    let wrong_single = tool_arg_call(tool_arg_enums, `{"kinds": "rooftop"}`);
+    assert.is_true(wrong_single.starts_with("InvalidArgument: invalid arguments for tool_arg_enums: kinds: "))
 }
 
 // BAML code that calls a tool itself passes values that are already typed. They
