@@ -2479,7 +2479,9 @@ fn render_typed_params(
 /// `__call__` carries the callable's precise signature. Required params are
 /// positional; optional params (the `?` marker on a BAML callable type) get an
 /// Ellipsis default (`= ...`) so a host callback that either supplies or omits
-/// them type-checks. Unlike an optional *function* argument there is no
+/// them type-checks. The return type also admits the coroutine of an
+/// `async def` callback, as every host callback type does
+/// (`host_callback_return_ty`). Unlike an optional *function* argument there is no
 /// `UNSET` sentinel: BAML invokes the callback positionally, and the
 /// callback's own language-level default fills any omitted trailing arg.
 fn render_callback_protocol(
@@ -2495,14 +2497,14 @@ fn render_callback_protocol(
             .as_ref()
             .map(|n| n.as_str().to_string())
             .unwrap_or_else(|| format!("arg{idx}"));
-        let pty = translate_ty(&p.ty, ctx);
+        let pty = crate::translate_ty::translate_callback_param_ty(&p.ty, ctx);
         if p.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional {
             write!(sig, ", {pname}: {pty} = ...").unwrap();
         } else {
             write!(sig, ", {pname}: {pty}").unwrap();
         }
     }
-    let ret_py = translate_ty(ret, ctx);
+    let ret_py = crate::translate_ty::host_callback_return_ty(&translate_ty(ret, ctx));
     format!("class {name}(typing.Protocol):\n    def __call__({sig}) -> {ret_py}: ...\n")
 }
 
