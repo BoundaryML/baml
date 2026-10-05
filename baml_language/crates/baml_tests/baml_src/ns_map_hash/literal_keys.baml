@@ -29,9 +29,9 @@ test "computed_keys" {
     assert.equal(values.get(5), "five");
 }
 
-test "identifier_keys_remain_strings" {
+test "quoted_keys_remain_strings" {
     let name = "computed";
-    let values: map<string, int> = { name: 1, "quoted": 2, (name): 3 };
+    let values: map<string, int> = { "name": 1, "quoted": 2, (name): 3 };
     assert.equal(values.get("name"), 1);
     assert.equal(values.get("quoted"), 2);
     assert.equal(values.get("computed"), 3);

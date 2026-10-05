@@ -2054,33 +2054,13 @@ impl<'db> InferenceContext<'db> {
 
     fn register_property_shorthands(&mut self, body: &ExprBody) {
         for (_, expr) in body.exprs.iter() {
-            match expr {
-                Expr::Map { entries } => {
-                    for entry in entries {
-                        if entry.syntax != PropertySyntax::Shorthand {
-                            continue;
-                        }
-                        let Expr::Path(segments) = &body.exprs[entry.value] else {
-                            debug_assert!(false, "map shorthand value must be a path");
-                            continue;
-                        };
-                        let [name] = segments.as_slice() else {
-                            debug_assert!(false, "map shorthand value must be a single name");
-                            continue;
-                        };
+            if let Expr::Object { fields, .. } = expr {
+                for field in fields {
+                    if field.syntax == PropertySyntax::Shorthand {
                         self.property_shorthand_values
-                            .insert(entry.value, name.clone());
+                            .insert(field.value, field.name.clone());
                     }
                 }
-                Expr::Object { fields, .. } => {
-                    for field in fields {
-                        if field.syntax == PropertySyntax::Shorthand {
-                            self.property_shorthand_values
-                                .insert(field.value, field.name.clone());
-                        }
-                    }
-                }
-                _ => {}
             }
         }
     }

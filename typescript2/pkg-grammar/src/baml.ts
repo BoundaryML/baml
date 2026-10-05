@@ -580,28 +580,10 @@ const mapExpression: Rule = {
     {
       key: 'map-entry',
       scope: 'meta.map.entry.baml',
-      begin: String.raw`\s*(?=(?:"|#|${DOTTED_IDENT}\s*:))`,
+      begin: String.raw`\s*(?=[^,\}\s])`,
       end: String.raw`(?=,|\})`,
       patterns: [
         comments,
-        {
-          key: 'map-entry-key',
-          scope: tm.meta,
-          match: DOTTED_PATH + String.raw`(?=\s*:)`,
-          captures: {
-            '1': { scope: 'variable.other.property.baml' },
-            '2': {
-              patterns: [
-                accessorDot,
-                {
-                  key: 'map-entry-key-segment',
-                  scope: 'variable.other.property.baml',
-                  match: String.raw`\b${IDENT}\b`,
-                },
-              ],
-            },
-          },
-        },
         stringLiteral,
         rawStringLiteral,
         colonSeparator,

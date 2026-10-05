@@ -3070,14 +3070,11 @@
     },
     "map-entry": {
       "name": "meta.map.entry.baml",
-      "begin": "\\s*(?=(?:\"|#|\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*(?:\\s*\\.\\s*\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*\\s*:))",
+      "begin": "\\s*(?=[^,\\}\\s])",
       "end": "(?=,|\\})",
       "patterns": [
         {
           "include": "#comments"
-        },
-        {
-          "include": "#map-entry-key"
         },
         {
           "include": "#string-literal"
@@ -3092,29 +3089,6 @@
           "include": "#expression"
         }
       ]
-    },
-    "map-entry-key": {
-      "name": "meta.map-entry-key.baml",
-      "match": "\\b(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)((?:\\s*\\.\\s*\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*)\\b(?=\\s*:)",
-      "captures": {
-        "1": {
-          "name": "variable.other.property.baml"
-        },
-        "2": {
-          "patterns": [
-            {
-              "include": "#accessor-dot"
-            },
-            {
-              "include": "#map-entry-key-segment"
-            }
-          ]
-        }
-      }
-    },
-    "map-entry-key-segment": {
-      "name": "variable.other.property.baml",
-      "match": "\\b\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*\\b"
     },
     "map-expression": {
       "name": "meta.expression.map.baml",

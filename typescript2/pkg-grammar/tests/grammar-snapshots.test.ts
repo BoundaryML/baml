@@ -81,6 +81,26 @@ describe("BAML TextMate grammar", () => {
   mkdirSync(snapshotsDir, { recursive: true });
   const fixtures = fixturePaths().sort();
 
+  it("highlights map keys as expressions without changing constructor fields", () => {
+    const leafScope = (source: string, content: string) => {
+      const { tokens } = highlighter.codeToTokens(source, {
+        lang: "baml",
+        theme: THEME,
+        includeExplanation: "scopeName",
+      });
+      const part = tokens.flat().flatMap(explanationParts)
+        .find((part) => part.content === content);
+      expect(part, `missing token ${content}`).toBeDefined();
+      return part?.scopes?.at(-1)?.scopeName;
+    };
+    expect(leafScope("let values = { key: 1 };", "key"))
+      .toBe("variable.other.readwrite.baml");
+    expect(leafScope("let values = { PointType.Pointy: 1 };", "PointType"))
+      .toBe(leafScope("let value = PointType.Pointy;", "PointType"));
+    expect(leafScope("let value = Point { key: 1 };", "key"))
+      .toBe("variable.other.property.baml");
+  });
+
   for (const fixture of fixtures) {
     const name = fixtureName(fixture);
 

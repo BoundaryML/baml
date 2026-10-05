@@ -7,8 +7,8 @@ function coalesce_array() -> (int | string)[] throws never {
 }
 
 function coalesce_map() -> map<string, int | string> throws never {
-    null ?? {key: 1}
-         // ^^^^^^^^ map<string, int | string>
+    null ?? {"key": 1}
+         // ^^^^^^^^^^ map<string, int | string>
 }
 
 // Forwarding context to a literal is not permission to retype an

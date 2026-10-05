@@ -85,17 +85,17 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[throw_context.baml:33:23]
- 33 │     throw map {value: "wrong"};
-    ·                       ───┬───
-    ·                          ╰── expected `int`, found `"wrong"`
+    ╭─[throw_context.baml:33:25]
+ 33 │     throw map {"value": "wrong"};
+    ·                         ───┬───
+    ·                            ╰── expected `int`, found `"wrong"`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[throw_context.baml:37:19]
- 37 │     throw {value: "wrong"};
-    ·                   ───┬───
-    ·                      ╰── expected `int`, found `"wrong"`
+    ╭─[throw_context.baml:37:21]
+ 37 │     throw {"value": "wrong"};
+    ·                     ───┬───
+    ·                        ╰── expected `int`, found `"wrong"`
     ╰────

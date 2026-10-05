@@ -2301,16 +2301,14 @@ function Demo(name: string) -> string {
     }
 
     #[test]
-    fn property_syntax_is_structural_ast_data() {
+    fn class_property_syntax_is_structural_ast_data() {
         let items = parse_and_lower(
             r#"
 class Config { name string }
 function build(name: string) -> unknown {
-  let shorthand_map = { name };
-  let explicit_map = { "name": name };
   let shorthand_object = Config { name };
   let explicit_object = Config { name: name };
-  [shorthand_map, explicit_map, shorthand_object, explicit_object]
+  [shorthand_object, explicit_object]
 }
 "#,
         );
@@ -2319,14 +2317,6 @@ function build(name: string) -> unknown {
             panic!("expected expression body");
         };
 
-        let map_syntax: Vec<_> = body
-            .exprs
-            .iter()
-            .filter_map(|(_, expr)| match expr {
-                Expr::Map { entries } => entries.first().map(|entry| entry.syntax),
-                _ => None,
-            })
-            .collect();
         let object_syntax: Vec<_> = body
             .exprs
             .iter()
@@ -2337,19 +2327,47 @@ function build(name: string) -> unknown {
             .collect();
 
         assert_eq!(
-            map_syntax,
-            vec![
-                crate::ast::PropertySyntax::Shorthand,
-                crate::ast::PropertySyntax::Explicit,
-            ]
-        );
-        assert_eq!(
             object_syntax,
             vec![
                 crate::ast::PropertySyntax::Shorthand,
                 crate::ast::PropertySyntax::Explicit,
             ]
         );
+    }
+
+    #[test]
+    fn map_keys_lower_as_ordinary_expressions() {
+        let function = first_function(parse_and_lower(
+            r#"
+function build(name: string) -> unknown {
+  { name: 0, "name": 1, PointType.Pointy: 2, name + "!": 3, f(): 4, keys[0]: 5 }
+}
+"#,
+        ));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let entries = body
+            .exprs
+            .iter()
+            .find_map(|(_, expr)| match expr {
+                Expr::Map { entries } => Some(entries),
+                _ => None,
+            })
+            .expect("map");
+        assert_eq!(entries.len(), 6);
+        assert!(
+            matches!(&body.exprs[entries[0].key], Expr::Path(path) if path == &[baml_base::Name::new("name")])
+        );
+        assert!(
+            matches!(&body.exprs[entries[1].key], Expr::Literal(baml_base::Literal::String(value)) if value == "name")
+        );
+        assert!(
+            matches!(&body.exprs[entries[2].key], Expr::Path(path) if path == &[baml_base::Name::new("PointType"), baml_base::Name::new("Pointy")])
+        );
+        assert!(matches!(&body.exprs[entries[3].key], Expr::Binary { .. }));
+        assert!(matches!(&body.exprs[entries[4].key], Expr::Call { .. }));
+        assert!(matches!(&body.exprs[entries[5].key], Expr::Index { .. }));
     }
 }
 

@@ -1959,6 +1959,12 @@ mod map_literal_format_tests {
             "null",
             "(key)",
             "(key + 1)",
+            "key",
+            "PointType.Pointy",
+            "key + 1",
+            "f()",
+            "keys[0]",
+            "-key",
         ] {
             let source = format!("function f() -> int {{\n    {{ {key}: 1 }};\n    0\n}}\n");
             assert_formats_to(&source, &source);
@@ -1967,14 +1973,14 @@ mod map_literal_format_tests {
 
     #[test]
     fn test_computed_map_keys_format_expressions() {
-        let source = "function f() -> int {\n    {(key+1):1,(-key):2};\n    0\n}\n";
-        let expected = "function f() -> int {\n    { (key + 1): 1, (-key): 2 };\n    0\n}\n";
+        let source = "function f() -> int {\n    {key+1:1,-key:2,f(  ):3,PointType.Pointy:4,\"name\":5};\n    0\n}\n";
+        let expected = "function f() -> int {\n    { key + 1: 1, -key: 2, f(): 3, PointType.Pointy: 4, \"name\": 5 };\n    0\n}\n";
         assert_formats_to(source, expected);
     }
 
     #[test]
-    fn test_property_shorthand_is_preserved() {
-        let source = "function f(options: string) -> map<string, string> {\n    { options, explicit: options }\n}\n";
+    fn test_map_variable_and_string_keys_are_distinct() {
+        let source = "function f(options: string) -> map<string, string> {\n    { options: options, \"options\": options }\n}\n";
         assert_formats_to(source, source);
     }
 

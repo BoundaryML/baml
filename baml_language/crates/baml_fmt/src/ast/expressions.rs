@@ -4534,8 +4534,7 @@ impl Printable for MapLiteral {
 #[derive(Debug)]
 pub struct ObjectField {
     pub name: ObjectFieldKey,
-    /// Absent for property shorthand (`{ options }`). The parser only permits
-    /// shorthand for a bare identifier, never for a quoted or qualified key.
+    /// Absent for class property shorthand (`Request { options }`).
     pub colon: Option<t::Colon>,
     pub value: Option<Expression>,
 }
@@ -4547,8 +4546,15 @@ impl FromCST for ObjectField {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        let name = it.expect_next("WORD or STRING_LITERAL")?;
-        let name = ObjectFieldKey::from_cst(name)?;
+        let name = it.expect_next("field name or map key expression")?;
+        let name = if node
+            .parent()
+            .is_some_and(|parent| parent.kind() == SyntaxKind::MAP_LITERAL)
+        {
+            ObjectFieldKey::Expression(Box::new(Expression::from_cst(name)?))
+        } else {
+            ObjectFieldKey::from_cst(name)?
+        };
 
         let colon = it
             .next_if_kind(SyntaxKind::COLON)

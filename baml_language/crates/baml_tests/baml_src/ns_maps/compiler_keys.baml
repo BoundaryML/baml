@@ -55,7 +55,7 @@ test "map compiler accepts literal and computed keys" {
             function literals(point: Point) -> int throws never {
                 let integers = {1: 2, 3: 4};
                 let computed = {(point): 5};
-                let legacy: map<string, int> = {name: 6};
+                let legacy: map<string, int> = {"name": 6};
                 integers[1] + computed[point] + legacy["name"]
             }
         `,

@@ -1534,23 +1534,13 @@ contexts:
     - match: '(?=,|\})'
       pop: true
     - include: comments
-    - include: map-entry-key
     - include: string-literal
     - include: raw-string
     - include: colon-separator
     - include: expression
   map-entry:
-    - match: '\s*(?=(?:"|#|\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*(?:\s*\.\s*\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)*\s*:))'
+    - match: '\s*(?=[^,\}\s])'
       push: map-entry--body
-  map-entry-key:
-    - match: '\b(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)((?:\s*\.\s*\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)*)\b(?=\s*:)'
-      scope: meta.map-entry-key.baml
-      captures:
-        1: variable.other.property.baml
-        2: variable.other.property.baml
-  map-entry-key-segment:
-    - match: '\b\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\b'
-      scope: variable.other.property.baml
   map-expression--body:
     - meta_scope: meta.expression.map.baml
     - match: '\}'

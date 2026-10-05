@@ -142,55 +142,67 @@ fn incremental_incomplete_log_repro_child() {
 }
 
 #[test]
-fn incremental_property_syntax_change_invalidates_inference() {
+fn incremental_map_key_expression_change_invalidates_inference() {
     let mut db = ProjectDatabase::new();
-    let root = Path::new("/property-syntax");
-    let file = Path::new("/property-syntax/main.baml");
+    let root = Path::new("/map-key-expression");
+    let file = Path::new("/map-key-expression/main.baml");
     db.workspace(root);
 
     db.file(
         file,
         r#"
 function build() -> map<string, string> {
-  { key }
+  { key: "value" }
 }
 "#,
     );
-    let shorthand_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+    let expression_messages: Vec<_> = collect_compiler2_diagnostics(&db)
         .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
         .map(|diagnostic| diagnostic.message)
         .collect();
     assert!(
-        shorthand_messages
+        expression_messages
             .iter()
-            .any(|message| message.contains("property shorthand `key`")),
-        "expected shorthand diagnostic, got: {shorthand_messages:#?}"
+            .any(|message| message.contains("unresolved name: `key`")),
+        "expected unresolved key diagnostic, got: {expression_messages:#?}"
     );
 
-    // These forms have identical key/value expressions after desugaring, so
-    // property syntax must participate in the structural body equality.
     db.file(
         file,
         r#"
 function build() -> map<string, string> {
-  { "key": key }
+  { "key": "value" }
 }
 "#,
     );
-    let explicit_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+    let quoted_messages: Vec<_> = collect_compiler2_diagnostics(&db)
         .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
         .map(|diagnostic| diagnostic.message)
         .collect();
     assert!(
-        explicit_messages
+        quoted_messages.is_empty(),
+        "quoted key reused stale expression inference: {quoted_messages:#?}"
+    );
+
+    db.file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { key: "value" }
+}
+"#,
+    );
+    let restored_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        restored_messages
             .iter()
             .any(|message| message.contains("unresolved name: `key`")),
-        "expected ordinary unresolved-name diagnostic, got: {explicit_messages:#?}"
-    );
-    assert!(
-        explicit_messages
-            .iter()
-            .all(|message| !message.contains("property shorthand")),
-        "explicit syntax reused stale shorthand inference: {explicit_messages:#?}"
+        "expression key reused stale quoted inference: {restored_messages:#?}"
     );
 }

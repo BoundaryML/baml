@@ -16,7 +16,7 @@ test "erasing an empty map does not erase its hashable key type" {
         "empty.baml": `
             function erased() -> unknown throws never { {} }
             function nested() -> map<string, unknown> throws never {
-                { capabilities: {} }
+                { "capabilities": {} }
             }
             function used() -> unknown throws never {
                 let values = {};
