@@ -587,10 +587,14 @@ impl BexHeap {
         // Update the handle table so external handles point to new locations.
         self.update_handles(&forwarding);
 
-        self.gc_policy
-            .after_full(live_count.saturating_mul(size_of::<Object>()));
+        self.gc_policy.after_full(
+            live_count
+                .saturating_mul(size_of::<Object>())
+                .saturating_add(live_payload_bytes),
+        );
 
         // Reset the actual-object counter used by GC profiling.
+        #[cfg(feature = "gc_profiling")]
         self.reset_gc_counter();
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
@@ -1623,6 +1627,7 @@ impl BexHeap {
         self.update_handles(&forwarding);
 
         // A minor collection does not satisfy the full-GC allocation budget.
+        #[cfg(feature = "gc_profiling")]
         self.reset_gc_counter();
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);

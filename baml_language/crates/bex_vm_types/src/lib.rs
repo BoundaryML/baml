@@ -39,7 +39,7 @@ pub use indexable::{
 };
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
-pub use meter::Meter;
+pub use meter::{AllocDebt, Meter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{

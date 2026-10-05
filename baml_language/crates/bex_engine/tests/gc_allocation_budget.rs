@@ -151,8 +151,11 @@ async fn existing_old_array_growth_does_not_spend_slot_budget() {
     engine.shutdown().await;
 }
 
+/// Twenty 4 MiB strings, keeping two, is 80 MiB of payload behind a few dozen
+/// objects: the payload alone must bring the heap to collect, and the kept
+/// strings must survive those collections intact.
 #[tokio::test(start_paused = true)]
-async fn large_payloads_do_not_trigger_gc_with_few_objects() {
+async fn large_payloads_trigger_gc_with_few_objects() {
     let engine = engine();
     let mut kept = std::collections::VecDeque::new();
     for _ in 0..20 {
@@ -169,8 +172,11 @@ async fn large_payloads_do_not_trigger_gc_with_few_objects() {
             kept.pop_front();
         }
     }
-    assert_eq!(engine.heap().gc_budget().full_collections, 0);
-    assert!(!engine.heap().should_gc());
+    let collections = engine.heap().gc_budget().full_collections;
+    assert!(
+        collections >= 2,
+        "{collections} collections for 80 MiB of payload against a 32 MiB budget"
+    );
     engine.collect_garbage(CollectionLevel::Major).await;
     for value in kept {
         assert_eq!(

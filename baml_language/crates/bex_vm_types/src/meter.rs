@@ -18,7 +18,13 @@
 //!
 //! Code that describes an object never learns which question is being asked.
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{
+        Arc,
+        atomic::{AtomicIsize, Ordering},
+    },
+};
 
 use bex_str::BexStr;
 use indexmap::IndexMap;
@@ -30,6 +36,51 @@ use crate::{
         TypeAliasDef, TypeValue,
     },
 };
+
+/// One allocator's running balance of payload bytes: what it has allocated
+/// outside object slots since it last settled, minus what it has released.
+///
+/// Written by one thread at a time (the allocator that owns it) and read by
+/// the same thread, so every access is a plain load or store with no
+/// read-modify-write. It is still an atomic so that a holder can be `Sync`
+/// and the balance can be reached through a shared reference.
+#[derive(Debug, Default)]
+pub struct AllocDebt(AtomicIsize);
+
+impl AllocDebt {
+    pub const fn new() -> Self {
+        Self(AtomicIsize::new(0))
+    }
+
+    /// Add `delta` bytes to the balance. Growth is positive; a release is
+    /// negative. Saturates rather than wrapping.
+    #[inline]
+    pub fn add(&self, delta: isize) {
+        let balance = self.0.load(Ordering::Relaxed);
+        self.0
+            .store(balance.saturating_add(delta), Ordering::Relaxed);
+    }
+
+    /// Add `bytes` of growth.
+    #[inline]
+    pub fn grow(&self, bytes: usize) {
+        self.add(isize::try_from(bytes).unwrap_or(isize::MAX));
+    }
+
+    /// The balance since the last [`Self::take`].
+    #[inline]
+    pub fn balance(&self) -> isize {
+        self.0.load(Ordering::Relaxed)
+    }
+
+    /// The balance since the last call, which resets it to zero.
+    #[inline]
+    pub fn take(&self) -> isize {
+        let balance = self.0.load(Ordering::Relaxed);
+        self.0.store(0, Ordering::Relaxed);
+        balance
+    }
+}
 
 /// Adds up the bytes heap objects keep alive outside their slots.
 pub struct Meter {
