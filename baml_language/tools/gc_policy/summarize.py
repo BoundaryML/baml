@@ -104,6 +104,23 @@ def main():
             values = [statistics.median(p[variant]['recorded_phase_totals_ms'].get(k + '_ms', 0)
                                        for p in pairs) for k in ['trace', 'keepalive', 'fixup', 'reclaim', 'park_wait']]
             lines.append(f'| {case} | {variant} | ' + ' | '.join(f'{v:.1f}' for v in values) + ' |')
+    lines += ['', '## Memory and engine-triggered collections', '',
+              'Medians per run. Automatic full collections are the ones the engine triggered on its own; '
+              'collections this harness requested are excluded. Sampled RSS is read between calls, '
+              'lifetime peak RSS is the process high-water mark and also sees growth inside one call. '
+              'A dash means the binary predates the field.', '',
+              '| Case | Binary | Automatic full GCs | Peak sampled RSS MiB | Lifetime peak RSS MiB | End RSS MiB |',
+              '|---|---|---:|---:|---:|---:|']
+    for case, pairs in sorted(by_case.items()):
+        if case == 'concurrent':
+            continue
+        for variant in ['baseline', 'candidate']:
+            def cell(key, fmt):
+                values = [p[variant].get(key) for p in pairs]
+                return format(statistics.median(values), fmt) if all(v is not None for v in values) else '-'
+            lines.append(f'| {case} | {variant} | {cell("automatic_full_collections", ".0f")} | '
+                         f'{cell("peak_sampled_rss_mib", ".0f")} | {cell("lifetime_peak_rss_mib", ".0f")} | '
+                         f'{cell("end_rss_mib", ".0f")} |')
     lines += ['', '## Reading these measurements', '',
               '- Time and memory must be compared together. `large_live_fixed` and `large_live_scaled` use identical '
               'workloads; the latter grants max(32 MiB, surviving slot bytes) between full collections. '
@@ -112,7 +129,11 @@ def main():
               'the original `collected_count` means reclaimed slots and must not be interpreted as dead-object count.',
               '- The `payload` case passes 64 KiB strings and retains 256 results. Payload bytes, compiler memory, '
               'allocator retention and scratch copies are not interchangeable with slot counts. RSS samples are in the raw results; '
-              'they are sampled every 32 calls, include startup/compilation, and can miss brief peaks.',
+              'they are taken between calls (after every call for matrices of at most 512 calls, otherwise every 32), '
+              'include startup/compilation, and can miss brief peaks.',
+              '- Cases run with the `current` policy (`bytes_loop`, `push_scalar`, `rope_append`, `rope_read`, '
+              '`slices`, `payload_sparse`, `payload_1m`, `churn_auto`, `retained_auto`) never collect from the harness. '
+              'Their collection-phase rows are empty; read the memory table instead.',
               '- The long-call case allocates roughly 64 MiB of slots within each call. A 32 MiB threshold checked '
               'only between calls cannot constrain that in-call growth. Production scheduling still needs safe allocation checkpoints.',
               '- `park_wait` is time waiting to acquire all permits; different callers may stop at different times. '
