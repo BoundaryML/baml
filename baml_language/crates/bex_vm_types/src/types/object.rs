@@ -101,8 +101,8 @@ pub enum Object {
     /// mutation under `spawn`.
     Array(Array),
 
-    /// Map of values. Wrapped in [`MapContainer`] so the underlying
-    /// `IndexMap` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
+    /// Map of values. Wrapped in [`crate::MapContainer`] so the underlying
+    /// [`crate::MapData`] is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
     Map(Map),
 
