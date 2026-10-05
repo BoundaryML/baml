@@ -1014,6 +1014,8 @@ pub struct BexEngine {
     inbound_alias_view: indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     inbound_class_view:
         indexmap::IndexMap<baml_type::TypeName, crate::conversion::WireClassDefinition>,
+    inbound_enum_view:
+        indexmap::IndexMap<baml_type::TypeName, crate::conversion::WireEnumDefinition>,
     /// Process argv passed in at engine creation. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
     argv: Arc<[String]>,
@@ -2081,10 +2083,12 @@ impl BexEngine {
 
         // Project the inbound matcher's views once; the tables they mirror do
         // not change after this point.
-        let (inbound_alias_view, inbound_class_view) = crate::conversion::wire_definition_views(
-            sys_op_ctx.type_alias_definitions.as_ref(),
-            sys_op_ctx.class_definitions.as_ref(),
-        );
+        let (inbound_alias_view, inbound_class_view, inbound_enum_view) =
+            crate::conversion::wire_definition_views(
+                sys_op_ctx.type_alias_definitions.as_ref(),
+                sys_op_ctx.class_definitions.as_ref(),
+                sys_op_ctx.enum_definitions.as_ref(),
+            );
 
         Ok(Self {
             #[cfg(test)]
@@ -2115,6 +2119,7 @@ impl BexEngine {
             runtime_compiler,
             inbound_alias_view,
             inbound_class_view,
+            inbound_enum_view,
             sys_op_ctx,
             argv,
             heap_permit_manager,

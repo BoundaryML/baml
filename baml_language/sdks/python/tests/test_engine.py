@@ -383,6 +383,79 @@ class TestCallFunctionSync:
 
 
 # ============================================================================
+# TEST: A plain string where an enum is declared
+# ============================================================================
+
+ENUM_ARGS_BAML = """\
+enum HostClientName {
+    BedrockSonnet5
+    AgentPrimary
+}
+
+function Describe(client_name: HostClientName) -> string {
+    match (client_name) {
+        HostClientName.BedrockSonnet5 => "bedrock",
+        HostClientName.AgentPrimary => "primary",
+    }
+}
+
+function Resolve(client_name: HostClientName?) -> string {
+    match (client_name) {
+        null => "default",
+        let named: HostClientName => Describe(named),
+    }
+}
+
+function ResolveAll(client_names: HostClientName[]) -> string {
+    client_names.map((name) -> { Describe(name) }).join(",")
+}
+
+function NameOrText(value: string | HostClientName) -> string {
+    match (value) {
+        let text: string => "string",
+        let named: HostClientName => "enum",
+    }
+}
+"""
+
+
+class TestStringForEnum:
+    """A host reads an enum's variant from JSON, a flag or a configuration
+    file, so it holds a `str`. The engine reads a plain string as the variant
+    it names where an enum is declared. `Describe` matches on the variants: a
+    string that only sat in the enum's place would match no arm."""
+
+    def test_string_names_a_variant_of_an_optional_enum(self):
+        rt = make_runtime(ENUM_ARGS_BAML)
+        result = call_function_sync(rt, "Resolve", {"client_name": "BedrockSonnet5"})
+        assert result.result() == "bedrock"
+        assert call_function_sync(rt, "Resolve", {"client_name": None}).result() == "default"
+
+    def test_string_names_a_variant_of_a_required_enum(self):
+        rt = make_runtime(ENUM_ARGS_BAML)
+        result = call_function_sync(rt, "Describe", {"client_name": "AgentPrimary"})
+        assert result.result() == "primary"
+
+    def test_strings_in_a_list_of_enums_name_variants(self):
+        rt = make_runtime(ENUM_ARGS_BAML)
+        result = call_function_sync(
+            rt, "ResolveAll", {"client_names": ["AgentPrimary", "BedrockSonnet5"]}
+        )
+        assert result.result() == "primary,bedrock"
+
+    @pytest.mark.parametrize("function", ["Describe", "Resolve"])
+    def test_string_that_names_no_variant_raises(self, function):
+        rt = make_runtime(ENUM_ARGS_BAML)
+        with pytest.raises(Exception):
+            call_function_sync(rt, function, {"client_name": "Gpt9"})
+
+    def test_string_stays_a_string_beside_a_string_member(self):
+        rt = make_runtime(ENUM_ARGS_BAML)
+        result = call_function_sync(rt, "NameOrText", {"value": "AgentPrimary"})
+        assert result.result() == "string"
+
+
+# ============================================================================
 # TEST: Async function calls
 # ============================================================================
 

@@ -54,6 +54,28 @@ and async cleanup finish. Cancellation does not interrupt a synchronous Python
 body. A callback that suppresses cancellation may finish later; its result
 does not revive the cancelled BAML call.
 
+## Enum arguments
+
+A BAML enum is generated as a `(str, enum.Enum)` class. Where a BAML function
+declares an enum, a call can pass a member of that class or a plain `str` that
+equals the name of a variant. A host often has only the string: a name read
+from JSON, from a flag or from a configuration file.
+
+```python
+Resolve(HostClientName.BedrockSonnet5)
+Resolve("BedrockSonnet5")  # the same variant
+```
+
+The string becomes the variant, also inside a list, a map or a class field.
+A string that names no variant raises `TypeError`, and the message lists the
+variants. Where the declared type also takes a string as it is
+(`string | HostClientName`, or a string literal that equals the value), the
+string stays a string.
+
+The generated annotations still name the enum, so a type checker expects a
+member. A callback that is declared to return an enum must return a member:
+the return value of a callback is not an argument.
+
 ## Requirements
 
 - Python 3.10+

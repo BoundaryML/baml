@@ -3013,13 +3013,51 @@ fn find_matching_member(
         }
     }
     // This indicates a type system inconsistency - the value should match one of the members
-    Err(EngineError::TypeMismatch {
+    Err(no_matching_union_member(value, members))
+}
+
+/// Why the string `name` does not fit the enum type `declared`: the type as a
+/// user writes it, and the names it does take.
+fn not_an_enum_variant(
+    name: &str,
+    declared: &RuntimeTy,
+    enums: &indexmap::IndexMap<baml_type::TypeName, WireEnumDefinition>,
+) -> String {
+    let declared_as = declared.as_ty().render_user_facing();
+    match declared {
+        RuntimeTy::Enum(enum_name) => {
+            let variants = enums
+                .get(enum_name)
+                .map(|definition| definition.variants.join(", "))
+                .unwrap_or_default();
+            format!(
+                "the string \"{name}\" is not a variant of enum `{declared_as}`; its variants are {variants}"
+            )
+        }
+        _ => format!("the string \"{name}\" is not the variant `{declared_as}`"),
+    }
+}
+
+/// The mismatch of a value that fits no member of a union. The union reads
+/// as a user writes it (`Mood | null`), each member in its own spelling.
+fn no_matching_union_member(value: &BexExternalValue, members: &[RuntimeTy]) -> EngineError {
+    EngineError::TypeMismatch {
         message: format!(
-            "Value of type '{}' does not match any member of union {:?}",
+            "Value of type '{}' does not match any member of union `{}`",
             described_value_type(value),
-            members
+            written_types(members, " | "),
         ),
-    })
+    }
+}
+
+/// `types` as a user writes them, joined by `separator`: the implicit `user`
+/// package is not spelled, and no Rust debug form of a type shows.
+fn written_types(types: &[RuntimeTy], separator: &str) -> String {
+    types
+        .iter()
+        .map(|ty| ty.as_ty().render_user_facing())
+        .collect::<Vec<_>>()
+        .join(separator)
 }
 
 /// `type_name`, refined for the mismatch diagnostics: an instance or variant
@@ -3033,6 +3071,59 @@ fn described_value_type(value: &BexExternalValue) -> String {
     }
 }
 
+/// The members of a union that `admits` accepts, in declaration order, each
+/// structural shape once.
+fn distinct_members(members: &[RuntimeTy], admits: impl Fn(&RuntimeTy) -> bool) -> Vec<&RuntimeTy> {
+    let mut distinct: Vec<&RuntimeTy> = Vec::new();
+    for member in members.iter().filter(|member| admits(member)) {
+        if distinct
+            .iter()
+            .all(|seen| !runtime_ty_structurally_equal(seen, member))
+        {
+            distinct.push(member);
+        }
+    }
+    distinct
+}
+
+/// Whether `value` is a plain string that names a variant `ty` holds: a
+/// variant of the enum `ty` is, the one variant `ty` is, or either through an
+/// alias or a member of a union.
+///
+/// A dynamic host passes an enum by its variant's name: Python reads names
+/// from JSON, flags and configuration (and a generated Python enum member is a
+/// `str`), and a TypeScript enum is its string at run time. An enum the
+/// program does not declare (one built at run time) is not in `enums`, and no
+/// string is read as its variant.
+fn string_names_enum_variant(
+    value: &BexExternalValue,
+    ty: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+    enums: &indexmap::IndexMap<baml_type::TypeName, WireEnumDefinition>,
+) -> bool {
+    let BexExternalValue::String(name) = value else {
+        return false;
+    };
+    match ty {
+        RuntimeTy::Enum(enum_name) => enums.get(enum_name).is_some_and(|definition| {
+            definition
+                .variants
+                .iter()
+                .any(|variant| variant == name.as_str())
+        }),
+        RuntimeTy::EnumVariant(enum_name, variant) => {
+            enums.contains_key(enum_name) && variant.as_str() == name.as_str()
+        }
+        RuntimeTy::TypeAlias(alias) if !is_canonical_json_alias(alias) => aliases
+            .get(alias)
+            .is_some_and(|expanded| string_names_enum_variant(value, expanded, aliases, enums)),
+        RuntimeTy::Union(members) => members
+            .iter()
+            .any(|member| string_names_enum_variant(value, member, aliases, enums)),
+        _ => false,
+    }
+}
+
 /// Select a union member for an inbound node that did not carry `value_type`.
 /// Unlike the general VM/output selector above, this must not invent intent for
 /// overlapping arms: a literal and its primitive, an enum variant and its enum,
@@ -3043,20 +3134,13 @@ fn find_unannotated_inbound_member_with_aliases(
     members: &[RuntimeTy],
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &indexmap::IndexMap<baml_type::TypeName, WireEnumDefinition>,
     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<RuntimeTy, EngineError> {
-    let mut matching: Vec<&RuntimeTy> = Vec::new();
-    for member in members.iter().filter(|member| {
+    let mut matching = distinct_members(members, |member| {
         !matches!(member, RuntimeTy::Unknown)
             && value_matches_type_with_definitions(value, member, aliases, classes)
-    }) {
-        if matching
-            .iter()
-            .all(|matched| !runtime_ty_structurally_equal(matched, member))
-        {
-            matching.push(member);
-        }
-    }
+    });
 
     // A nested optional alias can make one null payload match both the alias
     // member and an explicit null member. That is not distinct host intent:
@@ -3072,19 +3156,25 @@ fn find_unannotated_inbound_member_with_aliases(
         return Ok((**exact_null).clone());
     }
 
-    match matching.as_slice() {
-        [member] => Ok((*member).clone()),
-        [] => members
+    if matching.is_empty() {
+        // `unknown` takes any value as it is.
+        if let Some(unknown) = members
             .iter()
             .find(|member| matches!(member, RuntimeTy::Unknown))
-            .cloned()
-            .ok_or_else(|| EngineError::TypeMismatch {
-                message: format!(
-                    "Value of type '{}' does not match any member of union {:?}",
-                    described_value_type(value),
-                    members
-                ),
-            }),
+        {
+            return Ok(unknown.clone());
+        }
+        // No member takes the value as it is. Only now is a plain string read
+        // as the name of an enum variant: beside `string`, a literal that
+        // equals it or `unknown`, it stays the string the host passed.
+        matching = distinct_members(members, |member| {
+            string_names_enum_variant(value, member, aliases, enums)
+        });
+    }
+
+    match matching.as_slice() {
+        [member] => Ok((*member).clone()),
+        [] => Err(no_matching_union_member(value, members)),
         _ if ambiguity_policy == crate::InboundUnionAmbiguityPolicy::SelectDefault => {
             // Dynamic host values do not carry a generated union wrapper. Use
             // the same specificity preference as normal BAML selection, then
@@ -4125,6 +4215,7 @@ impl BexEngine {
             ty,
             &self.inbound_alias_view,
             &self.inbound_class_view,
+            &self.inbound_enum_view,
             crate::inbound_config::inbound_union_ambiguity_policy(),
         )
     }
@@ -4146,6 +4237,13 @@ pub(crate) struct WireClassFieldDefinition {
     pub skip: bool,
 }
 
+/// An enum definition as the inbound matcher reads it: the names of its
+/// variants, which is what a plain string must equal to be read as one.
+#[derive(Clone, Debug)]
+pub(crate) struct WireEnumDefinition {
+    pub variants: Vec<String>,
+}
+
 /// Project the lane's definition tables into the name-headed views the inbound
 /// matcher needs.
 ///
@@ -4164,9 +4262,11 @@ pub(crate) struct WireClassFieldDefinition {
 pub(crate) fn wire_definition_views(
     aliases: &indexmap::IndexMap<::sys_types::DefKey, ::sys_types::SapTy>,
     classes: &indexmap::IndexMap<::sys_types::DefKey, sys_types::ClassDefinition>,
+    enums: &indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition>,
 ) -> (
     indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    indexmap::IndexMap<baml_type::TypeName, WireEnumDefinition>,
 ) {
     let to_wire = |ty: &::sys_types::SapTy| -> Option<RuntimeTy> {
         ty.clone()
@@ -4196,7 +4296,18 @@ pub(crate) fn wire_definition_views(
             Some((head.declared()?.clone(), WireClassDefinition { fields }))
         })
         .collect();
-    (alias_view, class_view)
+    let enum_view = enums
+        .iter()
+        .filter_map(|(head, def)| {
+            let variants = def
+                .variants
+                .iter()
+                .map(|variant| variant.name.clone())
+                .collect();
+            Some((head.declared()?.clone(), WireEnumDefinition { variants }))
+        })
+        .collect();
+    (alias_view, class_view, enum_view)
 }
 
 fn runtime_ty_assignable_with_aliases(
@@ -4372,6 +4483,7 @@ pub(crate) fn coerce_arg_to_declared_type(
         ty,
         &indexmap::IndexMap::new(),
         &indexmap::IndexMap::new(),
+        &indexmap::IndexMap::new(),
         crate::InboundUnionAmbiguityPolicy::Reject,
     )
 }
@@ -4387,6 +4499,7 @@ fn coerce_arg_to_declared_type_with_policy(
         ty,
         &indexmap::IndexMap::new(),
         &indexmap::IndexMap::new(),
+        &indexmap::IndexMap::new(),
         policy,
     )
 }
@@ -4396,6 +4509,7 @@ fn coerce_arg_to_declared_type_with_aliases(
     ty: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
+    enums: &indexmap::IndexMap<baml_type::TypeName, WireEnumDefinition>,
     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<BexExternalValue, EngineError> {
     // Defense in depth for internally constructed values and aliases. Wire
@@ -4424,6 +4538,7 @@ fn coerce_arg_to_declared_type_with_aliases(
             expanded,
             aliases,
             classes,
+            enums,
             ambiguity_policy,
         );
     }
@@ -4483,6 +4598,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 value_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             if !value_matches_type_with_definitions(
@@ -4506,6 +4622,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 payload_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             if !value_matches_type_with_definitions(&coerced, &selected_type, aliases, classes) {
@@ -4548,6 +4665,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 value_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             if !value_matches_type_with_definitions(
@@ -4569,6 +4687,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 payload_type,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             Ok(BexExternalValue::typed(coerced, effective_type.clone()))
@@ -4605,6 +4724,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                             expected_element,
                             aliases,
                             classes,
+                            enums,
                             ambiguity_policy,
                         )
                     })
@@ -4629,6 +4749,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                         expected_value,
                         aliases,
                         classes,
+                        enums,
                         ambiguity_policy,
                     )
                     .map(|value| (name, value))
@@ -4659,6 +4780,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 media_ty,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             if !value_matches_type_with_definitions(&coerced, media_ty, aliases, classes) {
@@ -4683,7 +4805,7 @@ fn coerce_arg_to_declared_type_with_aliases(
             BexExternalValue::Instance {
                 fields, type_args, ..
             },
-            RuntimeTy::Class(type_name, class_args),
+            declared @ RuntimeTy::Class(type_name, class_args),
         ) => {
             // The contextual type is authoritative for nominal identity and
             // generic arguments. A sparse node annotation, when present, has
@@ -4691,7 +4813,9 @@ fn coerce_arg_to_declared_type_with_aliases(
             if !type_args.is_empty() && !class_type_args_compatible(&type_args, class_args) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
-                        "host class type arguments `{type_args:?}` are incompatible with declared class `{type_name}` arguments `{class_args:?}`"
+                        "host class type arguments `{}` are incompatible with declared class `{}`",
+                        written_types(&type_args, ", "),
+                        declared.as_ty().render_user_facing(),
                     ),
                 });
             }
@@ -4705,6 +4829,28 @@ fn coerce_arg_to_declared_type_with_aliases(
             Ok(BexExternalValue::Variant {
                 enum_name: type_name.to_string(),
                 variant_name,
+            })
+        }
+        // A plain string where an enum of this program is declared names a
+        // variant (`string_names_enum_variant`), and becomes it. A string that
+        // names none does not fit: left as it is, it would enter the function
+        // as a string in an enum's place.
+        (
+            value @ BexExternalValue::String(_),
+            declared @ (RuntimeTy::Enum(enum_name) | RuntimeTy::EnumVariant(enum_name, _)),
+        ) if enums.contains_key(enum_name) => {
+            let names_variant = string_names_enum_variant(&value, declared, aliases, enums);
+            let BexExternalValue::String(name) = value else {
+                unreachable!("the arm matched a string");
+            };
+            if !names_variant {
+                return Err(EngineError::TypeMismatch {
+                    message: not_an_enum_variant(&name, declared, enums),
+                });
+            }
+            Ok(BexExternalValue::Variant {
+                enum_name: enum_name.to_string(),
+                variant_name: name.to_string(),
             })
         }
 
@@ -4726,6 +4872,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                     members,
                     aliases,
                     classes,
+                    enums,
                     ambiguity_policy,
                 )?,
             };
@@ -4734,6 +4881,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 &selected,
                 aliases,
                 classes,
+                enums,
                 ambiguity_policy,
             )?;
             Ok(BexExternalValue::Union {
@@ -5119,6 +5267,7 @@ mod union_container_selection_tests {
             &declared,
             &aliases,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap();
@@ -5155,6 +5304,7 @@ mod union_container_selection_tests {
                 BexExternalValue::JsNumber(7.0),
                 &declared,
                 &aliases,
+                &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
                 crate::InboundUnionAmbiguityPolicy::Reject,
             )
@@ -5207,6 +5357,7 @@ mod union_container_selection_tests {
                 &declared,
                 &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
+                &indexmap::IndexMap::new(),
                 crate::InboundUnionAmbiguityPolicy::SelectDefault,
             )
             .unwrap();
@@ -5244,6 +5395,7 @@ mod union_container_selection_tests {
                 BexExternalValue::JsNumber(7.0),
                 &declared,
                 &aliases,
+                &indexmap::IndexMap::new(),
                 &indexmap::IndexMap::new(),
                 crate::InboundUnionAmbiguityPolicy::Reject,
             )
@@ -5552,6 +5704,306 @@ mod union_container_selection_tests {
         );
     }
 
+    // ── a plain string where an enum is declared ────────────────────────────
+
+    fn mood_name() -> TypeName {
+        TypeName::from_dotted_path("user.callbacks.Mood")
+    }
+
+    fn weather_name() -> TypeName {
+        TypeName::from_dotted_path("user.callbacks.Weather")
+    }
+
+    /// `enum Mood { HAPPY SAD }` and `enum Weather { SUNNY SAD }`.
+    fn mood_enums() -> indexmap::IndexMap<TypeName, WireEnumDefinition> {
+        let definition = |variants: &[&str]| WireEnumDefinition {
+            variants: variants.iter().map(ToString::to_string).collect(),
+        };
+        indexmap::IndexMap::from([
+            (mood_name(), definition(&["HAPPY", "SAD"])),
+            (weather_name(), definition(&["SUNNY", "SAD"])),
+        ])
+    }
+
+    fn coerce_with_enums(
+        value: BexExternalValue,
+        declared: &RuntimeTy,
+        policy: crate::InboundUnionAmbiguityPolicy,
+    ) -> Result<BexExternalValue, EngineError> {
+        coerce_arg_to_declared_type_with_aliases(
+            value,
+            declared,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+            &mood_enums(),
+            policy,
+        )
+    }
+
+    fn coerce_string_with_enums(
+        value: &str,
+        declared: &RuntimeTy,
+    ) -> Result<BexExternalValue, EngineError> {
+        coerce_with_enums(
+            BexExternalValue::String(value.into()),
+            declared,
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        )
+    }
+
+    fn mismatch_message(result: Result<BexExternalValue, EngineError>) -> String {
+        match result {
+            Err(EngineError::TypeMismatch { message }) => message,
+            other => panic!("expected a type mismatch, got {other:?}"),
+        }
+    }
+
+    /// The member a union coercion selected, with the value it holds.
+    fn selected(coerced: BexExternalValue) -> (RuntimeTy, BexExternalValue) {
+        match coerced {
+            BexExternalValue::Union { metadata, value } => (metadata.selected_option, *value),
+            other => panic!("expected a selected union member, got {other:?}"),
+        }
+    }
+
+    fn is_variant(value: &BexExternalValue, enum_name: &TypeName, variant: &str) -> bool {
+        matches!(
+            value,
+            BexExternalValue::Variant { enum_name: name, variant_name }
+                if *name == enum_name.to_string() && variant_name == variant
+        )
+    }
+
+    #[test]
+    fn string_naming_a_variant_becomes_the_variant() {
+        let mood = RuntimeTy::Enum(mood_name());
+        let coerced = coerce_string_with_enums("HAPPY", &mood).unwrap();
+        assert!(is_variant(&coerced, &mood_name(), "HAPPY"), "{coerced:?}");
+
+        let happy = RuntimeTy::EnumVariant(mood_name(), Name::new("HAPPY"));
+        let coerced = coerce_string_with_enums("HAPPY", &happy).unwrap();
+        assert!(is_variant(&coerced, &mood_name(), "HAPPY"), "{coerced:?}");
+    }
+
+    #[test]
+    fn string_naming_no_variant_does_not_fit_the_enum() {
+        let mood = RuntimeTy::Enum(mood_name());
+        assert_eq!(
+            mismatch_message(coerce_string_with_enums("GRUMPY", &mood)),
+            "the string \"GRUMPY\" is not a variant of enum `callbacks.Mood`; its variants are HAPPY, SAD"
+        );
+        // A variant's name is matched as written.
+        assert!(coerce_string_with_enums("happy", &mood).is_err());
+
+        let happy = RuntimeTy::EnumVariant(mood_name(), Name::new("HAPPY"));
+        assert_eq!(
+            mismatch_message(coerce_string_with_enums("SAD", &happy)),
+            "the string \"SAD\" is not the variant `callbacks.Mood.HAPPY`"
+        );
+    }
+
+    #[test]
+    fn string_for_an_enum_the_program_does_not_declare_is_left_alone() {
+        let unknown = RuntimeTy::Enum(TypeName::from_dotted_path("user.BuiltAtRunTime"));
+        let coerced = coerce_string_with_enums("ANY", &unknown).unwrap();
+        assert!(matches!(coerced, BexExternalValue::String(ref value) if value == "ANY"));
+    }
+
+    #[test]
+    fn string_for_an_optional_enum_selects_the_enum() {
+        let mood = RuntimeTy::Enum(mood_name());
+        let declared = RuntimeTy::optional(mood.clone());
+
+        let (member, value) = selected(coerce_string_with_enums("SAD", &declared).unwrap());
+        assert!(runtime_ty_structurally_equal(&member, &mood));
+        assert!(is_variant(&value, &mood_name(), "SAD"), "{value:?}");
+
+        assert_eq!(
+            mismatch_message(coerce_string_with_enums("GRUMPY", &declared)),
+            "Value of type 'string' does not match any member of union `callbacks.Mood | null`"
+        );
+    }
+
+    #[test]
+    fn string_stays_a_string_where_a_member_takes_it_as_it_is() {
+        let mood = RuntimeTy::Enum(mood_name());
+        for taker in [
+            RuntimeTy::string(),
+            string_literal("HAPPY"),
+            RuntimeTy::unknown(),
+        ] {
+            for declared in [
+                RuntimeTy::union([taker.clone(), mood.clone()]),
+                RuntimeTy::union([mood.clone(), taker.clone()]),
+            ] {
+                let (member, value) =
+                    selected(coerce_string_with_enums("HAPPY", &declared).unwrap());
+                assert!(
+                    runtime_ty_structurally_equal(&member, &taker),
+                    "`{declared}` selected `{member}`"
+                );
+                assert!(
+                    matches!(value, BexExternalValue::String(ref value) if value == "HAPPY"),
+                    "`{declared}` produced {value:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn string_beside_a_member_that_does_not_take_it_is_read_as_a_variant() {
+        let mood = RuntimeTy::Enum(mood_name());
+        for other in [string_literal("auto"), RuntimeTy::int(), RuntimeTy::null()] {
+            let declared = RuntimeTy::union([other, mood.clone()]);
+            let (member, value) = selected(coerce_string_with_enums("HAPPY", &declared).unwrap());
+            assert!(runtime_ty_structurally_equal(&member, &mood));
+            assert!(is_variant(&value, &mood_name(), "HAPPY"), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn string_selects_the_one_enum_that_has_the_variant() {
+        let mood = RuntimeTy::Enum(mood_name());
+        let weather = RuntimeTy::Enum(weather_name());
+        let declared = RuntimeTy::union([mood.clone(), weather.clone()]);
+
+        let (member, value) = selected(coerce_string_with_enums("SUNNY", &declared).unwrap());
+        assert!(runtime_ty_structurally_equal(&member, &weather));
+        assert!(is_variant(&value, &weather_name(), "SUNNY"), "{value:?}");
+
+        // Both enums have `SAD`: a typed host must say which, and a dynamic
+        // host gets the first declared, as for any ambiguous payload.
+        assert!(
+            mismatch_message(coerce_string_with_enums("SAD", &declared))
+                .contains("multiple union members")
+        );
+        let (member, value) = selected(
+            coerce_with_enums(
+                BexExternalValue::String("SAD".into()),
+                &declared,
+                crate::InboundUnionAmbiguityPolicy::SelectDefault,
+            )
+            .unwrap(),
+        );
+        assert!(runtime_ty_structurally_equal(&member, &mood));
+        assert!(is_variant(&value, &mood_name(), "SAD"), "{value:?}");
+    }
+
+    #[test]
+    fn strings_in_a_list_of_enums_become_variants() {
+        let declared = list(RuntimeTy::Enum(mood_name()));
+        let value = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![
+                BexExternalValue::String("HAPPY".into()),
+                BexExternalValue::String("SAD".into()),
+            ],
+        };
+        let coerced =
+            coerce_with_enums(value, &declared, crate::InboundUnionAmbiguityPolicy::Reject)
+                .unwrap();
+        let BexExternalValue::Array { items, .. } = coerced else {
+            panic!("expected a list")
+        };
+        assert!(is_variant(&items[0], &mood_name(), "HAPPY"), "{items:?}");
+        assert!(is_variant(&items[1], &mood_name(), "SAD"), "{items:?}");
+    }
+
+    #[test]
+    fn string_reaches_an_enum_through_an_alias() {
+        let alias_name = TypeName::from_dotted_path("user.callbacks.MaybeMood");
+        let aliases = indexmap::IndexMap::from([(
+            alias_name.clone(),
+            RuntimeTy::optional(RuntimeTy::Enum(mood_name())),
+        )]);
+        let declared = RuntimeTy::union([RuntimeTy::TypeAlias(alias_name), RuntimeTy::int()]);
+        let coerced = coerce_arg_to_declared_type_with_aliases(
+            BexExternalValue::String("HAPPY".into()),
+            &declared,
+            &aliases,
+            &indexmap::IndexMap::new(),
+            &mood_enums(),
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        )
+        .unwrap();
+        // The alias member is selected, then the enum inside it.
+        let (_, inner) = selected(coerced);
+        let (member, value) = selected(inner);
+        assert!(runtime_ty_structurally_equal(
+            &member,
+            &RuntimeTy::Enum(mood_name())
+        ));
+        assert!(is_variant(&value, &mood_name(), "HAPPY"), "{value:?}");
+    }
+
+    // ── type names in mismatch messages ─────────────────────────────────────
+
+    /// The message names each member as a user writes it. The debug form of a
+    /// type (`Enum(TypeName { .. })`) is never shown.
+    #[test]
+    fn union_mismatch_names_every_kind_of_member_as_written() {
+        let person = RuntimeTy::Class(
+            TypeName::from_dotted_path("user.Person"),
+            Box::new([RuntimeTy::int()]),
+        );
+        let members = [
+            RuntimeTy::int(),
+            RuntimeTy::float(),
+            RuntimeTy::bool(),
+            RuntimeTy::null(),
+            RuntimeTy::Uint8Array,
+            string_literal("draft"),
+            RuntimeTy::Literal(Literal::Int(3), Freshness::Regular),
+            RuntimeTy::Enum(mood_name()),
+            RuntimeTy::EnumVariant(mood_name(), Name::new("HAPPY")),
+            person,
+            RuntimeTy::TypeAlias(TypeName::from_dotted_path("user.Tree")),
+            list(RuntimeTy::int()),
+            map(RuntimeTy::Enum(mood_name())),
+            RuntimeTy::Media(baml_type::MediaKind::Image),
+        ];
+        let expected = "Value of type 'string' does not match any member of union \
+                        `int | float | bool | null | uint8array | \"draft\" | 3 | callbacks.Mood | \
+                        callbacks.Mood.HAPPY | Person<int> | Tree | int[] | \
+                        map<string, callbacks.Mood> | image`";
+        let value = BexExternalValue::String("text".into());
+
+        // Inbound: a host value against a declared union.
+        let inbound = coerce_with_enums(
+            value.clone(),
+            &RuntimeTy::union(members.clone()),
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        );
+        assert_eq!(mismatch_message(inbound), expected);
+
+        // Outbound: a value leaving the VM against its declared union.
+        let outbound = find_matching_member(&value, &members).map(|_| BexExternalValue::Null);
+        assert_eq!(mismatch_message(outbound), expected);
+    }
+
+    #[test]
+    fn class_type_argument_mismatch_names_types_as_written() {
+        let declared = RuntimeTy::Class(
+            TypeName::from_dotted_path("user.Pair"),
+            Box::new([list(RuntimeTy::int()), RuntimeTy::Enum(mood_name())]),
+        );
+        let value = BexExternalValue::Instance {
+            class_name: "user.Pair".to_string(),
+            type_args: vec![list(RuntimeTy::string()), RuntimeTy::Enum(mood_name())],
+            fields: indexmap::IndexMap::new(),
+        };
+        let message = mismatch_message(coerce_with_enums(
+            value,
+            &declared,
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        ));
+        assert_eq!(
+            message,
+            "host class type arguments `string[], callbacks.Mood` are incompatible with \
+             declared class `Pair<int[], callbacks.Mood>`"
+        );
+    }
+
     #[test]
     fn vm_enum_variant_selection_prefers_exact_variant_then_broad_enum() {
         let mood = TypeName::from_dotted_path("user.callbacks.Mood");
@@ -5741,6 +6193,7 @@ mod union_container_selection_tests {
             &RuntimeTy::int(),
             &aliases,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap_err();
@@ -5901,6 +6354,7 @@ mod union_container_selection_tests {
             &declared,
             &aliases,
             &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap();
@@ -5938,6 +6392,7 @@ mod union_container_selection_tests {
             BexExternalValue::Null,
             &declared,
             &aliases,
+            &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
@@ -6280,6 +6735,7 @@ mod union_container_selection_tests {
             typed_wrapper,
             &declared,
             &aliases,
+            &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
             crate::InboundUnionAmbiguityPolicy::Reject,
         )
