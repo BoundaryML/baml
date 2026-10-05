@@ -114,21 +114,29 @@ function contains(haystack: string, needle: string) -> void throws never {
 
 /// Asserts that `actual` is of type `T`.
 ///
-/// # Returns
+/// The function checks the type and returns nothing. It does not narrow
+/// `actual`: after the call, the argument has the type that it had before the
+/// call. To use a value as a `T`, narrow it with `is`:
 ///
-/// `actual` if it is of type `T`. This can be used to assert the type of a value and use it in further computations.
+/// ```baml
+/// if (x is T) {
+///     // `x` is a `T` here.
+/// }
+/// ```
+///
+/// `is` narrows a local binding (a `let` or a parameter) that no closure
+/// captures. It does not narrow a field path such as `holder.value`: bind the
+/// field first (`let value = holder.value;`), or use
+/// `if let value: T = holder.value { ... }` or `match`.
 ///
 /// # Panics
 ///
 /// - `baml.panics.AssertionFailed` when `actual` is not of type `T`.
-function is_type<T>(actual: unknown) -> T throws never {
-    match (actual) {
-        T => actual,
-        _ => {
-            let t: reflect.Type = reflect.Type.of<T>();
-            throw baml.panics.AssertionFailed {
-                message: `assertion failed: expected type "${t}", got "${actual}"`,
-            };
-        },
+function is_type<T>(actual: unknown) -> void throws never {
+    if (!(actual is T)) {
+        let t: reflect.Type = reflect.Type.of<T>();
+        throw baml.panics.AssertionFailed {
+            message: `assertion failed: expected type "${t}", got "${actual}"`,
+        };
     }
 }
