@@ -335,7 +335,7 @@ function _path_index(current: json, idx: int, selector: string) -> json throws P
 /// # Examples
 ///
 /// ```baml
-/// let doc = baml.json.parse("{\"users\": [{\"name\": \"Ada\", \"age\": 36}]}");
+/// let doc: json = { "users": [{ "name": "Ada", "age": 36 }] };
 /// assert.equal(baml.json.path<string>(doc, ".users[0].name"), "Ada");
 /// assert.equal(baml.json.path<int>(doc, "[\"users\"][0][\"age\"]"), 36);
 /// ```

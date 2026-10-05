@@ -278,7 +278,7 @@ function put(
         system,
         "--strict-mcp-config",
         "--mcp-config",
-        "{\"mcpServers\":{}}",
+        baml.json.stringify({ "mcpServers": {} }),
         "--disallowedTools",
     ]
         .concat(denied());

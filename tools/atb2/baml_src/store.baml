@@ -111,7 +111,7 @@ function upsert(table: string, rows: json) -> null {
 /// Insert one row; returns it as stored (with its generated id).
 function insert(table: string, row: json) -> json {
     let text = supabase_send("POST", table, baml.json.stringify([row]), "return=representation");
-    rows_of(text).at(0) ?? baml.json.parse("{}")
+    rows_of(text).at(0) ?? {}
 }
 
 /// `GET table?<query>` as rows.
@@ -182,7 +182,6 @@ function feedback_row(fb: Feedback, origin: json) -> json {
         "origin": origin,
         "dataset": dataset(),
     }
-        .to_json()
 }
 
 /// A Feedback from a `feedback` row.
@@ -225,7 +224,6 @@ function issue_row(issue: Issue) -> json {
         "design_doc": issue.design_doc,
         "dataset": dataset(),
     }
-        .to_json()
 }
 
 /// An Issue from an `issues` row (extra columns such as `state`,
@@ -271,7 +269,6 @@ function run_row(issue_id: string, o: HandleOutcome, mode: HandleMode) -> json {
         "mode": mode.to_string(),
         "dataset": dataset(),
     }
-        .to_json()
 }
 
 function source_from(s: string) -> FeedbackSource {
@@ -312,7 +309,7 @@ function save_feedback(fb: Feedback, origin: json) -> null {
         return null;
     };
     guard_dataset(fb.id);
-    upsert("feedback", [feedback_row(fb, origin)].to_json());
+    upsert("feedback", [feedback_row(fb, origin)]);
     null
 }
 
@@ -329,7 +326,7 @@ function save_issue(issue: Issue) -> null {
         return null;
     };
     guard_dataset(issue.id);
-    upsert("issues", [issue_row(issue)].to_json());
+    upsert("issues", [issue_row(issue)]);
     null
 }
 
@@ -384,8 +381,7 @@ function save_merge_round(
             "handled_ids": handled.to_json(),
             "brief": brief,
             "dataset": dataset(),
-        }
-            .to_json(),
+        },
     );
     null
 }
@@ -413,8 +409,7 @@ function log_event(
             "slack_channel": slack_channel,
             "slack_ts": slack_ts,
             "dataset": dataset(),
-        }
-            .to_json(),
+        },
     );
     baml.json.path_or<int>(row, ".id", 0)
 }
@@ -478,7 +473,7 @@ function set_cursor(name: string, value: string) -> null {
     supabase_send(
         "POST",
         "cursors?on_conflict=name",
-        baml.json.stringify([{ "name": cursor_name(name), "value": value }].to_json()),
+        baml.json.stringify([{ "name": cursor_name(name), "value": value }]),
         "resolution=merge-duplicates,return=minimal",
     );
     null
@@ -510,7 +505,7 @@ function sample_feedback() -> Feedback {
 testset "store" {
     test "a feedback row round-trips" {
         let fb = sample_feedback();
-        let row = feedback_row(fb, { "kind": "posthog", "event": "e1" }.to_json());
+        let row = feedback_row(fb, { "kind": "posthog", "event": "e1" });
         assert.equal(baml.json.path_or<string>(row, ".source", ""), "BamlFeedback");
         assert.equal(baml.json.path_or<string>(row, ".author_email", ""), "a@b.c");
         assert.equal(baml.json.path_or<string>(row, ".origin.kind", ""), "posthog");
@@ -561,11 +556,7 @@ testset "store" {
         assert.equal(baml.json.path_or<string>(row, ".dataset", ""), dataset());
         assert.is_true(dataset() == "live" || dataset() == "eval");
         assert.equal(
-            baml.json.path_or<string>(
-                feedback_row(sample_feedback(), baml.json.parse("{}")),
-                ".dataset",
-                "",
-            ),
+            baml.json.path_or<string>(feedback_row(sample_feedback(), {}), ".dataset", ""),
             dataset(),
         );
     }
