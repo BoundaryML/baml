@@ -1060,13 +1060,13 @@
 340:147-151  "bool"             source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 340:151-152  ">"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 340:153-154  "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
-341:9-10     "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.map.baml punctuation.definition.map.begin.baml
-341:10-11    "\""               source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-341:11-17    "result"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
-341:17-18    "\""               source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
-341:18-19    ":"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
-341:20-21    "1"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.map.baml meta.map.entry.baml constant.numeric.integer.baml
-341:21-22    "}"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.map.baml punctuation.definition.map.end.baml
+341:9-10     "{"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.begin.baml
+341:10-11    "\""               source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+341:11-17    "result"           source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml string.quoted.double.baml
+341:17-18    "\""               source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml string.quoted.double.baml punctuation.definition.string.end.baml
+341:18-19    ":"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.separator.colon.baml
+341:20-21    "1"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml constant.numeric.integer.baml
+341:21-22    "}"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.end.baml
 342:5-6      "}"                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
 343:1-2      "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 345:1-45     "// ===== Deeply nested class structure =====" source.baml comment.line.double-slash.baml

@@ -1002,6 +1002,32 @@
       "name": "constant.language.boolean.baml",
       "match": "\\b(?:true|false)\\b"
     },
+    "braced-expression": {
+      "name": "meta.expression.braced.baml",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.block.begin.baml"
+        }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.block.end.baml"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#block-contents"
+        },
+        {
+          "include": "#colon-separator"
+        },
+        {
+          "include": "#comma"
+        }
+      ]
+    },
     "break-statement": {
       "name": "meta.statement.break.baml",
       "begin": "(?:^\\s*|\\G\\s*|(?<=[{;}])\\s*)(break)\\b",
@@ -1433,7 +1459,7 @@
           "include": "#map-expression"
         },
         {
-          "include": "#code-block"
+          "include": "#braced-expression"
         },
         {
           "include": "#await-expression"
@@ -1990,13 +2016,13 @@
           "include": "#spawn-expression"
         },
         {
-          "include": "#constructor-expression"
-        },
-        {
           "include": "#map-expression"
         },
         {
-          "include": "#code-block"
+          "include": "#constructor-expression"
+        },
+        {
+          "include": "#braced-expression"
         },
         {
           "include": "#await-expression"
@@ -3068,51 +3094,21 @@
         }
       ]
     },
-    "map-entry": {
-      "name": "meta.map.entry.baml",
-      "begin": "\\s*(?=[^,\\}\\s])",
-      "end": "(?=,|\\})",
-      "patterns": [
-        {
-          "include": "#comments"
-        },
-        {
-          "include": "#string-literal"
-        },
-        {
-          "include": "#raw-string"
-        },
-        {
-          "include": "#colon-separator"
-        },
-        {
-          "include": "#expression"
-        }
-      ]
-    },
     "map-expression": {
       "name": "meta.expression.map.baml",
-      "begin": "\\{(?=\\s*(?:\\}|(?!(?:\\s|/\\*(?:[^*]|\\*(?!/))*\\*/)*(?:let|const|while|for)\\b)(?<map_key_atom>(?>\"(?:\\\\.|[^\"\\\\\\r\\n])*\"|(?<map_key_hash>#+)\"(?:(?!\"\\k<map_key_hash>)[^\\r\\n])*\"\\k<map_key_hash>|(?<map_key_tick>\\x60+)(?!\\x60)(?:(?!\\k<map_key_tick>)[^\\r\\n])*\\k<map_key_tick>(?!\\x60)|/\\*(?:[^*]|\\*(?!/))*\\*/|//[^\\r\\n]*|\\((?:\\g<map_key_atom>|[:;])*\\)|\\[(?:\\g<map_key_atom>|[:;])*\\]|\\{(?:\\g<map_key_atom>|[:;])*\\}|/(?![/*])|[^()\\[\\]{}:;\"\\x60#/\\r\\n]))+:))",
+      "begin": "\\bmap\\b(?=\\s*\\{)",
       "beginCaptures": {
         "0": {
-          "name": "punctuation.definition.map.begin.baml"
+          "name": "support.type.primitive.baml"
         }
       },
-      "end": "\\}",
-      "endCaptures": {
-        "0": {
-          "name": "punctuation.definition.map.end.baml"
-        }
-      },
+      "end": "(?<=\\})",
       "patterns": [
         {
           "include": "#comments"
         },
         {
-          "include": "#map-entry"
-        },
-        {
-          "include": "#comma"
+          "include": "#braced-expression"
         }
       ]
     },

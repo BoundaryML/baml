@@ -106,7 +106,7 @@ describe('BAML TextMate grammar', () => {
     );
   });
 
-  it('recognizes computed first keys without mistaking blocks for maps', () => {
+  it('uses one recursive brace context for map and block expressions', () => {
     const openingScopes = (body: string) => {
       const { tokens } = highlighter.codeToTokens(`let value = ${body};`, {
         includeExplanation: 'scopeName',
@@ -136,7 +136,7 @@ describe('BAML TextMate grammar', () => {
       'f<int, string>()',
     ]) {
       expect(openingScopes(`{ ${key}: 1 }`), key).toContain(
-        'meta.expression.map.baml',
+        'meta.expression.braced.baml',
       );
     }
     for (const body of [
@@ -153,8 +153,45 @@ describe('BAML TextMate grammar', () => {
       '{ (x: int) -> int { x } }',
       '{ Point { x: 1, y: 2 } }',
     ]) {
-      expect(openingScopes(body), body).not.toContain(
-        'meta.expression.map.baml',
+      expect(openingScopes(body), body).toContain(
+        'meta.expression.braced.baml',
+      );
+    }
+    expect(openingScopes('map { key + 1: f() }')).toContain(
+      'meta.expression.map.baml',
+    );
+  });
+
+  it('reuses expression rules for multiline nested map keys and values', () => {
+    const { tokens } = highlighter.codeToTokens(
+      `let value = {
+    f(
+        [KeyKind.Foo],
+        { "nested": g() }
+    ): {
+        key: h(),
+    },
+};`,
+      {
+        includeExplanation: 'scopeName',
+        lang: 'baml',
+        theme: THEME,
+      },
+    );
+    const parts = tokens.flat().flatMap(explanationParts);
+    const key = parts.find((part) => part.content === 'key');
+    expect(key?.scopes?.at(-1)?.scopeName).toBe(
+      'variable.other.readwrite.baml',
+    );
+    expect(
+      key?.scopes?.filter(
+        (scope) => scope.scopeName === 'meta.expression.braced.baml',
+      ).length,
+    ).toBe(2);
+    for (const name of ['f', 'g', 'h']) {
+      const call = parts.find((part) => part.content === name);
+      expect(call?.scopes?.map((scope) => scope.scopeName)).toContain(
+        'entity.name.function.baml',
       );
     }
   });
