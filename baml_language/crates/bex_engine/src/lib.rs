@@ -3508,11 +3508,12 @@ impl BexEngine {
             .into_iter()
             .enumerate()
             .map(|(idx, arg)| match arg {
-                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
-                    &mut thread,
-                    *arg,
-                    param_types.get(idx),
-                ),
+                // The fields of a class are checked here, where the map of a
+                // host becomes an instance: the same frame as the check of the
+                // argument as a whole.
+                BexCallArg::Provided(arg) => self
+                    .convert_external_to_vm_value_with_ty(&mut thread, *arg, param_types.get(idx))
+                    .map_err(|error| arg_coercion_mismatch(function_name, idx, error)),
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
