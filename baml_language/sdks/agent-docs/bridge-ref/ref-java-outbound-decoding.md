@@ -149,11 +149,11 @@ message BamlOutboundPanic {
 > `ErrorMappingTest.type_mismatch_unregistered_remaps_to_iae_with_map_message`
 > and `…_registered_instance_message_via_accessor`.
 
-> ⚠ **Deviation from Python:** `BamlPanic extends Error` (`BamlPanic.java:20`),
-> the JVM analog of Python's `BamlPanic` subclassing **`BaseException`** rather
-> than `Exception`. A bare `catch (Exception)` (Java's `except Exception`) does
-> **not** swallow a panic; callers that want to intercept one catch `BamlPanic`
-> or `Throwable` explicitly. `decodePanic` therefore returns `Error`
+> ⚠ **Deviation from Python:** `BamlPanic extends Error` (`BamlPanic.java:20`).
+> A bare `catch (Exception)` (Java's `except Exception`) does **not** swallow a
+> panic; callers that want to intercept one catch `BamlPanic` or `Throwable`
+> explicitly. In Python, `BamlPanic` is a `BamlError`, which `except Exception`
+> catches. `decodePanic` therefore returns `Error`
 > (`ProtoReader.java:295,323`). Pinned by
 > `ErrorMappingTest.baml_panic_is_error_not_exception`. `BamlError` itself stays
 > a `RuntimeException` (`BamlError.java:19`), matching Python's `Exception`

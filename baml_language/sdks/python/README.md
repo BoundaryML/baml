@@ -93,10 +93,38 @@ baml_bridge.set_unhandled_spawn_error_handler(report)
   `None` restores `default_unhandled_spawn_error_handler`. A handler can call
   the default for the errors that must end the process.
 
+## Exceptions
+
+`except BamlError` catches every failure that comes from BAML:
+
+| Class | Raised for |
+| --- | --- |
+| `BamlError` | A value that BAML code threw. `.value` is the value, `.class_name` the name of its BAML class, `.baml_trace` the BAML stack. |
+| `BamlPanic(BamlError)` | A panic: a failure that BAML code cannot `catch`, such as a failed assertion, `baml.sys.panic`, or a call of a function that the program does not have. |
+| `BamlCancelledError(BamlPanic)` | A sync call that was cancelled. |
+| `BamlTypeError(BamlError, TypeError)` | A value that does not match the type that BAML declares for it (next section). |
+
+`BamlError` is an `Exception`, so `except Exception` catches all of these
+too. Catch the narrower class first to treat a panic or a cancellation in
+another way.
+
+Two exceptions of a call are not a `BamlError`:
+
+- The exception that a Python callback raised. It comes back to the caller as
+  the same object.
+- The `asyncio.CancelledError` of a cancelled async call. `asyncio` needs its
+  own class, which `except Exception` must not catch. Its `reason` attribute
+  is the `BamlCancelledError`.
+
+The bridge also raises the built-in `TypeError` and `ValueError` for a wrong
+use of its own Python API before a call reaches BAML: a value that has no BAML
+encoding, a `_types=` that is not a `dict`, a negative timeout.
+
 ## Argument types
 
 The bridge checks every argument against the type that the BAML function
-declares, before the function runs. A value of another kind raises `TypeError`:
+declares, before the function runs. A value of another kind raises
+`BamlTypeError`, which is a `BamlError` and a `TypeError`:
 
 ```python
 Twice("7")    # TypeError: `Twice` was called with a value that doesn't match its type:
@@ -125,14 +153,36 @@ Resolve("BedrockSonnet5")  # the same variant
 ```
 
 The string becomes the variant, also inside a list, a map or a class field.
-A string that names no variant raises `TypeError`, and the message lists the
-variants. Where the declared type also takes a string as it is
-(`string | HostClientName`, or a string literal that equals the value), the
-string stays a string.
+A string that names no variant raises `TypeError`. Where the declared type is
+the enum, the message lists the variants. Where it is a union
+(`HostClientName?`), the message names the union. Where the declared type also
+takes a string as it is (`string | HostClientName`, or a string literal that
+equals the value), the string stays a string.
 
 The generated annotations still name the enum, so a type checker expects a
 member. A callback that is declared to return an enum must return a member:
 the return value of a callback is not an argument.
+
+## Thrown values without a generated class
+
+`baml generate` gives the bridge a Python class for each BAML class. A thrown
+value whose class has no Python class reaches the caller as the fields of the
+instance. This is the case for every class in a call through `baml_bridge`
+alone, and for a class that a program makes at run time:
+
+```python
+try:
+    call_function_sync(runtime, "user.Fail", {})
+except BamlError as error:
+    error.class_name  # "user.Failure"
+    error.value       # {"reason": "disk full", "severity": "High"}
+```
+
+`BamlPanic` carries its value the same way. The `BamlTypeError` of a rejected
+argument and the original exception of a Python callback do not depend on
+generated classes. A *returned* instance of such a class stays an error
+(`Unknown class FQN`): a return value has a declared type that a typed caller
+relies on.
 
 ## Requirements
 

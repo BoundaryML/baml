@@ -40,7 +40,13 @@ from .baml_py import (
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
-from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
+from .errors import (
+    BamlCancelledError,
+    BamlError,
+    BamlPanic,
+    BamlTypeError,
+    attach_baml_traceback,
+)
 from .typemap import BamlTypeMap, get_type_map
 
 
@@ -1545,21 +1551,17 @@ def decode_call_result(data: bytes) -> Any:
     if which == "error":
         msg = result.error
         decoded = decode_value(msg.value, type_map, unknown_class_as_fields=True)
+        class_name = _outbound_class_fqn(msg.value)
         # A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
         # synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
-        # type error — surface it as Python's native `TypeError` rather than a
-        # `BamlError` wrapper. Covers inbound-generics Gate-A failures (a
+        # type error — surface it as a `BamlTypeError`, which is also Python's
+        # native `TypeError`. Covers inbound-generics Gate-A failures (a
         # `TypeVar` that can't be inferred and must be specified, conflicting
         # variance occurrences) and ordinary argument-type mismatches.
-        if _outbound_class_fqn(msg.value) == "baml.errors.TypeMismatch":
-            message = getattr(decoded, "message", None)
-            if message is None and isinstance(decoded, dict):
-                message = decoded.get("message")
-            err = TypeError(message if message is not None else str(decoded))
-            # Let `attach_baml_traceback` splice the BAML frames onto the
-            # native exception (exception instances accept ad-hoc attributes).
-            err.baml_trace = list(msg.trace)  # type: ignore[attr-defined]
-            raise attach_baml_traceback(err)
+        if class_name == "baml.errors.TypeMismatch":
+            raise attach_baml_traceback(
+                BamlTypeError(decoded, baml_trace=list(msg.trace), class_name=class_name)
+            )
         # Same-host rehydration: a `baml.errors.HostCallable` carrying a
         # `_handle` that still resolves in this runtime's host-value
         # registry re-raises the *original* native exception object the
@@ -1567,16 +1569,12 @@ def decode_call_result(data: bytes) -> Any:
         # caught` identity. Foreign runtimes (different process) and
         # released keys (last `HostValueArc` clone already dropped) fall
         # through to the metadata-bearing `BamlError` wrapper below.
-        if _outbound_class_fqn(msg.value) == "baml.errors.HostCallable":
+        if class_name == "baml.errors.HostCallable":
             rehydrated = _try_rehydrate_host_value(decoded)
             if rehydrated is not None:
                 raise attach_baml_traceback(rehydrated)
         raise attach_baml_traceback(
-            BamlError(
-                decoded,
-                baml_trace=list(msg.trace),
-                class_name=_outbound_class_fqn(msg.value),
-            )
+            BamlError(decoded, baml_trace=list(msg.trace), class_name=class_name)
         )
 
     if which == "panic":

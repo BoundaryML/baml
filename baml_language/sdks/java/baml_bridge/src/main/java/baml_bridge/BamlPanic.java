@@ -8,12 +8,12 @@ import java.util.List;
  * (errors.py). A clean {@code baml.sys.exit} never reaches here — the decoder
  * terminates the process via {@code Runtime.getRuntime().halt(exit_code)}.
  *
- * <p>Extends {@link Error}, not {@link RuntimeException} — the JVM analog of
- * Python's {@code BamlPanic} subclassing {@code BaseException} rather than
- * {@code Exception}: a panic is not an ordinary recoverable error, so a bare
- * {@code catch (Exception)} (Java's {@code except Exception}) does not swallow
- * it. Callers that genuinely want to intercept a panic catch {@link BamlPanic}
- * (or {@link Throwable}) explicitly.
+ * <p>Extends {@link Error}, not {@link RuntimeException}: a panic is not an
+ * ordinary recoverable error, so a bare {@code catch (Exception)} does not
+ * swallow it. Callers that genuinely want to intercept a panic catch
+ * {@link BamlPanic} (or {@link Throwable}) explicitly. The Python
+ * {@code BamlPanic} differs here: it is a {@code BamlError}, which
+ * {@code except Exception} catches.
  *
  * <p>Accessor names are snake_case to line up 1:1 with the Python reference.
  */

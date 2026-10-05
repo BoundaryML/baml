@@ -377,7 +377,7 @@ Function calls return a `BamlOutboundResult` envelope; `ProtoReader.decodeOutbou
   ref-java-outbound-decoding.md, error arm.
 - **`panic`** (non-exit) → throw an unchecked `baml_bridge.BamlPanic(value, bamlTrace, className)`.
   **`BamlPanic` re-parents to `java.lang.Error`** (`BamlPanic.java:20`) so it escapes
-  `catch (Exception)` — the analog of Python raising `BamlPanic` off `BaseException`. **LANDED
+  `catch (Exception)`. (Python differs: its `BamlPanic` is a `BamlError`.) **LANDED
   (`74782a679`).**
 - **Exit panics** (`baml.sys.exit`, `is_exit_panic`) → `Runtime.getRuntime().halt(exitCode)`
   (hard exit, bypasses shutdown hooks — analog of Python `os._exit`). `ProtoReader.decodePanic`

@@ -713,14 +713,13 @@ pub(crate) fn send_dispatch_bridge_failure(call_id: u32, message: String) {
     );
 }
 
-/// If `py_err` is a `baml_bridge.errors.BamlError` *or* `BamlPanic` carrying
-/// a codegenned BAML value, encode the unwrapped value (`e.value`) as an
-/// `InboundValue` — preserving its real BAML class identity so the BAML
-/// caller can `catch (e: MyError)` and read fields just like a BAML-thrown
-/// error. `BamlPanic.value` is normally a `baml.panics.*` class; the
-/// engine's namespace-based routing turns that back into a panic on the
-/// BAML side. (`BamlPanic` is a `BaseException`, not a `BamlError`
-/// subclass, so it must be checked separately.)
+/// If `py_err` is a `baml_bridge.errors.BamlError` carrying a codegenned
+/// BAML value, encode the unwrapped value (`e.value`) as an `InboundValue` —
+/// preserving its real BAML class identity so the BAML caller can
+/// `catch (e: MyError)` and read fields just like a BAML-thrown error. A
+/// `BamlPanic` is a `BamlError` whose `.value` is normally a `baml.panics.*`
+/// class; the engine's namespace-based routing turns that back into a panic
+/// on the BAML side.
 ///
 /// Returns `Ok(None)` for:
 /// - any other exception type — caller falls back to the opaque
@@ -741,11 +740,8 @@ fn try_encode_baml_error_throw(py: Python<'_>, py_err: &pyo3::PyErr) -> PyResult
         Err(_) => return Ok(None),
     };
     let baml_error_cls = errors_mod.getattr("BamlError")?;
-    let baml_panic_cls = errors_mod.getattr("BamlPanic")?;
     let exc_value = py_err.value(py);
-    let is_baml_error = exc_value.is_instance(&baml_error_cls)?;
-    let is_baml_panic = exc_value.is_instance(&baml_panic_cls)?;
-    if !is_baml_error && !is_baml_panic {
+    if !exc_value.is_instance(&baml_error_cls)? {
         return Ok(None);
     }
 

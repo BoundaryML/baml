@@ -32,6 +32,7 @@ from .errors import (
     BamlCancelledError,
     BamlError,
     BamlPanic,
+    BamlTypeError,
     attach_baml_traceback,
     make_sdk_panic,
 )
@@ -154,7 +155,7 @@ _CANCELLED_PANIC_CLASS = "baml.panics.Cancelled"
 def _decode_call_result_async(result_bytes: bytes) -> Any:
     try:
         return decode_call_result(result_bytes)
-    except (BamlError, BamlPanic) as exc:
+    except BamlError as exc:
         if getattr(exc, "class_name", None) != _CANCELLED_PANIC_CLASS:
             raise
         reason = BamlCancelledError(
@@ -558,6 +559,7 @@ __all__ = [
     "BamlCancelledError",
     "BamlError",
     "BamlPanic",
+    "BamlTypeError",
     "make_sdk_panic",
     "shutdown_runtime",
     "UnhandledSpawnErrorHandler",
