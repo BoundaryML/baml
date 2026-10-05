@@ -100,7 +100,7 @@ function dir_greeter_instance() -> DirGreeter {
         implementations = [reflect.interface.implementation<DirGreeter>()],
     );
     type Adapter = unreflect(adapter.as_type());
-    let instance: Adapter = baml.json.from_string<Adapter>("{}");
+    let instance: Adapter = baml.json.to<Adapter>({});
     match (instance) {
         let greeter: DirGreeter => greeter,
         _ => throw "the witnessed class does not implement DirGreeter",

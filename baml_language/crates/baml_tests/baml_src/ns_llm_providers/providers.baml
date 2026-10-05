@@ -198,7 +198,7 @@ function check_Gemini31FlashLiteMinimal() -> void {
         google.GeminiClient.new(
             model = "gemini-3.1-flash-lite",
             api_key = env.GOOGLE_API_KEY,
-            request_body = baml.json.parse(`{"generationConfig":{"thinkingConfig":{"thinkingLevel":"minimal"}}}`),
+            request_body = { "generationConfig": { "thinkingConfig": { "thinkingLevel": "minimal" } } },
         ),
     )
 }
@@ -209,7 +209,7 @@ function check_VertexGeminiFlashLiteLow() -> void {
             model = "gemini-3.5-flash-lite",
             location = "global",
             temperature = 0.0,
-            request_body = baml.json.parse(`{"generationConfig":{"thinkingConfig":{"thinkingLevel":"low"}}}`),
+            request_body = { "generationConfig": { "thinkingConfig": { "thinkingLevel": "low" } } },
         ),
     )
 }

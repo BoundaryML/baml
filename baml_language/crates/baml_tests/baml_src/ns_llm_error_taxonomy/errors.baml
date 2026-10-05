@@ -176,13 +176,14 @@ test "Bedrock unmodeled error frame preserves plain text and native code" {
 }
 
 function chat_reported_failure(streaming: bool) -> bool {
-    let raw = `{"error":{"message":"overloaded","type":"server_error","code":503}}`;
+    let payload: json = { "error": { "message": "overloaded", "type": "server_error", "code": 503 } };
+    let raw = baml.json.stringify(payload);
     let result = {
         if (streaming) {
             let decoder = openai.internal.ChatStreamDecoder.new("openai-chat");
             decoder.decode(baml.json.stringify([{ "data": raw }]));
         } else {
-            let response = baml.json.from_string<openai.internal.CcResponse>(raw);
+            let response = baml.json.to<openai.internal.CcResponse>(payload);
             openai.internal.chat_parse(response, "openai-chat", raw);
         }
         false

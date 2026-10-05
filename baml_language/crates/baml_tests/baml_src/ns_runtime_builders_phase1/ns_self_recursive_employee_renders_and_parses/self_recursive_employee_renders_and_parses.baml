@@ -9,7 +9,12 @@ function Extract<T>() -> T {
     prompt: `${ctx.output_format()}`
 }
 
-function main() -> string {
+class ScenarioResult {
+    text: string,
+    value: baml.json.json,
+}
+
+function main() -> ScenarioResult {
     let employee = reflect.class.builder("Employee");
     let pending = employee.type();
     employee.field(
@@ -26,21 +31,20 @@ function main() -> string {
     let value = Extract@parse<Employee>(`{"full_name":"Ada","manager":{"full_name":"Grace","manager":null}`);
     let manager = reflect.class.get_field<unknown>(value, "manager");
     let manager_name = reflect.class.get_field<string>(manager, "name");
-    return prompt
-        + "\n<RESULT>"
-        + manager_name
-        + "|"
-        + (pending.resolved() == employee_t.as_type()).to_string()
-        + "|"
-        + baml.json.to_string(value);
+    return ScenarioResult {
+        text: prompt
+            + "\n<RESULT>"
+            + manager_name
+            + "|"
+            + (pending.resolved() == employee_t.as_type()).to_string(),
+        value: baml.json.from(value),
+    };
 }
 
 test "self_recursive_employee_renders_and_parses" {
-    let result = main();
+    let scenario = main();
+    let result = scenario.text;
     assert.contains(result, "Employee");
-    assert.is_true(
-        result.ends_with(
-            "<RESULT>Grace|true|{\"name\":\"Ada\",\"manager\":{\"name\":\"Grace\",\"manager\":null}}",
-        ),
-    )
+    assert.is_true(result.ends_with("<RESULT>Grace|true"));
+    assert.equal(scenario.value, { "name": "Ada", "manager": { "name": "Grace", "manager": null } })
 }
