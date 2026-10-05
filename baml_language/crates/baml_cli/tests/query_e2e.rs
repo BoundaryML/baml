@@ -32,7 +32,7 @@ fn cli(project: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Ou
 }
 
 fn query(project: &Path, sql: &str) -> (i32, Value) {
-    let output = cli(project, &["query", "--format", "json", sql], &[]);
+    let output = cli(project, &["query", "--local", "--format", "json", sql], &[]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json = serde_json::from_str(&stdout).unwrap_or_else(|e| {
         panic!(
@@ -219,12 +219,16 @@ fn schema_invalid_sql_and_stdin() {
         "{text}"
     );
 
-    let invalid = cli(project.path(), &["query", "DELETE FROM spans"], &[]);
+    let invalid = cli(
+        project.path(),
+        &["query", "--local", "DELETE FROM spans"],
+        &[],
+    );
     assert_eq!(invalid.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("read-only"));
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
-        .args(["query", "--format", "jsonl", "-"])
+        .args(["query", "--local", "--format", "jsonl", "-"])
         .current_dir(project.path())
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .stdin(std::process::Stdio::piped())

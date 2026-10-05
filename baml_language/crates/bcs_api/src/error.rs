@@ -33,6 +33,10 @@ pub enum Error {
     Protocol(&'static str),
     #[error("Could not encode Boundary request")]
     Encode(#[from] serde_json::Error),
+    #[error("Invalid saved Boundary login in the local OS credential store at {location}")]
+    InvalidStoredLogin {
+        location: crate::auth::CredentialStoreLocation,
+    },
     #[error("Cannot {operation} Boundary login in the local OS credential store at {location}")]
     Storage {
         operation: &'static str,

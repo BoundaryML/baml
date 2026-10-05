@@ -65,6 +65,7 @@ pub enum FailureKind {
     InvalidConfiguration(&'static str),
     RequestEncoding,
     CredentialStorage,
+    InvalidStoredLogin,
     Timeout,
     Transport,
     InvalidResponse(&'static str),
@@ -89,6 +90,7 @@ impl FailureKind {
             Self::InvalidConfiguration(_) => "BOUNDARY_CONFIG_INVALID",
             Self::RequestEncoding => "BOUNDARY_REQUEST_ENCODING_FAILED",
             Self::CredentialStorage => "BOUNDARY_CREDENTIAL_STORAGE_UNAVAILABLE",
+            Self::InvalidStoredLogin => "BOUNDARY_STORED_LOGIN_INVALID",
             Self::Timeout => "BOUNDARY_TIMEOUT",
             Self::Transport => "BOUNDARY_CONNECTION_FAILED",
             Self::InvalidResponse(_) => "BOUNDARY_RESPONSE_INVALID",
@@ -107,6 +109,7 @@ impl FailureKind {
             Error::Read(error) if error.kind() == std::io::ErrorKind::TimedOut => Self::Timeout,
             Error::Transport(_) | Error::Read(_) => Self::Transport,
             Error::Storage { .. } => Self::CredentialStorage,
+            Error::InvalidStoredLogin { .. } => Self::InvalidStoredLogin,
             Error::Protocol(reason) => Self::InvalidResponse(reason),
             Error::Renewal(RenewalError::MissingAccessToken) => {
                 Self::InvalidResponse("Boundary credential renewal returned no usable access token")
@@ -180,7 +183,7 @@ impl Context {
         diagnostic.api_error = source
             .http_failure()
             .and_then(|failure| failure.body.clone());
-        if let Error::Storage { location, .. } = &source {
+        if let Error::Storage { location, .. } | Error::InvalidStoredLogin { location } = &source {
             diagnostic.credential_store = Some(location.clone());
         }
         ReportedError { diagnostic, source }
@@ -337,6 +340,16 @@ impl fmt::Display for Diagnostic {
                     )?;
                 }
             }
+            FailureKind::InvalidStoredLogin => {
+                if let Some(location) = &self.credential_store {
+                    writeln!(
+                        f,
+                        "The saved Boundary login in the local OS credential store at {location} is invalid."
+                    )?;
+                } else {
+                    writeln!(f, "The saved Boundary login is invalid.")?;
+                }
+            }
             FailureKind::Timeout => writeln!(
                 f,
                 "Boundary timed out while processing {}.",
@@ -478,6 +491,15 @@ impl fmt::Display for Diagnostic {
                     if let Some(key) = self.api_key_name() {
                         writeln!(f, "    • Set {key} to a valid API key.")?;
                     }
+                }
+            }
+            FailureKind::InvalidStoredLogin => {
+                writeln!(
+                    f,
+                    "    • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`."
+                )?;
+                if let Some(key) = self.api_key_name() {
+                    writeln!(f, "    • Set {key} to a valid API key.")?;
                 }
             }
             FailureKind::Timeout | FailureKind::Transport => writeln!(
