@@ -373,7 +373,7 @@ impl fmt::Display for Diagnostic {
                 writeln!(
                     f,
                     "    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml."
-                )?
+                )?;
             }
             FailureKind::InvalidConfiguration(_) => writeln!(
                 f,
