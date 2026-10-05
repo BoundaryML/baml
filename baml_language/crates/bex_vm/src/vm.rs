@@ -3121,7 +3121,7 @@ impl BexVm {
     ) -> Result<bex_vm_types::Uint8ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         match self.get_object(ptr) {
-            Object::Uint8Array(bytes) => Ok(bytes.lock_mut()),
+            Object::Uint8Array(bytes) => Ok(bytes.lock_mut(self.tlab.alloc_debt())),
             other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(other).into(),
@@ -3891,7 +3891,7 @@ impl BexVm {
             });
         }
         match self.get_object(ptr) {
-            Object::Array(arr) => Ok(arr.lock_mut()),
+            Object::Array(arr) => Ok(arr.lock_mut(self.tlab.alloc_debt())),
             _ => unreachable!("type was just checked"),
         }
     }
@@ -3938,7 +3938,7 @@ impl BexVm {
             });
         }
         match self.get_object(index) {
-            Object::Map(map) => Ok(map.lock_mut()),
+            Object::Map(map) => Ok(map.lock_mut(self.tlab.alloc_debt())),
             _ => unreachable!("type was just checked"),
         }
     }
@@ -10025,7 +10025,7 @@ impl BexVm {
                         let store_result: Result<(), (i64, usize)> = {
                             match self.get_object(array_object_index) {
                                 Object::Array(arr) => {
-                                    let mut guard = arr.lock_mut();
+                                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {
@@ -10043,7 +10043,7 @@ impl BexVm {
                                         }
                                         .into());
                                     };
-                                    let mut guard = bytes.lock_mut();
+                                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {

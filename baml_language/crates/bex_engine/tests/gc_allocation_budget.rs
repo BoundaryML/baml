@@ -118,8 +118,11 @@ async fn long_compute_collects_before_returning() {
     engine.shutdown().await;
 }
 
+/// Growing an array that already survived a collection spends the budget by
+/// the capacity it gains: 2.1 million pushes reach a 4 Mi-element buffer, which
+/// is 32 MiB, the whole initial allowance.
 #[tokio::test(start_paused = true)]
-async fn existing_old_array_growth_does_not_spend_slot_budget() {
+async fn existing_old_array_growth_spends_the_budget() {
     let engine = engine();
     let values = call(&engine, "Empty", vec![], false).await;
     engine.collect_garbage(CollectionLevel::Major).await;
@@ -135,8 +138,10 @@ async fn existing_old_array_growth_does_not_spend_slot_budget() {
         Ext::Int(2_100_000)
     );
     let after = engine.heap().gc_budget();
-    assert_eq!(after.full_collections, before.full_collections);
-    assert!(!engine.heap().should_gc());
+    assert!(
+        after.full_collections > before.full_collections || engine.heap().should_gc(),
+        "the growth was neither collected during the call nor left due: {after:?}"
+    );
     engine.collect_garbage(CollectionLevel::Major).await;
     assert_eq!(
         call(&engine, "Size", vec![values.clone()], true).await,

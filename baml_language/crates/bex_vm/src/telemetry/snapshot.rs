@@ -456,13 +456,14 @@ mod tests {
         let Object::Array(array) = (unsafe { list.get() }) else {
             unreachable!()
         };
-        array.lock_mut().push(Value::object(list));
+        let scratch = bex_vm_types::AllocDebt::new();
+        array.lock_mut(&scratch).push(Value::object(list));
         let snapshot = capture(&[Value::object(list)]);
-        array.lock_mut().clear();
+        array.lock_mut(&scratch).clear();
         let Object::Uint8Array(data) = (unsafe { bytes.get() }) else {
             unreachable!()
         };
-        data.lock_mut().fill(7);
+        data.lock_mut(&scratch).fill(7);
         // Captures are independent: the graph does not contribute any GC roots.
         unsafe {
             vm.heap
@@ -631,10 +632,11 @@ mod tests {
         let Object::Array(array) = (unsafe { ptr.get() }) else {
             unreachable!()
         };
+        let scratch = bex_vm_types::AllocDebt::new();
         std::thread::scope(|scope| {
             let writer = scope.spawn(|| {
                 for i in 0..500 {
-                    let mut a = array.lock_mut();
+                    let mut a = array.lock_mut(&scratch);
                     a.clear();
                     a.resize(8, Value::int(i));
                 }
@@ -850,7 +852,7 @@ mod tests {
             let Object::Map(map) = map.get() else {
                 unreachable!()
             };
-            map.lock_mut().clear();
+            map.lock_mut(&bex_vm_types::AllocDebt::new()).clear();
             vm.heap
                 .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major);
         }
@@ -942,7 +944,9 @@ mod tests {
         let Object::Array(array) = (unsafe { list.get() }) else {
             unreachable!()
         };
-        array.lock_mut().push(Value::object(list));
+        array
+            .lock_mut(&bex_vm_types::AllocDebt::new())
+            .push(Value::object(list));
         let map = vm.tlab.alloc_map(
             ty(),
             ty(),
