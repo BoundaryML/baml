@@ -42,13 +42,13 @@ function sap_parses_optional_json_null() -> bool {
     let parsed = baml.sap.parse<json?>(`null`);
     match (parsed) {
         null => true,
-        let value: json => baml.json.stringify(value) == "never",
+        let value: json => value == "never",
     }
 }
 
 function sap_parses_optional_json_value() -> bool {
     let parsed = baml.sap.parse<json?>(`true`);
-    baml.json.stringify(parsed) == "true"
+    parsed == true
 }
 
 function sap_nullable_container_types_are_preserved() -> bool {

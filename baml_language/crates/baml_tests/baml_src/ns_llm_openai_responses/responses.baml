@@ -226,9 +226,12 @@ function oai_passthrough() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_text_response())],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let overrides = baml.json.parse(
-                `{"temperature":0.75,"metadata":{"tag":"unit"},"store":null,"reasoning":{"effort":"high"}}`,
-            );
+            let overrides: json = {
+                "temperature": 0.75,
+                "metadata": { "tag": "unit" },
+                "store": null,
+                "reasoning": { "effort": "high" },
+            };
             let cl = openai.ResponsesClient.new(
                 model = "gpt-4o-mini",
                 api_key = "test-key",

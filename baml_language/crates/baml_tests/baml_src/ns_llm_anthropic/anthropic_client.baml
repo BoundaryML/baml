@@ -549,7 +549,7 @@ test "anthropic_assistant_first_gets_leading_user" {
 // FOREIGN client is removed by ai.wire.sanitize_for_client; reasoning from THIS
 // client survives sanitization and is dropped by the client's own lowering —
 // either way no empty message reaches the wire.
-function anthropic_reasoning_only_turn_is_dropped() -> string {
+function anthropic_reasoning_only_turn_is_dropped() -> json {
     let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let journal = ai.Journal {
         log: [
@@ -559,20 +559,15 @@ function anthropic_reasoning_only_turn_is_dropped() -> string {
             },
         ],
     };
-    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
-    [
-        `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
-        `role1=${baml.json.path_or<string>(body, ".messages[1].role", "-")}`,
-        `empty=${baml.json.stringify(body).includes("\"content\":[]")}`,
-    ].join("|")
+    anth_render_body(cl, AnthMockPlain@spec(), journal)
 }
 
 test "anthropic_reasoning_only_turn_is_dropped" {
-    let got = anthropic_reasoning_only_turn_is_dropped();
-    // the prompt's user message is the ONLY message left
-    assert.contains(got, "role0=user|");
-    assert.contains(got, "role1=-|");
-    assert.contains(got, "empty=false")
+    let messages = baml.json.path<json[]>(anthropic_reasoning_only_turn_is_dropped(), ".messages");
+    // the prompt's user message is the ONLY message left, and it is not empty
+    assert.equal(messages.length(), 1);
+    assert.equal(baml.json.path<string>(messages[0], ".role"), "user");
+    assert.is_true(baml.json.path<json[]>(messages[0], ".content").length() > 0)
 }
 
 // Dropping that turn MID-conversation left the user turns that bracketed it
@@ -1282,7 +1277,7 @@ test "anthropic_missing_key_invoke" {
 // `input_schema`. A null argument is the schema-conformant answer for an
 // optional parameter (the generated schema types it `["string","null"]` and
 // marks it required), so dropping it rewrote conversation history.
-function anthropic_replayed_tool_args_keep_nulls() -> string {
+function anthropic_replayed_tool_args_keep_nulls() -> json {
     let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let args: map<string, unknown> = { "city": "SF", "unit": null };
     let journal = ai.Journal {
@@ -1294,20 +1289,15 @@ function anthropic_replayed_tool_args_keep_nulls() -> string {
             ai.events.ToolCompleted.new("t1", "sunny in SF"),
         ],
     };
-    let body = anth_render_body(cl, AnthMockTools@spec("weather?"), journal);
-    [
-        `city=${baml.json.path_or<string>(body, ".messages[1].content[0].input.city", "-")}`,
-        `unit_present=${baml.json.stringify(body).includes("\"unit\":null")}`,
-        // the request's OWN unset optionals are still pruned
-        `has_top_null=${baml.json.stringify(body).includes("\"temperature\":null")}`,
-    ].join("|")
+    anth_render_body(cl, AnthMockTools@spec("weather?"), journal)
 }
 
 test "anthropic_replayed_tool_args_keep_nulls" {
-    let got = anthropic_replayed_tool_args_keep_nulls();
-    assert.contains(got, "city=SF|");
-    assert.contains(got, "unit_present=true|");
-    assert.contains(got, "has_top_null=false")
+    let body = anthropic_replayed_tool_args_keep_nulls();
+    let input: json = { "city": "SF", "unit": null };
+    assert.equal(baml.json.path<json>(body, ".messages[1].content[0].input"), input);
+    // the request's OWN unset optionals are still pruned
+    assert.equal(baml.json.to<map<string, json>>(body).has("temperature"), false)
 }
 
 // ─── extended-thinking usage ─────────────────────────────────────────────────

@@ -825,7 +825,7 @@ test "test_bigint_ilog_floor" {
 // Bigint values render as arbitrary-precision JSON numbers.
 
 test "test_bigint_to_json_returns_number" {
-    assert.equal(baml.json.stringify((42n).to_json()), "42")
+    assert.equal((42n).to_json(), 42)
 }
 
 test "test_bigint_to_json_large" {

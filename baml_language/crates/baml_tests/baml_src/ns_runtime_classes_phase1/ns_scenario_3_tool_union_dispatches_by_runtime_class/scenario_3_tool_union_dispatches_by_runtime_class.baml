@@ -9,7 +9,12 @@ function PickAction<T>(context: string) -> T {
     prompt: `Pick one action for ${context}.\n${ctx.output_format()}`
 }
 
-function main() -> string {
+class ScenarioResult {
+    text: string,
+    action: baml.json.json,
+}
+
+function main() -> ScenarioResult {
     let read_args_t = reflect.class.new("Tool0Args", { "path": reflect.Type.of<string>().meta(alias = "file_path") });
     let read_t = reflect.class.new(
         "Tool0Action",
@@ -47,28 +52,30 @@ function main() -> string {
     let args = reflect.class.get_field<unknown>(action, "args");
     let path = reflect.class.get_field<string>(args, "path");
     let tool = reflect.class.get_field<string>(action, "tool");
-    return prompt
-        + "\n<RESULT>"
-        + branch
-        + "|"
-        + matched
-        + "|"
-        + (reflect.Type.of_value(action) == read_t.as_type()).to_string()
-        + "|"
-        + tool
-        + "|"
-        + path
-        + "|"
-        + baml.json.to_string(action);
+    return ScenarioResult {
+        text: prompt
+            + "\n<RESULT>"
+            + branch
+            + "|"
+            + matched
+            + "|"
+            + (reflect.Type.of_value(action) == read_t.as_type()).to_string()
+            + "|"
+            + tool
+            + "|"
+            + path,
+        action: baml.json.from(action),
+    };
 }
 
 test "scenario_3_tool_union_dispatches_by_runtime_class" {
-    let result = main();
+    let scenario = main();
+    let result = scenario.text;
     assert.contains(result, "filesystem/read_file");
     assert.contains(result, "web/search");
-    assert.is_true(
-        result.ends_with(
-            "<RESULT>read|read|true|filesystem/read_file|/tmp/a.txt|{\"tool\":\"filesystem/read_file\",\"args\":{\"path\":\"/tmp/a.txt\"}}",
-        ),
+    assert.is_true(result.ends_with("<RESULT>read|read|true|filesystem/read_file|/tmp/a.txt"));
+    assert.equal(
+        scenario.action,
+        { "tool": "filesystem/read_file", "args": { "path": "/tmp/a.txt" } },
     )
 }

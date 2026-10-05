@@ -61,8 +61,8 @@ class SrEnvelope<T> {
     optional: T?
 }
 
-function sr_decode_nested() -> bool throws baml.json.ParseError | baml.json.DecodeError {
-    let j = baml.json.parse(`{"item":1,"items":[2],"by_name":{"x":3},"optional":null}`);
+function sr_decode_nested() -> bool throws baml.json.DecodeError {
+    let j: baml.json.json = { "item": 1, "items": [2], "by_name": { "x": 3 }, "optional": null };
     let a = SrEnvelope<SrTag>.from_json(j);
     let b = baml.json.to<SrEnvelope<SrTag>>(j);
     a.item.id == 1 && a.item.note == "decoded"

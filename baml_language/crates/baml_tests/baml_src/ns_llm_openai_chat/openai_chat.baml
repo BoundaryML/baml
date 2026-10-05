@@ -1377,8 +1377,12 @@ function chat_tool_schema_keeps_nulls() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let schema = baml.json.from_string<map<string, unknown>>(
-                `{"type":"object","properties":{"x":{"type":["string","null"],"default":null}},"required":[]}`,
+            let schema = baml.json.to<map<string, unknown>>(
+                {
+                    "type": "object",
+                    "properties": { "x": { "type": ["string", "null"], "default": null } },
+                    "required": [],
+                },
             );
             let spec = ChatEcho@spec("hi");
             let input = ai.ModelTurnInput {
