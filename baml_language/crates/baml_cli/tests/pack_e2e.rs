@@ -337,3 +337,90 @@ fn pack_e2e_manifest_less_baml_src() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
 }
+
+/// A packed host launches an ordinary child with inherited streams and forwards
+/// its exit status after normal runtime shutdown.
+#[test]
+#[cfg(unix)]
+fn pack_child_preserves_streams_environment_and_status() {
+    use std::{io::Write as _, process::Stdio};
+    let built = common::ensure_built();
+    let (_tmp, bin) = pack_project(
+        built,
+        r#"
+        function main() -> never {
+            let status = baml.sys.run("sh", args = ["-c", "printf '%s:%s:%s:' $$ \"$BAML_HANDOFF\" \"${BAML_HANDOFF_REMOVE-unset}\"; cat; printf err >&2; exit 23"], env = map { "BAML_HANDOFF": "overlay", "BAML_HANDOFF_REMOVE": null });
+            baml.sys.exit(status.exit_code)
+        }
+    "#,
+        &["main"],
+    );
+    let mut child = Command::new(bin)
+        .env("BAML_HANDOFF_REMOVE", "inherited")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    child.stdin.take().unwrap().write_all(b"input").unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(23));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let (child_pid, rest) = stdout.split_once(':').unwrap();
+    assert_ne!(child_pid.parse::<u32>().unwrap(), pid);
+    assert_eq!(rest, "overlay:unset:input");
+    assert_eq!(output.stderr, b"err");
+}
+
+#[test]
+#[cfg(windows)]
+fn pack_child_preserves_full_windows_exit_status() {
+    let built = common::ensure_built();
+    let (_tmp, bin) = pack_project(
+        built,
+        r#"function main() -> never { let status = baml.sys.run("cmd", args = ["/c", "exit -23"]); baml.sys.exit(status.exit_code) }"#,
+        &["main"],
+    );
+    assert_eq!(run(&bin, &[]).status.code(), Some(-23));
+}
+
+/// Runtime shutdown drops its reaper/handles without terminating an OS child.
+#[test]
+#[cfg(unix)]
+fn pack_child_survives_cleanup_and_runtime_shutdown() {
+    let built = common::ensure_built();
+    let (tmp, bin) = pack_project(
+        built,
+        r#"
+        function main(marker: string) -> void {
+            let child = baml.sys.subprocess("sh",
+                args = ["-c", "sleep 5; printf completed > \"$1\"", "sh", marker],
+                stdin = "ignore", stdout = "ignore", stderr = "ignore");
+            child.cleanup();
+            baml.sys.collect_garbage();
+        }
+        "#,
+        &["main"],
+    );
+    let marker = tmp.path().join("completed");
+    let output = Command::new(bin)
+        .arg("--marker")
+        .arg(&marker)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !marker.exists(),
+        "the host must exit while its child is still running"
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
+    while !marker.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(std::fs::read_to_string(marker).unwrap(), "completed");
+}

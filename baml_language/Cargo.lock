@@ -7445,6 +7445,7 @@ dependencies = [
  "hyper-util",
  "indexmap",
  "jiff",
+ "libc",
  "num-bigint",
  "once_cell",
  "prost",
