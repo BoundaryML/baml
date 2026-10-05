@@ -179,7 +179,6 @@ fn runtime_only_types_have_their_own_kinds() {
     for (ty, kind) in [
         (RealizedTy::Type, "type"),
         (RealizedTy::Unknown, "unknown"),
-        (RealizedTy::Void, "void"),
         (RealizedTy::Uint8Array, "uint8Array"),
         (RealizedTy::PromptAst, "promptAst"),
     ] {

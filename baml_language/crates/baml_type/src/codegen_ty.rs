@@ -66,7 +66,6 @@ impl CodegenTy {
             Self::Type => Self::Type,
             Self::Resource => Self::Resource,
             Self::PromptAst => Self::PromptAst,
-            Self::Void => Self::Void,
             Self::TypeAlias(name) => Self::TypeAlias(name),
             Self::TypeVar(name) => Self::TypeVar(name),
             Self::Unknown => Self::Unknown,
@@ -83,7 +82,7 @@ impl<N: Clone> CodegenTy<N> {
     /// callback returning it takes that form. A type that merely *admits* the
     /// unit value (`int?`) is not unit.
     pub fn is_unit(&self) -> bool {
-        matches!(self, Self::Null | Self::Void)
+        matches!(self, Self::Null)
     }
 }
 

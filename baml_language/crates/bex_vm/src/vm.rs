@@ -3649,12 +3649,11 @@ impl BexVm {
                 // Host closures are FFI-constructed; they carry no name.
                 name: None,
                 params: (*hc.params).clone().into(),
-                // A host callable's undeclared (unit) throws is normalized to
-                // `unknown` when the closure is bound (see the engine's
-                // conversion): foreign code may surface a native exception, so
-                // an unstated error contract is opaque rather than empty. A
-                // declared contract — `never` included — is kept and enforced.
-                // Nothing here can be `void`.
+                // A parameter that states no error type reaches the boundary
+                // as `unknown` (its inferred effect parameter erases to it):
+                // foreign code may surface a native exception, so an unstated
+                // error contract is opaque rather than empty. A declared
+                // contract — `never` included — is kept and enforced.
                 throws: (*hc.throws_ty).clone(),
                 ret: (*hc.ret_ty).clone(),
                 // Host closures are FFI-constructed; they carry no docs.

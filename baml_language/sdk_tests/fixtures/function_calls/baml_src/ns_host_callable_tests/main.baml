@@ -11,8 +11,8 @@ function call_with_callback(callback: (int) -> string, x: int) -> string {
 // A callback with an omitted `throws` gets an inferred effect param `E`. What
 // the *outer* function throws then depends on the body — cases python/TS erase
 // but Rust surfaces as real, distinct `Error<…>` types. (The callback's return
-// type must be concrete — the engine validates the host's returned value
-// against it — so these use `() -> int`, not `() -> void`.)
+// type must be concrete: the engine validates the host's returned value
+// against it.)
 
 // The callback's error is caught and replaced, so the outer function throws
 // nothing (`throws never`): `Error<Infallible>`, with the effect param used

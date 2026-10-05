@@ -266,7 +266,6 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
         RuntimeTy::Type => TyVariant::MetaType(crate::baml_bridge::cffi::BamlTyMetaType {}),
         RuntimeTy::Resource => TyVariant::Resource(crate::baml_bridge::cffi::BamlTyResource {}),
         RuntimeTy::PromptAst => TyVariant::PromptAst(crate::baml_bridge::cffi::BamlTyPromptAst {}),
-        RuntimeTy::Void => TyVariant::Void(crate::baml_bridge::cffi::BamlTyVoid {}),
         RuntimeTy::Never => TyVariant::Never(crate::baml_bridge::cffi::BamlTyNever {}),
         RuntimeTy::Unknown => TyVariant::Unknown(crate::baml_bridge::cffi::BamlTyUnknown {}),
     }

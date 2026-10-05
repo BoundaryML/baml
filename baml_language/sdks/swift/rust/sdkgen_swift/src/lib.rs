@@ -798,36 +798,35 @@ mod tests {
     }
 
     #[test]
-    fn unit_return_has_no_result_under_either_spelling() {
-        // `null` and `void` spell one unit type: a function returning it has
+    fn unit_return_has_no_result() {
+        // A function returning the unit type (`null`, also spelled `void`) has
         // no Swift result and calls the envelope-discarding `callSyncVoid`,
         // rather than decoding a `BamlNull`.
-        for unit in [Ty::Void, null()] {
-            let function = baml_sdkgen_types::Function {
-                name: "settle".into(),
-                generic_params: Vec::new(),
-                docstring: None,
-                arguments: Vec::new(),
-                return_type: unit,
-                throws: None,
-                watchers: Vec::new(),
-                origin: baml_sdkgen_types::Origin {
-                    source_file_path: "unit.baml".to_string(),
-                    span_start: 0,
-                },
-            };
-            let pool = SymbolPool::from([(
-                Name::new("user".into(), Vec::new(), "settle".into()),
-                Symbol::Function(function),
-            )]);
-            let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
-            let emitted: String = files.values().map(String::as_str).collect();
-            assert!(
-                emitted.contains("callSyncVoid(\"user.settle\""),
-                "{emitted}"
-            );
-            assert!(!emitted.contains("-> BamlNull"), "{emitted}");
-        }
+        let unit = null();
+        let function = baml_sdkgen_types::Function {
+            name: "settle".into(),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: unit,
+            throws: None,
+            watchers: Vec::new(),
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "unit.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let pool = SymbolPool::from([(
+            Name::new("user".into(), Vec::new(), "settle".into()),
+            Symbol::Function(function),
+        )]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let emitted: String = files.values().map(String::as_str).collect();
+        assert!(
+            emitted.contains("callSyncVoid(\"user.settle\""),
+            "{emitted}"
+        );
+        assert!(!emitted.contains("-> BamlNull"), "{emitted}");
     }
 
     #[test]

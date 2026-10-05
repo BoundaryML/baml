@@ -144,7 +144,7 @@ mod tests {
                 ),
             ]),
             ret: Box::new(Ty::<TypeName>::Bool {}),
-            throws: Box::new(Ty::<TypeName>::Void {}),
+            throws: Box::new(Ty::<TypeName>::Never {}),
         };
         assert_round_trips(ty);
     }
@@ -217,7 +217,7 @@ mod tests {
         let ty: LoweringTy<TypeName> = LoweringTy::<TypeName>::Function {
             params: Box::new([]),
             ret: Box::new(LoweringTy::<TypeName>::Infer {}),
-            throws: Box::new(LoweringTy::<TypeName>::Void {}),
+            throws: Box::new(LoweringTy::<TypeName>::Never {}),
         };
         assert_eq!(
             RealizedTy::try_from(&ty),

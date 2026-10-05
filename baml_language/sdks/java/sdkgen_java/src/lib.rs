@@ -537,7 +537,6 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Bool => "bool".to_string(),
         Ty::Null => "null".to_string(),
         Ty::Uint8Array => "uint8array".to_string(),
-        Ty::Void => "void".to_string(),
         Ty::Unknown => "unknown".to_string(),
         // A generic class carries its concrete type args in its identity token
         // (`Wrapper<int>` vs `Wrapper<string>`) — kept for parity with
@@ -1337,7 +1336,7 @@ mod tests {
                 ty: t_class(event),
                 mode: CodegenFunctionParamMode::Required,
             }]),
-            ret: Box::new(Ty::Void),
+            ret: Box::new(Ty::Null),
             throws: Box::new(Ty::Never),
         };
         pool.insert(

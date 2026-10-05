@@ -152,14 +152,10 @@ fn instantiate_interface(
 /// Whether a bound must refuse `head` before consulting any implementation:
 /// the type has no single runtime type for code under the bound to dispatch
 /// on (`TYPE_SYSTEM.md`, "Generics on Functions"), because it spans several
-/// (a union, an existential, `unknown`) or none (`never`, `void`).
+/// (a union, an existential, `unknown`) or none (`never`).
 fn is_abstract_head(head: &InferTy) -> bool {
     match head {
-        InferTy::Union(..)
-        | InferTy::Interface(..)
-        | InferTy::Unknown
-        | InferTy::Never
-        | InferTy::Void => true,
+        InferTy::Union(..) | InferTy::Interface(..) | InferTy::Unknown | InferTy::Never => true,
         InferTy::Int
         | InferTy::Bigint
         | InferTy::Float

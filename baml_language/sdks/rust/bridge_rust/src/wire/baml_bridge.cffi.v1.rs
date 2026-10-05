@@ -131,7 +131,7 @@ impl BamlHandleType {
 /// the type of a function's arg (which, for a generic function, is a TypeVar).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlTy {
-    #[prost(oneof = "baml_ty::Ty", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24")]
+    #[prost(oneof = "baml_ty::Ty", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24")]
     pub ty: ::core::option::Option<baml_ty::Ty>,
 }
 /// Nested message and enum types in `BamlTy`.
@@ -181,8 +181,6 @@ pub mod baml_ty {
         Resource(super::BamlTyResource),
         #[prost(message, tag = "19")]
         PromptAst(super::BamlTyPromptAst),
-        #[prost(message, tag = "20")]
-        Void(super::BamlTyVoid),
         #[prost(message, tag = "22")]
         TypeVar(super::BamlTyTypeVar),
         #[prost(message, tag = "23")]
@@ -441,10 +439,6 @@ pub struct BamlTyResource {
 /// Opaque structured prompt tree for LLM calls (`RuntimeTy::PromptAst`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlTyPromptAst {
-}
-/// The void type — the type of effectful expressions (`RuntimeTy::Void`).
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyVoid {
 }
 /// A type variable / generic parameter such as `T` in `Array<T>`
 /// (`RuntimeTy::TypeVar`).

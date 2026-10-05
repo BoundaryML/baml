@@ -52,6 +52,33 @@ test "void and null are one type in invariant positions" {
     assert.equal(fs[0](), null)
 }
 
+// ---- and one type at run time ----------------------------------------------------
+
+// A value carries its own concrete type, so with the static type widened to
+// `unknown` these hold only if a `void` function *is* a `null` function.
+test "a void function value is a null function value at run time" {
+    let as_void: unknown = unit_as_void;
+    let as_null: unknown = unit_as_null;
+    assert.is_true(as_void is () -> null throws never);
+    assert.is_true(as_null is () -> void throws never);
+    assert.equal(reflect.Type.of_value(as_void).to_string(), "() -> null throws never");
+    assert.equal(reflect.Type.of_value(as_null).to_string(), "() -> null throws never")
+}
+
+// A `test` body is a unit function, and `Package.tests()` declares its values
+// as `() -> null throws unknown`: each one must be a member of that type.
+test "a compiled package's tests are members of their declared type" {
+    let pkg = reflect.Package.compile({ "main.baml": `test "t" { assert.equal(1, 1) }` });
+    let tests = pkg.tests();
+    let run: unknown = tests["root::t"];
+    assert.is_true(run is () -> null throws unknown);
+    if let typed: () -> null throws unknown = tests.get("root::t") {
+        assert.equal(typed(), null)
+    } else {
+        throw "the test was not found under its declared type"
+    }
+}
+
 // ---- `void` is a type like any other -------------------------------------------
 
 type UnitAlias = void

@@ -13958,7 +13958,6 @@ fn nearest_scoped_relaxation(ty: &baml_type::Ty, variance: RelaxationVariance) -
         | Plain::Type
         | Plain::Resource
         | Plain::PromptAst
-        | Plain::Void
         | Plain::TypeAlias(..)
         | Plain::Unknown
         | Plain::Never
@@ -14326,7 +14325,6 @@ fn may_become_unit(ty: &Ty) -> bool {
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst
-        | InferTy::Void
         | InferTy::TypeAlias(..)
         | InferTy::TypeVar(..)
         | InferTy::Unknown

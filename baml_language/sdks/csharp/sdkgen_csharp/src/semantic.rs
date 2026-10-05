@@ -826,7 +826,7 @@ impl RenderContext<'_> {
             Ty::Media(MediaKind::Audio) => "global::Baml.BamlAudio".to_string(),
             Ty::Media(MediaKind::Video) => "global::Baml.BamlVideo".to_string(),
             Ty::Media(MediaKind::Pdf) => "global::Baml.BamlPdf".to_string(),
-            Ty::Null | Ty::Unknown | Ty::Void | Ty::Never => "global::Baml.BamlValue".to_string(),
+            Ty::Null | Ty::Unknown | Ty::Never => "global::Baml.BamlValue".to_string(),
             Ty::Literal(literal, ..) => literal_source(literal).to_string(),
             Ty::TypeAlias(name) => self.type_source(self.alias_target(name)),
             Ty::Class(name, arguments) => {
@@ -1092,7 +1092,6 @@ impl RenderContext<'_> {
             | Ty::Map { .. }
             | Ty::Function { .. }
             | Ty::Unknown
-            | Ty::Void
             | Ty::Never => false,
             _ => unreachable!("unsupported type reached projection classification"),
         }
@@ -1779,7 +1778,6 @@ fn require_supported_type_inner(
         | Ty::Unknown
         | Ty::Literal(..)
         | Ty::TypeVar(..)
-        | Ty::Void
         | Ty::Never => Ok(()),
         Ty::Media(MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf) => {
             Ok(())
@@ -1894,7 +1892,7 @@ fn require_supported_type_inner(
             if !ret.is_unit() {
                 require_supported_type(ret, model, path)?;
             }
-            if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
+            if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
                 require_supported_type(throws, model, path)?;
             }
             Ok(())
@@ -2015,7 +2013,7 @@ fn csharp_projection_key(ty: &Ty, model: &CodegenModel) -> String {
         Ty::Float | Ty::Literal(Literal::Float(_), ..) => "double".to_string(),
         Ty::String | Ty::Literal(Literal::String(_), ..) => "string".to_string(),
         Ty::Uint8Array => "System.ReadOnlyMemory<byte>".to_string(),
-        Ty::Null | Ty::Unknown | Ty::Void | Ty::Never => "Baml.BamlValue".to_string(),
+        Ty::Null | Ty::Unknown | Ty::Never => "Baml.BamlValue".to_string(),
         Ty::Media(kind) => format!("Baml.Media::{kind:?}"),
         Ty::TypeVar(name) => format!("type parameter `{name}`"),
         Ty::TypeAlias(name) => match model.symbols.get(name) {
@@ -2203,7 +2201,6 @@ fn codec_type(ty: &Ty) -> Ty {
         },
         Ty::TypeAlias(name) => Ty::TypeAlias(name.clone()),
         Ty::TypeVar(name) => Ty::TypeVar(name.clone()),
-        Ty::Void => Ty::Void,
         Ty::Never => Ty::Never,
         _ => ty.clone(),
     }
@@ -2229,7 +2226,7 @@ fn collect_argument_type_closure(
         if !ret.is_unit() {
             collect_type_closure(ret, model, types)?;
         }
-        if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
+        if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
             collect_type_closure(throws, model, types)?;
         }
         return Ok(());
@@ -2322,7 +2319,7 @@ fn collect_type_closure(
             if !ret.is_unit() {
                 collect_type_closure(ret, model, types)?;
             }
-            if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
+            if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
                 collect_type_closure(throws, model, types)?;
             }
         }
@@ -3504,12 +3501,6 @@ fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String
             "            if (!value.IsNull)\n            {\n                return context.Fail<global::Baml.BamlValue>(\n                    \"The native bridge returned a non-null value for a generated null position.\",\n                    \"Standalone BAML null requires BamlValue.Null.\");\n            }\n            return context.ReadValue(value);\n"
                 .to_string(),
         ),
-        Ty::Void => (
-            "            if (value is null || value.Kind != global::Baml.BamlValueKind.Null)\n            {\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated void codec received a non-null BAML value.\",\n                    \"BAML void is represented by the null wire value.\");\n            }\n            return context.Null();\n"
-                .to_string(),
-            "            if (!value.IsNull)\n            {\n                return context.Fail<global::Baml.BamlValue>(\n                    \"The native bridge returned a non-null value for BAML void.\",\n                    \"BAML void is represented by the null wire value.\");\n            }\n            return context.ReadValue(value);\n"
-                .to_string(),
-        ),
         Ty::Never => (
             "            return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                \"A generated never codec cannot encode a value.\",\n                \"A BAML never position is uninhabited.\");\n"
                 .to_string(),
@@ -4515,7 +4506,6 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             push_message(&mut function, 5, &encode_type_metadata(throws));
             push_message(&mut message, 14, &function);
         }
-        Ty::Void => push_message(&mut message, 20, &[]),
         Ty::TypeVar(name) => {
             let mut encoded = Vec::new();
             push_string(&mut encoded, 1, name.as_str());
@@ -4992,7 +4982,7 @@ mod tests {
         );
         symbols.insert(
             void_name.clone(),
-            Symbol::Function(make_function("MakeVoid", Ty::Void)),
+            Symbol::Function(make_function("MakeVoid", Ty::Null)),
         );
         let mut callables = HashMap::new();
         for (name, wire) in [
@@ -6117,18 +6107,17 @@ mod tests {
     }
 
     #[test]
-    fn unit_returning_callback_is_a_plain_task_under_either_spelling() {
-        // `null` and `void` spell one unit type: a callback returning it is a
-        // value-less `Task`, never a `Task<BamlValue>`.
-        for unit in [Ty::Void, Ty::Null] {
-            let source = function_type_source(&[], &unit, |_| {
-                unreachable!("a unit result is never projected")
-            });
-            assert_eq!(
-                source,
-                "global::System.Func<global::System.Threading.Tasks.Task>"
-            );
-        }
+    fn unit_returning_callback_is_a_plain_task() {
+        // A callback returning the unit type (`null`, also spelled `void`) is
+        // a value-less `Task`, never a `Task<BamlValue>`.
+        let unit = Ty::Null;
+        let source = function_type_source(&[], &unit, |_| {
+            unreachable!("a unit result is never projected")
+        });
+        assert_eq!(
+            source,
+            "global::System.Func<global::System.Threading.Tasks.Task>"
+        );
     }
 
     #[test]

@@ -721,7 +721,6 @@ fn collect_root_imports(
         | Ty::PromptAst
         | Ty::Unknown
         | Ty::Never
-        | Ty::Void
         | Ty::Interface(..)
         | Ty::Future(..) => {}
     }
@@ -1047,7 +1046,6 @@ fn collect_alias_dependencies(
         | Ty::PromptAst
         | Ty::Unknown
         | Ty::Never
-        | Ty::Void
         | Ty::Interface(..)
         | Ty::Future(..) => {}
     }
@@ -2022,7 +2020,6 @@ fn walk_generic_inference_positions(
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Void
         | Ty::TypeAlias(..)
         | Ty::Unknown
         | Ty::Never => {}

@@ -41,10 +41,10 @@ use crate::routing::{PackagePath, java_identifier, route};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TyPosition {
     /// Field declarations, parameters, return types: primitives stay
-    /// unboxed (`long`, `double`, `boolean`; `void` returns).
+    /// unboxed (`long`, `double`, `boolean`).
     TopLevel,
     /// Generic type arguments and nullable positions: primitives box
-    /// (`java.lang.Long`, …; `java.lang.Void`).
+    /// (`java.lang.Long`, …).
     Boxed,
 }
 
@@ -193,10 +193,6 @@ pub(crate) fn translate_ty(
         Ty::Union(items) => translate_union(items, ctx, sink),
         Ty::Unknown => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
-        Ty::Void => match pos {
-            TyPosition::TopLevel => "void".to_string(),
-            TyPosition::Boxed => "java.lang.Void".to_string(),
-        },
         Ty::RustType => "baml_bridge.BamlHandle".to_string(),
         // Types the Java SDK does not model yet: fall back to the opaque
         // `java.lang.Object` (mirrors python's `typing.Any` / TS's
@@ -677,7 +673,6 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
         },
         Ty::Unknown => "Unknown".to_string(),
         Ty::Function { .. } => "Callable".to_string(),
-        Ty::Void => "Void".to_string(),
         Ty::Never => "Never".to_string(),
         Ty::RustType => "Handle".to_string(),
         Ty::Interface(..) => "Interface".to_string(),
@@ -922,9 +917,6 @@ mod tests {
     fn uint8array() -> Ty {
         Ty::Uint8Array
     }
-    fn void() -> Ty {
-        Ty::Void
-    }
     fn unknown() -> Ty {
         Ty::Unknown
     }
@@ -979,12 +971,6 @@ mod tests {
         assert_eq!(tr(&bigint(), TyPosition::TopLevel), "java.math.BigInteger");
         assert_eq!(tr(&uint8array(), TyPosition::TopLevel), "byte[]");
         assert_eq!(tr(&null(), TyPosition::TopLevel), "java.lang.Void");
-    }
-
-    #[test]
-    fn unit_is_void_only_at_top_level() {
-        assert_eq!(tr(&void(), TyPosition::TopLevel), "void");
-        assert_eq!(tr(&void(), TyPosition::Boxed), "java.lang.Void");
     }
 
     #[test]
@@ -1187,42 +1173,28 @@ mod tests {
             tr(&f, TyPosition::TopLevel),
             "java.util.function.Function<java.lang.Long, java.lang.String>"
         );
+    }
+
+    #[test]
+    fn callable_returning_unit_is_a_consumer() {
+        // A callback returning the unit type (`null`, also spelled `void`)
+        // hands nothing back, so it takes Java's value-less shapes.
         let c = callable(
             vec![CallableParam {
                 name: Some(BaseName::new("x")),
                 ty: int(),
                 mode: CodegenFunctionParamMode::Required,
             }],
-            void(),
+            null(),
         );
         assert_eq!(
             tr(&c, TyPosition::TopLevel),
             "java.util.function.Consumer<java.lang.Long>"
         );
-    }
-
-    #[test]
-    fn callable_returning_unit_is_a_consumer_under_either_spelling() {
-        // `null` and `void` spell one unit type, so `(int) -> null` is the
-        // same value-less callback as `(int) -> void`.
-        for unit in [void(), null()] {
-            let c = callable(
-                vec![CallableParam {
-                    name: Some(BaseName::new("x")),
-                    ty: int(),
-                    mode: CodegenFunctionParamMode::Required,
-                }],
-                unit.clone(),
-            );
-            assert_eq!(
-                tr(&c, TyPosition::TopLevel),
-                "java.util.function.Consumer<java.lang.Long>"
-            );
-            assert_eq!(
-                tr(&callable(vec![], unit), TyPosition::TopLevel),
-                "java.lang.Runnable"
-            );
-        }
+        assert_eq!(
+            tr(&callable(vec![], null()), TyPosition::TopLevel),
+            "java.lang.Runnable"
+        );
     }
 
     /// A callback with no `java.util.function` shape still returns nothing when

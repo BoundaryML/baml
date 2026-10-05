@@ -3908,7 +3908,7 @@ impl BexEngine {
                 }
                 Object::HostClosure(host) => {
                     let throws_type = match &*host.throws_ty {
-                        bex_vm_types::RealizedTy::Never | bex_vm_types::RealizedTy::Void => None,
+                        bex_vm_types::RealizedTy::Never => None,
                         ty => Some(bex_vm_types::RuntimeTy::from(ty.clone())),
                     };
                     let param_types: Vec<bex_vm_types::RuntimeTy> = host

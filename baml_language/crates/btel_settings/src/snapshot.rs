@@ -38,6 +38,12 @@ pub const MAX_LEAF_BYTES: usize = 1 << 30;
 pub const RECENT_CAPTURE_IDS: usize = 4096;
 
 /// CAS blob envelope. Change with the binary codec, never as a tuning knob.
+///
+/// One narrowing was made in place, under no version of its own: a blob no
+/// longer carries the type family's retired `Void` (discriminant 22; `void`
+/// is a spelling of `null`). Nothing writes it, so every blob written since
+/// reads under either codec, but a blob of either readable version written
+/// before that and naming a `void` type no longer decodes.
 pub const BLOB_MAGIC: [u8; 8] = *b"BTELCAS\0";
 pub const BLOB_VERSION: u32 = 4;
 /// Supported read formats, newest first, for decoding and on-disk lookup.

@@ -1643,8 +1643,8 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
 
 // ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
-//         opaque. The FFI entry boundary normalizes the synthesized effect
-//         param (post-MIR `RuntimeTy::Void`) to `RuntimeTy::Unknown` so the contract
+//         opaque. The synthesized effect param has no frame slot, so it
+//         reaches the FFI entry boundary as `RuntimeTy::Unknown` and the contract
 //         check at `materialize_host_throw` treats any thrown value as
 //         on-contract — including the opaque `baml.errors.HostCallable`
 //         Instance the bridge synthesizes for a native host exception. The
@@ -1655,8 +1655,8 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
 //         This pins the "throws unknown" fallback: a host-provided callable
 //         whose error contract is undeclared must NOT be admitted by a
 //         concrete-throws check (that's the off-contract case above) and
-//         must NOT be rejected by an over-strict `RuntimeTy::Void` validator (the
-//         pre-D1 erasure path). Both failure modes are guarded against.
+//         must NOT be rejected by an over-strict validator. Both failure modes
+//         are guarded against.
 // ============================================================================
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2152,8 +2152,8 @@ async fn host_callable_throw_in_spawn_settles_child_does_not_hang() {
 
 // ============================================================================
 // A host callable bound to a generic function-typed parameter is rejected at
-//         call setup. A generic parameter's type variables erase to `RuntimeTy::Void`
-//         at runtime, which the return validator treats as "accept anything" —
+//         call setup. A generic parameter's type variable gives the return
+//         validator nothing to check the host's value against,
 //         so the host could return a value of any type into a position BAML
 //         treats as the instantiated type. Rather than admit that unvalidatable
 //         return, binding the callable fails up front.

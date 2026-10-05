@@ -334,7 +334,6 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst
-            | Ty::Void
             | Ty::TypeAlias(..)
             | Ty::Unknown
             | Ty::Never
@@ -730,7 +729,6 @@ fn unify_into_at(
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst
-            | Ty::Void
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
             | Ty::Unknown
@@ -1308,7 +1306,6 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Void
         | Ty::TypeAlias(..)
         | Ty::Unknown
         | Ty::Never

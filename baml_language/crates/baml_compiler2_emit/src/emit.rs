@@ -2169,7 +2169,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             | TyTemplate::Type
             | TyTemplate::Resource
             | TyTemplate::PromptAst
-            | TyTemplate::Void
             | TyTemplate::TypeAlias(..)
             | TyTemplate::Never) => {
                 // A fully-realized leaf (primitive, enum, alias, literal, ...):
@@ -3634,7 +3633,6 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         | RealizedTy::RustType
         | RealizedTy::Resource
         | RealizedTy::PromptAst
-        | RealizedTy::Void
         | RealizedTy::TypeAlias(..)
         | RealizedTy::Unknown
         | RealizedTy::Never

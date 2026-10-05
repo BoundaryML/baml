@@ -238,8 +238,7 @@ impl<N: Clone + PartialEq> Ty<N> {
     ///     their own;
     ///   - `Interface<N>` (existential) and `Union` — no single concrete implementor;
     ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
-    ///   - `Void`, the top type `Unknown`, and the compiler-only sentinels
-    ///     `Unknown` / `Error`;
+    ///   - the top type `Unknown` and the error sentinel `Error`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
     ///     is unresolved (recursive or missing), i.e. not a valid bare target.
     ///
@@ -273,7 +272,6 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Function { .. }
             | Ty::RustType
             | Ty::TypeAlias(..)
-            | Ty::Void
             | Ty::Unknown
             | Ty::Error => false,
         }
@@ -293,7 +291,6 @@ impl<N: Clone + PartialEq> Ty<N> {
     ///   - `Literal` / `EnumVariant` — literal types, subsets of a concrete base that
     ///     dispatch through it rather than being a concrete type of their own;
     ///   - `Never` — the empty type (no values);
-    ///   - `Void`;
     ///   - `TypeVar` and `AssociatedTypeProjection` — symbolic stand-ins whose
     ///     concreteness, when required, is a separate *inductive* obligation on their
     ///     own bound, not a property of the type as written here;
@@ -335,7 +332,6 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Literal(..)
             | Ty::EnumVariant(..)
             | Ty::Never
-            | Ty::Void
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::TypeAlias(..)
@@ -552,90 +548,6 @@ impl<N: Clone + PartialEq> Ty<N> {
     pub fn type_type() -> Self {
         Ty::Type
     }
-
-    /// Recursively walk this type tree and return an error if any compiler-only
-    /// variants are found.
-    pub fn validate_runtime(&self) -> Result<(), String> {
-        match self {
-            // Recursive type aliases are intentionally preserved at runtime
-            // for output format rendering (cycle detection needs the alias name).
-            Ty::TypeAlias(_) => Ok(()),
-            Ty::Void => Err("Void type should not reach runtime".to_string()),
-            Ty::Unknown => Ok(()),
-            // Recurse into containers
-            Ty::List(inner) => inner.validate_runtime(),
-            Ty::Map { key, value, .. } => {
-                key.validate_runtime()?;
-                value.validate_runtime()
-            }
-            Ty::Union(members) => {
-                for m in members {
-                    m.validate_runtime()?;
-                }
-                Ok(())
-            }
-            // All other variants are fine at runtime
-            Ty::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                for p in params {
-                    p.ty.validate_runtime()?;
-                }
-                ret.validate_runtime()?;
-                if matches!(throws.as_ref(), Ty::Void) {
-                    Ok(())
-                } else {
-                    throws.validate_runtime()
-                }
-            }
-            Ty::Future(value, error) => {
-                value.validate_runtime()?;
-                error.validate_runtime()
-            }
-            Ty::Class(_, args) => {
-                for a in args {
-                    a.validate_runtime()?;
-                }
-                Ok(())
-            }
-            Ty::Interface(_, args, associated_bindings) => {
-                for a in args {
-                    a.validate_runtime()?;
-                }
-                for (_, ty) in associated_bindings {
-                    ty.validate_runtime()?;
-                }
-                Ok(())
-            }
-            // TIR-only variants must have been erased before runtime.
-            Ty::TypeVar(..)
-            | Ty::AssociatedTypeProjection { .. }
-            | Ty::Never
-            | Ty::Error => Err("compiler-only type should not reach runtime".to_string()),
-            Ty::Int
-            | Ty::Bigint
-            | Ty::Float
-            | Ty::String
-            | Ty::Bool
-            | Ty::Null
-            | Ty::Media(..)
-            | Ty::Uint8Array
-            | Ty::Literal(..)
-            | Ty::Enum(..)
-            | Ty::EnumVariant(..)
-            // The opaque leaf concrete types are genuine runtime types (their
-            // values live as concrete Rust types on the VM heap): `type`
-            // (reflection), `$rust_type` (Rust-managed field state), resource
-            // handles, and prompt trees.
-            | Ty::RustType
-            | Ty::Type
-            | Ty::Resource
-            | Ty::PromptAst => Ok(())
-        }
-    }
 }
 
 // The lowering-stage constructors type-expression lowering builds with.
@@ -671,11 +583,6 @@ impl<N: Clone> LoweringTy<N> {
     /// `never` with default attributes.
     pub fn never() -> Self {
         LoweringTy::Never
-    }
-
-    /// `void` with default attributes.
-    pub fn void() -> Self {
-        LoweringTy::Void
     }
 
     /// `unknown` (the top type) with default attributes.
@@ -780,7 +687,6 @@ impl<N: Clone> LoweringTy<N> {
             | LoweringTy::Type
             | LoweringTy::Resource
             | LoweringTy::PromptAst
-            | LoweringTy::Void
             | LoweringTy::TypeAlias(..)
             | LoweringTy::TypeVar(..)
             | LoweringTy::Unknown
@@ -1056,7 +962,6 @@ impl<N: Clone> LoweringTy<N> {
                 )
             }
             LoweringTy::Never => "never".to_string(),
-            LoweringTy::Void => "void".to_string(),
             LoweringTy::Unknown => "unknown".to_string(),
 
             LoweringTy::RustType => "$rust_type".to_string(),
@@ -1256,16 +1161,10 @@ impl<N: Clone + HeadDisplay> fmt::Display for LoweringTy<N> {
             } => {
                 let param_strs: Vec<std::string::String> =
                     params.iter().map(|p| p.ty.to_string()).collect();
-                let throws_display = if matches!(throws.as_ref(), LoweringTy::Void) {
-                    "never".to_string()
-                } else {
-                    throws.to_string()
-                };
                 write!(f, "({}) -> ", param_strs.join(", "))?;
                 ret.fmt_as_function_result(f)?;
-                write!(f, " throws {}", throws_display)
+                write!(f, " throws {throws}")
             }
-            LoweringTy::Void => write!(f, "void"),
             LoweringTy::Unknown => write!(f, "unknown"),
             LoweringTy::Future(value, error) => {
                 // The writable spelling — lowercase `future<…>` resolves
@@ -1380,7 +1279,6 @@ mod tests {
             },
             Ty::RustType,
             Ty::TypeAlias(qtn("A")),
-            Ty::<TypeName>::Void {},
             Ty::Unknown,
             Ty::<TypeName>::unknown(),
             Ty::Error,
@@ -1442,7 +1340,6 @@ mod tests {
             Ty::<TypeName>::Literal(Literal::Int(1), Freshness::Regular),
             Ty::EnumVariant(qtn("Color"), Name::new("Red")),
             Ty::Never,
-            Ty::<TypeName>::Void {},
             Ty::type_var("T"),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::type_var("T")),
@@ -1455,25 +1352,6 @@ mod tests {
         for ty in &not_concrete {
             assert!(!ty.is_concrete(), "{ty:?} should not be concrete");
         }
-    }
-
-    #[test]
-    fn test_validate_runtime_accepts_core_types() {
-        assert!(ty_int().validate_runtime().is_ok());
-        assert!(ty_float().validate_runtime().is_ok());
-        assert!(ty_string().validate_runtime().is_ok());
-        assert!(
-            Ty::<TypeName>::Literal(Literal::Float("3.14".to_string()), Freshness::Regular)
-                .validate_runtime()
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn test_validate_runtime_accepts_opaque_types() {
-        assert!(Ty::<TypeName>::resource().validate_runtime().is_ok());
-        assert!(Ty::<TypeName>::prompt_ast().validate_runtime().is_ok());
-        assert!(Ty::<TypeName>::type_type().validate_runtime().is_ok());
     }
 
     #[test]
@@ -1505,38 +1383,15 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_runtime_rejects_compiler_types() {
-        assert!((Ty::<TypeName>::Void {}).validate_runtime().is_err());
-        // TypeAlias is now allowed at runtime for recursive type alias rendering
-        assert!(
-            Ty::TypeAlias(TypeName::local(Name::new("MyAlias")))
-                .validate_runtime()
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn test_function_display_uses_never_for_void_throws_sentinel() {
-        let ty = Ty::Function {
-            params: Box::new([FunctionParamTy::required(None, ty_int())]),
-            ret: Box::new(ty_string()),
-            throws: Box::new(Ty::<TypeName>::Void {}),
-        };
-
-        assert_eq!(ty.to_string(), "(int) -> string throws never");
-        assert!(ty.validate_runtime().is_ok());
-    }
-
-    #[test]
     fn test_function_display_parenthesizes_nested_function_returns() {
         let ty = Ty::Function {
             params: Box::new([]),
             ret: Box::new(Ty::Function {
                 params: Box::new([FunctionParamTy::required(None, ty_int())]),
                 ret: Box::new(ty_string()),
-                throws: Box::new(Ty::<TypeName>::Void {}),
+                throws: Box::new(Ty::<TypeName>::Never {}),
             }),
-            throws: Box::new(Ty::<TypeName>::Void {}),
+            throws: Box::new(Ty::<TypeName>::Never {}),
         };
 
         assert_eq!(
@@ -1550,7 +1405,7 @@ mod tests {
         let callback = Ty::Function {
             params: Box::new([FunctionParamTy::required(None, ty_int())]),
             ret: Box::new(ty_string()),
-            throws: Box::new(Ty::<TypeName>::Void {}),
+            throws: Box::new(Ty::<TypeName>::Never {}),
         };
 
         assert_eq!(

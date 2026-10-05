@@ -707,33 +707,32 @@ mod injected_argument_tests {
     }
 
     #[test]
-    fn unit_return_is_a_void_function_under_either_spelling() {
-        // `null` and `void` spell one unit type: a function returning it is a
-        // C++ `void` function, never one returning `std::monostate`.
-        for unit in [Ty::Void, Ty::Null] {
-            let name = Name::new(BaseName::new("user"), vec![], BaseName::new("settle"));
-            let function = Function {
-                name: BaseName::new("settle"),
-                generic_params: vec![],
-                docstring: None,
-                arguments: vec![],
-                return_type: unit,
-                throws: None,
-                watchers: vec![],
-                origin: Origin {
-                    source_file_path: "unit.baml".to_string(),
-                    span_start: 0,
-                },
-            };
-            let files = to_source_code_with_bytecode(
-                &SymbolPool::from([(name, Symbol::Function(function))]),
-                &[],
-                &[],
-            );
-            let header = &files[&PathBuf::from("include/baml_sdk.h")];
-            assert!(header.contains("void settle("), "{header}");
-            assert!(!header.contains("std::monostate settle("), "{header}");
-        }
+    fn unit_return_is_a_void_function() {
+        // A function returning the unit type (`null`, also spelled `void`) is
+        // a C++ `void` function, never one returning `std::monostate`.
+        let unit = Ty::Null;
+        let name = Name::new(BaseName::new("user"), vec![], BaseName::new("settle"));
+        let function = Function {
+            name: BaseName::new("settle"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type: unit,
+            throws: None,
+            watchers: vec![],
+            origin: Origin {
+                source_file_path: "unit.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let files = to_source_code_with_bytecode(
+            &SymbolPool::from([(name, Symbol::Function(function))]),
+            &[],
+            &[],
+        );
+        let header = &files[&PathBuf::from("include/baml_sdk.h")];
+        assert!(header.contains("void settle("), "{header}");
+        assert!(!header.contains("std::monostate settle("), "{header}");
     }
 
     #[test]
@@ -749,7 +748,7 @@ mod injected_argument_tests {
                 ty: Ty::String,
                 mode: CodegenFunctionParamMode::Required,
             }]),
-            ret: Box::new(Ty::Void),
+            ret: Box::new(Ty::Null),
             throws: Box::new(Ty::Never),
         };
         let function = Function {

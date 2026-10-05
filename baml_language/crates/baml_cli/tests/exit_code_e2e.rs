@@ -1686,9 +1686,9 @@ function via_union() -> null | null {
 
 /// Associated type projections that resolve to concrete value types must still
 /// produce stdout through `baml run`. This catches a real boundary bug where the
-/// VM metadata erased `(Class as Interface).Assoc` to `void`; dispatch treats
-/// `void` as "do not print", so a value-returning function silently produced no
-/// output.
+/// VM metadata erased `(Class as Interface).Assoc` to the unit type; dispatch
+/// prints nothing for a unit return, so a value-returning function silently
+/// produced no output.
 #[test]
 fn run_prints_concrete_associated_type_projection_return() {
     let built = &common::baml_cli();
@@ -1846,8 +1846,8 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         "Generic associated projection signatures must not be erased in list output:\n{stdout}"
     );
     assert!(
-        !stdout.contains("-> void"),
-        "Projected value-returning functions must not be listed as void:\n{stdout}"
+        !stdout.contains("-> null"),
+        "Projected value-returning functions must not be listed as returning unit:\n{stdout}"
     );
 
     let json_output = run_baml_cli(

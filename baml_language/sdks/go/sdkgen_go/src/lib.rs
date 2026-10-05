@@ -5217,10 +5217,6 @@ mod tests {
         Ty::Uint8Array
     }
 
-    fn ty_void() -> Ty {
-        Ty::Void
-    }
-
     fn ty_never() -> Ty {
         Ty::Never
     }
@@ -5426,7 +5422,7 @@ mod tests {
                     name: BaseName::new("on_event"),
                     docstring: None,
                     ty: ty_union(vec![
-                        ty_callable(vec![ty_string()], ty_void(), ty_never()),
+                        ty_callable(vec![ty_string()], ty_null(), ty_never()),
                         ty_null(),
                     ]),
                     default: Some(FunctionArgumentDefault::Null),
@@ -6910,7 +6906,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![],
-            return_type: ty_void(),
+            return_type: ty_null(),
             throws: None,
             watchers: vec![],
             origin: origin(),

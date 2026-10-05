@@ -668,7 +668,7 @@ struct UnitCtx<'a>(baml_type::unify::AliasEquivCtx<'a>);
 impl UnitCtx<'_> {
     fn is_unit(&self, ty: &TirTy) -> bool {
         use baml_type::normalize::TypeContext;
-        matches!(ty, TirTy::Void) || self.0.equivalent(ty, &TirTy::Null)
+        self.0.equivalent(ty, &TirTy::Null)
     }
 }
 
@@ -738,7 +738,6 @@ fn convert_tir_leaf(spelling: &Spelling, ty: &TirTy, unit: &UnitCtx<'_>) -> cg::
         TirTy::Type => cg::Ty::Type,
         TirTy::Resource => cg::Ty::Resource,
         TirTy::PromptAst => cg::Ty::PromptAst,
-        TirTy::Void => cg::Ty::Null,
         TirTy::TypeVar(name) => cg::Ty::TypeVar(name.clone()),
         TirTy::Unknown => cg::Ty::Unknown,
         TirTy::Never => cg::Ty::Never,

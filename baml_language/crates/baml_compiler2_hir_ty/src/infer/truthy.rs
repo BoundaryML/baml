@@ -94,7 +94,6 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::AssociatedTypeProjection { .. }
         | InferTy::TypeAlias(..)
         | InferTy::Never
-        | InferTy::Void
         | InferTy::Error
         | InferTy::InferVar { .. } => Truthiness::Runtime,
     }

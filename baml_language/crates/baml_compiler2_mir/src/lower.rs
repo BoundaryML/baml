@@ -819,7 +819,7 @@ fn flatten_runtime_union(ty: &RuntimeTy, out: &mut Vec<RuntimeTy>) {
 /// dynamically resolve to a container or class instantiation its static type
 /// does not reveal — a type alias (`json` keeps its `json[]`/`map` arms hidden
 /// behind an opaque leaf), a type variable, `unknown`, an interface (a container
-/// or class may implement it), an associated projection, or `void`. A coarse
+/// or class may implement it), or an associated projection. A coarse
 /// type-tag test can never be *proven* equivalent to the structural test against
 /// such a member, so a tag-sufficiency proof must fail closed on it and emit the
 /// element/arg-precise structural test instead.
@@ -832,8 +832,7 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
         | RuntimeTy::TypeVar(..)
         | RuntimeTy::Unknown
         | RuntimeTy::AssociatedTypeProjection { .. }
-        | RuntimeTy::Interface(..)
-        | RuntimeTy::Void => true,
+        | RuntimeTy::Interface(..) => true,
         // A union should have been flattened before this check; recurse
         // defensively so a nested one can't smuggle an opaque member past it.
         RuntimeTy::Union(members) => members.iter().any(member_is_opaque_for_tag_proof),
@@ -4403,7 +4402,7 @@ impl<'db> LoweringContext<'db> {
     /// Lower a pattern's type annotation to TIR with the enclosing function's
     /// generic params in scope, so `TypeVar`s survive and a typed pattern test
     /// lowers to a `TypeArgRef` template (dynamic dispatch on the realized type
-    /// argument) instead of a constant-false `Void` test.
+    /// argument).
     fn lower_type_annotation_tir(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Tir2Ty {
         let generic_params = self.enclosing_generic_params();
         let generic_param_bounds = self.enclosing_generic_param_bounds();
@@ -13198,8 +13197,7 @@ impl<'db> LoweringContext<'db> {
     /// Used directly (instead of [`Self::emit_is_type_branch`]) when the
     /// pattern type still contains the enclosing function's `TypeVar`s: the
     /// caller builds the template via `ty_to_template` so those lower to
-    /// `TypeArgRef` leaves resolved against `frame.type_args` at runtime,
-    /// rather than being erased to `RuntimeTy::Void` (a constant-false test).
+    /// `TypeArgRef` leaves resolved against `frame.type_args` at runtime.
     fn emit_is_type_template_branch(
         &mut self,
         scrutinee: Local,
@@ -13729,10 +13727,11 @@ impl<'db> LoweringContext<'db> {
                 // bookkeeping, not a runtime dispatch condition. Emitting a
                 // type test here is at best a tautology and at worst a
                 // miscompile: a rigid generic (e.g. the `E` of a combinator's
-                // `catch (e) { let e => … }`) erases to `RuntimeTy::Void` in
-                // `convert_tir_ty_for_runtime`, making the test constant-false and the
-                // catch arm silently rethrow. (Panic fall-through for catch
-                // arms is handled separately by `ThrowIfPanic`.)
+                // `catch (e) { let e => … }`) is carried by name in
+                // `convert_tir_ty_for_runtime`'s output, which a test cannot
+                // resolve against the frame, so the catch arm could silently
+                // rethrow. (Panic fall-through for catch arms is handled
+                // separately by `ThrowIfPanic`.)
                 self.builder.goto(success);
             }
             // OLD's Pattern::Type covered structural shape tests; OLD's
@@ -13811,8 +13810,9 @@ impl<'db> LoweringContext<'db> {
                     // TypeVars — a bare `T`, `T[]`, `map<_, T>`, a class like
                     // `AllFailed<E>` inside `any<T, E>`, or a union thereof —
                     // must NOT go through `convert_tir_ty_for_runtime`: that
-                    // erases TypeVar → Void and the test becomes constant-false
-                    // (a silent arm miss). Build a template instead so each
+                    // carries each TypeVar by name, with no frame slot for the
+                    // test to resolve it against (a silent arm miss). Build a
+                    // template instead so each
                     // typevar resolves against `frame.type_args` at runtime and
                     // the value is compared against the *realized* binding
                     // (TYPE_SYSTEM.md "Type Variables": at any run-time usage

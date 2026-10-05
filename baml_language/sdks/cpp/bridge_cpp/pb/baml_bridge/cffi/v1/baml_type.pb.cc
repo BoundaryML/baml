@@ -55,30 +55,6 @@ struct BamlWitnessFieldLinkDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlWitnessFieldLinkDefaultTypeInternal _BamlWitnessFieldLink_default_instance_;
 
-inline constexpr BamlTyVoid::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0} {}
-
-template <typename>
-PROTOBUF_CONSTEXPR BamlTyVoid::BamlTyVoid(::_pbi::ConstantInitialized)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::MessageLite(BamlTyVoid_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::MessageLite(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
-}
-struct BamlTyVoidDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR BamlTyVoidDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~BamlTyVoidDefaultTypeInternal() {}
-  union {
-    BamlTyVoid _instance;
-  };
-};
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 BamlTyVoidDefaultTypeInternal _BamlTyVoid_default_instance_;
-
 inline constexpr BamlTyUnknown::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0} {}
@@ -1362,19 +1338,6 @@ void BamlTy::set_allocated_prompt_ast(::baml_bridge::cffi::v1::BamlTyPromptAst* 
   }
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTy.prompt_ast)
 }
-void BamlTy::set_allocated_void_(::baml_bridge::cffi::v1::BamlTyVoid* PROTOBUF_NULLABLE void_) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  clear_ty();
-  if (void_) {
-    ::google::protobuf::Arena* submessage_arena = void_->GetArena();
-    if (message_arena != submessage_arena) {
-      void_ = ::google::protobuf::internal::GetOwnedMessage(message_arena, void_, submessage_arena);
-    }
-    set_has_void_();
-    _impl_.ty_.void__ = void_;
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlTy.void)
-}
 void BamlTy::set_allocated_type_var(::baml_bridge::cffi::v1::BamlTyTypeVar* PROTOBUF_NULLABLE type_var) {
   ::google::protobuf::Arena* message_arena = GetArena();
   clear_ty();
@@ -1503,9 +1466,6 @@ BamlTy::BamlTy(
         break;
       case kPromptAst:
         _impl_.ty_.prompt_ast_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.ty_.prompt_ast_);
-        break;
-      case kVoid:
-        _impl_.ty_.void__ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.ty_.void__);
         break;
       case kTypeVar:
         _impl_.ty_.type_var_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.ty_.type_var_);
@@ -1738,16 +1698,6 @@ void BamlTy::clear_ty() {
       }
       break;
     }
-    case kVoid: {
-      if (GetArena() == nullptr) {
-        delete _impl_.ty_.void__;
-      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-        if (_impl_.ty_.void__ != nullptr) {
-          _impl_.ty_.void__->Clear();
-        }
-      }
-      break;
-    }
     case kTypeVar: {
       if (GetArena() == nullptr) {
         delete _impl_.ty_.type_var_;
@@ -1826,17 +1776,17 @@ BamlTy::GetClassData() const {
   return BamlTy_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 23, 23, 0, 2>
+const ::_pbi::TcParseTable<0, 22, 22, 0, 2>
 BamlTy::_table_ = {
   {
     0,  // no _has_bits_
     0, // no _extensions_
     24, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4279238656,  // skipmap
+    4279762944,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    23,  // num_field_entries
-    23,  // num_aux_entries
+    22,  // num_field_entries
+    22,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     BamlTy_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1906,17 +1856,14 @@ BamlTy::_table_ = {
     // .baml_bridge.cffi.v1.BamlTyPromptAst prompt_ast = 19;
     {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.prompt_ast_), _Internal::kOneofCaseOffset + 0, 18,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .baml_bridge.cffi.v1.BamlTyVoid void = 20;
-    {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.void__), _Internal::kOneofCaseOffset + 0, 19,
-    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .baml_bridge.cffi.v1.BamlTyTypeVar type_var = 22;
-    {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.type_var_), _Internal::kOneofCaseOffset + 0, 20,
+    {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.type_var_), _Internal::kOneofCaseOffset + 0, 19,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .baml_bridge.cffi.v1.BamlTyAssociatedTypeProjection associated_type_projection = 23;
-    {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.associated_type_projection_), _Internal::kOneofCaseOffset + 0, 21,
+    {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.associated_type_projection_), _Internal::kOneofCaseOffset + 0, 20,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .baml_bridge.cffi.v1.BamlTyNever never = 24;
-    {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.never_), _Internal::kOneofCaseOffset + 0, 22,
+    {PROTOBUF_FIELD_OFFSET(BamlTy, _impl_.ty_.never_), _Internal::kOneofCaseOffset + 0, 21,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
@@ -1939,7 +1886,6 @@ BamlTy::_table_ = {
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyMetaType>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyResource>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyPromptAst>()},
-      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyVoid>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyTypeVar>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyAssociatedTypeProjection>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyNever>()},
@@ -2085,12 +2031,6 @@ PROTOBUF_NOINLINE void BamlTy::Clear() {
     case kPromptAst: {
       target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
           19, *this_._impl_.ty_.prompt_ast_, this_._impl_.ty_.prompt_ast_->GetCachedSize(), target,
-          stream);
-      break;
-    }
-    case kVoid: {
-      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-          20, *this_._impl_.ty_.void__, this_._impl_.ty_.void__->GetCachedSize(), target,
           stream);
       break;
     }
@@ -2251,12 +2191,6 @@ PROTOBUF_NOINLINE void BamlTy::Clear() {
     case kPromptAst: {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.ty_.prompt_ast_);
-      break;
-    }
-    // .baml_bridge.cffi.v1.BamlTyVoid void = 20;
-    case kVoid: {
-      total_size += 2 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.ty_.void__);
       break;
     }
     // .baml_bridge.cffi.v1.BamlTyTypeVar type_var = 22;
@@ -2457,14 +2391,6 @@ void BamlTy::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::
           _this->_impl_.ty_.prompt_ast_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.ty_.prompt_ast_);
         } else {
           _this->_impl_.ty_.prompt_ast_->CheckTypeAndMergeFrom(*from._impl_.ty_.prompt_ast_);
-        }
-        break;
-      }
-      case kVoid: {
-        if (oneof_needs_init) {
-          _this->_impl_.ty_.void__ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.ty_.void__);
-        } else {
-          _this->_impl_.ty_.void__->CheckTypeAndMergeFrom(*from._impl_.ty_.void__);
         }
         break;
       }
@@ -11148,196 +11074,6 @@ void BamlTyPromptAst::CopyFrom(const BamlTyPromptAst& from) {
 
 
 void BamlTyPromptAst::InternalSwap(BamlTyPromptAst* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
-  using ::std::swap;
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-}
-
-// ===================================================================
-
-class BamlTyVoid::_Internal {
- public:
-};
-
-BamlTyVoid::BamlTyVoid(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::MessageLite(arena, BamlTyVoid_class_data_.base()) {
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::MessageLite(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.BamlTyVoid)
-}
-BamlTyVoid::BamlTyVoid(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BamlTyVoid& from)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::MessageLite(arena, BamlTyVoid_class_data_.base()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::MessageLite(arena),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
-  _internal_metadata_.MergeFrom<std::string>(
-      from._internal_metadata_);
-}
-PROTOBUF_NDEBUG_INLINE BamlTyVoid::Impl_::Impl_(
-    ::google::protobuf::internal::InternalVisibility visibility,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
-
-inline void BamlTyVoid::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
-  new (&_impl_) Impl_(internal_visibility(), arena);
-}
-BamlTyVoid::~BamlTyVoid() {
-  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.BamlTyVoid)
-  SharedDtor(*this);
-}
-inline void BamlTyVoid::SharedDtor(MessageLite& self) {
-  BamlTyVoid& this_ = static_cast<BamlTyVoid&>(self);
-  this_._internal_metadata_.Delete<std::string>();
-  ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.~Impl_();
-}
-
-inline void* PROTOBUF_NONNULL BamlTyVoid::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) BamlTyVoid(arena);
-}
-constexpr auto BamlTyVoid::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BamlTyVoid),
-                                            alignof(BamlTyVoid));
-}
-constexpr auto BamlTyVoid::InternalGenerateClassData_() {
-  return ::google::protobuf::internal::ClassDataLite<31>{
-      {
-          &_BamlTyVoid_default_instance_._instance,
-          &_table_.header,
-          nullptr,  // OnDemandRegisterArenaDtor
-          nullptr,  // IsInitialized
-          &BamlTyVoid::MergeImpl,
-          ::google::protobuf::MessageLite::GetNewImpl<BamlTyVoid>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &BamlTyVoid::SharedDtor,
-          ::google::protobuf::MessageLite::GetClearImpl<BamlTyVoid>(), &BamlTyVoid::ByteSizeLong,
-              &BamlTyVoid::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(BamlTyVoid, _impl_._cached_size_),
-          true,
-      },
-      "baml_bridge.cffi.v1.BamlTyVoid",
-  };
-}
-
-PROTOBUF_CONSTINIT
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::google::protobuf::internal::ClassDataLite<31> BamlTyVoid_class_data_ =
-    BamlTyVoid::InternalGenerateClassData_();
-
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-BamlTyVoid::GetClassData() const {
-  return BamlTyVoid_class_data_.base();
-}
-PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 0, 0, 0, 2>
-BamlTyVoid::_table_ = {
-  {
-    0,  // no _has_bits_
-    0, // no _extensions_
-    0, 0,  // max_field_number, fast_idx_mask
-    offsetof(decltype(_table_), field_lookup_table),
-    4294967295,  // skipmap
-    offsetof(decltype(_table_), field_names),  // no field_entries
-    0,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
-    BamlTyVoid_class_data_.base(),
-    nullptr,  // post_loop_handler
-    ::_pbi::TcParser::GenericFallbackLite,  // fallback
-    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyVoid>(),  // to_prefetch
-    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-  }, {{
-    {::_pbi::TcParser::MiniParse, {}},
-  }}, {{
-    65535, 65535
-  }}, // no field_entries, or aux_entries
-  {{
-  }},
-};
-PROTOBUF_NOINLINE void BamlTyVoid::Clear() {
-// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.BamlTyVoid)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  _internal_metadata_.Clear<std::string>();
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL BamlTyVoid::_InternalSerialize(
-    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const BamlTyVoid& this_ = static_cast<const BamlTyVoid&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL BamlTyVoid::_InternalSerialize(
-    ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const BamlTyVoid& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.BamlTyVoid)
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    target = stream->WriteRaw(
-        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
-        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.BamlTyVoid)
-  return target;
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t BamlTyVoid::ByteSizeLong(const MessageLite& base) {
-  const BamlTyVoid& this_ = static_cast<const BamlTyVoid&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::size_t BamlTyVoid::ByteSizeLong() const {
-  const BamlTyVoid& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.BamlTyVoid)
-  ::size_t total_size = 0;
-
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void)cached_has_bits;
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
-  }
-  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
-  return total_size;
-}
-
-void BamlTyVoid::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
-  auto* const _this = static_cast<BamlTyVoid*>(&to_msg);
-  auto& from = static_cast<const BamlTyVoid&>(from_msg);
-  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.BamlTyVoid)
-  ABSL_DCHECK_NE(&from, _this);
-  ::uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-}
-
-void BamlTyVoid::CopyFrom(const BamlTyVoid& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.BamlTyVoid)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-
-void BamlTyVoid::InternalSwap(BamlTyVoid* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
 }

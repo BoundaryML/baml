@@ -622,7 +622,7 @@ For `if (x != null) { ... } else { ... }`:
 
 ### TypeScript features present vs absent
 
-**Present:** fresh/regular literal types, `never` as bottom, `unknown` as top, structural typing, union types, `void`, equirecursive recursive types, control-flow narrowing, bidirectional checking.
+**Present:** fresh/regular literal types, `never` as bottom, `unknown` as top, structural typing, union types, `void` (a spelling of the unit type `null`, not a distinct type), equirecursive recursive types, control-flow narrowing, bidirectional checking.
 
 **Absent:** intersection types, conditional types (`T extends U ? A : B`), mapped types, `infer` keyword, discriminated union contextual decomposition (checking against a union doesn't pick a member to check against — it synthesizes and subtype-checks).
 

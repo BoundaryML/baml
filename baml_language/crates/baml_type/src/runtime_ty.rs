@@ -141,7 +141,7 @@ impl<N: Clone> RuntimeTy<N> {
     /// list or map (E0068), so it admits an empty container and is never unit.
     pub fn is_unit(&self) -> bool {
         match self {
-            RuntimeTy::Null | RuntimeTy::Void => true,
+            RuntimeTy::Null => true,
             RuntimeTy::Union(members) => {
                 members.iter().any(RuntimeTy::is_unit)
                     && members
@@ -181,7 +181,7 @@ impl<N: Clone> RuntimeTy<N> {
         match self {
             RuntimeTy::Never => true,
             RuntimeTy::Union(members) => members.iter().all(RuntimeTy::is_uninhabited),
-            RuntimeTy::Null | RuntimeTy::Void => false,
+            RuntimeTy::Null => false,
             RuntimeTy::Int
             | RuntimeTy::Bigint
             | RuntimeTy::Float
@@ -425,7 +425,6 @@ pub fn lower_to_runtime<N: Head>(
 
         // Bottom, opaque-leaf, and reflection types map faithfully.
         Ty::Never => RuntimeTy::Never,
-        Ty::Void => RuntimeTy::Void,
         Ty::Unknown => RuntimeTy::Unknown,
         Ty::RustType => RuntimeTy::RustType,
         Ty::Type => RuntimeTy::Type,
@@ -560,9 +559,8 @@ mod tests {
 
     #[test]
     fn is_unit_admits_exactly_the_unit_value() {
-        let unit: [RuntimeTy; 4] = [
+        let unit: [RuntimeTy; 3] = [
             RuntimeTy::Null,
-            RuntimeTy::Void,
             RuntimeTy::Union(Box::new([RuntimeTy::Null, RuntimeTy::Null])),
             RuntimeTy::Union(Box::new([RuntimeTy::Never, RuntimeTy::Null])),
         ];
@@ -651,7 +649,7 @@ mod tests {
                 ),
             ]),
             ret: Box::new(Ty::Bool),
-            throws: Box::new(Ty::Void),
+            throws: Box::new(Ty::Never),
         };
         assert_round_trips(ty);
     }
@@ -715,7 +713,7 @@ mod tests {
         let ty: LoweringTy<TypeName> = LoweringTy::Function {
             params: Box::new([]),
             ret: Box::new(LoweringTy::Infer),
-            throws: Box::new(LoweringTy::Void),
+            throws: Box::new(LoweringTy::Never),
         };
         assert_eq!(
             RuntimeTy::try_from(&ty),

@@ -822,12 +822,7 @@ fn render_callable_pair(
     let param_decls: Vec<String> = required
         .iter()
         .map(|a| {
-            // `void` is legal only as a return type; a unit-typed
-            // parameter (stdlib type-position args) boxes to Void.
             let mut ty = translate_ty(&a.ty, TyPosition::TopLevel, ctx, sink);
-            if ty == "void" {
-                ty = "java.lang.Void".to_string();
-            }
             // A nullable required param (`x: T?`) carries `@Nullable` so callers
             // (Kotlin especially) see it accepts `null`.
             if crate::translate_ty::is_nullable(&a.ty, ctx.aliases) {
