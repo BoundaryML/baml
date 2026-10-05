@@ -1,0 +1,47 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[catch_function_value_effects.baml:15:30]
+ 15 │             let probe: int = error;
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `string`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[catch_function_value_effects.baml:26:30]
+ 26 │             let probe: int = error;
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `string | baml.errors.Timeout`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[catch_function_value_effects.baml:36:30]
+ 36 │             let probe: int = error;
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `unknown`
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `never`, but this function may also throw `string`
+    ╭─[catch_function_value_effects.baml:45:5]
+ 45 │     baml.future.with_timeout(baml.time.Duration.from_seconds(30), body) catch (error) {
+    ·     ───────────────────────────────────────────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[catch_function_value_effects.baml:56:30]
+ 56 │             let probe: int = error;
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `string | baml.errors.Timeout`
+    ╰────

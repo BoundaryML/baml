@@ -10375,18 +10375,36 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// A caught effect contribution, resolved for the error channel: still
-    /// live variables resolve where possible (an unconstrained effect is
-    /// `never` here too).
+    /// A caught effect contribution, resolved for the error channel. A
+    /// `catch` needs the facts of the effect now, so a still-open effect
+    /// class commits from the bounds it has, as at every structure demand
+    /// ([`InferenceContext::force_occurring_vars`]). The effect of a function
+    /// VALUE passed as an argument is such a bound: `throws string` sits
+    /// under the callee's `throws E` as a lower bound of `E`, and only the
+    /// finish fixpoint would turn it into the solution. A class with no
+    /// evidence is `never` here, so it drops out of a union and the facts
+    /// beside it stay.
     fn finalize_incoming_effect(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.table.resolve_completely(ty);
-        if resolved.has_infer() {
-            // Effect vars inside the base that never got constrained: the
-            // conservative read for catching purposes is Error-free
-            // emptiness - drop to never; real obligations arrive with I4.
-            return Ty::never();
+        let resolved = self.force_occurring_vars(ty);
+        if !resolved.has_infer() {
+            return resolved;
         }
-        resolved
+        // Effect vars inside the base that never got constrained: the
+        // conservative read for catching purposes is Error-free
+        // emptiness; real obligations arrive with I4.
+        let InferTy::Union(members) = resolved.kind() else {
+            return Ty::never();
+        };
+        let known: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.has_infer())
+            .cloned()
+            .collect();
+        if known.is_empty() {
+            Ty::never()
+        } else {
+            self.union_of(&known)
+        }
     }
 
     /// A `?.` link whose base PROVABLY cannot be null is noise the user
