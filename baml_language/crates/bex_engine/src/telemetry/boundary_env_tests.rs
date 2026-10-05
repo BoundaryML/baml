@@ -1,6 +1,8 @@
-use std::process::Command;
+use std::{process::Command, sync::Arc};
 
-use super::{BOUNDARY_API_KEY, BOUNDARY_URL, Destination, TelemetryRecording};
+use btel_types::context::Context;
+
+use super::{BOUNDARY_API_KEY, Destination, TelemetryRecording};
 
 #[test]
 fn from_boundary_env() {
@@ -16,6 +18,7 @@ fn from_boundary_env() {
         (Some(URL), Some(""), false),
         (Some(""), Some(""), false),
         (Some("not a URL"), Some(KEY), true),
+        (Some("not a URL"), None, true),
         (Some("http://example.invalid/"), Some(KEY), true),
         // Endpoint validation happens before discovering credentials.
         (Some("http://localhost:1234/"), Some(KEY), true),
@@ -36,7 +39,6 @@ fn from_boundary_env() {
             ]);
             command.env(CASE, index.to_string());
             command
-                .env_remove(BOUNDARY_URL)
                 .env_remove(BOUNDARY_API_KEY)
                 .env_remove("BOUNDARY_API_URL")
                 .env_remove("BOUNDARY_PROJECT")
@@ -48,7 +50,7 @@ fn from_boundary_env() {
                     ),
                 );
             if let Some(url) = url {
-                command.env(BOUNDARY_URL, url);
+                command.env("BOUNDARY_API_URL", url);
             }
             if let Some(key) = key {
                 command.env(BOUNDARY_API_KEY, key);
@@ -68,9 +70,15 @@ fn from_boundary_env() {
     let recording = TelemetryRecording::from_boundary_env();
     assert_eq!(recording.is_some(), enabled);
     if let Some(recording) = recording {
-        if let Destination::Disabled { reason } = recording.destination {
-            assert!(!reason.is_empty());
-            assert!(bcs_api::auth::Endpoint::parse(url.unwrap()).is_err());
+        if let Destination::InvalidConfiguration { reason } = &recording.destination {
+            let expected = bcs_api::auth::Endpoint::parse(url.unwrap())
+                .unwrap_err()
+                .to_string();
+            assert_eq!(reason, &expected);
+            let Err(error) = recording.start(None, Arc::default(), &Context::default()) else {
+                panic!("invalid Boundary configuration must fail startup");
+            };
+            assert_eq!(error.to_string(), expected);
             return;
         }
         let Destination::Cloud { delivery, .. } = recording.destination else {

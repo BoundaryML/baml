@@ -8,7 +8,6 @@ use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
-const BOUNDARY_URL: &str = "BOUNDARY_URL";
 const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
 
 /// One recording per engine, delivered to local files or BCS. Cloud payload
@@ -24,7 +23,7 @@ pub struct TelemetryRecording {
     exit: Arc<btel_types::ProcessExitSlot>,
 }
 enum Destination {
-    Disabled {
+    InvalidConfiguration {
         reason: String,
     },
     LocalFiles {
@@ -89,15 +88,14 @@ impl TelemetryRecording {
     }
 
     /// Hosts pass artifact/project defaults; process environment variables take precedence.
-    /// Invalid cloud configuration selects disabled recording, preserving its error rather
-    /// than allowing hosts to fall back to local files. `None` means no cloud credential.
+    /// Invalid cloud configuration fails engine startup rather than falling back to
+    /// local files. `None` means no cloud credential.
     pub fn from_boundary_defaults(project: Option<&str>, api_url: Option<&str>) -> Option<Self> {
-        let legacy_url = baml_env::string_var(BOUNDARY_URL).ok()?;
-        let endpoint = match bcs_api::Endpoint::with_default(api_url.or(legacy_url.as_deref())) {
+        let endpoint = match bcs_api::Endpoint::with_default(api_url) {
             Ok(endpoint) => endpoint,
             Err(error) => {
                 let mut recording = Self::user_files(RecordingConfig::default());
-                recording.destination = Destination::Disabled {
+                recording.destination = Destination::InvalidConfiguration {
                     reason: error.to_string(),
                 };
                 return Some(recording);
@@ -292,7 +290,7 @@ impl TelemetryRecording {
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
         let root = match self.destination {
-            Destination::Disabled { reason } => Err(std::io::Error::other(reason)),
+            Destination::InvalidConfiguration { reason } => return Err(EngineError::Other(reason)),
             Destination::Cloud {
                 publisher,
                 delivery,

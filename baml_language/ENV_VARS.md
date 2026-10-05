@@ -38,7 +38,6 @@ BAML files are under `BAML_HOME` (default `~/.baml`). Login credentials live in 
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.cloud.boundaryml.com`. |
 | `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |
 | `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
-| `BOUNDARY_URL` | Fallback telemetry endpoint when `[boundary].api_url` and `BOUNDARY_API_URL` are unset. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
 | `BAML_FEEDBACK_HOST` | Where `baml feedback` sends reports. Staging and tests. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |

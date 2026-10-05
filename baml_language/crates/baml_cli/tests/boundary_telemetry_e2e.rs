@@ -22,7 +22,6 @@ fn run(project: &Path, boundary_url: &str, telemetry: &str) {
         .args(["run", "main"])
         .current_dir(project)
         .env("BOUNDARY_API_URL", boundary_url)
-        .env_remove("BOUNDARY_URL")
         .env("BOUNDARY_API_KEY", KEY)
         .env("BOUNDARY_PROJECT", "acme/app")
         .env("BAML_TELEMETRY", telemetry)

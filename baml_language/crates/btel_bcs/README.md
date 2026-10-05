@@ -25,19 +25,18 @@ from the engine level: the former engine-level spelling `auto` is replaced by
 ## Transport
 
 `baml run`, `baml test`, packed binaries, and native SDK runtimes select cloud
-recording when both `BOUNDARY_URL` and `BOUNDARY_API_KEY` are non-empty and the
-URL parses. `BOUNDARY_URL` is the publisher's HTTPS base URL, including any path
-prefix; `BOUNDARY_API_KEY` is its bearer credential. Packed binaries read these
-variables when they run. The language server and WASM playground do not use this
-configuration.
+recording when `BOUNDARY_API_KEY` or a saved Boundary login supplies a credential.
+`BOUNDARY_API_URL` selects the Boundary HTTPS endpoint, including any path prefix;
+it overrides `[boundary].api_url` and defaults to `https://api.cloud.boundaryml.com`.
+`BOUNDARY_PROJECT` overrides `[boundary].project` for the recording target.
+The language server and WASM playground do not use this configuration.
 
-With missing or empty variables, or an unparsable URL, hosts keep their existing
-behavior: the CLI records under the project, packed binaries under the user's
-home, and SDKs do not persist recordings. A parsed but rejected delivery config
-disables recording without failing execution. `BAML_TELEMETRY=off` disables all
-recording regardless of the Boundary variables. Cloud recordings omit process
-arguments. Environment reads live in `bex_engine::TelemetryRecording`, not this
-transport crate.
+Invalid endpoint configuration fails engine startup. With a valid endpoint and
+no cloud credential, hosts keep their existing local recording behavior: the
+CLI records under the project, packed binaries under the user's home, and SDKs
+do not persist recordings. `BAML_TELEMETRY=off` disables all recording regardless
+of the Boundary variables. Cloud recordings omit process arguments. Environment
+reads live in `bex_engine::TelemetryRecording`, not this transport crate.
 
 Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.
 The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and

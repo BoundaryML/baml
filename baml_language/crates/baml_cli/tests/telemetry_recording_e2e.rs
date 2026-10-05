@@ -15,7 +15,6 @@ fn cli(cwd: &Path, home: &Path) -> Command {
         .env("BAML_HOME", home.join(".baml"))
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
-        .env_remove("BOUNDARY_URL")
         .env_remove("BOUNDARY_API_KEY")
         .env("BAML_TELEMETRY", "medium");
     command
@@ -159,7 +158,6 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
             .current_dir(&launch)
             .env("HOME", &home)
             .env("USERPROFILE", &home)
-            .env_remove("BOUNDARY_URL")
             .env_remove("BOUNDARY_API_KEY")
             .env("BAML_TELEMETRY", "medium");
         if index == 1 {
