@@ -716,11 +716,12 @@ impl TelemetryState {
         let captured_inputs = (mode == InvocationMode::Span && capture_inputs)
             .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
             .flatten();
-        // Types are not user data: a span records them whether or not it
-        // captures its arguments.
-        let captured_type_args = (mode == InvocationMode::Span && !type_args.is_empty())
-            .then(|| self.capture_type_args(function, type_args))
-            .flatten();
+        // Type arguments are inputs too: a span that doesn't capture its
+        // arguments builds no snapshot of them either.
+        let captured_type_args =
+            (mode == InvocationMode::Span && capture_inputs && !type_args.is_empty())
+                .then(|| self.capture_type_args(function, type_args))
+                .flatten();
         if captured_inputs.is_some() || captured_type_args.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
@@ -2239,18 +2240,29 @@ mod tests {
         }
     }
 
-    /// Records of one generic call made with `type_args`: its announced
-    /// type arguments, and whether its completion depends on the
+    /// Records of one generic call made with `type_args` under a policy
+    /// capturing inputs or not and a call's own `inputs` request: its
+    /// announced type arguments, and whether its completion depends on the
     /// announcement.
     fn type_args_of(
         function: &Function,
-        inputs: bool,
+        capture_inputs: bool,
+        inputs: Option<bool>,
         type_args: CallTypeArgs<'_>,
     ) -> (Option<serde_json::Value>, bool) {
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        state
+            .set_policy(
+                function,
+                TelemetryPolicy {
+                    capture_inputs,
+                    ..TelemetryPolicy::NONE
+                },
+            )
+            .unwrap();
         let trace = TraceConfig {
             mode: Some(InvocationMode::Span),
-            inputs: Some(inputs),
+            inputs,
             ..TraceConfig::default()
         };
         // SAFETY: no heap values; the registration hook dereferences nothing.
@@ -2282,7 +2294,7 @@ mod tests {
     }
 
     #[test]
-    fn a_generic_call_records_its_type_args_by_name_whether_or_not_inputs_are() {
+    fn a_generic_call_records_its_type_args_by_name_when_it_captures_its_inputs() {
         let mut generic = function(FunctionKind::Bytecode, None);
         // A method of `Box<T>`: the class's parameter rides on the receiver,
         // the method's own is passed by the call.
@@ -2293,32 +2305,56 @@ mod tests {
             carried: &carried,
             passed: &passed,
         };
-        for inputs in [false, true] {
-            assert_eq!(
-                type_args_of(&generic, inputs, both),
-                (
-                    Some(serde_json::json!({"T": "type: int", "U": "type: string"})),
-                    true
-                ),
-                "inputs captured: {inputs}"
-            );
+        let recorded = (
+            Some(serde_json::json!({"T": "type: int", "U": "type: string"})),
+            true,
+        );
+        // The same decision as the arguments': the policy, or the call's own
+        // request. A call can ask for its inputs but not opt out of them.
+        for capture_inputs in [false, true] {
+            for inputs in [None, Some(false), Some(true)] {
+                let captured = capture_inputs || inputs == Some(true);
+                assert_eq!(
+                    type_args_of(&generic, capture_inputs, inputs, both),
+                    if captured {
+                        recorded.clone()
+                    } else {
+                        (None, false)
+                    },
+                    "policy: {capture_inputs}, call: {inputs:?}"
+                );
+            }
         }
+        // An LLM function captures its inputs by default, so its type
+        // arguments too.
+        let mut llm = function(
+            FunctionKind::Bytecode,
+            Some(FunctionMeta::Llm {
+                client: "test".into(),
+            }),
+        );
+        llm.type_param_names = vec!["T".into(), "U".into()];
+        assert_eq!(type_args_of(&llm, false, None, both), recorded);
         // Without type arguments nothing is recorded, and the completion
         // does not wait for an announcement.
         let plain = function(FunctionKind::Bytecode, None);
         assert_eq!(
-            type_args_of(&plain, false, CallTypeArgs::default()),
+            type_args_of(&plain, false, None, CallTypeArgs::default()),
             (None, false)
         );
         // A slot the compiler did not name is left out, never given a key.
         let mut partial = generic;
         partial.type_param_names.truncate(1);
         assert_eq!(
-            type_args_of(&partial, false, both),
+            type_args_of(&partial, false, Some(true), both),
             (Some(serde_json::json!({"T": "type: int"})), true)
         );
         partial.type_param_names.clear();
-        assert_eq!(type_args_of(&partial, false, both), (None, false));
+        assert_eq!(
+            type_args_of(&partial, false, Some(true), both).0,
+            None,
+            "no named slot"
+        );
     }
 
     #[test]

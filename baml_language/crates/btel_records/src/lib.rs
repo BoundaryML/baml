@@ -169,8 +169,8 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         entered_at: ClockInstant,
         captured_inputs: Option<InputCapture>,
         /// A generic call's type arguments, `map<string, Type>` keyed by
-        /// type-parameter name. Recorded with the span, whether or not its
-        /// inputs are; `None` for a call without type arguments.
+        /// type-parameter name. Captured exactly when its inputs are; `None`
+        /// for a call without type arguments or whose inputs aren't captured.
         captured_type_args: Option<InputCapture>,
     },
     /// Completion variants specialize outcome, reentry and announcement dependency.
