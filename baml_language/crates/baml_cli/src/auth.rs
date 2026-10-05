@@ -215,8 +215,6 @@ impl StatusArgs {
         };
         let login_context = diagnostic(CredentialSource::SavedLogin);
         let report_login = |error| login_context.report(error, Outcome::AuthenticationFailed);
-        let store = bcs_api::Store::new(&endpoint).map_err(report_login)?;
-        let stored = store.read().map_err(report_login)?;
         let api_key = baml_env::string_var("BOUNDARY_API_KEY")?
             .filter(|key| key != bcs_api::credentials::LOCAL_API_KEY)
             .map(bcs_api::Secret::new);
@@ -229,20 +227,32 @@ impl StatusArgs {
             },
         };
         let client = bcs_api::Client::new(endpoint.clone()).map_err(report_login)?;
-        let user = if let Some(stored) = stored {
-            let session = client.refresh(&stored).map_err(report_login)?;
-            store
-                .write(&bcs_api::StoredSession::from(&session))
-                .map_err(report_login)?;
-            Some(session.caller.email)
-        } else {
-            None
-        };
         if let Some(key) = &api_key {
             client.verify_api_key(key).map_err(|error| {
                 diagnostic(CredentialSource::ApiKey).report(error, Outcome::AuthenticationFailed)
             })?;
         }
+        // Verify the active API key independently of the optional saved login.
+        // A broken saved login remains fatal when it is the only credential.
+        let login = (|| -> std::result::Result<Option<String>, bcs_api::Error> {
+            let store = bcs_api::Store::new(&endpoint)?;
+            let Some(stored) = store.read()? else {
+                return Ok(None);
+            };
+            let session = client.refresh(&stored)?;
+            store.write(&bcs_api::StoredSession::from(&session))?;
+            Ok(Some(session.caller.email))
+        })();
+        let user = match login {
+            Ok(user) => user,
+            Err(error) if api_key.is_some() => {
+                crate::reporter::Reporter::new().warning(format!(
+                    "Could not verify your saved Boundary login. BOUNDARY_API_KEY is verified.\n\n{error}"
+                ));
+                None
+            }
+            Err(error) => return Err(report_login(error).into()),
+        };
         let authenticated = user.is_some() || api_key.is_some();
         println!(
             "{}",

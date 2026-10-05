@@ -641,8 +641,12 @@ function main() -> int {
         "bdry_session_invalid",
         &["run", "main"],
     );
+    let requested = requested_at
+        .lock()
+        .unwrap()
+        .unwrap_or_else(|| panic!("heartbeat was never requested: {output:?}"));
     assert!(
-        requested_at.lock().unwrap().unwrap().elapsed() < std::time::Duration::from_secs(5),
+        requested.elapsed() < std::time::Duration::from_secs(5),
         "initial refusal must interrupt the 60-second call: {output:?}"
     );
     assert!(
