@@ -2,7 +2,7 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 1036. IDs with complete required parity: 316. Required gaps: 4949.
+Distinct exact test IDs: 1037. IDs with complete required parity: 317. Required gaps: 4949.
 
 
 ## Python-baselined parity
@@ -48,6 +48,7 @@ Parity is the share of the 368 shared test IDs declared in `python_pydantic2` th
 | function_calls/argument_types_int_rejects_a_value_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
 | function_calls/argument_types_int_rejects_a_value_of_another_kind_async | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
 | function_calls/argument_types_list_rejects_an_item_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
+| function_calls/argument_types_returned_closure_rejects_a_value_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
 | function_calls/argument_types_scalars_reject_a_value_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
 | function_calls/argument_types_values_that_the_boundary_converts_are_accepted | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a Python dict and a Python int where the generated annotations are a class and a float |
 | function_calls/async_callback_can_use_originating_loop_resources_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
