@@ -170,6 +170,18 @@ pub struct EmbeddedIngestion {
     pub bytecode_digest: BytecodeDigest,
 }
 
+impl EmbeddedIngestion {
+    /// Check the credential, build identity and concrete ingestion target.
+    /// Each artifact format verifies its fingerprint separately.
+    pub fn is_well_formed(&self) -> bool {
+        self.token.expose().starts_with("bdry_public_")
+            && !self.build_id.is_empty()
+            && !self.destination.org_id.is_empty()
+            && !self.destination.project_id.is_empty()
+            && !self.destination.environment_id.is_empty()
+    }
+}
+
 /// The public credential is never reused when the caller selects a destination.
 #[derive(Debug, PartialEq, Eq)]
 pub enum IngestionSelection<'a> {
@@ -458,12 +470,7 @@ impl ArtifactTelemetry {
             if embedded.bytecode_digest != build_digest(payload, self)? {
                 return Err(PolicyError("Embedded telemetry does not match this artifact. Rebuild with `baml pack --embed-telemetry` or `baml generate --embed-telemetry`.".into()));
             }
-            if !embedded.token.expose().starts_with("bdry_public_")
-                || embedded.build_id.is_empty()
-                || embedded.destination.org_id.is_empty()
-                || embedded.destination.project_id.is_empty()
-                || embedded.destination.environment_id.is_empty()
-            {
+            if !embedded.is_well_formed() {
                 return Err(PolicyError("The embedded telemetry credential is invalid. Rebuild the artifact with `--embed-telemetry`.".into()));
             }
         }
