@@ -456,8 +456,10 @@ typedef struct BamlApiV1 {
    */
   BamlMediaConstructorFn media_from_url;
   /**
-   * Create an owned media handle from a borrowed NUL-terminated file path.
-   * Ownership and output rules match `media_from_url`.
+   * Always `UnsupportedHandleType`: a media value is built from content,
+   * never from a file path, and this library reads no file. A host reads
+   * the file itself or calls `baml.media.<Kind>.from_file`. The slot stays
+   * because this table is append-only.
    */
   BamlMediaConstructorFn media_from_file;
   /**
@@ -474,7 +476,9 @@ typedef struct BamlApiV1 {
    */
   BamlMediaAccessorFn media_url;
   /**
-   * Read a media file path. Ownership rules match `media_url`.
+   * Always absent: a media value holds content, never a file path. The
+   * slot stays because this table is append-only. Ownership rules match
+   * `media_url`.
    */
   BamlMediaAccessorFn media_file;
   /**

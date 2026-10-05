@@ -247,8 +247,10 @@ pub struct BamlApiV1 {
     /// The optional MIME type may be null. On success, both output pointers are
     /// written and the returned key must be released with `handle_release`.
     pub media_from_url: BamlMediaConstructorFn,
-    /// Create an owned media handle from a borrowed NUL-terminated file path.
-    /// Ownership and output rules match `media_from_url`.
+    /// Always `UnsupportedHandleType`: a media value is built from content,
+    /// never from a file path, and this library reads no file. A host reads
+    /// the file itself or calls `baml.media.<Kind>.from_file`. The slot stays
+    /// because this table is append-only.
     pub media_from_file: BamlMediaConstructorFn,
     /// Create an owned media handle from borrowed NUL-terminated base64 data.
     /// Ownership and output rules match `media_from_url`.
@@ -259,7 +261,9 @@ pub struct BamlApiV1 {
     /// represented by a zero-length buffer. Release every successful output
     /// once with `free_buffer`.
     pub media_url: BamlMediaAccessorFn,
-    /// Read a media file path. Ownership rules match `media_url`.
+    /// Always absent: a media value holds content, never a file path. The
+    /// slot stays because this table is append-only. Ownership rules match
+    /// `media_url`.
     pub media_file: BamlMediaAccessorFn,
     /// Read media base64 data. Ownership rules match `media_url`.
     pub media_base64: BamlMediaAccessorFn,

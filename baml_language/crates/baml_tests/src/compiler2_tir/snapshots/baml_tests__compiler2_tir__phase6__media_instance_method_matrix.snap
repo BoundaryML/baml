@@ -27,8 +27,8 @@ function user.audio_base64_returns_string(a: audio) -> string throws never {
     a.base64() : string
   }
 }
-function user.video_file_returns_optional_string(v: video) -> string | null throws never {
+function user.video_name_returns_optional_string(v: video) -> string | null throws never {
   { : string | null
-    v.file() : string | null
+    v.name() : string | null
   }
 }

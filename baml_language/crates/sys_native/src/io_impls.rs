@@ -498,6 +498,27 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
+    fn bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncReadExt;
+
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read file: {e}"),
+            })?;
+            Ok(buf)
+        })
+    }
+
     fn close(
         &self,
         _heap: &Arc<BexHeap>,

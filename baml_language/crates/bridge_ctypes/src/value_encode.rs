@@ -460,10 +460,11 @@ fn bex_media_to_proto_media(
         mime_type: media.mime_type(),
         value: Some(media.read_content(|content| match content {
             bex_project::MediaContent::Url { url, .. } => BamlValueMediaValue::Url(url.clone()),
-            bex_project::MediaContent::Base64 { base64_data } => {
-                BamlValueMediaValue::Base64(base64_data.as_str().to_owned())
-            }
-            bex_project::MediaContent::File { file, .. } => BamlValueMediaValue::File(file.clone()),
+            // The portable payload has no place for a name yet.
+            bex_project::MediaContent::Base64 {
+                base64_data,
+                name: _,
+            } => BamlValueMediaValue::Base64(base64_data.as_str().to_owned()),
         })),
     }
 }
@@ -872,6 +873,7 @@ mod tests {
             bex_project::MediaKind::Image,
             MediaContent::Base64 {
                 base64_data: "aW1hZ2U=".into(),
+                name: None,
             },
             Some("image/png".to_string()),
         ));

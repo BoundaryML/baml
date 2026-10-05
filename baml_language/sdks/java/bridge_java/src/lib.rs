@@ -821,23 +821,22 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromUrl<'local>(
     )
 }
 
-/// `nativeMediaFromFile(int kind, String path, String mimeType) -> long`.
+/// `nativeMediaFromFile(int kind, String path, String mimeType) -> long`:
+/// always throws. A media value is built from content, never from a file
+/// path, and nothing here reads a file.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromFile<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
-    kind: jint,
-    path: JString<'local>,
-    mime: JString<'local>,
+    _kind: jint,
+    _path: JString<'local>,
+    _mime: JString<'local>,
 ) -> jlong {
-    media_from(
+    throw_runtime_exception(
         &mut env,
-        kind,
-        path,
-        mime,
-        "nativeMediaFromFile",
-        MediaValue::from_file,
-    )
+        "nativeMediaFromFile: a media value is built from a file's content, not its path",
+    );
+    0
 }
 
 /// `nativeMediaFromBase64(int kind, String base64, String mimeType) -> long`.
@@ -902,7 +901,8 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaUrl<'local>(
     }
 }
 
-/// `nativeMediaFile(long key) -> String` (Java `null` when not file-backed).
+/// `nativeMediaFile(long key) -> String`: always Java `null`. A media value
+/// holds content, never a file path.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFile<'local>(
     mut env: JNIEnv<'local>,
@@ -910,7 +910,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFile<'local>(
     key: jlong,
 ) -> JString<'local> {
     match resolve_media(key) {
-        Some(media) => optional_string_to_jstring(&mut env, media.file(), "nativeMediaFile"),
+        Some(_) => optional_string_to_jstring(&mut env, None, "nativeMediaFile"),
         None => {
             throw_runtime_exception(&mut env, "nativeMediaFile: invalid media handle key");
             JString::default()

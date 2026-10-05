@@ -200,6 +200,19 @@ impl io::IoClassFsFile for WasmIoFs {
         })
     }
 
+    fn bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
     fn close(
         &self,
         _h: &Arc<BexHeap>,

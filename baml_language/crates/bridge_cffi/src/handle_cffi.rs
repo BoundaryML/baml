@@ -159,16 +159,16 @@ pub fn media_from_url(
     )))
 }
 
-/// Construct an owned media handle from a file-path descriptor.
+/// A media value is built from content, never from a path, and nothing here
+/// reads a file: there is no handle to make. The input is still checked, as
+/// for every constructor.
 pub fn media_from_file(
-    kind: MediaKind,
+    _kind: MediaKind,
     file: &str,
     mime_type: Option<&str>,
 ) -> Result<HandleParts, HandleError> {
     validate_media_input(file, mime_type)?;
-    Ok(insert_entry(CffiHandleTableEntry::Adt(
-        BexExternalAdt::Media(MediaValue::from_file(kind, file, mime_type)),
-    )))
+    Err(HandleError::UnsupportedHandleType)
 }
 
 /// Construct an owned media handle from base64 text.
@@ -187,8 +187,11 @@ pub fn media_url(key: u64, handle_type: i32) -> Result<Option<String>, HandleErr
     Ok(resolve_media(key, handle_type)?.url())
 }
 
+/// A media value holds content, never a path: there is none to return. The
+/// handle is still checked, as for every accessor.
 pub fn media_file(key: u64, handle_type: i32) -> Result<Option<String>, HandleError> {
-    Ok(resolve_media(key, handle_type)?.file())
+    resolve_media(key, handle_type)?;
+    Ok(None)
 }
 
 pub fn media_base64(key: u64, handle_type: i32) -> Result<String, HandleError> {

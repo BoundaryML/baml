@@ -225,9 +225,11 @@ fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, Ct
         Some(baml_value_media::Value::Base64(base64)) => {
             Ok(MediaValue::from_base64(kind, base64.into(), mime_type))
         }
-        Some(baml_value_media::Value::File(file)) => {
-            Ok(MediaValue::from_file(kind, &file, mime_type))
-        }
+        // A media value holds content, never a path, and nothing here reads
+        // a file.
+        Some(baml_value_media::Value::File(_)) => Err(CtypesError::InternalError(
+            "portable media payload names a file instead of holding its content".to_string(),
+        )),
         None => Err(CtypesError::InternalError(
             "portable media payload has no content".to_string(),
         )),

@@ -503,7 +503,6 @@ fn media_to_proto(media: &TraceMediaValue) -> BamlValueMedia {
         value: Some(match &media.content {
             TraceMediaContent::Url(url) => BamlValueMediaValue::Url(url.clone()),
             TraceMediaContent::Base64(base64) => BamlValueMediaValue::Base64(base64.clone()),
-            TraceMediaContent::File(file) => BamlValueMediaValue::File(file.clone()),
         }),
     }
 }
