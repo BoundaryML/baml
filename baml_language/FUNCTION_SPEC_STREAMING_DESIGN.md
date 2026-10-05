@@ -457,7 +457,7 @@ Required behavior:
 - `FunctionSpec.prompt()` may return a prompt through FFI.
 - The host can inspect text/messages using its SDK wrapper.
 - The prompt can be encoded inbound again.
-- Images/audio/media embedded in prompts preserve mime type, source kind, URL/file/base64 or byte payload as defined by the portable schema.
+- Images/audio/media embedded in prompts preserve mime type, source kind, URL or base64 payload, and name as defined by the portable schema.
 - No live heap pointer or engine-local handle is serialized as prompt/media data.
 
 Because the inbound proto imports outbound prompt/media types, import order must keep
