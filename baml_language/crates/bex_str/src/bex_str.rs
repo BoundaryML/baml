@@ -57,6 +57,13 @@ pub(crate) enum ConcatState {
     Flattened(Arc<FlatStr>),
 }
 
+/// Bytes of an `Arc<FlatStr>` allocation beyond the text itself: the two
+/// reference counts and the header.
+const FLAT_OVERHEAD: usize = 2 * std::mem::size_of::<usize>() + std::mem::size_of::<FlatStr>();
+
+/// Bytes of an `Arc<ConcatNode>` allocation: the two reference counts and the node.
+const CONCAT_OVERHEAD: usize = 2 * std::mem::size_of::<usize>() + std::mem::size_of::<ConcatNode>();
+
 // Size assertion — must fit within Object payload budget
 const _: () = assert!(
     std::mem::size_of::<BexStr>() == 56,
@@ -89,17 +96,51 @@ impl BexStr {
     ///
     /// Returns `None` on arithmetic overflow.
     pub fn retained_heap_bytes(&self) -> Option<usize> {
-        fn flat_bytes(flat: &FlatStr) -> Option<usize> {
-            std::mem::size_of::<FlatStr>()
-                .checked_add(2 * std::mem::size_of::<usize>())?
-                .checked_add(flat.data.len())
-        }
         match self {
             Self::Inline { .. } => Some(0),
-            Self::Flat(flat) | Self::Slice { parent: flat, .. } => flat_bytes(flat),
-            Self::Concat(node) => std::mem::size_of::<ConcatNode>()
-                .checked_add(2 * std::mem::size_of::<usize>())?
-                .checked_add(flat_bytes(&node.flatten())?),
+            Self::Flat(flat) | Self::Slice { parent: flat, .. } => {
+                FLAT_OVERHEAD.checked_add(flat.data.len())
+            }
+            Self::Concat(node) => CONCAT_OVERHEAD
+                .checked_add(FLAT_OVERHEAD)?
+                .checked_add(node.flatten().data.len()),
+        }
+    }
+
+    /// Heap bytes this string would own if it shared nothing: zero when
+    /// inline, otherwise an allocation holding its full length. A slice counts
+    /// only the bytes it views, and a concatenation counts the buffer that
+    /// reading it would materialize. Never flattens.
+    ///
+    /// Every handle to shared storage reports it in full, so summing this over
+    /// handles overestimates; see [`Self::shared_heap_bytes`] for the share.
+    pub fn unshared_heap_bytes(&self) -> usize {
+        match self {
+            Self::Inline { .. } => 0,
+            Self::Flat(flat) => FLAT_OVERHEAD.saturating_add(flat.data.len()),
+            Self::Slice { len, .. } => usize::try_from(*len).unwrap_or(usize::MAX),
+            Self::Concat(node) => CONCAT_OVERHEAD
+                .saturating_add(usize::try_from(node.total_len).unwrap_or(usize::MAX)),
+        }
+    }
+
+    /// This handle's share of the allocation it keeps alive: the allocation's
+    /// size divided among the handles holding it, rounded up. Summed over every
+    /// handle, a shared buffer is counted about once. A slice shares its whole
+    /// parent, so a small slice of a large string reports a large share.
+    ///
+    /// A concatenation is sized as in [`Self::unshared_heap_bytes`] without
+    /// looking inside, so its pieces are counted again if they are also held
+    /// elsewhere. Never flattens.
+    pub fn shared_heap_bytes(&self) -> usize {
+        match self {
+            Self::Inline { .. } => 0,
+            Self::Flat(flat) | Self::Slice { parent: flat, .. } => FLAT_OVERHEAD
+                .saturating_add(flat.data.len())
+                .div_ceil(Arc::strong_count(flat)),
+            Self::Concat(node) => CONCAT_OVERHEAD
+                .saturating_add(usize::try_from(node.total_len).unwrap_or(usize::MAX))
+                .div_ceil(Arc::strong_count(node)),
         }
     }
 

@@ -107,11 +107,37 @@ impl<T> LockedContainer<T> {
         // SAFETY: caller upholds the contract.
         unsafe { &mut *self.data.get() }
     }
+
+    /// The backing store, through exclusive access to the container. No lock
+    /// is taken: `&mut self` already proves nothing else can reach it.
+    pub fn get_mut(&mut self) -> &mut T {
+        self.data.get_mut()
+    }
 }
 
 impl<T> From<T> for LockedContainer<T> {
     fn from(data: T) -> Self {
         Self::new(data)
+    }
+}
+
+/// The bytes a value's backing storage occupies in its own allocations.
+///
+/// This is capacity, not length: it is what the allocator handed out, so a
+/// container that grew and was then emptied still reports the buffer it holds.
+pub trait Footprint {
+    fn footprint(&self) -> usize;
+}
+
+impl<T> Footprint for Vec<T> {
+    fn footprint(&self) -> usize {
+        self.capacity().saturating_mul(size_of::<T>())
+    }
+}
+
+impl Footprint for Box<MapData> {
+    fn footprint(&self) -> usize {
+        size_of::<MapData>().saturating_add(self.backing_bytes())
     }
 }
 
@@ -334,6 +360,22 @@ impl MapData {
 
     pub fn epoch(&self) -> u64 {
         self.epoch
+    }
+
+    /// Everything this map allocates: the entry storage, its index, and the
+    /// per-hash buckets. Estimated from capacities without walking entries.
+    fn backing_bytes(&self) -> usize {
+        // An entry stores its id, the entry and its hash, plus an index slot.
+        let entry = size_of::<EntryId>() + size_of::<MapEntry>() + 2 * size_of::<usize>();
+        // A bucket-table slot stores the hash, the bucket and a control byte.
+        let bucket_slot = size_of::<u64>() + size_of::<Vec<EntryId>>() + 1;
+        // Each distinct hash has a bucket, whose first allocation holds four ids.
+        let bucket = 4 * size_of::<EntryId>();
+        self.entries
+            .capacity()
+            .saturating_mul(entry)
+            .saturating_add(self.buckets.capacity().saturating_mul(bucket_slot))
+            .saturating_add(self.buckets.len().saturating_mul(bucket))
     }
 
     pub fn len(&self) -> usize {

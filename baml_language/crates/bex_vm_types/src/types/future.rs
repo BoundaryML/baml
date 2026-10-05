@@ -325,6 +325,19 @@ impl Future {
         self.flags.fetch_or(FUTURE_FLAG_OBSERVED, Ordering::AcqRel);
     }
 
+    /// Report what this future keeps alive outside its slot: its output
+    /// types, the settlement shared with whoever resolves it, and an error
+    /// trace once one has been recorded.
+    pub(crate) fn measure(&self, meter: &mut crate::Meter) {
+        meter.bytes(size_of::<FutureOutputTypes>());
+        meter.shared(&self.settlement, |_| {});
+        meter.shared(&self.error_trace, |meter| {
+            if let Some(trace) = self.error_trace.get() {
+                meter.shared(trace, |_| {});
+            }
+        });
+    }
+
     pub fn is_observed(&self) -> bool {
         self.flags.load(Ordering::Acquire) & FUTURE_FLAG_OBSERVED != 0
     }

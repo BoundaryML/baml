@@ -21,6 +21,7 @@ pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
+pub mod meter;
 pub mod prompt;
 pub mod relink;
 mod roots;
@@ -38,6 +39,7 @@ pub use indexable::{
 };
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
+pub use meter::Meter;
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
