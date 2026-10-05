@@ -4493,7 +4493,7 @@ impl<'db> InferenceContext<'db> {
         match op {
             BinaryOp::And | BinaryOp::Or => {
                 let lhs_ty = self.check_condition(body, lhs);
-                let rhs_ty = self.check_condition(body, rhs);
+                let rhs_ty = self.check_short_circuit_operand(body, op, lhs, rhs);
                 let lhs_ty = self.table.resolve_completely(&lhs_ty);
                 let rhs_ty = self.table.resolve_completely(&rhs_ty);
                 const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
