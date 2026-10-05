@@ -204,12 +204,15 @@ fn prepare_runtime_from_blob(
                     BridgeError::Startup(format!(
                         "{context}invalid artifact telemetry policy: {error}"
                     ))
-                })?
-                .unwrap_or_default();
-            policy
-                .verify_build(&bytecode)
-                .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
-            runtime.with_artifact_telemetry(policy)
+                })?;
+            if let Some(policy) = policy {
+                policy
+                    .verify_build(&bytecode)
+                    .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
+                runtime.with_artifact_telemetry(policy)
+            } else {
+                runtime
+            }
         }
         None => runtime,
     };

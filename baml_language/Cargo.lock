@@ -1629,6 +1629,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "tempfile",
  "text-size",
  "thiserror 2.0.18",
  "tokio",
@@ -2183,6 +2184,7 @@ dependencies = [
  "borsh",
  "serde",
  "sha2",
+ "strsim",
  "thiserror 2.0.18",
  "toml 0.8.23",
 ]

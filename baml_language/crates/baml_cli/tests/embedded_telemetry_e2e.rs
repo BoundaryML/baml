@@ -19,6 +19,7 @@ use wiremock::{
 
 fn cli(project: &Path, api: &str, args: &[&str]) -> Output {
     Command::new(common::baml_cli())
+        .args(["--agent-skill-check", "off"])
         .args(args)
         .current_dir(project)
         .env("BOUNDARY_API_URL", api)
@@ -249,4 +250,115 @@ async fn generate_embeds_registration_matching_bytecode_and_plain_generate_never
     assert_eq!(server.received_requests().await.unwrap().len(), 1);
     succeeded(&cli(temp.path(), &server.uri(), &["generate"]));
     assert_eq!(server.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn malformed_publisher_settings_fail_before_minting_or_writing_an_artifact() {
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    let server = MockServer::start().await;
+    for (table, key, value, expected) in [
+        (
+            "pack",
+            "on_inital_telemetry_failure",
+            "\"ignore\"",
+            r#"error: Unknown setting `pack.on_inital_telemetry_failure` in baml.toml.
+
+  Did you mean `pack.on_initial_telemetry_failure`?
+
+  Valid [pack] settings:
+    on_initial_telemetry_failure
+    initial_telemetry_warning_message
+    telemetry_environment
+    env_var_names"#,
+        ),
+        (
+            "bridge",
+            "extra",
+            "true",
+            r#"error: Unknown setting `bridge.extra` in baml.toml.
+
+  Valid [bridge] settings:
+    on_initial_telemetry_failure
+    initial_telemetry_warning_message
+    telemetry_environment
+    env_var_names"#,
+        ),
+        (
+            "bridge.env_var_names",
+            "BOUNDARY_API_KE",
+            "\"CUSTOM_KEY\"",
+            r#"error: Unknown setting `bridge.env_var_names.BOUNDARY_API_KE` in baml.toml.
+
+  Did you mean `bridge.env_var_names.BOUNDARY_API_KEY`?
+
+  Valid [bridge.env_var_names] settings:
+    BAML_TELEMETRY
+    BOUNDARY_PROJECT
+    BOUNDARY_API_KEY"#,
+        ),
+        (
+            "boundary",
+            "api_ur",
+            "\"https://api.cloud.boundaryml.com\"",
+            r#"error: Unknown setting `boundary.api_ur` in baml.toml.
+
+  Did you mean `boundary.api_url`?
+
+  Valid [boundary] settings:
+    project
+    api_url"#,
+        ),
+        (
+            "pack",
+            "telemetry_environment",
+            "false",
+            r#"error: pack.telemetry_environment must be a non-empty string."#,
+        ),
+    ] {
+        let mut config: toml::Value = manifest("").parse().unwrap();
+        let parsed: toml::Value = format!("[{table}]\n{key} = {value}").parse().unwrap();
+        if table.ends_with(".env_var_names") {
+            config["bridge"].as_table_mut().unwrap().insert(
+                "env_var_names".into(),
+                parsed["bridge"]["env_var_names"].clone(),
+            );
+        } else {
+            config[table]
+                .as_table_mut()
+                .unwrap()
+                .insert(key.into(), parsed[table][key].clone());
+        }
+        std::fs::write(
+            temp.path().join("baml.toml"),
+            toml::to_string(&config).unwrap(),
+        )
+        .unwrap();
+        for args in [
+            &[
+                "pack",
+                "main",
+                "--embed-telemetry",
+                "--telemetry-environment=staging",
+                "-o",
+                "out",
+            ][..],
+            &[
+                "generate",
+                "--embed-telemetry",
+                "--telemetry-environment=staging",
+            ][..],
+        ] {
+            let output = cli(temp.path(), &server.uri(), args);
+            assert!(!output.status.success(), "{output:?}");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let error = stderr
+                .find("error: ")
+                .unwrap_or_else(|| panic!("missing diagnostic: {stderr}"));
+            assert_eq!(stderr[error..].trim(), expected);
+            assert_eq!(server.received_requests().await.unwrap().len(), 0);
+            assert!(!temp.path().join("out").exists());
+            assert!(!temp.path().join("generated").exists());
+        }
+    }
 }

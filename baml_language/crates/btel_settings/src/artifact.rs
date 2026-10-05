@@ -10,7 +10,7 @@
 //! [pack.env_var_names]
 //! BAML_TELEMETRY = "ACME_TELEMETRY"
 //! ```
-use std::{ffi::OsString, fmt};
+use std::{ffi::OsString, fmt, fmt::Write as _};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -221,9 +221,77 @@ impl ArtifactKind {
 #[error("{0}")]
 pub struct PolicyError(pub String);
 
+const PRODUCER_FIELDS: &[&str] = &[
+    "on_initial_telemetry_failure",
+    "initial_telemetry_warning_message",
+    "telemetry_environment",
+    "env_var_names",
+];
+const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY_API_KEY"];
+
+/// Validate publisher-owned namespaces before any build can provision credentials.
+/// Other manifest tables (package, generators, etc.) have their own parsers.
+fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError> {
+    for (name, fields) in [
+        ("boundary", &["project", "api_url"][..]),
+        ("pack", PRODUCER_FIELDS),
+        ("bridge", PRODUCER_FIELDS),
+    ] {
+        let Some(value) = manifest.get(name) else {
+            continue;
+        };
+        let table = value
+            .as_table()
+            .ok_or_else(|| PolicyError(format!("[{name}] must be a table.")))?;
+        validate_fields(table, name, fields)?;
+        if name != "boundary" {
+            if let Some(names) = table.get("env_var_names") {
+                let name = format!("{name}.env_var_names");
+                let table = names
+                    .as_table()
+                    .ok_or_else(|| PolicyError(format!("[{name}] must be a table.")))?;
+                validate_fields(table, &name, ENVVAR_FIELDS)?;
+            }
+            if let Some(value) = table.get("telemetry_environment") {
+                if value.as_str().is_none_or(str::is_empty) {
+                    return Err(PolicyError(format!(
+                        "{name}.telemetry_environment must be a non-empty string."
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_fields(table: &toml::Table, name: &str, fields: &[&str]) -> Result<(), PolicyError> {
+    for field in table.keys() {
+        if fields.contains(&field.as_str()) {
+            continue;
+        }
+        let mut message = format!("Unknown setting `{name}.{field}` in baml.toml.\n");
+        if let Some((distance, suggestion)) = fields
+            .iter()
+            .map(|candidate| (strsim::levenshtein(field, candidate), candidate))
+            .min_by_key(|(distance, _)| *distance)
+            && distance <= 2
+        {
+            writeln!(message, "\n  Did you mean `{name}.{suggestion}`?")
+                .expect("writing to a String cannot fail");
+        }
+        write!(message, "\n  Valid [{name}] settings:").expect("writing to a String cannot fail");
+        for field in fields {
+            write!(message, "\n    {field}").expect("writing to a String cannot fail");
+        }
+        return Err(PolicyError(message));
+    }
+    Ok(())
+}
+
 impl ArtifactTelemetry {
     /// Resolve only publisher settings; ambient runtime values are never baked in.
     pub fn from_manifest(manifest: &toml::Value, kind: ArtifactKind) -> Result<Self, PolicyError> {
+        validate_manifest_settings(manifest)?;
         let name = kind.table();
         let mut policy = Self::default();
         if let Some(boundary) = manifest.get("boundary") {
@@ -281,16 +349,6 @@ impl ArtifactTelemetry {
             let names = names
                 .as_table()
                 .ok_or_else(|| PolicyError(format!("[{name}.env_var_names] must be a table.")))?;
-            for binding in names.keys() {
-                if !matches!(
-                    binding.as_str(),
-                    "BAML_TELEMETRY" | "BOUNDARY_PROJECT" | "BOUNDARY_API_KEY"
-                ) {
-                    return Err(PolicyError(format!(
-                        "Unknown {name}.env_var_names binding {binding}. Expected BAML_TELEMETRY, BOUNDARY_PROJECT, or BOUNDARY_API_KEY."
-                    )));
-                }
-            }
             policy.destination_overrides = match (
                 names.get("BOUNDARY_PROJECT"),
                 names.get("BOUNDARY_API_KEY"),
@@ -440,6 +498,89 @@ fn valid_envvar(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_publisher_settings_fail_with_exact_actionable_messages() {
+        for (input, expected) in [
+            (
+                r#"[pack]
+on_inital_telemetry_failure = "ignore""#,
+                r#"Unknown setting `pack.on_inital_telemetry_failure` in baml.toml.
+
+  Did you mean `pack.on_initial_telemetry_failure`?
+
+  Valid [pack] settings:
+    on_initial_telemetry_failure
+    initial_telemetry_warning_message
+    telemetry_environment
+    env_var_names"#,
+            ),
+            (
+                r#"[bridge]
+extra = true"#,
+                r#"Unknown setting `bridge.extra` in baml.toml.
+
+  Valid [bridge] settings:
+    on_initial_telemetry_failure
+    initial_telemetry_warning_message
+    telemetry_environment
+    env_var_names"#,
+            ),
+            (
+                r#"[pack.env_var_names]
+BOUNDARY_API_KE = "CUSTOM_KEY""#,
+                r#"Unknown setting `pack.env_var_names.BOUNDARY_API_KE` in baml.toml.
+
+  Did you mean `pack.env_var_names.BOUNDARY_API_KEY`?
+
+  Valid [pack.env_var_names] settings:
+    BAML_TELEMETRY
+    BOUNDARY_PROJECT
+    BOUNDARY_API_KEY"#,
+            ),
+            (
+                r#"[boundary]
+api_ur = "https://api.cloud.boundaryml.com""#,
+                r#"Unknown setting `boundary.api_ur` in baml.toml.
+
+  Did you mean `boundary.api_url`?
+
+  Valid [boundary] settings:
+    project
+    api_url"#,
+            ),
+        ] {
+            let manifest: toml::Value = input.parse().unwrap();
+            // Both producers reject malformed publisher settings before minting.
+            for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
+                assert_eq!(
+                    ArtifactTelemetry::from_manifest(&manifest, kind)
+                        .unwrap_err()
+                        .to_string(),
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn telemetry_environment_is_validated_even_when_unused_or_overridden() {
+        for name in ["pack", "bridge"] {
+            for value in ["42", "false", "\"\"", "{}"] {
+                let manifest: toml::Value = format!("[{name}]\ntelemetry_environment = {value}")
+                    .parse()
+                    .unwrap();
+                for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
+                    assert_eq!(
+                        ArtifactTelemetry::from_manifest(&manifest, kind)
+                            .unwrap_err()
+                            .to_string(),
+                        format!(r#"{name}.telemetry_environment must be a non-empty string."#)
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn omitted_and_false_never_read_ambient_variables() {

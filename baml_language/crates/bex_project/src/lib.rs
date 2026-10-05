@@ -271,6 +271,7 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
 }
 
 /// Validate and decode a program artifact without executing package initializers.
+/// Runtime telemetry settings apply unless the caller attaches an artifact policy.
 pub fn prepare_from_bytecode(
     bytecode: &[u8],
     sys_ops: SysOps,
@@ -284,7 +285,7 @@ pub fn prepare_from_bytecode(
     Ok(PreparedRuntime {
         program,
         sys_ops,
-        artifact_telemetry: Some(btel_settings::artifact::ArtifactTelemetry::default()),
+        artifact_telemetry: None,
     })
 }
 
@@ -293,6 +294,60 @@ mod bytecode_artifact_tests {
     use sys_native::SysOpsExt as _;
 
     use super::*;
+
+    #[test]
+    fn bytecode_without_artifact_policy_uses_source_runtime_defaults() {
+        const CHILD: &str = "BAML_BYTECODE_POLICY_TEST";
+        if std::env::var_os(CHILD).is_none() {
+            let home = tempfile::tempdir().unwrap();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "bytecode_artifact_tests::bytecode_without_artifact_policy_uses_source_runtime_defaults", "--nocapture"])
+                .current_dir(home.path())
+                .env(CHILD, "1")
+                .env("HOME", home.path())
+                .env("BAML_HOME", home.path())
+                .env("BAML_TELEMETRY", "off")
+                .env("BOUNDARY_API_KEY", "local")
+                .env("BOUNDARY_API_URL", "not a URL")
+                .env_remove("BOUNDARY_PROJECT")
+                .output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let source = prepare(
+            vfs::VfsPath::new(vfs::MemoryFS::new()),
+            sys_ops::SysOps::native(),
+            HashMap::from([(
+                FsPath::from_str("/p/a.baml".to_string()),
+                "function main() -> int { 7 }".to_string(),
+            )]),
+        )
+        .unwrap();
+        let bytecode =
+            baml_artifact::encode(baml_artifact::ArtifactKind::Program, &source.program).unwrap();
+        // Both paths honor the caller's explicit telemetry-off setting.
+        for engine in [
+            source.build().unwrap(),
+            prepare_from_bytecode(&bytecode, sys_ops::SysOps::native())
+                .unwrap()
+                .build()
+                .unwrap(),
+        ] {
+            assert_eq!(engine.telemetry_recording_id(), None);
+        }
+        // An explicit publisher policy still controls generated artifacts.
+        let artifact = prepare_from_bytecode(&bytecode, sys_ops::SysOps::native())
+            .unwrap()
+            .with_artifact_telemetry(btel_settings::artifact::ArtifactTelemetry::default())
+            .build()
+            .unwrap();
+        assert!(artifact.telemetry_recording_id().is_some());
+    }
 
     #[test]
     fn preparation_defers_package_execution_but_eager_constructors_do_not() {
