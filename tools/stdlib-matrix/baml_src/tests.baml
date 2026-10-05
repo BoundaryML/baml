@@ -1,112 +1,154 @@
-// Unit tests over synthetic fixtures. Export-side fixtures are JSON strings
-// (not struct literals) for two reasons: they must go through the real decode
-// path to exercise the `baml.FromJson` override on ExportSignature, and
-// ExportImpl cannot be built as a literal (its `interface` field name is
-// rejected by the parser in literal position).
+// Unit tests over synthetic fixtures. The input-document fixtures are `json`
+// literals decoded with `baml.json.to`, the same decoder the real ingest path
+// uses (`parse_export_text` is only `baml.json.parse` in front of it), so the
+// `baml.FromJson` override on ExportSignature still runs. They stay `json`
+// rather than struct literals because ExportImpl cannot be built as a literal:
+// its `interface` field name is rejected by the parser in literal position.
 
-function fixture_export_text() -> string {
-    `
-        {
-          "format_version": 1,
-          "package": "baml",
-          "items": [
+function fixture_export_json() -> json {
+    {
+        "format_version": 1,
+        "package": "baml",
+        "items": [
             {
-              "id": "T:baml.Foo",
-              "kind": "class",
-              "name": "Foo",
-              "docstring": "see \\"throws\\": here",
-              "fields": [{"id": "F:baml.Foo._size", "name": "_size", "ty": {"display": "int"}}],
-              "methods": [
-                {
-                  "id": "M:baml.Foo.index_of",
-                  "name": "index_of",
-                  "signature": {
-                    "params": [{"name": "self", "ty": {"display": "baml.Foo"}}],
-                    "returns": {"display": "int"},
-                    "throws": {"display": "baml.panics.IndexOutOfBounds"}
-                  }
-                },
-                {
-                  "id": "M:baml.Foo.from_parts",
-                  "name": "from_parts",
-                  "signature": {"params": [{"name": "parts", "ty": {"display": "int"}}], "returns": {"display": "baml.Foo"}}
-                },
-                {
-                  "id": "M:baml.Foo.clone",
-                  "name": "clone",
-                  "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}], "returns": {"display": "baml.Foo"}}
-                },
-                {
-                  "id": "M:baml.Foo.sort_helper",
-                  "name": "sort_helper",
-                  "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}]}
-                }
-              ],
-              "impls": ["X:baml.impl[baml.Comparable for baml.Foo]"]
+                "id": "T:baml.Foo",
+                "kind": "class",
+                "name": "Foo",
+                "docstring": "see \"throws\": here",
+                "fields": [{ "id": "F:baml.Foo._size", "name": "_size", "ty": { "display": "int" } }],
+                "methods": [
+                    {
+                        "id": "M:baml.Foo.index_of",
+                        "name": "index_of",
+                        "signature": {
+                            "params": [{ "name": "self", "ty": { "display": "baml.Foo" } }],
+                            "returns": { "display": "int" },
+                            "throws": { "display": "baml.panics.IndexOutOfBounds" },
+                        },
+                    },
+                    {
+                        "id": "M:baml.Foo.from_parts",
+                        "name": "from_parts",
+                        "signature": {
+                            "params": [{ "name": "parts", "ty": { "display": "int" } }],
+                            "returns": { "display": "baml.Foo" },
+                        },
+                    },
+                    {
+                        "id": "M:baml.Foo.clone",
+                        "name": "clone",
+                        "signature": {
+                            "params": [{ "name": "self", "ty": { "display": "baml.Foo" } }],
+                            "returns": { "display": "baml.Foo" },
+                        },
+                    },
+                    {
+                        "id": "M:baml.Foo.sort_helper",
+                        "name": "sort_helper",
+                        "signature": { "params": [{ "name": "self", "ty": { "display": "baml.Foo" } }] },
+                    },
+                ],
+                "impls": ["X:baml.impl[baml.Comparable for baml.Foo]"],
             },
-            {"id": "T:baml.Foo$stream", "kind": "class", "name": "Foo$stream", "methods": []},
+            { "id": "T:baml.Foo$stream", "kind": "class", "name": "Foo$stream", "methods": [] },
             {
-              "id": "V:baml.helper_fn",
-              "kind": "function",
-              "name": "helper_fn",
-              "signature": {"params": [], "returns": {"display": "int"}}
-            }
-          ],
-          "impls": [
+                "id": "V:baml.helper_fn",
+                "kind": "function",
+                "name": "helper_fn",
+                "signature": { "params": [], "returns": { "display": "int" } },
+            },
+        ],
+        "impls": [
             {
-              "id": "X:baml.impl[baml.Comparable for baml.Foo]",
-              "interface": "baml.Comparable",
-              "for_ty": {"display": "baml.Foo"},
-              "methods": [
-                {
-                  "id": "X:baml.impl[baml.Comparable for baml.Foo]::compare",
-                  "name": "compare",
-                  "signature": {
-                    "params": [{"name": "self", "ty": {"display": "baml.Foo"}}],
-                    "returns": {"display": "int"},
-                    "throws": {"display": "CompareError"}
-                  }
-                },
-                {"id": "X:baml.impl[baml.Comparable for baml.Foo]::index_of", "declared_by": "M:baml.Foo.index_of", "name": "index_of", "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}]}}
-              ]
-            }
-          ]
-        }
-    `
+                "id": "X:baml.impl[baml.Comparable for baml.Foo]",
+                "interface": "baml.Comparable",
+                "for_ty": { "display": "baml.Foo" },
+                "methods": [
+                    {
+                        "id": "X:baml.impl[baml.Comparable for baml.Foo]::compare",
+                        "name": "compare",
+                        "signature": {
+                            "params": [{ "name": "self", "ty": { "display": "baml.Foo" } }],
+                            "returns": { "display": "int" },
+                            "throws": { "display": "CompareError" },
+                        },
+                    },
+                    {
+                        "id": "X:baml.impl[baml.Comparable for baml.Foo]::index_of",
+                        "declared_by": "M:baml.Foo.index_of",
+                        "name": "index_of",
+                        "signature": { "params": [{ "name": "self", "ty": { "display": "baml.Foo" } }] },
+                    },
+                ],
+            },
+        ],
+    }
 }
 
-function fixture_ts_text() -> string {
-    `
-        {
-          "format_version": 2,
-          "typescript_version": "5.8.3-test",
-          "types_node_version": null,
-          "modules": [
+function fixture_export() -> PackageExportDoc {
+    baml.json.to<PackageExportDoc>(fixture_export_json())
+}
+
+function fixture_ts() -> TsSurfaceDoc {
+    let j: json = {
+        "format_version": 2,
+        "typescript_version": "5.8.3-test",
+        "types_node_version": null,
+        "modules": [
             {
-              "name": "(globals)",
-              "kind": "globals",
-              "containers": [
-                {
-                  "name": "Foo",
-                  "kind": "class",
-                  "singleton": false,
-                  "doc": "A fixture container.",
-                  "since": "es5",
-                  "members": [
-                    {"name": "indexOf", "static": false, "signatures": ["indexOf(x: number): number"], "doc": "Finds x.", "since": "es5"},
-                    {"name": "only", "static": false, "signatures": ["only(): void"], "doc": null, "since": "es5"},
-                    {"name": "sortStuff", "static": false, "signatures": ["sortStuff(): void"], "doc": null, "since": "es2015"},
-                    {"name": "clone", "static": false, "signatures": ["clone(): Foo"], "doc": null, "since": "es5"}
-                  ]
-                }
-              ],
-              "functions": [
-                {"name": "parseFixture", "signatures": ["parseFixture(x: string): number"], "doc": null, "since": "es5"}
-              ]
-            }
-          ]
-        }
-    `
+                "name": "(globals)",
+                "kind": "globals",
+                "containers": [
+                    {
+                        "name": "Foo",
+                        "kind": "class",
+                        "singleton": false,
+                        "doc": "A fixture container.",
+                        "since": "es5",
+                        "members": [
+                            {
+                                "name": "indexOf",
+                                "static": false,
+                                "signatures": ["indexOf(x: number): number"],
+                                "doc": "Finds x.",
+                                "since": "es5",
+                            },
+                            {
+                                "name": "only",
+                                "static": false,
+                                "signatures": ["only(): void"],
+                                "doc": null,
+                                "since": "es5",
+                            },
+                            {
+                                "name": "sortStuff",
+                                "static": false,
+                                "signatures": ["sortStuff(): void"],
+                                "doc": null,
+                                "since": "es2015",
+                            },
+                            {
+                                "name": "clone",
+                                "static": false,
+                                "signatures": ["clone(): Foo"],
+                                "doc": null,
+                                "since": "es5",
+                            },
+                        ],
+                    },
+                ],
+                "functions": [
+                    {
+                        "name": "parseFixture",
+                        "signatures": ["parseFixture(x: string): number"],
+                        "doc": null,
+                        "since": "es5",
+                    },
+                ],
+            },
+        ],
+    };
+    baml.json.to<TsSurfaceDoc>(j)
 }
 
 test "id helpers split kind prefixes and path segments" {
@@ -118,7 +160,7 @@ test "id helpers split kind prefixes and path segments" {
 }
 
 test "the FromJson override decodes throws and leaves string values intact" {
-    let doc = parse_export_text(fixture_export_text());
+    let doc = fixture_export();
     assert.equal(doc.items.length(), 3);
     if let foo: ExportItem = doc.items.at(0) {
         assert.equal(foo.docstring ?? "", "see \"throws\": here");
@@ -140,7 +182,7 @@ test "the FromJson override decodes throws and leaves string values intact" {
 }
 
 test "BAML symbols carry paths, origins, and split args from kwargs" {
-    let symbols = extract_symbols(parse_export_text(fixture_export_text()));
+    let symbols = extract_symbols(fixture_export());
     let by_display: map<string, BamlSymbol> = {};
     for (let symbol in symbols) {
         let _ = by_display.set(symbol.display, symbol);
@@ -201,7 +243,7 @@ test "a static that is not callable is a property, not a static method" {
 }
 
 test "TypeScript symbols separate callables from properties" {
-    let symbols = extract_ts_symbols(baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()));
+    let symbols = extract_ts_symbols(fixture_ts());
     // The container, its four members, and the module's free function. A
     // container is a symbol in its own right: it is what a session is opened
     // over, and what a judgement about `Date` is recorded against.
@@ -231,11 +273,7 @@ test "TypeScript symbols separate callables from properties" {
 }
 
 test "a fresh matrix relates both sides and concludes nothing" {
-    let matrix = build_symbol_matrix(
-        parse_export_text(fixture_export_text()),
-        baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()),
-        "sha-fixture",
-    );
+    let matrix = build_symbol_matrix(fixture_export(), fixture_ts(), "sha-fixture");
     assert.equal(matrix.counts.baml_symbols, 9);
     // `Foo`, its four members, and `parseFixture`.
     assert.equal(matrix.counts.ts_symbols, 6);
@@ -277,11 +315,7 @@ function fixture_header(sha: string, ts_version: string) -> ReportHeader {
 /// `clone` is the one that names a type: its signature returns `Foo`, so it is
 /// what proves a judgement goes stale when something it *refers to* moves.
 function fixture_matrix(sha: string, ts_version: string) -> SymbolMatrix {
-    let matrix = build_symbol_matrix(
-        parse_export_text(fixture_export_text()),
-        baml.json.from_string<TsSurfaceDoc>(fixture_ts_text()),
-        sha,
-    );
+    let matrix = build_symbol_matrix(fixture_export(), fixture_ts(), sha);
     matrix.provenance.typescript_version = ts_version;
     matrix.judgements.push(fixture_judgement("Foo.prototype.indexOf", "M:baml.Foo.index_of"));
     matrix.judgements.push(fixture_judgement("Foo.prototype.clone", "M:baml.Foo.clone"));
@@ -383,7 +417,7 @@ test "a generic parameter splits from its bound" {
 }
 
 test "references resolve to declarations, never to members or to nothing" {
-    let symbols = extract_symbols(parse_export_text(fixture_export_text()));
+    let symbols = extract_symbols(fixture_export());
     let by_display: map<string, BamlSymbol> = {};
     for (let symbol in symbols) {
         let _ = by_display.set(symbol.display, symbol);
@@ -447,7 +481,7 @@ test "a name two declarations answer to points at neither" {
 }
 
 test "impl entries address themselves and name what they re-list" {
-    let symbols = extract_symbols(parse_export_text(fixture_export_text()));
+    let symbols = extract_symbols(fixture_export());
     let impl_methods = symbols.filter((symbol) -> {
         symbol.origin == "impl_method"
     });
