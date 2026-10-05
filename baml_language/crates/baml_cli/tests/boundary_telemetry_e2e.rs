@@ -41,15 +41,24 @@ fn diagnostic(output: &std::process::Output) -> String {
     lines[start..=start + end].join("\n")
 }
 
-fn assert_api_key_rejection(output: &std::process::Output, endpoint: &str, query: bool) {
+fn assert_api_key_rejection(
+    output: &std::process::Output,
+    endpoint: &str,
+    query: bool,
+    recording_off_allowed: bool,
+) {
     let actual = diagnostic(output);
     let local_and_outcome = if query {
         r#"    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
 
   Query failed."#
-    } else {
+    } else if recording_off_allowed {
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
+
+  Execution cancelled."#
+    } else {
+        r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
 
   Execution cancelled."#
     };
@@ -284,7 +293,7 @@ async fn initial_rejection_fails_even_if_execution_finishes_before_authorization
         assert!(!output.status.success());
         let stderr = String::from_utf8_lossy(&output.stderr);
         if status == 401 {
-            assert_api_key_rejection(&output, &server.uri(), false);
+            assert_api_key_rejection(&output, &server.uri(), false, true);
         } else {
             assert_ingest_forbidden(&output, &server.uri());
         }
@@ -377,7 +386,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let endpoint = server.uri();
         if status == 401 {
-            assert_api_key_rejection(&output, &endpoint, true);
+            assert_api_key_rejection(&output, &endpoint, true, true);
         } else {
             let expected = match status {
                 403 => format!(
@@ -658,7 +667,7 @@ function main() -> int {
         String::from_utf8_lossy(&output.stdout).contains("execution-started"),
         "execution must start before authorization finishes: {output:?}"
     );
-    assert_api_key_rejection(&output, &server.uri(), false);
+    assert_api_key_rejection(&output, &server.uri(), false, true);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -739,7 +748,7 @@ async fn standalone_binary_reports_initial_refusal_after_a_fast_main() {
         .output()
         .unwrap();
     assert!(!output.status.success(), "{output:?}");
-    assert_api_key_rejection(&output, &server.uri(), false);
+    assert_api_key_rejection(&output, &server.uri(), false, false);
 }
 
 #[test]

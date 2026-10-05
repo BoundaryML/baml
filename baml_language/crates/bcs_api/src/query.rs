@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 pub use crate::credentials::Target;
 use crate::{
-    auth::{Client, HttpFailure},
+    auth::Client,
     credentials::RequestAuthorization,
     error::{Error, Result, require},
 };
@@ -111,44 +111,6 @@ impl Client {
                 .json(&json!({"target":authorization.target}))
         })?;
         Ok(())
-    }
-    /// The same credential lifecycle applies to query and cancellation; targets stay in bodies.
-    fn send_authorized(
-        &self,
-        authorization: &RequestAuthorization,
-        request: impl Fn() -> reqwest::blocking::RequestBuilder,
-    ) -> Result<reqwest::blocking::Response> {
-        if authorization.authentication.endpoint() != self.endpoint.as_str() {
-            return Err(Error::EndpointMismatch);
-        }
-        for attempt in 0..2 {
-            let sent = authorization.authentication.acquire_blocking()?;
-            let response = request()
-                .bearer_auth(sent.token().expose())
-                .send()
-                .map_err(Error::transport)?;
-            let retry = attempt == 0
-                && response.status() == reqwest::StatusCode::UNAUTHORIZED
-                && authorization.authentication.rejected(sent.token());
-            if retry {
-                sent.complete(response.status(), response.headers());
-                continue;
-            }
-            if !response.status().is_success() {
-                let failure = HttpFailure::blocking(
-                    response,
-                    &[
-                        sent.token().expose(),
-                        authorization.authentication.original_credential(),
-                    ],
-                );
-                sent.complete_failure(failure.clone());
-                return Err(failure.into());
-            }
-            sent.complete(response.status(), response.headers());
-            return Ok(response);
-        }
-        unreachable!("the second attempt returns its response")
     }
 }
 

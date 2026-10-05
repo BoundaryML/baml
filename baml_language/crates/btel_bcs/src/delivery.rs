@@ -36,12 +36,16 @@ pub enum DeliveryError {
     Http,
     Unauthorized,
     InitialAuthorization(bcs_api::HttpFailure),
+    InitialConnection(Box<DeliveryError>),
     Api(bcs_api::HttpFailure),
     Worker,
 }
 
 impl fmt::Display for DeliveryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Self::InitialConnection(error) = self {
+            return write!(f, "initial cloud telemetry connection failed: {error}");
+        }
         if let Self::InitialAuthorization(failure) = self {
             return write!(
                 f,
@@ -68,6 +72,8 @@ pub struct DeliveryConfig {
     pub authorization: Option<bcs_api::credentials::RequestAuthorization>,
     /// Start ingestion authorization immediately, before any recording batch is sealed.
     pub initial_recording_id: Option<btel_types::RecordingId>,
+    /// Artifact failure policy applies after bounded initial connection retries.
+    pub terminal_initial_connection: bool,
     pub max_pending_plans: usize,
     /// At most 32 captures, leaving default snapshot-pool headroom for VM
     /// capture. A capture spanning plans counts once per plan.
@@ -105,6 +111,7 @@ impl DeliveryConfig {
             bearer_token: None,
             authorization: None,
             initial_recording_id: None,
+            terminal_initial_connection: false,
             max_pending_plans: 4,
             max_pending_snapshots: 32,
             recording_reserved_bytes: 128 * 1024 * 1024,
@@ -233,6 +240,7 @@ pub enum InitialAuthorization {
     Pending,
     Authorized,
     Rejected(bcs_api::HttpFailure),
+    Failed(DeliveryError),
 }
 
 /// A byte budget that refuses nothing. Plans that fit are admitted together;
@@ -324,6 +332,11 @@ impl Shared {
         state.last_error = Some(error);
         state.loss_count = state.loss_count.saturating_add(1);
         state.progress.reset_cas |= reset_cas;
+    }
+
+    fn initial_connection_failed(&self, error: DeliveryError) -> DeliveryError {
+        self.state.lock().unwrap().authorization = InitialAuthorization::Failed(error.clone());
+        DeliveryError::InitialConnection(Box::new(error))
     }
 
     fn fail(&self, error: DeliveryError) {
@@ -1085,6 +1098,10 @@ async fn prepare(
         serde_json::to_writer(
             &mut writer,
             &bcs_api::credentials::Targeted {
+                build_id: config
+                    .authorization
+                    .as_ref()
+                    .and_then(|auth| auth.authentication.build_id()),
                 target: config
                     .authorization
                     .as_ref()
@@ -1473,7 +1490,6 @@ async fn authorize_initial(
             {
                 return Err(error
                     .http_failure()
-                    .filter(|failure| failure.body.is_some())
                     .map_or(DeliveryError::Http, DeliveryError::Api));
             }
             Ok(Err(error)) => last_failure = error.http_failure(),
@@ -1483,9 +1499,7 @@ async fn authorize_initial(
             tokio::time::sleep(config.retry_delay).await;
         }
     }
-    Err(last_failure
-        .filter(|failure| failure.body.is_some())
-        .map_or(DeliveryError::Http, DeliveryError::Api))
+    Err(last_failure.map_or(DeliveryError::Http, DeliveryError::Api))
 }
 
 async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Receiver<Work>) {
@@ -1510,6 +1524,10 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
             Ok(()) => shared.authorized(),
             Err(error @ DeliveryError::InitialAuthorization(_)) => {
                 shared.fail(error);
+                return;
+            }
+            Err(error) if shared.config.terminal_initial_connection => {
+                shared.fail(shared.initial_connection_failed(error));
                 return;
             }
             Err(error) => shared.lose(error, false),

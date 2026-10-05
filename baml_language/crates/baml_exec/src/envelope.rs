@@ -67,4 +67,109 @@ pub struct PackEnvelope {
 
     /// Output serialization format, baked in at pack time.
     pub output_format: OutputFormat,
+    /// Recording defaults and the runtime overrides permitted by the publisher.
+    pub telemetry: btel_settings::artifact::ArtifactTelemetry,
+}
+
+impl PackEnvelope {
+    /// Dispatch metadata and the complete versioned program are part of the build.
+    pub fn telemetry_digest(
+        &self,
+    ) -> Result<btel_settings::artifact::BytecodeDigest, btel_settings::artifact::PolicyError> {
+        let mut unsigned = self.clone();
+        unsigned.telemetry.embedded = None;
+        let payload = baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &unsigned)
+            .map_err(|_| {
+                btel_settings::artifact::PolicyError(
+                    "Could not encode telemetry build fingerprint.".into(),
+                )
+            })?;
+        btel_settings::artifact::build_digest(&payload, &unsigned.telemetry)
+    }
+    pub fn verify_telemetry(&self) -> Result<(), btel_settings::artifact::PolicyError> {
+        if let Some(embedded) = &self.telemetry.embedded {
+            if embedded.bytecode_digest != self.telemetry_digest()? {
+                return Err(btel_settings::artifact::PolicyError("Embedded telemetry does not match this packed artifact. Rebuild with `baml pack --embed-telemetry`.".into()));
+            }
+            if !embedded.is_well_formed() {
+                return Err(btel_settings::artifact::PolicyError("The embedded telemetry credential is invalid. Rebuild with `baml pack --embed-telemetry`.".into()));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use btel_settings::artifact::{
+        ArtifactTelemetry, EmbeddedIngestion, IngestionDestination, PublicCredential,
+    };
+
+    use super::*;
+
+    fn embedded_envelope() -> PackEnvelope {
+        let mut envelope = PackEnvelope {
+            program: Program::default(),
+            mode: PackMode::Single,
+            targets: vec![TargetEntry {
+                qualified_name: "user.main".into(),
+                display_name: "main".into(),
+                subcommand_name: "main".into(),
+            }],
+            output_format: OutputFormat::Json,
+            telemetry: ArtifactTelemetry::default(),
+        };
+        envelope.telemetry.embedded = Some(Box::new(EmbeddedIngestion {
+            token: PublicCredential::new(format!("bdry_public_{}", "a".repeat(64))),
+            token_id: "token".into(),
+            build_id: "build".into(),
+            product_id: "product".into(),
+            destination: IngestionDestination {
+                org_id: "org".into(),
+                project_id: "project".into(),
+                environment_id: "environment".into(),
+            },
+            bytecode_digest: envelope.telemetry_digest().unwrap(),
+        }));
+        envelope
+    }
+
+    #[test]
+    fn packed_credentials_require_a_build_and_complete_destination() {
+        let valid = embedded_envelope();
+        valid.verify_telemetry().unwrap();
+        for field in [
+            "token",
+            "build_id",
+            "org_id",
+            "project_id",
+            "environment_id",
+        ] {
+            let mut envelope = valid.clone();
+            let embedded = envelope.telemetry.embedded.as_mut().unwrap();
+            match field {
+                "token" => embedded.token = PublicCredential::new("bdry_secret_not_public".into()),
+                "build_id" => embedded.build_id.clear(),
+                "org_id" => embedded.destination.org_id.clear(),
+                "project_id" => embedded.destination.project_id.clear(),
+                "environment_id" => embedded.destination.environment_id.clear(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                envelope.verify_telemetry().unwrap_err().to_string(),
+                r#"The embedded telemetry credential is invalid. Rebuild with `baml pack --embed-telemetry`."#,
+                "invalid {field} must fail even when the envelope digest matches"
+            );
+        }
+    }
+
+    #[test]
+    fn packed_fingerprint_still_covers_dispatch_metadata() {
+        let mut envelope = embedded_envelope();
+        envelope.targets[0].qualified_name = "user.other".into();
+        assert_eq!(
+            envelope.verify_telemetry().unwrap_err().to_string(),
+            r#"Embedded telemetry does not match this packed artifact. Rebuild with `baml pack --embed-telemetry`."#
+        );
+    }
 }

@@ -85,6 +85,124 @@ fn pack_project(
 // Tests
 // ============================================================================
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn artifact_recording_level_requires_explicit_permission_and_off_skips_auth() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+    let built = common::ensure_built();
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    let bin = pack(built, temp.path(), &["main"]);
+    let output = Command::new(&bin)
+        .env("BAML_TELEMETRY", "invalid")
+        .env("BOUNDARY_API_KEY", "local")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "ambient BAML_TELEMETRY must not override the baked default: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    std::fs::write(
+        temp.path().join("baml.toml"),
+        r#"[package]
+name = "test"
+[pack.env_var_names]
+BAML_TELEMETRY = "ACME_TELEMETRY"
+"#,
+    )
+    .unwrap();
+    let bin = pack(built, temp.path(), &["main"]);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(401))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let output = Command::new(&bin)
+        .env("BAML_TELEMETRY", "invalid")
+        .env("ACME_TELEMETRY", "off")
+        .env("BOUNDARY_API_KEY", "bdry_secret_test")
+        .env("BOUNDARY_API_URL", server.uri())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "status: {}; stdout: {}; stderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
+    let output = Command::new(&bin)
+        .env("ACME_TELEMETRY", "invalid")
+        .env("BOUNDARY_API_KEY", "local")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        r#"error: failed to initialize engine: ACME_TELEMETRY must be off, low, medium, or high.
+"#
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn artifact_initial_failure_warning_is_customizable_and_ignore_is_silent() {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path_regex},
+    };
+    let built = common::ensure_built();
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    for action in ["warn", "ignore"] {
+        std::fs::write(
+            temp.path().join("baml.toml"),
+            format!(
+                r#"[package]
+name = "test"
+[pack]
+on_initial_telemetry_failure = "{action}"
+initial_telemetry_warning_message = "Telemetry unavailable; continuing."
+"#
+            ),
+        )
+        .unwrap();
+        let bin = pack(built, temp.path(), &["main"]);
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path_regex(r"/heartbeat$"))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let output = Command::new(&bin)
+            .env("BOUNDARY_API_KEY", "bdry_secret_test")
+            .env("BOUNDARY_API_URL", server.uri())
+            .env("BOUNDARY_PROJECT", "acme/app")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            if action == "warn" {
+                r#"warning: Telemetry unavailable; continuing.
+"#
+            } else {
+                ""
+            }
+        );
+    }
+}
+
 /// Pack root `main`, run it, observe its return value on stdout.
 /// Validates the whole pipeline: envelope roundtrip, host dispatch,
 /// output formatting, auto-CLI parameter binding — all together.

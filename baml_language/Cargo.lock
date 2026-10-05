@@ -1053,11 +1053,13 @@ name = "baml_exec"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_artifact",
  "baml_tests",
  "baml_type",
  "bex_engine",
  "bex_vm_types",
  "borsh",
+ "btel_settings",
  "clap",
  "console",
  "indexmap",
@@ -1218,6 +1220,7 @@ dependencies = [
  "bex_engine",
  "bex_events",
  "bex_project",
+ "bex_vm_types",
  "btel_settings",
  "libsui",
  "sys_native",
@@ -1626,6 +1629,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "tempfile",
  "text-size",
  "thiserror 2.0.18",
  "tokio",
@@ -1869,10 +1873,12 @@ version = "0.218.1"
 dependencies = [
  "baml_artifact",
  "baml_env",
+ "baml_test_support",
  "baml_version",
  "bex_events",
  "bex_project",
  "bridge_ctypes",
+ "btel_settings",
  "btel_types",
  "cbindgen",
  "cc",
@@ -1891,6 +1897,7 @@ dependencies = [
  "toml 0.8.23",
  "vfs",
  "wasm-bindgen-futures",
+ "wiremock",
 ]
 
 [[package]]
@@ -2174,6 +2181,12 @@ name = "btel_settings"
 version = "0.0.0-beta"
 dependencies = [
  "baml_env",
+ "borsh",
+ "serde",
+ "sha2",
+ "strsim",
+ "thiserror 2.0.18",
+ "toml 0.8.23",
 ]
 
 [[package]]

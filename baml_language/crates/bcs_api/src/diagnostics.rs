@@ -8,6 +8,7 @@ pub enum CredentialSource {
     ApiKey,
     SavedLogin,
     Configured,
+    Embedded,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,6 +16,7 @@ pub enum Operation {
     Ingest,
     Query,
     Authentication,
+    MintBuildToken,
 }
 impl Operation {
     fn description(self) -> &'static str {
@@ -22,6 +24,7 @@ impl Operation {
             Self::Ingest => "cloud telemetry ingestion",
             Self::Query => "the cloud query",
             Self::Authentication => "the authentication request",
+            Self::MintBuildToken => "telemetry credential minting",
         }
     }
 }
@@ -31,6 +34,7 @@ pub enum Outcome {
     ExecutionCancelled,
     QueryFailed,
     AuthenticationFailed,
+    ArtifactBuildFailed,
     TelemetryDisabled,
 }
 impl fmt::Display for Outcome {
@@ -39,6 +43,7 @@ impl fmt::Display for Outcome {
             Self::ExecutionCancelled => "Execution cancelled.",
             Self::QueryFailed => "Query failed.",
             Self::AuthenticationFailed => "Authentication command failed.",
+            Self::ArtifactBuildFailed => "Artifact build failed.",
             Self::TelemetryDisabled => "Cloud telemetry disabled. Program execution continues.",
         })
     }
@@ -135,6 +140,23 @@ enum SavedLogin {
     Unreadable,
 }
 
+/// The artifact's permitted recording-level override, used in recovery suggestions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecordingOverride {
+    Fixed,
+    EnvVar(String),
+    Artifact {
+        level: Option<String>,
+        project: Option<String>,
+        api_key: Option<String>,
+    },
+}
+impl Default for RecordingOverride {
+    fn default() -> Self {
+        Self::EnvVar("BAML_TELEMETRY".to_owned())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Diagnostic {
     pub kind: FailureKind,
@@ -143,9 +165,13 @@ pub struct Diagnostic {
     saved_login: SavedLogin,
     api_error: Option<Arc<crate::ApiErrorBody>>,
     credential_store: Option<crate::auth::CredentialStoreLocation>,
+    recording_override: RecordingOverride,
 }
 
 impl Context {
+    pub fn connection_failed(&self, outcome: Outcome) -> Diagnostic {
+        self.diagnostic(FailureKind::Transport, outcome)
+    }
     pub fn rejected(&self, status: u16, outcome: Outcome) -> Diagnostic {
         self.diagnostic(FailureKind::from_status(status), outcome)
     }
@@ -188,6 +214,7 @@ impl Context {
             saved_login,
             api_error: None,
             credential_store: None,
+            recording_override: RecordingOverride::default(),
         }
     }
 }
@@ -202,29 +229,63 @@ pub struct ReportedError {
 }
 
 impl Diagnostic {
+    #[must_use]
+    pub fn with_recording_override(mut self, policy: RecordingOverride) -> Self {
+        self.recording_override = policy;
+        self
+    }
+
+    fn api_key_name(&self) -> Option<&str> {
+        match &self.recording_override {
+            RecordingOverride::Artifact { api_key, .. } => api_key.as_deref(),
+            _ => Some("BOUNDARY_API_KEY"),
+        }
+    }
     fn authentication_choices(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.context.source == CredentialSource::Embedded {
+            writeln!(
+                f,
+                "    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential."
+            )?;
+            if let RecordingOverride::Artifact {
+                project: Some(project),
+                api_key: Some(key),
+                ..
+            } = &self.recording_override
+            {
+                writeln!(
+                    f,
+                    "    • Set {key} to your own Boundary API key, or run `baml auth login` and set {project}=org_handle/project_name."
+                )?;
+            }
+            return Ok(());
+        }
+        let key = self.api_key_name();
         match self.context.source {
             CredentialSource::ApiKey => {
-                writeln!(f, "    • Replace BOUNDARY_API_KEY with a valid API key.")?;
+                let key = key.unwrap_or("the configured API key");
+                writeln!(f, "    • Replace {key} with a valid API key.")?;
                 match self.saved_login {
-                    SavedLogin::Exists => writeln!(
-                        f,
-                        "    • Unset BOUNDARY_API_KEY to use your saved Boundary login."
-                    ),
-                    SavedLogin::Missing => writeln!(
-                        f,
-                        "    • Unset BOUNDARY_API_KEY, then run `baml auth login`."
-                    ),
+                    SavedLogin::Exists => {
+                        writeln!(f, "    • Unset {key} to use your saved Boundary login.")
+                    }
+                    SavedLogin::Missing => {
+                        writeln!(f, "    • Unset {key}, then run `baml auth login`.")
+                    }
                     SavedLogin::Unreadable => writeln!(
                         f,
-                        "    • Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml auth login` to restore user authentication."
+                        "    • Your saved login could not be read. Unset {key}, then run `baml auth login` to restore user authentication."
                     ),
                 }
             }
             CredentialSource::SavedLogin => {
                 writeln!(f, "    • Run `baml auth login` again.")?;
-                writeln!(f, "    • Set BOUNDARY_API_KEY to a valid API key.")
+                if let Some(key) = key {
+                    writeln!(f, "    • Set {key} to a valid API key.")?;
+                }
+                Ok(())
             }
+            CredentialSource::Embedded => unreachable!(),
             CredentialSource::Configured => writeln!(
                 f,
                 "    • Replace the configured credential with a valid credential for this endpoint."
@@ -239,8 +300,11 @@ impl fmt::Display for Diagnostic {
         match self.kind {
             FailureKind::AuthenticationRejected => {
                 let credential = match self.context.source {
-                    CredentialSource::ApiKey => "BOUNDARY_API_KEY",
+                    CredentialSource::ApiKey => {
+                        self.api_key_name().unwrap_or("the configured API key")
+                    }
                     CredentialSource::SavedLogin => "your saved login",
+                    CredentialSource::Embedded => "the embedded telemetry credential",
                     CredentialSource::Configured if operation == Operation::Authentication => {
                         "the authentication request"
                     }
@@ -326,11 +390,29 @@ impl fmt::Display for Diagnostic {
                         f,
                         "    • Select an environment with --environment <name> and, when needed, --project <org/project>."
                     ),
-                    Operation::Ingest => writeln!(
-                        f,
-                        "    • Set BOUNDARY_PROJECT=org_handle/project_name for user authentication, or use an API key bound to an ingestion environment."
-                    ),
-                    Operation::Authentication => {
+                    Operation::Ingest => {
+                        if let RecordingOverride::Artifact {
+                            project, api_key, ..
+                        } = &self.recording_override
+                        {
+                            match (project, api_key) {
+                                (Some(project), Some(key)) => writeln!(
+                                    f,
+                                    "    • Set {project}=org_handle/project_name for user authentication, or set {key} to an API key bound to an ingestion environment."
+                                ),
+                                _ => writeln!(
+                                    f,
+                                    "    • Ask the publisher to rebuild with a valid telemetry destination."
+                                ),
+                            }
+                        } else {
+                            writeln!(
+                                f,
+                                "    • Set BOUNDARY_PROJECT=org_handle/project_name for user authentication, or use an API key bound to an ingestion environment."
+                            )
+                        }
+                    }
+                    Operation::Authentication | Operation::MintBuildToken => {
                         writeln!(f, "    • Check the requested project and environment.")
                     }
                 }?;
@@ -348,16 +430,18 @@ impl fmt::Display for Diagnostic {
                 "    • Run `baml auth login` again and approve the new code in your browser."
             )?,
             FailureKind::PermissionDenied => {
-                if operation == Operation::Authentication {
+                if self.context.source == CredentialSource::Embedded {
+                    self.authentication_choices(f)?;
+                } else if operation == Operation::Authentication {
                     writeln!(
                         f,
                         "    • Ask your Boundary administrator to check authentication access for this deployment."
                     )?;
                 } else {
-                    let permission = if operation == Operation::Ingest {
-                        "ingestion"
-                    } else {
-                        "query"
+                    let permission = match operation {
+                        Operation::Ingest => "ingestion",
+                        Operation::MintBuildToken => "minting (or project administrator access)",
+                        _ => "query",
                     };
                     writeln!(
                         f,
@@ -367,7 +451,9 @@ impl fmt::Display for Diagnostic {
             }
             FailureKind::MissingCredentials => {
                 writeln!(f, "    • Run `baml auth login`.")?;
-                writeln!(f, "    • Set BOUNDARY_API_KEY to a valid API key.")?;
+                if let Some(key) = self.api_key_name() {
+                    writeln!(f, "    • Set {key} to a valid API key.")?;
+                }
             }
             FailureKind::InvalidConfiguration(reason) if reason.starts_with("Boundary API URL") => {
                 writeln!(
@@ -389,7 +475,9 @@ impl fmt::Display for Diagnostic {
                     "    • Unlock your OS credential store and allow BAML to access it."
                 )?;
                 if operation != Operation::Authentication {
-                    writeln!(f, "    • Set BOUNDARY_API_KEY to a valid API key.")?;
+                    if let Some(key) = self.api_key_name() {
+                        writeln!(f, "    • Set {key} to a valid API key.")?;
+                    }
                 }
             }
             FailureKind::Timeout | FailureKind::Transport => writeln!(
@@ -416,17 +504,23 @@ impl fmt::Display for Diagnostic {
         }
         match operation {
             Operation::Ingest => {
-                writeln!(
-                    f,
-                    "    • Record locally: rerun with BOUNDARY_API_KEY=local."
-                )?;
-                writeln!(f, "    • Disable recording: rerun with BAML_TELEMETRY=off.")?;
+                if let Some(key) = self.api_key_name() {
+                    writeln!(f, "    • Record locally: rerun with {key}=local.")?;
+                }
+                let level = match &self.recording_override {
+                    RecordingOverride::EnvVar(name) => Some(name.as_str()),
+                    RecordingOverride::Artifact { level, .. } => level.as_deref(),
+                    RecordingOverride::Fixed => None,
+                };
+                if let Some(name) = level {
+                    writeln!(f, "    • Disable recording: rerun with {name}=off.")?;
+                }
             }
             Operation::Query => writeln!(
                 f,
                 "    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local."
             )?,
-            Operation::Authentication => {}
+            Operation::Authentication | Operation::MintBuildToken => {}
         }
         write!(f, "\n  {}", self.outcome)
     }
@@ -488,6 +582,43 @@ mod tests {
     }
 
     #[test]
+    fn ingestion_recovery_respects_the_artifacts_recording_override() {
+        for (policy, expected) in [
+            (
+                RecordingOverride::Fixed,
+                r#"Boundary rejected your saved login (401).
+
+  To continue, choose one:
+    • Run `baml auth login` again.
+    • Set BOUNDARY_API_KEY to a valid API key.
+    • Record locally: rerun with BOUNDARY_API_KEY=local.
+
+  Execution cancelled."#,
+            ),
+            (
+                RecordingOverride::EnvVar("ACME_TELEMETRY".into()),
+                r#"Boundary rejected your saved login (401).
+
+  To continue, choose one:
+    • Run `baml auth login` again.
+    • Set BOUNDARY_API_KEY to a valid API key.
+    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with ACME_TELEMETRY=off.
+
+  Execution cancelled."#,
+            ),
+        ] {
+            assert_eq!(
+                context(Operation::Ingest, CredentialSource::SavedLogin)
+                    .rejected(401, Outcome::ExecutionCancelled)
+                    .with_recording_override(policy)
+                    .to_string(),
+                expected,
+            );
+        }
+    }
+
+    #[test]
     fn rejected_key_suggests_the_correct_login_recovery() {
         for (saved_login, expected) in [
             (
@@ -534,6 +665,7 @@ mod tests {
                 saved_login,
                 api_error: None,
                 credential_store: None,
+                recording_override: RecordingOverride::default(),
             }
             .to_string();
             assert_eq!(message, expected, "saved login: {saved_login:?}");
@@ -817,5 +949,61 @@ mod tests {
             let message = report.to_string();
             assert_eq!(message, expected);
         }
+    }
+}
+
+#[cfg(test)]
+mod artifact_diagnostics_tests {
+    use super::*;
+    #[test]
+    fn fixed_embedded_rejection_guides_the_publisher_without_ambient_override_suggestions() {
+        let context = Context {
+            endpoint: None,
+            source: CredentialSource::Embedded,
+            operation: Operation::Ingest,
+        };
+        assert_eq!(
+            context
+                .rejected(401, Outcome::ExecutionCancelled)
+                .with_recording_override(RecordingOverride::Artifact {
+                    level: None,
+                    project: None,
+                    api_key: None
+                })
+                .to_string(),
+            r#"Boundary rejected the embedded telemetry credential (401).
+
+  To continue, choose one:
+    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential.
+
+  Execution cancelled."#
+        );
+    }
+    #[test]
+    fn embedded_recovery_names_only_publisher_permitted_variables() {
+        let context = Context {
+            endpoint: None,
+            source: CredentialSource::Embedded,
+            operation: Operation::Ingest,
+        };
+        assert_eq!(
+            context
+                .rejected(403, Outcome::ExecutionCancelled)
+                .with_recording_override(RecordingOverride::Artifact {
+                    level: Some("ACME_TELEMETRY".into()),
+                    project: Some("ACME_PROJECT".into()),
+                    api_key: Some("ACME_KEY".into())
+                })
+                .to_string(),
+            r#"Boundary denied cloud telemetry ingestion (HTTP 403).
+
+  To continue, choose one:
+    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential.
+    • Set ACME_KEY to your own Boundary API key, or run `baml auth login` and set ACME_PROJECT=org_handle/project_name.
+    • Record locally: rerun with ACME_KEY=local.
+    • Disable recording: rerun with ACME_TELEMETRY=off.
+
+  Execution cancelled."#
+        );
     }
 }

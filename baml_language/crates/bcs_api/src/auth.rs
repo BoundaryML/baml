@@ -165,12 +165,50 @@ impl Client {
         )?;
         Ok(())
     }
+    /// All authenticated operations share renewal and refusal handling; targets stay in bodies.
+    pub(crate) fn send_authorized(
+        &self,
+        authorization: &crate::credentials::RequestAuthorization,
+        request: impl Fn() -> reqwest::blocking::RequestBuilder,
+    ) -> Result<reqwest::blocking::Response> {
+        if authorization.authentication.endpoint() != self.endpoint.as_str() {
+            return Err(Error::EndpointMismatch);
+        }
+        for attempt in 0..2 {
+            let sent = authorization.authentication.acquire_blocking()?;
+            let response = request()
+                .bearer_auth(sent.token().expose())
+                .send()
+                .map_err(Error::transport)?;
+            let retry = attempt == 0
+                && response.status() == reqwest::StatusCode::UNAUTHORIZED
+                && authorization.authentication.rejected(sent.token());
+            if retry {
+                sent.complete(response.status(), response.headers());
+                continue;
+            }
+            if !response.status().is_success() {
+                let failure = HttpFailure::blocking(
+                    response,
+                    &[
+                        sent.token().expose(),
+                        authorization.authentication.original_credential(),
+                    ],
+                );
+                sent.complete_failure(failure.clone());
+                return Err(failure.into());
+            }
+            sent.complete(response.status(), response.headers());
+            return Ok(response);
+        }
+        unreachable!("the second attempt returns its response")
+    }
     pub(crate) fn post<T: DeserializeOwned>(
         &self,
         path: &str,
         body: &serde_json::Value,
     ) -> Result<T> {
-        let mut response = self
+        let response = self
             .http
             .post(format!("{}{path}", self.endpoint.0))
             .json(body)
@@ -184,6 +222,11 @@ impl Client {
                 .collect();
             return Err(HttpFailure::blocking(response, &secrets).into());
         }
+        Self::read_json(response)
+    }
+    pub(crate) fn read_json<T: DeserializeOwned>(
+        mut response: reqwest::blocking::Response,
+    ) -> Result<T> {
         let mut bytes = Vec::new();
         response
             .by_ref()

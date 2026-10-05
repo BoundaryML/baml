@@ -73,6 +73,7 @@ impl Cache {
 struct State {
     endpoint: String,
     credential: Secret,
+    build_id: Option<String>,
     cache: Mutex<Cache>,
 }
 
@@ -80,25 +81,35 @@ struct State {
 /// endpoint and original credential. Neither credentials nor access grants enter diagnostics.
 #[derive(Clone, Debug)]
 pub struct Authentication(Arc<State>);
-type CacheKey = (String, [u8; 32]);
+type CacheKey = (String, [u8; 32], Option<String>);
 type Registry = HashMap<CacheKey, Weak<State>>;
 static AUTHENTICATIONS: OnceLock<Mutex<Registry>> = OnceLock::new();
 
 impl Authentication {
     pub fn shared(endpoint: &str, credential: Secret) -> Self {
+        Self::shared_context(endpoint, credential, None)
+    }
+    pub fn for_build(endpoint: &str, credential: Secret, build_id: String) -> Self {
+        Self::shared_context(endpoint, credential, Some(build_id))
+    }
+    pub fn build_id(&self) -> Option<&str> {
+        self.0.build_id.as_deref()
+    }
+    fn shared_context(endpoint: &str, credential: Secret, build_id: Option<String>) -> Self {
         let hash: [u8; 32] = Sha256::digest(credential.expose().as_bytes()).into();
         let mut registry = AUTHENTICATIONS
             .get_or_init(Mutex::default)
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         registry.retain(|_, state| state.strong_count() > 0);
-        let key = (endpoint.trim_end_matches('/').to_owned(), hash);
+        let key = (endpoint.trim_end_matches('/').to_owned(), hash, build_id);
         if let Some(state) = registry.get(&key).and_then(Weak::upgrade) {
             return Self(state);
         }
         let state = Arc::new(State {
             endpoint: key.0.clone(),
             credential,
+            build_id: key.2.clone(),
             cache: Mutex::new(Cache::default()),
         });
         registry.insert(key, Arc::downgrade(&state));
@@ -349,6 +360,8 @@ pub struct RequestAuthorization {
 
 #[derive(Serialize)]
 pub struct Targeted<'a, T> {
+    #[serde(rename = "buildId", skip_serializing_if = "Option::is_none")]
+    pub build_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<&'a Target>,
     #[serde(flatten)]

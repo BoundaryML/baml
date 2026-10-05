@@ -38,6 +38,7 @@ pub async fn heartbeat(
     body: &Liveness,
 ) -> Result<Response, ControlError> {
     let targeted = Targeted {
+        build_id: authorization.and_then(|auth| auth.authentication.build_id()),
         target: authorization.and_then(|auth| auth.target.as_ref()),
         payload: body,
     };
