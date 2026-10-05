@@ -1269,7 +1269,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         current(&s)?.body_text(cas)
     })?;
     register_identity_and_time(conn)?;
-    register_final_tables(conn)?;
+    register_final_tables(conn, slot)?;
     let _ = Null;
     Ok(())
 }
@@ -1397,7 +1397,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
         };
         usage.cost = usage
             .cost
-            .zip(crate::pricing::cost(
+            .zip(btel_reader::pricing::cost(
                 model.as_deref(),
                 input,
                 output,
@@ -1448,6 +1448,81 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
                     .map_or(Inline::Null, Inline::Float),
             ),
         ]))))
+    }
+}
+
+/// Provider response usage is shared with cloud projection.
+struct NetworkUsageSum(ContextSlot);
+struct NetworkUsageState {
+    usage: btel_reader::usage::NetworkUsage,
+    request: Option<[u8; 16]>,
+}
+impl Aggregate<Option<NetworkUsageState>, Option<Vec<u8>>> for NetworkUsageSum {
+    fn init(&self, _: &mut Context<'_>) -> rusqlite::Result<Option<NetworkUsageState>> {
+        Ok(None)
+    }
+    fn step(
+        &self,
+        ctx: &mut Context<'_>,
+        acc: &mut Option<NetworkUsageState>,
+    ) -> rusqlite::Result<()> {
+        if acc.is_none() {
+            let Some(url) = ctx.get::<Option<String>>(0)? else {
+                return Ok(());
+            };
+            let Some(usage) = btel_reader::usage::NetworkUsage::new(&url) else {
+                return Ok(());
+            };
+            let request = opt_blob(ctx, 1)?
+                .map(|id| <[u8; 16]>::try_from(id).map_err(|_| user_error("invalid CAS id")))
+                .transpose()?;
+            *acc = Some(NetworkUsageState { usage, request });
+        }
+        let Some(id) = opt_blob(ctx, 2)? else {
+            return Ok(());
+        };
+        let id = <[u8; 16]>::try_from(id).map_err(|_| user_error("invalid CAS id"))?;
+        if let Some(body) = current(&self.0)?.body_text(id)? {
+            acc.as_mut()
+                .expect("initialized usage")
+                .usage
+                .observe(&body);
+        }
+        Ok(())
+    }
+    fn finalize(
+        &self,
+        _: &mut Context<'_>,
+        acc: Option<Option<NetworkUsageState>>,
+    ) -> rusqlite::Result<Option<Vec<u8>>> {
+        let Some(acc) = acc.flatten() else {
+            return Ok(None);
+        };
+        let request = acc
+            .request
+            .filter(|_| acc.usage.needs_request_model())
+            .map(|id| current(&self.0)?.body_text(id))
+            .transpose()?
+            .flatten();
+        Ok(acc.usage.finish(request.as_deref()).map(|usage| {
+            let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
+            inline_handle(&Inline::Map(vec![
+                (
+                    "model_name".into(),
+                    usage.model_name.map_or(Inline::Null, Inline::Text),
+                ),
+                ("model_calls".into(), Inline::Int(usage.model_calls)),
+                ("input_tokens".into(), Inline::Int(usage.input_tokens)),
+                ("output_tokens".into(), Inline::Int(usage.output_tokens)),
+                ("cache_read_tokens".into(), int(usage.cache_read_tokens)),
+                ("cache_write_tokens".into(), int(usage.cache_write_tokens)),
+                ("reasoning_tokens".into(), int(usage.reasoning_tokens)),
+                (
+                    "cost".into(),
+                    usage.cost.map_or(Inline::Null, Inline::Float),
+                ),
+            ]))
+        }))
     }
 }
 
@@ -1528,7 +1603,7 @@ fn utc_text(ns: Option<i64>) -> Option<String> {
     ns.and_then(|ns| format_unix_ns(i128::from(ns)))
 }
 
-fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
+fn register_final_tables(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
     let pure = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
     // A node's public ID: 16 hex digits.
     conn.create_scalar_function("__btel_hex", 1, pure, |ctx| {
@@ -1558,7 +1633,18 @@ fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
         }
         Ok(inline_handle(&Inline::List(history)))
     })?;
+    conn.create_scalar_function("__btel_provider_route", 1, pure, |ctx| {
+        Ok(ctx
+            .get::<Option<String>>(0)?
+            .is_some_and(|url| btel_reader::usage::NetworkUsage::new(&url).is_some()))
+    })?;
     conn.create_aggregate_function("__btel_usage", 6, pure, UsageSum)?;
+    conn.create_aggregate_function(
+        "__btel_network_usage",
+        3,
+        FunctionFlags::SQLITE_UTF8,
+        NetworkUsageSum(slot.clone()),
+    )?;
     // `(url, marker)`: the path segment right after the first `marker`, up
     // to the next '/', ':', '?' or '#', percent-decoded. The model in
     // `.../models/gemini-2.5-pro:generateContent` or `/model/<id>/converse`.

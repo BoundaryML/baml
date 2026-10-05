@@ -1,5 +1,5 @@
-//! Model prices for `spans.temporary_projections.cost`, until journal
-//! projections replace the column. Dollars per million tokens.
+//! Estimated model prices shared by local queries and cloud projection.
+//! Dollars per million tokens; prices are a snapshot, not a billing contract.
 
 struct Price {
     model: &'static str,
@@ -71,7 +71,7 @@ fn price(model: &str) -> Option<&'static Price> {
 
 /// Dollars for one model turn; `None` for a model without a price. `input`
 /// excludes cache reads and writes.
-pub(crate) fn cost(
+pub fn cost(
     model: Option<&str>,
     input: i64,
     output: i64,
