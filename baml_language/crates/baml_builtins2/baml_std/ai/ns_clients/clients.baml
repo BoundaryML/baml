@@ -300,7 +300,11 @@ class Retry {
             attempt,
             inner.id(),
             () -> root.ModelTurn {
-                inner.invoke(input)
+                inner.invoke(input) catch (e) {
+                    // A member's raw Io is judged as its classified form: a
+                    // safe transport failure (see `ai.errors.InvokeError`).
+                    let io: baml.errors.Io => throw root.errors.normalize(io),
+                }
             },
             $trace = _attempt_trace(),
         ) catch_all (e) {
@@ -557,7 +561,12 @@ class Fallback {
                     index,
                     c.id(),
                     () -> root.ModelTurn {
-                        c.invoke(input)
+                        c.invoke(input) catch (e) {
+                            // A member's raw Io is judged as its classified
+                            // form: a safe transport failure (see
+                            // `ai.errors.InvokeError`).
+                            let io: baml.errors.Io => throw root.errors.normalize(io),
+                        }
                     },
                     $trace = _attempt_trace(),
                 ) catch_all (e) {

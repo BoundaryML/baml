@@ -166,7 +166,11 @@ class FunctionSpec<Out> {
                 toolbox: self.tools(),
                 output_type: self.output_type(),
             },
-        )
+        ) catch (e) {
+            // A client may throw a raw Io; the stack above it throws the
+            // classified failure (see `ai.errors.InvokeError`).
+            let io: baml.errors.Io => throw root.errors.normalize(io),
+        }
     }
 
     function name(self) -> string {

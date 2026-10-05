@@ -275,7 +275,11 @@ class Agent {
                 toolbox: spec.tools(),
                 output_type: spec.output_type(),
             },
-        );
+        ) catch (e) {
+            // A client may throw a raw Io; the stack above it throws the
+            // classified failure (see `ai.errors.InvokeError`).
+            let io: baml.errors.Io => throw root.errors.normalize(io),
+        };
         if let u: root.events.Usage = turn.usage {
             total.input_tokens += u.input_tokens;
             total.output_tokens += u.output_tokens;

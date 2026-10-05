@@ -682,7 +682,9 @@ function _token_timeout_error(
 /// from the text received so far.
 class Stream<T> {
     _provider: string,
-    _next_text: () -> string? throws root.errors.InvokeError,
+    // Every error of the pull is classified before it leaves the closure, so
+    // the channel is the normalized one: no raw `baml.errors.Io`.
+    _next_text: () -> string? throws root.errors.NormalizedError,
     _cache: baml.sap._ParseCache<T>,
     _text: string,
     _finished: bool,
@@ -795,7 +797,11 @@ function from_spec<T>(
             toolbox: spec.tools(),
             output_type: spec.output_type(),
         },
-    );
+    ) catch (e) {
+        // A client may throw a raw Io; the stack above it throws the
+        // classified failure (see `ai.errors.InvokeError`).
+        let io: baml.errors.Io => throw root.errors.normalize(io),
+    };
     // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
     // all it needs is a way to pull the next text delta from TurnStream.
     Stream {
