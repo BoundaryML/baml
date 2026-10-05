@@ -5,8 +5,8 @@
 //! "list", "item": …}`), a nullable union folds to `optional`, and a named
 //! part is `{name, schema}`. It is widened to every type a runtime value can
 //! have: a generic class keeps its arguments, and functions, futures and
-//! interfaces have their own kinds. A named type is spelled as `$class` spells
-//! it; a head the capture could not resolve has a `null` name.
+//! interfaces have their own kinds. A named type has its full name, as
+//! `$class` spells it; a head the capture could not resolve has a `null` name.
 
 use baml_type::{Literal, RealizedTy};
 use btel_snapshot::{OwnedType, TypeIdentity};
@@ -131,7 +131,7 @@ fn node<const N: usize>(name: &str, parts: [(&str, Json); N]) -> Json {
 fn named(name: &str, head: &TypeIdentity) -> Map<String, Json> {
     let mut map = kind(name);
     let spelled = match head {
-        TypeIdentity::Resolved(head) => Json::from(head.name().display_name().as_str()),
+        TypeIdentity::Resolved(head) => Json::from(head.name().to_string()),
         TypeIdentity::Unresolved(_) => Json::Null,
     };
     map.insert("name".into(), spelled);

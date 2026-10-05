@@ -846,7 +846,7 @@ impl<'a> Renderer<'a> {
 
     fn declaration_name(&mut self, blob: &DecodedSnapshot, id: NodeId) -> Json {
         match blob.object(id) {
-            DecodedObject::Declaration { name, .. } => self.text(name.0.display_name().as_ref()),
+            DecodedObject::Declaration { name, .. } => self.text(&name.0.to_string()),
             DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
             | DecodedObject::Map { .. }
@@ -1035,7 +1035,7 @@ impl<'a> Renderer<'a> {
                         "$class_type"
                     }
                     .into(),
-                    self.text(name.0.display_name().as_ref()),
+                    self.text(&name.0.to_string()),
                 );
             }
             DecodedObject::Cell(value) => {

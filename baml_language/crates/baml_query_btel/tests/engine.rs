@@ -229,7 +229,7 @@ async fn acceptance_queries_answer_from_real_recordings() {
     assert_eq!(column(&typed, "who"), vec![&json!("bob"); 3]);
     assert_eq!(column(&typed, "count")[0], &json!(8));
     let results = column(&typed, "result");
-    assert_eq!(results[0]["$class"], json!("Order"));
+    assert_eq!(results[0]["$class"], json!("user.Order"));
     assert_eq!(results[0]["items"].as_array().map(Vec::len), Some(8));
     assert_eq!(results[1], &json!("Premium"));
     assert_eq!(results[2], &json!(27));
@@ -1224,10 +1224,11 @@ async fn generic_calls_record_their_type_args_by_name() {
     assert!(results.iter().all(Result::is_ok), "{results:?}");
     let mut index = index(project.path());
     let ty = |name: &str| json!({ "$type": { "type": name } });
-    let class = |name: &str| json!({ "$type": { "type": "class", "name": name } });
+    let class =
+        |name: &str| json!({ "$type": { "type": "class", "name": format!("user.{name}") } });
     let resumes = json!({ "$type": {
         "type": "list",
-        "item": { "type": "class", "name": "Resume" },
+        "item": { "type": "class", "name": "user.Resume" },
     } });
     let expected = vec![
         // A lambda's frame is its enclosing function's.

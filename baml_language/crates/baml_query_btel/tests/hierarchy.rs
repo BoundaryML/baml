@@ -185,7 +185,7 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
     assert_eq!(union.columns[1].column_type, "baml_value");
     assert_eq!(union.rows[0][0], json!("user.Classify"));
     assert_eq!(union.rows[0][1], json!("Premium"));
-    assert_eq!(union.rows[1][1]["$class"], json!("Order"));
+    assert_eq!(union.rows[1][1]["$class"], json!("user.Order"));
     assert_eq!(union.rows[1][1]["customer"]["name"], json!("bob"));
 
     // Distinct states, one call each.

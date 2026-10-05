@@ -37,7 +37,7 @@ fn data_types_use_the_playground_vocabulary() {
         json!({"type": "optional", "inner": {
             "type": "map",
             "key": {"type": "string"},
-            "value": {"type": "list", "item": {"type": "class", "name": "Resume"}},
+            "value": {"type": "list", "item": {"type": "class", "name": "user.Resume"}},
         }})
     );
     assert_eq!(
@@ -64,14 +64,14 @@ fn data_types_use_the_playground_vocabulary() {
 fn a_generic_class_keeps_its_arguments() {
     assert_eq!(
         ty_json(&class("Box", vec![RealizedTy::Int])),
-        json!({"type": "class", "name": "Box", "args": [{"type": "int"}]})
+        json!({"type": "class", "name": "user.Box", "args": [{"type": "int"}]})
     );
 }
 
 #[test]
-fn named_types_are_spelled_as_instances_spell_them() {
-    // A dependency's package is kept; a runtime-created type has its bare
-    // name; an unresolved head has none.
+fn named_types_have_their_full_names() {
+    // A user type has its package, as a dependency's does; a runtime-created
+    // type has no package, only its name; an unresolved head has none.
     let dependency = head(DeclarationName::Declared(TypeName::new(
         Name::new("baml"),
         vec![Name::new("json")],
@@ -99,7 +99,7 @@ fn named_types_are_spelled_as_instances_spell_them() {
             user("Status"),
             Name::new("Active")
         )),
-        json!({"type": "enumVariant", "name": "Status", "value": "Active"})
+        json!({"type": "enumVariant", "name": "user.Status", "value": "Active"})
     );
 }
 
@@ -151,10 +151,10 @@ fn runtime_only_types_have_their_own_kinds() {
             ],
             "return": {
                 "type": "future",
-                "value": {"type": "class", "name": "Box", "args": [{"type": "int"}]},
+                "value": {"type": "class", "name": "user.Box", "args": [{"type": "int"}]},
                 "error": {"type": "never"},
             },
-            "throws": {"type": "class", "name": "Oops"},
+            "throws": {"type": "class", "name": "user.Oops"},
         })
     );
     let interface = RealizedTy::Interface(
@@ -166,7 +166,7 @@ fn runtime_only_types_have_their_own_kinds() {
         ty_json(&interface),
         json!({
             "type": "interface",
-            "name": "Iterator",
+            "name": "user.Iterator",
             "args": [{"type": "int"}],
             "associated": {"Item": {"type": "string"}},
         })
