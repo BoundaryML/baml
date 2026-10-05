@@ -1153,9 +1153,8 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
     };
     let read = || {
         let other = vm
-            .as_map(&instance.load_field(4))
+            .as_string_map(&instance.load_field(4))
             .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())?
-            .to_index_map()
             .iter()
             .map(|(key, value)| {
                 vm.as_string(value)
@@ -1589,9 +1588,8 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 }
             };
             let other = vm
-                .as_map(&meta.load_field(3))
+                .as_string_map(&meta.load_field(3))
                 .map_err(|_| "reflect.Meta.other must be map<string, string>".to_string())?
-                .to_index_map()
                 .iter()
                 .map(|(key, value)| {
                     vm.as_string(value)

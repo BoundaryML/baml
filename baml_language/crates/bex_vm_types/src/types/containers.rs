@@ -1,4 +1,4 @@
-use std::cell::UnsafeCell;
+use std::{cell::UnsafeCell, collections::HashMap};
 
 use indexmap::IndexMap;
 
@@ -274,31 +274,198 @@ pub struct Map {
     pub value_ty: Box<crate::RealizedTy>,
     pub data: MapContainer,
 }
-/// Heap-mutable map container. Pairs a boxed `IndexMap<BexStr, Value>` with
+/// Heap-mutable map container. Pairs a boxed [`MapData`] with
 /// the generic [`LockedContainer`] lock/guard machinery.
 ///
 /// `IndexMap` is 72 bytes before the lock, so storing it inline would push
 /// `Object` past its size cap. Storing only the backing map behind `Box<_>`
 /// keeps the container itself small while avoiding an extra indirection around
 /// the lock.
-pub type MapContainer = LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>;
-pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
-pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<bex_str::BexStr, Value>>>;
+pub type MapContainer = LockedContainer<Box<MapData>>;
+pub type MapReadGuard<'a> = LockedReadGuard<'a, Box<MapData>>;
+pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<MapData>>;
 
-impl MapReadGuard<'_> {
-    /// Snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
-        self.data.as_ref().clone()
+pub type EntryId = u64;
+
+/// Hash a native string key with the same framing as the VM's `Hash` driver.
+pub fn map_string_hash(key: &str) -> u64 {
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hasher.write(&[5]);
+    hasher.write(&(key.len() as u64).to_le_bytes());
+    hasher.write(key.as_bytes());
+    hasher.finish()
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MapEntry {
+    pub key: Value,
+    pub value: Value,
+    pub hash: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MapEpochChanged;
+
+/// Ordered entries indexed by hashes computed by the VM, never by Rust's
+/// pointer-based `Value` equality or hashing.
+#[derive(Clone, Debug, Default)]
+pub struct MapData {
+    entries: IndexMap<EntryId, MapEntry>,
+    buckets: HashMap<u64, Vec<EntryId>>,
+    next_id: EntryId,
+    // Only membership changes invalidate an in-flight key comparison.
+    epoch: u64,
+}
+
+impl MapData {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Construct from distinct keys with their VM-computed hashes.
+    pub fn from_hashed_entries(entries: impl IntoIterator<Item = (u64, Value, Value)>) -> Self {
+        let mut data = Self::new();
+        for (hash, key, value) in entries {
+            data.insert_hashed(hash, key, value);
+        }
+        data
+    }
+
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        if !self.entries.is_empty() {
+            self.advance_epoch();
+            self.entries.clear();
+            self.buckets.clear();
+        }
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&Value, &Value)> {
+        self.entries
+            .values()
+            .map(|entry| (&entry.key, &entry.value))
+    }
+
+    pub fn entries(&self) -> impl ExactSizeIterator<Item = (&EntryId, &MapEntry)> {
+        self.entries.iter()
+    }
+
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = &Value> {
+        self.entries.values().map(|entry| &entry.key)
+    }
+
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &Value> {
+        self.entries.values().map(|entry| &entry.value)
+    }
+
+    /// Only for GC forwarding: changing a key's identity or contents invalidates
+    /// its cached hash. GC relocation preserves the VM hash.
+    pub fn trace_values_mut(&mut self) -> impl Iterator<Item = &mut Value> {
+        self.entries
+            .values_mut()
+            .flat_map(|entry| [&mut entry.key, &mut entry.value])
+    }
+
+    /// Capture candidates for equality checks performed after releasing the lock.
+    /// The caller must root copied keys and values if a check can trigger GC.
+    pub fn snapshot_bucket(&self, hash: u64) -> (u64, Vec<(EntryId, MapEntry)>) {
+        (
+            self.epoch,
+            self.buckets
+                .get(&hash)
+                .into_iter()
+                .flatten()
+                .map(|id| (*id, self.entries[id]))
+                .collect(),
+        )
+    }
+
+    fn advance_epoch(&mut self) {
+        self.epoch = self.epoch.checked_add(1).expect("map epoch exhausted");
+    }
+
+    /// Insert a key already known to be distinct by the caller.
+    pub fn insert_hashed(&mut self, hash: u64, key: Value, value: Value) -> EntryId {
+        let id = self.next_id;
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("map entry IDs exhausted");
+        self.advance_epoch();
+        self.entries.insert(id, MapEntry { key, value, hash });
+        self.buckets.entry(hash).or_default().push(id);
+        id
+    }
+
+    /// Validate a search against this map's snapshot epoch. The ID must come
+    /// from that snapshot; `None` denotes a completed search with no match.
+    pub fn get_if_epoch(
+        &self,
+        epoch: u64,
+        id: Option<EntryId>,
+    ) -> Result<Option<Value>, MapEpochChanged> {
+        if epoch != self.epoch {
+            return Err(MapEpochChanged);
+        }
+        Ok(id.map(|id| self.entries[&id].value))
+    }
+
+    pub fn set_if_epoch(
+        &mut self,
+        epoch: u64,
+        id: Option<EntryId>,
+        hash: u64,
+        key: Value,
+        value: Value,
+    ) -> Result<Option<Value>, MapEpochChanged> {
+        if epoch != self.epoch {
+            return Err(MapEpochChanged);
+        }
+        if let Some(id) = id {
+            Ok(Some(std::mem::replace(&mut self.entries[&id].value, value)))
+        } else {
+            self.insert_hashed(hash, key, value);
+            Ok(None)
+        }
+    }
+
+    pub fn remove_if_epoch(
+        &mut self,
+        epoch: u64,
+        id: Option<EntryId>,
+    ) -> Result<Option<Value>, MapEpochChanged> {
+        if epoch != self.epoch {
+            return Err(MapEpochChanged);
+        }
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        self.advance_epoch();
+        let entry = self.entries.shift_remove(&id).expect("validated map entry");
+        let bucket = self.buckets.get_mut(&entry.hash).expect("map bucket");
+        bucket.retain(|candidate| *candidate != id);
+        if bucket.is_empty() {
+            self.buckets.remove(&entry.hash);
+        }
+        Ok(Some(entry.value))
     }
 }
 
 impl Map {
     /// Build a map of `key_ty`/`value_ty` from its backing entries.
-    pub fn new(
-        key_ty: crate::RealizedTy,
-        value_ty: crate::RealizedTy,
-        data: IndexMap<bex_str::BexStr, Value>,
-    ) -> Self {
+    pub fn new(key_ty: crate::RealizedTy, value_ty: crate::RealizedTy, data: MapData) -> Self {
         Self {
             key_ty: Box::new(key_ty),
             value_ty: Box::new(value_ty),
@@ -322,7 +489,7 @@ impl Map {
     ///
     /// The caller must uphold the no-concurrent-writer contract documented on
     /// [`LockedContainer::data_unchecked`].
-    pub unsafe fn data_unchecked(&self) -> &IndexMap<bex_str::BexStr, Value> {
+    pub unsafe fn data_unchecked(&self) -> &MapData {
         // SAFETY: forwarded to the caller's obligation.
         unsafe { self.data.data_unchecked() }
     }
@@ -335,7 +502,7 @@ impl Map {
     /// The caller must uphold the contract documented on
     /// [`LockedContainer::data_unchecked_mut`].
     #[expect(clippy::mut_from_ref)]
-    pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<bex_str::BexStr, Value> {
+    pub unsafe fn data_unchecked_mut(&self) -> &mut MapData {
         // SAFETY: forwarded to the caller's obligation.
         unsafe { self.data.data_unchecked_mut() }
     }
@@ -350,13 +517,115 @@ impl Map {
         self.data.lock().data.is_empty()
     }
 
-    /// Locked convenience: copy the value at `key`, or `None` if absent.
-    pub fn get(&self, key: &str) -> Option<Value> {
-        self.data.lock().data.get(key).copied()
+    pub fn epoch(&self) -> u64 {
+        self.lock().epoch()
     }
 
-    /// Locked convenience: snapshot the underlying `IndexMap`.
-    pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
-        self.data.lock().to_index_map()
+    pub fn snapshot_bucket(&self, hash: u64) -> (u64, Vec<(EntryId, MapEntry)>) {
+        self.lock().snapshot_bucket(hash)
+    }
+
+    pub fn snapshot_entries(&self) -> Vec<(Value, Value)> {
+        self.lock()
+            .iter()
+            .map(|(key, value)| (*key, *value))
+            .collect()
+    }
+
+    pub fn get_if_epoch(
+        &self,
+        epoch: u64,
+        id: Option<EntryId>,
+    ) -> Result<Option<Value>, MapEpochChanged> {
+        self.lock().get_if_epoch(epoch, id)
+    }
+
+    pub fn set_if_epoch(
+        &self,
+        epoch: u64,
+        id: Option<EntryId>,
+        hash: u64,
+        key: Value,
+        value: Value,
+    ) -> Result<Option<Value>, MapEpochChanged> {
+        self.lock_mut().set_if_epoch(epoch, id, hash, key, value)
+    }
+
+    pub fn remove_if_epoch(
+        &self,
+        epoch: u64,
+        id: Option<EntryId>,
+    ) -> Result<Option<Value>, MapEpochChanged> {
+        self.lock_mut().remove_if_epoch(epoch, id)
+    }
+}
+
+#[cfg(test)]
+mod map_tests {
+    use super::*;
+
+    #[test]
+    fn collisions_updates_and_reinsertion_preserve_order() {
+        let mut map = MapData::new();
+        let first = map.insert_hashed(7, Value::int(1), Value::int(10));
+        let second = map.insert_hashed(7, Value::int(2), Value::int(20));
+        let (epoch, candidates) = map.snapshot_bucket(7);
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(
+            map.set_if_epoch(epoch, Some(first), 7, Value::int(99), Value::int(11)),
+            Ok(Some(Value::int(10)))
+        );
+        assert_eq!(
+            map.keys().copied().collect::<Vec<_>>(),
+            vec![Value::int(1), Value::int(2)]
+        );
+        assert_eq!(
+            map.remove_if_epoch(map.epoch(), Some(first)),
+            Ok(Some(Value::int(11)))
+        );
+        let third = map.insert_hashed(7, Value::int(1), Value::int(12));
+        assert!(third > second);
+        assert_eq!(
+            map.keys().copied().collect::<Vec<_>>(),
+            vec![Value::int(2), Value::int(1)]
+        );
+        assert_eq!(
+            map.snapshot_bucket(7)
+                .1
+                .iter()
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>(),
+            vec![second, third]
+        );
+    }
+
+    #[test]
+    fn membership_changes_invalidate_searches_but_value_updates_do_not() {
+        let mut map = MapData::new();
+        let (epoch, _) = map.snapshot_bucket(0);
+        let id = map.insert_hashed(0, Value::TRUE, Value::FALSE);
+        assert_eq!(map.get_if_epoch(epoch, None), Err(MapEpochChanged));
+        assert_eq!(
+            map.set_if_epoch(epoch, None, 0, Value::NULL, Value::NULL),
+            Err(MapEpochChanged)
+        );
+        assert_eq!(map.remove_if_epoch(epoch, Some(id)), Err(MapEpochChanged));
+        assert_eq!(map.len(), 1);
+        let epoch = map.epoch();
+        map.set_if_epoch(epoch, Some(id), 0, Value::TRUE, Value::NULL)
+            .unwrap();
+        assert_eq!(map.get_if_epoch(epoch, Some(id)), Ok(Some(Value::NULL)));
+    }
+
+    #[test]
+    fn forwarding_visits_keys_and_values_without_changing_hashes() {
+        let mut map = MapData::from_hashed_entries([(123, Value::int(1), Value::int(2))]);
+        for value in map.trace_values_mut() {
+            *value = Value::int(value.as_int().unwrap() + 10);
+        }
+        let (_, entries) = map.snapshot_bucket(123);
+        assert_eq!(entries[0].1.key, Value::int(11));
+        assert_eq!(entries[0].1.value, Value::int(12));
+        assert_eq!(entries[0].1.hash, 123);
     }
 }

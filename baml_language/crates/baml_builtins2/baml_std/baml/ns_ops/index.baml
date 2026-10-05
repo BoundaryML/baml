@@ -37,8 +37,8 @@ interface Index<Idx> requires root.Concrete {
     ///
     /// The standard library's containers index as Python does: a list or
     /// `uint8array` index is a zero-based `int` and a negative one counts back
-    /// from the end, `-1` being the last element; a map index is its `string`
-    /// key. They are all-or-nothing, so use a list's `at` or a map's `get` —
+    /// from the end, `-1` being the last element; a map index is its key.
+    /// They are all-or-nothing, so use a list's `at` or a map's `get` -
     /// both of which return an optional — when a missing element should be a
     /// value rather than a panic.
     function index(self, idx: Idx) -> Self.Output throws never;
@@ -51,12 +51,9 @@ implement<T> Index<int> for T[] {
     }
 }
 
-// Map keys are `string` by the language contract (E0067 enforces it in
-// impl headers); a literal-key map type cannot `.set` either, so it has
-// no index impl.
-implement<V> Index<string> for map<string, V> {
+implement<K extends root.Hash & Equals, V> Index<K> for map<K, V> {
     type Output = V;
-    function index(self, idx: string) -> V throws never {
+    function index(self, idx: K) -> V throws never {
         self[idx]
     }
 }

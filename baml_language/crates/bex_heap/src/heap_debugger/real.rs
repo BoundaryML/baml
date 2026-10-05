@@ -1,9 +1,6 @@
-use std::{
-    env,
-    sync::{
-        Mutex,
-        atomic::{AtomicU32, Ordering},
-    },
+use std::sync::{
+    Mutex,
+    atomic::{AtomicU32, Ordering},
 };
 
 use bex_vm_types::{
@@ -21,14 +18,11 @@ pub enum HeapVerifyMode {
 }
 
 impl HeapVerifyMode {
-    fn parse(value: &str) -> Option<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "off" | "0" | "false" | "no" => Some(Self::Off),
-            "quick" | "1" | "true" | "yes" => Some(Self::Quick),
-            "full" => Some(Self::Full),
-            _ => None,
-        }
-    }
+    const CHOICES: [(&'static str, Self); 3] = [
+        ("off", Self::Off),
+        ("quick", Self::Quick),
+        ("full", Self::Full),
+    ];
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -47,26 +41,17 @@ impl Default for HeapDebuggerConfig {
 }
 
 impl HeapDebuggerConfig {
+    /// Reads `DEV_BAML_HEAP_VERIFY=off|quick|full`; any value other than
+    /// `off` enables the debugger. This is a dev-only, feature-gated knob, so
+    /// an invalid value panics with a clear message instead of being ignored.
     pub fn from_env() -> Self {
-        let mut config = Self::default();
-
-        if let Ok(value) = env::var("BEX_HEAP_DEBUG")
-            && let Some(parsed) = HeapVerifyMode::parse(&value)
-        {
-            config.enabled = parsed != HeapVerifyMode::Off;
+        let verify = baml_env::choice_var("DEV_BAML_HEAP_VERIFY", &HeapVerifyMode::CHOICES)
+            .unwrap_or_else(|error| panic!("{error}"))
+            .unwrap_or(HeapVerifyMode::Off);
+        Self {
+            enabled: verify != HeapVerifyMode::Off,
+            verify,
         }
-
-        if let Ok(value) = env::var("BEX_HEAP_VERIFY")
-            && let Some(parsed) = HeapVerifyMode::parse(&value)
-        {
-            config.verify = parsed;
-        }
-
-        if config.verify != HeapVerifyMode::Off {
-            config.enabled = true;
-        }
-
-        config
     }
 }
 
@@ -301,7 +286,7 @@ impl BexHeap {
             }
             Object::Map(values) => {
                 let data = unsafe { values.data_unchecked() };
-                for value in data.values() {
+                for value in data.keys().chain(data.values()) {
                     self.debug_assert_valid_value(value);
                 }
             }

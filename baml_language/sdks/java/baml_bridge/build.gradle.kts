@@ -149,8 +149,8 @@ tasks.jar {
 tasks.withType<Test> {
     useJUnitPlatform()
     // Propagate the native-library path so the smoke test can System.load it.
-    // BAML_JAVA_BRIDGE_LIB (env) → -Dbaml.bridge.lib (system property).
-    System.getenv("BAML_JAVA_BRIDGE_LIB")?.let { systemProperty("baml.bridge.lib", it) }
+    // BAML_BRIDGE_PATH (env) → -Dbaml.bridge.lib (system property).
+    System.getenv("BAML_BRIDGE_PATH")?.let { systemProperty("baml.bridge.lib", it) }
     testLogging {
         events("failed", "skipped", "passed")
         showExceptions = true

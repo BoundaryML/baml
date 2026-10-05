@@ -41,9 +41,12 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
         .arg(dir)
         .arg("-o")
         .arg(&out_bin);
-    // Share the bytecode cache across the suite so only the first invocation
-    // pays the stdlib compile; see `common::shared_cache_dir`.
-    cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
+    // Share the build cache across the suite so only the first invocation
+    // pays the stdlib compile; see `common::shared_baml_home`.
+    cmd.env("BAML_HOME", common::shared_baml_home());
+    // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would make the
+    // agent-skill check apply.
+    cmd.env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1");
     for arg in pack_args {
         cmd.arg(arg);
     }
@@ -175,11 +178,10 @@ fn pack_e2e_omits_compile_file_status() {
 
     let output = Command::new(&built.baml_cli)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
-        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
-        .env("BAML_OUTPUT_PRESET", "human")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would flip
+        // `--output-preset auto` to `agent` and hide progress lines.
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+        .env("BAML_HOME", common::shared_baml_home())
         .arg("pack")
         .arg("--from")
         .arg(tmp.path())
@@ -231,7 +233,8 @@ fn pack_e2e_hermetic_baml_file() {
     std::fs::write(&src, "function main() -> string { \"hermetic\" }\n").unwrap();
     let out_bin = tmp.path().join("out");
     let status = Command::new(&built.baml_cli)
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        .env("BAML_HOME", common::shared_baml_home())
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .arg("pack")
         .arg("--file")
         .arg(&src)

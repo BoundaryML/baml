@@ -390,13 +390,28 @@ function resolve_unknown_prefix_is_typed() -> string {
     }
 }
 
+// Azure has no shorthand: a model name does not identify a deployment. The
+// error says what to build instead.
+function resolve_azure_shorthand_is_typed() -> string {
+    ai.clients.resolve("azure/gpt-4o").id() catch (e) {
+        ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
+    }
+}
+
+test "resolve_azure_shorthand_is_typed" {
+    let got = resolve_azure_shorthand_is_typed();
+    assert.contains(got, "ai.clients|");
+    assert.contains(got, `there is no "azure/<model>" shorthand`);
+    assert.contains(got, `openai.AzureClient.new(model = "gpt-4o", deployment_id = ...`)
+}
+
 test "resolve_unknown_prefix_is_typed" {
     assert.contains(resolve_unknown_prefix_is_typed(), "ai.clients|");
     assert.contains(resolve_unknown_prefix_is_typed(), `no builtin provider for prefix "acme-inc"`);
     // every prefix the compile-time map knows, so the two stay visibly in sync
     assert.contains(
         resolve_unknown_prefix_is_typed(),
-        "openai, openai-chat, openai-images, azure, ollama, openrouter",
+        "openai, openai-chat, openai-images, ollama, openrouter",
     );
     assert.contains(
         resolve_unknown_prefix_is_typed(),

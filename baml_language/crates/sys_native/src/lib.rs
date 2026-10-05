@@ -12,6 +12,8 @@
 //! let engine = BexEngine::new(program, SysOps::native())?;
 //! ```
 
+#![warn(clippy::disallowed_methods)]
+
 use std::path::{Path, PathBuf};
 
 pub mod host_dispatch;

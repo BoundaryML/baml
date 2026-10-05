@@ -1,5 +1,6 @@
 //! Runtime call and structured logging overhead benchmarks.
 //! Run with: cargo bench --bench call_overhead
+#![allow(clippy::disallowed_methods)]
 
 use std::{path::Path, sync::Arc};
 

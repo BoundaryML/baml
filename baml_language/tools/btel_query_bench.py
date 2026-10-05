@@ -144,9 +144,8 @@ class Bench:
 
     def query(self, project, sql, *flags):
         # As the CLI's own end-to-end tests do: no agent-skill gate for the harness.
-        env = dict(os.environ, BAML_AGENT_SKILL_CHECK="off")
-        child = run_child([self.args.baml, "query", "--from", project, "--format", "json",
-                           *flags, sql], env=env)
+        child = run_child([self.args.baml, "--agent-skill-check", "off", "query", "--from", project, "--format", "json",
+                           *flags, sql])
         # 0 complete, 1 incomplete evidence (live or unavailable values).
         if child.code not in (0, 1):
             raise RuntimeError(f"query {sql!r} exited {child.code}:\n{child.err}")

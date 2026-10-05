@@ -1268,8 +1268,7 @@ impl TirTypeError {
                 TirTypeError::InvalidMapKeyType { key } => {
                     write!(
                         f,
-                        "map keys must be `string`; got `{}`. Declare the map as `map<string, V>`; \
-                     convert non-string keys with `.to_string()` before `.set()` or `.get()`",
+                        "map keys must implement `baml.Hash`; got `{}`",
                         key.spell(vp)
                     )
                 }

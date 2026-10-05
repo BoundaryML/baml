@@ -298,6 +298,9 @@ pub struct RunArgs {
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
 
+    #[command(flatten)]
+    pub shutdown: crate::shutdown::ShutdownArgs,
+
     /// Include compiler-synthesized functions in `--list` output.
     #[arg(long, help_heading = "Run output options")]
     pub include_generated: bool,
@@ -817,7 +820,12 @@ impl RunArgs {
         };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
+            crate::shutdown::shutdown_engine_future(
+                &engine,
+                reporter,
+                status,
+                self.shutdown.shutdown_timeout,
+            ),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -920,21 +928,16 @@ impl RunArgs {
 
         if let Some(program) = session.try_cached_program() {
             self.vlog(format_args!("Bytecode cache hit — skipping compile"));
-            match program.validate() {
-                Ok(()) => {
-                    return Ok(Prepared {
-                        recording_root: session.root().to_path_buf(),
-                        launch_context: Default::default(),
-                        recording_sources: crate::runtime_telemetry::session_sources(&session),
-                        db: session.db,
-                        package: session.package,
-                        program,
-                        needs_format_hint,
-                    });
-                }
-                Err(error) => crate::bytecode_cache::cache_debug(format_args!(
-                    "cached program failed validation; recompiling: {error:?}"
-                )),
+            if program.validate().is_ok() {
+                return Ok(Prepared {
+                    recording_root: session.root().to_path_buf(),
+                    launch_context: Default::default(),
+                    recording_sources: crate::runtime_telemetry::session_sources(&session),
+                    db: session.db,
+                    package: session.package,
+                    program,
+                    needs_format_hint,
+                });
             }
         }
 
@@ -989,18 +992,6 @@ impl RunArgs {
                 stdlib_interface_hit,
             )?;
         }
-        // Warm evidence: with the check rows served this is 0; a cold compile
-        // walks every scope.
-        crate::bytecode_cache::cache_debug(format_args!(
-            "body inferences: {} this process",
-            baml_db::baml_compiler2_hir_ty::infer::body_inferences()
-        ));
-        // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
-        // seed served every stdlib package); a cold run reports up to 6.
-        crate::bytecode_cache::cache_debug(format_args!(
-            "stdlib interface: {} honest derivation(s) this process",
-            baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
-        ));
         Ok(Prepared {
             recording_root: session.root().to_path_buf(),
             launch_context: Default::default(),
@@ -1252,7 +1243,12 @@ impl RunArgs {
         };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
+            crate::shutdown::shutdown_engine_future(
+                &engine,
+                reporter,
+                status,
+                self.shutdown.shutdown_timeout,
+            ),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -2308,6 +2304,7 @@ mod tests {
             output_format: OutputFormat::Debug,
             log: RunLogLevel::Off,
             log_file: None,
+            shutdown: crate::shutdown::ShutdownArgs::default(),
             include_generated: false,
             from: None,
             target_args: Vec::new(),

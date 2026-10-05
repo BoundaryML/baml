@@ -148,10 +148,31 @@ impl Scratch {
                     let key_type = b.leaves().ty(owned_type(&data.key_ty));
                     let value_type = b.leaves().ty(owned_type(&data.value_ty));
                     let data = data.lock();
-                    b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
-                        let key = rewritten(&self.rewrites, key).into_owned();
-                        (key, self.add(leaves, *value, depth + 1))
-                    })
+                    let entries: Option<Vec<_>> = data
+                        .iter()
+                        .map(|(key, value)| {
+                            let ptr = key.as_object_ptr()?;
+                            // SAFETY: capture holds the heap permit throughout traversal.
+                            let Object::String(key) = (unsafe { ptr.get() }) else {
+                                return None;
+                            };
+                            Some((key, *value))
+                        })
+                        .collect();
+                    match entries {
+                        Some(entries) => b.map(
+                            key_type,
+                            value_type,
+                            entries.iter(),
+                            |leaves, (key, value)| {
+                                let key = rewritten(&self.rewrites, key).into_owned();
+                                (key, self.add(leaves, *value, depth + 1))
+                            },
+                        ),
+                        // The telemetry wire map is string-keyed. Mark the whole map
+                        // unavailable rather than omit or stringify unsupported keys.
+                        None => SnapshotObject::NonSnapshotableValue {},
+                    }
                 }
                 Object::Instance(instance) => {
                     let class = Value::object(instance.class);

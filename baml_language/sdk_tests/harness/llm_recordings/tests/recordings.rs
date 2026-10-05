@@ -15,6 +15,7 @@
 //! otherwise the checked-in payload is validated offline and re-asserted
 //! through insta. No bespoke record env var. A real capture/refresh runs under
 //! `infisical run --` (it needs `OPENAI_API_KEY`).
+#![allow(clippy::disallowed_methods)]
 
 use std::{env, path::PathBuf, process::Command};
 

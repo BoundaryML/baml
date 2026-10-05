@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/corpus.rs
+assertion_line: 122
 ---
 function fixtures.short_circuit_locals.chained_and(a: bool, b: bool, c: bool) -> bool {
     load_var a
@@ -13,13 +14,18 @@ function fixtures.short_circuit_locals.chained_and(a: bool, b: bool, c: bool) ->
 }
 
 function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> bool {
-    load_type int
-    alloc_array 0
-    load_const 1
-    load_const "a"
     load_type string
     load_type int
-    alloc_map 1
+    alloc_map 0
+    store_var _4
+    load_var _4
+    load_const "a"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type int
+    alloc_array 0
+    load_var _4
     init_instance user.fixtures.short_circuit_locals.ShortCircuitBox .items, .tags
     store_var box
     load_var box
@@ -44,12 +50,12 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     jump L3
 
   L2:
-    store_var _8
+    store_var _10
     jump L4
 
   L3:
     load_const -1
-    store_var _8
+    store_var _10
 
   L4:
     load_var tags
@@ -68,19 +74,19 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     jump L8
 
   L7:
-    store_var _15
+    store_var _17
     jump L9
 
   L8:
     load_const 0
-    store_var _15
+    store_var _17
 
   L9:
-    load_var _8
+    load_var _10
     load_const 0
     cmp_int_op ==
     jump_if_false_or_pop L10
-    load_var _15
+    load_var _17
     load_const 1
     cmp_int_op ==
 

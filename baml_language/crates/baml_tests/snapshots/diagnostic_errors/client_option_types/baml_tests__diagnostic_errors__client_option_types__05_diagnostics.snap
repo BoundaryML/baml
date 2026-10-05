@@ -40,3 +40,15 @@ source: crates/baml_tests/src/generated_tests.rs
  41 │ ├─▶ }
     · ╰──── use a "provider/model" string or an expression evaluating to ai.Client
     ╰────
+
+  [hir] E0010
+
+  × LLM function `AzureShorthand` has an unusable `client`: there is no "azure/<model>" shorthand: an Azure request goes to a deployment, which a model name does not identify; build
+  │ openai.AzureClient.new(model = ..., deployment_id = ..., resource_name = ...)
+    ╭─[client_option_types.baml:45:50]
+ 45 │ ╭─▶ function AzureShorthand(input: string) -> string {
+ 46 │ │       client: "azure/gpt-4o"
+ 47 │ │       prompt: `${input}`
+ 48 │ ├─▶ }
+    · ╰──── use a "provider/model" string or an expression evaluating to ai.Client
+    ╰────

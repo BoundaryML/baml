@@ -1677,8 +1677,6 @@ function normalize(value: null | string | null) -> null | string | null { value 
 
     #[test]
     fn aliased_map_keys_are_checked_through_resolved_targets() {
-        use baml_compiler_diagnostics::diagnostic::DiagnosticId;
-
         let legal_root = Path::new("/tmp/codegen_legal_alias_map_key");
         let mut legal_db = ProjectDatabase::new();
         legal_db.workspace(legal_root);
@@ -1713,10 +1711,8 @@ function normalize(value: null | string | null) -> null | string | null { value 
         );
         let diagnostics = workspace_diagnostics(&illegal_db);
         assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.id == DiagnosticId::InvalidMapKeyType),
-            "the compiler must reject an int-denoting alias map key: {diagnostics:#?}"
+            diagnostics.is_empty(),
+            "the compiler must accept a hashable alias map key: {diagnostics:#?}"
         );
         let illegal_pool = build_symbol_pool(&illegal_db);
         assert!(matches!(

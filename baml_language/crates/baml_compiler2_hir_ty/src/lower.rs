@@ -63,8 +63,7 @@ pub enum LoweringDiagKind {
         /// "Did you mean" candidates, each a fully qualified `root...` path.
         suggestions: Box<[Name]>,
     },
-    /// A map key type provably outside the string domain (B-267's
-    /// contract; `checked_map_key` lowers it to the Error sentinel).
+    /// A map key type without a `baml.Hash` implementation.
     InvalidMapKey { key: baml_type::Ty },
     /// A type error already in the shared vocabulary (projection
     /// determination, existential completeness), carried through the
@@ -756,26 +755,14 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
-    /// Map keys are strings by the language's contract: the VM's backing
-    /// store assumes it, map literals cannot spell a non-string key, and
-    /// `baml.Map`'s docstring states it (B-267). A key type not provably
-    /// a subtype of `string` is diagnosed (E0067) - INCLUDING a type
-    /// variable: no bound can prove one string-denoting, so `map<K, V>`
-    /// could be instantiated at a non-string key (TIR's fail-closed
-    /// rule; the stdlib's own `Map<K, V>` never writes a `map<K, V>`
-    /// annotation). Inference holes and error recovery stay untouched.
+    /// Inference holes are checked after solving; written keys must prove
+    /// `Hash` through their structural implementation or the enclosing bounds.
     fn checked_map_key(&self, key: LoweringTy) -> LoweringTy {
-        if key.contains_hole() || key.contains_error() {
+        if self.diags.is_none() || key.contains_hole() || key.contains_error() {
             return key;
         }
-        let facts = crate::facts::Facts::new(self.db);
-        let string = baml_type::Ty::String;
-        // Past the gate the key is hole-free, so the reject fold is a pure
-        // narrowing; the judgment stays in the plain vocabulary.
-        if !baml_type::normalize::is_subtype(&reject_holes(&key), &string, &facts) {
-            // Diagnose but keep the WRITTEN key (TIR's shape): the
-            // diagnostic is the enforcement, and downstream surfaces
-            // (codegen schemas, renders) still see what the user wrote.
+        let facts = crate::facts::Facts::with_bounds(self.db, self.plain_bounds_env());
+        if !crate::interfaces::map_key_is_hashable(self.db, &facts, &reject_holes(&key)) {
             if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get()) {
                 diags.borrow_mut().push(LoweringDiag {
                     type_ref,

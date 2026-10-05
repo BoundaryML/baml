@@ -1314,6 +1314,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     let iface_name = QualifiedTypeName::local(Name::new("Runtime"));
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
         name: iface_name.clone(),
+        structural_default: None,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         args: Vec::new(),
         requires: Vec::new(),
@@ -1384,8 +1385,14 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
     let body_ptr = tlab.alloc_string("default body".to_string());
+    let structural_ptr = tlab.alloc_string("structural body".to_string());
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
         name: QualifiedTypeName::local(Name::new("SessionIface")),
+        structural_default: Some(bex_vm_types::types::StructuralDefault {
+            kind: baml_type::StructuralInterface::ToString,
+            function: bex_vm_types::ObjectIndex::from_raw(0),
+            function_ptr: structural_ptr,
+        }),
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         args: Vec::new(),
         requires: Vec::new(),
@@ -1408,6 +1415,7 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     // address after three collections is not a valid movement assertion.
     let mut roots = vec![iface_ptr];
     let mut expected_body = body_ptr;
+    let mut expected_structural = structural_ptr;
     let mut expected_owner = package_ptr;
     for level in [
         CollectionLevel::Minor,
@@ -1416,12 +1424,15 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     ] {
         let (stats, next_roots, forwarding) =
             unsafe { heap.collect_garbage_generational(&roots, level) };
-        assert_eq!(stats.live_count, 3);
+        assert_eq!(stats.live_count, 4);
         let next_body = forwarding[&expected_body];
+        let next_structural = forwarding[&expected_structural];
         let next_owner = forwarding[&expected_owner];
         assert_ne!(next_body, expected_body);
+        assert_ne!(next_structural, expected_structural);
         assert_ne!(next_owner, expected_owner);
         expected_body = next_body;
+        expected_structural = next_structural;
         expected_owner = next_owner;
         roots = next_roots;
     }
@@ -1431,6 +1442,14 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     assert_eq!(iface.owner, expected_owner);
     assert!(matches!(unsafe { iface.owner.get() }, Object::Package(_)));
     assert_eq!(iface.methods[0].default_fn, expected_body);
+    assert_eq!(
+        iface.structural_default.as_ref().unwrap().function_ptr,
+        expected_structural
+    );
+    let Object::String(structural) = (unsafe { expected_structural.get() }) else {
+        panic!("structural body was not forwarded")
+    };
+    assert_eq!(structural.as_str(), "structural body");
     let Object::String(body) = (unsafe { expected_body.get() }) else {
         panic!("body was not forwarded")
     };

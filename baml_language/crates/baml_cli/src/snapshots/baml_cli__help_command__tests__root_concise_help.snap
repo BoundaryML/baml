@@ -25,6 +25,7 @@ Commands:
   playground  Open the BAML playground in a browser
   lsp         Start a language server
   help        Display documentation for a command
+  telemetry   Show or change BAML CLI telemetry preferences
 
 Global options:
   -q, --quiet...                    Suppress nonessential output

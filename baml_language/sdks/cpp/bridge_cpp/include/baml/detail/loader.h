@@ -7,22 +7,28 @@
 //
 // Resolution order (contract "Canonical runtime-resolution algorithm"):
 //   1. Programmatic path set via baml::set_runtime_path before first load.
-//   2. BAML_RUNTIME_PATH (compatibility alias: BAML_LIBRARY_PATH; both set
-//      to different values is BAML_RUNTIME_CONFIG_CONFLICT).
+//   2. BAML_BRIDGE_PATH: an absolute library path. When set, a missing or
+//      invalid file is a hard error; there is no fallback.
 //   3. Executable-adjacent library (application-bundled delivery).
-//   4. The shared runtime cache:
-//      <cache-root>/prod/<version>/abi-v1/<target>/<filename>, where
-//      cache-root is BAML_RUNTIME_CACHE_DIR, then BAML_CACHE_DIR, then
-//      <BAML_HOME>/runtimes, then <home>/.baml/runtimes.
+//   4. The shared bridge cache for this bridge's compiled-in version:
+//      <BAML_HOME>/bridges/<version>/<target>/<filename>, where BAML_HOME
+//      defaults to ~/.baml.
 // The bridge never downloads; a miss produces BAML_RUNTIME_NOT_FOUND with
 // every searched path and `baml runtime install` remediation.
+//
+// DEV_BAML_BRIDGE_SKIP_VERSION_CHECK=<bool> (dev only, requires an explicit
+// path) is honored by the runtime's register_bridge, which then skips the
+// toolchain-version match. The ABI table check is never skipped.
 //
 // The library handle is deliberately never closed: the runtime lives for
 // the process, and unloading a library with live engine threads is UB.
 
 #include <baml/errors.h>
+#include <baml/version.h>
 #include <baml_cffi.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -104,6 +110,42 @@ inline std::string env_or_empty(const char* name) {
   return v == nullptr ? std::string() : std::string(v);
 }
 
+// Boolean environment variable with the shared BAML rules: case-insensitive
+// 1/true/yes/on or 0/false/no/off, empty means unset, anything else throws.
+inline bool env_bool(const char* name) {
+  std::string value = env_or_empty(name);
+  const auto not_space = [](unsigned char c) { return !std::isspace(c); };
+  value.erase(value.begin(),
+              std::find_if(value.begin(), value.end(), not_space));
+  value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(),
+              value.end());
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  if (value.empty() || value == "0" || value == "false" || value == "no" ||
+      value == "off") {
+    return false;
+  }
+  if (value == "1" || value == "true" || value == "yes" || value == "on") {
+    return true;
+  }
+  throw runtime_error("BAML_RUNTIME_CONFIG_INVALID",
+                      std::string(name) +
+                          " must be a boolean (1/true/yes/on or "
+                          "0/false/no/off), got \"" +
+                          env_or_empty(name) + "\"");
+}
+
+inline bool is_absolute_path(const std::string& path) {
+#if defined(_WIN32)
+  const bool drive = path.size() >= 3 &&
+                     std::isalpha(static_cast<unsigned char>(path[0])) &&
+                     path[1] == ':' && (path[2] == '\\' || path[2] == '/');
+  return drive || path.rfind("\\\\", 0) == 0;
+#else
+  return !path.empty() && path[0] == '/';
+#endif
+}
+
 // Directory containing the running executable, or empty when undeterminable.
 inline std::string executable_dir() {
 #if defined(_WIN32)
@@ -143,34 +185,27 @@ inline bool file_exists(const std::string& path) {
 #endif
 }
 
-// Shared runtime cache path for `version` (contract "Runtime cache layout").
-inline std::string cache_path(const std::string& version) {
-  std::string root = env_or_empty("BAML_RUNTIME_CACHE_DIR");
-  const std::string alias = env_or_empty("BAML_CACHE_DIR");
-  if (!root.empty() && !alias.empty() && root != alias) {
-    throw runtime_error(
-        "BAML_RUNTIME_CONFIG_CONFLICT",
-        "BAML_RUNTIME_CACHE_DIR and BAML_CACHE_DIR are both set and differ");
+// BAML_HOME when non-empty, else <home>/.baml, else a relative .baml
+// (mirrors baml_env::baml_home_from). Deliberately duplicated: this header-only
+// SDK cannot call into Rust before the native library is located. Keep it in
+// sync with baml_env::baml_home_from and the Go bridge loader.
+inline std::string baml_home() {
+  const std::string home = env_or_empty("BAML_HOME");
+  if (!home.empty()) {
+    return home;
   }
-  if (root.empty()) {
-    root = alias;
-  }
-  if (root.empty()) {
-    std::string home = env_or_empty("BAML_HOME");
-    if (home.empty()) {
 #if defined(_WIN32)
-      home = env_or_empty("USERPROFILE");
+  const std::string user_home = env_or_empty("USERPROFILE");
 #else
-      home = env_or_empty("HOME");
+  const std::string user_home = env_or_empty("HOME");
 #endif
-      if (home.empty()) {
-        return std::string();
-      }
-      home += "/.baml";
-    }
-    root = home + "/runtimes";
-  }
-  return root + "/prod/" + version + "/abi-v1/" + canonical_target() + "/" +
+  return user_home.empty() ? std::string(".baml") : user_home + "/.baml";
+}
+
+// Shared bridge cache path for `version`:
+// <BAML_HOME>/bridges/<version>/<target>/<filename>.
+inline std::string cache_path(const std::string& version) {
+  return baml_home() + "/bridges/" + version + "/" + canonical_target() + "/" +
          runtime_filename();
 }
 
@@ -211,26 +246,29 @@ struct loaded_api {
 // runtime_error on every failure path.
 inline const loaded_api& load_api() {
   static const loaded_api loaded = [] {
-    // Candidate paths in contract order. The version used for the cache
-    // path is the SDK's expected version when registration has provided
-    // one; before that the cache probe is skipped (steps 1-3 don't need
-    // a version).
+    // Candidate paths in contract order. The cache probe always uses this
+    // bridge's compiled-in toolchain version.
     std::vector<std::string> searched;
     std::string chosen;
 
     const std::string programmatic = programmatic_path_storage();
-    const std::string env_path = env_or_empty("BAML_RUNTIME_PATH");
-    const std::string alias_path = env_or_empty("BAML_LIBRARY_PATH");
-    if (!env_path.empty() && !alias_path.empty() && env_path != alias_path) {
+    const std::string env_path = env_or_empty("BAML_BRIDGE_PATH");
+    if (!env_path.empty() && !is_absolute_path(env_path)) {
+      throw runtime_error("BAML_RUNTIME_CONFIG_INVALID",
+                          "BAML_BRIDGE_PATH must be an absolute path, got \"" +
+                              env_path + "\"");
+    }
+    if (env_bool("DEV_BAML_BRIDGE_SKIP_VERSION_CHECK") &&
+        programmatic.empty() && env_path.empty()) {
       throw runtime_error(
-          "BAML_RUNTIME_CONFIG_CONFLICT",
-          "BAML_RUNTIME_PATH and BAML_LIBRARY_PATH are both set and differ");
+          "BAML_RUNTIME_CONFIG_INVALID",
+          "DEV_BAML_BRIDGE_SKIP_VERSION_CHECK requires BAML_BRIDGE_PATH");
     }
 
     if (!programmatic.empty()) {
       chosen = programmatic;
-    } else if (!env_path.empty() || !alias_path.empty()) {
-      chosen = env_path.empty() ? alias_path : env_path;
+    } else if (!env_path.empty()) {
+      chosen = env_path;
     } else {
       const std::string exe_dir = executable_dir();
       if (!exe_dir.empty()) {
@@ -242,16 +280,11 @@ inline const loaded_api& load_api() {
         }
       }
       if (chosen.empty()) {
-        const std::string version = env_or_empty("BAML_RUNTIME_VERSION");
-        if (!version.empty()) {
-          const std::string cached = cache_path(version);
-          if (!cached.empty()) {
-            if (file_exists(cached)) {
-              chosen = cached;
-            } else {
-              searched.push_back(cached);
-            }
-          }
+        const std::string cached = cache_path(kToolchainVersion);
+        if (file_exists(cached)) {
+          chosen = cached;
+        } else {
+          searched.push_back(cached);
         }
       }
     }
@@ -268,7 +301,7 @@ inline const loaded_api& load_api() {
         }
       }
       message +=
-          "\nRun `baml runtime install`, set BAML_RUNTIME_PATH, or bundle "
+          "\nRun `baml runtime install`, set BAML_BRIDGE_PATH, or bundle "
           "the runtime next to the executable.";
       throw runtime_error("BAML_RUNTIME_NOT_FOUND", message);
     }

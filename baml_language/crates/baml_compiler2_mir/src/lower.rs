@@ -261,21 +261,6 @@ fn widen_literal_bases(ty: &Tir2Ty) -> Tir2Ty {
     }
 }
 
-/// A `recv.NAME(..)` / `Prefix.NAME(..)` callee shape - the desugar
-/// trigger the engines and this lowering share.
-fn is_sugar_callee(expr: &baml_compiler2_ast::Expr, name: &str) -> bool {
-    match expr {
-        baml_compiler2_ast::Expr::MemberAccess { member, .. } => member.as_str() == name,
-        baml_compiler2_ast::Expr::Path(segments) => {
-            segments.len() >= 2
-                && segments
-                    .last()
-                    .is_some_and(|segment| segment.as_str() == name)
-        }
-        _ => false,
-    }
-}
-
 /// Resolve a written interface reference to its declaration: the `hir_ty`
 /// lowering road (written pins only) plus the facts definition lookup.
 fn resolve_ref_to_interface_loc<'db>(
@@ -2884,14 +2869,6 @@ impl<'db> LoweringContext<'db> {
             .get(&key.expr)
     }
 
-    /// Whether the checker resolved `key`'s callee through a language-sugar
-    /// tier (`to_string` / `to_json` / `from_json`): the callee is typed as
-    /// the desugar target and records no member resolution.
-    fn tir_desugared_callee(&self, key: ExprMetadataKey) -> bool {
-        self.tir_tables(key.scope)
-            .is_some_and(|tables| tables.desugared_callees.contains(&key.expr))
-    }
-
     /// The interface view and field index a recorded member resolution carries
     /// when it is a virtual-field read — source or mounted interface alike; every
     /// other resolution kind is `None`. Authoritative, and preferred over
@@ -3156,67 +3133,32 @@ impl<'db> LoweringContext<'db> {
                 .get(qtn)
                 .and_then(|target| self.interface_dispatch_target_for_member(target, member)),
             Tir2Ty::Union(members) => self.union_virtual_dispatch_view(members, member),
-            Tir2Ty::Interface(qtn, type_args, associated_bindings) => {
-                Some((qtn.clone(), type_args.clone(), associated_bindings.clone()))
-            }
-            // `T extends A & B` — the generic-parameter axis.
-            Tir2Ty::TypeVar(name) => {
-                let conjuncts: Vec<Tir2Ty> = self
-                    .generic_param_bounds
-                    .get(name)
-                    .into_iter()
-                    .flatten()
-                    .map(baml_type::Interface::to_ty)
-                    .collect();
-                self.dispatch_view_over_conjunction(&conjuncts, member)
-            }
-            // `type Item extends A & B` — the associated-type axis, same rule.
-            Tir2Ty::AssociatedTypeProjection { .. } => {
-                let resolved = self.resolve_ty_projections(ty);
-                if &resolved != ty {
-                    return self.interface_dispatch_target_for_member(&resolved, member);
-                }
-                self.dispatch_view_over_conjunction(&self.resolve_projection_bounds(ty), member)
-            }
+            Tir2Ty::Interface(..)
+            | Tir2Ty::TypeVar(..)
+            | Tir2Ty::AssociatedTypeProjection { .. } => self.canonical_dispatch_view(ty, member),
             _ => None,
         }
     }
 
-    /// Pick which conjunct of a bound list a `member` access dispatches through: the
-    /// first whose `requires` closure declares it.
-    ///
-    /// Falls back to the first conjunct that yields a view at all when none declares
-    /// `member` — an access TIR has already rejected, so the choice only shapes the
-    /// code emitted for a program that will not run.
-    ///
-    /// Shared by both places a bound list is a conjunction — a generic parameter's
-    /// `T extends A & B` and an associated type's `type Item extends A & B` — so the
-    /// two cannot drift.
-    fn dispatch_view_over_conjunction(
-        &self,
-        bounds: &[Tir2Ty],
-        member: &Name,
-    ) -> Option<InterfaceTypeView> {
-        bounds
-            .iter()
-            .find_map(|bound| {
-                let view = self.interface_dispatch_target_for_member(bound, member)?;
-                // Asked of the realized VIEW the conjunct dispatches through —
-                // never a view rebuilt from its bare name at arity zero, which
-                // a generic interface's declaration rejects (lowering pins
-                // every reference to declared arity; `interface_instantiation`
-                // asserts it).
-                (!matches!(
-                    self.resolve_interface_member(&view, member),
-                    InterfaceMember::Undeclared
-                ))
-                .then_some(view)
-            })
-            .or_else(|| {
-                bounds
-                    .iter()
-                    .find_map(|bound| self.interface_dispatch_target_for_member(bound, member))
-            })
+    fn canonical_dispatch_view(&self, ty: &Tir2Ty, member: &Name) -> Option<InterfaceTypeView> {
+        use baml_compiler2_hir_ty::interfaces::{
+            Determination, MemberNamespace, determine_member_interface,
+        };
+        let (determination, _) = determine_member_interface(
+            self.db,
+            baml_compiler2_hir::file_package::file_package(self.db, self.file).root,
+            &self.enclosing_generic_param_bounds(),
+            ty,
+            None,
+            member,
+            MemberNamespace::Value,
+        );
+        match determination {
+            Determination::Determined(view) => {
+                Some((view.name, view.generics, view.associated_types))
+            }
+            _ => None,
+        }
     }
 
     /// The interface view an *expression* receiver dispatches through for `member`
@@ -3238,6 +3180,21 @@ impl<'db> LoweringContext<'db> {
             .or_else(|| self.written_qualifier_interface_view(expr_id, member))
     }
 
+    /// Member lookup has already chosen fields and inherent methods. Only
+    /// interface methods (or accesses without a resolution record) may use
+    /// the type-based interface dispatch fallback.
+    fn allows_interface_method_dispatch(&self, access: AstExprId) -> bool {
+        use crate::inference_provider::MemberResolution;
+
+        matches!(
+            self.tir_resolution(self.expr_metadata_key(access)),
+            None | Some(MemberResolution::Method {
+                callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                ..
+            })
+        )
+    }
+
     /// The interface view used to lower a member-access expression. Optional
     /// member access has already guarded the null branch before the member is
     /// evaluated, so dispatch must use the non-null receiver type.
@@ -3247,6 +3204,9 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         member: &Name,
     ) -> Option<InterfaceTypeView> {
+        if !self.allows_interface_method_dispatch(access) {
+            return None;
+        }
         let narrowed = if matches!(
             &self.body.exprs[access],
             AstExpr::OptionalMemberAccess { .. }
@@ -3593,6 +3553,30 @@ impl<'db> LoweringContext<'db> {
         rvalue: Rvalue<'db>,
     ) -> Lowered<()> {
         let arg_operands = self.lower_call_arg_operands(expr_id, args)?;
+        if let Rvalue::Use(Operand::Constant(Constant::GenericFunction { func, type_args })) =
+            &rvalue
+        {
+            let mut operands = Vec::new();
+            for ty in type_args {
+                let local = self.builder.temp(RuntimeTy::Type);
+                self.builder.assign(
+                    Place::local(local),
+                    Rvalue::LoadType(TyTemplate::from(ty.clone())),
+                );
+                operands.push(Operand::Copy(Place::local(local)));
+            }
+            operands.extend(arg_operands);
+            let layout = self.call_argument_layout(expr_id, operands.len() - type_args.len())?;
+            self.emit_direct_structural_call(
+                *func,
+                operands,
+                type_args.len(),
+                layout,
+                self.expr_ty(expr_id),
+                dest.clone(),
+            );
+            return Ok(());
+        }
         let callable = self.builder.temp(RuntimeTy::unknown());
         self.builder.assign(Place::local(callable), rvalue);
         self.emit_resolved_indirect_call(
@@ -3656,6 +3640,9 @@ impl<'db> LoweringContext<'db> {
         view: &InterfaceTypeView,
         method: &Name,
     ) -> Rvalue<'db> {
+        if let Some(rvalue) = self.structural_function_rvalue(self_ty, &view.0, method) {
+            return rvalue;
+        }
         let generic_params = self.enclosing_generic_params();
         let iface =
             tir2_interface_to_template(&view.0, &view.1, &view.2, &self.runtime(), &generic_params);
@@ -3798,6 +3785,9 @@ impl<'db> LoweringContext<'db> {
         let shape = self.interface_method_shape(interface, method)?;
         let iface_tn = self.interface_type_name(interface);
         let (prefix, own_ops) = self.interface_item_slots(expr_id, &shape)?;
+        if let Some(rvalue) = self.structural_function_rvalue(&prefix[0], &iface_tn, method) {
+            return Some(rvalue);
+        }
         let generic_params = self.enclosing_generic_params();
         let to_template = |this: &Self, ty: &Tir2Ty| this.ty_to_template(ty, &generic_params);
         let iface_template = TyTemplateInterface {
@@ -3996,15 +3986,6 @@ impl<'db> LoweringContext<'db> {
     /// view of the impl whose interface (or its `requires` closure) declares it.
     /// `None` for non-concrete receivers (interfaces/type-vars take their view from
     /// the type itself) and for methods no impl provides.
-    // BUG: an inherent class method shadowed by a same-named `implements`
-    // method diverges across spellings: the checker and the UFCS/value roads
-    // resolve the INHERENT method ("class members win" ruling), but this
-    // pre-filter routes the receiver `.` call to the interface impl — so a
-    // program can type against the inherent signature and run the impl
-    // (wrong value, or a VM arity error). Predates item projections (the
-    // repro uses no qualified syntax). Fix direction: honor the ruling here
-    // (skip interface dispatch when the receiver's class declares the name
-    // inherently), or reject the shadowing at declaration like E0121.
     fn dispatch_target_for_concrete(
         &self,
         recv_ty: &Tir2Ty,
@@ -4025,6 +4006,11 @@ impl<'db> LoweringContext<'db> {
         if !matches!(
             recv_ty,
             Tir2Ty::Class(..)
+                | Tir2Ty::Enum(..)
+                | Tir2Ty::EnumVariant(..)
+                | Tir2Ty::TypeAlias(..)
+                | Tir2Ty::Unknown
+                | Tir2Ty::Function { .. }
                 | Tir2Ty::Int
                 | Tir2Ty::Bigint
                 | Tir2Ty::Float
@@ -4037,6 +4023,8 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::List(..)
                 | Tir2Ty::Map { .. }
                 | Tir2Ty::Future(..)
+                | Tir2Ty::Resource
+                | Tir2Ty::PromptAst
         ) {
             return None;
         }
@@ -4053,12 +4041,7 @@ impl<'db> LoweringContext<'db> {
         if !self.interface_method_names.contains(method) {
             return None;
         }
-        for (name, generics, associated) in self.l1_impl_views_for_recv(recv_ty) {
-            if self.mir_interface_declares_method(&name, method) {
-                return Some((name, generics, associated));
-            }
-        }
-        None
+        self.canonical_dispatch_view(recv_ty, method)
     }
 
     /// The interface views a union arm's member access can resolve `member`
@@ -4210,10 +4193,8 @@ impl<'db> LoweringContext<'db> {
     /// call the value indirectly); an UNDECLARED name declines too. Every
     /// interface's declaration is readable by identity, on either lane, so
     /// "undeclared" is a fact about the closure, not a gap in what this
-    /// compilation can see: the call is a sugar (`x.to_string()` on an
-    /// existential whose interfaces say nothing about `to_string`), and the
-    /// sugar road lowers it as the checker resolved it. Dispatching on the
-    /// view as given compiled into a `VirtualCall` the VM refuses at run time
+    /// compilation can see. Dispatching an undeclared method on the view as
+    /// given would emit a `VirtualCall` the VM refuses at run time
     /// ("interface `I` declares no method `m`").
     fn dispatch_view_for_call(
         &self,
@@ -4279,7 +4260,7 @@ impl<'db> LoweringContext<'db> {
     /// The key/value type templates for a map-literal expression — the `K`/`V`
     /// of its `map<K, V>` static type — for [`Rvalue::Map`]. Falls back to
     /// `map<string, unknown>` when the recorded type is not a map (error
-    /// recovery); map keys are always strings.
+    /// recovery).
     fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
@@ -5732,6 +5713,25 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) -> Lowered<()> {
+        if let Place::Index {
+            base,
+            index,
+            kind: IndexKind::Map,
+        } = dest
+        {
+            let value = self.lower_to_operand(expr_id)?;
+            let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+            self.emit_map_call(
+                "set",
+                vec![
+                    Operand::Copy(*base),
+                    Operand::Copy(Place::local(index)),
+                    value,
+                ],
+                ignored,
+            );
+            return Ok(());
+        }
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
             self.builder.current_source_span = Some(span);
@@ -5800,18 +5800,21 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Map { entries } => {
-                let pairs: Vec<(Operand<'db>, Operand<'db>)> = entries
-                    .iter()
-                    .map(|entry| {
-                        Ok((
-                            self.lower_to_operand(entry.key)?,
-                            self.lower_to_operand(entry.value)?,
-                        ))
-                    })
-                    .collect::<Lowered<Vec<_>>>()?;
                 let (key_ty, value_ty) = self.map_kv_templates(expr_id);
+                let map = Place::local(self.builder.temp(self.expr_ty(expr_id)));
                 self.builder
-                    .assign(dest, Rvalue::Map(key_ty, value_ty, pairs));
+                    .assign(map.clone(), Rvalue::Map(key_ty, value_ty, Vec::new()));
+                for entry in entries {
+                    let key = self.lower_to_operand(entry.key)?;
+                    let value = self.lower_to_operand(entry.value)?;
+                    let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+                    self.emit_map_call(
+                        "set",
+                        vec![Operand::Copy(map.clone()), key, value],
+                        ignored,
+                    );
+                }
+                self.builder.assign(dest, Rvalue::Use(Operand::Copy(map)));
             }
 
             AstExpr::Object {
@@ -6344,6 +6347,7 @@ impl<'db> LoweringContext<'db> {
             // `resolutions` above and returns before reaching here, so the
             // receiver is always `segments[..len-1]`.
             if segments.len() >= 2
+                && self.allows_interface_method_dispatch(expr_id)
                 && let Some(recv_root) = self.path_receiver_root(expr_id, &segments[0])?
             {
                 let method_name = segments.last().unwrap().clone();
@@ -6611,12 +6615,19 @@ impl<'db> LoweringContext<'db> {
                 Place::local(key_local),
                 Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
             );
-            current_place = Place::Index {
-                base: Box::new(current_place),
-                index: key_local,
-                kind: IndexKind::Map,
-            };
-            break;
+            self.emit_map_call(
+                "index",
+                vec![
+                    Operand::Copy(current_place),
+                    Operand::Copy(Place::local(key_local)),
+                ],
+                target_place.clone(),
+            );
+            if is_last {
+                return Ok(());
+            }
+            current_place = target_place;
+            current_ty = target_ty;
         }
 
         self.builder
@@ -6836,9 +6847,41 @@ impl<'db> LoweringContext<'db> {
         rhs: AstExprId,
         dest: Place,
     ) -> Lowered<()> {
+        let lhs_ty = self.tir_expr_type(self.expr_metadata_key(lhs));
+        let rhs_ty = self.tir_expr_type(self.expr_metadata_key(rhs));
+        let structural = lhs_ty
+            .filter(|lhs_ty| Some(*lhs_ty) == rhs_ty)
+            .and_then(|ty| self.structural_witness(ty, &self.baml_decl("ops", "Equals")));
         let lhs_op = self.lower_to_operand(lhs)?;
         let rhs_op = self.lower_to_operand(rhs)?;
         let bool_ty = RuntimeTy::Bool;
+        if let Some(kind) = structural {
+            let result = if matches!(op, AstBinaryOp::Eq) {
+                dest.clone()
+            } else {
+                Place::local(self.builder.temp(bool_ty.clone()))
+            };
+            let func =
+                self.lang_function(baml_base::LangPackage::Baml, &[], kind.native_function());
+            self.emit_direct_structural_call(
+                func,
+                vec![lhs_op, rhs_op],
+                0,
+                None,
+                bool_ty,
+                result.clone(),
+            );
+            if matches!(op, AstBinaryOp::Ne) {
+                self.builder.assign(
+                    dest,
+                    Rvalue::UnaryOp {
+                        op: crate::UnaryOp::Not,
+                        operand: Operand::Copy(result),
+                    },
+                );
+            }
+            return Ok(());
+        }
         if matches!(op, AstBinaryOp::Eq) {
             self.lower_via_ops_driver("equals_equals", vec![lhs_op, rhs_op], bool_ty, dest);
             return Ok(());
@@ -7337,6 +7380,25 @@ impl<'db> LoweringContext<'db> {
         op: AstAssignOp,
         value: AstExprId,
     ) -> Lowered<()> {
+        if let Place::Index {
+            base,
+            index,
+            kind: IndexKind::Map,
+        } = place
+        {
+            let current = Place::local(self.builder.temp(self.expr_ty(target)));
+            let receiver = Operand::Copy(*base);
+            let key = Operand::Copy(Place::local(index));
+            self.emit_map_call(
+                "index",
+                vec![receiver.clone(), key.clone()],
+                current.clone(),
+            );
+            self.emit_assign_op(current.clone(), target, op, value)?;
+            let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+            self.emit_map_call("set", vec![receiver, key, Operand::Copy(current)], ignored);
+            return Ok(());
+        }
         let mir_op = Self::convert_assign_op(op);
         let driver = match mir_op {
             BinOp::Add => Some("__union_add"),
@@ -7714,415 +7776,6 @@ impl<'db> LoweringContext<'db> {
         Operand::Constant(constant)
     }
 
-    /// Operator-style `recv.to_string()` -> `string.from(recv)` desugar, the
-    /// inverse direction of `==` -> `baml.ops.equals_equals` (`lower_equality_via_driver`).
-    /// Fires only for a 0-arg `to_string` call with NO resolved method: the only
-    /// source of a real `to_string` is `implements baml.ToString` (a bare one is
-    /// banned), which resolves to a method and is handled by the dispatch/resolution
-    /// paths in `lower_call`. `string.from` is total (`throws never`) and honors any
-    /// `baml.ToString` override via its runtime shim, so it matches a real call.
-    /// Returns `true` (and emits the call) when it handled the expression.
-    ///
-    /// `callee_expr` is the caller's NORMALIZED view of `callee`: for
-    /// `x?.to_string()` it is the plain `x.to_string` member access (the null
-    /// guard has already run), while the arena node is still the
-    /// `OptionalMemberAccess` — reading that instead misses the sugar shape.
-    fn try_lower_to_string_fallback(
-        &mut self,
-        expr_id: AstExprId,
-        callee: AstExprId,
-        callee_expr: &AstExpr,
-        args: &[AstExprId],
-        dest: &Place,
-    ) -> Lowered<bool> {
-        if !args.is_empty() {
-            return Ok(false);
-        }
-        // Trigger shape (shared with TIR type inference + throws analysis): a
-        // `to_string` member/path call.
-        if !is_sugar_callee(callee_expr, "to_string") {
-            return Ok(false);
-        }
-        // Fires when the checker resolved the call through the sugar tier
-        // (`desugared_callees`) or left the callee *untyped* (`Error`) — no
-        // real `to_string` method resolved. A real implementor (any
-        // `baml.ToString` / interface impl) types the callee as a method and
-        // is dispatched by the normal paths. The untyped leg keys on the
-        // callee's type, not on resolution presence: a generic typevar receiver
-        // records a placeholder resolution yet still has an untyped callee, and
-        // must take the fallback rather than ICE on it. A nullable receiver
-        // types the missing member as `Error | null`, so test the non-null part.
-        let key = self.expr_metadata_key(callee);
-        let sugar = self.tir_desugared_callee(key)
-            || self
-                .tir_expr_type(key)
-                .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error));
-        if !sugar {
-            return Ok(false);
-        }
-        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match callee_expr {
-            AstExpr::MemberAccess { base, .. } => {
-                let base_id = *base;
-                let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
-                (self.lower_to_operand(base_id)?, ty)
-            }
-            AstExpr::Path(segments) => {
-                let receiver_segments = &segments[..segments.len() - 1];
-                // Lower the receiver, mirroring normal path-method receiver
-                // handling: a single-segment root may be a local OR a closure
-                // capture; a multi-segment receiver is a field chain off either.
-                // (Can't reuse `lower_path_receiver_to_local`: it assumes a local
-                // root and `expr_ty(callee)` would ICE on the untyped callee.)
-                let recv_op = if receiver_segments.len() == 1 {
-                    let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
-                        return Ok(false);
-                    };
-                    Operand::Copy(place)
-                } else {
-                    let recv_ty = self
-                        .tir_path_segment_type((
-                            self.current_metadata_scope,
-                            callee,
-                            receiver_segments.len() - 1,
-                        ))
-                        .cloned()
-                        .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or(RuntimeTy::Unknown);
-                    let recv_local = self.builder.temp(recv_ty);
-                    self.lower_multi_segment_path_as_field_chain(
-                        callee,
-                        receiver_segments,
-                        Place::local(recv_local),
-                    )?;
-                    Operand::Copy(Place::local(recv_local))
-                };
-                let prefix_idx = segments.len() - 2;
-                let ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
-                    .cloned();
-                (recv_op, ty)
-            }
-            _ => return Ok(false),
-        };
-
-        // `string.from` is the static `from<T>` on `class String` (baml root
-        // package, no namespace). Pass the receiver's static type as the leading
-        // type arg so `T` binds under monomorphization (a generic receiver `t: T`
-        // would otherwise leave `T` undetermined and ICE). The shim ignores `T` at
-        // runtime, so an out-of-scope typevar or unknown receiver type safely
-        // drops to ntypeargs=0 — matching how `string.from(x)` is normally emitted.
-        let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
-            Some(t)
-                if !baml_type_runtime::contains_typevar_where(t, &|name| {
-                    !caller_generic_params.iter().any(|p| p == name)
-                }) =>
-            {
-                // An `Error` sentinel ANYWHERE in the receiver type is
-                // not lowerable — `ty_to_template` ICEs on it rather than
-                // degrading — so erase the whole type to `unknown`, its only
-                // sound static erasure. A `catch`/`catch_all` binder reaches here
-                // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes the top type
-                // `unknown` by design, so `e` is legitimately typed
-                // `SomeError | unknown`.
-                // Erase rather than drop to ntypeargs=0 — these generic shims
-                // bind `T` in a frame slot their own bodies read, so a
-                // zero-type-arg call traps in the VM.
-                let erased;
-                let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::Unknown;
-                    &erased
-                } else {
-                    t
-                };
-                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
-            }
-            _ => Vec::new(),
-        };
-        let ntypeargs = type_arg_ops.len();
-        let mut all_args = type_arg_ops;
-        all_args.push(recv_op);
-
-        let callee_op = Operand::Constant(Constant::Function(self.lang_class_method(
-            baml_base::LangPackage::Baml,
-            "String",
-            "from",
-        )));
-        // `string.from` is `throws never`; the unwind target is harmless/unused.
-        let target = self.builder.create_block();
-        // The call destination must be a `Place::Local`; route projection/capture
-        // dests through a temp + assign-through (mirrors the normal call path).
-        if let Place::Local(_) = dest {
-            self.builder
-                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
-            self.builder.set_current_block(target);
-        } else {
-            let call_ty = self.expr_ty(expr_id);
-            let tmp = self.builder.temp(call_ty);
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                Place::local(tmp),
-                target,
-            );
-            self.builder.set_current_block(target);
-            self.builder
-                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
-        }
-        Ok(true)
-    }
-
-    /// Operator-style `recv.to_json()` -> `baml.json.from(recv)` desugar, the json
-    /// analog of [`try_lower_to_string_fallback`]. Fires only for a 0-arg `to_json`
-    /// call with NO resolved method: the only source of a real `to_json` is
-    /// `implements baml.ToJson` (a bare one is banned), handled by the dispatch
-    /// paths in `lower_call`. `baml.json.from` honors any `baml.ToJson` override via
-    /// its runtime shim, so it matches a real call. Unlike `string.from` it throws
-    /// `SerializationError`, so the call's unwind target carries the throw.
-    /// Returns `true` (and emits the call) when it handled the expression.
-    fn try_lower_to_json_fallback(
-        &mut self,
-        expr_id: AstExprId,
-        callee: AstExprId,
-        callee_expr: &AstExpr,
-        args: &[AstExprId],
-        dest: &Place,
-    ) -> Lowered<bool> {
-        if !args.is_empty() {
-            return Ok(false);
-        }
-        if !is_sugar_callee(callee_expr, "to_json") {
-            return Ok(false);
-        }
-        // Fires when the checker desugared the call or left the callee untyped
-        // (no real `to_json` method).
-        let key = self.expr_metadata_key(callee);
-        let sugar = self.tir_desugared_callee(key)
-            || self
-                .tir_expr_type(key)
-                .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error));
-        if !sugar {
-            return Ok(false);
-        }
-        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match callee_expr {
-            AstExpr::MemberAccess { base, .. } => {
-                let base_id = *base;
-                let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
-                (self.lower_to_operand(base_id)?, ty)
-            }
-            AstExpr::Path(segments) => {
-                let receiver_segments = &segments[..segments.len() - 1];
-                let recv_op = if receiver_segments.len() == 1 {
-                    let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
-                        return Ok(false);
-                    };
-                    Operand::Copy(place)
-                } else {
-                    let recv_ty = self
-                        .tir_path_segment_type((
-                            self.current_metadata_scope,
-                            callee,
-                            receiver_segments.len() - 1,
-                        ))
-                        .cloned()
-                        .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or(RuntimeTy::Unknown);
-                    let recv_local = self.builder.temp(recv_ty);
-                    self.lower_multi_segment_path_as_field_chain(
-                        callee,
-                        receiver_segments,
-                        Place::local(recv_local),
-                    )?;
-                    Operand::Copy(Place::local(recv_local))
-                };
-                let prefix_idx = segments.len() - 2;
-                let ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
-                    .cloned();
-                (recv_op, ty)
-            }
-            _ => return Ok(false),
-        };
-
-        // `baml.json.from` is the namespace function `from<T>(value: T) -> json`.
-        // Pass the receiver's static type as the leading type arg so `T` binds
-        // under monomorphization (the shim ignores `T` at runtime, so an
-        // out-of-scope typevar / unknown receiver safely drops to ntypeargs=0).
-        let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
-            Some(t)
-                if !baml_type_runtime::contains_typevar_where(t, &|name| {
-                    !caller_generic_params.iter().any(|p| p == name)
-                }) =>
-            {
-                // An `Error` sentinel ANYWHERE in the receiver type is
-                // not lowerable — `ty_to_template` ICEs on it rather than
-                // degrading — so erase the whole type to `unknown`, its only
-                // sound static erasure. A `catch`/`catch_all` binder reaches here
-                // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes the top type
-                // `unknown` by design, so `e` is legitimately typed
-                // `SomeError | unknown`.
-                // Erase rather than drop to ntypeargs=0 — these generic shims
-                // bind `T` in a frame slot their own bodies read, so a
-                // zero-type-arg call traps in the VM.
-                let erased;
-                let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::Unknown;
-                    &erased
-                } else {
-                    t
-                };
-                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
-            }
-            _ => Vec::new(),
-        };
-        let ntypeargs = type_arg_ops.len();
-        let mut all_args = type_arg_ops;
-        all_args.push(recv_op);
-
-        let callee_op = Operand::Constant(Constant::Function(self.lang_function(
-            baml_base::LangPackage::Baml,
-            &["json"],
-            "from",
-        )));
-        let target = self.builder.create_block();
-        if let Place::Local(_) = dest {
-            self.builder
-                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
-            self.builder.set_current_block(target);
-        } else {
-            let call_ty = self.expr_ty(expr_id);
-            let tmp = self.builder.temp(call_ty);
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                Place::local(tmp),
-                target,
-            );
-            self.builder.set_current_block(target);
-            self.builder
-                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
-        }
-        Ok(true)
-    }
-
-    /// Static-constructor sugar: `Type.from_json(j)` -> `baml.json.to<Type>(j)`.
-    /// The deserialize analog of `try_lower_to_json_fallback`. The call's RESULT
-    /// type is the receiver type `Type`, so it threads in as the leading type arg
-    /// (concretely — `Box<int>` decodes to `Box<int>`). Fires only when TIR left
-    /// the callee untyped (no real `from_json` method / `baml.FromJson` override).
-    fn try_lower_from_json_static_fallback(
-        &mut self,
-        expr_id: AstExprId,
-        callee: AstExprId,
-        callee_expr: &AstExpr,
-        args: &[AstExprId],
-        dest: &Place,
-    ) -> Lowered<bool> {
-        if args.len() != 1 {
-            return Ok(false);
-        }
-        if !is_sugar_callee(callee_expr, "from_json") {
-            return Ok(false);
-        }
-        // Fire only for a type-name receiver (`Type.from_json`), never a value
-        // call (`x.from_json`) — rewriting the latter would silently drop `x`.
-        // Mirrors the guard in the TIR sugar that types this call.
-        let static_receiver = match callee_expr {
-            AstExpr::MemberAccess { base, .. } => match &self.body.exprs[*base] {
-                AstExpr::Path(segs) if !segs.is_empty() => {
-                    self.binding_id_for_path(*base, &segs[0]).is_none()
-                }
-                _ => false,
-            },
-            AstExpr::Path(segs) if segs.len() >= 2 => {
-                self.binding_id_for_path(callee, &segs[0]).is_none()
-            }
-            _ => false,
-        };
-        if !static_receiver {
-            return Ok(false);
-        }
-        let key = self.expr_metadata_key(callee);
-        let sugar = self.tir_desugared_callee(key)
-            || self
-                .tir_expr_type(key)
-                .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error));
-        if !sugar {
-            return Ok(false);
-        }
-
-        // The receiver type is the call's result type. Pass it as the leading
-        // type arg so `baml.json.to<T>` binds `T` under monomorphization; an
-        // out-of-scope typevar / unknown safely drops to ntypeargs=0 (the shim
-        // resolves on the runtime value when no static type is supplied).
-        let recv_tir_ty: Option<Tir2Ty> =
-            self.tir_expr_type(self.expr_metadata_key(expr_id)).cloned();
-        let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
-            Some(t)
-                if !baml_type_runtime::contains_typevar_where(t, &|name| {
-                    !caller_generic_params.iter().any(|p| p == name)
-                }) =>
-            {
-                // An `Error` sentinel ANYWHERE in the receiver type is
-                // not lowerable — `ty_to_template` ICEs on it rather than
-                // degrading — so erase the whole type to `unknown`, its only
-                // sound static erasure. A `catch`/`catch_all` binder reaches here
-                // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes the top type
-                // `unknown` by design, so `e` is legitimately typed
-                // `SomeError | unknown`.
-                // Erase rather than drop to ntypeargs=0 — these generic shims
-                // bind `T` in a frame slot their own bodies read, so a
-                // zero-type-arg call traps in the VM.
-                let erased;
-                let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::Unknown;
-                    &erased
-                } else {
-                    t
-                };
-                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
-            }
-            _ => Vec::new(),
-        };
-        let ntypeargs = type_arg_ops.len();
-        let arg_op = self.lower_to_operand(args[0])?;
-        let mut all_args = type_arg_ops;
-        all_args.push(arg_op);
-
-        let callee_op = Operand::Constant(Constant::Function(self.lang_function(
-            baml_base::LangPackage::Baml,
-            &["json"],
-            "to",
-        )));
-        let target = self.builder.create_block();
-        if let Place::Local(_) = dest {
-            self.builder
-                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
-            self.builder.set_current_block(target);
-        } else {
-            let call_ty = self.expr_ty(expr_id);
-            let tmp = self.builder.temp(call_ty);
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                Place::local(tmp),
-                target,
-            );
-            self.builder.set_current_block(target);
-            self.builder
-                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
-        }
-        Ok(true)
-    }
-
     /// Lower a call expression. `x?.m(...)` enters through
     /// [`Self::lower_optional_method_call`], which emits the null guard and
     /// then re-enters here with the `x.m(...)` shape: `?.` decides *whether*
@@ -8253,7 +7906,9 @@ impl<'db> LoweringContext<'db> {
         if self.try_lower_interface_item_call(expr_id, callee, args, &dest)? {
             return Ok(());
         }
-        if let AstExpr::MemberAccess { base, member } = callee_expr {
+        if let AstExpr::MemberAccess { base, member } = callee_expr
+            && self.allows_interface_method_dispatch(callee)
+        {
             let member_name = member.clone();
             let base_id = *base;
             // BEP-044: interface-typed receiver — dispatch by type tag over
@@ -8418,6 +8073,7 @@ impl<'db> LoweringContext<'db> {
             // (expr, name) would have to prove the first load dominates the
             // second use, and these can land in different blocks.
             if segments.len() >= 2
+                && self.allows_interface_method_dispatch(callee)
                 && let Some(recv_root) = self.path_receiver_root(callee, &segments[0])?
             {
                 let method_name = segments.last().unwrap().clone();
@@ -8557,22 +8213,6 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             }
-        }
-
-        // Operator-style `recv.to_string()` -> `string.from(recv)` fallback. Runs
-        // after all real dispatch (interface/union above, method resolution below)
-        // has been attempted, so a `baml.ToString` implementor always wins first;
-        // only a `to_string` call with no resolved method reaches the fallback.
-        if self.try_lower_to_string_fallback(expr_id, callee, callee_expr, args, &dest)? {
-            return Ok(());
-        }
-        // Same fallback for `recv.to_json()` -> `baml.json.from(recv)`.
-        if self.try_lower_to_json_fallback(expr_id, callee, callee_expr, args, &dest)? {
-            return Ok(());
-        }
-        // Static-constructor `Type.from_json(j)` -> `baml.json.to<Type>(j)`.
-        if self.try_lower_from_json_static_fallback(expr_id, callee, callee_expr, args, &dest)? {
-            return Ok(());
         }
 
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
@@ -10671,13 +10311,13 @@ impl<'db> LoweringContext<'db> {
                 Place::local(key_local),
                 Rvalue::Use(Operand::Constant(Constant::String(field_str))),
             );
-            self.builder.assign(
+            self.emit_map_call(
+                "index",
+                vec![
+                    Operand::Copy(Place::local(base_local)),
+                    Operand::Copy(Place::local(key_local)),
+                ],
                 dest,
-                Rvalue::Use(Operand::Copy(Place::Index {
-                    base: Box::new(Place::Local(base_local)),
-                    index: key_local,
-                    kind: IndexKind::Map,
-                })),
             );
         }
         Ok(())
@@ -10780,20 +10420,47 @@ impl<'db> LoweringContext<'db> {
         // the base type is T? but we've already null-checked.
         let unwrapped_ty = base_ty.strip_null();
 
-        let kind = if matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
-            IndexKind::Array
-        } else {
-            IndexKind::Map
-        };
+        if !matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
+            self.emit_map_call(
+                "index",
+                vec![
+                    Operand::Copy(Place::local(base_local)),
+                    Operand::Copy(Place::local(index_local)),
+                ],
+                dest,
+            );
+            return;
+        }
 
         self.builder.assign(
             dest,
             Rvalue::Use(Operand::Copy(Place::Index {
                 base: Box::new(Place::Local(base_local)),
                 index: index_local,
-                kind,
+                kind: IndexKind::Array,
             })),
         );
+    }
+
+    fn emit_map_call(&mut self, method: &str, args: Vec<Operand<'db>>, dest: Place) {
+        let callee = Operand::Constant(Constant::Function(self.lang_class_method(
+            baml_base::LangPackage::Baml,
+            "Map",
+            method,
+        )));
+        let call_dest = if matches!(dest, Place::Local(_)) {
+            dest.clone()
+        } else {
+            Place::local(self.builder.temp(RuntimeTy::Unknown))
+        };
+        let resume = self.builder.create_block();
+        // Native map operations read K/V from the typed receiver, not call type arguments.
+        self.builder.call(callee, args, call_dest.clone(), resume);
+        self.builder.set_current_block(resume);
+        if call_dest != dest {
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
+        }
     }
 
     /// If the expression is a simple local variable reference (single-segment path
@@ -10862,13 +10529,10 @@ impl<'db> LoweringContext<'db> {
         {
             return Ok(false);
         }
-        // Every interface-mediated call dispatches open-world via a virtual
-        // call: the VM resolves the impl from the receiver's runtime concrete
-        // type (containers included — array/map values carry their element
-        // types), so a statically-undetermined receiver (a bounded type-var,
-        // an existential, `Self` in a default body) and a concrete one route
-        // identically. `dispatch_view_for_call` supplies the interface to key
-        // on, or declines the road entirely for a field.
+        // The shared call funnel devirtualizes a closed structural witness.
+        // Otherwise the VM resolves the impl from the runtime concrete type.
+        // `dispatch_view_for_call` supplies the declaring interface, or
+        // declines this road for a field.
         let Some((decl_tn, decl_args, decl_assoc)) = self.dispatch_view_for_call(&view, method)
         else {
             return Ok(false);
@@ -10888,13 +10552,112 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
-    /// Emit an open-world [`Terminator::VirtualCall`] dispatching `method` of
-    /// interface `iface_tn` on `recv_local`. The receiver is passed as the first
-    /// value argument; the VM reads its runtime concrete type as `Self` and
-    /// resolves the impl (coherence guarantees at most one). Always succeeds
-    /// (returns `true`): the type checker has already proved the receiver
-    /// implements the interface, so no compile-time candidate enumeration — and
-    /// hence no closed-world fall-through — is needed.
+    fn structural_witness(
+        &self,
+        self_ty: &Tir2Ty,
+        interface: &DeclName,
+    ) -> Option<baml_type::StructuralInterface> {
+        use baml_compiler2_hir_ty::impls::{
+            ResolvedImplementation, resolve_implementation, structural_interface,
+        };
+        use baml_type::interned::{InferInterface, Ty};
+
+        // Concrete nominal types are not closed: a later Session submission
+        // can add an impl while retaining previously compiled callers. Only
+        // builtin types with recursively closed components can be devirtualized.
+        fn has_closed_implementations(ty: &Tir2Ty) -> bool {
+            match ty {
+                Tir2Ty::List(inner) => has_closed_implementations(inner),
+                Tir2Ty::Map { key, value } => {
+                    has_closed_implementations(key) && has_closed_implementations(value)
+                }
+                Tir2Ty::Int
+                | Tir2Ty::Bigint
+                | Tir2Ty::Float
+                | Tir2Ty::Bool
+                | Tir2Ty::String
+                | Tir2Ty::Null
+                | Tir2Ty::Uint8Array
+                | Tir2Ty::Type
+                | Tir2Ty::Literal(..) => true,
+                _ => false,
+            }
+        }
+        structural_interface(self.db, interface)?;
+        if !has_closed_implementations(self_ty) {
+            return None;
+        }
+        let interface = InferInterface::new(interface.clone(), Box::new([]), Box::new([]));
+        match resolve_implementation(self.db, &Ty::from_plain(self_ty), &interface)? {
+            ResolvedImplementation::StructuralDefault(kind) => Some(kind),
+            ResolvedImplementation::Explicit(_) => None,
+        }
+    }
+
+    fn structural_function_rvalue(
+        &self,
+        self_ty: &Tir2Ty,
+        interface: &DeclName,
+        method: &Name,
+    ) -> Option<Rvalue<'db>> {
+        let kind = self.structural_witness(self_ty, interface)?;
+        if method.as_str() != kind.primary_method() {
+            return None;
+        }
+        let func = self.lang_function(baml_base::LangPackage::Baml, &[], kind.native_function());
+        let type_args = if kind.native_type_arg_count() == 0 {
+            Vec::new()
+        } else {
+            let template = self.ty_to_template(self_ty, &self.enclosing_generic_params());
+            vec![RealizedTy::try_from(&template).ok()?]
+        };
+        Some(Rvalue::Use(Operand::Constant(Constant::GenericFunction {
+            func,
+            type_args,
+        })))
+    }
+
+    fn emit_direct_structural_call(
+        &mut self,
+        func: FunctionRef<'db>,
+        args: Vec<Operand<'db>>,
+        ntypeargs: usize,
+        layout: Option<baml_type::CallLayout>,
+        result_ty: RuntimeTy,
+        dest: Place,
+    ) {
+        let native_layout = baml_type::CallLayout::from_modes(
+            baml_compiler2_hir_ty::callable::callable_signature(self.db, func)
+                .params
+                .iter()
+                .map(|param| (param.name.clone(), param.mode)),
+        );
+        let layout = layout.filter(|layout| layout != &native_layout);
+        let call_dest = if matches!(dest, Place::Local(_)) {
+            dest.clone()
+        } else {
+            Place::local(self.builder.temp(result_ty))
+        };
+        let resume = self.builder.create_block();
+        self.builder.call_with_type_args(
+            Operand::Constant(Constant::Function(func)),
+            args,
+            ntypeargs,
+            call_dest.clone(),
+            resume,
+        );
+        self.builder.set_call_layout(layout);
+        self.builder.set_current_block(resume);
+        if call_dest != dest {
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
+        }
+    }
+
+    /// Emit an interface call, directly for a closed structural witness and
+    /// otherwise through [`Terminator::VirtualCall`]. The receiver is the first
+    /// value argument. Always returns `true`: the type checker has proved the
+    /// receiver implements the interface.
     #[expect(clippy::too_many_arguments)]
     fn emit_virtual_call(
         &mut self,
@@ -10938,6 +10701,37 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         dest: &Place,
     ) -> Lowered<bool> {
+        if iface_type_args.is_empty()
+            && iface_assoc.is_empty()
+            && let Some(Operand::Copy(Place::Local(receiver))) = value_ops.get(self_arg)
+        {
+            let self_ty = Tir2Ty::from(self.builder.local_ty(*receiver));
+            if let Some(kind) = self.structural_witness(&self_ty, iface_tn)
+                && method.as_str() == kind.primary_method()
+            {
+                let layout = self.call_argument_layout(expr_id, value_ops.len())?;
+                let mut args = Vec::new();
+                if kind.native_type_arg_count() != 0 {
+                    let ty = self.ty_to_template(&self_ty, &self.enclosing_generic_params());
+                    let local = self.builder.temp(RuntimeTy::Type);
+                    self.builder
+                        .assign(Place::local(local), Rvalue::LoadType(ty));
+                    args.push(Operand::Copy(Place::local(local)));
+                }
+                args.extend(value_ops);
+                let func =
+                    self.lang_function(baml_base::LangPackage::Baml, &[], kind.native_function());
+                self.emit_direct_structural_call(
+                    func,
+                    args,
+                    kind.native_type_arg_count(),
+                    layout,
+                    self.expr_ty(expr_id),
+                    dest.clone(),
+                );
+                return Ok(true);
+            }
+        }
         // The method's OWN generic count, read off the interface that DECLARES
         // it: the view may be a sub-interface whose `requires` ancestor
         // declares the method (that is what `dispatch_target_for_concrete`
@@ -11248,6 +11042,22 @@ impl<'db> LoweringContext<'db> {
                 let candidates = candidate_views(member);
                 shared.retain(|view| candidates.contains(view));
             }
+            let facts = baml_compiler2_hir_ty::facts::Facts::with_bounds(
+                self.db,
+                self.enclosing_generic_param_bounds(),
+            );
+            baml_compiler2_hir_ty::method_resolution::prefer_explicit_members(
+                self.db,
+                baml_compiler2_hir::file_package::file_package(self.db, self.file).root,
+                &facts,
+                &baml_type::interned::Ty::from_plain(&Tir2Ty::Union(members.into())),
+                &mut shared,
+                |(name, args, pins)| {
+                    baml_type::interned::InferInterface::from_constraint(
+                        &baml_type::Interface::new(name.clone(), args.clone(), pins.clone()),
+                    )
+                },
+            );
             (shared.len() == 1).then(|| shared.remove(0))
         };
 
@@ -12316,25 +12126,42 @@ impl LoweringContext<'_> {
                         ));
                     }
                     // Dynamic map fallback for non-class base or unknown field
+                    let receiver = Place::local(self.builder.temp(current_ty));
+                    self.builder
+                        .assign(receiver.clone(), Rvalue::Use(Operand::Copy(current_place)));
                     let key_local = self.builder.temp(RuntimeTy::String);
                     self.builder.assign(
                         Place::local(key_local),
                         Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
                     );
-                    current_place = Place::Index {
-                        base: Box::new(current_place),
-                        index: key_local,
-                        kind: IndexKind::Map,
-                    };
-                    break;
+                    if seg_idx == segments.len() - 1 {
+                        return Ok(Place::Index {
+                            base: Box::new(receiver),
+                            index: key_local,
+                            kind: IndexKind::Map,
+                        });
+                    }
+                    current_ty = self
+                        .path_segment_ty(expr_id, seg_idx)
+                        .unwrap_or(RuntimeTy::Unknown);
+                    current_place = Place::local(self.builder.temp(current_ty.clone()));
+                    self.emit_map_call(
+                        "index",
+                        vec![
+                            Operand::Copy(receiver),
+                            Operand::Copy(Place::local(key_local)),
+                        ],
+                        current_place.clone(),
+                    );
                 }
                 Ok(current_place)
             }
             AstExpr::MemberAccess { base, member } => {
                 let base_id = *base;
                 let member_name = member.clone();
-                let base_place = self.lower_lvalue(base_id)?;
                 let base_ty = self.expr_ty(base_id);
+                let base_op = self.lower_to_operand(base_id)?;
+                let base_place = Place::local(self.operand_to_local(base_op, base_ty.clone()));
                 if let RuntimeTy::Class(ref tn, _) = base_ty {
                     if let Some(idx) =
                         layout::class_field_index(self.db, self.class_ref_of(tn)?, &member_name)
@@ -12368,9 +12195,10 @@ impl LoweringContext<'_> {
             AstExpr::Index { base, index } => {
                 let base_id = *base;
                 let index_id = *index;
-                let base_place = self.lower_lvalue(base_id)?;
-                let index_op = self.lower_to_operand(index_id)?;
                 let base_ty = self.expr_ty(base_id);
+                let base_op = self.lower_to_operand(base_id)?;
+                let base_place = Place::local(self.operand_to_local(base_op, base_ty.clone()));
+                let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();

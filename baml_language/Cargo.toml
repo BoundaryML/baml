@@ -112,6 +112,7 @@ sys_regex = { path = "crates/sys_regex" }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
+baml_env = { path = "crates/baml_env" }
 baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }

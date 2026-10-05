@@ -349,7 +349,7 @@ function write_issue(fb: Feedback, repro: Repro, run: ReproRun) -> IssueDraft {
 // ==================== Helpers ====================
 
 function toolchain_version() -> string {
-    baml.env.get("BAML_VERSION") ?? "unknown"
+    baml.env.get("BAML_TOOLCHAIN") ?? "unknown"
 }
 
 function format_comments(comments: Comment[]) -> string {

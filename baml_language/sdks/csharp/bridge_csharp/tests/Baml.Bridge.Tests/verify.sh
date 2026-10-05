@@ -80,14 +80,14 @@ fi
 
 run_success() {
   local mode="$1"
-  BAML_BRIDGE_CSHARP_NATIVE_LIBRARY="$valid_library" \
+  BAML_BRIDGE_PATH="$valid_library" \
     BAML_FAKE_NATIVE_MODE="$mode" \
     dotnet run --project "$project" --configuration Release --no-build --no-restore -- \
       native-success 0.15.0
 }
 
 run_registration() {
-  BAML_BRIDGE_CSHARP_NATIVE_LIBRARY="$valid_library" \
+  BAML_BRIDGE_PATH="$valid_library" \
     dotnet run --project "$project" --configuration Release --no-build --no-restore -- \
       register-success 0.15.0
 }
@@ -96,7 +96,7 @@ run_failure() {
   local library="$1"
   local mode="$2"
   local marker="$3"
-  BAML_BRIDGE_CSHARP_NATIVE_LIBRARY="$library" \
+  BAML_BRIDGE_PATH="$library" \
     BAML_FAKE_NATIVE_MODE="$mode" \
     dotnet run --project "$project" --configuration Release --no-build --no-restore -- \
       native-failure "$marker"

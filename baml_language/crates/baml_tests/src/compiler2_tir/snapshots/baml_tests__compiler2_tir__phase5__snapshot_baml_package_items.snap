@@ -10,8 +10,9 @@ namespace baml:
   class Float { methods: [is_nan, is_infinite, is_finite, abs, signum, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, exp, ln, log2, log10, cbrt, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, _unit_from_draw, pi, e, golden_ratio, nan, inf, max_finite, min_finite, epsilon] }
   type FloatStats
   type FromJson
+  type Hash
   class Int { methods: [abs, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, _random_in_range, max_value, min_value] }
-  class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear] }
+  class Map<K, V> { methods: [length, has, keys, values, set, get, index, delete, get_or_insert, clear] }
   class Null { methods: [] }
   type Sortable
   class String { methods: [from, length, char_count, is_empty, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, slice, replace, index_of, last_index_of, at, code_point_at, repeat, replace_all, _as_string, _replace_literal, _replace_all_literal, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
@@ -21,14 +22,15 @@ namespace baml:
   type ToString
   class Uint8Array { methods: [length, at, push, pop, concat, includes, index_of, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort] }
   function _cleanup_begin<T>
-  function _from_json_shim<T>
+  function _equals_structural_default
+  function _from_json_structural_default<T>
+  function _hash_structural_default
   function _is_primitive_array<T>
   function _median_float
   function _rust_sort<A>
   function _sum_float
   function _sum_int
   function _to_json_default<T>
-  function _to_json_shim<T>
   function _to_string_default<T>
   function _trunc_to_int
   function deep_copy<T>
@@ -142,6 +144,9 @@ namespace baml.glob:
   class Glob { methods: [scan, matches] }
   class ScanOptions { methods: [] }
   function new
+namespace baml.hash:
+  class DefaultHasher { methods: [new] }
+  type Hasher
 namespace baml.host:
   class Value { methods: [] }
   function call_host_value<T, E>

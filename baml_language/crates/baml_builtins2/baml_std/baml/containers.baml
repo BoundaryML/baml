@@ -688,9 +688,10 @@ class Array<T> {
 
 /// An insertion-ordered collection of key-value pairs.
 ///
-/// `Map<K, V>` is spelled `map<K, V>` in type position. `K` must be `string` —
-/// the compiler rejects any other key type — so the type parameter exists for
-/// uniformity rather than choice; convert other keys with `.to_string()` first.
+/// `Map<K, V>` is spelled `map<K, V>` in type position. Keys must implement
+/// `baml.Hash` and `baml.ops.Equals`. Equal keys must hash equally,
+/// and their hash and equality must stay stable while stored in the map.
+/// JSON and SDK boundaries still require string-keyed maps.
 ///
 /// Iteration order is the order in which keys were *first* inserted: `keys()`
 /// and `values()` follow it, `set` on an existing key keeps that key's original
@@ -710,7 +711,7 @@ class Array<T> {
 /// When `V` is nullable, a `null` returned by `get`, `set` or `delete` is
 /// ambiguous between "no such key" and "the key's value is `null`". `has` is
 /// the way to tell the two apart.
-class Map<K, V> {
+class Map<K extends root.Hash & root.ops.Equals, V> {
     /// Returns the number of entries. `O(1)`.
     function length(self) -> int throws never {
         $rust_function
@@ -720,7 +721,8 @@ class Map<K, V> {
     ///
     /// Prefer this to `get(key) != null`: a key mapped to `null` is present,
     /// but `get` cannot say so.
-    //baml:vm
+    //baml:mut_vm
+    //baml:may_yield
     function has(self, key: K) -> bool throws never {
         $rust_function
     }
@@ -758,6 +760,8 @@ class Map<K, V> {
     /// m.set("a", 1)         // null  (was absent)
     /// m.set("a", 2)         // 1     (returns the old value)
     /// ```
+    //baml:mut_vm
+    //baml:may_yield
     //baml:mut_self
     function set(self, key: K, value: V) -> V? throws never {
         $rust_function
@@ -774,8 +778,16 @@ class Map<K, V> {
     /// m.get("a")     // 1
     /// m.get("b")     // null
     /// ```
-    //baml:vm
+    //baml:mut_vm
+    //baml:may_yield
     function get(self, key: K) -> V? throws never {
+        $rust_function
+    }
+
+    /// Reads `key`, raising `baml.panics.MapKeyNotFound` if it is absent.
+    //baml:mut_vm
+    //baml:may_yield
+    function index(self, key: K) -> V throws never {
         $rust_function
     }
 
@@ -793,6 +805,8 @@ class Map<K, V> {
     /// m.delete("a")     // 1
     /// m.delete("a")     // null  (already gone)
     /// ```
+    //baml:mut_vm
+    //baml:may_yield
     //baml:mut_self
     function delete(self, key: K) -> V? throws never {
         $rust_function
@@ -815,6 +829,8 @@ class Map<K, V> {
     /// m.get_or_insert("k", 10)   // 10  (inserted)
     /// m.get_or_insert("k", 99)   // 10  (existing — `99` ignored)
     /// ```
+    //baml:mut_vm
+    //baml:may_yield
     //baml:mut_self
     function get_or_insert(self, key: K, default: V) -> V throws never {
         $rust_function

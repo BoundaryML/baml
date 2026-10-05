@@ -625,7 +625,7 @@ impl BexHeap {
             }
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked() };
-                for value in data.values() {
+                for value in data.keys().chain(data.values()) {
                     if let Some(ptr) = value.as_object_ptr() {
                         worklist.push(ptr);
                     }
@@ -742,6 +742,11 @@ impl BexHeap {
                 if !interface.owner.as_ptr().is_null() {
                     worklist.push(interface.owner);
                 }
+                if let Some(default) = &interface.structural_default
+                    && !default.function_ptr.is_null()
+                {
+                    worklist.push(default.function_ptr);
+                }
                 worklist.extend(
                     interface
                         .methods
@@ -838,7 +843,7 @@ impl BexHeap {
             }
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked_mut() };
-                for value in data.values_mut() {
+                for value in data.trace_values_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }
@@ -977,6 +982,11 @@ impl BexHeap {
             Object::Interface(interface) => {
                 if let Some(&new_ptr) = forwarding.get(&interface.owner) {
                     interface.owner = new_ptr;
+                }
+                if let Some(default) = &mut interface.structural_default
+                    && let Some(&new_ptr) = forwarding.get(&default.function_ptr)
+                {
+                    default.function_ptr = new_ptr;
                 }
                 for method in &mut interface.methods {
                     if let Some(&new_ptr) = forwarding.get(&method.default_fn) {
@@ -1185,7 +1195,8 @@ impl BexHeap {
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked() };
                 worklist.extend(
-                    data.values()
+                    data.keys()
+                        .chain(data.values())
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
@@ -1350,6 +1361,12 @@ impl BexHeap {
                     && self.generation_of(interface.owner).is_young()
                 {
                     worklist.push(interface.owner);
+                }
+                if let Some(default) = &interface.structural_default
+                    && !default.function_ptr.is_null()
+                    && self.generation_of(default.function_ptr).is_young()
+                {
+                    worklist.push(default.function_ptr);
                 }
                 worklist.extend(
                     interface
@@ -2012,6 +2029,35 @@ mod tests {
     }
 
     #[test]
+    fn test_gc_traces_and_forwards_structural_map_keys() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let leaf = tlab.alloc_string("key leaf");
+        let key = tlab.alloc_array(baml_type::RealizedTy::string(), vec![Value::object(leaf)]);
+        let map = tlab.alloc(Object::Map(bex_vm_types::types::Map::new(
+            baml_type::RealizedTy::unknown(),
+            baml_type::RealizedTy::int(),
+            bex_vm_types::MapData::from_hashed_entries([(17, Value::object(key), Value::int(42))]),
+        )));
+        let (stats, roots, _) = unsafe { heap.collect_garbage(&[map]) };
+        assert_eq!(stats.live_count, 3);
+        let Object::Map(map) = (unsafe { roots[0].get() }) else {
+            panic!("expected map");
+        };
+        let (_, entries) = map.snapshot_bucket(17);
+        assert_eq!(entries[0].1.value, Value::int(42));
+        let Object::Array(key) = (unsafe { entries[0].1.key.as_object_ptr().unwrap().get() })
+        else {
+            panic!("expected array key");
+        };
+        let Object::String(leaf) = (unsafe { key.get(0).unwrap().as_object_ptr().unwrap().get() })
+        else {
+            panic!("expected key leaf");
+        };
+        assert_eq!(leaf, "key leaf");
+    }
+
+    #[test]
     fn test_gc_with_map_references() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2034,15 +2080,19 @@ mod tests {
         // Run GC with only the map as root
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[map_obj]) };
 
-        // Both map and string should survive
-        assert_eq!(stats.live_count, 2);
+        // The map, key, and value should survive.
+        assert_eq!(stats.live_count, 3);
         assert_eq!(remapped.len(), 1);
 
         // Verify the map's reference was updated correctly
         let new_map_ptr = remapped[0];
         let map_result = unsafe { new_map_ptr.get() };
         if let Object::Map(m) = map_result {
-            if let Some(str_ptr) = m.get("key").and_then(|v| v.as_object_ptr()) {
+            let entries = m.snapshot_entries();
+            assert!(
+                matches!(unsafe { entries[0].0.as_object_ptr().unwrap().get() }, Object::String(key) if key == "key")
+            );
+            if let Some(str_ptr) = entries[0].1.as_object_ptr() {
                 let str_result = unsafe { str_ptr.get() };
                 if let Object::String(s) = str_result {
                     assert_eq!(s, "value");
@@ -2172,8 +2222,8 @@ mod tests {
         // Only root the outer array
         let (stats, remapped, _forwarding) = unsafe { heap.collect_garbage(&[outer_array]) };
 
-        // All 4 objects in the chain should survive
-        assert_eq!(stats.live_count, 4);
+        // The four chain objects and the map key should survive.
+        assert_eq!(stats.live_count, 5);
         assert!(stats.collected_count >= 2);
 
         // Verify the chain is intact after forwarding
@@ -2185,7 +2235,7 @@ mod tests {
         {
             let map_obj = unsafe { map_ptr.get() };
             if let Object::Map(m) = map_obj
-                && let Some(inner_arr_ptr) = m.get("nested").and_then(|v| v.as_object_ptr())
+                && let Some(inner_arr_ptr) = m.snapshot_entries()[0].1.as_object_ptr()
             {
                 let inner_arr_obj = unsafe { inner_arr_ptr.get() };
                 if let Object::Array(inner_arr) = inner_arr_obj
@@ -3338,7 +3388,7 @@ mod tests {
         let Object::Map(m) = (unsafe { new_roots[1].get() }) else {
             panic!("new_roots[1] not Map")
         };
-        let Some(map_leaf) = m.get("k").and_then(|v| v.as_object_ptr()) else {
+        let Some(map_leaf) = m.snapshot_entries()[0].1.as_object_ptr() else {
             panic!("map[\"k\"] not Object")
         };
         let Object::String(s) = (unsafe { map_leaf.get() }) else {

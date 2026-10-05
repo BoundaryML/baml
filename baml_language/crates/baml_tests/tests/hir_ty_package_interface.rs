@@ -1777,6 +1777,23 @@ fn impl_identity_ignores_written_parameter_names_but_not_bounds() {
     );
 }
 
+#[test]
+fn structural_defaults_export_no_generated_impl_rows() {
+    let db = dependency_db("class Bare { value int }");
+    assert!(package_interface(&db, app_root(&db)).impls.is_empty());
+    let root = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_base::LangPackage::Baml)
+        .expect("stdlib installed");
+    for row in &package_interface(&db, root).impls {
+        if baml_compiler2_hir_ty::impls::structural_interface(&db, &row.interface.name).is_some() {
+            assert!(
+                !matches!(row.for_ty_pattern, baml_type::Ty::TypeVar(_)),
+                "implicit defaults must not export blanket impls"
+            );
+        }
+    }
+}
+
 fn rename_impl_params(row: &ExportedImpl) -> ExportedImpl {
     fn rename(param: &ParamTy) -> ParamTy {
         ParamTy::new(

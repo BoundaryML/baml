@@ -1385,12 +1385,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         span: method.name_span,
                     });
             }
-            // `from_json` likewise belongs to `baml.FromJson`. The auto-derived
-            // structural-default delegate (origin `AutoDerive`) is exempt — it is
-            // synthesized, not user-written, and is `baml.FromJson`'s default.
-            if method.name.as_str() == "from_json"
-                && method.metadata.origin != ast::FunctionOrigin::AutoDerive
-            {
+            if method.name.as_str() == "from_json" {
                 self.diagnostics
                     .push(Hir2Diagnostic::FromJsonMustImplementInterface {
                         class_name: c.name.clone(),

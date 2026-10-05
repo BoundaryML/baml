@@ -84,8 +84,8 @@ impl TelemetryRecording {
     /// non-empty and the URL parses. Delivery validates the URL and bearer
     /// header at engine construction; a rejected config disables recording.
     pub fn from_boundary_env() -> Option<Self> {
-        let url = std::env::var(BOUNDARY_URL).ok()?;
-        let key = std::env::var(BOUNDARY_API_KEY).ok()?;
+        let url = baml_env::raw_var(BOUNDARY_URL)?;
+        let key = baml_env::raw_var(BOUNDARY_API_KEY)?;
         if url.is_empty() || key.is_empty() {
             return None;
         }

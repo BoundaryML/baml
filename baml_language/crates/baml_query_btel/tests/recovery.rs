@@ -681,7 +681,7 @@ fn crash(project: &Path, fault: &str) {
             "1",
         ])
         .env("RECOVERY_CHILD_PROJECT", project)
-        .env("BAML_QUERY_FAULT", fault)
+        .env("DEV_BAML_QUERY_FAULT", fault)
         .status()
         .unwrap();
     assert!(!status.success(), "the child must crash at {fault}");

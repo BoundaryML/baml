@@ -1,3 +1,6 @@
 # Standard-library changes, including doc comments, need approval from one
 # stdlib owner. Enforced by "Require review from Code Owners" on `canary`.
 /baml_language/crates/baml_builtins2/baml_std/ @hellovai @aaronvg @2kai2kai2
+
+/baml_language/ENV_VARS.md @hellovai @aaronvg
+/baml_language/crates/baml_env/ @hellovai @aaronvg

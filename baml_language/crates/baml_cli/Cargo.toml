@@ -20,6 +20,7 @@ workspace = true
 baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_db = { workspace = true }
+baml_env = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
 baml_ide = { workspace = true }

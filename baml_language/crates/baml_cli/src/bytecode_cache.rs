@@ -20,38 +20,28 @@
 //!   current.
 //!
 //! Knobs:
-//! - `BAML_NO_BYTECODE_CACHE=1` — disable lookups and writes entirely.
-//! - `BAML_CACHE_DIR=<path>` — cache location override (default:
-//!   `<project>/.baml/cache`). Content addressing makes a shared directory
-//!   safe across projects.
-//! - `BAML_CACHE_VERIFY=1` — tripwire mode: never serve from the cache;
-//!   compile, then hard-fail if a fresh package output or the fresh bytecode
-//!   differs from the cached entry under the same key (catches emit
-//!   nondeterminism and missing cache-key inputs, at both tiers — Go's
-//!   `GODEBUG=gocacheverify=1`). Also runs the stdlib-interface and per-file
-//!   diagnostics oracles. Too expensive to leave always-on.
-//! - `BAML_CACHE_SAMPLED_VERIFY` — sampled field verification, the always-on
-//!   complement to full verify (rustc's "1-in-N compiles verifies one
-//!   artifact" hardening). On a warm compile that *serves* the check rows,
-//!   ~1 run in 32 picks one served file and checks its served diagnostics
-//!   blob and `callable_throws` fragment against an honest, un-seeded
-//!   re-derivation — after the compile result is already produced, so the
-//!   added latency is one file's honest work. A mismatch is a hard error
-//!   (silent staleness must be LOUD). `=0` disables; `=1` forces every warm
-//!   compile (tests); default is 1/32. See [`sampled_pick_from_key`] for the
-//!   key-derived, RNG-free sampling decision.
-//! - `BAML_NO_DIAGNOSTICS_CACHE=1` — check every file instead of serving the
-//!   check rows, to isolate that feature's win. Also forces the builtin
-//!   (stdlib) files to be checked honestly instead of served from the
-//!   per-toolchain stdlib-diagnostics blob — one knob governs all
-//!   diagnostics serving.
-//! - `BAML_NO_CALLABLE_THROWS_CACHE=1` — empty the per-function `callable_throws`
-//!   seed so every function infers its throws honestly (diagnostics serving
-//!   unaffected), to isolate the fragment seed's win.
-//! - `BAML_NO_DISCOVERY_CACHE=1` — never serve `baml test --list` from the
-//!   cached discovery output (the flattened test list), forcing the honest
-//!   engine-boot + in-VM discovery every time, to A/B the discovery cache's win.
-//!   The rest of the cache is unaffected.
+//! - `BAML_BUILD_CACHE=false` — disable lookups and writes entirely. The
+//!   cache lives in `$BAML_HOME/build/cache`; content addressing makes one
+//!   directory safe to share across projects.
+//! - `DEV_BAML_BUILD_CACHE_VERIFY=off|sampled|always` — how hard the cache is
+//!   cross-checked against an honest recompute:
+//!   - `always` — tripwire mode: never serve from the cache; compile, then
+//!     hard-fail if a fresh package output or the fresh bytecode differs from
+//!     the cached entry under the same key (catches emit nondeterminism and
+//!     missing cache-key inputs, at both tiers: Go's `GODEBUG=gocacheverify=1`).
+//!     Also runs the stdlib-interface and per-file diagnostics oracles. Too
+//!     expensive to leave always-on.
+//!   - `sampled` (default) — the always-on complement (rustc's "1-in-N compiles
+//!     verifies one artifact" hardening). On a warm compile that *serves* the
+//!     check rows, ~1 run in 32 picks one served file and checks its served
+//!     diagnostics blob and `callable_throws` fragment against an honest,
+//!     un-seeded re-derivation, after the compile result is already produced,
+//!     so the added latency is one file's honest work. A mismatch is a hard
+//!     error (silent staleness must be LOUD). See [`sampled_pick_from_key`]
+//!     for the key-derived, RNG-free sampling decision.
+//!   - `off` — no verification.
+//! - `BAML_BUILD_CACHE_REMOTE` / `BAML_BUILD_CACHE_REMOTE_TOKEN` — optional
+//!   shared remote entry store (see `bex_cache`).
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -70,8 +60,8 @@ use baml_db::{
 use baml_linker_types::EmittedPackage;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, PackageKeyInputs, ProjectManifest,
-    compiler_fingerprint, compute_key, env_flag, manifest_key, package_key, rel_path,
-    stdlib_diagnostics_key, stdlib_interface_key, test_discovery_key,
+    compiler_fingerprint, compute_key, manifest_key, package_key, rel_path, stdlib_diagnostics_key,
+    stdlib_interface_key, test_discovery_key,
 };
 use bex_vm_types::Program;
 
@@ -109,7 +99,7 @@ pub(crate) struct CacheContext {
     /// and the tests assert.
     packages_served: AtomicUsize,
     packages_emitted: AtomicUsize,
-    /// Under `BAML_CACHE_VERIFY`, every package whose fresh output differed
+    /// Under `DEV_BAML_BUILD_CACHE_VERIFY=always`, every package whose fresh output differed
     /// from the entry stored under its key, reported by
     /// [`Self::verify_packages`]. Empty otherwise.
     package_mismatches: Mutex<Vec<PackageMismatch>>,
@@ -155,15 +145,63 @@ impl std::fmt::Display for PackageDivergence {
     }
 }
 
+/// How much the cache's own output is cross-checked against an honest
+/// recompute (`DEV_BAML_BUILD_CACHE_VERIFY`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VerifyMode {
+    /// No verification.
+    Off,
+    /// Verify one served file on ~1 in 32 warm compiles. The default.
+    Sampled,
+    /// Never serve from the cache; recompile and byte-compare everything.
+    Always,
+}
+
+const BUILD_CACHE_ENV: &str = "BAML_BUILD_CACHE";
+const VERIFY_ENV: &str = "DEV_BAML_BUILD_CACHE_VERIFY";
+const VERIFY_CHOICES: [(&str, VerifyMode); 3] = [
+    ("off", VerifyMode::Off),
+    ("sampled", VerifyMode::Sampled),
+    ("always", VerifyMode::Always),
+];
+
+/// Reject an unparseable `BAML_BUILD_CACHE` or `DEV_BAML_BUILD_CACHE_VERIFY`
+/// up front, so a typo is an error and not a silently different cache mode.
+/// The readers below fall back to their defaults on a bad value, so this runs
+/// first wherever a session opens the cache.
+pub(crate) fn validate_env() -> anyhow::Result<()> {
+    baml_env::bool_var(BUILD_CACHE_ENV)?;
+    baml_env::choice_var(VERIFY_ENV, &VERIFY_CHOICES)?;
+    Ok(())
+}
+
+/// Whether the build cache is on (`BAML_BUILD_CACHE`, default on).
+pub(crate) fn build_cache_enabled() -> bool {
+    baml_env::bool_var(BUILD_CACHE_ENV)
+        .ok()
+        .flatten()
+        .unwrap_or(true)
+}
+
+pub(crate) fn verify_mode() -> VerifyMode {
+    baml_env::choice_var(VERIFY_ENV, &VERIFY_CHOICES)
+        .ok()
+        .flatten()
+        .unwrap_or(VerifyMode::Sampled)
+}
+
 impl CacheContext {
-    /// `None` when caching is disabled via `BAML_NO_BYTECODE_CACHE=1`.
+    /// `None` when caching is disabled via `BAML_BUILD_CACHE=false`.
     pub(crate) fn open(resolved: &ResolvedProject) -> Option<Self> {
-        if env_flag("BAML_NO_BYTECODE_CACHE") {
+        Self::open_in(resolved, baml_release::build_cache_dir())
+    }
+
+    /// [`Self::open`] over an explicit cache directory, so tests can keep
+    /// themselves out of the shared one.
+    pub(crate) fn open_in(resolved: &ResolvedProject, dir: PathBuf) -> Option<Self> {
+        if !build_cache_enabled() {
             return None;
         }
-        let dir = std::env::var_os("BAML_CACHE_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| resolved.root.join(".baml").join("cache"));
         let fingerprint = compiler_fingerprint(&dir);
 
         // Root-relative paths keep the key location-independent. Discovery
@@ -205,37 +243,24 @@ impl CacheContext {
         })
     }
 
-    /// Tripwire mode: force a real compile even on a hit, then byte-compare.
+    /// Tripwire mode (`DEV_BAML_BUILD_CACHE_VERIFY=always`): force a real
+    /// compile even on a hit, then byte-compare.
     pub(crate) fn verify_enabled() -> bool {
-        env_flag("BAML_CACHE_VERIFY")
+        verify_mode() == VerifyMode::Always
     }
 
     /// Load and borsh-decode a raw cache entry under `key`. `None` on a miss or
-    /// a decode failure — both fall through to honest recomputation, the decode
-    /// failure logged (labelled `what`) under `BAML_CACHE_DEBUG`. Callers own any
-    /// disable-knob gating before this.
-    fn load_decoded<T: borsh::BorshDeserialize>(&self, key: &CacheKey, what: &str) -> Option<T> {
+    /// a decode failure; both fall through to honest recomputation.
+    fn load_decoded<T: borsh::BorshDeserialize>(&self, key: &CacheKey) -> Option<T> {
         let bytes = self.cache.load_raw(key)?;
-        match borsh::from_slice::<T>(&bytes) {
-            Ok(value) => Some(value),
-            Err(e) => {
-                cache_debug(format_args!("{what} undecodable: {e}"));
-                None
-            }
-        }
+        borsh::from_slice::<T>(&bytes).ok()
     }
 
     /// Serialize `value` and store it under `key`, best-effort: a serialize or
-    /// store failure is logged (labelled `what`) under `BAML_CACHE_DEBUG` and
-    /// otherwise ignored — the entry is simply re-derived next run.
-    fn store_encoded<T: borsh::BorshSerialize>(&self, key: &CacheKey, value: &T, what: &str) {
-        match borsh::to_vec(value) {
-            Ok(payload) => {
-                if let Err(e) = self.cache.store_raw(key, &payload) {
-                    cache_debug(format_args!("{what} store failed: {e}"));
-                }
-            }
-            Err(e) => cache_debug(format_args!("{what} serialize failed: {e}")),
+    /// store failure is ignored and the entry is simply re-derived next run.
+    fn store_encoded<T: borsh::BorshSerialize>(&self, key: &CacheKey, value: &T) {
+        if let Ok(payload) = borsh::to_vec(value) {
+            let _ = self.cache.store_raw(key, &payload);
         }
     }
 
@@ -243,7 +268,7 @@ impl CacheContext {
         self.cache.load_shared(&self.key)
     }
 
-    /// The `BAML_CACHE_VERIFY` tripwire: byte-compare a fresh compile against
+    /// The `DEV_BAML_BUILD_CACHE_VERIFY=always` tripwire: byte-compare a fresh compile against
     /// any existing entry under the same key. A mismatch is a hard error —
     /// it means emit is nondeterministic or a compile input is missing from
     /// the cache key.
@@ -255,7 +280,7 @@ impl CacheContext {
             let fresh = borsh::to_vec(program)?;
             if fresh != cached {
                 anyhow::bail!(
-                    "BAML_CACHE_VERIFY: cached bytecode for key {} differs from a fresh \
+                    "DEV_BAML_BUILD_CACHE_VERIFY=always: cached bytecode for key {} differs from a fresh \
                      compile ({} vs {} bytes). This means emit is nondeterministic or a \
                      compile input is missing from the cache key — please report this.",
                     self.key.hex(),
@@ -275,57 +300,24 @@ impl CacheContext {
         Ok(())
     }
 
-    /// Isolation toggle for measuring the stdlib-interface cache's win:
-    /// `BAML_NO_STDLIB_INTERFACE_CACHE=1` disables *only* the interface seed
-    /// (leaving the package and check-row tiers intact) so a with/without
-    /// timing comparison isolates B-694. `BAML_NO_BYTECODE_CACHE` already
-    /// disables the whole cache, so this is the finer-grained knob.
-    fn stdlib_interface_cache_disabled() -> bool {
-        env_flag("BAML_NO_STDLIB_INTERFACE_CACHE")
-    }
-
-    /// Isolation toggle for measuring the check-row cache's win:
-    /// `BAML_NO_DIAGNOSTICS_CACHE=1` drops the served rows so every file is
-    /// re-checked. `BAML_NO_BYTECODE_CACHE` already disables the whole cache,
-    /// so this is the finer-grained knob.
-    fn diagnostics_cache_disabled() -> bool {
-        env_flag("BAML_NO_DIAGNOSTICS_CACHE")
-    }
-
-    /// Isolation toggle for measuring the `callable_throws` seed's win:
-    /// `BAML_NO_CALLABLE_THROWS_CACHE=1` empties the seed so every function
-    /// infers its throws honestly, leaving diagnostics serving intact.
-    /// `BAML_NO_BYTECODE_CACHE` already disables the whole cache, so this is
-    /// the finer-grained knob.
-    fn callable_throws_cache_disabled() -> bool {
-        env_flag("BAML_NO_CALLABLE_THROWS_CACHE")
-    }
-
     /// Load the cached stdlib typed-interface blob (B-694), if present:
     /// `load_raw` + borsh-decode into `package-name -> borsh(PackageInterface)`.
-    /// `None` on a miss, a decode failure, or when the interface cache is
-    /// disabled — every case falls through to honest stdlib derivation.
+    /// `None` on a miss or a decode failure; both fall through to honest stdlib
+    /// derivation.
     pub(crate) fn load_stdlib_interface(&self) -> Option<BTreeMap<String, Vec<u8>>> {
-        if Self::stdlib_interface_cache_disabled() {
-            return None;
-        }
-        self.load_decoded(&self.stdlib_interface_key, "stdlib interface")
+        self.load_decoded(&self.stdlib_interface_key)
     }
 
     /// Extract and store the stdlib typed-interface blob after a successful
     /// (interface cache-miss) compile. Best-effort, like every cache write; a
-    /// failed write just means re-deriving next run. Skipped when the interface
-    /// cache is disabled.
+    /// failed write just means re-deriving next run.
     pub(crate) fn store_stdlib_interface(&self, db: &ProjectDatabase) {
-        if Self::stdlib_interface_cache_disabled() {
-            return;
-        }
         let blob = baml_db::stdlib_prefix::stdlib_interfaces(db);
-        self.store_encoded(&self.stdlib_interface_key, &blob, "stdlib interface");
+        self.store_encoded(&self.stdlib_interface_key, &blob);
     }
 
     /// Localized B-694 verify oracle (analog of `gocacheverify`): under
-    /// `BAML_CACHE_VERIFY` the stdlib seed is *not* applied, so `db` derives every
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` the stdlib seed is *not* applied, so `db` derives every
     /// stdlib interface honestly; this compares that derivation byte-for-byte
     /// against any cached blob. A mismatch means the cached "export data" is a
     /// stale substitute that would change typecheck results — a hard error, and a
@@ -343,7 +335,7 @@ impl CacheContext {
             if let Some(cached_bytes) = cached.get(name) {
                 if cached_bytes != derived_bytes {
                     anyhow::bail!(
-                        "BAML_CACHE_VERIFY: cached stdlib interface for package `{name}` differs \
+                        "DEV_BAML_BUILD_CACHE_VERIFY=always: cached stdlib interface for package `{name}` differs \
                          from a fresh derivation ({} vs {} bytes). The cached typed interface is a \
                          stale or incomplete substitute — please report this.",
                         cached_bytes.len(),
@@ -355,23 +347,17 @@ impl CacheContext {
         Ok(())
     }
 
-    /// Read the cached interface blob for the verify oracle, bypassing the
-    /// `BAML_NO_STDLIB_INTERFACE_CACHE` disable (verify must still compare
-    /// against whatever is on disk).
+    /// Read the cached interface blob for the verify oracle (verify must
+    /// compare against whatever is on disk).
     fn load_raw_stdlib_interface_for_verify(&self) -> Option<BTreeMap<String, Vec<u8>>> {
-        self.load_decoded(&self.stdlib_interface_key, "stdlib interface")
+        self.load_decoded(&self.stdlib_interface_key)
     }
 
     /// Load the cached stdlib **builtin diagnostics** blob, if present: the
     /// opaque payload that `collect_diagnostics_incremental` rehydrates onto
-    /// current-process builtin `FileId`s. `None` on a miss or when the
-    /// diagnostics cache is disabled (`BAML_NO_DIAGNOSTICS_CACHE=1`) — both fall
-    /// through to the honest builtin check, the one knob that governs all
-    /// diagnostics serving.
+    /// current-process builtin `FileId`s. `None` on a miss, which
+    /// falls through to the honest builtin check.
     pub(crate) fn load_stdlib_diagnostics(&self) -> Option<Vec<u8>> {
-        if Self::diagnostics_cache_disabled() {
-            return None;
-        }
         self.cache.load_raw(&self.stdlib_diagnostics_key)
     }
 
@@ -381,24 +367,18 @@ impl CacheContext {
     /// presence: it writes only when no entry exists yet (a genuine miss) and
     /// never rewrites a served blob. Deriving the blob re-checks the builtins,
     /// but on the just-compiled database every builtin scope is Salsa-memoized,
-    /// so no fresh inference is pulled. Best-effort; skipped when the diagnostics
-    /// cache is disabled.
+    /// so no fresh inference is pulled. Best-effort.
     pub(crate) fn store_stdlib_diagnostics(&self, db: &ProjectDatabase) {
-        if Self::diagnostics_cache_disabled() {
-            return;
-        }
         if self.cache.load_raw(&self.stdlib_diagnostics_key).is_some() {
             return;
         }
         let blob = crate::diagnostics_cache::serialize_builtin_diagnostics(db);
-        if let Err(e) = self.cache.store_raw(&self.stdlib_diagnostics_key, &blob) {
-            cache_debug(format_args!("stdlib diagnostics store failed: {e}"));
-        }
+        let _ = self.cache.store_raw(&self.stdlib_diagnostics_key, &blob);
     }
 
     /// Localized builtin-diagnostics verify oracle (analog of
     /// [`Self::verify_stdlib_interface`] / [`Self::verify_diagnostics`]): under
-    /// `BAML_CACHE_VERIFY` the builtin serve is disabled, so
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` the builtin serve is disabled, so
     /// `collect_diagnostics_incremental` checks the builtins honestly and this
     /// compares any cached blob against a fresh builtin check. A mismatch means
     /// the cached builtin diagnostics are a stale substitute that would change
@@ -407,8 +387,8 @@ impl CacheContext {
         if !Self::verify_enabled() {
             return Ok(());
         }
-        // Read the on-disk blob directly, bypassing the disable knob (verify must
-        // still compare against whatever is on disk).
+        // Read the on-disk blob directly (verify must compare against whatever
+        // is on disk).
         let Some(cached_blob) = self.cache.load_raw(&self.stdlib_diagnostics_key) else {
             return Ok(());
         };
@@ -431,7 +411,7 @@ impl CacheContext {
         };
         if !diagnostic_sets_equal(&cached, honest) {
             anyhow::bail!(
-                "BAML_CACHE_VERIFY: cached stdlib (builtin) diagnostics differ from a fresh \
+                "DEV_BAML_BUILD_CACHE_VERIFY=always: cached stdlib (builtin) diagnostics differ from a fresh \
                  check ({} cached vs {} honest). The cached builtin-diagnostics blob is a stale \
                  substitute — please report this.",
                 cached.len(),
@@ -454,8 +434,8 @@ impl CacheContext {
 ///
 /// R1 (design §5): a testset generator running IO/LLM could make discovery
 /// depend on state outside the cache key. Posture 1 mitigations: the
-/// `BAML_CACHE_VERIFY` tripwire ([`CacheContext::verify_test_discovery`]) and
-/// the `BAML_NO_DISCOVERY_CACHE` opt-out. The datum is only ever written from a
+/// `DEV_BAML_BUILD_CACHE_VERIFY=always` tripwire
+/// ([`CacheContext::verify_test_discovery`]). The datum is only ever written from a
 /// discovery that completed without error.
 #[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub(crate) struct TestDiscovery {
@@ -465,38 +445,23 @@ pub(crate) struct TestDiscovery {
 }
 
 impl CacheContext {
-    /// Isolation / A-B toggle for the `--list` discovery cache:
-    /// `BAML_NO_DISCOVERY_CACHE=1` disables *only* serving/writing the flattened
-    /// test list, so `--list` always boots the engine and discovers honestly,
-    /// leaving the other tiers intact. `BAML_NO_BYTECODE_CACHE` already
-    /// disables the whole cache, so this is the finer-grained knob.
-    fn discovery_cache_disabled() -> bool {
-        env_flag("BAML_NO_DISCOVERY_CACHE")
-    }
-
     /// Load the cached `--list` discovery output, if present: `load_raw` + borsh
-    /// decode. `None` on a miss, a decode failure, or when the discovery cache is
-    /// disabled — every case falls through to honest engine-boot discovery.
+    /// decode. `None` on a miss or a decode failure; both fall through to honest
+    /// engine-boot discovery.
     pub(crate) fn load_test_discovery(&self) -> Option<TestDiscovery> {
-        if Self::discovery_cache_disabled() {
-            return None;
-        }
-        self.load_decoded(&self.test_discovery_key, "test discovery")
+        self.load_decoded(&self.test_discovery_key)
     }
 
     /// Write-through the discovery output after a successful honest discovery.
     /// Best-effort, like every cache write; a failed write just means
-    /// re-discovering next run. Skipped when the discovery cache is disabled.
+    /// re-discovering next run.
     /// Callers must only pass a discovery that completed without error
     /// (never-save-on-error, design §6).
     pub(crate) fn store_test_discovery(&self, disco: &TestDiscovery) {
-        if Self::discovery_cache_disabled() {
-            return;
-        }
-        self.store_encoded(&self.test_discovery_key, disco, "test discovery");
+        self.store_encoded(&self.test_discovery_key, disco);
     }
 
-    /// The `BAML_CACHE_VERIFY` tripwire for `--list` discovery (design §6): under
+    /// The `DEV_BAML_BUILD_CACHE_VERIFY=always` tripwire for `--list` discovery (design §6): under
     /// verify the discovery cache is *not* served (the caller ran the honest
     /// engine-boot discovery), so this compares that honest result byte-for-byte
     /// against any cached blob on disk. A mismatch means discovery is
@@ -506,11 +471,8 @@ impl CacheContext {
         if !Self::verify_enabled() {
             return Ok(());
         }
-        // Read the on-disk blob directly, bypassing the `BAML_NO_DISCOVERY_CACHE`
-        // disable (verify must still compare against whatever is on disk).
-        let Some(cached) =
-            self.load_decoded::<TestDiscovery>(&self.test_discovery_key, "test discovery")
-        else {
+        // Verify compares against whatever is on disk.
+        let Some(cached) = self.load_decoded::<TestDiscovery>(&self.test_discovery_key) else {
             return Ok(());
         };
         Self::compare_test_discovery(&cached, honest)
@@ -525,7 +487,7 @@ impl CacheContext {
     ) -> anyhow::Result<()> {
         if cached.testset_leaf_names != honest.testset_leaf_names {
             anyhow::bail!(
-                "BAML_CACHE_VERIFY: cached `test --list` testset discovery differs from a fresh \
+                "DEV_BAML_BUILD_CACHE_VERIFY=always: cached `test --list` testset discovery differs from a fresh \
                  discovery ({} vs {} leaf tests). A testset generator is nondeterministic or reads \
                  uncached state (IO/env/LLM) — please report this.",
                 cached.testset_leaf_names.len(),
@@ -640,7 +602,7 @@ impl CacheContext {
             .push(mismatch);
     }
 
-    /// The `BAML_CACHE_VERIFY` tripwire for the per-package tier: fail if any
+    /// The `DEV_BAML_BUILD_CACHE_VERIFY=always` tripwire for the per-package tier: fail if any
     /// package emitted by this context's compiles differed from the entry
     /// stored under its key. The compare itself runs where the fresh output
     /// is offered to the cache ([`PackageCache::store`]), before it could
@@ -668,7 +630,7 @@ impl CacheContext {
             .collect::<Vec<_>>()
             .join("\n");
         anyhow::bail!(
-            "BAML_CACHE_VERIFY: the cached output of {} package(s) differs from a fresh emit \
+            "DEV_BAML_BUILD_CACHE_VERIFY=always: the cached output of {} package(s) differs from a fresh emit \
              under the same key. This means emit is nondeterministic or a package-key input \
              is missing — please report this.\n{report}",
             mismatches.len()
@@ -677,7 +639,7 @@ impl CacheContext {
 }
 
 /// A package's output is served by its key and offered back under it. Under
-/// `BAML_CACHE_VERIFY` nothing is served — the tripwire exercises the full
+/// `DEV_BAML_BUILD_CACHE_VERIFY=always` nothing is served — the tripwire exercises the full
 /// compile path — and a fresh output is compared with the entry stored under
 /// its key before it may replace it: a difference is recorded for
 /// [`CacheContext::verify_packages`], and the stored entry is kept as the
@@ -696,7 +658,6 @@ impl PackageCache for CacheContext {
             .cache
             .load_package_shared(&self.package_key(db, root, opt))?;
         self.packages_served.fetch_add(1, Ordering::Relaxed);
-        cache_debug(format_args!("package served: {}", root.path(db).display()));
         Some(emitted)
     }
 
@@ -719,12 +680,7 @@ impl PackageCache for CacheContext {
             });
             return;
         }
-        if let Err(e) = self.cache.store_package_shared(&key, emitted) {
-            cache_debug(format_args!(
-                "package store failed for {}: {e}",
-                root.path(db).display()
-            ));
-        }
+        let _ = self.cache.store_package_shared(&key, emitted);
     }
 }
 
@@ -746,18 +702,8 @@ pub(crate) fn compile_program(
         return baml_db::compile_program(db, package, CLI_OPT_LEVEL);
     };
     match baml_db::compile_program_with(db, package, CLI_OPT_LEVEL, ctx) {
-        Ok(program) => {
-            cache_debug(format_args!(
-                "packages: {} served, {} emitted",
-                ctx.packages_served(),
-                ctx.packages_emitted()
-            ));
-            Ok(program)
-        }
-        Err(CompileProgramError::Link(error)) => {
-            cache_debug(format_args!(
-                "served packages failed to link; recompiling honestly: {error}"
-            ));
+        Ok(program) => Ok(program),
+        Err(CompileProgramError::Link(_)) => {
             // Every package is emitted afresh and stored under its own key,
             // so the entry that failed to bind is overwritten rather than
             // served — and refused — again on the next compile.
@@ -812,8 +758,7 @@ pub(crate) struct ServedChecks {
     throw_facts:
         BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>>>,
     /// Per-function `callable_throws` seeds projected from `fragments`, keyed
-    /// by full source path then by item-tree `LocalItemId::as_u32`. Empty
-    /// under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
+    /// by full source path then by item-tree `LocalItemId::as_u32`.
     callable_throws: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::PathName>>>,
 }
 
@@ -837,16 +782,6 @@ pub(crate) struct WarmPrep {
     /// Whether the stdlib interface seed was served — run/test skip re-writing
     /// it in that case; `check` ignores this.
     pub(crate) stdlib_interface_hit: bool,
-}
-
-/// Cache diagnostics to stderr, gated on `BAML_CACHE_DEBUG=1`. For support
-/// and perf triage: shows what was served, fallback reasons, and store
-/// failures without affecting normal output.
-#[allow(clippy::print_stderr)] // opt-in debug channel (BAML_CACHE_DEBUG=1)
-pub(crate) fn cache_debug(args: std::fmt::Arguments<'_>) {
-    if env_flag("BAML_CACHE_DEBUG") {
-        eprintln!("[baml-cache] {args}");
-    }
 }
 
 /// Root-relative display path for a user `SourceFile`, or `None` for a stdlib
@@ -877,14 +812,10 @@ fn user_files_with_rel_paths(
 /// seed map, keyed by full source path then by item-tree `LocalItemId::as_u32`
 /// (the fragment's key form). A fragment that is empty or fails to decode is
 /// skipped — its functions then infer honestly (degrade, never miscompile).
-/// Empty under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
 fn project_callable_throws_seeds(
     fragments: &BTreeMap<String, Vec<u8>>,
     root: &Path,
 ) -> BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::PathName>>> {
-    if CacheContext::callable_throws_cache_disabled() {
-        return BTreeMap::new();
-    }
     use baml_db::baml_compiler2_hir_ty::package_interface::CallableThrowsFragment;
     let mut by_path = BTreeMap::new();
     for (rel, fragment_bytes) in fragments {
@@ -894,12 +825,7 @@ fn project_callable_throws_seeds(
         let fragment: CallableThrowsFragment<baml_type::PathName> =
             match borsh::from_slice(fragment_bytes) {
                 Ok(f) => f,
-                Err(e) => {
-                    cache_debug(format_args!(
-                        "interface fragment for `{rel}` undecodable: {e}"
-                    ));
-                    continue;
-                }
+                Err(_) => continue,
             };
         if fragment.by_id.is_empty() {
             continue;
@@ -921,7 +847,7 @@ impl CacheContext {
     /// served soundly, since a file's diagnostics and throws depend on every
     /// declaration it resolves. `None` on a first compile, a changed
     /// project, a missing or undecodable manifest, or under
-    /// `BAML_CACHE_VERIFY` (the oracle exercises the honest path).
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` (the oracle exercises the honest path).
     pub(crate) fn served_checks(
         &self,
         db: &ProjectDatabase,
@@ -930,11 +856,8 @@ impl CacheContext {
         if Self::verify_enabled() {
             return None;
         }
-        let manifest: ProjectManifest = self.load_decoded(&self.manifest_key, "manifest")?;
+        let manifest: ProjectManifest = self.load_decoded(&self.manifest_key)?;
         if manifest.program_key != *self.key.as_bytes() {
-            cache_debug(format_args!(
-                "project changed since the last compile — every file is checked honestly"
-            ));
             return None;
         }
         let root = package.path(db);
@@ -947,10 +870,6 @@ impl CacheContext {
             fragments.insert(entry.rel_path.clone(), entry.callable_throws_fragment);
             diagnostics.insert(entry.rel_path, entry.diagnostics);
         }
-        cache_debug(format_args!(
-            "check rows served for {} file(s)",
-            diagnostics.len()
-        ));
         let callable_throws = project_callable_throws_seeds(&fragments, root);
         Some(ServedChecks {
             diagnostics,
@@ -1040,7 +959,7 @@ impl CacheContext {
 
     /// The warm-path verify-and-store sequence shared by `run`, `test`,
     /// `pack`, and a seeding `check` for `session`'s compile: run every
-    /// `BAML_CACHE_VERIFY` oracle, persist the Program and the manifest,
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` oracle, persist the Program and the manifest,
     /// materialize the stdlib interface (unless it was already served) and the
     /// per-toolchain builtin-diagnostics blob, then run the sampled
     /// field-verify on a fresh un-seeded database over the session's sources.
@@ -1059,11 +978,8 @@ impl CacheContext {
         self.verify_diagnostics(db, package)?;
         self.verify_stdlib_diagnostics(db)?;
         self.verify_callable_throws_fragments(db, package)?;
-        // A store failure never fails the command (the compile succeeded), but
-        // it is LOUD on the debug channel, never silent.
-        if let Err(e) = self.store_program_and_manifest(db, package, program, fresh, served) {
-            cache_debug(format_args!("bytecode cache write failed: {e}"));
-        }
+        // A store failure never fails the command (the compile succeeded).
+        let _ = self.store_program_and_manifest(db, package, program, fresh, served);
         // Materialize the stdlib interface blob on a miss (idempotent on a hit,
         // so only write when the seed was absent).
         if !stdlib_interface_hit {
@@ -1076,7 +992,7 @@ impl CacheContext {
         // result exists, ~1 warm run in 32 re-derives one served file on a
         // fresh, un-seeded database and hard-errors on any drift. Bounded
         // latency (one file's honest work), loud on the silent-staleness bug
-        // class the full `BAML_CACHE_VERIFY` guards.
+        // class the full `DEV_BAML_BUILD_CACHE_VERIFY=always` guards.
         self.maybe_sampled_verify(served, || session.honest_db())?;
         Ok(())
     }
@@ -1110,16 +1026,11 @@ impl CacheContext {
         self.collect_diagnostics_with_plan(db, package, self.serve_plan(served), true)
     }
 
-    /// The rows to serve, unless serving is disabled (the isolation toggle
-    /// mirrors `BAML_NO_STDLIB_INTERFACE_CACHE`: dropping the served rows
-    /// checks every file, so a with/without comparison measures exactly the
-    /// files this tier skips).
+    /// The rows to serve, if any were.
     fn serve_plan<'a>(&self, served: Option<&'a ServedChecks>) -> Option<DiagnosticsServePlan<'a>> {
-        served
-            .filter(|_| !Self::diagnostics_cache_disabled())
-            .map(|served| DiagnosticsServePlan {
-                diagnostics: &served.diagnostics,
-            })
+        served.map(|served| DiagnosticsServePlan {
+            diagnostics: &served.diagnostics,
+        })
     }
 
     fn collect_diagnostics_with_plan(
@@ -1153,10 +1064,9 @@ impl CacheContext {
         // re-inference tail from every warm compile. It is independent of the
         // served rows (even a first-ever compile of a project can serve a blob
         // written by any earlier compile on the same toolchain). A missing /
-        // corrupt blob, `BAML_NO_DIAGNOSTICS_CACHE`, and `BAML_CACHE_VERIFY` all
-        // fall through to the honest builtin check (`load_stdlib_diagnostics`
-        // gates the disable knob; verify is gated here so its oracle exercises
-        // the honest path).
+        // corrupt blob and `DEV_BAML_BUILD_CACHE_VERIFY=always` both fall
+        // through to the honest builtin check (verify is gated here so its
+        // oracle exercises the honest path).
         let serve_builtins = !Self::verify_enabled()
             && self
                 .load_stdlib_diagnostics()
@@ -1207,7 +1117,7 @@ impl CacheContext {
     }
 
     /// Localized diagnostics verify oracle (analog of `verify_stdlib_interface`):
-    /// under `BAML_CACHE_VERIFY` no row is served, so the compile runs the
+    /// under `DEV_BAML_BUILD_CACHE_VERIFY=always` no row is served, so the compile runs the
     /// honest full check; this compares every row a warm run would have served
     /// against a fresh `check_file`. A mismatch means the cached diagnostics are
     /// a stale substitute that would change what a warm run reports — a hard
@@ -1250,7 +1160,7 @@ impl CacheContext {
             let fresh = db.check_file(sf);
             if !diagnostic_sets_equal(&served, &fresh) {
                 anyhow::bail!(
-                    "BAML_CACHE_VERIFY: cached diagnostics for `{}` differ from a fresh check \
+                    "DEV_BAML_BUILD_CACHE_VERIFY=always: cached diagnostics for `{}` differ from a fresh check \
                      ({} cached vs {} fresh). The cached per-file diagnostics are a stale \
                      substitute — please report this.",
                     entry.rel_path,
@@ -1268,13 +1178,13 @@ impl CacheContext {
     /// compare against whatever is on disk). `None` when no row would be
     /// served, so there is nothing to compare.
     fn servable_manifest_for_verify(&self) -> Option<ProjectManifest> {
-        let manifest: ProjectManifest = self.load_decoded(&self.manifest_key, "manifest")?;
+        let manifest: ProjectManifest = self.load_decoded(&self.manifest_key)?;
         (manifest.program_key == *self.key.as_bytes()).then_some(manifest)
     }
 
     /// Localized `callable_throws`-seed verify oracle (analog of
     /// `verify_stdlib_interface` / `verify_diagnostics`): under
-    /// `BAML_CACHE_VERIFY` no row is served, so `db` derives every fragment
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` no row is served, so `db` derives every fragment
     /// honestly. This compares each fragment a warm run would have seeded from
     /// against that honest re-derivation; whole-fragment equality checks the
     /// exact seed-faithfulness invariant, not a heuristic.
@@ -1321,7 +1231,7 @@ impl CacheContext {
             })?;
             if honest_bytes != entry.callable_throws_fragment {
                 anyhow::bail!(
-                    "BAML_CACHE_VERIFY: cached interface fragment for `{}` differs from a fresh \
+                    "DEV_BAML_BUILD_CACHE_VERIFY=always: cached interface fragment for `{}` differs from a fresh \
                      derivation ({} cached vs {} fresh bytes). A served file's stored fragment is \
                      a stale substitute — the seeded value would be wrong. Please report this.",
                     entry.rel_path,
@@ -1333,32 +1243,16 @@ impl CacheContext {
         Ok(())
     }
 
-    /// The `BAML_CACHE_SAMPLED_VERIFY` knob: `Some(false)` disables sampling,
-    /// `Some(true)` forces it on every warm compile (tests want determinism),
-    /// `None` leaves the default 1/32 gate. Any other value is treated as unset.
-    fn sampled_verify_force() -> Option<bool> {
-        match std::env::var_os("BAML_CACHE_SAMPLED_VERIFY") {
-            Some(v) if v == "0" => Some(false),
-            Some(v) if v == "1" => Some(true),
-            _ => None,
-        }
-    }
-
     /// Pick the one served file this compile should sample-verify, keyed off
-    /// the program cache key (see [`sampled_pick_from_key`]). `None` when
-    /// verify mode is active (it already does the full compare), this compile
-    /// isn't sampled, or nothing is served.
+    /// the program cache key (see [`sampled_pick_from_key`]). `None` unless
+    /// verification is `sampled` (`always` already does the full compare),
+    /// this compile isn't sampled, or nothing is served.
     fn sampled_verify_pick(&self, served: &ServedChecks) -> Option<String> {
-        if Self::verify_enabled() {
+        if verify_mode() != VerifyMode::Sampled {
             return None;
         }
         let served_files: Vec<&str> = served.diagnostics.keys().map(String::as_str).collect();
-        sampled_pick_from_key(
-            self.key.as_bytes(),
-            &served_files,
-            Self::sampled_verify_force(),
-        )
-        .map(str::to_string)
+        sampled_pick_from_key(self.key.as_bytes(), &served_files, None).map(str::to_string)
     }
 
     /// Sampled field verification driver (the always-on tripwire). If this warm
@@ -1390,7 +1284,6 @@ impl CacheContext {
         let Some(rel) = self.sampled_verify_pick(served) else {
             return Ok(());
         };
-        cache_debug(format_args!("sampled field verify: checking `{rel}`"));
         let (mut honest_db, honest_package) = build_honest_db();
         // Seed only the stdlib typed interface — a compiler-build constant keyed
         // by fingerprint, guarded by its own `verify_stdlib_interface` oracle and
@@ -1413,7 +1306,7 @@ impl CacheContext {
     /// un-seeded — see [`Self::maybe_sampled_verify`]). A mismatch is a hard
     /// error: the cache served a stale artifact, so the user's warm build
     /// silently diverged from an honest compile. The message points at
-    /// `BAML_CACHE_VERIFY=1` (the full byte-compare) and names the file and
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` (the full byte-compare) and names the file and
     /// artifact kind, mirroring rustc's ICE-on-fingerprint-mismatch.
     pub(crate) fn verify_sampled_artifact(
         &self,
@@ -1438,10 +1331,10 @@ impl CacheContext {
             let fresh = honest_db.check_file(sf);
             if !diagnostic_sets_equal(&served_diagnostics, &fresh) {
                 anyhow::bail!(
-                    "BAML_CACHE_SAMPLED_VERIFY: the cache served STALE diagnostics for `{rel}` \
+                    "DEV_BAML_BUILD_CACHE_VERIFY=sampled: the cache served STALE diagnostics for `{rel}` \
                      ({} served vs {} from an honest check). This is a cache-soundness bug — a \
                      warm build would report different errors than a clean one. Re-run with \
-                     BAML_CACHE_VERIFY=1 for the full compare and please report this (file \
+                     DEV_BAML_BUILD_CACHE_VERIFY=always for the full compare and please report this (file \
                      `{rel}`, artifact: diagnostics).",
                     served_diagnostics.len(),
                     fresh.len(),
@@ -1461,10 +1354,10 @@ impl CacheContext {
             let honest_bytes = borsh::to_vec(&honest)?;
             if honest_bytes != *fragment {
                 anyhow::bail!(
-                    "BAML_CACHE_SAMPLED_VERIFY: the cache served a STALE callable-throws seed for \
+                    "DEV_BAML_BUILD_CACHE_VERIFY=sampled: the cache served a STALE callable-throws seed for \
                      `{rel}` ({} served vs {} honest bytes). This is a cache-soundness bug — a \
                      warm build would infer different throws than a clean one. Re-run with \
-                     BAML_CACHE_VERIFY=1 for the full compare and please report this (file \
+                     DEV_BAML_BUILD_CACHE_VERIFY=always for the full compare and please report this (file \
                      `{rel}`, artifact: callable-throws fragment).",
                     fragment.len(),
                     honest_bytes.len(),
@@ -1476,7 +1369,7 @@ impl CacheContext {
 
     /// Install the immutable stdlib typed-interface seed (a per-toolchain
     /// build constant). Returns whether the seed was served; gated off under
-    /// `BAML_CACHE_VERIFY` so the oracle exercises the honest path.
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` so the oracle exercises the honest path.
     pub(crate) fn seed_stdlib_interface(&self, db: &mut ProjectDatabase) -> bool {
         !Self::verify_enabled()
             && self
@@ -1585,7 +1478,7 @@ fn diagnostic_sets_equal(
 ///
 /// - Whether to sample: `key[0] & 31 == 0` — one value in 32, so ~1/32 of warm
 ///   compiles pay the check. `force = Some(true/false)` overrides the gate for
-///   the `BAML_CACHE_SAMPLED_VERIFY=1/0` knobs.
+///   tests that need a deterministic decision.
 /// - Which file: bytes 1..5 of the key (independent of the gate byte) index the
 ///   **sorted** served set, so the pick is stable regardless of set iteration
 ///   order.
@@ -1611,13 +1504,15 @@ mod tests {
     //! reproduces an honest compile byte for byte; an edit re-emits only the
     //! user package; the check rows are served only for an identical project;
     //! the stdlib typed-interface and builtin-diagnostics blobs; the fragment
-    //! and diagnostics `BAML_CACHE_VERIFY` oracles (a faithful cache passes, a
+    //! and diagnostics `DEV_BAML_BUILD_CACHE_VERIFY=always` oracles (a faithful cache passes, a
     //! poisoned one bails); the discovery cache; sampled verification.
 
     use std::path::{Path, PathBuf};
 
     use super::*;
-    use crate::cache_test_support::{cache_disabled, compile_and_store_v1, resolved, unique_root};
+    use crate::cache_test_support::{
+        cache_disabled, compile_and_store_v1, open, resolved, unique_root,
+    };
 
     /// A unique on-disk root for a `bytecode_cache` disk-round-trip test.
     fn bc_root() -> PathBuf {
@@ -1677,7 +1572,7 @@ mod tests {
 
         let r2 = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
+        let ctx2 = open(&r2).expect("cache reopens");
         let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
         assert_eq!(
             ctx2.packages_served(),
@@ -1704,7 +1599,7 @@ mod tests {
         let edited = [("a.baml", A_V2), ("b.baml", B)];
         let r2 = resolved(&root, &edited);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
+        let ctx2 = open(&r2).expect("cache reopens");
         let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
         assert_eq!(
             ctx2.packages_emitted(),
@@ -1721,7 +1616,7 @@ mod tests {
         // The edited package's output is now cached too: a third compile of
         // the edited sources serves everything.
         let (db3, pkg3) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx3 = CacheContext::open(&r2).expect("cache reopens");
+        let ctx3 = open(&r2).expect("cache reopens");
         let again = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");
         assert_eq!(ctx3.packages_emitted(), 0);
         assert_eq!(program_bytes(&again), program_bytes(&program));
@@ -1754,7 +1649,7 @@ mod tests {
 
         let r2 = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
+        let ctx2 = open(&r2).expect("cache reopens");
         let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
         assert_eq!(
             ctx2.packages_emitted(),
@@ -1798,7 +1693,7 @@ mod tests {
 
         let r2 = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
+        let ctx2 = open(&r2).expect("cache reopens");
         let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
         let packages = linked_package_count(&db2, pkg2);
         assert_eq!(
@@ -1815,7 +1710,7 @@ mod tests {
 
         let r3 = resolved(&root, &files);
         let (db3, pkg3) = crate::project_load::build_db_from_sources(&r3, |_| {});
-        let ctx3 = CacheContext::open(&r3).expect("cache reopens");
+        let ctx3 = open(&r3).expect("cache reopens");
         let program = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");
         assert_eq!(ctx3.packages_emitted(), 0, "the forged entry was refreshed");
         assert_eq!(ctx3.packages_served(), packages);
@@ -1833,7 +1728,7 @@ mod tests {
         let root_b = bc_root();
         let ra = resolved(&root_a, &[("a.baml", A_V1)]);
         let rb = resolved(&root_b, &[("other.baml", B), ("more.baml", A_V2)]);
-        let (Some(ctx_a), Some(ctx_b)) = (CacheContext::open(&ra), CacheContext::open(&rb)) else {
+        let (Some(ctx_a), Some(ctx_b)) = (open(&ra), open(&rb)) else {
             return;
         };
         assert_ne!(ctx_a.key, ctx_b.key, "the projects differ");
@@ -1877,7 +1772,7 @@ mod tests {
 
         let same = resolved(&root, &files);
         let (db_same, pkg_same) = crate::project_load::build_db_from_sources(&same, |_| {});
-        let ctx_same = CacheContext::open(&same).expect("cache reopens");
+        let ctx_same = open(&same).expect("cache reopens");
         let served = ctx_same
             .served_checks(&db_same, pkg_same)
             .expect("an identical project serves its check rows");
@@ -1896,7 +1791,7 @@ mod tests {
 
         let edited = resolved(&root, &[("a.baml", A_V2), ("b.baml", B)]);
         let (db_edit, pkg_edit) = crate::project_load::build_db_from_sources(&edited, |_| {});
-        let ctx_edit = CacheContext::open(&edited).expect("cache reopens");
+        let ctx_edit = open(&edited).expect("cache reopens");
         assert!(
             ctx_edit.served_checks(&db_edit, pkg_edit).is_none(),
             "an edited project serves no row — every file is checked honestly"
@@ -1992,7 +1887,7 @@ mod tests {
         let _ = compile_and_store_v1(&root, &files);
         let r = resolved(&root, &files);
         let (db, pkg) = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx = CacheContext::open(&r).expect("cache reopens");
+        let ctx = open(&r).expect("cache reopens");
         let key = ctx.package_key(&db, pkg, CLI_OPT_LEVEL);
         let fresh = baml_db::baml_compiler2_emit::emit_package(&db, pkg, CLI_OPT_LEVEL)
             .expect("the package emits");
@@ -2061,7 +1956,7 @@ mod tests {
         // A faithful fragment cache passes the oracle.
         let r = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx2 = CacheContext::open(&r).expect("cache reopens");
+        let ctx2 = open(&r).expect("cache reopens");
         ctx2.check_callable_throws_fragments_against_honest(&db2, pkg2)
             .expect("faithful fragments pass the oracle");
 
@@ -2080,7 +1975,7 @@ mod tests {
         // compare: the poisoned row is not a violation there.
         let edited = resolved(&root, &[("a.baml", A_V2), ("b.baml", B)]);
         let (db4, pkg4) = crate::project_load::build_db_from_sources(&edited, |_| {});
-        let ctx4 = CacheContext::open(&edited).expect("cache reopens");
+        let ctx4 = open(&edited).expect("cache reopens");
         ctx4.check_callable_throws_fragments_against_honest(&db4, pkg4)
             .expect("rows that would not be served are not compared");
         let _ = std::fs::remove_dir_all(&root);
@@ -2206,7 +2101,7 @@ mod tests {
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", A_V1)]);
-        let ctx = CacheContext::open(&r).expect("cache opens");
+        let ctx = open(&r).expect("cache opens");
 
         assert!(
             ctx.load_test_discovery().is_none(),
@@ -2235,7 +2130,7 @@ mod tests {
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", A_V1)]);
-        let ctx = CacheContext::open(&r).expect("cache opens");
+        let ctx = open(&r).expect("cache opens");
 
         ctx.cache
             .store_raw(&ctx.test_discovery_key, b"not-a-valid-borsh-TestDiscovery")
@@ -2344,7 +2239,7 @@ mod tests {
 
         let r = resolved(&root, files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx2 = CacheContext::open(&r).expect("cache reopens");
+        let ctx2 = open(&r).expect("cache reopens");
         let served = ctx2
             .served_checks(&db2, pkg2)
             .expect("an identical project serves its rows");
@@ -2387,7 +2282,7 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("a.baml"), "must name the file; got: {msg}");
         assert!(
-            msg.contains("diagnostics") && msg.contains("BAML_CACHE_VERIFY=1"),
+            msg.contains("diagnostics") && msg.contains("DEV_BAML_BUILD_CACHE_VERIFY=always"),
             "must name the artifact kind and point at full verify; got: {msg}"
         );
         let _ = std::fs::remove_dir_all(root);
@@ -2428,7 +2323,7 @@ mod tests {
         // would need a full honest compile — the design forbids it).
         let root = bc_root();
         let project = resolved(&root, &[("a.baml", A_V1)]);
-        let Some(ctx) = CacheContext::open(&project) else {
+        let Some(ctx) = open(&project) else {
             return;
         };
         ctx.maybe_sampled_verify(None, || panic!("hit path must not build an honest DB"))
@@ -2466,14 +2361,14 @@ mod tests {
         // `should_check` yet the merged set stays byte-identical to the honest
         // full collector (builtins contribute exactly their cached — here empty —
         // diagnostics, folded into `precomputed`).
-        if cache_disabled() || CacheContext::diagnostics_cache_disabled() {
+        if cache_disabled() {
             return;
         }
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", A_V1)]);
         let (db, ws) = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx = CacheContext::open(&r).expect("cache opens");
+        let ctx = open(&r).expect("cache opens");
 
         let honest = baml_db::collect_compiler2_diagnostics(&db);
 

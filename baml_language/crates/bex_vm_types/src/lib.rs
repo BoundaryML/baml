@@ -136,14 +136,14 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
 }
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
-    ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, Enum,
+    ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, EntryId, Enum,
     EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
     GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, Instance,
     InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
-    MapContainer, MapReadGuard, MapWriteGuard, Object, ObjectType, PanicClass, Program,
-    RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory,
-    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant,
-    format_float, sys_op_for_path, type_tags,
+    MapContainer, MapData, MapEntry, MapEpochChanged, MapReadGuard, MapWriteGuard, Object,
+    ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory,
+    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
+    ValueKind, Variant, format_float, map_string_hash, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.
