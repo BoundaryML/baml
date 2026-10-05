@@ -173,6 +173,18 @@ impl Heartbeat {
         bearer_token: Option<String>,
         request_timeout: Duration,
     ) {
+        self.run_authorized(client, endpoint, bearer_token, None, request_timeout)
+            .await;
+    }
+
+    pub async fn run_authorized(
+        &self,
+        client: reqwest::Client,
+        endpoint: reqwest::Url,
+        bearer_token: Option<String>,
+        authorization: Option<bcs_api::credentials::RequestAuthorization>,
+        request_timeout: Duration,
+    ) {
         if !matches!(endpoint.scheme(), "http" | "https")
             || !endpoint.username().is_empty()
             || endpoint.password().is_some()
@@ -208,11 +220,14 @@ impl Heartbeat {
                 _ = stopped.changed() => return,
                 result = tokio::time::timeout(
                     request_timeout,
-                    post(&client, &endpoint, bearer_token.as_deref(), liveness),
+                    post(&client, &endpoint, bearer_token.as_deref(), authorization.as_ref(), liveness),
                 ) => result.unwrap_or(Err(HeartbeatError::Timeout)),
             };
             if let Err(error) = result {
                 self.observe_error(error);
+                if matches!(error, HeartbeatError::Status(401 | 403)) {
+                    return;
+                }
             } else {
                 self.mark_control_success();
             }
@@ -228,17 +243,18 @@ async fn post(
     client: &reqwest::Client,
     endpoint: &reqwest::Url,
     bearer_token: Option<&str>,
+    authorization: Option<&bcs_api::credentials::RequestAuthorization>,
     body: Liveness,
 ) -> Result<(), HeartbeatError> {
     const MAX_RESPONSE_BYTES: usize = 4096;
-    let mut request = client
-        .post(endpoint.clone())
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .body(serde_json::to_vec(&body).map_err(|_| HeartbeatError::Http)?);
-    if let Some(token) = bearer_token {
-        request = request.bearer_auth(token);
-    }
-    let mut response = request.send().await.map_err(|_| HeartbeatError::Http)?;
+    let mut response =
+        bcs_api::telemetry::heartbeat(client, endpoint, bearer_token, authorization, &body)
+            .await
+            .map_err(|error| {
+                error.status().map_or(HeartbeatError::Http, |status| {
+                    HeartbeatError::Status(status.as_u16())
+                })
+            })?;
     if !response.status().is_success() {
         return Err(HeartbeatError::Status(response.status().as_u16()));
     }
@@ -400,6 +416,7 @@ mod tests {
                 &client,
                 &endpoint,
                 Some("private"),
+                None,
                 Heartbeat::new().liveness().unwrap(),
             )
             .await;

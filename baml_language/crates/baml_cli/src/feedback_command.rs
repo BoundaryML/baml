@@ -6,7 +6,7 @@
 // distinct id (persisted in `~/.baml/creds.json`). After `baml auth login`,
 // reports carry the verified email instead. No prompt either way.
 //
-// When an anonymous reporter later logs in, a `$identify` event merges the
+// When a logged-in reporter sends identified feedback, a `$identify` event merges the
 // anonymous person into the identified one — PostHog's native person merge —
 // so every previously filed report is retroactively attributed. There is no
 // backfill job; the merge *is* the backfill.
@@ -265,6 +265,10 @@ impl FeedbackInner {
         };
 
         self.print_preview(&payload, identified, creds.user_email.as_deref());
+        if identified {
+            // Associate feedback only when sending an identified report.
+            identify(&creds);
+        }
 
         // A stable distinct id makes every report from this machine one
         // PostHog person — and is what a later login merges into the
@@ -882,8 +886,8 @@ fn send_feedback(
 }
 
 /// Sends the `$identify` event that merges the anonymous person into the
-/// identified one. Called from `baml auth login`; best-effort by design —
-/// the caller ignores failures, and the next login retries the merge.
+/// identified one. Called for an identified feedback report; best-effort —
+/// the caller ignores failures, and the next identified report retries the merge.
 pub(crate) fn identify(creds: &Credentials) {
     let (Some(anon_id), Some(email)) = (
         creds.posthog_distinct_id.as_deref(),

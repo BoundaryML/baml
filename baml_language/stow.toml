@@ -188,6 +188,10 @@ link_crates = ["baml_type", "sys_types"]
 [[namespaces]]
 name = "btel"
 
+# Boundary Cloud Service API contracts and clients.
+[[namespaces]]
+name = "bcs"
+
 # lsp namespace configuration
 [[namespaces]]
 name = "baml_lsp"

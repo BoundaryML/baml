@@ -34,6 +34,7 @@ pub enum DeliveryError {
     Expired,
     Encoding,
     Http,
+    Unauthorized,
     Worker,
 }
 
@@ -53,6 +54,7 @@ impl std::error::Error for DeliveryError {}
 pub struct DeliveryConfig {
     pub prepare_base_url: Url,
     pub bearer_token: Option<String>,
+    pub authorization: Option<bcs_api::credentials::RequestAuthorization>,
     pub max_pending_plans: usize,
     /// At most 32 captures, leaving default snapshot-pool headroom for VM
     /// capture. A capture spanning plans counts once per plan.
@@ -88,6 +90,7 @@ impl DeliveryConfig {
         Self {
             prepare_base_url,
             bearer_token: None,
+            authorization: None,
             max_pending_plans: 4,
             max_pending_snapshots: 32,
             recording_reserved_bytes: 128 * 1024 * 1024,
@@ -144,6 +147,19 @@ impl DeliveryConfig {
         validate_url(base, true).map_err(|_| DeliveryError::InvalidConfig)?;
         if base.query().is_some() || base.as_str().len() > 8192 {
             return Err(DeliveryError::InvalidConfig);
+        }
+        if let Some(authorization) = &self.authorization {
+            if !authorization
+                .authentication
+                .accepts_url(&self.endpoint("0", "heartbeat")?)
+            {
+                return Err(DeliveryError::InvalidConfig);
+            }
+            reqwest::header::HeaderValue::from_str(&format!(
+                "Bearer {}",
+                authorization.authentication.bearer().expose()
+            ))
+            .map_err(|_| DeliveryError::InvalidConfig)?;
         }
         if let Some(token) = &self.bearer_token {
             reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
@@ -1000,18 +1016,28 @@ async fn prepare(
     for attempt in 0..config.max_attempts {
         let decorated = heartbeat.decorate_prepare(request);
         let mut writer = LimitedWriter::new(config.max_request_bytes);
-        serde_json::to_writer(&mut writer, decorated.as_ref().unwrap_or(request))
-            .map_err(|_| DeliveryError::Capacity)?;
+        serde_json::to_writer(
+            &mut writer,
+            &bcs_api::credentials::Targeted {
+                target: config
+                    .authorization
+                    .as_ref()
+                    .and_then(|auth| auth.target.as_ref()),
+                payload: decorated.as_ref().unwrap_or(request),
+            },
+        )
+        .map_err(|_| DeliveryError::Capacity)?;
         let body = Bytes::from(writer.bytes);
-        let mut post = client
-            .post(url.clone())
-            .header("content-type", "application/json")
-            .header("idempotency-key", &key)
-            .body(body.clone());
-        if let Some(token) = &config.bearer_token {
-            post = post.bearer_auth(token);
-        }
-        match post.send().await {
+        match bcs_api::telemetry::prepare(
+            client,
+            &url,
+            config.bearer_token.as_deref(),
+            config.authorization.as_ref(),
+            &key,
+            body,
+        )
+        .await
+        {
             Ok(response) if response.status().is_success() => {
                 match read_response(response, config.max_response_bytes).await {
                     Ok(bytes) => {
@@ -1025,7 +1051,23 @@ async fn prepare(
                     Err(error) => return Err(error),
                 }
             }
+            Ok(response)
+                if matches!(
+                    response.status(),
+                    reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
+                ) =>
+            {
+                return Err(DeliveryError::Unauthorized);
+            }
             Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
+            Err(error)
+                if matches!(
+                    error.status(),
+                    Some(reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN)
+                ) =>
+            {
+                return Err(DeliveryError::Unauthorized);
+            }
             _ => {}
         }
         if attempt + 1 < config.max_attempts {
@@ -1068,33 +1110,28 @@ async fn put(
                 .map_err(|_| DeliveryError::InvalidPlan)?,
         );
     }
-    headers.entry(reqwest::header::CONTENT_TYPE).or_insert(
-        reqwest::header::HeaderValue::from_static("application/x-protobuf"),
-    );
-    // The body goes out in chunks of known total length, not chunk-encoded.
-    headers.insert(
-        reqwest::header::CONTENT_LENGTH,
-        reqwest::header::HeaderValue::from(body.len() as u64),
-    );
     for attempt in 0..config.max_attempts {
         let remaining = expiry
             .checked_sub(now_ms()?)
             .filter(|&ms| ms > 0)
             .ok_or(DeliveryError::Expired)?;
-        let request = client
-            .put(&target.presigned_put_url)
-            .timeout(
-                config
-                    .put_timeout(body.len())
-                    .min(Duration::from_millis(remaining)),
-            )
-            .headers(headers.clone())
-            .body(reqwest::Body::wrap_stream(futures::stream::iter(
-                body.chunks()
-                    .into_iter()
-                    .map(Ok::<Bytes, std::convert::Infallible>),
-            )));
-        match request.send().await {
+        let request_body = reqwest::Body::wrap_stream(futures::stream::iter(
+            body.chunks()
+                .into_iter()
+                .map(Ok::<Bytes, std::convert::Infallible>),
+        ));
+        match bcs_api::telemetry::upload(
+            client,
+            &target.presigned_put_url,
+            headers.clone(),
+            request_body,
+            body.len(),
+            config
+                .put_timeout(body.len())
+                .min(Duration::from_millis(remaining)),
+        )
+        .await
+        {
             Ok(response) if response.status().is_success() => return Ok(()),
             Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
             _ => {}
@@ -1363,12 +1400,17 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                             let heartbeat = shared.heartbeat.clone();
                             let client = client.clone();
                             let token = shared.config.bearer_token.clone();
+                            let authorization = shared.config.authorization.clone();
                             let timeout = shared.config.request_timeout;
+                            let heartbeat_owner = shared.clone();
                             heartbeats.spawn(async move {
                                 if std::panic::AssertUnwindSafe(
-                                    heartbeat.run(client, endpoint, token, timeout),
+                                    heartbeat.run_authorized(client, endpoint, token, authorization, timeout),
                                 ).catch_unwind().await.is_err() {
                                     heartbeat.observe_error(HeartbeatError::Worker);
+                                }
+                                if matches!(heartbeat.last_error(), Some(HeartbeatError::Status(401 | 403))) {
+                                    heartbeat_owner.fail(DeliveryError::Unauthorized);
                                 }
                             });
                         }
@@ -1398,6 +1440,7 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                             ).await;
                         });
                     }
+                    Err(DeliveryError::Unauthorized) => shared.fail(DeliveryError::Unauthorized),
                     Err(error) => {
                         shared.lose(error, true);
                     }

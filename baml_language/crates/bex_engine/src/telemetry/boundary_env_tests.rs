@@ -1,6 +1,8 @@
-use std::process::Command;
+use std::{process::Command, sync::Arc};
 
-use super::{BOUNDARY_API_KEY, BOUNDARY_URL, Destination, TelemetryRecording};
+use btel_types::context::Context;
+
+use super::{BOUNDARY_API_KEY, Destination, TelemetryRecording};
 
 #[test]
 fn from_boundary_env() {
@@ -9,14 +11,16 @@ fn from_boundary_env() {
     const KEY: &str = "bml_test_key";
     let cases = [
         (Some(URL), Some(KEY), true),
-        (None, None, false),
-        (None, Some(KEY), false),
+        (None, Some(KEY), true),
         (Some(URL), None, false),
-        (Some(""), Some(KEY), false),
+        (Some(""), Some(KEY), true),
+        (Some("  "), Some(KEY), true),
         (Some(URL), Some(""), false),
         (Some(""), Some(""), false),
-        (Some("not a URL"), Some(KEY), false),
-        // Validation belongs to delivery, not the environment constructor.
+        (Some("not a URL"), Some(KEY), true),
+        (Some("not a URL"), None, true),
+        (Some("http://example.invalid/"), Some(KEY), true),
+        // Endpoint validation happens before discovering credentials.
         (Some("http://localhost:1234/"), Some(KEY), true),
         (
             Some("https://user:pass@example.invalid/?q=1#f"),
@@ -35,10 +39,18 @@ fn from_boundary_env() {
             ]);
             command.env(CASE, index.to_string());
             command
-                .env_remove(BOUNDARY_URL)
-                .env_remove(BOUNDARY_API_KEY);
+                .env_remove(BOUNDARY_API_KEY)
+                .env_remove("BOUNDARY_API_URL")
+                .env_remove("BOUNDARY_PROJECT")
+                .env(
+                    "BAML_HOME",
+                    format!(
+                        "/tmp/baml-boundary-env-tests-{}-{index}",
+                        std::process::id()
+                    ),
+                );
             if let Some(url) = url {
-                command.env(BOUNDARY_URL, url);
+                command.env("BOUNDARY_API_URL", url);
             }
             if let Some(key) = key {
                 command.env(BOUNDARY_API_KEY, key);
@@ -58,10 +70,28 @@ fn from_boundary_env() {
     let recording = TelemetryRecording::from_boundary_env();
     assert_eq!(recording.is_some(), enabled);
     if let Some(recording) = recording {
+        if let Destination::InvalidConfiguration { reason } = &recording.destination {
+            let expected = bcs_api::auth::Endpoint::parse(url.unwrap())
+                .unwrap_err()
+                .to_string();
+            assert_eq!(reason, &expected);
+            let Err(error) = recording.start(None, Arc::default(), &Context::default()) else {
+                panic!("invalid Boundary configuration must fail startup");
+            };
+            assert_eq!(error.to_string(), expected);
+            return;
+        }
         let Destination::Cloud { delivery, .. } = recording.destination else {
             panic!("Boundary environment must select cloud delivery");
         };
-        assert_eq!(delivery.prepare_base_url.as_str(), url.unwrap());
-        assert_eq!(delivery.bearer_token.as_deref(), key);
+        assert_eq!(
+            delivery.prepare_base_url.as_str().trim_end_matches('/'),
+            url.filter(|url| !url.trim().is_empty())
+                .unwrap_or(bcs_api::auth::DEFAULT_API_URL)
+                .trim_end_matches('/')
+        );
+        let authorization = delivery.authorization.as_ref().unwrap();
+        assert_eq!(Some(authorization.authentication.bearer().expose()), key);
+        assert!(delivery.bearer_token.is_none());
     }
 }

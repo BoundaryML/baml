@@ -16,13 +16,14 @@ mod cloud_protocol;
 const KEY: &str = "bml_cli_test_key";
 const RECORDINGS: &str = ".baml/btel/recordings";
 
-fn run(project: &Path, boundary_url: &str, telemetry: &str) {
+fn run(project: &Path, boundary_url: &str, telemetry: &str, expected_success: bool) {
     common::share_build_cache(&project.join("home"));
     let output = Command::new(common::baml_cli())
         .args(["run", "main"])
         .current_dir(project)
-        .env("BOUNDARY_URL", boundary_url)
+        .env("BOUNDARY_API_URL", boundary_url)
         .env("BOUNDARY_API_KEY", KEY)
+        .env("BOUNDARY_PROJECT", "acme/app")
         .env("BAML_TELEMETRY", telemetry)
         .env("BAML_HOME", project.join("home"))
         .env("BAML_CLI_ALLOW_DIRECT", "1")
@@ -30,9 +31,10 @@ fn run(project: &Path, boundary_url: &str, telemetry: &str) {
         .env("DO_NOT_TRACK", "1")
         .output()
         .unwrap();
-    assert!(
+    assert_eq!(
         output.status.success(),
-        "CLI failed:\n{}\n{}",
+        expected_success,
+        "unexpected CLI status:\n{}\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
@@ -83,17 +85,18 @@ fn baml_run_uploads_from_boundary_env() {
                 .mount(&server)
                 .await;
 
-            run(temp.path(), &boundary_url, "medium");
+            run(temp.path(), &boundary_url, "medium", true);
             let requests = server.received_requests().await.unwrap();
             let mut prepares = 0;
             let mut recordings = Vec::new();
             for request in &requests {
                 if request.method == "POST" {
                     assert_eq!(request.headers["authorization"], format!("Bearer {KEY}"));
+                    let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                    assert_eq!(body["target"], serde_json::json!({"project": "acme/app"}));
                     if request.url.path().ends_with("/uploads:prepare") {
                         prepares += 1;
-                        let prepare: PrepareUploadsRequest =
-                            serde_json::from_slice(&request.body).unwrap();
+                        let prepare: PrepareUploadsRequest = cloud_protocol::prepare(request);
                         assert_eq!(
                             request.headers["idempotency-key"],
                             format!(
@@ -127,8 +130,8 @@ fn baml_run_uploads_from_boundary_env() {
                     "cloud must omit process arguments"
                 );
                 assert!(
-                    header.source_cas_id.is_some(),
-                    "CLI must include source metadata"
+                    header.source_cas_id.is_none(),
+                    "cloud recordings must omit source metadata"
                 );
             }
             assert!(recordings.iter().any(|recording| {
@@ -139,10 +142,15 @@ fn baml_run_uploads_from_boundary_env() {
             }));
 
             server.reset().await;
-            run(temp.path(), &boundary_url, "off");
+            run(temp.path(), &boundary_url, "off", true);
             assert!(server.received_requests().await.unwrap().is_empty());
-            // Plain HTTP to a non-loopback host is rejected without failing BAML.
-            run(temp.path(), "http://example.invalid/publisher", "medium");
+            // Plain HTTP to a non-loopback host fails engine startup.
+            run(
+                temp.path(),
+                "http://example.invalid/publisher",
+                "medium",
+                false,
+            );
             assert!(server.received_requests().await.unwrap().is_empty());
         });
 }

@@ -95,6 +95,10 @@ jobs:
       # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
       # Keep the GNU job's --exclude list in sync. The musl job also runs
       # pack_e2e, so both Linux libc variants exercise the ELF pack path.
+      - name: "Setup test credential store"
+        if: inputs.run-compiler-tests
+        uses: ./.github/actions/setup-test-keyring
+
       - name: "Run compiler, CLI, and snapshot tests"
         if: inputs.run-compiler-tests
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
@@ -173,4 +177,3 @@ jobs:
           name: cargo-timings-snapshot
           path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
           if-no-files-found: ignore
-
