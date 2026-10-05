@@ -1,6 +1,6 @@
 use std::{
-    collections::{HashMap, HashSet, hash_map::DefaultHasher},
-    sync::{Arc, Mutex},
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, Value, ValueKind};
@@ -12,7 +12,7 @@ enum Work {
     Value(Value, bool),
     Exit(HeapPtr),
     MapEntry(Value, Value),
-    FinishMapEntry(Value, Arc<Mutex<DefaultHasher>>),
+    FinishMapEntry(Value, Arc<super::hasher::HasherState>),
     FinishMap,
 }
 

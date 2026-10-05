@@ -902,7 +902,7 @@ fn wrap_output_format(
     content: std::sync::Arc<crate::output_format::OutputFormatContent>,
 ) -> io::owned::ai::OutputFormat {
     io::owned::ai::OutputFormat {
-        _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
+        _data: content as std::sync::Arc<dyn bex_vm_types::BexRustData>,
     }
 }
 
@@ -911,10 +911,11 @@ fn wrap_output_format(
 fn unwrap_output_format(
     owned: &io::owned::ai::OutputFormat,
 ) -> std::sync::Arc<crate::output_format::OutputFormatContent> {
+    use bex_vm_types::RustDataArc as _;
     owned
         ._data
         .clone()
-        .downcast::<crate::output_format::OutputFormatContent>()
+        .downcast_payload::<crate::output_format::OutputFormatContent>()
         .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 

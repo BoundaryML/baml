@@ -79,6 +79,44 @@ impl ReservedSpanData {
     }
 }
 
+impl crate::BexRustData for SpanId {
+    fn measure(&self, _: &mut crate::Meter) {}
+}
+
+impl TraceOptionsData {
+    /// What the options keep alive: a context patch, shared with every span
+    /// that carries it.
+    fn measure_into(&self, meter: &mut crate::Meter) {
+        if let Some(context) = &self.context {
+            meter.shared(context, |meter| {
+                meter.bytes(context.distinct_id.as_ref().map_or(0, String::capacity));
+                for (key, value) in &context.metadata {
+                    meter.bytes(key.capacity() + size_of_val(value));
+                }
+            });
+        }
+    }
+}
+
+impl crate::BexRustData for TraceOptionsData {
+    fn measure(&self, meter: &mut crate::Meter) {
+        self.measure_into(meter);
+    }
+}
+
+impl crate::BexRustData for ReservedSpanData {
+    fn measure(&self, meter: &mut crate::Meter) {
+        self.options.measure_into(meter);
+    }
+}
+
+impl crate::BexRustData for HostMarker {
+    fn measure(&self, meter: &mut crate::Meter) {
+        meter.bytes(self.definition.retained_bytes());
+        self.options.measure_into(meter);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -181,6 +219,15 @@ pub struct HostDefinition {
 pub type HostDefinitionKey = (String, String, String, String, u32, u32);
 
 impl HostDefinition {
+    /// Bytes the definition's names occupy outside the value.
+    pub fn retained_bytes(&self) -> usize {
+        self.language.capacity()
+            + self.module.capacity()
+            + self.qualified_name.capacity()
+            + self.source_file.capacity()
+            + self.display_name.capacity()
+    }
+
     pub fn key(&self) -> HostDefinitionKey {
         (
             self.language.clone(),

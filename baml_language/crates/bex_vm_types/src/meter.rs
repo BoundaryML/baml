@@ -184,8 +184,7 @@ impl Object {
                 meter.bytes(usize::try_from(bigint.bits().div_ceil(8)).unwrap_or(usize::MAX));
             }),
             Object::Future(future) => future.measure(meter),
-            // The payload reports nothing about itself yet.
-            Object::RustData(data) => meter.shared(data, |_| {}),
+            Object::RustData(data) => meter.shared(data, |meter| data.measure(meter)),
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),
             Object::Function(function) => {
                 let bytecode = &function.bytecode;
@@ -358,11 +357,25 @@ mod tests {
     }
 
     #[test]
-    fn an_opaque_payload_is_measured_as_its_allocation() {
-        let payload: Arc<dyn std::any::Any + Send + Sync> = Arc::new([0u64; 16]);
+    fn an_opaque_payload_is_measured_as_its_allocation_plus_what_it_reports() {
+        struct Payload {
+            inline: [u64; 16],
+            buffer: Vec<u8>,
+        }
+        impl crate::BexRustData for Payload {
+            fn measure(&self, meter: &mut Meter) {
+                // The inline words are the allocation the heap reports itself.
+                let _ = self.inline;
+                meter.bytes(self.buffer.capacity());
+            }
+        }
+        let payload: Arc<dyn crate::BexRustData> = Arc::new(Payload {
+            inline: [0; 16],
+            buffer: Vec::with_capacity(1_000),
+        });
         assert_eq!(
             charged(Object::RustData(payload)),
-            2 * size_of::<usize>() + 16 * size_of::<u64>()
+            2 * size_of::<usize>() + size_of::<Payload>() + 1_000
         );
     }
 }

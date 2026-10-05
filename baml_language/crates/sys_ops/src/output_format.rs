@@ -104,6 +104,17 @@ pub struct OutputFormatContent {
     build_error: Option<RenderError>,
 }
 
+impl bex_vm_types::BexRustData for OutputFormatContent {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        // Bounded by the target type's declarations: table storage only.
+        meter.bytes(self.enums.capacity() * size_of::<(String, Enum)>());
+        meter.bytes(self.classes.capacity() * size_of::<(String, Class)>());
+        meter.bytes(self.enum_reference_order.capacity() * size_of::<String>());
+        meter.bytes(self.recursive_classes.capacity() * size_of::<String>());
+        meter.bytes(self.recursive_type_aliases.capacity() * size_of::<(String, SapTy)>());
+    }
+}
+
 impl OutputFormatContent {
     /// Create a new `OutputFormatContent` with the given target type.
     pub fn new(target: ::sys_types::SapTy) -> Self {

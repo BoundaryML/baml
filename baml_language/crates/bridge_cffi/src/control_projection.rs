@@ -1,5 +1,6 @@
 //! Data-only projections used by every generated invocation and trace facade.
 
+use bex_project::RustDataArc as _;
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE, TraceReservationHandle,
     baml_bridge::cffi::{
@@ -24,7 +25,7 @@ pub fn trace_selection(call_id: u64, key: u64) -> Result<(Vec<u8>, Option<u64>),
     let CffiHandleTableEntry::RustData(data) = &*entry else {
         return Err(invalid("expected generated trace options or reservation"));
     };
-    if let Some(options) = data.0.downcast_ref::<bex_project::TraceOptionsData>() {
+    if let Some(options) = data.downcast_ref::<bex_project::TraceOptionsData>() {
         let mut wire = TraceOptions {
             mode: options.mode.map(|mode| match mode {
                 InvocationMode::Hidden => TraceMode::Hidden as i32,
@@ -60,9 +61,8 @@ pub fn trace_selection(call_id: u64, key: u64) -> Result<(Vec<u8>, Option<u64>),
         ));
     }
     let reservation = data
-        .0
         .clone()
-        .downcast::<bex_project::ReservedSpanData>()
+        .downcast_payload::<bex_project::ReservedSpanData>()
         .map_err(|_| invalid("expected generated trace options or reservation"))?;
     // The typed capability pins the owner during preparation. The engine also
     // validates the reservation's original recording scope before admission.

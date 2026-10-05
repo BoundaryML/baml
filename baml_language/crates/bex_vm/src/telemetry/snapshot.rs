@@ -497,7 +497,7 @@ mod tests {
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.alloc_float(2.5);
-        let opaque: Arc<dyn std::any::Any + Send + Sync> = Arc::new(7_u64);
+        let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(7));
         let weak = Arc::downgrade(&opaque);
         let first = vm.tlab.alloc_rust_data(opaque.clone());
         let second = vm.tlab.alloc_rust_data(opaque.clone());
@@ -551,7 +551,7 @@ mod tests {
             panic!("expected a heap-backed payload, got {payload:?}")
         };
         let stored = Arc::clone(stored);
-        let sources: [Arc<dyn std::any::Any + Send + Sync>; 3] = [
+        let sources: [Arc<dyn bex_vm_types::BexRustData>; 3] = [
             MediaValue::from_file(
                 baml_type::MediaKind::Image,
                 "/nonexistent/telemetry-must-not-read.png",
@@ -690,7 +690,7 @@ mod tests {
             Value::object(vm.tlab.alloc_uint8array(vec![7; length]))
         };
         let image = |vm: &mut crate::BexVm, length: usize| {
-            let media: Arc<dyn std::any::Any + Send + Sync> = MediaValue::from_base64(
+            let media: Arc<dyn bex_vm_types::BexRustData> = MediaValue::from_base64(
                 baml_type::MediaKind::Image,
                 bex_str::BexStr::from("A".repeat(length)),
                 None,
@@ -1101,7 +1101,7 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let raw = "https://example.test/report.pdf?key=secret";
         let clean = "https://example.test/report.pdf?key=sha256:0123";
-        let media: Arc<dyn std::any::Any + Send + Sync> =
+        let media: Arc<dyn bex_vm_types::BexRustData> =
             MediaValue::from_url(baml_type::MediaKind::Pdf, raw, None);
         let message = format!("GET {raw} failed");
         let values = [
@@ -1234,8 +1234,12 @@ mod tests {
             panic!()
         };
         source.store(Value::object(cell));
-        let a = vm.tlab.alloc_rust_data(Arc::new(1_u64));
-        let b = vm.tlab.alloc_rust_data(Arc::new(1_u64));
+        let a = vm
+            .tlab
+            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
+        let b = vm
+            .tlab
+            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
         let snapshot = capture(&[Value::object(cell), Value::object(a), Value::object(b)]);
         source.store(Value::int(5));
         drop(vm);

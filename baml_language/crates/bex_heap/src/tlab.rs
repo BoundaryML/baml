@@ -279,7 +279,7 @@ impl Tlab {
 
     /// Allocate opaque Rust data on the heap.
     #[inline]
-    pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+    pub fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
         self.alloc(Object::RustData(data))
     }
 
@@ -464,7 +464,7 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_bigint(value)
     }
 
-    fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+    fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
         self.tlab_mut().alloc_rust_data(data)
     }
 

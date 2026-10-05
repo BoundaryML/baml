@@ -222,7 +222,7 @@ pub enum VmInternalError {
     #[error("type error: expected {expected}, got {got}")]
     TypeError { expected: Type, got: Type },
 
-    /// A Rust type error during downcasting from an `Arc<dyn Any + Send + Sync>`.
+    /// A Rust type error during downcasting from an `Arc<dyn BexRustData>`.
     /// The message currently uses typeids which are not very human-readable.
     #[error("rust type error during downcasting: expected typeid {expected:?}, got typeid {got:?}")]
     RustTypeError {

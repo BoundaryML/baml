@@ -504,6 +504,13 @@ impl Drop for Admission {
     }
 }
 
+impl crate::BexRustData for LimitInner {
+    fn measure(&self, _: &mut crate::Meter) {
+        // The queues hold waiters that the parked tasks own; reading them
+        // would take the lock the admit path holds. Nothing beyond the value.
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{

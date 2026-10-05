@@ -44,6 +44,19 @@ struct BuilderHandle {
     state: Arc<Mutex<BuilderState>>,
 }
 
+impl bex_vm_types::BexRustData for BuilderHandle {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        // Builder natives hold the lock for one call at a time; a failed
+        // `try_lock` leaves the fields uncounted until the next census.
+        meter.shared(&self.state, |meter| {
+            if let Ok(state) = self.state.try_lock() {
+                meter.bytes(state.name.capacity());
+                meter.bytes(state.fields.capacity() * size_of::<BuilderField>());
+            }
+        });
+    }
+}
+
 struct BuilderState {
     id: u64,
     name: String,
@@ -68,6 +81,10 @@ enum PendingOp {
 #[derive(Clone, Copy)]
 struct PendingHandle {
     op: PendingOp,
+}
+
+impl bex_vm_types::BexRustData for PendingHandle {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
 }
 
 /// The schema metadata a field root carries, independent of how its type is

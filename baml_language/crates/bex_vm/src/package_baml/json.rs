@@ -50,7 +50,7 @@ use std::collections::HashMap;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, ValueKind,
+    HeapPtr, RustDataArc as _, ValueKind,
     types::{Array, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
@@ -1148,7 +1148,10 @@ pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_ty
 
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
-        Object::RustData(arc) => arc.clone().downcast::<bex_vm_types::MediaValue>().ok(),
+        Object::RustData(arc) => arc
+            .clone()
+            .downcast_payload::<bex_vm_types::MediaValue>()
+            .ok(),
         _ => None,
     }
 }

@@ -102,7 +102,8 @@ use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value, Variant,
+    VmGlobals,
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
@@ -5036,7 +5037,10 @@ impl BexVm {
     /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
     ///
     /// Used by generated `view::` struct accessors for `$rust_type` fields.
-    pub fn as_rust_data<T: 'static>(&self, value: &Value) -> Result<&T, VmInternalError> {
+    pub fn as_rust_data<T: bex_vm_types::BexRustData>(
+        &self,
+        value: &Value,
+    ) -> Result<&T, VmInternalError> {
         let Some(ptr) = value.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::RustData),
@@ -5049,7 +5053,7 @@ impl BexVm {
                 arc.downcast_ref::<T>()
                     .ok_or_else(|| VmInternalError::RustTypeError {
                         expected: TypeId::of::<T>(),
-                        got: arc.as_ref().type_id(),
+                        got: arc.payload_type_id(),
                     })
             }
             _ => Err(VmInternalError::TypeError {
@@ -5062,7 +5066,7 @@ impl BexVm {
     /// Clone the `Arc` out of the `$rust_type` field `field` of the instance
     /// `holder`, so a native can keep using the payload while it borrows
     /// `&mut BexVm` to allocate.
-    pub fn rust_data_field<T: Send + Sync + 'static>(
+    pub fn rust_data_field<T: bex_vm_types::BexRustData>(
         &self,
         holder: &Value,
         field: usize,
@@ -5076,9 +5080,9 @@ impl BexVm {
         };
         match self.get_object(ptr) {
             Object::RustData(arc) => {
-                let got = arc.as_ref().type_id();
+                let got = arc.payload_type_id();
                 arc.clone()
-                    .downcast::<T>()
+                    .downcast_payload::<T>()
                     .map_err(|_| VmInternalError::RustTypeError {
                         expected: TypeId::of::<T>(),
                         got,
@@ -5294,7 +5298,7 @@ impl BexVm {
                 // it as `Object::RustData(Arc<HostValueArc>)` so the BAML
                 // class's `_handle` slot can be downcast back to the
                 // original host-value reference on round-trip.
-                let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = handle;
+                let dyn_arc: std::sync::Arc<dyn bex_vm_types::BexRustData> = handle;
                 let handle_val = Value::object(self.tlab.alloc(Object::RustData(dyn_arc)));
                 (
                     ErrorClass::HostCallable,

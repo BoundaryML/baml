@@ -8,6 +8,7 @@ use bex_engine::{
     BexEngine, BexExternalValue, CallId, FunctionCallContextBuilder, HostDefinition,
     TelemetryRecording,
 };
+use bex_vm_types::RustDataArc as _;
 use btel_recorder::{RecordingConfig, proto};
 use btel_types::{
     InvocationMode, InvocationOutcome,
@@ -364,7 +365,7 @@ extern "C" fn callback_dispatch(request: *const u8, length: usize) {
     assert!(sys_native::host_dispatch::start_execution(id).is_some());
     let capture = sys_native::host_dispatch::execution_capture(id)
         .unwrap()
-        .downcast::<bex_engine::InvocationCapture>()
+        .downcast_payload::<bex_engine::InvocationCapture>()
         .unwrap_or_else(|_| panic!("typed capture"));
     CALLBACK_CONTEXTS
         .lock()

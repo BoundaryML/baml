@@ -7291,9 +7291,9 @@ impl BexEngine {
                     class_name: "reflect.CompileArtifact".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(
-                            bex_vm::PinnedArtifact { artifact, pins },
-                        )))),
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(
+                            bex_vm::RuntimeCompileArtifactSlot::new(bex_vm::PinnedArtifact { artifact, pins }),
+                        )),
                     },
                 }),
                 Err(diagnostics) => {
@@ -7373,7 +7373,7 @@ struct InvocationSpawner {
 
 #[async_trait]
 impl sys_types::VmSpawner for InvocationSpawner {
-    fn capture_invocation(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+    fn capture_invocation(&self) -> Option<Arc<dyn bex_vm_types::BexRustData>> {
         Some(Arc::new(self.capture.clone()))
     }
     async fn spawn_with_function(

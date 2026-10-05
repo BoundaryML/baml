@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, hash_map::DefaultHasher},
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use bex_vm_types::{EntryId, HeapPtr, MapData, Object, Value};
 
@@ -23,7 +20,7 @@ struct MapDriver {
     key: Value,
     value: Value,
     state: Value,
-    hasher: Option<Arc<Mutex<DefaultHasher>>>,
+    hasher: Option<Arc<super::hasher::HasherState>>,
     operation: Operation,
     hash: u64,
     epoch: u64,

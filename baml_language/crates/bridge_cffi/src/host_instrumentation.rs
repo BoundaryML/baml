@@ -1,7 +1,7 @@
 //! Shared host instrumentation bindings. No host body is executed here.
 use std::sync::Arc;
 
-use bex_project::{HostDefinition, HostInvocation, TraceOptionsData};
+use bex_project::{HostDefinition, HostInvocation, RustDataArc as _, TraceOptionsData};
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, InvocationStateHandle};
 
 use crate::BridgeError;
@@ -21,8 +21,7 @@ pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
     let CffiHandleTableEntry::RustData(data) = &*entry else {
         return Err(invalid("instrument accepts generated trace.Options only"));
     };
-    data.0
-        .downcast_ref::<TraceOptionsData>()
+    data.downcast_ref::<TraceOptionsData>()
         .cloned()
         .ok_or_else(|| {
             invalid("instrument accepts generated trace.Options only; reservations are unsupported")
@@ -103,15 +102,15 @@ pub fn registration_marker(
     let CffiHandleTableEntry::RustData(data) = &*entry else {
         return Err(invalid("expected a host marker"));
     };
-    Arc::clone(&data.0)
-        .downcast::<bex_project::HostMarker>()
+    Arc::clone(data)
+        .downcast_payload::<bex_project::HostMarker>()
         .map_err(|_| invalid("expected a host marker"))
 }
 
 pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>> {
     let capture = sys_native::host_dispatch::execution_capture(call_id)?;
     capture
-        .downcast::<bex_project::InvocationCapture>()
+        .downcast_payload::<bex_project::InvocationCapture>()
         .ok()?
         .host
         .clone()

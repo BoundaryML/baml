@@ -1705,6 +1705,10 @@ impl Drop for CountsDrops {
     }
 }
 
+impl bex_vm_types::BexRustData for CountsDrops {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
+}
+
 /// Moving a survivor neither duplicates nor leaks what it owns: a payload is
 /// untouched for as long as its object lives, and dropped once when it dies.
 #[test]

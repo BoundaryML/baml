@@ -234,10 +234,10 @@ fn take_compile_artifact(
         .map_err(|_| VmBamlError::InvalidArgument {
             message: invalid_message.to_string(),
         })?;
-    let mut slot = slot.lock().map_err(|_| VmBamlError::InvalidArgument {
+    let taken = slot.take().map_err(|_| VmBamlError::InvalidArgument {
         message: format!("{invalid_message}: artifact state is unavailable"),
     })?;
-    slot.take().ok_or_else(|| {
+    taken.ok_or_else(|| {
         VmRustFnError::from(VmBamlError::InvalidArgument {
             message: consumed_message.to_string(),
         })

@@ -84,5 +84,37 @@ pub struct PinnedArtifact {
     pub pins: IndexMap<String, Handle>,
 }
 
-/// One-shot storage used by the BAML `CompileArtifact` wrapper.
-pub type RuntimeCompileArtifactSlot = std::sync::Mutex<Option<PinnedArtifact>>;
+/// One-shot storage used by the BAML `CompileArtifact` wrapper: holds the
+/// artifact until `_finish` takes it.
+pub struct RuntimeCompileArtifactSlot(std::sync::Mutex<Option<PinnedArtifact>>);
+
+impl RuntimeCompileArtifactSlot {
+    pub fn new(artifact: PinnedArtifact) -> Self {
+        Self(std::sync::Mutex::new(Some(artifact)))
+    }
+
+    /// The artifact, if it has not been taken.
+    pub fn take(&self) -> Result<Option<PinnedArtifact>, std::sync::PoisonError<()>> {
+        self.0
+            .lock()
+            .map(|mut slot| slot.take())
+            .map_err(|_| std::sync::PoisonError::new(()))
+    }
+}
+
+impl bex_vm_types::BexRustData for RuntimeCompileArtifactSlot {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        // Only `_finish` locks the slot, for one call on the VM thread. The
+        // emitted package has no size of its own to report; the interface
+        // blob and diagnostics are what an artifact retains in bulk.
+        if let Ok(slot) = self.0.try_lock()
+            && let Some(pinned) = slot.as_ref()
+        {
+            meter.bytes(pinned.artifact.interface_blob.capacity());
+            meter.bytes(
+                pinned.artifact.diagnostics.capacity() * size_of::<RuntimeCompileDiagnostic>(),
+            );
+            meter.bytes(pinned.pins.capacity() * size_of::<(String, Handle, usize)>());
+        }
+    }
+}

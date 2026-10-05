@@ -20,7 +20,7 @@
 //! which converts a whole batch in one pass over the haystack rather than
 //! re-counting from the start for each span.
 
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
@@ -206,16 +206,32 @@ fn throw_build_error(vm: &mut BexVm, pattern: &str, err: &BuildError) -> VmRustF
     }
 }
 
+/// A compiled program as `$rust_type` data.
+struct RegexProgram(Program);
+
+impl bex_vm_types::BexRustData for RegexProgram {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.bytes(self.0.retained_bytes());
+    }
+}
+
+impl std::ops::Deref for RegexProgram {
+    type Target = Program;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Store the compiled program behind a shareable native handle owned by the BAML value.
 fn regex_value(vm: &mut BexVm, prog: Program) -> Value {
-    let handle: Arc<dyn Any + Send + Sync> = Arc::new(prog);
+    let handle: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RegexProgram(prog));
     copy::regex::Regex { _handle: handle }.to_value(vm)
 }
 
 /// Clone the `Arc` out of `Regex._handle` so the program stays alive while
 /// `&mut BexVm` is borrowed for allocation.
-fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<Program>, VmRustFnError> {
-    Ok(vm.rust_data_field::<Program>(&regex, 0)?)
+fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<RegexProgram>, VmRustFnError> {
+    Ok(vm.rust_data_field::<RegexProgram>(&regex, 0)?)
 }
 
 /// A search that ran out of budget is a panic, not a "no match".

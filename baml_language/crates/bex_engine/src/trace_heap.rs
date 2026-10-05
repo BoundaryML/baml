@@ -728,7 +728,9 @@ mod tests {
             .await;
         let host_owned = permit
             .tlab_mut()
-            .alloc(Object::RustData(std::sync::Arc::new(1_u64)));
+            .alloc(Object::RustData(std::sync::Arc::new(
+                bex_vm_types::TestRustData(1),
+            )));
         let trace_heap = TraceHeap::new();
 
         let handle = trace_heap.copy_values_from_bex_heap(

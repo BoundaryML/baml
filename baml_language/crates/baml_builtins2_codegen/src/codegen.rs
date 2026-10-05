@@ -258,10 +258,10 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         let field_name = rust_field_ident(raw_name);
         match &field.field_type {
             BamlType::RustType => {
-                // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
+                // Generic downcast accessor: fn _data<T: BexRustData>(&self, vm: &BexVm) -> &T
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{"
+                    "{inner}pub fn {field_name}<'v, T: bex_vm_types::BexRustData>(&self, vm: &'v BexVm) -> &'v T {{"
                 )
                 .unwrap();
                 writeln!(
@@ -608,7 +608,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 /// Map `BamlType` to the owned Rust type used in copy structs.
 fn copy_field_type(ty: &BamlType) -> String {
     match ty {
-        BamlType::RustType => "Arc<dyn Any + Send + Sync>".to_string(),
+        BamlType::RustType => "Arc<dyn bex_vm_types::BexRustData>".to_string(),
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
@@ -2594,9 +2594,9 @@ mod tests {
             output.contains("pub instance: &'a Instance"),
             "Pdf view should hold &Instance:\n{output}"
         );
-        // _data accessor should be generic with downcast
+        // _data accessor downcasts to any payload type.
         assert!(
-            output.contains("fn _data<'v, T: 'static>"),
+            output.contains("fn _data<'v, T: bex_vm_types::BexRustData>"),
             "Pdf._data should be generic downcast accessor:\n{output}"
         );
     }
@@ -2606,9 +2606,9 @@ mod tests {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
-        // copy::media::Pdf should have _data: Arc<dyn Any + Send + Sync>
+        // copy::media::Pdf should have _data: Arc<dyn bex_vm_types::BexRustData>
         assert!(
-            output.contains("Arc<dyn Any + Send + Sync>"),
+            output.contains("Arc<dyn bex_vm_types::BexRustData>"),
             "copy struct should have Arc<dyn Any> field:\n{output}"
         );
         // to_value method

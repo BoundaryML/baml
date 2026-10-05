@@ -217,14 +217,14 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    /// Extract an opaque `Arc<dyn Any + Send + Sync>` from a RustData value.
+    /// Extract the opaque `Arc<dyn BexRustData>` from a RustData value.
     /// Handles both external values (`BexExternalValue::RustData`) and
     /// heap values (`Object::RustData`).
     pub fn as_rust_data(
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> {
+    ) -> Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
                 Ok(std::sync::Arc::clone(data))

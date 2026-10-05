@@ -26,6 +26,7 @@ pub mod prompt;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
+pub mod rust_data;
 pub mod trace;
 pub mod type_head;
 pub mod types;
@@ -52,6 +53,7 @@ pub use runtime_compile::{
     RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
     RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
+pub use rust_data::{BexRustData, RetainedBytes, RustDataArc, TestRustData};
 pub use type_head::TypeHead;
 
 // ── The runtime's instantiation of the `baml_type` family ────────────────────

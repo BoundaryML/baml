@@ -88,12 +88,18 @@ impl WasmRegistry {
     }
 }
 
-/// Opaque body handle stored in `owned::http::Response._body` as `Arc<dyn Any + Send + Sync>`.
+/// Opaque body handle stored in `owned::http::Response._body` as `Arc<dyn BexRustData>`.
 ///
 /// Ties the response's body promise to the registry and cleans up on drop.
 pub(crate) struct WasmResponseBody {
     pub(crate) registry: Arc<WasmRegistry>,
     pub(crate) key: usize,
+}
+
+impl sys_types::BexRustData for WasmResponseBody {
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // The body is a promise the registry holds on the host's behalf.
+    }
 }
 
 impl Drop for WasmResponseBody {
@@ -131,6 +137,12 @@ pub(crate) struct WasmSseStreamHandle {
 // SAFETY: wasm32-unknown-unknown is single-threaded.
 unsafe impl Send for WasmSseStreamHandle {}
 unsafe impl Sync for WasmSseStreamHandle {}
+
+impl sys_types::BexRustData for WasmSseStreamHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // Events wait in the channel until read.
+    }
+}
 
 impl WasmSseStreamHandle {
     pub(crate) fn new(receiver: SseEventReceiver) -> Self {

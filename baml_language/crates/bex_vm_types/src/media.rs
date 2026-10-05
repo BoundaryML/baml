@@ -235,6 +235,28 @@ impl std::fmt::Display for MediaContent {
     }
 }
 
+impl crate::BexRustData for MediaValue {
+    fn measure(&self, meter: &mut crate::Meter) {
+        // The content lock has no writer once the value is built, so a read
+        // cannot block. The MIME type is a few bytes and is not counted.
+        self.read_content(|content| match content {
+            MediaContent::Url { url, base64_data } => {
+                meter.bytes(url.capacity());
+                if let Some(data) = base64_data {
+                    meter.string(data);
+                }
+            }
+            MediaContent::Base64 { base64_data } => meter.string(base64_data),
+            MediaContent::File { file, base64_data } => {
+                meter.bytes(file.capacity());
+                if let Some(data) = base64_data {
+                    meter.string(data);
+                }
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

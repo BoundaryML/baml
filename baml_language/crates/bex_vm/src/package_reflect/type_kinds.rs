@@ -173,6 +173,14 @@ struct InterfaceWitness {
     field_links: IndexMap<baml_type::Name, baml_type::Name>,
 }
 
+impl bex_vm_types::BexRustData for InterfaceWitness {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.bytes(
+            self.field_links.capacity() * size_of::<(baml_type::Name, baml_type::Name, usize)>(),
+        );
+    }
+}
+
 pub(super) struct WitnessField {
     pub(super) name: String,
     pub(super) ty: bex_vm_types::RealizedTy,

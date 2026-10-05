@@ -5,7 +5,7 @@
 //! `WasmHttp` instance, so there are no globals.
 
 use std::{
-    any::{Any as _, TypeId},
+    any::TypeId,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -16,8 +16,8 @@ use bex_events::run::{HeaderObservation, InMemoryRunStore};
 use js_sys::{Function, Object, Promise, Reflect};
 use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceHttp};
 use sys_types::{
-    BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmInternalError, VmPanic,
-    VmRustFnError,
+    BexHeap, CallId, RustDataArc as _, SysOpContext, SysOpOutput, VmBamlError, VmInternalError,
+    VmPanic, VmRustFnError,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -218,7 +218,7 @@ impl WasmHttp {
             }
 
             let key = registry.store_body_promise(body_promise);
-            let body: Arc<dyn std::any::Any + Send + Sync> =
+            let body: Arc<dyn sys_types::BexRustData> =
                 Arc::new(WasmResponseBody { registry, key });
 
             Ok(io::owned::http::Response {
@@ -458,7 +458,7 @@ impl io::IoClassHttpSseStream for WasmHttp {
         let handle = sse_stream
             ._handle
             .clone()
-            .downcast::<WasmSseStreamHandle>()
+            .downcast_payload::<WasmSseStreamHandle>()
             .ok();
         let Some(handle) = handle else {
             return SysOpOutput::err(VmInternalError::RustTypeError {
@@ -773,7 +773,7 @@ impl IoNamespaceHttp for WasmHttp {
                 sender,
             ));
 
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
+            let handle: Arc<dyn sys_types::BexRustData> =
                 Arc::new(WasmSseStreamHandle::new(receiver));
 
             Ok(io::owned::http::SseStream {

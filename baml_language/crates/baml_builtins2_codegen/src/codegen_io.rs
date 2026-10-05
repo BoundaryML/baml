@@ -252,7 +252,7 @@ fn owned_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn std::any::Any + Send + Sync> },
+        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = owned_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }
@@ -310,7 +310,7 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
         }
         BamlType::RustType => {
             *needs_heap = true;
-            quote! { Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> }
+            quote! { Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> }
         }
         // The `type` metatype's owned representation is `RuntimeTy` (see the
         // owned-field mapping), so the accessor must return it too — not the
@@ -640,7 +640,7 @@ fn clean_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn std::any::Any + Send + Sync> },
+        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = clean_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }

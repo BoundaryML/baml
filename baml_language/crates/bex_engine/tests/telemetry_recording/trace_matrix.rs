@@ -1121,7 +1121,7 @@ async fn unions_and_opaque_values(program: &Program) {
     assert_eq!(result.unwrap(), External::Int(1));
     assert_eq!(recording.spans.len(), 1);
     let (_, entry, done) = &recording.spans[0];
-    let placeholder = External::RustData(Arc::new(()));
+    let placeholder = External::RustData(Arc::new(bex_vm_types::TestRustData(0)));
     recording.assert_capture(
         entry.inputs_cas_id.as_ref(),
         Some(&one_field_instance(

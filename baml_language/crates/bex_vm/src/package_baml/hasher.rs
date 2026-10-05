@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     collections::hash_map::DefaultHasher,
     hash::Hasher as _,
     sync::{Arc, Mutex, MutexGuard, PoisonError},
@@ -13,7 +12,21 @@ use super::{
 };
 use crate::BexVm;
 
-pub(super) fn finish_state(state: &Arc<Mutex<DefaultHasher>>) -> u64 {
+/// A hasher in progress as `$rust_type` data: fixed size.
+pub(super) struct HasherState(Mutex<DefaultHasher>);
+
+impl bex_vm_types::BexRustData for HasherState {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
+}
+
+impl std::ops::Deref for HasherState {
+    type Target = Mutex<DefaultHasher>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub(super) fn finish_state(state: &Arc<HasherState>) -> u64 {
     state
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -29,7 +42,7 @@ fn state<'v>(
     vm: &'v BexVm,
 ) -> MutexGuard<'v, DefaultHasher> {
     hasher
-        ._state::<Mutex<DefaultHasher>>(vm)
+        ._state::<HasherState>(vm)
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
 }
@@ -40,9 +53,9 @@ impl BamlClassHashDefaultHasher for PackageBamlImpl {
     }
 }
 
-pub(super) fn new_state(vm: &mut BexVm) -> (Value, Arc<Mutex<DefaultHasher>>) {
-    let state = Arc::new(Mutex::new(DefaultHasher::new()));
-    let opaque: Arc<dyn Any + Send + Sync> = state.clone();
+pub(super) fn new_state(vm: &mut BexVm) -> (Value, Arc<HasherState>) {
+    let state = Arc::new(HasherState(Mutex::new(DefaultHasher::new())));
+    let opaque: Arc<dyn bex_vm_types::BexRustData> = state.clone();
     let value = copy::hash::DefaultHasher { _state: opaque }.to_value(vm);
     (value, state)
 }
