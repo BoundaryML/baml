@@ -7,9 +7,11 @@ using System.Text;
 internal static unsafe partial class Program
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint BamlApiV1AbiVersion = 2;
+    private const uint BamlApiV1AbiVersion = 3;
     private const uint BamlBridgeLanguageCSharp = 5;
     private const uint BamlBridgeLanguageRust = 4;
+    private const string SleepFunctionName = "user.throws_test.SleepMs";
+    private const long SleepMilliseconds = 5_000;
     private const uint StatusOk = 0;
     private const uint StatusInvalidHandle = 1;
     private const uint StatusTypeMismatch = 2;
@@ -21,7 +23,7 @@ internal static unsafe partial class Program
     private const int HandleTypeMediaAudio = 7;
 
     private static readonly nuint RequiredV1PrefixSize = ApiFieldEnd(
-        nameof(BamlApiV1.RegisterBridge));
+        nameof(BamlApiV1.InvocationContext));
 
     private static readonly ConcurrentDictionary<
         uint,
@@ -135,7 +137,8 @@ internal static unsafe partial class Program
         }
 
         api->RegisterCallback(&OnResult);
-        api->RegisterHostDispatchCallback(&OnHostDispatch);
+        api->RegisterHostDispatchV2(&OnHostDispatchV2);
+        api->RegisterHostCancelCallback(&OnHostCancel);
         api->RegisterHostReleaseCallback(&OnHostRelease);
 
         VerifyCallIdentifiers(api);
@@ -151,9 +154,12 @@ internal static unsafe partial class Program
                 DecodeSuccessfulString(helloResult),
                 "hello world"),
             "hello_world returned an unexpected value");
-        Require(
-            api->CancelFunctionCall(helloCallId) == 0,
-            "completed call ID was not reserved against reuse");
+        RequireNonSuccess(
+            CallFunction(
+                api,
+                "hello_world",
+                EncodeCallArguments(helloCallId, null, null)),
+            "completed call ID was accepted again");
 
         const string utf8Boundary = "héllo\0雪\u0001";
         ulong stringCallId = api->NewFunctionCall();
@@ -189,7 +195,7 @@ internal static unsafe partial class Program
             Volatile.Read(ref _lateOrDuplicateResults) == 1,
             "synthetic duplicate result was not contained");
         Require(
-            Volatile.Read(ref _borrowedResultCopies) == 6,
+            Volatile.Read(ref _borrowedResultCopies) == 7,
             "result callback did not copy every borrowed payload");
         Require(
             Volatile.Read(ref _releasedBuffers) == 15,
@@ -203,13 +209,14 @@ internal static unsafe partial class Program
         Console.WriteLine("registration_version_conflict=fail_closed");
         Console.WriteLine("bytecode_invalid_then_valid=ok");
         Console.WriteLine("ordinary_calls=2/2");
+        Console.WriteLine("completed_call_reuse=rejected");
         Console.WriteLine("utf8_binary_boundary=ok");
         Console.WriteLine("structured_error_and_decode_failure=ok");
         Console.WriteLine("pre_and_inflight_cancellation=ok");
         Console.WriteLine("media_handle_clone_release=ok");
         Console.WriteLine($"owned_buffers_released={_releasedBuffers}");
         Console.WriteLine("callback_boundary=contained");
-        Console.WriteLine("host_callback_abi=v1");
+        Console.WriteLine("host_callback_abi=v2");
         return 0;
     }
 
@@ -247,8 +254,8 @@ internal static unsafe partial class Program
             "pre-registration cancellation was rejected");
         byte[] preCancelled = CallFunction(
             api,
-            "slow_cancel_probe",
-            EncodeCallArguments(preCancelledId, null, null));
+            SleepFunctionName,
+            EncodeSleepArguments(preCancelledId));
         RequireNonSuccess(
             preCancelled,
             "pre-cancelled call returned success");
@@ -257,8 +264,8 @@ internal static unsafe partial class Program
         Require(inFlightId != 0, "in-flight call ID allocation failed");
         Task<byte[]> inFlight = DispatchFunction(
             api,
-            "slow_cancel_probe",
-            EncodeCallArguments(inFlightId, null, null));
+            SleepFunctionName,
+            EncodeSleepArguments(inFlightId));
         Thread.Sleep(TimeSpan.FromMilliseconds(100));
         var started = System.Diagnostics.Stopwatch.StartNew();
         Require(
@@ -324,8 +331,11 @@ internal static unsafe partial class Program
             api->CancelFunctionCall(0) == 1,
             "zero call ID was accepted for cancellation");
         Require(
-            api->CancelFunctionCall(ulong.MaxValue) == 0,
-            "nonzero pre-registration cancellation was rejected");
+            api->CancelFunctionCall(ulong.MaxValue) == 1,
+            "unallocated call ID was accepted for cancellation");
+        Require(
+            api->ReleaseFunctionCall(ulong.MaxValue) == 1,
+            "unallocated call ID was released");
 
         var identifiers = new HashSet<ulong>();
         for (int index = 0; index < 1_024; index++)
@@ -336,6 +346,28 @@ internal static unsafe partial class Program
                 identifiers.Add(identifier),
                 $"new_function_call repeated {identifier}");
         }
+
+        ulong now = 0;
+        ulong first = identifiers.First();
+        Require(
+            api->InvocationClockNs(first, &now) == StatusOk && now != 0,
+            "allocated call has no invocation clock");
+        foreach (ulong identifier in identifiers)
+        {
+            Require(
+                api->ReleaseFunctionCall(identifier) == 0,
+                $"unsubmitted call {identifier} was not released");
+        }
+
+        Require(
+            api->ReleaseFunctionCall(first) == 1,
+            "released call ID was released twice");
+        Require(
+            api->CancelFunctionCall(first) == 1,
+            "released call ID was accepted for cancellation");
+        Require(
+            api->InvocationClockNs(first, &now) != StatusOk,
+            "released call ID still reads an invocation clock");
     }
 
     private static byte[] CallFunction(
@@ -382,18 +414,38 @@ internal static unsafe partial class Program
         string? argumentName,
         string? argumentValue)
     {
-        var output = new List<byte>();
-        if (argumentName is not null)
+        if (argumentName is null)
         {
-            string suppliedValue = argumentValue
-                ?? throw new InvalidOperationException(
-                    "a named string argument requires a value");
-            var inbound = new List<byte>();
-            WriteLengthDelimited(
-                inbound,
-                2,
-                Encoding.UTF8.GetBytes(suppliedValue));
+            return EncodeCall(callId, null, null);
+        }
 
+        string suppliedValue = argumentValue
+            ?? throw new InvalidOperationException(
+                "a named string argument requires a value");
+        var inbound = new List<byte>();
+        WriteLengthDelimited(
+            inbound,
+            2,
+            Encoding.UTF8.GetBytes(suppliedValue));
+        return EncodeCall(callId, argumentName, inbound);
+    }
+
+    private static byte[] EncodeSleepArguments(ulong callId)
+    {
+        var inbound = new List<byte>();
+        WriteTag(inbound, 3, 0);
+        WriteVarint(inbound, (ulong)SleepMilliseconds);
+        return EncodeCall(callId, "ms", inbound);
+    }
+
+    private static byte[] EncodeCall(
+        ulong callId,
+        string? argumentName,
+        List<byte>? inbound)
+    {
+        var output = new List<byte>();
+        if (argumentName is not null && inbound is not null)
+        {
             var entry = new List<byte>();
             WriteLengthDelimited(
                 entry,
@@ -405,6 +457,11 @@ internal static unsafe partial class Program
 
         WriteTag(output, 2, 0);
         WriteVarint(output, callId);
+
+        var invocation = new List<byte>();
+        WriteTag(invocation, 5, 0);
+        WriteVarint(invocation, callId);
+        WriteLengthDelimited(output, 6, invocation);
         return [.. output];
     }
 
@@ -888,6 +945,25 @@ internal static unsafe partial class Program
             api->MediaMimeType is not null,
             "media_mime_type is null");
         Require(api->RegisterBridge is not null, "register_bridge is null");
+        Require(
+            api->InvocationProtocolVersion is not null,
+            "invocation_protocol_version is null");
+        Require(
+            api->InvocationClockNs is not null,
+            "invocation_clock_ns is null");
+        Require(
+            api->ReleaseFunctionCall is not null,
+            "release_function_call is null");
+        Require(
+            api->RegisterHostDispatchV2 is not null,
+            "register_host_dispatch_v2 is null");
+        Require(
+            api->RegisterHostCancelCallback is not null,
+            "register_host_cancel_callback is null");
+        Require(api->TraceSelection is not null, "trace_selection is null");
+        Require(
+            api->InvocationContext is not null,
+            "invocation_context is null");
     }
 
     private static nuint ApiFieldEnd(string field) =>
@@ -964,21 +1040,34 @@ internal static unsafe partial class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnHostDispatch(
-        ulong hostValueKey,
-        uint callId,
-        byte* args,
-        nuint length)
+    private static void OnHostDispatchV2(byte* request, nuint length)
     {
         try
         {
-            if (hostValueKey == 0
-                || callId == 0
-                || length > int.MaxValue
-                || (length != 0 && args is null))
+            if (length == 0 || length > int.MaxValue || request is null)
             {
                 throw new InvalidDataException(
-                    "invalid borrowed host-dispatch callback arguments");
+                    "invalid borrowed host-dispatch envelope");
+            }
+        }
+        catch (Exception error)
+        {
+            Interlocked.CompareExchange(
+                ref _callbackFailure,
+                ExceptionDispatchInfo.Capture(error),
+                null);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnHostCancel(uint callbackId)
+    {
+        try
+        {
+            if (callbackId == 0)
+            {
+                throw new InvalidDataException(
+                    "host-cancel callback supplied ID zero");
             }
         }
         catch (Exception error)
@@ -1108,6 +1197,37 @@ internal static unsafe partial class Program
         public readonly delegate* unmanaged[Cdecl]<
             BamlBridgeInfoV1*,
             BamlBuffer> RegisterBridge;
+        public readonly delegate* unmanaged[Cdecl]<
+            delegate* unmanaged[Cdecl]<sbyte*, nuint, int, void>,
+            void> RegisterUnhandledSpawnErrorCallback;
+        public readonly delegate* unmanaged[Cdecl]<BamlBuffer> ShutdownRuntime;
+        public readonly delegate* unmanaged[Cdecl]<
+            byte*,
+            nuint,
+            byte*,
+            BamlBuffer> InitializeRuntimeFromBlobWithMetadata;
+        public readonly delegate* unmanaged[Cdecl]<uint> InvocationProtocolVersion;
+        public readonly delegate* unmanaged[Cdecl]<
+            ulong,
+            ulong*,
+            uint> InvocationClockNs;
+        public readonly delegate* unmanaged[Cdecl]<ulong, int> ReleaseFunctionCall;
+        public readonly delegate* unmanaged[Cdecl]<
+            delegate* unmanaged[Cdecl]<byte*, nuint, void>,
+            void> RegisterHostDispatchV2;
+        public readonly delegate* unmanaged[Cdecl]<
+            delegate* unmanaged[Cdecl]<uint, void>,
+            void> RegisterHostCancelCallback;
+        public readonly delegate* unmanaged[Cdecl]<
+            ulong,
+            ulong,
+            BamlBuffer*,
+            ulong*,
+            uint> TraceSelection;
+        public readonly delegate* unmanaged[Cdecl]<
+            ulong,
+            BamlBuffer*,
+            uint> InvocationContext;
     }
 
     private static partial class NativeMethods
