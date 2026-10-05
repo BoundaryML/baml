@@ -24,6 +24,7 @@ use crate::evidence::ArgumentNames;
 
 pub mod equality;
 mod span;
+mod ty;
 pub use span::{BlobSource, Found, Located, media_content};
 use span::{Examine, Span, reach};
 
@@ -881,12 +882,15 @@ impl<'a> Renderer<'a> {
                 };
                 envelope("$bigint", digits)
             }
-            DecodedValue::Type(ty) => {
-                let ty = match &ty.decoded {
-                    Some(ty) => self.text(&ty.to_string()),
+            DecodedValue::Type(description) => {
+                // A decoded type is at most `max_type_bytes`; its encoding
+                // stands in for the text the rendering spends.
+                let rendered = match &description.decoded {
+                    Some(decoded) if self.take_text(description.encoded.len()) => ty::json(decoded),
+                    Some(_) => self.truncated(RENDER_SIZE),
                     None => Json::Null,
                 };
-                envelope("$type", ty)
+                envelope("$type", rendered)
             }
             DecodedValue::Enum {
                 declaration, name, ..
