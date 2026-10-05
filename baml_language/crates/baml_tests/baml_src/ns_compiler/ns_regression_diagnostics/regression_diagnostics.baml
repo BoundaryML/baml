@@ -42,8 +42,8 @@ test "integer literals outside the i63 range are rejected" {
     )
 }
 
-test "non-string map key annotations are rejected" {
-    root.compiler.AssertHasMessage(
+test "integer and hash-bounded generic map key annotations compile" {
+    root.compiler.AssertCompiles(
         {
             "concrete.baml": `
                 function main(nums: int[]) -> int {
@@ -55,18 +55,16 @@ test "non-string map key annotations are rejected" {
                 }
             `,
         },
-        "map keys must be `string`; got `int`",
     );
-    root.compiler.AssertHasMessage(
+    root.compiler.AssertCompiles(
         {
             "generic.baml": `
-                function passthrough<K, V>(items: map<K, V>) -> map<K, V> { items }
+                function passthrough<K extends baml.Hash, V>(items: map<K, V>) -> map<K, V> { items }
                 function main() -> int { 0 }
             `,
         },
-        "map keys must be `string`; got `K`",
     );
-    root.compiler.AssertHasMessage(
+    root.compiler.AssertCompiles(
         {
             "alias.baml": `
                 type IntKey = int
@@ -76,7 +74,6 @@ test "non-string map key annotations are rejected" {
                 }
             `,
         },
-        "map keys must be `string`; got `IntKey`",
     )
 }
 

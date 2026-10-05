@@ -1486,17 +1486,21 @@ pub(crate) fn applicable_structural_interface_roots(
     receiver: &Ty,
 ) -> Vec<InferInterface> {
     let mut roots = structural_interface_roots(db);
-    if let Some(root) = lang_roots(db).get(baml_base::LangPackage::Baml) {
-        let hash = InferInterface::new(
-            DeclName::in_root(root, vec![], Name::new("Hash")),
-            Box::new([]),
-            Box::new([]),
-        );
-        if hash_eligible(db, facts, receiver, &hash) {
-            roots.push(hash);
-        }
+    if let Some(hash) = hash_interface_root(db)
+        && hash_eligible(db, facts, receiver, &hash)
+    {
+        roots.push(hash);
     }
     roots
+}
+
+pub(crate) fn hash_interface_root(db: &dyn baml_compiler2_hir::Db) -> Option<InferInterface> {
+    let root = lang_roots(db).get(baml_base::LangPackage::Baml)?;
+    Some(InferInterface::new(
+        DeclName::in_root(root, vec![], Name::new("Hash")),
+        Box::new([]),
+        Box::new([]),
+    ))
 }
 
 /// Prove data eligibility coinductively, while preserving explicit implementations.

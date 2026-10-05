@@ -365,6 +365,12 @@ impl TraceSnapshotBuilder {
                 let map = map.data.lock();
                 let mut entries = Self::vec_with_capacity(map.len())?;
                 for (key, value) in map.iter() {
+                    let key_ptr = key.as_object_ptr().ok_or(CopyError::CopyFailed)?;
+                    // SAFETY: the copy holds a heap permit for the entire traversal.
+                    let Object::String(key) = (unsafe { key_ptr.get() }) else {
+                        // Trace maps cannot represent non-string keys.
+                        return Err(CopyError::CopyFailed);
+                    };
                     let key = Self::copy_str(key.as_str())?;
                     let value = self.copy_value(heap, permit, *value)?;
                     entries.push((key, value));

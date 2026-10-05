@@ -2298,7 +2298,7 @@ impl BexVm {
         payload: Value,
     ) -> Result<(btel_records::LogLevel, Option<Arc<str>>, Value), VmInternalError> {
         use btel_records::LogLevel;
-        let map = self.as_map(&payload)?;
+        let map = self.as_string_map(&payload)?;
         let level = map
             .get("level")
             .ok_or(VmInternalError::InvalidLogEvent("missing level"))?;
@@ -3904,6 +3904,17 @@ impl BexVm {
                 got: ObjectType::of(obj).into(),
             }),
         }
+    }
+
+    /// Snapshot a string-keyed map for native string-only boundaries.
+    pub fn as_string_map(
+        &self,
+        value: &Value,
+    ) -> Result<IndexMap<bex_vm_types::BexStr, Value>, VmInternalError> {
+        self.as_map(value)?
+            .iter()
+            .map(|(key, value)| Ok((self.as_string(key)?.clone(), *value)))
+            .collect()
     }
 
     /// Get mutable map from a Value. Acquires the container's mutex.
@@ -8327,6 +8338,8 @@ impl BexVm {
                         // the entries.
                         let value_ty = self.ensure_pop_type()?;
                         let key_ty = self.ensure_pop_type()?;
+                        // Nonempty allocations are compiler-generated string maps.
+                        // General-key literals use yielding Map.set calls.
                         let map = if n > 0 {
                             let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
                             let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
@@ -9956,37 +9969,7 @@ impl BexVm {
                     }
 
                     OpCode::LoadMapElement => {
-                        let key_value = self.stack.ensure_pop();
-                        let map_value = self.stack.ensure_pop();
-                        let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                        let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
-                        let key = self.get_object(key_index).as_string()?.clone();
-                        // Take the map's read lock and copy out the value so the
-                        // guard releases before any `&mut self` call.
-                        let lookup_result: Result<Option<Value>, ObjectType> =
-                            match self.get_object(map_index) {
-                                Object::Map(map) => {
-                                    let guard = map.lock();
-                                    Ok(guard.get(&key).copied())
-                                }
-                                other => Err(ObjectType::of(other)),
-                            };
-                        let value = match lookup_result {
-                            Ok(Some(v)) => v,
-                            Ok(None) => {
-                                return Err(VmError::thrown_fresh(
-                                    self.panic_to_exception_value(VmPanic::MapKeyNotFound),
-                                ));
-                            }
-                            Err(got) => {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Map.into(),
-                                    got: got.into(),
-                                }
-                                .into());
-                            }
-                        };
-                        self.stack.push(value);
+                        unreachable!("map indexing must be lowered through baml.Map.index");
                     }
 
                     OpCode::StoreArrayElement => {
@@ -10059,33 +10042,7 @@ impl BexVm {
                     }
 
                     OpCode::StoreMapElement => {
-                        let new_value = self.stack.ensure_pop();
-                        let key_value = self.stack.ensure_pop();
-                        let map_value = self.stack.ensure_pop();
-                        let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
-                        let key = self.get_object(key_index).as_string()?.clone();
-                        let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                        let store_result: Result<(), ObjectType> = {
-                            match self.get_object(map_index) {
-                                Object::Map(map) => {
-                                    let mut guard = map.lock_mut();
-                                    guard.insert(key, new_value);
-                                    Ok(())
-                                }
-                                other => Err(ObjectType::of(other)),
-                            }
-                        };
-                        match store_result {
-                            Ok(()) => {}
-                            Err(got) => {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Map.into(),
-                                    got: got.into(),
-                                }
-                                .into());
-                            }
-                        }
-                        self.heap.write_barrier(map_index, new_value);
+                        unreachable!("map assignment must be lowered through baml.Map.set");
                     }
 
                     // ── Expanded arithmetic ───────────────────────────────────────

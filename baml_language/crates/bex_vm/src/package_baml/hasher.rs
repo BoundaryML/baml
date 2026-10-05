@@ -13,6 +13,13 @@ use super::{
 };
 use crate::BexVm;
 
+pub(super) fn finish_state(state: &Arc<Mutex<DefaultHasher>>) -> u64 {
+    state
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .finish()
+}
+
 #[expect(
     clippy::used_underscore_items,
     reason = "the `_state` view accessor is generated from the private BAML field"
@@ -29,9 +36,15 @@ fn state<'v>(
 
 impl BamlClassHashDefaultHasher for PackageBamlImpl {
     fn new(vm: &mut BexVm) -> Value {
-        let state: Arc<dyn Any + Send + Sync> = Arc::new(Mutex::new(DefaultHasher::new()));
-        copy::hash::DefaultHasher { _state: state }.to_value(vm)
+        new_state(vm).0
     }
+}
+
+pub(super) fn new_state(vm: &mut BexVm) -> (Value, Arc<Mutex<DefaultHasher>>) {
+    let state = Arc::new(Mutex::new(DefaultHasher::new()));
+    let opaque: Arc<dyn Any + Send + Sync> = state.clone();
+    let value = copy::hash::DefaultHasher { _state: opaque }.to_value(vm);
+    (value, state)
 }
 
 impl BamlClassHashHasher_for_DefaultHasher for PackageBamlImpl {

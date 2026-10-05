@@ -130,6 +130,54 @@ pub trait Continuation: Send {
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
 }
 
+pub(super) fn chain(
+    vm: &mut BexVm,
+    result: NativeCallResult,
+    next: Box<dyn Continuation>,
+) -> NativeCallResult {
+    match result {
+        NativeCallResult::Done(value) => next.call(vm, value),
+        NativeCallResult::Error(error) => NativeCallResult::Error(error),
+        NativeCallResult::YieldToCall {
+            callee,
+            args,
+            type_args,
+            continuation,
+        } => NativeCallResult::YieldToCall {
+            callee,
+            args,
+            type_args,
+            continuation: Box::new(ChainedContinuation {
+                inner: continuation,
+                next,
+            }),
+        },
+    }
+}
+
+struct ChainedContinuation {
+    inner: Box<dyn Continuation>,
+    next: Box<dyn Continuation>,
+}
+
+impl Continuation for ChainedContinuation {
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let result = self.inner.call(vm, value);
+        chain(vm, result, self.next)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = self.inner.gc_roots();
+        roots.extend(self.next.gc_roots());
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.inner.apply_forwarding(forwarding);
+        self.next.apply_forwarding(forwarding);
+    }
+}
+
 /// Returns the dispatched callee's result unchanged. Shared by the single-call
 /// shims (`string.to<T>`'s `from_string` dispatch, `reflect.call_any`) whose
 /// only job is to dispatch one call and surface its value.
@@ -167,24 +215,23 @@ impl std::ops::Deref for ArrayView<'_> {
 }
 
 /// A typed view of a map receiver: its declared key/value types alongside the
-/// backing `IndexMap`.
+/// insertion-ordered entries.
 ///
 /// The map analogue of [`ArrayView`] — the key and value types ride *with* the
 /// receiver so a builtin that preserves them can tag its result map without a
-/// side channel. Derefs to the underlying `IndexMap`, so map-only builtins take
-/// it in place of `&IndexMap<BexStr, Value>` with no body changes.
+/// side channel. Derefs to the underlying [`bex_vm_types::MapData`].
 pub struct MapView<'a> {
     /// The receiver map's declared key type (`K` of `map<K, V>`).
     pub key_ty: &'a bex_vm_types::RealizedTy,
     /// The receiver map's declared value type (`V` of `map<K, V>`).
     pub value_ty: &'a bex_vm_types::RealizedTy,
     /// The receiver map's entries.
-    pub data: &'a indexmap::IndexMap<bex_str::BexStr, Value>,
+    pub data: &'a bex_vm_types::MapData,
 }
 
 impl std::ops::Deref for MapView<'_> {
-    type Target = indexmap::IndexMap<bex_str::BexStr, Value>;
-    fn deref(&self) -> &indexmap::IndexMap<bex_str::BexStr, Value> {
+    type Target = bex_vm_types::MapData;
+    fn deref(&self) -> &bex_vm_types::MapData {
         self.data
     }
 }

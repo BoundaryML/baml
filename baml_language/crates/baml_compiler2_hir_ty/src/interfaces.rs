@@ -1613,6 +1613,27 @@ pub fn type_generic_bound_errors(
     errors
 }
 
+pub(crate) fn map_key_is_hashable(
+    db: &dyn baml_compiler2_hir::Db,
+    facts: &crate::facts::Facts<'_>,
+    key: &Ty,
+) -> bool {
+    use baml_type::normalize::TypeContext as _;
+    if key.as_lowering_ty().contains_error() {
+        return true;
+    }
+    let Some(root) = baml_compiler2_hir::package::lang_roots(db).get(baml_base::LangPackage::Baml)
+    else {
+        return false;
+    };
+    let bound = baml_type::Interface::new(
+        DeclName::in_root(root, Vec::new(), Name::new("Hash")),
+        Box::new([]),
+        Box::new([]),
+    );
+    normalized_arg_implements_bound(facts, &facts.normalize(key), &bound)
+}
+
 fn collect_type_generic_bound_errors<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     facts: &crate::facts::Facts<'db>,

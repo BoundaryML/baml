@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/corpus.rs
+assertion_line: 122
 ---
 === MIR2 ===
 fn user.fixtures.llm_quoted_prompt.QuotedPrompt(topic: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
@@ -135,34 +136,41 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@spec(topic: string) -> ai.Functi
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // topic // param
     let _2: map<string, unknown>
-    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _4: ai.tools.Toolbox
-    let _5: ai.tools.Tool[]
-    let _6: ai.Client
-    let _7: (string, string) -> null | ai.Client throws never
-    let _8: string[]
-    let _9: reflect.Type
+    let _3: map<string, unknown>
+    let _4: unknown
+    let _5: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _6: ai.tools.Toolbox
+    let _7: ai.tools.Tool[]
+    let _8: ai.Client
+    let _9: (string, string) -> null | ai.Client throws never
+    let _10: string[]
+    let _11: reflect.Type
 
     bb0: {
-        _2 = { const "topic": copy _1 }: map<string, unknown>;
-        _3 = make_closure lambda[0]();
-        _5 = []: ai.tools.Tool[];
-        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+        _3 = {  }: map<string, unknown>;
+        _4 = call const fn baml.Map.set(copy _3, const "topic", copy _1) -> [bb1];
     }
 
     bb1: {
-        _7 = make_closure lambda[1]();
-        _8 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
-        _9 = load_type(never);
-        _6 = call const fn ai.clients.resolve<copy _9>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _7, copy _8) -> [bb2];
+        _2 = copy _3;
+        _5 = make_closure lambda[0]();
+        _7 = []: ai.tools.Tool[];
+        _6 = call const fn ai.tools.Toolbox.new(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "QuotedPrompt", copy _2, copy _3, copy _4, copy _6 };
-        goto -> bb3;
+        _9 = make_closure lambda[1]();
+        _10 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
+        _11 = load_type(never);
+        _8 = call const fn ai.clients.resolve<copy _11>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _9, copy _10) -> [bb3];
     }
 
     bb3: {
+        _0 = ai.FunctionSpec<string> { const "QuotedPrompt", copy _2, copy _5, copy _6, copy _8 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -555,36 +563,43 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@spec(topic: string) -> ai.Func
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // topic // param [captured]
     let _2: map<string, unknown>
-    let _3: string
-    let _4: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
-    let _5: ai.tools.Toolbox
-    let _6: ai.tools.Tool[]
-    let _7: ai.Client
-    let _8: (string, string) -> null | ai.Client throws never
-    let _9: string[]
-    let _10: reflect.Type
+    let _3: map<string, unknown>
+    let _4: string
+    let _5: unknown
+    let _6: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _7: ai.tools.Toolbox
+    let _8: ai.tools.Tool[]
+    let _9: ai.Client
+    let _10: (string, string) -> null | ai.Client throws never
+    let _11: string[]
+    let _12: reflect.Type
 
     bb0: {
-        _3 = copy *_1;
-        _2 = { const "topic": copy _3 }: map<string, unknown>;
-        _4 = make_closure lambda[0](copy _1);
-        _6 = []: ai.tools.Tool[];
-        _5 = call const fn ai.tools.Toolbox.new(copy _6) -> [bb1];
+        _3 = {  }: map<string, unknown>;
+        _4 = copy *_1;
+        _5 = call const fn baml.Map.set(copy _3, const "topic", copy _4) -> [bb1];
     }
 
     bb1: {
-        _8 = make_closure lambda[1]();
-        _9 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
-        _10 = load_type(never);
-        _7 = call const fn ai.clients.resolve<copy _10>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _8, copy _9) -> [bb2];
+        _2 = copy _3;
+        _6 = make_closure lambda[0](copy _1);
+        _8 = []: ai.tools.Tool[];
+        _7 = call const fn ai.tools.Toolbox.new(copy _8) -> [bb2];
     }
 
     bb2: {
-        _0 = ai.FunctionSpec<string> { const "BacktickPrompt", copy _2, copy _4, copy _5, copy _7 };
-        goto -> bb3;
+        _10 = make_closure lambda[1]();
+        _11 = [const "openai", const "openai-chat", const "openai-images", const "azure", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
+        _12 = load_type(never);
+        _9 = call const fn ai.clients.resolve<copy _12>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _10, copy _11) -> [bb3];
     }
 
     bb3: {
+        _0 = ai.FunctionSpec<string> { const "BacktickPrompt", copy _2, copy _6, copy _7, copy _9 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }

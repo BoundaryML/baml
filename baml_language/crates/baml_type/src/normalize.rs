@@ -612,6 +612,13 @@ pub fn is_subtype<H: Head, C: TypeContext<H>>(sub: &Ty<H>, sup: &Ty<H>, ctx: &C)
     ctx.is_subtype(sub, sup)
 }
 
+/// Whether a map's declared key type can cross a string-keyed boundary.
+/// This checks the declaration even for empty maps; callers must also validate
+/// actual key payloads. The written type is not replaced by its normalization.
+pub fn is_string_key<H: Head, C: TypeContext<H>>(key: &Ty<H>, ctx: &C) -> bool {
+    ctx.is_subtype(key, &Ty::string())
+}
+
 /// True only when `a` and `b` provably canonicalize to different forms, judged
 /// from their outermost constructor alone — a cheap reject for [`TypeContext::
 /// equivalent`] that skips the two canonicalization walks on the common

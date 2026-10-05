@@ -42,6 +42,75 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 }
 
 #[test]
+fn map_operations_lower_to_yielding_calls() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function maps(value: int, optional: map<string, int>?) -> int {
+  let values = {"first": value, "second": value + 1};
+  values["first"] = value + 2;
+  values["second"] += values["first"];
+  optional?.["first"] = value;
+  optional?.["second"] += value;
+  values["second"]
+}
+function nested(values: map<string, map<string, int>>) -> int {
+  values["outer"]["inner"] += 1;
+  values["outer"]["inner"]
+}
+function generic<T>(value: T) -> map<string, T> {
+  {"value": value}
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    assert!(output.contains("Map.index"), "{output}");
+    assert!(output.contains("Map.set"), "{output}");
+    for &loc in file_functions(&db, file) {
+        let mir = lower_function(&db, loc, OptLevel::Two).as_ref().unwrap();
+        let MirFunctionKind::Bytecode(body) = &mir.kind else {
+            panic!("test functions must have bytecode bodies")
+        };
+        for statement in body.blocks.iter().flat_map(|block| &block.statements) {
+            if let StatementKind::Assign {
+                value: baml_compiler2_mir::Rvalue::Map(_, _, entries),
+                ..
+            } = &statement.kind
+            {
+                assert!(entries.is_empty(), "map entries must use yielding calls");
+            }
+        }
+    }
+    let program = baml_db::compile_program(&db, db.workspace_root().unwrap(), OptLevel::Two)
+        .expect("compile yielding map operations");
+    for object in &program.objects {
+        let bex_vm_types::Object::Function(function) = object else {
+            continue;
+        };
+        if !["maps", "nested", "generic"]
+            .iter()
+            .any(|name| function.name.ends_with(name))
+        {
+            continue;
+        }
+        for instruction in &function.bytecode.instructions {
+            assert!(
+                !matches!(
+                    instruction,
+                    bex_vm_types::Instruction::LoadMapElement
+                        | bex_vm_types::Instruction::StoreMapElement
+                        | bex_vm_types::Instruction::AllocMap(1..)
+                ),
+                "legacy map instruction in {}: {instruction:?}",
+                function.name,
+            );
+        }
+    }
+}
+
+#[test]
 fn structural_defaults_call_native_helpers_directly() {
     let mut db = make_db();
     let file = db.file(

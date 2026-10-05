@@ -8,7 +8,6 @@ use bex_vm_types::{
     HeapPtr, ObjectType, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
-use indexmap::IndexMap;
 
 use super::{
     BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl,
@@ -266,11 +265,15 @@ pub(super) fn collect_to_string_overrides(
     }
     // Snapshot children (owned), dropping the heap borrow / container lock before
     // recursing - same discipline as `render_to_sink`'s `DisplaySnap`. The
-    // child order (array elements, then map values, then instance fields) matches
+    // child order (array elements, map key/value pairs, instance fields) matches
     // the renderer so the two stay index-aligned.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
-        Object::Map(map) => map.to_index_map().values().copied().collect(),
+        Object::Map(map) => map
+            .snapshot_entries()
+            .into_iter()
+            .flat_map(|(key, value)| [key, value])
+            .collect(),
         Object::Instance(inst) => inst.fields.iter().map(AtomicValueSlot::load).collect(),
         _ => Vec::new(),
     };
@@ -410,9 +413,8 @@ enum DisplaySnap {
     /// An array — elements rendered as `[a, b, c]`, with at most one trailing
     /// ellipsis when diagnostic limits omit further siblings.
     Seq(Vec<Value>, bool),
-    /// A map — entries rendered as `{"k": v, ...}` (keys are always strings, and
-    /// are quoted so keys containing `:`/`,` stay unambiguous).
-    Entries(Vec<(String, Value)>, bool),
+    /// A map whose keys and values are rendered recursively.
+    Entries(Vec<(Value, Value)>, bool),
     /// A class instance — `ClassName { field: value, ... }`.
     Instance(String, Vec<(String, Value)>, bool),
 }
@@ -610,10 +612,7 @@ pub(super) fn render_to_sink(
             let map = map.lock();
             let limit = state.snapshot_child_limit(map.len());
             DisplaySnap::Entries(
-                map.iter()
-                    .take(limit)
-                    .map(|(k, v)| (k.as_str().to_string(), *v))
-                    .collect(),
+                map.iter().take(limit).map(|(k, v)| (*k, *v)).collect(),
                 map.len() > limit,
             )
         }
@@ -703,7 +702,8 @@ pub(super) fn render_to_sink(
                 if rendered_count != 0 {
                     sink.push_text(", ");
                 }
-                sink.push_text(&format!("{key:?}: "));
+                render_to_sink(vm, *key, true, depth + 1, state, sink);
+                sink.push_text(": ");
                 render_to_sink(vm, *value, true, depth + 1, state, sink);
                 rendered_count += 1;
             }
@@ -826,15 +826,16 @@ fn deep_copy_value_recursive(
                     let placeholder_ptr = vm.tlab.alloc(Object::Map(Map::new(
                         key_ty.clone(),
                         value_ty.clone(),
-                        IndexMap::new(),
+                        bex_vm_types::MapData::new(),
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
 
-                    let snapshot = map.to_index_map();
-                    let mut new_map = IndexMap::new();
-                    for (key, value) in &snapshot {
-                        let new_value = deep_copy_value_recursive(vm, *value, copied_objects)?;
-                        new_map.insert(key.clone(), new_value);
+                    let snapshot: Vec<_> = map.lock().entries().map(|(_, entry)| *entry).collect();
+                    let mut new_map = bex_vm_types::MapData::new();
+                    for entry in snapshot {
+                        let new_key = deep_copy_value_recursive(vm, entry.key, copied_objects)?;
+                        let new_value = deep_copy_value_recursive(vm, entry.value, copied_objects)?;
+                        new_map.insert_hashed(entry.hash, new_key, new_value);
                     }
 
                     // no GC write barrier because it is all in gen0

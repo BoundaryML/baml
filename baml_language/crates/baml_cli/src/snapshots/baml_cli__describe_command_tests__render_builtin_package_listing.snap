@@ -1,13 +1,14 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 813
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
 class            baml.Bool                        <builtin>/baml/bool.baml:2
 class            baml.Array                       <builtin>/baml/containers.baml:26
-class            baml.Map                         <builtin>/baml/containers.baml:713
-interface        baml.Summable                    <builtin>/baml/containers.baml:842
-interface        baml.FloatStats                  <builtin>/baml/containers.baml:911
+class            baml.Map                         <builtin>/baml/containers.baml:714
+interface        baml.Summable                    <builtin>/baml/containers.baml:858
+interface        baml.FloatStats                  <builtin>/baml/containers.baml:927
 interface        baml.ToString                    <builtin>/baml/conversions.baml:24
 interface        baml.ToJson                      <builtin>/baml/conversions.baml:98
 interface        baml.FromJson                    <builtin>/baml/conversions.baml:140

@@ -2684,16 +2684,9 @@ impl<'db> InferenceContext<'db> {
                         value: value_ty,
                     })
                 } else if entries.is_empty() {
-                    // The key is `string` outright, not a fresh var: map
-                    // keys are string-domain by language contract (see
-                    // `checked_map_key`), so a key var has exactly one
-                    // legal solution and leaving it open lets `m[0] = 1`
-                    // silently solve `?K := int`.
+                    let key = self.table.new_var_ty_of(unify::VarPolicy::MapKeySlot);
                     self.untyped_empty_container_ty(expr, |value| {
-                        Ty::intern(InferTy::Map {
-                            key: Ty::string(),
-                            value,
-                        })
+                        Ty::intern(InferTy::Map { key, value })
                     })
                 } else {
                     let (keys, values): (Vec<Ty>, Vec<Ty>) = entries
@@ -3820,16 +3813,9 @@ impl<'db> InferenceContext<'db> {
         if actual == expected {
             return true;
         }
-        // A GROUND top expectation is trivially satisfied - but it IS a
-        // consuming use, so an empty container literal flowing into
-        // `unknown` commits its establishment slots to the top type
-        // (`{}` in a `map<string, unknown>` value slot is
-        // `map<unknown, unknown>` - TIR's frozen-Evolving behavior at
-        // exactly the demanded case). ONLY establishment vars commit:
-        // solving an ordinary inference var to `unknown` here would
-        // poison its real solution. A literal with NO demand at all
-        // keeps the strict uninferrable-container error (ruling 2's
-        // fixture `unconstrained_empty_list_strict`).
+        // An `unknown` demand commits empty-container value slots, but
+        // not key slots or ordinary inference variables. Keys still need
+        // a hashable type; unconstrained map keys default to string.
         // A bare inference variable still records its upper bound through
         // the Infer arm below (an `unknown` upper participates in bounds
         // resolution); only STRUCTURED actuals take the fast path.
@@ -10864,7 +10850,34 @@ impl<'db> InferenceContext<'db> {
             if solved || replayed || obligations || subs {
                 continue;
             }
-            if !self.resolve_bounded_vars(SolveTier::GroundSubset) {
+            if self.resolve_bounded_vars(SolveTier::GroundSubset) {
+                continue;
+            }
+            // Preserve the historical string default only when an empty
+            // map's key has no evidence from any use.
+            let mut defaulted = false;
+            if let Some(body) = body {
+                for (expr, node) in body.exprs.iter() {
+                    if !matches!(node, Expr::Map { entries } if entries.is_empty()) {
+                        continue;
+                    }
+                    let Some(ty) = self.result.type_of_expr.get(&expr) else {
+                        continue;
+                    };
+                    let ty = self.table.resolve_completely(ty);
+                    let InferTy::Map { key, .. } = ty.kind() else {
+                        continue;
+                    };
+                    let InferTy::InferVar { var, .. } = key.kind() else {
+                        continue;
+                    };
+                    let bounds = self.table.var_bounds(*var);
+                    if bounds.lowers.is_empty() && bounds.uppers.is_empty() {
+                        defaulted |= self.table.unify(key, &Ty::string()).is_ok();
+                    }
+                }
+            }
+            if !defaulted {
                 break;
             }
         }
@@ -11007,6 +11020,28 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
             };
             let mut diags: Vec<TirDiagnostic<'db>> = Vec::new();
+            if let Some(body) = body {
+                for (expr, node) in body.exprs.iter() {
+                    if !matches!(node, Expr::Map { .. }) {
+                        continue;
+                    }
+                    let Some(ty) = result.type_of_expr.get(&expr) else {
+                        continue;
+                    };
+                    let InferTy::Map { key, .. } = ty.kind() else {
+                        continue;
+                    };
+                    let key = self.plain_finalized(key);
+                    if !crate::interfaces::map_key_is_hashable(self.db, &self.facts, &key) {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::InvalidMapKeyType { key },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(expr),
+                            related: Vec::new(),
+                        });
+                    }
+                }
+            }
             for (location, error) in unresolved_infer_diagnostics {
                 diags.push(TirDiagnostic {
                     error,

@@ -4274,7 +4274,7 @@ impl<'db> LoweringContext<'db> {
     /// The key/value type templates for a map-literal expression — the `K`/`V`
     /// of its `map<K, V>` static type — for [`Rvalue::Map`]. Falls back to
     /// `map<string, unknown>` when the recorded type is not a map (error
-    /// recovery); map keys are always strings.
+    /// recovery).
     fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
@@ -5727,6 +5727,25 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) -> Lowered<()> {
+        if let Place::Index {
+            base,
+            index,
+            kind: IndexKind::Map,
+        } = dest
+        {
+            let value = self.lower_to_operand(expr_id)?;
+            let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+            self.emit_map_call(
+                "set",
+                vec![
+                    Operand::Copy(*base),
+                    Operand::Copy(Place::local(index)),
+                    value,
+                ],
+                ignored,
+            );
+            return Ok(());
+        }
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
             self.builder.current_source_span = Some(span);
@@ -5795,18 +5814,21 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Map { entries } => {
-                let pairs: Vec<(Operand<'db>, Operand<'db>)> = entries
-                    .iter()
-                    .map(|entry| {
-                        Ok((
-                            self.lower_to_operand(entry.key)?,
-                            self.lower_to_operand(entry.value)?,
-                        ))
-                    })
-                    .collect::<Lowered<Vec<_>>>()?;
                 let (key_ty, value_ty) = self.map_kv_templates(expr_id);
+                let map = Place::local(self.builder.temp(self.expr_ty(expr_id)));
                 self.builder
-                    .assign(dest, Rvalue::Map(key_ty, value_ty, pairs));
+                    .assign(map.clone(), Rvalue::Map(key_ty, value_ty, Vec::new()));
+                for entry in entries {
+                    let key = self.lower_to_operand(entry.key)?;
+                    let value = self.lower_to_operand(entry.value)?;
+                    let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+                    self.emit_map_call(
+                        "set",
+                        vec![Operand::Copy(map.clone()), key, value],
+                        ignored,
+                    );
+                }
+                self.builder.assign(dest, Rvalue::Use(Operand::Copy(map)));
             }
 
             AstExpr::Object {
@@ -6599,12 +6621,19 @@ impl<'db> LoweringContext<'db> {
                 Place::local(key_local),
                 Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
             );
-            current_place = Place::Index {
-                base: Box::new(current_place),
-                index: key_local,
-                kind: IndexKind::Map,
-            };
-            break;
+            self.emit_map_call(
+                "index",
+                vec![
+                    Operand::Copy(current_place),
+                    Operand::Copy(Place::local(key_local)),
+                ],
+                target_place.clone(),
+            );
+            if is_last {
+                return Ok(());
+            }
+            current_place = target_place;
+            current_ty = target_ty;
         }
 
         self.builder
@@ -7357,6 +7386,25 @@ impl<'db> LoweringContext<'db> {
         op: AstAssignOp,
         value: AstExprId,
     ) -> Lowered<()> {
+        if let Place::Index {
+            base,
+            index,
+            kind: IndexKind::Map,
+        } = place
+        {
+            let current = Place::local(self.builder.temp(self.expr_ty(target)));
+            let receiver = Operand::Copy(*base);
+            let key = Operand::Copy(Place::local(index));
+            self.emit_map_call(
+                "index",
+                vec![receiver.clone(), key.clone()],
+                current.clone(),
+            );
+            self.emit_assign_op(current.clone(), target, op, value)?;
+            let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+            self.emit_map_call("set", vec![receiver, key, Operand::Copy(current)], ignored);
+            return Ok(());
+        }
         let mir_op = Self::convert_assign_op(op);
         let driver = match mir_op {
             BinOp::Add => Some("__union_add"),
@@ -10266,13 +10314,13 @@ impl<'db> LoweringContext<'db> {
                 Place::local(key_local),
                 Rvalue::Use(Operand::Constant(Constant::String(field_str))),
             );
-            self.builder.assign(
+            self.emit_map_call(
+                "index",
+                vec![
+                    Operand::Copy(Place::local(base_local)),
+                    Operand::Copy(Place::local(key_local)),
+                ],
                 dest,
-                Rvalue::Use(Operand::Copy(Place::Index {
-                    base: Box::new(Place::Local(base_local)),
-                    index: key_local,
-                    kind: IndexKind::Map,
-                })),
             );
         }
         Ok(())
@@ -10375,20 +10423,47 @@ impl<'db> LoweringContext<'db> {
         // the base type is T? but we've already null-checked.
         let unwrapped_ty = base_ty.strip_null();
 
-        let kind = if matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
-            IndexKind::Array
-        } else {
-            IndexKind::Map
-        };
+        if !matches!(&unwrapped_ty, RuntimeTy::List(..) | RuntimeTy::Uint8Array) {
+            self.emit_map_call(
+                "index",
+                vec![
+                    Operand::Copy(Place::local(base_local)),
+                    Operand::Copy(Place::local(index_local)),
+                ],
+                dest,
+            );
+            return;
+        }
 
         self.builder.assign(
             dest,
             Rvalue::Use(Operand::Copy(Place::Index {
                 base: Box::new(Place::Local(base_local)),
                 index: index_local,
-                kind,
+                kind: IndexKind::Array,
             })),
         );
+    }
+
+    fn emit_map_call(&mut self, method: &str, args: Vec<Operand<'db>>, dest: Place) {
+        let callee = Operand::Constant(Constant::Function(self.lang_class_method(
+            baml_base::LangPackage::Baml,
+            "Map",
+            method,
+        )));
+        let call_dest = if matches!(dest, Place::Local(_)) {
+            dest.clone()
+        } else {
+            Place::local(self.builder.temp(RuntimeTy::Unknown))
+        };
+        let resume = self.builder.create_block();
+        // Native map operations read K/V from the typed receiver, not call type arguments.
+        self.builder.call(callee, args, call_dest.clone(), resume);
+        self.builder.set_current_block(resume);
+        if call_dest != dest {
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
+        }
     }
 
     /// If the expression is a simple local variable reference (single-segment path
@@ -12004,25 +12079,42 @@ impl LoweringContext<'_> {
                         ));
                     }
                     // Dynamic map fallback for non-class base or unknown field
+                    let receiver = Place::local(self.builder.temp(current_ty));
+                    self.builder
+                        .assign(receiver.clone(), Rvalue::Use(Operand::Copy(current_place)));
                     let key_local = self.builder.temp(RuntimeTy::String);
                     self.builder.assign(
                         Place::local(key_local),
                         Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
                     );
-                    current_place = Place::Index {
-                        base: Box::new(current_place),
-                        index: key_local,
-                        kind: IndexKind::Map,
-                    };
-                    break;
+                    if seg_idx == segments.len() - 1 {
+                        return Ok(Place::Index {
+                            base: Box::new(receiver),
+                            index: key_local,
+                            kind: IndexKind::Map,
+                        });
+                    }
+                    current_ty = self
+                        .path_segment_ty(expr_id, seg_idx)
+                        .unwrap_or(RuntimeTy::Unknown);
+                    current_place = Place::local(self.builder.temp(current_ty.clone()));
+                    self.emit_map_call(
+                        "index",
+                        vec![
+                            Operand::Copy(receiver),
+                            Operand::Copy(Place::local(key_local)),
+                        ],
+                        current_place.clone(),
+                    );
                 }
                 Ok(current_place)
             }
             AstExpr::MemberAccess { base, member } => {
                 let base_id = *base;
                 let member_name = member.clone();
-                let base_place = self.lower_lvalue(base_id)?;
                 let base_ty = self.expr_ty(base_id);
+                let base_op = self.lower_to_operand(base_id)?;
+                let base_place = Place::local(self.operand_to_local(base_op, base_ty.clone()));
                 if let RuntimeTy::Class(ref tn, _) = base_ty {
                     if let Some(idx) =
                         layout::class_field_index(self.db, self.class_ref_of(tn)?, &member_name)
@@ -12056,9 +12148,10 @@ impl LoweringContext<'_> {
             AstExpr::Index { base, index } => {
                 let base_id = *base;
                 let index_id = *index;
-                let base_place = self.lower_lvalue(base_id)?;
-                let index_op = self.lower_to_operand(index_id)?;
                 let base_ty = self.expr_ty(base_id);
+                let base_op = self.lower_to_operand(base_id)?;
+                let base_place = Place::local(self.operand_to_local(base_op, base_ty.clone()));
+                let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();

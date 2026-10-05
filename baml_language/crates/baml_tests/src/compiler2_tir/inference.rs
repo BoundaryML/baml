@@ -919,20 +919,6 @@ fn map_indexed_by_int_key_is_rejected() {
 }
 
 #[test]
-fn empty_map_index_assign_with_int_key_is_rejected() {
-    assert!(
-        has_type_mismatch(
-            r#"function main() -> int {
-    let m = {};
-    m[0] = 1;
-    return 0;
-}"#
-        ),
-        "index-assigning an empty map with an int key should report a type mismatch"
-    );
-}
-
-#[test]
 fn well_typed_index_access_is_accepted() {
     // Regression guard: int-keyed list and string-keyed map (incl. evolving
     // empties) must stay valid.

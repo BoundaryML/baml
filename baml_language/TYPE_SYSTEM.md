@@ -545,11 +545,19 @@ An applicable explicit implementation always wins over an implicit default. Reso
 
 Defaults preserve the existing structural conversion and equality behavior, including nested explicit overrides. JSON conversion remains fallible: interface membership does not guarantee that a particular value can be serialized or decoded. Structural equality handles cycles. The `==` operator additionally handles pairs of different runtime types; `Equals.eq` retains its same-`Self` signature.
 
-`baml.Hash` uses the same implementation model, but its implicit implementation is conditional. Scalars, enums, arrays, string-key maps, and classes qualify when their equality-relevant components support `Hash`. Generic components need a sufficient bound; opaque values such as functions and runtime handles do not acquire implicit hashing. Recursive data types are checked coinductively, while hashing an actually cyclic value panics.
+Implicit `baml.Hash` requires hashable components, including both map keys and values. Generic components need suitable bounds; functions and runtime handles are not implicitly hashable. Recursive types qualify, but hashing cyclic values panics.
 
-A matching custom `Equals.eq` declaration suppresses implicit hashing, even if that declaration has conditional generic bounds. An explicit `Hash` implementation still wins. This avoids proving hashing by assuming that a recursively dependent equality implementation is absent. An empty `Equals` implementation adopting structural equality does not suppress hashing.
+A potentially matching custom `Equals.eq` declaration blocks implicit Hash, regardless of conditional bounds. Explicit Hash wins; empty Equals implementations retain structural hashing.
 
-`Hash.hash` feeds a caller-provided `baml.hash.Hasher`. The interface is user-implementable and exposes `write(uint8array)` and a non-resetting `finish() -> int`. The built-in `baml.hash.DefaultHasher` has shared mutable state and an unspecified non-cryptographic algorithm. Hash encodings and results are not persistent identifiers. Equal values must feed equivalent hash input; custom implementations must preserve that contract. Maps do not expose a hasher-selection parameter.
+`Hash` is independent of `Equals`. `Hash.hash` feeds a user-implementable `baml.hash.Hasher`: `write(uint8array)` appends bytes; `finish() -> int` does not reset state. `DefaultHasher` shares mutable state and provides non-cryptographic, non-stable hashes. Custom hashing must agree with equality.
+
+### Map keys
+
+`map<K, V>` requires Hash keys; Equals is already implicit for every type. Equal-key updates preserve the original key and insertion position. Map equality and hashing ignore insertion order. Maps do not expose hasher selection.
+
+Stored keys must keep hash and equality stable. Callbacks run without map locks; key insertion or removal during lookup causes a retry.
+
+JSON and SDK interchange remain string-keyed. Structural conversion rejects non-string maps; custom JSON conversions can encode them differently.
 
 ### Interface Coherence
 

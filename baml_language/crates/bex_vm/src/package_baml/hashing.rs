@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet, hash_map::DefaultHasher},
+    sync::{Arc, Mutex},
+};
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, Value, ValueKind};
 
@@ -7,14 +10,17 @@ use crate::{BexVm, VmPanic, errors::VmRustFnError};
 
 enum Work {
     Value(Value, bool),
-    Bytes(Vec<u8>),
     Exit(HeapPtr),
+    MapEntry(Value, Value),
+    FinishMapEntry(Value, Arc<Mutex<DefaultHasher>>),
+    FinishMap,
 }
 
 struct HashDriver {
     state: Value,
     pending: Vec<Work>,
     active: HashSet<HeapPtr>,
+    map_hashes: Vec<Vec<u64>>,
 }
 
 fn panic(message: &str) -> NativeCallResult {
@@ -38,7 +44,31 @@ impl HashDriver {
                     self.active.remove(&ptr);
                     continue;
                 }
-                Work::Bytes(bytes) => bytes,
+                Work::MapEntry(key, value) => {
+                    let (state, handle) = super::hasher::new_state(vm);
+                    let previous = std::mem::replace(&mut self.state, state);
+                    self.pending.push(Work::FinishMapEntry(previous, handle));
+                    self.pending.push(Work::Value(value, true));
+                    self.pending.push(Work::Value(key, true));
+                    continue;
+                }
+                Work::FinishMapEntry(previous, handle) => {
+                    self.state = previous;
+                    self.map_hashes
+                        .last_mut()
+                        .expect("map entry belongs to an active map")
+                        .push(super::hasher::finish_state(&handle));
+                    continue;
+                }
+                Work::FinishMap => {
+                    let mut hashes = self.map_hashes.pop().expect("active map hash frame");
+                    hashes.sort_unstable();
+                    let mut bytes = Vec::with_capacity(hashes.len() * 8);
+                    for hash in hashes {
+                        bytes.extend_from_slice(&hash.to_le_bytes());
+                    }
+                    framed(8, &bytes)
+                }
                 Work::Value(value, dispatch) => {
                     if let Some(ptr) = value.as_object_ptr() {
                         if !self.active.insert(ptr) {
@@ -117,19 +147,13 @@ impl HashDriver {
                                 bytes
                             }
                             Object::Map(map) => {
-                                let mut entries: Vec<_> = map
-                                    .data
-                                    .lock()
-                                    .iter()
-                                    .map(|(key, value)| (key.clone(), *value))
-                                    .collect();
-                                entries.sort_by(|(a, _), (b, _)| a.cmp(b));
-                                let bytes = framed(8, &(entries.len() as u64).to_le_bytes());
+                                let entries = map.snapshot_entries();
+                                self.map_hashes.push(Vec::with_capacity(entries.len()));
+                                self.pending.push(Work::FinishMap);
                                 for (key, value) in entries.into_iter().rev() {
-                                    self.pending.push(Work::Value(value, true));
-                                    self.pending.push(Work::Bytes(framed(5, key.as_bytes())));
+                                    self.pending.push(Work::MapEntry(key, value));
                                 }
-                                bytes
+                                continue;
                             }
                             Object::Instance(instance) => {
                                 let Object::Class(class) = vm.get_object(instance.class) else {
@@ -202,7 +226,12 @@ impl Continuation for HashDriver {
             match work {
                 Work::Value(value, _) => roots.extend(value.as_object_ptr()),
                 Work::Exit(ptr) => roots.push(*ptr),
-                Work::Bytes(_) => {}
+                Work::MapEntry(key, value) => {
+                    roots.extend(key.as_object_ptr());
+                    roots.extend(value.as_object_ptr());
+                }
+                Work::FinishMapEntry(previous, _) => roots.extend(previous.as_object_ptr()),
+                Work::FinishMap => {}
             }
         }
         roots
@@ -221,7 +250,19 @@ impl Continuation for HashDriver {
                     }
                 }
                 Work::Exit(ptr) => *ptr = forward(*ptr),
-                Work::Bytes(_) => {}
+                Work::MapEntry(key, value) => {
+                    for value in [key, value] {
+                        if let Some(ptr) = value.as_object_ptr() {
+                            *value = Value::object(forward(ptr));
+                        }
+                    }
+                }
+                Work::FinishMapEntry(previous, _) => {
+                    if let Some(ptr) = previous.as_object_ptr() {
+                        *previous = Value::object(forward(ptr));
+                    }
+                }
+                Work::FinishMap => {}
             }
         }
         self.active = self.active.iter().copied().map(forward).collect();
@@ -237,6 +278,17 @@ pub(super) fn hash_structural_default(
         state,
         pending: vec![Work::Value(value, false)],
         active: HashSet::new(),
+        map_hashes: Vec::new(),
+    }
+    .drive(vm)
+}
+
+pub(super) fn hash_value(vm: &mut BexVm, value: Value, state: Value) -> NativeCallResult {
+    HashDriver {
+        state,
+        pending: vec![Work::Value(value, true)],
+        active: HashSet::new(),
+        map_hashes: Vec::new(),
     }
     .drive(vm)
 }

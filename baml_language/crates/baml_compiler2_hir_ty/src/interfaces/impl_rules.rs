@@ -299,20 +299,6 @@ pub fn impl_data<'db>(
         } => {
             let names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
             let generic_param_names = crate::lower::impl_frame(db, impl_loc);
-            let mut for_target_diags = Vec::new();
-            let for_ty = lower_ref_in(
-                &LowerScope {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: ns,
-                    generic_params: &generic_param_names,
-                    bounds: &TypeVarBoundsMap::default(),
-                    self_ty: None,
-                },
-                &block.type_refs,
-                *for_target,
-                &mut for_target_diags,
-            );
             let mut bound_diags = Vec::new();
             // `implements<T, T> …` — a duplicate impl generic is a declaration error.
             for (idx, name) in names.iter().enumerate() {
@@ -320,7 +306,7 @@ pub fn impl_data<'db>(
                     bound_diags.push(TirTypeError::DuplicateGenericParam { name: name.clone() });
                 }
             }
-            let generic_params = generics
+            let generic_params: Vec<_> = generics
                 .iter()
                 .zip(generic_param_names.iter())
                 .map(|(g, param)| {
@@ -336,6 +322,21 @@ pub fn impl_data<'db>(
                     (param.clone(), ifaces)
                 })
                 .collect();
+            let bounds = generic_params.iter().cloned().collect();
+            let mut for_target_diags = Vec::new();
+            let for_ty = lower_ref_in(
+                &LowerScope {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: ns,
+                    generic_params: &generic_param_names,
+                    bounds: &bounds,
+                    self_ty: None,
+                },
+                &block.type_refs,
+                *for_target,
+                &mut for_target_diags,
+            );
             (
                 generic_param_names,
                 for_ty,
@@ -348,6 +349,7 @@ pub fn impl_data<'db>(
     };
 
     let mut interface_target_diags = Vec::new();
+    let bounds = generic_params.iter().cloned().collect();
     // The target is a constraint head: it pins only its written inline bindings.
     let lowered_interface = lower_ref_in_at(
         &LowerScope {
@@ -355,7 +357,7 @@ pub fn impl_data<'db>(
             package_items: pkg_items,
             ns_context: ns,
             generic_params: &generic_param_names,
-            bounds: &TypeVarBoundsMap::default(),
+            bounds: &bounds,
             self_ty: None,
         },
         &block.type_refs,

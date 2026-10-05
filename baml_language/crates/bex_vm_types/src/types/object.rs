@@ -1,7 +1,6 @@
 use std::{any::Any, sync::Arc};
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use indexmap::IndexMap;
 
 use crate::{
     ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
@@ -262,7 +261,7 @@ enum ObjectWire {
     Map(
         Box<crate::RealizedTy>,
         Box<crate::RealizedTy>,
-        IndexMap<String, Value>,
+        Vec<(u64, Value, Value)>,
     ),
     Float(f64),
     Future(crate::Future),
@@ -303,9 +302,9 @@ impl BorshSerialize for Object {
             Self::Map(v) => ObjectWire::Map(
                 v.key_ty.clone(),
                 v.value_ty.clone(),
-                v.to_index_map()
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v))
+                v.lock()
+                    .entries()
+                    .map(|(_, entry)| (entry.hash, entry.key, entry.value))
                     .collect(),
             ),
             Self::Float(v) => ObjectWire::Float(*v),
@@ -361,12 +360,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Map(key_ty, value_ty, data) => Self::Map(Map {
                 key_ty,
                 value_ty,
-                data: MapContainer::new(
-                    data.into_iter()
-                        .map(|(k, v)| (bex_str::BexStr::from(k), v))
-                        .collect::<IndexMap<bex_str::BexStr, Value>>()
-                        .into(),
-                ),
+                data: MapContainer::new(Box::new(crate::MapData::from_hashed_entries(data))),
             }),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
