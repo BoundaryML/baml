@@ -1226,6 +1226,9 @@ fn relocate(
             function.bytecode.compact = Some(function.bytecode.lower_to_compact());
         }
         Object::Interface(interface) => {
+            if let Some(default) = &mut interface.structural_default {
+                default.function_ptr = image.objects[default.function.raw()];
+            }
             for method in &mut interface.methods {
                 if let Some(default) = method.default {
                     method.default_fn = image.objects[default.raw()];

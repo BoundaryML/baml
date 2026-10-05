@@ -4755,22 +4755,24 @@ impl Printable for SpreadElement {
 pub enum ObjectFieldKey {
     Word(t::Word),
     String(t::QuotedString),
+    Expression(Box<Expression>),
 }
 
 impl FromCST for ObjectFieldKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
+            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => Ok(
+                ObjectFieldKey::Expression(Box::new(Expression::from_cst(elem)?)),
+            ),
             // `client` (KW_CLIENT) is a keyword but a valid field name, e.g.
             // `Agent { client: ... }` — mirror `parse_object_field`.
             kind if t::is_word_like(kind) => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
             SyntaxKind::STRING_LITERAL => {
                 Ok(ObjectFieldKey::String(t::QuotedString::from_cst(elem)?))
             }
-            _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "WORD or STRING_LITERAL".into(),
-                found: elem.kind(),
-                at: elem.text_range(),
-            }),
+            _ => Ok(ObjectFieldKey::Expression(Box::new(Expression::from_cst(
+                elem,
+            )?))),
         }
     }
 }
@@ -4781,6 +4783,7 @@ impl ObjectFieldKey {
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         match self {
             ObjectFieldKey::Word(word) => Some(usize::from(word.span().len())),
+            ObjectFieldKey::Expression(expr) => expr.single_line_width(input),
             ObjectFieldKey::String(s) => {
                 if input.input[s.span()].contains('\n') {
                     None
@@ -4800,18 +4803,21 @@ impl Printable for ObjectFieldKey {
                 PrintInfo::default_single_line()
             }
             ObjectFieldKey::String(string) => printer.print(string, shape),
+            ObjectFieldKey::Expression(expr) => printer.print(expr.as_ref(), shape),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ObjectFieldKey::Word(word) => word.span(),
             ObjectFieldKey::String(string) => string.leftmost_token(),
+            ObjectFieldKey::Expression(expr) => expr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ObjectFieldKey::Word(word) => word.span(),
             ObjectFieldKey::String(string) => string.rightmost_token(),
+            ObjectFieldKey::Expression(expr) => expr.rightmost_token(),
         }
     }
 }

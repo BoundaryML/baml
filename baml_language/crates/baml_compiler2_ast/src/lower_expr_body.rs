@@ -1031,7 +1031,7 @@ pub(crate) fn synthesize_spec_build_request_body(
 }
 
 /// Synthesize the `@parse` companion body: a network-free parse of an
-/// existing JSON/SAP string into the function's return type —
+/// existing JSON/SAP string into the function's return type,
 /// `baml.sap.parse<Out>(json)`.
 pub(crate) fn synthesize_spec_parse_body(
     out_type: Option<crate::ast::TypeExpr>,
@@ -5340,7 +5340,15 @@ impl LoweringContext {
                         rowan::NodeOrToken::Token(t) => {
                             if t.kind() == SyntaxKind::COLON {
                                 seen_colon = true;
-                            } else if !seen_colon && key_expr.is_none() && is_ident_token(t.kind())
+                            } else if !seen_colon
+                                && key_expr.is_none()
+                                && is_ident_token(t.kind())
+                                && !matches!(
+                                    t.kind(),
+                                    SyntaxKind::KW_TRUE
+                                        | SyntaxKind::KW_FALSE
+                                        | SyntaxKind::KW_NULL
+                                )
                             {
                                 let span = t.text_range();
                                 shorthand_name = Some((Name::new(t.text()), span));
@@ -5357,6 +5365,8 @@ impl LoweringContext {
                                 key_expr = Some(
                                     self.alloc_expr(Expr::Literal(Literal::String(content)), span),
                                 );
+                            } else if !seen_colon && key_expr.is_none() {
+                                key_expr = self.try_lower_bare_token(&t);
                             } else if seen_colon && val_expr.is_none() {
                                 val_expr = self.try_lower_bare_token(&t);
                             }

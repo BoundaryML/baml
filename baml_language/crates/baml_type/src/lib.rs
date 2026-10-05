@@ -49,6 +49,7 @@ mod primitive;
 mod realized_ty;
 mod runtime_ty;
 pub mod simplify_sap;
+mod structural_interface;
 pub mod template;
 #[cfg(test)]
 pub(crate) mod test_roots;
@@ -68,6 +69,7 @@ pub use names::*;
 pub use param::*;
 pub use primitive::*;
 pub use runtime_ty::*;
+pub use structural_interface::StructuralInterface;
 pub use template::SubstituteError;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to

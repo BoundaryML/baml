@@ -641,13 +641,29 @@ impl BexEngine {
                     _ => (&RuntimeTy::String, &RuntimeTy::Null),
                 };
 
-                let snapshot = map.to_index_map();
+                if !anchor_wire_ty(vm, key_type)
+                    .is_ok_and(|key| baml_type::normalize::is_string_key(key.as_ty(), vm))
+                    || !baml_type::normalize::is_string_key(map.key_ty.as_ty(), vm)
+                {
+                    return Err(EngineError::CannotConvert {
+                        type_name:
+                            "map with non-string keys (SDK interchange requires string keys)"
+                                .to_owned(),
+                    });
+                }
+                let snapshot = map.snapshot_entries();
                 let entries: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
                     snapshot
                         .iter()
                         .map(|(k, v)| {
+                            let key = match k.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
+                                Some(Object::String(key)) => key.to_string(),
+                                _ => return Err(EngineError::CannotConvert {
+                                    type_name: "map with non-string keys (SDK interchange requires string keys)".to_owned(),
+                                }),
+                            };
                             Ok((
-                                k.to_string(),
+                                key,
                                 self.convert_vm_value_to_external_with_type(
                                     *v, value_type, vm, permit,
                                 )?,
@@ -1484,6 +1500,22 @@ impl BexEngine {
                 value_type,
                 entries,
             } => {
+                let incoming_key_ty = self.realize_host_ty_with_runtime(
+                    &holder.holder().vm,
+                    holder.proof(),
+                    &key_type,
+                    overlay,
+                )?;
+                if !baml_type::normalize::is_string_key(
+                    incoming_key_ty.as_ty(),
+                    &holder.holder().vm,
+                ) {
+                    return Err(EngineError::CannotConvert {
+                        type_name:
+                            "map with non-string keys (SDK interchange requires string keys)"
+                                .to_owned(),
+                    });
+                }
                 let (key_type, value_type) = match expected_ty {
                     Some(RuntimeTy::Map { key, value, .. }) => {
                         (key.as_ref().clone(), value.as_ref().clone())
@@ -1496,6 +1528,32 @@ impl BexEngine {
                     &key_type,
                     overlay,
                 )?;
+                if !baml_type::normalize::is_string_key(key_ty.as_ty(), &holder.holder().vm) {
+                    return Err(EngineError::CannotConvert {
+                        type_name:
+                            "map with non-string keys (SDK interchange requires string keys)"
+                                .to_owned(),
+                    });
+                }
+                for key in entries.keys() {
+                    let actual = baml_type::Ty::Literal(
+                        baml_type::Literal::String(key.clone()),
+                        baml_type::Freshness::Regular,
+                    );
+                    if !baml_type::normalize::is_subtype(
+                        &actual,
+                        incoming_key_ty.as_ty(),
+                        &holder.holder().vm,
+                    ) || !baml_type::normalize::is_subtype(
+                        &actual,
+                        key_ty.as_ty(),
+                        &holder.holder().vm,
+                    ) {
+                        return Err(EngineError::CannotConvert {
+                            type_name: "map key does not match declared key type".to_owned(),
+                        });
+                    }
+                }
                 let declared_value_ty = expected_ty.and_then(peel_map_value_ty);
                 let runtime_value_ty = declared_value_ty.unwrap_or(&value_type).clone();
                 let values = entries
@@ -2072,7 +2130,18 @@ impl BexEngine {
                 "host-call optional arguments are not a map".to_string(),
             ));
         };
-        let optional_values = optional_map.to_index_map();
+        let optional_values = optional_map
+            .snapshot_entries()
+            .into_iter()
+            .map(
+                |(key, value)| match key.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
+                    Some(Object::String(key)) => Ok((key.clone(), value)),
+                    _ => Err(malformed(
+                        "host-call optional argument names must be strings".to_owned(),
+                    )),
+                },
+            )
+            .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
         let (required_types, optional_types) = host_call_parameter_types(
             params,
             positional_values.len(),

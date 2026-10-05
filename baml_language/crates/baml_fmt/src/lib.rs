@@ -1947,6 +1947,32 @@ mod map_literal_format_tests {
     }
 
     #[test]
+    fn test_non_string_map_keys_are_preserved() {
+        for key in [
+            "1",
+            "-1",
+            "1n",
+            "-1n",
+            "1.5",
+            "true",
+            "false",
+            "null",
+            "(key)",
+            "(key + 1)",
+        ] {
+            let source = format!("function f() -> int {{\n    {{ {key}: 1 }};\n    0\n}}\n");
+            assert_formats_to(&source, &source);
+        }
+    }
+
+    #[test]
+    fn test_computed_map_keys_format_expressions() {
+        let source = "function f() -> int {\n    {(key+1):1,(-key):2};\n    0\n}\n";
+        let expected = "function f() -> int {\n    { (key + 1): 1, (-key): 2 };\n    0\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    #[test]
     fn test_property_shorthand_is_preserved() {
         let source = "function f(options: string) -> map<string, string> {\n    { options, explicit: options }\n}\n";
         assert_formats_to(source, source);

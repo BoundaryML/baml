@@ -1290,7 +1290,7 @@ fn emit_single_extraction_indented(
         );
         writeln!(
             out,
-            "{indent}let {name} = if args[{idx}].is_omitted() {{ indexmap::IndexMap::new() }} else {{ vm.as_map(&args[{idx}])?.to_index_map() }};"
+            "{indent}let {name} = if args[{idx}].is_omitted() {{ indexmap::IndexMap::new() }} else {{ vm.as_string_map(&args[{idx}])? }};"
         )
         .unwrap();
         return;
@@ -1338,9 +1338,9 @@ fn emit_immut_receiver_extraction_indented(
             .unwrap();
         }
         // A read map receiver is passed as a `MapView` carrying its key/value
-        // types alongside the data. The data is owned (`to_index_map`) when the
+        // types alongside the data. The data is cloned when the
         // glue later needs `&mut vm` (may_yield / mut_vm), else a cheap read
-        // guard; both deref to the `IndexMap` so map-only builtins are unchanged.
+        // guard; both deref to `MapData`.
         "Map" => {
             writeln!(
                 out,
@@ -1353,7 +1353,7 @@ fn emit_immut_receiver_extraction_indented(
             )
             .unwrap();
             let data_expr = if arraymap_needs_owned {
-                format!("vm.as_map(&args[{idx}])?.to_index_map()")
+                format!("(*vm.as_map(&args[{idx}])?).clone()")
             } else {
                 format!("vm.as_map(&args[{idx}])?")
             };
@@ -1510,7 +1510,7 @@ fn receiver_immut_extraction_expr(
         }
         "Map" => {
             if arraymap_needs_owned {
-                format!("vm.as_map({val})?.to_index_map()")
+                format!("(*vm.as_map({val})?).clone()")
             } else {
                 format!("vm.as_map({val})?")
             }
@@ -1638,11 +1638,14 @@ fn extraction_expr(
                 format!("vm.as_array({val})?")
             }
         }
+        BamlType::Map(key, _) if matches!(&**key, BamlType::String) && !is_mut => {
+            format!("vm.as_string_map({val})?")
+        }
         BamlType::Map(_, _) => {
             if is_mut {
                 format!("vm.as_map_mut({val})?")
             } else if arraymap_needs_owned {
-                format!("vm.as_map({val})?.to_index_map()")
+                format!("(*vm.as_map({val})?).clone()")
             } else {
                 format!("vm.as_map({val})?")
             }
@@ -2066,11 +2069,14 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
                 "&[Value]".to_string()
             }
         }
+        BamlType::Map(key, _) if matches!(&**key, BamlType::String) && !is_mut => {
+            "&IndexMap<bex_str::BexStr, Value>".to_string()
+        }
         BamlType::Map(_, _) => {
             if is_mut {
-                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
+                "&mut bex_vm_types::MapData".to_string()
             } else {
-                "&IndexMap<bex_str::BexStr, Value>".to_string()
+                "&bex_vm_types::MapData".to_string()
             }
         }
         BamlType::Optional(inner) => {
@@ -2159,10 +2165,10 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
             if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
                 "&Value".to_string()
             } else if recv.receiver_type.is_mut() {
-                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
+                "&mut bex_vm_types::MapData".to_string()
             } else {
                 // A read receiver carries its key/value types via `MapView`,
-                // which derefs to `IndexMap` so map-only builtins are unaffected.
+                // which derefs to `MapData`.
                 "MapView<'_>".to_string()
             }
         }

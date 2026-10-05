@@ -193,6 +193,58 @@ fn unify_into(
     unify_into_at(x, y, vars, aliases, bindings, 0)
 }
 
+/// Bound-free head overlap. Symbolic projections may denote any type; proving
+/// their values here would re-enter trait selection during negative reasoning.
+pub(crate) fn heads_may_overlap(
+    db: &dyn baml_compiler2_hir::Db,
+    package: baml_base::SourceRoot,
+    left: &ClosedTy,
+    right: &ClosedTy,
+) -> bool {
+    fn freshen(
+        ty: &baml_type::interned::Ty,
+        symbols: &mut FxHashMap<baml_type::interned::Ty, baml_type::interned::Ty>,
+        vars: &mut Vec<ParamTy>,
+    ) -> baml_type::interned::Ty {
+        use baml_type::interned::{InferTy, Ty};
+        if matches!(
+            ty.kind(),
+            InferTy::TypeVar(..) | InferTy::AssociatedTypeProjection { .. }
+        ) {
+            return symbols
+                .entry(ty.clone())
+                .or_insert_with(|| {
+                    let param = renamed_var('h', vars.len());
+                    vars.push(param.clone());
+                    Ty::intern(InferTy::TypeVar(param))
+                })
+                .clone();
+        }
+        Ty::intern(
+            ty.kind()
+                .map_children(|child| freshen(child, symbols, vars)),
+        )
+    }
+    let mut vars = Vec::new();
+    let left = freshen(left, &mut FxHashMap::default(), &mut vars);
+    let right = freshen(right, &mut FxHashMap::default(), &mut vars);
+    let aliases = AliasEquivCtx {
+        aliases: crate::interfaces::normalized_alias_map(db, package),
+        lang: lang_roots(db),
+    };
+    unify_into(
+        &ClosedTy::try_from(left)
+            .expect("freshened head is closed")
+            .to_plain(),
+        &ClosedTy::try_from(right)
+            .expect("freshened head is closed")
+            .to_plain(),
+        &vars,
+        &aliases,
+        &mut TypeBindings::default(),
+    ) != Overlap::No
+}
+
 fn unify_into_at(
     x: &Ty,
     y: &Ty,

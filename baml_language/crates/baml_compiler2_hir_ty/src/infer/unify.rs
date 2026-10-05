@@ -68,12 +68,15 @@ pub enum VarPolicy {
     /// untyped, so its first ground demand commits and later incompatible
     /// demands diagnose at their own use sites.
     LambdaParam,
-    /// Element/key/value of an EMPTY container literal (the honest
+    /// Element/value of an EMPTY container literal (the honest
     /// replacement for TIR's Evolving sentinels): first-demand order on
     /// disagreeing demands (ruling 1), and a ground `unknown` demand
     /// commits the slot to top - TIR's frozen-Evolving behavior at
     /// exactly the demanded case.
     ContainerSlot,
+    /// An empty map's key slot takes its first demand, but cannot absorb
+    /// `unknown`: an erased container still needs a hashable key type.
+    MapKeySlot,
 }
 
 impl VarPolicy {
@@ -82,7 +85,7 @@ impl VarPolicy {
     /// ordinary var (a call instantiation) fails resolution instead.
     pub fn first_demand_commits(self) -> bool {
         match self {
-            VarPolicy::LambdaParam | VarPolicy::ContainerSlot => true,
+            VarPolicy::LambdaParam | VarPolicy::ContainerSlot | VarPolicy::MapKeySlot => true,
             VarPolicy::Value | VarPolicy::Effect => false,
         }
     }
@@ -94,7 +97,10 @@ impl VarPolicy {
     pub fn absorbs_unknown(self) -> bool {
         match self {
             VarPolicy::ContainerSlot => true,
-            VarPolicy::Value | VarPolicy::Effect | VarPolicy::LambdaParam => false,
+            VarPolicy::Value
+            | VarPolicy::Effect
+            | VarPolicy::LambdaParam
+            | VarPolicy::MapKeySlot => false,
         }
     }
 
@@ -103,7 +109,10 @@ impl VarPolicy {
     pub fn defaults_to_never(self) -> bool {
         match self {
             VarPolicy::Effect => true,
-            VarPolicy::Value | VarPolicy::LambdaParam | VarPolicy::ContainerSlot => false,
+            VarPolicy::Value
+            | VarPolicy::LambdaParam
+            | VarPolicy::ContainerSlot
+            | VarPolicy::MapKeySlot => false,
         }
     }
 
@@ -129,6 +138,7 @@ impl VarPolicy {
             }
             (VarPolicy::Value, other) | (other, VarPolicy::Value) => other,
             (VarPolicy::LambdaParam, other) | (other, VarPolicy::LambdaParam) => other,
+            (VarPolicy::MapKeySlot, _) | (_, VarPolicy::MapKeySlot) => VarPolicy::MapKeySlot,
             (VarPolicy::ContainerSlot, VarPolicy::ContainerSlot) => VarPolicy::ContainerSlot,
         }
     }

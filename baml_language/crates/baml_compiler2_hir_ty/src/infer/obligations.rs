@@ -202,9 +202,9 @@ enum Attempt {
 #[derive(Clone, Copy)]
 enum Stall {
     /// Part of the goal is still unsolved: the subject is a variable, a
-    /// union has not closed, or a projection's base has not resolved. No
-    /// candidate was ever consulted, so there is nothing to call ambiguous;
-    /// the diagnostics for an undetermined type own it.
+    /// union has not closed, a projection's base has not resolved, or a
+    /// conditional default needs resolved components. This is not candidate
+    /// ambiguity; the diagnostics for an undetermined type own it.
     Unresolved,
     /// The goal is decidable and MORE THAN ONE candidate decides it. More
     /// solving may still prune the set, so it retries; if nothing does, it
@@ -229,6 +229,8 @@ enum Selection {
     Confirmed,
     /// Several candidates apply; more solving may prune them.
     Ambiguous,
+    /// A conditional default needs the subject's remaining variables resolved.
+    Unresolved,
     /// No candidate can apply, whatever the goal's open variables become.
     NoCandidate,
 }
@@ -326,7 +328,13 @@ impl<'db> InferenceContext<'db> {
                 // before the shared verdict, whose existential arm answers by
                 // the existential's own reference — right for a coercion
                 // (a `Show` value is usable as a `Show`), never for a bound.
-                if purpose == GoalPurpose::Bound && is_abstract_head(ty.kind()) {
+                if purpose == GoalPurpose::Bound
+                    && is_abstract_head(ty.kind())
+                    && !crate::impls::is_structural_interface(self.db, &interface)
+                    && !(crate::impls::structural_interface(self.db, &interface.name)
+                        == Some(baml_type::StructuralInterface::Hash)
+                        && crate::impls::hash_eligible(self.db, &self.facts, &ty, &interface))
+                {
                     self.pending_diags
                         .push(super::PendingDiag::BoundedArgNotConcrete {
                             expr: at,
@@ -385,6 +393,7 @@ impl<'db> InferenceContext<'db> {
                 match selection {
                     Selection::Confirmed => Attempt::Done,
                     Selection::Ambiguous => Attempt::Stalled(Stall::Ambiguous),
+                    Selection::Unresolved => Attempt::Stalled(Stall::Unresolved),
                     Selection::NoCandidate => {
                         self.report_not_implemented(at, subject, &interface, required_for);
                         Attempt::Done
@@ -418,8 +427,9 @@ impl<'db> InferenceContext<'db> {
     /// inversion B-898 needs): every candidate is tried under a table
     /// snapshot and rolled back; EXACTLY ONE applying confirms it - the
     /// header unification commits, constraining the goal's inference
-    /// variables. Zero applicable is a definite failure (reported);
-    /// several is genuine ambiguity - Stalled, retried once more
+    /// variables. Zero applicable falls back to structural defaults, whose
+    /// eligibility may still be unresolved; otherwise it is a definite failure.
+    /// Several is genuine ambiguity - Stalled, retried once more
     /// information may prune, reported at quiescence if it never does
     /// (rustc's "type annotations needed"). Committing on uniqueness is
     /// sound because coherence (I7) guarantees at most one impl per
@@ -433,7 +443,7 @@ impl<'db> InferenceContext<'db> {
         required_for: &[RequiredFor],
     ) -> Selection {
         let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
-        let mut applicable = None;
+        let mut applicable: Option<&crate::impls::ImplFacts<'_>> = None;
         for facts in candidates {
             let probe = self.probe();
             let applies = self.confirm_impl(goal, interface, facts).is_some();
@@ -446,6 +456,19 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let Some(facts) = applicable else {
+            if crate::impls::is_structural_interface(self.db, interface) {
+                return Selection::Confirmed;
+            }
+            if crate::impls::structural_interface(self.db, &interface.name)
+                == Some(baml_type::StructuralInterface::Hash)
+            {
+                if goal.has_infer() || interface_has_infer(interface) {
+                    return Selection::Unresolved;
+                }
+                if crate::impls::hash_eligible(self.db, &self.facts, subject, interface) {
+                    return Selection::Confirmed;
+                }
+            }
             return Selection::NoCandidate;
         };
         let instantiation = self
@@ -842,7 +865,7 @@ impl<'db> InferenceContext<'db> {
         if !crate::impls::is_concrete_receiver(receiver) {
             return None;
         }
-        let mut applicable = None;
+        let mut applicable: Option<&crate::impls::ImplFacts<'_>> = None;
         for facts in crate::impls::all_impl_facts(self.db, self.viewer()) {
             if !crate::impls::provides_concrete_members(
                 baml_compiler2_hir::package::lang_roots(self.db),
@@ -860,7 +883,44 @@ impl<'db> InferenceContext<'db> {
                 applicable = Some(facts);
             }
         }
-        let facts = applicable?;
+        let Some(facts) = applicable else {
+            let roots = if receiver.has_infer() {
+                crate::impls::structural_interface_roots(self.db)
+                    .into_iter()
+                    .chain(crate::impls::hash_interface_root(self.db))
+                    .collect()
+            } else {
+                crate::impls::applicable_structural_interface_roots(self.db, &self.facts, receiver)
+            };
+            let mut candidates = roots.into_iter().filter_map(|interface| {
+                crate::method_resolution::member_on_interface(
+                    self.db,
+                    &self.facts,
+                    &interface,
+                    receiver,
+                    name,
+                    false,
+                )
+                .map(|member| (interface, member))
+            });
+            let (interface, member) = candidates.next()?;
+            if candidates.next().is_some() {
+                return None;
+            }
+            // Discovering a conditional default's signature does not prove
+            // conformance. Fulfillment checks it once the receiver resolves.
+            if crate::impls::structural_interface(self.db, &interface.name)
+                == Some(baml_type::StructuralInterface::Hash)
+            {
+                self.register_obligation(Obligation::implements(
+                    receiver.clone(),
+                    interface,
+                    at,
+                    GoalPurpose::Bound,
+                ));
+            }
+            return Some(member);
+        };
         let (member, instantiation) = self
             .probe_candidate(receiver, name, facts)
             .expect("the unique applicable candidate re-confirms");
@@ -930,6 +990,14 @@ impl<'db> InferenceContext<'db> {
     /// construction: a union reaches the registry and no impl subject is
     /// a union, so it fails - never "passes as a subtype".
     fn implements_holds(&mut self, ty: &Ty, interface: &InferInterface) -> bool {
+        if crate::impls::is_structural_interface(self.db, interface) {
+            return true;
+        }
+        if crate::impls::structural_interface(self.db, &interface.name)
+            == Some(baml_type::StructuralInterface::Hash)
+        {
+            return crate::impls::hash_eligible(self.db, &self.facts, ty, interface);
+        }
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {

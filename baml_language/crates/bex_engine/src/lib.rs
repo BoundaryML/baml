@@ -6846,17 +6846,10 @@ impl BexEngine {
             vm: &BexVm,
             value: Value,
         ) -> Result<IndexMap<bex_str::BexStr, Value>, EngineError> {
-            let Some(ptr) = value.as_object_ptr() else {
-                return Err(EngineError::TypeMismatch {
-                    message: "Package.compile expected a map".to_string(),
-                });
-            };
-            let Object::Map(map) = vm.get_object(ptr) else {
-                return Err(EngineError::TypeMismatch {
-                    message: "Package.compile expected a map".to_string(),
-                });
-            };
-            Ok(map.to_index_map())
+            vm.as_string_map(&value)
+                .map_err(|_| EngineError::TypeMismatch {
+                    message: "Package.compile expected a string-keyed map".to_string(),
+                })
         }
 
         let files_value = args

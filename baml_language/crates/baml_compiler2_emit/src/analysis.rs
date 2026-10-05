@@ -1154,6 +1154,8 @@ impl Clobbers {
 
 /// Everything re-evaluating a definition's rvalue at a use reads: the rvalue's
 /// own reads plus those of every single-definition local it reads, transitively.
+/// The same chain determines whether evaluation may repeat: copying an
+/// allocation does not make its observable identity repeatable.
 ///
 /// A sunk evaluation re-evaluates the whole chain, and each link is judged
 /// pairwise over its own segment: a link classified `Virtual` was proven
@@ -1161,8 +1163,12 @@ impl Clobbers {
 /// unclobbered from here to the use for everything the chain reads. A local
 /// with several definitions, or defined by a terminator, is a slot the sunk
 /// evaluation loads, so it stays a leaf and the path walk finds its writes.
-fn transitive_reads(cx: &ClassifyCx<'_, '_>, def: &DefLocation<'_>) -> Resources {
+fn transitive_evaluation(cx: &ClassifyCx<'_, '_>, def: &DefLocation<'_>) -> (Resources, bool) {
     let mut reads = memory::rvalue_reads(cx.body, &def.rvalue, cx.track_type_slots);
+    let mut once = matches!(
+        repeatability(cx.body, &def.rvalue),
+        Repeatability::Movable { once: true }
+    );
     let mut worklist: Vec<Local> = reads.locals.iter().copied().collect();
     let mut followed: HashSet<Local> = HashSet::new();
     while let Some(local) = worklist.pop() {
@@ -1179,11 +1185,15 @@ fn transitive_reads(cx: &ClassifyCx<'_, '_>, def: &DefLocation<'_>) -> Resources
         if inner.statement_ref == StatementRef::Terminator {
             continue;
         }
+        once |= matches!(
+            repeatability(cx.body, &inner.rvalue),
+            Repeatability::Movable { once: true }
+        );
         let inner_reads = memory::rvalue_reads(cx.body, &inner.rvalue, cx.track_type_slots);
         worklist.extend(inner_reads.locals.iter().copied());
         reads.extend(&inner_reads);
     }
-    reads
+    (reads, once)
 }
 
 /// Whether something in `reads` is written on some path from the definition at
@@ -1309,10 +1319,10 @@ fn rematerializable(cx: &ClassifyCx<'_, '_>, du: &LocalDefUse<'_>) -> bool {
     if du.all_defs.len() != 1 {
         return false;
     }
-    let once = match repeatability(cx.body, &def.rvalue) {
+    match repeatability(cx.body, &def.rvalue) {
         Repeatability::Constant => return !du.uses.is_empty(),
-        Repeatability::Movable { once } => once,
-    };
+        Repeatability::Movable { .. } => {}
+    }
     // Evaluating a non-constant at several uses would repeat its work.
     if du.uses.len() != 1 {
         return false;
@@ -1330,7 +1340,7 @@ fn rematerializable(cx: &ClassifyCx<'_, '_>, du: &LocalDefUse<'_>) -> bool {
     {
         return false;
     }
-    let reads = transitive_reads(cx, def);
+    let (reads, once) = transitive_evaluation(cx, def);
     if clobbered_between(cx, def.block, def_idx, use_loc, &reads) {
         return false;
     }
