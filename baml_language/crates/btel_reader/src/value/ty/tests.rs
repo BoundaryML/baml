@@ -122,6 +122,11 @@ fn literals_hold_their_values() {
         literal(Literal::Bigint(12.into())),
         json!({"type": "literal", "value": {"$bigint": "12"}})
     );
+    // Too large for a JSON number, and not the string literal "1e999".
+    assert_eq!(
+        literal(Literal::Float("1e999".into())),
+        json!({"type": "literal", "value": {"$float": "1e999"}})
+    );
 }
 
 #[test]

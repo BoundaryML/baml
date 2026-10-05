@@ -12,6 +12,8 @@ use baml_type::{Literal, RealizedTy};
 use btel_snapshot::{OwnedType, TypeIdentity};
 use serde_json::{Map, Value as Json};
 
+use super::envelope;
+
 pub(super) fn json(ty: &OwnedType) -> Json {
     match ty {
         RealizedTy::Int => leaf("int"),
@@ -143,20 +145,20 @@ fn list(types: &[OwnedType]) -> Json {
 }
 
 /// A literal's value as the value renderer writes it: a bigint as `$bigint`
-/// digits, a float that JSON can't hold as its source text.
+/// digits, a float that JSON can't hold (`1e999`) as `$float` source text,
+/// never a plain string a string literal could also be.
 fn literal_value(literal: &Literal) -> Json {
     match literal {
         Literal::Int(n) => Json::from(*n),
-        Literal::Bigint(n) => {
-            let mut map = Map::new();
-            map.insert("$bigint".into(), Json::from(n.to_string()));
-            Json::Object(map)
-        }
+        Literal::Bigint(n) => envelope("$bigint", Json::from(n.to_string())),
         Literal::Float(text) => text
             .parse::<f64>()
             .ok()
             .and_then(serde_json::Number::from_f64)
-            .map_or_else(|| Json::from(text.as_str()), Json::Number),
+            .map_or_else(
+                || envelope("$float", Json::from(text.as_str())),
+                Json::Number,
+            ),
         Literal::String(text) => Json::from(text.as_str()),
         Literal::Bool(b) => Json::Bool(*b),
     }
