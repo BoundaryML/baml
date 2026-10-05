@@ -54,6 +54,45 @@ and async cleanup finish. Cancellation does not interrupt a synchronous Python
 body. A callback that suppresses cancellation may finish later; its result
 does not revive the cancelled BAML call.
 
+## Unobserved errors of spawned tasks
+
+A BAML `spawn { ... }` task can end with an error that no code awaits. The
+runtime finds such a task at a later garbage collection or at shutdown, and
+reports its error one time to one handler for the process. The default handler
+prints the traceback and ends the process with exit status 1, as an uncaught
+exception ends a script. If the task was cancelled before it failed, the
+default only prints.
+
+A server must usually not end because of one stray task. It installs a
+handler that reports the error and returns:
+
+```python
+import logging
+
+import baml_bridge
+
+
+def report(error: BaseException, cancelled: bool) -> None:
+    logging.getLogger("baml").error("unobserved BAML spawn error", exc_info=error)
+
+
+baml_bridge.set_unhandled_spawn_error_handler(report)
+```
+
+- `error` is the exception that a call raises for the same failure (a
+  `BamlError`, a `BamlPanic`, or the exception a Python callback raised). Its
+  traceback has the BAML frames. `cancelled` is `True` when the task was
+  cancelled before it failed.
+- The handler runs on a thread of the BAML runtime, not on the thread or the
+  event loop that made the call, and no event loop runs on that thread. It must
+  return soon and must not call BAML. To reach the application, use
+  `loop.call_soon_threadsafe` or a queue.
+- If the handler raises, the bridge prints the error of the task, gives the
+  exception of the handler to `sys.unraisablehook`, and the process continues.
+- `set_unhandled_spawn_error_handler` returns the handler that it replaces.
+  `None` restores `default_unhandled_spawn_error_handler`. A handler can call
+  the default for the errors that must end the process.
+
 ## Enum arguments
 
 A BAML enum is generated as a `(str, enum.Enum)` class. Where a BAML function
