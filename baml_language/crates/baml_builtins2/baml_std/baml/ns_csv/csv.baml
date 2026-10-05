@@ -932,7 +932,7 @@ function decode_optional<T>(
 ) -> T? throws Error {
     let all = decode<T>(source, options = options);
     if (all.length() > 1) {
-        throw _error(ErrorKind.TooManyRows, "expected at most one data record, found " + all.length().to_string());
+        throw _error(ErrorKind.TooManyRows, `expected at most one data record, found ${all.length()}`);
     }
     all.at(0)
 }
@@ -957,7 +957,7 @@ function decode_one<T>(
         throw _error(ErrorKind.NotFound, "expected exactly one data record, found none");
     }
     if (all.length() > 1) {
-        throw _error(ErrorKind.TooManyRows, "expected exactly one data record, found " + all.length().to_string());
+        throw _error(ErrorKind.TooManyRows, `expected exactly one data record, found ${all.length()}`);
     }
     match (all.at(0)) {
         null => root.sys.panic("unreachable: decode_one lost its record"),
