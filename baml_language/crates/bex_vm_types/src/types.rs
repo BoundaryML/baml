@@ -671,9 +671,6 @@ include!(concat!(env!("OUT_DIR"), "/sys_op_generated.rs"));
 #[derive(Clone, Debug)]
 pub enum SentinelKind {
     Uninit,
-    FromSpacePoison {
-        epoch: u32,
-    },
     TlabCanary {
         chunk_start: usize,
         chunk_end: usize,

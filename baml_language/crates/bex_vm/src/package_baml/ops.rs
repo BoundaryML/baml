@@ -607,6 +607,8 @@ impl EqualsDriver {
             #[cfg(feature = "heap_debug")]
             (Object::Sentinel(_), _) => Cmp::NotEqual,
 
+            (Object::Tombstone, _) => Object::tombstone_reached(),
+
             (Object::RustData(x), Object::RustData(y)) => {
                 match (
                     x.downcast_ref::<bex_vm_types::trace::SpanId>(),

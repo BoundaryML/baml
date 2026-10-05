@@ -215,6 +215,7 @@ impl Scratch {
                 Object::Interface(_) => describe(Description::Interface),
                 Object::ImplRule(_) => describe(Description::Implementation),
                 Object::TypeAlias(_) => describe(Description::TypeAlias),
+                Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => describe(Description::Sentinel),
                 Object::Float(_)

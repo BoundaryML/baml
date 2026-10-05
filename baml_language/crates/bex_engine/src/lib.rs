@@ -201,6 +201,22 @@ impl Drop for ParkRequestGuard {
     }
 }
 
+/// Aborts the process if a collection unwinds.
+///
+/// A collection moves survivors out of from-space, so from its first move until
+/// every root has been forwarded, parked VMs hold pointers to vacated slots.
+/// Unwinding out of that window would release the [`HeapGuard`] and resume
+/// those VMs on a heap they can no longer read, so a panic there is fatal.
+struct AbortOnCollectionUnwind;
+
+impl Drop for AbortOnCollectionUnwind {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            std::process::abort();
+        }
+    }
+}
+
 use crate::logger::{TraceLogMetadata, TraceLogger};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
@@ -2920,6 +2936,10 @@ impl BexEngine {
 
         cycle.roots_scanned();
 
+        // From the first evacuated object until every root is forwarded and
+        // verified, the heap is unusable by anyone but this collection.
+        let abort_on_unwind = AbortOnCollectionUnwind;
+
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (mut stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
@@ -2965,6 +2985,9 @@ impl BexEngine {
         }
 
         self.heap.verify_quick();
+
+        // Roots are forwarded; a panic past this point leaves a readable heap.
+        drop(abort_on_unwind);
 
         // Root object-valued errors into handles before releasing the GC
         // guard. The raw queue values are post-copy pointers and must survive

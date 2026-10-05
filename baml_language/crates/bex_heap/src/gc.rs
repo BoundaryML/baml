@@ -24,6 +24,21 @@
 //! is ever handed a compile-time pointer whose payload would have produced
 //! a runtime reference, so a regression of this invariant surfaces as an
 //! immediate panic in debug builds (and under `heap_debug`).
+//!
+//! # Invariant: a survivor's old slot is read exactly once
+//!
+//! Evacuation moves each survivor into its destination space and leaves an
+//! `Object::Tombstone` in the slot it came from (`evacuate_object`). From then
+//! on the old slot no longer holds the object: tracing, fixup, the finalizer and
+//! unhandled-error scans, and the engine's root forwarding must reach a
+//! survivor through the `forwarding` map, never through its old pointer. A
+//! from-space scan may still read slots that are *not* in `forwarding`; those
+//! are dead objects, and they stay intact until their space is cleared.
+//!
+//! Because survivors are gone from from-space, a collection cannot be
+//! abandoned halfway: once the first object has moved, the roots are stale
+//! until root forwarding completes. A panic in that window must not resume
+//! execution; the engine aborts the process instead.
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
@@ -102,6 +117,9 @@ impl BexHeap {
     /// Caller must ensure all VMs are at safepoints (not executing).
     /// This is typically guaranteed by the engine's epoch-based GC protocol.
     ///
+    /// If this panics, the heap must not be used again: survivors may already
+    /// have been moved out of the slots the roots point at.
+    ///
     /// # Arguments
     ///
     /// * `roots` — Stack roots from all yielded VMs plus any externally-held handles.
@@ -167,8 +185,14 @@ impl BexHeap {
                 if inst.cleaned.is_cleaned() {
                     continue; // explicit/`defer` already cleaned it — SuppressFinalize
                 }
-                // The class object is compile-time/permanent — always valid.
-                let Object::Class(class) = (unsafe { inst.class.get() }) else {
+                // A runtime-created class is itself collectible, so this
+                // collection may already have evacuated it: read it where it
+                // lives now. A compile-time class, or one this collection does
+                // not move, is still at `inst.class`.
+                let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
+                // SAFETY: a forwarded pointer names an initialized destination
+                // slot; an unforwarded one names a slot no evacuation touched.
+                let Object::Class(class) = (unsafe { class_ptr.get() }) else {
                     continue;
                 };
                 if class.has_cleanup {
@@ -213,7 +237,7 @@ impl BexHeap {
                 forwarding.insert(old_ptr, old_ptr);
                 continue;
             }
-            let new_ptr = self.copy_object_to_inactive(old_ptr, forwarding);
+            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
             // SAFETY: just written into inactive; pointer valid.
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
@@ -250,13 +274,13 @@ impl BexHeap {
                     forwarding.insert(old_ptr, old_ptr);
                 }
                 Generation::Gen0 => {
-                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
                     // SAFETY: just written; pointer valid.
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
                 }
                 Generation::Gen1 => {
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, forwarding);
                     // SAFETY: just written; pointer valid.
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
@@ -345,7 +369,7 @@ impl BexHeap {
                 forwarding.insert(old_ptr, old_ptr);
                 continue;
             }
-            let new_ptr = self.copy_object_to_inactive(old_ptr, forwarding);
+            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
             // SAFETY: `new_ptr` was just initialized in inactive space.
             self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
         }
@@ -384,11 +408,11 @@ impl BexHeap {
                     forwarding.insert(old_ptr, old_ptr);
                 }
                 Generation::Gen0 => {
-                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
                     self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
                 }
                 Generation::Gen1 => {
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, forwarding);
                     self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
                     *promoted_to_gen2 += 1;
                 }
@@ -465,8 +489,8 @@ impl BexHeap {
                 continue;
             }
 
-            // Copy this object to the inactive space.
-            let new_ptr = self.copy_object_to_inactive(old_ptr, &mut forwarding);
+            // Move this object to the inactive space.
+            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, &mut forwarding);
 
             // Enqueue this object's outgoing heap references.
             // SAFETY: We just wrote the object into inactive, pointer is valid.
@@ -582,29 +606,59 @@ impl BexHeap {
         (stats, remapped_roots, forwarding)
     }
 
-    /// Copy a single object from an active generation into the inactive space.
-    /// Returns the new HeapPtr in the inactive space.
-    fn copy_object_to_inactive(
+    /// Move a survivor out of its slot into `to` (Gen1, Gen2, or inactive) and
+    /// return its new address.
+    ///
+    /// The object is moved, not cloned: its backing storage keeps its address
+    /// and capacity, so a collection costs time proportional to the number of
+    /// survivors rather than to the bytes they own. The old slot is left
+    /// holding an [`Object::Tombstone`], which owns nothing and is discarded
+    /// when its space is cleared.
+    ///
+    /// A collection reads each survivor's old slot exactly once, here. Every
+    /// later step works from the destination and the `forwarding` map, so
+    /// anything that still needs a survivor must look it up through
+    /// `forwarding` first.
+    fn evacuate_object(
         &self,
+        to: &UnsafeCell<ChunkedVec<Object>>,
         old_ptr: HeapPtr,
         forwarding: &mut HashMap<HeapPtr, HeapPtr>,
     ) -> HeapPtr {
-        // Clone the object from its old location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let obj = unsafe { old_ptr.get().clone() };
+        debug_assert!(
+            !self.is_compile_time_ptr(old_ptr),
+            "compile-time object {old_ptr:?} must never be evacuated"
+        );
+        // Scans every chunk of `to`, so it is a `heap_debug` check rather than
+        // a `debug_assert!`: it would otherwise run once per survivor.
+        #[cfg(feature = "heap_debug")]
+        assert!(
+            // SAFETY: GC runs at safepoints; only addresses are compared.
+            !unsafe { (*to.get()).contains_ptr(old_ptr.as_ptr()) },
+            "heap_debug: {old_ptr:?} already lives in its destination space"
+        );
 
-        // Append to the inactive space and get a pointer to the new location.
+        // SAFETY: GC runs at safepoints, so nothing else references this slot.
+        // `replace` moves the object out and installs the tombstone in one
+        // step; the slot is never left uninitialized.
+        let obj = unsafe { std::ptr::replace(old_ptr.as_ptr(), Object::Tombstone) };
+
+        // Append to the destination space and get a pointer to the new location.
         // SAFETY: GC runs at safepoints, no VMs are executing.
         let new_ptr = unsafe {
-            let inactive = self.inactive_mut();
-            let new_runtime_idx = inactive.len();
-            inactive.push_with(obj, || Object::String(bex_str::BexStr::empty()));
-            let raw_ptr = inactive.get_ptr(new_runtime_idx);
+            let space = &mut *to.get();
+            let new_idx = space.len();
+            space.push_with(obj, || Object::String(bex_str::BexStr::empty()));
+            let raw_ptr = space.get_ptr(new_idx);
             self.make_heap_ptr(raw_ptr)
         };
 
         // Record forwarding pointer
-        forwarding.insert(old_ptr, new_ptr);
+        let previous = forwarding.insert(old_ptr, new_ptr);
+        debug_assert!(
+            previous.is_none(),
+            "{old_ptr:?} was evacuated twice; the second move read a vacated slot"
+        );
 
         new_ptr
     }
@@ -720,6 +774,7 @@ impl BexHeap {
             }
             Object::Enum(enm) => trace_owner(&enm.owner, worklist),
             // Primitives have no references
+            Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
@@ -964,6 +1019,7 @@ impl BexHeap {
             }
             Object::Enum(enm) => forward_owner(&mut enm.owner, forwarding),
             // Primitives have no references
+            Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries no heap references; see
@@ -1077,36 +1133,6 @@ impl BexHeap {
                 self.fixup_object_references(obj, forwarding);
             }
         }
-    }
-
-    /// Copy a single object into an arbitrary destination space.
-    ///
-    /// Generalised version of `copy_object_to_inactive` that can target any
-    /// `ChunkedVec` (Gen1, Gen2, or inactive).
-    ///
-    /// Returns the new `HeapPtr` in the destination space.
-    fn copy_object_to_space(
-        &self,
-        space: &UnsafeCell<ChunkedVec<Object>>,
-        old_ptr: HeapPtr,
-        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
-    ) -> HeapPtr {
-        // Clone the object from its old location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let obj = unsafe { old_ptr.get().clone() };
-
-        // Append to the destination space and return a pointer to the new location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let new_ptr = unsafe {
-            let vec = &mut *space.get();
-            let new_idx = vec.len();
-            vec.push_with(obj, || Object::String(bex_str::BexStr::empty()));
-            let raw_ptr = vec.get_ptr(new_idx);
-            self.make_heap_ptr(raw_ptr)
-        };
-
-        forwarding.insert(old_ptr, new_ptr);
-        new_ptr
     }
 
     /// Scan dirty cards in `space`/`card_table` and push any references to
@@ -1341,6 +1367,7 @@ impl BexHeap {
                 );
             }
             // Primitives/leaf variants have no heap references.
+            Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries no heap references.
@@ -1416,6 +1443,9 @@ impl BexHeap {
     /// # Safety
     ///
     /// Caller must ensure all VMs are at safepoints (not executing).
+    ///
+    /// If this panics, the heap must not be used again: survivors may already
+    /// have been moved out of the slots the roots point at.
     pub unsafe fn collect_garbage_minor(
         &self,
         roots: &[HeapPtr],
@@ -1465,14 +1495,13 @@ impl BexHeap {
                 }
                 Generation::Gen0 => {
                     // Gen0 survivors → new Gen1 (inactive).
-                    let new_ptr =
-                        self.copy_object_to_space(&self.inactive, old_ptr, &mut forwarding);
+                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, &mut forwarding);
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
                 }
                 Generation::Gen1 => {
                     // Gen1 survivors → promote to Gen2.
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, &mut forwarding);
+                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, &mut forwarding);
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
                     promoted_to_gen2 += 1;
@@ -1606,6 +1635,9 @@ impl BexHeap {
     /// # Safety
     ///
     /// Caller must ensure all VMs are at safepoints (not executing).
+    ///
+    /// If this panics, the heap must not be used again: survivors may already
+    /// have been moved out of the slots the roots point at.
     pub unsafe fn collect_garbage_generational(
         &self,
         roots: &[HeapPtr],

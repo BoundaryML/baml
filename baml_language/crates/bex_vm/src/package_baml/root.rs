@@ -897,6 +897,7 @@ fn deep_copy_value_recursive(
                 // the closure semantics (shared handle).
                 Object::HostClosure(hc) => vm.tlab.alloc(Object::HostClosure(hc)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
+                Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };

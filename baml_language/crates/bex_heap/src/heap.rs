@@ -839,7 +839,7 @@ impl BexHeap {
     /// Used by the engine's post-`forward_roots` integrity sweep to detect
     /// stale references the GC failed to forward. The inactive space's
     /// chunks still exist (their slots have been overwritten with
-    /// `Sentinel::FromSpacePoison` in heap_debug builds), so checking
+    /// `Object::Tombstone` in heap_debug builds), so checking
     /// `ptr_in_chunked_vec` against `inactive` is safe even after
     /// `finalize_inactive_space` has run.
     #[cfg(feature = "heap_debug")]

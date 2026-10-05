@@ -783,6 +783,7 @@ fn convert_object(
             &hc.handle,
         ))),
         Object::Cell(_) => unconvertible("cell"),
+        Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(sentinel_kind) => unconvertible(&format!("sentinel: {:?}", sentinel_kind)),
     }

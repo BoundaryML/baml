@@ -786,6 +786,7 @@ fn value_to_serde_at(
             | Object::GenericFunction(_)
             | Object::HostClosure(_)
             | Object::Cell(_) => serde_json::Value::Null,
+            Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => serde_json::Value::Null,
         },

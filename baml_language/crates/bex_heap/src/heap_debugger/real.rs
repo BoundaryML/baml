@@ -237,22 +237,21 @@ impl BexHeap {
         for (handle_key, idx) in handles.iter() {
             self.debug_assert_valid_index(*idx);
             let obj = unsafe { self.get_object(*idx) };
-            if let Object::Sentinel(_) = obj {
+            if let Object::Sentinel(_) | Object::Tombstone = obj {
                 panic!("handle points to sentinel: handle_key={handle_key} idx={idx:?}");
             }
         }
     }
 
     fn debug_handle_runtime_sentinel(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) -> bool {
-        let Object::Sentinel(kind) = obj else {
-            return false;
+        let kind = match obj {
+            Object::Sentinel(kind) => kind,
+            Object::Tombstone => panic!("tombstone in active space: idx={idx:?}"),
+            _ => return false,
         };
 
         match kind {
             SentinelKind::Uninit => true,
-            SentinelKind::FromSpacePoison { .. } => {
-                panic!("from-space poison in active space: idx={idx:?}");
-            }
             SentinelKind::TlabCanary {
                 chunk_start,
                 chunk_end,
@@ -360,7 +359,8 @@ impl BexHeap {
             | Object::Type(_)
             | Object::Float(_)
             // `HostClosure` carries no heap references.
-            | Object::HostClosure(_) => {}
+            | Object::HostClosure(_)
+            | Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
@@ -411,12 +411,13 @@ impl BexHeap {
         })
     }
 
+    /// Keep the old space's chunks alive but drop everything in them, so a
+    /// read through a stale pointer finds a tombstone instead of freed memory.
     pub(crate) fn finalize_inactive_space(&self) {
-        let epoch = self.heap_epoch();
         unsafe {
             let space = &mut *self.inactive.get();
             for slot in space.iter_mut() {
-                *slot = Object::Sentinel(SentinelKind::FromSpacePoison { epoch });
+                *slot = Object::Tombstone;
             }
         }
     }
@@ -427,8 +428,10 @@ impl BexHeap {
             return;
         }
 
-        if let Object::Sentinel(kind) = obj {
-            panic!("heap sentinel read: {kind:?}");
+        match obj {
+            Object::Sentinel(kind) => panic!("heap sentinel read: {kind:?}"),
+            Object::Tombstone => panic!("heap tombstone read"),
+            _ => {}
         }
     }
 

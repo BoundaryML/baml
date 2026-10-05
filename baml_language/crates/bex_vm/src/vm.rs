@@ -2065,6 +2065,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Interface(_) => type_tags::UNKNOWN,
                 Object::Package(_) => type_tags::UNKNOWN,
                 Object::ImplRule(_) => type_tags::UNKNOWN,
+                Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
                 Object::Instance(instance) => {
@@ -3693,6 +3694,8 @@ impl BexVm {
             ),
             // Opaque native handles are not BAML data types at all.
             Object::RustData(_) => return None,
+
+            Object::Tombstone => Object::tombstone_reached(),
 
             // A GC-debug sentinel is never a live value.
             #[cfg(feature = "heap_debug")]
