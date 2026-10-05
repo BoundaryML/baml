@@ -602,6 +602,55 @@ impl io::IoClassFsFile for NativeSysOps {
 }
 
 impl io::IoNamespaceFs for NativeSysOps {
+    fn metadata(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::fs::Metadata> {
+        crate::installation::fs_metadata(self, &path)
+    }
+    fn rename(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        source: String,
+        destination: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        crate::installation::fs_rename(self, &source, &destination)
+    }
+    fn canonicalize(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        crate::installation::fs_canonicalize(self, &path)
+    }
+    fn write_atomic(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        content: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        crate::installation::fs_write_atomic(self, &path, content)
+    }
+    fn lock(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        timeout_ms: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::fs::Lock> {
+        crate::installation::fs_lock(self, &path, timeout_ms)
+    }
+
     fn open(
         &self,
         _heap: &Arc<BexHeap>,
@@ -1874,6 +1923,47 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn current_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        crate::installation::sys_current_dir(self)
+    }
+    fn current_exe(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        crate::installation::sys_current_exe(self)
+    }
+    fn home_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        crate::installation::sys_home_dir(self)
+    }
+    fn platform(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        crate::installation::sys_platform(self)
+    }
+    fn host_target(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        crate::installation::sys_host_target(self)
+    }
+
     fn collect_garbage(
         &self,
         _heap: &Arc<BexHeap>,

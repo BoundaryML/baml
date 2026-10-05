@@ -406,6 +406,70 @@ impl io::IoClassFsFile for WebFs {
 }
 
 impl IoNamespaceFs for WebFs {
+    fn metadata(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<sys_ops::io::owned::fs::Metadata> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Native installation operations are not supported by this host".into(),
+        })
+    }
+    fn rename(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _source: String,
+        _destination: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Native installation operations are not supported by this host".into(),
+        })
+    }
+    fn canonicalize(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Native installation operations are not supported by this host".into(),
+        })
+    }
+    fn write_atomic(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _content: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Native installation operations are not supported by this host".into(),
+        })
+    }
+    fn lock(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _path: String,
+        _timeout_ms: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<sys_ops::io::owned::fs::Lock> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".into(),
+            message: "Native installation operations are not supported by this host".into(),
+        })
+    }
+
     fn open(
         &self,
         _h: &Arc<BexHeap>,
@@ -771,4 +835,16 @@ fn bridge_failure(message: impl Into<String>) -> VmRustFnError {
         message: message.into(),
     }
     .into()
+}
+
+impl sys_ops::io::IoClassFsLock for WebFs {
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _lock: sys_ops::io::owned::fs::Lock,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::ok(())
+    }
 }
