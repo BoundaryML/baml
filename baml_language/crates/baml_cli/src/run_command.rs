@@ -349,7 +349,7 @@ impl Prepared {
             self.recording_sources,
             self.launch_context,
         )
-        .map_err(|e| anyhow!("failed to create engine: {e:?}"))
+        .context("failed to create engine")
     }
 }
 
@@ -828,6 +828,9 @@ impl RunArgs {
             ),
             logs.as_ref(),
         );
+        if let Some(error) = engine.initial_cloud_authorization_error() {
+            return Err(error.into());
+        }
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
@@ -1245,6 +1248,9 @@ impl RunArgs {
             ),
             logs.as_ref(),
         );
+        if let Some(error) = engine.initial_cloud_authorization_error() {
+            return Err(error.into());
+        }
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         match output_succeeded {

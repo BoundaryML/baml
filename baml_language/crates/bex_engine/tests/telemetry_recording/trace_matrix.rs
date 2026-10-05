@@ -1328,7 +1328,7 @@ fn trace_contract_end_to_end() {
                 callable_shapes(&program).await;
                 exceptional_completion(&program).await;
                 Box::pin(unions_and_opaque_values(&program)).await;
-                llm_policy(&program).await;
+                Box::pin(llm_policy(&program)).await;
             }
         });
 }

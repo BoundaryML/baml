@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DeliveryError {
     InvalidConfig,
     Capacity,
@@ -35,11 +35,22 @@ pub enum DeliveryError {
     Encoding,
     Http,
     Unauthorized,
+    InitialAuthorization(bcs_api::HttpFailure),
+    Api(bcs_api::HttpFailure),
     Worker,
 }
 
 impl fmt::Display for DeliveryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Self::InitialAuthorization(failure) = self {
+            return write!(
+                f,
+                "initial cloud telemetry authorization failed: {failure}; check Boundary credentials and project permissions"
+            );
+        }
+        if let Self::Api(failure) = self {
+            return write!(f, "cloud recording delivery: {failure}");
+        }
         write!(f, "cloud recording delivery: {self:?}")
     }
 }
@@ -55,6 +66,8 @@ pub struct DeliveryConfig {
     pub prepare_base_url: Url,
     pub bearer_token: Option<String>,
     pub authorization: Option<bcs_api::credentials::RequestAuthorization>,
+    /// Start ingestion authorization immediately, before any recording batch is sealed.
+    pub initial_recording_id: Option<btel_types::RecordingId>,
     pub max_pending_plans: usize,
     /// At most 32 captures, leaving default snapshot-pool headroom for VM
     /// capture. A capture spanning plans counts once per plan.
@@ -91,6 +104,7 @@ impl DeliveryConfig {
             prepare_base_url,
             bearer_token: None,
             authorization: None,
+            initial_recording_id: None,
             max_pending_plans: 4,
             max_pending_snapshots: 32,
             recording_reserved_bytes: 128 * 1024 * 1024,
@@ -207,6 +221,18 @@ struct State {
     cas_window: Duration,
     last_file: Option<([u8; 16], u64)>,
     finished: bool,
+    authorization: InitialAuthorization,
+}
+
+/// The recording's ingestion admission state, independent of the shared credential cache.
+/// Successful query authentication does not establish permission to ingest this recording.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum InitialAuthorization {
+    #[default]
+    NotRequested,
+    Pending,
+    Authorized,
+    Rejected(bcs_api::HttpFailure),
 }
 
 /// A byte budget that refuses nothing. Plans that fit are admitted together;
@@ -271,6 +297,25 @@ struct Shared {
 }
 
 impl Shared {
+    fn authorized(&self) {
+        let mut state = self.state.lock().unwrap();
+        if state.authorization == InitialAuthorization::Pending {
+            state.authorization = InitialAuthorization::Authorized;
+        }
+    }
+
+    fn authorization_rejected(&self, failure: bcs_api::HttpFailure) -> DeliveryError {
+        let mut state = self.state.lock().unwrap();
+        if state.authorization == InitialAuthorization::Pending {
+            state.authorization = InitialAuthorization::Rejected(failure.clone());
+            DeliveryError::InitialAuthorization(failure)
+        } else if failure.body.is_some() {
+            DeliveryError::Api(failure)
+        } else {
+            DeliveryError::Unauthorized
+        }
+    }
+
     fn lose(&self, error: DeliveryError, reset_cas: bool) {
         let mut state = self.state.lock().unwrap();
         if state.failure.is_some() {
@@ -287,7 +332,7 @@ impl Shared {
             if state.failure.is_some() {
                 (false, None)
             } else {
-                state.failure = Some(error);
+                state.failure = Some(error.clone());
                 (true, state.sender.take())
             }
         };
@@ -507,7 +552,7 @@ impl BcsDeliveryHandle {
     /// Most recent loss, or the fatal lifecycle error if delivery was disabled.
     pub fn last_error(&self) -> Option<DeliveryError> {
         let state = self.shared.state.lock().unwrap();
-        state.failure.or(state.last_error)
+        state.failure.clone().or_else(|| state.last_error.clone())
     }
 
     pub(crate) fn take_progress(&self) -> DeliveryProgress {
@@ -537,7 +582,7 @@ impl BcsDeliveryHandle {
         let window = match Window::whole(snapshots) {
             Ok(window) => window,
             Err(error) => {
-                self.shared.lose(error, true);
+                self.shared.lose(error.clone(), true);
                 return Err(error);
             }
         };
@@ -552,9 +597,9 @@ impl BcsDeliveryHandle {
         proposed_uploads: Vec<ProposedUploadTarget>,
     ) -> Result<(), DeliveryError> {
         let result = self.submit(file, window, proposed_uploads);
-        if let Err(error) = result {
-            if error != DeliveryError::Closed {
-                self.shared.lose(error, true);
+        if let Err(error) = &result {
+            if *error != DeliveryError::Closed {
+                self.shared.lose(error.clone(), true);
             }
         }
         result
@@ -727,7 +772,7 @@ impl BcsDeliveryHandle {
         let mut state = self.shared.state.lock().unwrap();
         let identity = (*file.recording_id().as_bytes(), file.sequence().get());
         loop {
-            if let Some(error) = state.failure {
+            if let Some(error) = state.failure.clone() {
                 return Err(error);
             }
             if state.sender.is_none() {
@@ -819,6 +864,11 @@ impl BcsDelivery {
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 sender: Some(sender),
+                authorization: if config.initial_recording_id.is_some() {
+                    InitialAuthorization::Pending
+                } else {
+                    InitialAuthorization::NotRequested
+                },
                 ..State::default()
             }),
             config,
@@ -882,12 +932,16 @@ impl BcsDelivery {
         }
         let mut state = self.handle.shared.state.lock().unwrap();
         state.finished = true;
-        state.failure.or(state.last_error).map_or(Ok(()), Err)
+        state
+            .failure
+            .clone()
+            .or_else(|| state.last_error.clone())
+            .map_or(Ok(()), Err)
     }
 
     pub fn result(&self) -> Option<Result<(), DeliveryError>> {
         let state = self.handle.shared.state.lock().unwrap();
-        if let Some(error) = state.failure.or(state.last_error) {
+        if let Some(error) = state.failure.clone().or_else(|| state.last_error.clone()) {
             Some(Err(error))
         } else {
             state.finished.then_some(Ok(()))
@@ -900,6 +954,16 @@ impl BcsDelivery {
 
     pub fn heartbeat_failure_count(&self) -> u64 {
         self.handle.shared.heartbeat.failure_count()
+    }
+
+    pub fn initial_authorization(&self) -> InitialAuthorization {
+        self.handle
+            .shared
+            .state
+            .lock()
+            .unwrap()
+            .authorization
+            .clone()
     }
 }
 
@@ -1006,13 +1070,15 @@ async fn prepare(
     client: &Client,
     config: &DeliveryConfig,
     request: &PrepareUploadsRequest,
-    heartbeat: &Heartbeat,
+    shared: &Shared,
 ) -> Result<PrepareUploadsResponse, DeliveryError> {
+    let heartbeat = &shared.heartbeat;
     let url = config.endpoint(&request.recording.recording_id, "uploads:prepare")?;
     let key = format!(
         "{}:{}",
         request.recording.recording_id, request.recording.recording_file_sequence
     );
+    let mut last_failure = None;
     for attempt in 0..config.max_attempts {
         let decorated = heartbeat.decorate_prepare(request);
         let mut writer = LimitedWriter::new(config.max_request_bytes);
@@ -1038,7 +1104,8 @@ async fn prepare(
         )
         .await
         {
-            Ok(response) if response.status().is_success() => {
+            Ok(response) => {
+                shared.authorized();
                 match read_response(response, config.max_response_bytes).await {
                     Ok(bytes) => {
                         heartbeat.mark_control_success();
@@ -1051,30 +1118,38 @@ async fn prepare(
                     Err(error) => return Err(error),
                 }
             }
-            Ok(response)
-                if matches!(
-                    response.status(),
-                    reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
-                ) =>
-            {
-                return Err(DeliveryError::Unauthorized);
-            }
-            Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
             Err(error)
                 if matches!(
                     error.status(),
                     Some(reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN)
                 ) =>
             {
-                return Err(DeliveryError::Unauthorized);
+                let failure = error
+                    .http_failure()
+                    .cloned()
+                    .unwrap_or_else(|| bcs_api::HttpFailure::new(error.status().unwrap()));
+                return Err(shared.authorization_rejected(failure));
             }
-            _ => {}
+            Err(error)
+                if error
+                    .http_failure()
+                    .is_some_and(|failure| !retryable(failure.status)) =>
+            {
+                return Err(error
+                    .http_failure()
+                    .cloned()
+                    .filter(|failure| failure.body.is_some())
+                    .map_or(DeliveryError::Http, DeliveryError::Api));
+            }
+            Err(error) => last_failure = error.http_failure().cloned(),
         }
         if attempt + 1 < config.max_attempts {
             tokio::time::sleep(config.retry_delay).await;
         }
     }
-    Err(DeliveryError::Http)
+    Err(last_failure
+        .filter(|failure| failure.body.is_some())
+        .map_or(DeliveryError::Http, DeliveryError::Api))
 }
 
 async fn read_response(
@@ -1172,7 +1247,7 @@ async fn assemble(
         mut reservation,
         mut holds,
     } = work;
-    let response = prepare(client, config, &request, &reservation.shared.heartbeat).await?;
+    let response = prepare(client, config, &request, &reservation.shared).await?;
     let now = now_ms()?;
     // When a lane that may be held for `held` is certainly free.
     let after = |held: Duration| {
@@ -1352,6 +1427,67 @@ async fn upload_body(
     }
 }
 
+/// This runs on the delivery worker, independently of VM execution and file sealing.
+/// Transient failures retain the ordinary retry/loss policy; only an admission refusal
+/// before the first successful control request is an initial authorization failure.
+async fn authorize_initial(
+    client: &Client,
+    shared: &Shared,
+    id: &str,
+) -> Result<(), DeliveryError> {
+    let config = &shared.config;
+    let endpoint = config.endpoint(id, "heartbeat")?;
+    let mut last_failure = None;
+    for attempt in 0..config.max_attempts {
+        let body = shared
+            .heartbeat
+            .liveness()
+            .map_err(|_| DeliveryError::Http)?;
+        let result = tokio::time::timeout(
+            config.request_timeout,
+            crate::liveness::post(
+                client,
+                &endpoint,
+                config.bearer_token.as_deref(),
+                config.authorization.as_ref(),
+                body,
+            ),
+        )
+        .await;
+        match result {
+            Ok(Ok(())) => {
+                shared.heartbeat.mark_control_success();
+                return Ok(());
+            }
+            Ok(Err(error))
+                if error
+                    .http_failure()
+                    .is_some_and(|failure| matches!(failure.status.as_u16(), 401 | 403)) =>
+            {
+                return Err(shared.authorization_rejected(error.http_failure().unwrap()));
+            }
+            Ok(Err(error))
+                if error
+                    .http_failure()
+                    .is_some_and(|failure| !retryable(failure.status)) =>
+            {
+                return Err(error
+                    .http_failure()
+                    .filter(|failure| failure.body.is_some())
+                    .map_or(DeliveryError::Http, DeliveryError::Api));
+            }
+            Ok(Err(error)) => last_failure = error.http_failure(),
+            _ => {}
+        }
+        if attempt + 1 < config.max_attempts {
+            tokio::time::sleep(config.retry_delay).await;
+        }
+    }
+    Err(last_failure
+        .filter(|failure| failure.body.is_some())
+        .map_or(DeliveryError::Http, DeliveryError::Api))
+}
+
 async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Receiver<Work>) {
     let mut cancel = shared.cancel.subscribe();
     if *cancel.borrow() {
@@ -1369,6 +1505,16 @@ async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Re
 }
 
 async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Receiver<Work>) {
+    if let Some(id) = shared.config.initial_recording_id {
+        match authorize_initial(&client, &shared, &hex::encode(id.as_bytes())).await {
+            Ok(()) => shared.authorized(),
+            Err(error @ DeliveryError::InitialAuthorization(_)) => {
+                shared.fail(error);
+                return;
+            }
+            Err(error) => shared.lose(error, false),
+        }
+    }
     let recording_slots = Arc::new(Semaphore::new(1));
     let cas_slots = Arc::new(Semaphore::new(shared.config.max_cas_uploads));
     // One task per plan, for its recording, and one per CAS body.
@@ -1409,8 +1555,8 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                                 ).catch_unwind().await.is_err() {
                                     heartbeat.observe_error(HeartbeatError::Worker);
                                 }
-                                if matches!(heartbeat.last_error(), Some(HeartbeatError::Status(401 | 403))) {
-                                    heartbeat_owner.fail(DeliveryError::Unauthorized);
+                                if let Some(failure) = heartbeat.last_error().and_then(|error| error.http_failure()).filter(|failure| matches!(failure.status.as_u16(), 401 | 403)) {
+                                    heartbeat_owner.fail(heartbeat_owner.authorization_rejected(failure));
                                 }
                             });
                         }
@@ -1440,7 +1586,8 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                             ).await;
                         });
                     }
-                    Err(DeliveryError::Unauthorized) => shared.fail(DeliveryError::Unauthorized),
+                    Err(error @ (DeliveryError::Unauthorized | DeliveryError::InitialAuthorization(_))) => shared.fail(error),
+                    Err(DeliveryError::Api(failure)) if matches!(failure.status.as_u16(), 401 | 403) => shared.fail(DeliveryError::Api(failure)),
                     Err(error) => {
                         shared.lose(error, true);
                     }
@@ -1471,6 +1618,96 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn initial_authorization_runs_without_a_recording_batch_and_is_joined_at_finish() {
+        use wiremock::{
+            Mock, MockServer, ResponseTemplate,
+            matchers::{method, path_regex},
+        };
+        for status in [204, 401, 403] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path_regex(r"/heartbeat$"))
+                .respond_with(ResponseTemplate::new(status).set_delay(Duration::from_millis(100)))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let delivery = BcsDelivery::new(
+                DeliveryConfig {
+                    initial_recording_id: Some(btel_types::RecordingId::generate()),
+                    ..DeliveryConfig::new(server.uri().parse().unwrap())
+                },
+                |_| {},
+            )
+            .unwrap();
+            assert_eq!(
+                delivery.initial_authorization(),
+                InitialAuthorization::Pending
+            );
+            // No files were submitted. Finishing must still wait for authorization.
+            let delivery = tokio::task::spawn_blocking(move || {
+                let result = delivery.finish();
+                (delivery.initial_authorization(), result)
+            })
+            .await
+            .unwrap();
+            if status == 204 {
+                assert_eq!(delivery, (InitialAuthorization::Authorized, Ok(())));
+            } else {
+                assert_eq!(
+                    delivery,
+                    (
+                        InitialAuthorization::Rejected(bcs_api::HttpFailure::new(
+                            StatusCode::from_u16(status).unwrap()
+                        )),
+                        Err(DeliveryError::InitialAuthorization(
+                            bcs_api::HttpFailure::new(StatusCode::from_u16(status).unwrap())
+                        ))
+                    )
+                );
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn initial_transient_failure_is_retried_without_canceling_execution() {
+        use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let responses = count.clone();
+        Mock::given(method("POST"))
+            .respond_with(move |_: &Request| {
+                ResponseTemplate::new(
+                    if responses.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
+                        503
+                    } else {
+                        204
+                    },
+                )
+            })
+            .expect(2)
+            .mount(&server)
+            .await;
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                retry_delay: Duration::ZERO,
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
+            },
+            |_| panic!("transient failure must not cancel execution"),
+        )
+        .unwrap();
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(delivery.finish(), Ok(()));
+            assert_eq!(
+                delivery.initial_authorization(),
+                InitialAuthorization::Authorized
+            );
+        })
+        .await
+        .unwrap();
+    }
 
     #[test]
     fn parsed_endpoints_still_require_http_policy_validation() {

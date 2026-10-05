@@ -30,8 +30,14 @@ const SOURCE: &str =
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressure() {
     let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
     let base = server.uri();
     Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
         .respond_with(move |request: &Request| {
             ResponseTemplate::new(200).set_body_json(cloud_protocol::response(request, &base, &[]))
         })
@@ -157,8 +163,14 @@ async fn execute(engine: &Arc<BexEngine>) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn capture_pressure_cannot_deadlock_vm_or_fail_execution() {
     let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
     let base = server.uri();
     Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
         .respond_with(move |request: &Request| {
             ResponseTemplate::new(200).set_body_json(cloud_protocol::response(request, &base, &[]))
         })
@@ -222,10 +234,16 @@ fn snapshot_hex(id: proto::CasId) -> String {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
     let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
     let uri = server.uri();
     let skipped_id = Arc::new(Mutex::new(None::<String>));
     let plan_skipped_id = Arc::clone(&skipped_id);
     Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
         .respond_with(move |request: &Request| {
             let prepare: Value = serde_json::from_slice(&request.body).unwrap();
             let sequence = prepare["recording"]["recording_file_sequence"]
@@ -301,7 +319,10 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
 
     let requests = server.received_requests().await.unwrap();
     let skipped_id = skipped_id.lock().unwrap().clone().unwrap();
-    let prepares: Vec<_> = requests.iter().filter(|r| r.method == "POST").collect();
+    let prepares: Vec<_> = requests
+        .iter()
+        .filter(|r| r.url.path().ends_with("/uploads:prepare"))
+        .collect();
     let puts: Vec<_> = requests.iter().filter(|r| r.method == "PUT").collect();
     assert!(!prepares.is_empty());
     assert_eq!(prepares.len(), puts.len());
@@ -437,10 +458,16 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cloud_delivery_failure_does_not_change_execution() {
     let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
     let healthy = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let responding = healthy.clone();
     let base = server.uri();
     Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
         .respond_with(move |request: &Request| {
             if responding.load(std::sync::atomic::Ordering::Acquire) {
                 ResponseTemplate::new(200).set_body_json(cloud_protocol::response(

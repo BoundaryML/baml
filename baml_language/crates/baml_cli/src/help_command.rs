@@ -232,7 +232,7 @@ mod tests {
         let error = render(&["auth".to_string(), "missing".to_string()]).unwrap_err();
         let message = error.to_string();
         assert!(message.contains("no command `missing` for `baml auth`"));
-        assert!(message.contains("whoami"));
+        assert!(message.contains("status"));
         assert!(message.contains("logout"));
     }
 

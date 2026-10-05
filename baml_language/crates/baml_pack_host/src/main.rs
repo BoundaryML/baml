@@ -286,6 +286,10 @@ fn finalize_dispatch(
         _ => bex_engine::ProcessStatus::Error,
     });
     rt.block_on(engine.shutdown());
+    if let Some(error) = engine.initial_cloud_authorization_error() {
+        print_error(format_args!("{error}"));
+        return ExitCode::FAILURE;
+    }
     if let Some(Err(error)) = engine.telemetry_result() {
         eprintln!("Warning: telemetry recording failed: {error}");
     }

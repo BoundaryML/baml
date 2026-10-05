@@ -6,6 +6,10 @@
 #[cfg(feature = "auth")]
 pub mod auth;
 pub mod credentials;
+pub mod response;
+pub use response::{ApiErrorBody, HttpFailure};
+#[cfg(feature = "auth")]
+pub mod diagnostics;
 #[cfg(feature = "auth")]
 pub mod error;
 #[cfg(feature = "auth")]
@@ -15,8 +19,8 @@ pub mod wire;
 
 #[cfg(feature = "auth")]
 pub use auth::{
-    Caller, Client, DEFAULT_API_URL, DeviceLogin, Endpoint, HttpFailure, LoginPoll, Secret,
-    Session, Store, StoredSession,
+    Caller, Client, DEFAULT_API_URL, DeviceLogin, Endpoint, LoginPoll, Secret, Session, Store,
+    StoredSession,
 };
 #[cfg(feature = "auth")]
 pub use error::Error;

@@ -329,14 +329,14 @@ async fn canceled_submitters_do_not_count_as_payload_losses() {
         let server = MockServer::start().await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
         let handle = delivery.handle();
-        handle.disable(fatal);
+        handle.disable(fatal.clone());
         assert_eq!(
             handle.try_submit(
                 files(1).pop().unwrap(),
                 vec![],
                 vec![proposed(0, UploadKind::Recording, &[])],
             ),
-            Err(fatal)
+            Err(fatal.clone())
         );
         assert_eq!(handle.loss_count(), 0);
         assert_eq!(finish(delivery).await, Err(fatal));

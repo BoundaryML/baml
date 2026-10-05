@@ -87,6 +87,8 @@ pub use host_instrumentation::{
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]
 mod telemetry;
+#[cfg(not(target_arch = "wasm32"))]
+pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
@@ -691,6 +693,10 @@ impl Drop for RootCallWork {
 /// Errors that can occur during engine execution.
 #[derive(Debug, PartialEq, Error, Clone)]
 pub enum EngineError {
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("{0}")]
+    CloudAuthorization(Box<CloudAuthorizationFailure>),
+
     #[error("BAML engine is shutting down")]
     ShuttingDown,
 
@@ -3098,8 +3104,18 @@ impl BexEngine {
     ) -> Result<BexCallResult, EngineError> {
         call_ctx.bind_timeout(self.engine_id, self.invocation_clock)?;
         let (function, kind) = self.lookup_function(function_name)?;
-        self.call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
-            .await
+        let result = self
+            .call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
+            .await;
+        #[cfg(not(target_arch = "wasm32"))]
+        if self
+            .initial_cloud_auth_cancel()
+            .is_some_and(CancellationToken::is_cancelled)
+            && let Some(error) = self.initial_cloud_authorization_error()
+        {
+            return Err(error);
+        }
+        result
     }
 
     /// Call a function resolved by identity — the name boundary is
@@ -4223,6 +4239,12 @@ impl BexEngine {
         let mut sources = vec![bex_vm_types::cancellation::CancellationSource::from(
             explicit,
         )];
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(token) = self.initial_cloud_auth_cancel() {
+            sources.push(bex_vm_types::cancellation::CancellationSource::from(
+                token.clone(),
+            ));
+        }
         for token in tokens {
             if let BexExternalValue::Handle(handle) = token
                 && self.resolve_handle(thread.proof(), handle).is_none()
@@ -5181,6 +5203,17 @@ impl BexEngine {
         // shield: cleanup that delegates must not hand its work a
         // cancellation that has already fired; the child stays cancellable
         // through its own handle and token.
+        #[cfg(not(target_arch = "wasm32"))]
+        let linked = {
+            let mut linked = linked;
+            if let Some(token) = self.initial_cloud_auth_cancel() {
+                // A rooted task remains subject to the execution's initial cloud authorization.
+                linked.push(bex_vm_types::cancellation::CancellationSource::from(
+                    token.clone(),
+                ));
+            }
+            linked
+        };
         let child_cancel = if root || thread.vm_thread_is_shielded() {
             TaskCancel::detached(linked)
         } else {

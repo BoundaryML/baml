@@ -130,13 +130,22 @@ impl Client {
             let retry = attempt == 0
                 && response.status() == reqwest::StatusCode::UNAUTHORIZED
                 && authorization.authentication.rejected(sent.token());
-            sent.complete(response.status(), response.headers());
             if retry {
+                sent.complete(response.status(), response.headers());
                 continue;
             }
             if !response.status().is_success() {
-                return Err(HttpFailure(response.status()).into());
+                let failure = HttpFailure::blocking(
+                    response,
+                    &[
+                        sent.token().expose(),
+                        authorization.authentication.original_credential(),
+                    ],
+                );
+                sent.complete_failure(failure.clone());
+                return Err(failure.into());
             }
+            sent.complete(response.status(), response.headers());
             return Ok(response);
         }
         unreachable!("the second attempt returns its response")

@@ -146,6 +146,9 @@ pub async fn dispatch_target_with_context(
             Ok(DispatchResult::Ok)
         }
         Err(EngineError::Exit { code }) => Ok(DispatchResult::Exit(code)),
+        // Hosts report initial telemetry refusal after shutdown has joined authorization.
+        #[cfg(not(target_arch = "wasm32"))]
+        Err(error @ EngineError::CloudAuthorization(_)) => Err(error.into()),
         Err(e) => {
             // Bold-red `error:` matching ariadne / cargo. Same renderer
             // used by `baml run`'s top-level error path so target-side

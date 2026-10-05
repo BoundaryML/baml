@@ -21,6 +21,10 @@ struct MockState {
     /// How many times device approval has been polled.
     auth_polls: Mutex<u32>,
     reject_logout: Mutex<bool>,
+    refreshes: Mutex<u32>,
+    refreshed_email: Mutex<Option<String>>,
+    reject_refresh: Mutex<bool>,
+    verified_keys: Mutex<Vec<String>>,
 }
 
 fn spawn_mock(state: Arc<MockState>) -> String {
@@ -67,7 +71,7 @@ fn spawn_mock(state: Arc<MockState>) -> String {
                     .unwrap_or("")
                     .to_string();
                 let body = req.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
-                let (status, response) = respond(&state, &base, &path, &body);
+                let (status, response) = respond(&state, &base, &path, &body, &req);
                 let _ = stream.write_all(
                     format!(
                         "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{response}",
@@ -81,7 +85,13 @@ fn spawn_mock(state: Arc<MockState>) -> String {
     base
 }
 
-fn respond(state: &MockState, base: &str, path: &str, body: &str) -> (&'static str, String) {
+fn respond(
+    state: &MockState,
+    base: &str,
+    path: &str,
+    body: &str,
+    request: &str,
+) -> (&'static str, String) {
     match path {
         "/capture/" => {
             let parsed: Value = serde_json::from_str(body).expect("capture body is JSON");
@@ -114,12 +124,42 @@ fn respond(state: &MockState, base: &str, path: &str, body: &str) -> (&'static s
                 )
             }
         }
+        "/v1/auth/verify" => {
+            let key = request
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("authorization")
+                        .then(|| value.trim().to_owned())
+                })
+                .unwrap_or_default();
+            state.verified_keys.lock().unwrap().push(key.clone());
+            if key == "Bearer bdry_secret_status_test" {
+                ("204 No Content", String::new())
+            } else {
+                (
+                    "401 Unauthorized",
+                    r#"{"code":"UNAUTHORIZED","retryable":false}"#.into(),
+                )
+            }
+        }
         "/v1/auth/refresh" => {
+            *state.refreshes.lock().unwrap() += 1;
+            if *state.reject_refresh.lock().unwrap() {
+                return (
+                    "401 Unauthorized",
+                    r#"{"code":"UNAUTHORIZED","retryable":false}"#.into(),
+                );
+            }
             assert_eq!(
                 serde_json::from_str::<Value>(body).unwrap()["refreshToken"],
                 "bdry_session_test"
             );
-            ("200 OK", session().to_string())
+            let mut session = session();
+            if let Some(email) = state.refreshed_email.lock().unwrap().as_ref() {
+                session["caller"]["email"] = Value::String(email.clone());
+            }
+            ("200 OK", session.to_string())
         }
         "/v1/auth/logout" => {
             assert_eq!(
@@ -319,9 +359,17 @@ fn anonymous_by_default_then_identified_feedback_backfills() {
         "{events:?}"
     );
 
-    // 3. whoami shows the anonymous state.
-    let (_, out) = run_baml(home.path(), &base, &["auth", "whoami"], None);
-    assert!(out.contains("anonymous (feedback id"), "{out}");
+    // 3. Status reports no login.
+    let (_, out) = run_baml(home.path(), &base, &["auth", "status"], None);
+    assert_eq!(
+        out,
+        format!(
+            r#"User: Not logged in
+Project: Not selected (outside a BAML project)
+Endpoint: {base}
+"#
+        )
+    );
 
     // 4. Login saves the protected session; it does not identify feedback.
     let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
@@ -377,7 +425,7 @@ fn anonymous_by_default_then_identified_feedback_backfills() {
         "{events:?}"
     );
 
-    // 6. Logout keeps the distinct id; whoami returns to anonymous.
+    // 6. Logout keeps the distinct id; status reports no login.
     let (ok, out) = run_baml(home.path(), &base, &["auth", "logout"], None);
     assert!(ok, "{out}");
     let json = std::fs::read_to_string(&creds).unwrap();
@@ -386,8 +434,16 @@ fn anonymous_by_default_then_identified_feedback_backfills() {
         "distinct id must survive logout: {json}"
     );
     assert!(!json.contains("access_token"), "{json}");
-    let (_, out) = run_baml(home.path(), &base, &["auth", "whoami"], None);
-    assert!(out.contains("anonymous"), "{out}");
+    let (_, out) = run_baml(home.path(), &base, &["auth", "status"], None);
+    assert_eq!(
+        out,
+        format!(
+            r#"User: Not logged in
+Project: Not selected (outside a BAML project)
+Endpoint: {base}
+"#
+        )
+    );
 
     // 7. `baml login` no longer exists at the top level.
     let (ok, out) = run_baml(home.path(), &base, &["login"], None);
@@ -737,6 +793,182 @@ fn status_list_view_read_the_local_store() {
     let (ok, out) = run_baml(home.path(), &base, &["feedback", "view", "zzzzzzzz"], None);
     assert!(!ok, "{out}");
     assert!(out.contains("no report with id"), "{out}");
+}
+
+fn status_command(
+    home: &std::path::Path,
+    directory: &std::path::Path,
+    base: &str,
+    env: &[(&str, &str)],
+) -> std::process::Output {
+    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
+    std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+        .args(["--agent-skill-check", "off", "auth", "status"])
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .current_dir(directory)
+        .env("BAML_HOME", home)
+        .env("BOUNDARY_API_URL", base)
+        .env("DO_NOT_TRACK", "1")
+        .env_remove("BOUNDARY_API_KEY")
+        .env_remove("BOUNDARY_PROJECT")
+        .envs(env.iter().copied())
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn status_verifies_both_credentials_and_shows_the_project_override() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let (ok, output) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
+    assert!(ok, "{output}");
+    *state.refreshed_email.lock().unwrap() = Some("verified@example.com".into());
+    let output = status_command(
+        home.path(),
+        home.path(),
+        &base,
+        &[
+            ("BOUNDARY_API_KEY", "bdry_secret_status_test"),
+            ("BOUNDARY_PROJECT", "acme/app"),
+        ],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!(
+            r#"User: verified@example.com (verified)
+Credential overridden by: BOUNDARY_API_KEY (verified)
+Project: acme/app (BOUNDARY_PROJECT)
+Endpoint: {base}
+"#
+        )
+    );
+    assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
+    assert_eq!(*state.refreshes.lock().unwrap(), 1);
+    assert_eq!(
+        *state.verified_keys.lock().unwrap(),
+        ["Bearer bdry_secret_status_test"]
+    );
+    let output = status_command(home.path(), home.path(), &base, &[]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!(
+            r#"User: verified@example.com (verified)
+Project: Not selected (outside a BAML project)
+Endpoint: {base}
+"#
+        )
+    );
+    assert_eq!(*state.refreshes.lock().unwrap(), 2);
+    let output = status_command(
+        home.path(),
+        home.path(),
+        &base,
+        &[("BOUNDARY_API_KEY", "invalid-status-key")],
+    );
+    assert!(!output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        format!(
+            r#"error: Boundary rejected BOUNDARY_API_KEY (401).
+  Endpoint: {base}
+  Code: UNAUTHORIZED
+
+  To continue, choose one:
+    • Replace BOUNDARY_API_KEY with a valid API key.
+    • Unset BOUNDARY_API_KEY to use your saved Boundary login.
+
+  Authentication command failed.
+"#
+        )
+    );
+}
+
+#[test]
+fn status_reports_api_key_only_and_manifest_project_and_rejects_bad_keys() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("baml_src")).unwrap();
+    std::fs::write(
+        project.path().join("baml.toml"),
+        "[boundary]\nproject = \"acme/app\"\n",
+    )
+    .unwrap();
+    let output = status_command(
+        home.path(),
+        project.path(),
+        &base,
+        &[("BOUNDARY_API_KEY", "bdry_secret_status_test")],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!(
+            r#"User: Not logged in
+Credential: BOUNDARY_API_KEY (verified)
+Project: acme/app (baml.toml)
+Endpoint: {base}
+"#
+        )
+    );
+    assert_eq!(*state.refreshes.lock().unwrap(), 0);
+    let output = status_command(
+        home.path(),
+        project.path(),
+        &base,
+        &[("BOUNDARY_API_KEY", "invalid-status-key")],
+    );
+    assert!(!output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        format!(
+            r#"error: Boundary rejected BOUNDARY_API_KEY (401).
+  Endpoint: {base}
+  Code: UNAUTHORIZED
+
+  To continue, choose one:
+    • Replace BOUNDARY_API_KEY with a valid API key.
+    • Unset BOUNDARY_API_KEY, then run `baml auth login`.
+
+  Authentication command failed.
+"#
+        )
+    );
+}
+
+#[test]
+fn status_rejects_revoked_login_and_whoami_is_removed() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let (ok, output) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
+    assert!(ok, "{output}");
+    *state.reject_refresh.lock().unwrap() = true;
+    let output = status_command(home.path(), home.path(), &base, &[]);
+    assert!(!output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        format!(
+            r#"error: Boundary rejected your saved login (401).
+  Endpoint: {base}
+  Code: UNAUTHORIZED
+
+  To continue, choose one:
+    • Run `baml auth login` again and approve the new code in your browser.
+
+  Authentication command failed.
+"#
+        )
+    );
+    let (ok, _) = run_baml(home.path(), &base, &["auth", "whoami"], None);
+    assert!(!ok);
 }
 
 #[test]
