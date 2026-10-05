@@ -122,6 +122,11 @@ impl<'db> InferenceContext<'db> {
             } else {
                 outcome.matched_ty.clone()
             };
+            // The arm's own bindings read the same way as the scrutinee
+            // does in the arm: `null => .., let rest => ..` binds `rest`
+            // to the non-null remainder. The matrix row above stays a
+            // wildcard over the whole column.
+            self.record_unwritten_pattern_type(body, arm.pattern, &residual);
 
             let saved_flow = self.flow.clone();
             if let Some(binding) = scrut_binding {
@@ -374,6 +379,28 @@ impl<'db> InferenceContext<'db> {
             // those matches sentinel out anyway).
             Err(baml_type::interned::OpenTy) => ty.clone(),
         }
+    }
+
+    /// Records `world` as the type of a pattern that writes no type of its
+    /// own: `_`, a bare `let name`, and a chain of bare bindings
+    /// (`let outer: let inner`). Such a pattern takes whatever reaches it,
+    /// and [`Self::lower_pattern`] can only give it the scrutinee type; the
+    /// caller knows the narrower world that the earlier arms left. A pattern
+    /// that writes a type, a literal or a shape keeps what it recorded, and
+    /// so does every binding in front of it. Returns whether the pattern is
+    /// of the first kind.
+    fn record_unwritten_pattern_type(&mut self, body: &ExprBody, pat: PatId, world: &Ty) -> bool {
+        let unwritten = match &body.patterns[pat] {
+            Pattern::Wildcard => true,
+            Pattern::Bind { subpat, .. } => {
+                subpat.is_none_or(|sub| self.record_unwritten_pattern_type(body, sub, world))
+            }
+            _ => false,
+        };
+        if unwritten {
+            self.result.type_of_pat.insert(pat, world.clone());
+        }
+        unwritten
     }
 
     /// The scrutinee's binding, when it is a bare local - the only
