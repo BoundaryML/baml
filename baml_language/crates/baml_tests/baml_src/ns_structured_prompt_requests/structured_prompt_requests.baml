@@ -592,10 +592,16 @@ client OldChat = openai.ChatClient.new(
     base_url = "http://localhost:1234/v1",
 );
 
-client PreviewAzure = openai.AzureClient.new(
-    model = "my-deployment",
+client DefaultAzure = openai.AzureClient.new(
+    model = "gpt-5.6-luna",
     api_key = "test-key",
-    base_url = "http://localhost:1234/openai/deployments/my-deployment",
+    base_url = "http://localhost:1234/openai/deployments/gpt-5.6-luna",
+);
+
+client OldAzure = openai.AzureClient.new(
+    model = "gpt-5.5",
+    api_key = "test-key",
+    base_url = "http://localhost:1234/openai/deployments/gpt-5.5",
 );
 
 function CacheDefault(name: string) -> string {
@@ -649,13 +655,14 @@ test "cache() sends each client's own default marker" {
     let chat_system: json = [
         { "type": "text", "text": "You greet people.", "prompt_cache_breakpoint": { "mode": "explicit" } },
     ];
-    assert.equal(_default_cache_at(DefaultChat, ".messages[0].content"), chat_system)
+    assert.equal(_default_cache_at(DefaultChat, ".messages[0].content"), chat_system);
+    assert.equal(_default_cache_at(DefaultAzure, ".messages[0].content"), chat_system)
 }
 
-// No default: no cache marker on the wire (Gemini, the generic chat hosts), a
-// model the marker would be rejected by (GPT-5.5 and earlier, a Bedrock model
-// that is not Claude or Nova), or a model that cannot be told (an Azure
-// deployment). The request is the one the prompt produces without `${cache()}`.
+// No default: no cache marker on the wire (Gemini, the generic chat hosts), or
+// a model the marker would be rejected by (GPT-5.5 and earlier, a Bedrock model
+// that is not Claude or Nova). The request is the one the prompt produces
+// without `${cache()}`.
 test "cache() sends nothing where the client has no default" {
     assert.is_true(_default_cache_sends_nothing(PreviewGemini));
     assert.is_true(_default_cache_sends_nothing(PreviewGeneric));
@@ -664,12 +671,13 @@ test "cache() sends nothing where the client has no default" {
     assert.is_true(_default_cache_sends_nothing(OldResponses));
     assert.is_true(_default_cache_sends_nothing(OldChat));
     assert.is_true(_default_cache_sends_nothing(PreviewBedrock));
-    assert.is_true(_default_cache_sends_nothing(PreviewAzure));
+    assert.is_true(_default_cache_sends_nothing(OldAzure));
     // ...and where it has one, the bodies differ
     assert.is_true(_default_cache_sends_nothing(PreviewAnthropic) == false);
     assert.is_true(_default_cache_sends_nothing(DefaultBedrockClaude) == false);
     assert.is_true(_default_cache_sends_nothing(DefaultResponses) == false);
-    assert.is_true(_default_cache_sends_nothing(DefaultChat) == false)
+    assert.is_true(_default_cache_sends_nothing(DefaultChat) == false);
+    assert.is_true(_default_cache_sends_nothing(DefaultAzure) == false)
 }
 
 function _null_is_default(target: ai.Client) -> bool {
@@ -691,7 +699,7 @@ test "cache(args) is sent where the default is withheld" {
     let picture = image.from_base64("image-data", "image/png");
     assert.is_true(_cache_delimiter_is_dropped_by(OldResponses) == false);
     assert.is_true(_cache_delimiter_is_dropped_by(OldChat) == false);
-    assert.is_true(_cache_delimiter_is_dropped_by(PreviewAzure) == false);
+    assert.is_true(_cache_delimiter_is_dropped_by(OldAzure) == false);
     let body = baml.json.parse(CacheMarked@build_request("Ada", picture, client = OldResponses).body);
     let system: json = [
         { "type": "input_text", "text": "You greet people.", "prompt_cache_breakpoint": { "type": "default" } },
@@ -718,7 +726,8 @@ test "default_cache_args per client" {
         OldResponses,
         DefaultChat,
         OldChat,
-        PreviewAzure,
+        DefaultAzure,
+        OldAzure,
         vertex_claude,
         vertex_gemini,
         PreviewGemini,
@@ -738,7 +747,8 @@ test "default_cache_args per client" {
         null, // OldResponses: GPT-5.5
         { "mode": "explicit" }, // DefaultChat
         null, // OldChat: GPT-5-mini
-        null, // PreviewAzure: a deployment name
+        { "mode": "explicit" }, // DefaultAzure
+        null, // OldAzure: GPT-5.5
         { "type": "ephemeral" }, // Claude on Vertex
         null, // Gemini on Vertex
         null, // PreviewGemini
