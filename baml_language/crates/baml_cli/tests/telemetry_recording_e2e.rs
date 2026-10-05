@@ -2,7 +2,7 @@
 //! serialized build-machine source paths. Keep all output inside temp fixtures.
 mod common;
 
-use std::{path::Path, process::Command};
+use std::{io::Write as _, path::Path, process::Command};
 
 const RECORDINGS: &str = ".baml/btel/recordings";
 
@@ -138,6 +138,19 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
     std::fs::create_dir(&launch).unwrap();
     common::write_project(&source, "function main() -> int { 9 }\n");
     common::write_project(&launch, "function main() -> int { 42 }\n");
+    // Packed artifacts only accept telemetry-mode overrides explicitly allowed
+    // by the publisher. This fixture tests recording roots with that opt-in.
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(source.join("baml.toml"))
+        .unwrap()
+        .write_all(
+            br#"
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"
+"#,
+        )
+        .unwrap();
     let home = home(temp.path());
     // This case checks recording roots, not cold-cache behavior. Reuse the
     // stdlib compiled by other CLI integration tests.
