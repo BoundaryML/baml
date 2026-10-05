@@ -26,7 +26,7 @@ from baml_sdk import (
     round_trip_person,
     round_trip_string,
 )
-from baml_sdk.host_callable_tests import call_list_roundtrip_callback
+from baml_sdk.host_callable_tests import call_list_roundtrip_callback, make_adder
 
 
 def _rejected(function: str, kind: str, declared: str) -> str:
@@ -81,6 +81,19 @@ def test_argument_types_class_rejects_a_field_of_another_kind():
         round_trip_person(typing.cast(Person, fields))
     with pytest.raises(TypeError, match=_rejected("round_trip_person", "string", "Person")):
         round_trip_person(typing.cast(Person, "Ada"))
+
+
+# SDK_PARITY_LINT(skip): passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call
+def test_argument_types_returned_closure_rejects_a_value_of_another_kind():
+    """A BAML closure that the host holds has no declared name: it is "the callable"."""
+    add_ten = make_adder(offset=10)
+    expected = (
+        "the callable was called with a value that doesn't match its type: "
+        "argument 1: Value of type 'string' does not match the declared type `int`"
+    )
+    with pytest.raises(TypeError, match=expected):
+        add_ten(typing.cast(int, "x"))
+    assert add_ten(1) == 11
 
 
 # SDK_PARITY_LINT(skip): passes a Python dict and a Python int where the generated annotations are a class and a float

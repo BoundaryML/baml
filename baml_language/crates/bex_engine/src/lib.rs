@@ -1596,23 +1596,30 @@ fn friendly_arg_type_mismatch(function_name: &str, arg_index: usize, detail: &st
     )
 }
 
+/// How a rejected argument names its callee: a function by the name that its
+/// source declares, and a callable with no such name (a lambda, a host
+/// closure) as "the callable".
+fn callee_label(declared_name: Option<&str>) -> String {
+    declared_name.map_or_else(
+        || "the callable".to_string(),
+        |name| format!("`{}`", host_display_name(name)),
+    )
+}
+
 /// An argument that the inbound rules reject: a value of another kind than
 /// its parameter, a string that names no variant, a value that no member of a
-/// union takes. The mismatch keeps its own text, and gets the call frame and
-/// the 1-based argument position in front, as
-/// [`friendly_arg_type_mismatch`] gives them to the check of a generic call.
-/// Any other error passes as it is.
-fn arg_coercion_mismatch(function_name: &str, arg_index: usize, error: EngineError) -> EngineError {
+/// union takes. The mismatch keeps its own text, and gets the call frame
+/// (`callee`, from [`callee_label`]) and the 1-based argument position in
+/// front, as [`friendly_arg_type_mismatch`] gives them to the check of a
+/// generic call. Any other error passes as it is.
+fn arg_coercion_mismatch(callee: &str, arg_index: usize, error: EngineError) -> EngineError {
     match error {
-        EngineError::TypeMismatch { message } => {
-            let name = host_display_name(function_name);
-            EngineError::TypeMismatch {
-                message: format!(
-                    "`{name}` was called with a value that doesn't match its type: argument {}: {message}",
-                    arg_index + 1
-                ),
-            }
-        }
+        EngineError::TypeMismatch { message } => EngineError::TypeMismatch {
+            message: format!(
+                "{callee} was called with a value that doesn't match its type: argument {}: {message}",
+                arg_index + 1
+            ),
+        },
         other => other,
     }
 }
@@ -3482,7 +3489,9 @@ impl BexEngine {
                 BexCallArg::Provided(value) => {
                     let coerced = self
                         .coerce_inbound_arg(*value, &param_types[idx])
-                        .map_err(|error| arg_coercion_mismatch(function_name, idx, error))?;
+                        .map_err(|error| {
+                            arg_coercion_mismatch(&callee_label(Some(function_name)), idx, error)
+                        })?;
                     if callee_is_generic {
                         crate::conversion::check_generic_arg(
                             &coerced,
@@ -3513,7 +3522,9 @@ impl BexEngine {
                 // argument as a whole.
                 BexCallArg::Provided(arg) => self
                     .convert_external_to_vm_value_with_ty(&mut thread, *arg, param_types.get(idx))
-                    .map_err(|error| arg_coercion_mismatch(function_name, idx, error)),
+                    .map_err(|error| {
+                        arg_coercion_mismatch(&callee_label(Some(function_name)), idx, error)
+                    }),
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -4069,6 +4080,14 @@ impl BexEngine {
             }
         };
 
+        // A rejected argument names its callee and its position among the
+        // arguments that the caller wrote (`idx`, without the `self` of a
+        // bound method), as a call by name does.
+        let callee = callee_label(func_ptr.and_then(|ptr| match thread.vm.get_object(ptr) {
+            Object::Function(func) => func.declared_name.as_deref(),
+            _ => None,
+        }));
+
         // Coerce each provided arg to its declared param type (offset by `self`
         // for bound methods).
         let coerced: Vec<BexCallArg> = args
@@ -4078,7 +4097,8 @@ impl BexEngine {
                 Some(ty) => match arg {
                     BexCallArg::Provided(value) => self
                         .coerce_inbound_arg(*value, ty)
-                        .map(|value| BexCallArg::Provided(Box::new(value))),
+                        .map(|value| BexCallArg::Provided(Box::new(value)))
+                        .map_err(|error| arg_coercion_mismatch(&callee, idx, error)),
                     BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
                 },
                 None => Ok(arg),
@@ -4093,11 +4113,13 @@ impl BexEngine {
         }
         for (idx, arg) in coerced.into_iter().enumerate() {
             vm_args.push(match arg {
-                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
-                    &mut thread,
-                    *arg,
-                    param_types.get(idx + self_offset),
-                )?,
+                BexCallArg::Provided(arg) => self
+                    .convert_external_to_vm_value_with_ty(
+                        &mut thread,
+                        *arg,
+                        param_types.get(idx + self_offset),
+                    )
+                    .map_err(|error| arg_coercion_mismatch(&callee, idx, error))?,
                 BexCallArg::OmittedDefault => Value::OMITTED_ARG,
             });
         }
