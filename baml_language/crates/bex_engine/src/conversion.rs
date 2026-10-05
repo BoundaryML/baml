@@ -6196,7 +6196,7 @@ mod union_container_selection_tests {
     fn scalar_that_the_boundary_converts_is_accepted() {
         let float = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::float()).unwrap();
         assert!(
-            matches!(float, BexExternalValue::Float(value) if value == 7.0),
+            matches!(float, BexExternalValue::Float(value) if value.to_bits() == 7.0_f64.to_bits()),
             "{float:?}"
         );
         let bigint = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::Bigint).unwrap();

@@ -1596,6 +1596,27 @@ fn friendly_arg_type_mismatch(function_name: &str, arg_index: usize, detail: &st
     )
 }
 
+/// An argument that the inbound rules reject: a value of another kind than
+/// its parameter, a string that names no variant, a value that no member of a
+/// union takes. The mismatch keeps its own text, and gets the call frame and
+/// the 1-based argument position in front, as
+/// [`friendly_arg_type_mismatch`] gives them to the check of a generic call.
+/// Any other error passes as it is.
+fn arg_coercion_mismatch(function_name: &str, arg_index: usize, error: EngineError) -> EngineError {
+    match error {
+        EngineError::TypeMismatch { message } => {
+            let name = host_display_name(function_name);
+            EngineError::TypeMismatch {
+                message: format!(
+                    "`{name}` was called with a value that doesn't match its type: argument {}: {message}",
+                    arg_index + 1
+                ),
+            }
+        }
+        other => other,
+    }
+}
+
 /// Raise the process's soft `RLIMIT_NOFILE` toward the hard limit, once.
 ///
 /// BAML workloads legitimately fan out — the test runner spawns every testset
@@ -3459,7 +3480,9 @@ impl BexEngine {
             .enumerate()
             .map(|(idx, arg)| match arg {
                 BexCallArg::Provided(value) => {
-                    let coerced = self.coerce_inbound_arg(*value, &param_types[idx])?;
+                    let coerced = self
+                        .coerce_inbound_arg(*value, &param_types[idx])
+                        .map_err(|error| arg_coercion_mismatch(function_name, idx, error))?;
                     if callee_is_generic {
                         crate::conversion::check_generic_arg(
                             &coerced,

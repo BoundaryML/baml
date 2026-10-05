@@ -99,7 +99,8 @@ The bridge checks every argument against the type that the BAML function
 declares, before the function runs. A value of another kind raises `TypeError`:
 
 ```python
-Twice("7")    # TypeError: Value of type 'string' does not match the declared type `int`
+Twice("7")    # TypeError: `Twice` was called with a value that doesn't match its type:
+              #   argument 1: Value of type 'string' does not match the declared type `int`
 Twice(1.5)    # TypeError: a float is not an int
 Twice(True)   # TypeError: a bool is not an int
 Twice(None)   # TypeError, unless the parameter is `int?`

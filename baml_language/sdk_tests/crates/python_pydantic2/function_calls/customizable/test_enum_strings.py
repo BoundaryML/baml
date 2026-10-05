@@ -35,6 +35,7 @@ from baml_sdk.host_callable_tests import (
 from baml_sdk.static_method_edges import Edge, StaticMood
 
 
+# SDK_PARITY_LINT(skip): passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call
 def test_enum_strings_plain_string_becomes_the_variant():
     """`Edge.enum_value(value: StaticMood) -> StaticMood` returns what it is
     given. A variant comes back as a member of the generated enum, so the
@@ -46,10 +47,12 @@ def test_enum_strings_plain_string_becomes_the_variant():
     assert Edge.enum_value(StaticMood.SAD) is StaticMood.SAD
 
 
+# SDK_PARITY_LINT(skip): passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call
 async def test_enum_strings_plain_string_becomes_the_variant_async():
     assert await Edge.enum_value_async(typing.cast(StaticMood, "HAPPY")) is StaticMood.HAPPY
 
 
+# SDK_PARITY_LINT(skip): passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call
 def test_enum_strings_string_that_names_no_variant_is_a_type_error():
     with pytest.raises(TypeError) as excinfo:
         Edge.enum_value(typing.cast(StaticMood, "GRUMPY"))
@@ -63,6 +66,7 @@ def test_enum_strings_string_that_names_no_variant_is_a_type_error():
         Edge.enum_value(typing.cast(StaticMood, "happy"))
 
 
+# SDK_PARITY_LINT(skip): passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call
 def test_enum_strings_string_stays_a_string_beside_a_string_member():
     """`Person | CallbackMood | string`: `string` takes the value as it is, so
     a string that happens to name a variant is still a string."""
@@ -82,6 +86,7 @@ def test_enum_strings_string_stays_a_string_beside_a_string_member():
     assert seen[1] is CallbackMood.HAPPY
 
 
+# SDK_PARITY_LINT(skip): passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call
 def test_enum_strings_callback_receives_the_variant():
     """A plain string for the enum argument reaches a host callback as a
     member of the generated enum: it crossed BAML as a variant."""
@@ -96,6 +101,7 @@ def test_enum_strings_callback_receives_the_variant():
     assert seen == [CallbackMood.SAD] and seen[0] is CallbackMood.SAD
 
 
+# SDK_PARITY_LINT(skip): passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call
 def test_enum_strings_union_mismatch_names_types_as_written():
     """`Edge.nullable(value: int?)` and `Edge.union_value(value: string | int)`
     with a value no member takes."""
