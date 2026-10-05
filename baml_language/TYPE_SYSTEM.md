@@ -537,28 +537,6 @@ implements<T extends Bound> Foo<T> for Bar<T> {}
 
 The only substantive difference here is that the in-body class `implements` block form permits field links while the out-of-body variant does not. This is because only classes have fields, so restricting to in-body `implements` blocks gives us this check for free. However, at a later date it would not be unsound to permit field links in out-of-body `implements` blocks if and only if the `for` target provably only matches classes. Either way, the implementation should use a unified path for both forms beyond the syntax layers.
 
-### Implicit structural implementations
-
-The compiler recognizes built-in implementations of `baml.ToString`, `baml.ToJson`, `baml.FromJson`, and `baml.ops.Equals`. These are real interface implementations: their methods are available through ordinary member lookup and they satisfy generic interface bounds, including for unconstrained type parameters.
-
-An applicable explicit implementation always wins over an implicit default. Resolution distinguishes explicit implementations from built-in structural implementations; it does not generate blanket implementation blocks, wrapper methods, or per-class implementation tables. Each structural interface carries one shared native implementation descriptor. Statically resolved structural calls can invoke that implementation directly; unresolved calls select the implementation at runtime. Ordinary coherence checks still reject two overlapping explicit implementations.
-
-Defaults preserve the existing structural conversion and equality behavior, including nested explicit overrides. JSON conversion remains fallible: interface membership does not guarantee that a particular value can be serialized or decoded. Structural equality handles cycles. The `==` operator additionally handles pairs of different runtime types; `Equals.eq` retains its same-`Self` signature.
-
-Implicit `baml.Hash` requires hashable components, including both map keys and values. Generic components need suitable bounds; functions and runtime handles are not implicitly hashable. Recursive types qualify, but hashing cyclic values panics.
-
-A potentially matching custom `Equals.eq` declaration blocks implicit Hash, regardless of conditional bounds. Explicit Hash wins; empty Equals implementations retain structural hashing.
-
-`Hash` is independent of `Equals`. `Hash.hash` feeds a user-implementable `baml.hash.Hasher`: `write(uint8array)` appends bytes; `finish() -> int` does not reset state. `DefaultHasher` shares mutable state and provides non-cryptographic, non-stable hashes. Custom hashing must agree with equality.
-
-### Map keys
-
-`map<K, V>` explicitly requires `Hash & Equals` keys. Equal-key updates preserve the original key and insertion position. Map equality and hashing ignore insertion order. Maps do not expose hasher selection.
-
-Stored keys must keep hash and equality stable. Callbacks run without map locks; key insertion or removal during lookup causes a retry.
-
-JSON and SDK interchange remain string-keyed. Structural conversion rejects non-string maps; custom JSON conversions can encode them differently.
-
 ### Interface Coherence
 
 BAML largely follows Rust's proven sound trait coherence rules to enforce that any given type has at most one implementation of any given interface. However, this is complicated in BAML by the fact that we have union types with algebraic equivalence: when searching over more complex pairs of `implements` blocks, the problem of determining whether they are disjoint is [NP-hard](https://arxiv.org/abs/1611.05672) in the general case. Fortunately, there are several common special-cases that we can solve more efficiently, and we can place a limit on the search space the compiler will attempt otherwise. When disjointness cannot be proven within that limit, the compiler conservatively rejects the `implements` blocks (it fails closed) rather than risk admitting an overlapping pair, so the at-most-one-implementation guarantee is never weakened by the search budget. In practice, this is unlikely to be a major obstacle to users, similar to TypeScript's type size limit.
