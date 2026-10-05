@@ -150,10 +150,19 @@ function azure_chat(deployment: string) -> openai.AzureClient {
     )
 }
 
+// Azure takes a few seconds to make a cache write readable: back to back, the
+// second call almost always misses and writes the prefix again. So the Azure
+// GPT-5.6 tests assert the write, which the first call reports for the
+// `${cache()}` marker, and not a read.
+function check_azure_cache(name: string, client: ai.Client) -> void {
+    let usage = cache_round_trip(name, client);
+    assert.is_true((usage[0].cache_write_input_tokens ?? 0) > 1024);
+}
+
 function check_AzureChatGpt56Cache() -> void {
     let cl = azure_chat("gpt-5.6-luna");
     assert.equal(cl.default_cache_args(), { "mode": "explicit" });
-    check_openai_cache("AzureChatGpt56Cache", cl)
+    check_azure_cache("AzureChatGpt56Cache", cl)
 }
 
 // gpt-5-mini rejects `prompt_cache_breakpoint`, so `${cache()}` sends no marker
@@ -164,6 +173,26 @@ function check_AzureChatGpt5MiniCache() -> void {
     let cl = azure_chat("gpt-5-mini");
     assert.equal(cl.default_cache_args(), null);
     let _ = cache_round_trip("AzureChatGpt5MiniCache", cl);
+}
+
+// `prompt_cache_key` rides in `request_body`, through the
+// `resource_name` + `deployment_id` path: the request carries the key as
+// written, and the endpoint accepts it alongside the default cache marker.
+function check_AzureChatGpt56CacheKey() -> void {
+    // The `{name}` in `https://{name}.cognitiveservices.azure.com/openai/v1`.
+    let host = baml.env.get_or_panic("AZURE_OPENAI_RESPONSES_BASE_URL").replace("https://", "");
+    let resource_name = host.split(".").at(0) ?? "";
+    let cl = openai.AzureClient.new(
+        model = "gpt-5.6-luna",
+        resource_name = resource_name,
+        deployment_id = "gpt-5.6-luna",
+        api_key = env.AZURE_OPENAI_API_KEY,
+        max_completion_tokens = 1024,
+        request_body = { "prompt_cache_key": `lorem-ipsum-dolor` },
+    );
+    let body = baml.json.parse(CachedReference@build_request("n", "r", "q", client = cl).body);
+    assert.equal(baml.json.path<json>(body, ".prompt_cache_key"), "lorem-ipsum-dolor");
+    check_azure_cache("AzureChatGpt56CacheKey", cl)
 }
 
 function check_BedrockGptOss20b() -> void {
@@ -250,6 +279,9 @@ testset "live" with testing.Sequential() {
     }
     test "AzureChatGpt56Cache" {
         check_AzureChatGpt56Cache()
+    }
+    test "AzureChatGpt56CacheKey" {
+        check_AzureChatGpt56CacheKey()
     }
     test "AzureChatGpt5MiniCache" {
         check_AzureChatGpt5MiniCache()
