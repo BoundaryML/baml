@@ -226,6 +226,33 @@ pub struct MirFunction<'db> {
 #[expect(unsafe_code)]
 unsafe impl salsa::SalsaValue for MirFunction<'_> {}
 
+impl MirFunction<'_> {
+    /// Whether this function, or a lambda inside it, reads the package it is
+    /// declared in ([`Rvalue::CurrentPackage`]): a written
+    /// `reflect.Package.current()`, or the one the compiler appends to an
+    /// `ai.clients.resolve` call. What such a function computes depends on
+    /// which package it is compiled in.
+    pub fn reads_current_package(&self) -> bool {
+        let reads = match &self.kind {
+            MirFunctionKind::Bytecode(body) => body
+                .blocks
+                .iter()
+                .flat_map(|block| &block.statements)
+                .any(|statement| {
+                    matches!(
+                        statement.kind,
+                        StatementKind::Assign {
+                            value: Rvalue::CurrentPackage(_),
+                            ..
+                        }
+                    )
+                }),
+            MirFunctionKind::Builtin(_) => false,
+        };
+        reads || self.lambdas.iter().any(Self::reads_current_package)
+    }
+}
+
 // ============================================================================
 // Identifiers
 // ============================================================================

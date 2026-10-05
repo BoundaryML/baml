@@ -1086,9 +1086,12 @@ impl RunArgs {
     /// and compiles/runs it. An explicit `--file` is compiled with the
     /// expression as its standalone context. Otherwise, expressions are first
     /// compiled with only the standard library in scope, so unrelated project
-    /// errors cannot block an independent probe. If that fails and a project is
-    /// available, retry with project context so expressions can reference its
-    /// declarations.
+    /// errors cannot block an independent probe. An expression that needs the
+    /// project is compiled again with project context, when a project is
+    /// available: one that does not compile without the project's
+    /// declarations, and one that reads the package it is compiled in
+    /// ([`expression_reads_its_package`]), which names those declarations at
+    /// run time.
     ///
     /// `expr_body` is the resolved expression text — already de-referenced
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
@@ -1100,7 +1103,7 @@ impl RunArgs {
         ));
 
         // `-> unknown` lets any return type through.
-        let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
+        let synthetic = format!("function {EXPRESSION_ENTRY}() -> unknown {{\n{expr_body}\n}}");
 
         // An explicit standalone file is always part of the expression's
         // compilation context. Without one, preserve the isolation-first path
@@ -1140,20 +1143,23 @@ impl RunArgs {
             .iter()
             .any(|diagnostic| diagnostic.severity == Severity::Error);
 
-        let (db, package) = if expression_has_errors {
-            if discovered_root.is_none() {
-                self.render_and_bail_on_errors(
-                    &expression_diagnostics,
-                    &expression_db,
-                    "cannot evaluate expression: compilation errors",
-                    reporter,
-                )?;
-                unreachable!("expression diagnostics contain an error");
-            }
+        if expression_has_errors && discovered_root.is_none() {
+            self.render_and_bail_on_errors(
+                &expression_diagnostics,
+                &expression_db,
+                "cannot evaluate expression: compilation errors",
+                reporter,
+            )?;
+            unreachable!("expression diagnostics contain an error");
+        }
+        // The isolated compile proves the project necessary in two ways: the
+        // expression does not compile without the project's declarations, or
+        // it compiles and reads its package, which would be the isolated one.
+        let needs_project = discovered_root.is_some()
+            && (expression_has_errors
+                || expression_reads_its_package(&expression_db, expression_workspace));
 
-            // The expression may refer to project declarations. Preserve that
-            // existing behavior by retrying with the surrounding project only
-            // when the isolated compile proves it necessary.
+        let (db, package) = if needs_project {
             let mut project = load_project_or_default(self.from.as_deref())?;
             self.vlog(format_args!(
                 "Expression requires project context: loaded {} file(s)",
@@ -1202,14 +1208,14 @@ impl RunArgs {
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let return_type = engine
-            .function_return_type("baml_run_expr_main__")
+            .function_return_type(EXPRESSION_ENTRY)
             .unwrap_or(bex_engine::RuntimeTy::Null);
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
         let call_result = self.block_on_with_logs(
             &rt,
-            engine.call_function("baml_run_expr_main__", vec![], call_context, true),
+            engine.call_function(EXPRESSION_ENTRY, vec![], call_context, true),
             logs.as_ref(),
         );
         let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
@@ -1895,6 +1901,34 @@ fn load_expression_source(source: &str) -> Result<String> {
 }
 
 /// Choose a synthetic expression path that cannot replace a loaded source.
+/// The synthetic function `baml run -e` wraps an expression in.
+const EXPRESSION_ENTRY: &str = "baml_run_expr_main__";
+
+/// Whether the expression compiled into `package` reads the package it is
+/// compiled in: it calls `reflect.Package.current()`, or `ai.clients.resolve`,
+/// where the compiler appends that call so a client name resolves against the
+/// calling package.
+///
+/// Such an expression reaches its package's declarations by name at run time.
+/// Compiled in isolation it would see a package that declares nothing, and a
+/// name that an identifier in the expression could reach (`Fast.id()`) would
+/// not resolve as a string (`ai.clients.resolve("Fast")`).
+fn expression_reads_its_package(db: &ProjectDatabase, package: SourceRoot) -> bool {
+    use baml_db::{
+        baml_compiler2_hir::{contributions::Definition, package::package_items},
+        baml_compiler2_mir::{MirFunction, lower_function},
+    };
+
+    let entry = baml_db::Name::new(EXPRESSION_ENTRY);
+    let Some(Definition::Function(function)) = package_items(db, package).lookup_value(&[], &entry)
+    else {
+        return false;
+    };
+    lower_function(db, function, crate::bytecode_cache::CLI_OPT_LEVEL)
+        .as_ref()
+        .is_ok_and(MirFunction::reads_current_package)
+}
+
 fn synthetic_expression_path(root: &Path, occupied: &[PathBuf]) -> PathBuf {
     let mut suffix = 0;
     loop {

@@ -78,7 +78,7 @@ use bex_vm_types::Program;
 use crate::{project_load::ResolvedProject, project_session::ProjectSession};
 
 /// The optimization level every CLI compile uses (the emit default).
-const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
+pub(crate) const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
 
 /// An opened cache plus the keys for one resolved project + compile config.
 pub(crate) struct CacheContext {

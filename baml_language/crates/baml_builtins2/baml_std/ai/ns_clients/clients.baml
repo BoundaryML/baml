@@ -30,7 +30,11 @@ type Selector = root.Client | string | baml.env.Ref;
 ///     name is the client's path in the package, wherever the call is: a
 ///     client declared in namespace `billing` is `"billing.Fast"` (or
 ///     `"root.billing.Fast"`), and no namespace is searched for a bare name.
-///     A name the package does not declare throws `ai.errors.InvalidRequest`;
+///     A name the package does not declare throws `ai.errors.InvalidRequest`.
+///     Code that a `reflect.Session` evaluates calls from the Session, so
+///     there a name is one that a submission bound (`let Fast = ...` or
+///     `client Fast = ...`), as the submission wrote it. A name resolves
+///     where an identifier of the same spelling would reach the client;
 ///   * a `baml.env.Ref` is read now and its value takes the string path. An
 ///     UNSET variable is a typed `ai.errors.InvalidRequest` naming it — not
 ///     a panic, so a `catch_all` at the call boundary can still fall back.

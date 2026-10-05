@@ -514,6 +514,27 @@ test "resolve_inside_a_compiled_package" {
     assert.equal(resolve_inside_a_compiled_package(), "openai/gpt-4.1-nano|undeclared")
 }
 
+// Code that a Session evaluates resolves a name against the Session's own
+// bindings, under the names its submissions wrote: what `Bound.id()` reaches by
+// identifier, `resolve("Bound")` reaches by name. The package that opened the
+// Session is not in reach, as for a compiled package.
+function resolve_inside_a_session() -> string {
+    let session = reflect.Session.new();
+    session.eval(
+        `client Bound = openai.ResponsesClient.new(model = "gpt-4.1-mini", api_key = "test-key");`,
+    );
+    let by_identifier = session.eval<string>(`Bound.id()`);
+    let by_name = session.eval<string>(`ai.clients.resolve("Bound").id()`);
+    let of_the_opener = session.eval<string>(
+        `ai.clients.resolve("env_ref_clients.EnvRefNamedFast").id() catch (e) { ai.errors.InvalidRequest => "undeclared" }`,
+    );
+    `${by_identifier}|${by_name}|${of_the_opener}`
+}
+
+test "resolve_inside_a_session" {
+    assert.equal(resolve_inside_a_session(), "openai/gpt-4.1-mini|openai/gpt-4.1-mini|undeclared")
+}
+
 // The `client:` position takes the same names.
 function EnvRefNamedEcho(question: string, client_name: string) -> string {
     client: client_name
