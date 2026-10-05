@@ -159,18 +159,6 @@ pub fn media_from_url(
     )))
 }
 
-/// A media value is built from content, never from a path, and nothing here
-/// reads a file: there is no handle to make. The input is still checked, as
-/// for every constructor.
-pub fn media_from_file(
-    _kind: MediaKind,
-    file: &str,
-    mime_type: Option<&str>,
-) -> Result<HandleParts, HandleError> {
-    validate_media_input(file, mime_type)?;
-    Err(HandleError::UnsupportedHandleType)
-}
-
 /// Construct an owned media handle from base64 content read from `file`.
 pub fn media_from_file_content(
     kind: MediaKind,

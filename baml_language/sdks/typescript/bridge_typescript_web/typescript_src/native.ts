@@ -9,11 +9,12 @@ import initWasm, {
   getToolchainVersion as getWasmToolchainVersion,
   getVersion as getWasmVersion,
   mediaBase64 as mediaWasmBase64,
-  mediaFile as mediaWasmFile,
   mediaFromBase64 as mediaWasmFromBase64,
-  mediaFromFile as mediaWasmFromFile,
+  mediaFromFileBytes as mediaWasmFromFileBytes,
+  mediaFromFileContent as mediaWasmFromFileContent,
   mediaFromUrl as mediaWasmFromUrl,
   mediaMimeType as mediaWasmMimeType,
+  mediaName as mediaWasmName,
   mediaUrl as mediaWasmUrl,
   mintWebHostValueKey,
   newFunctionCall as newWasmFunctionCall,
@@ -145,6 +146,28 @@ function webReadFileSync(path: unknown): WebReadFileResult {
   } catch (error) {
     return { kind: "io", message: `readFileSync failed for ${path}: ${errorMessage(error)}` };
   }
+}
+
+/**
+ * The bytes of `file`, read now with the installed `readFileSync`: this
+ * module has no file system of its own. A media value holds content, never
+ * a path.
+ */
+function readMediaFile(file: string, operation: string): Uint8Array {
+  if (!readFileSyncImpl) {
+    throw new Error(
+      `${operation}: fs.readFileSync is not available in this JavaScript runtime; read the file yourself and use fromFileContent`,
+    );
+  }
+  try {
+    return readFileSyncImpl(file);
+  } catch (error) {
+    throw new Error(`${operation}: media file ${JSON.stringify(file)} could not be read: ${errorMessage(error)}`);
+  }
+}
+
+function mediaFromFile(kind: number, file: string, mimeType: string | null | undefined): bigint {
+  return mediaWasmFromFileBytes(kind, file, readMediaFile(file, "fromFile"), mimeType ?? undefined);
 }
 
 function ensureWebSysopsConfigured(): void {
@@ -284,9 +307,10 @@ abstract class BamlMedia {
     return mediaWasmUrl(this.rawKey, this.handleType) ?? null;
   }
 
-  file(): string | null {
+  /** The base name of the file the content was read from, if any. */
+  name(): string | null {
     this.assertLive();
-    return mediaWasmFile(this.rawKey, this.handleType) ?? null;
+    return mediaWasmName(this.rawKey, this.handleType) ?? null;
   }
 
   base64(): string {
@@ -310,7 +334,8 @@ abstract class BamlMedia {
 export class BamlImage extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_IMAGE); }
   static fromUrl(url: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromUrl(MEDIA_IMAGE, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromFile(MEDIA_IMAGE, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaFromFile(MEDIA_IMAGE, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromFileContent(MEDIA_IMAGE, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromBase64(MEDIA_IMAGE, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlImage { return new BamlImage(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_IMAGE, "BamlImage")); }
 }
@@ -318,7 +343,8 @@ export class BamlImage extends BamlMedia {
 export class BamlAudio extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_AUDIO); }
   static fromUrl(url: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromUrl(MEDIA_AUDIO, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromFile(MEDIA_AUDIO, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaFromFile(MEDIA_AUDIO, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromFileContent(MEDIA_AUDIO, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromBase64(MEDIA_AUDIO, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlAudio { return new BamlAudio(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_AUDIO, "BamlAudio")); }
 }
@@ -326,7 +352,8 @@ export class BamlAudio extends BamlMedia {
 export class BamlVideo extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_VIDEO); }
   static fromUrl(url: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromUrl(MEDIA_VIDEO, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromFile(MEDIA_VIDEO, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaFromFile(MEDIA_VIDEO, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromFileContent(MEDIA_VIDEO, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromBase64(MEDIA_VIDEO, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlVideo { return new BamlVideo(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_VIDEO, "BamlVideo")); }
 }
@@ -334,7 +361,8 @@ export class BamlVideo extends BamlMedia {
 export class BamlPdf extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_PDF); }
   static fromUrl(url: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromUrl(MEDIA_PDF, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromFile(MEDIA_PDF, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaFromFile(MEDIA_PDF, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromFileContent(MEDIA_PDF, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromBase64(MEDIA_PDF, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlPdf { return new BamlPdf(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_PDF, "BamlPdf")); }
 }

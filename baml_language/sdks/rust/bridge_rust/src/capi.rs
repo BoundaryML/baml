@@ -183,6 +183,17 @@ struct BamlApiV1 {
     register_host_cancel_callback: Option<unsafe extern "C" fn(HostCancelFn)>,
     trace_selection: Option<unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32>,
     invocation_context: Option<unsafe extern "C" fn(u64, *mut Buffer) -> u32>,
+    media_name: Option<unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32>,
+    media_from_file_content: Option<
+        unsafe extern "C" fn(
+            i32,
+            *const c_char,
+            *const c_char,
+            *const c_char,
+            *mut u64,
+            *mut i32,
+        ) -> u32,
+    >,
 }
 
 #[repr(C)]
@@ -244,10 +255,10 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     // contract returns a process-lifetime table.
     #[expect(unsafe_code)]
     let table = unsafe { &*table_ptr };
-    if table.abi_version != 3 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
+    if table.abi_version != 4 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
         return Err(LoaderError::LoadLibrary(format!(
             "{} exposes an incompatible BAML C API (abi_version {}, {} bytes; \
-             baml_bridge needs ABI revision 3 with at least {} bytes)",
+             baml_bridge needs ABI revision 4 with at least {} bytes)",
             path.display(),
             table.abi_version,
             table.struct_size,
@@ -292,6 +303,12 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     required_slot(table.media_file, "media_file", &path)?;
     required_slot(table.media_base64, "media_base64", &path)?;
     required_slot(table.media_mime_type, "media_mime_type", &path)?;
+    required_slot(table.media_name, "media_name", &path)?;
+    required_slot(
+        table.media_from_file_content,
+        "media_from_file_content",
+        &path,
+    )?;
     let register_bridge = required_slot(table.register_bridge, "register_bridge", &path)?;
     required_slot(
         table.register_unhandled_spawn_error_callback,

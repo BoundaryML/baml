@@ -29,6 +29,9 @@ export declare class BamlTypeMap {
      * its BAML FQN, or "" if it is not a codegen-emitted class. Builds the
      * reverse map lazily by resolving every class/enum thunk once.
      */
+    private ensureReverse;
+    /** Identity-only lookup for capture; never inspects application prototypes. */
+    captureType(ctor: unknown): string;
     jsTypeToBamlType(ctor: unknown): string;
     warm(): void;
 }

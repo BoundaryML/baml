@@ -821,24 +821,6 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromUrl<'local>(
     )
 }
 
-/// `nativeMediaFromFile(int kind, String path, String mimeType) -> long`:
-/// always throws. A media value is built from content, never from a file
-/// path, and nothing here reads a file.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromFile<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass<'local>,
-    _kind: jint,
-    _path: JString<'local>,
-    _mime: JString<'local>,
-) -> jlong {
-    throw_runtime_exception(
-        &mut env,
-        "nativeMediaFromFile: a media value is built from a file's content, not its path",
-    );
-    0
-}
-
 /// `nativeMediaFromBase64(int kind, String base64, String mimeType) -> long`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromBase64<'local>(
@@ -858,7 +840,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromBase64<'local>(
     )
 }
 
-/// Shared body for the three media constructors: validate the kind, read the
+/// Shared body for the media constructors: validate the kind, read the
 /// value + optional mime strings, then mint the row and return its key. Returns
 /// `0` after throwing on any input failure (a thrown JNI method's return value
 /// is ignored by the JVM).
@@ -868,7 +850,7 @@ fn media_from<'local>(
     value: JString<'local>,
     mime: JString<'local>,
     ctx: &str,
-    make: fn(MediaKind, &str, Option<&str>) -> Arc<MediaValue>,
+    make: impl FnOnce(MediaKind, &str, Option<&str>) -> Arc<MediaValue>,
 ) -> jlong {
     let Some(media_kind) = media_kind_from_proto(kind) else {
         throw_runtime_exception(env, &format!("{ctx}: unsupported media kind {kind}"));
@@ -901,21 +883,42 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaUrl<'local>(
     }
 }
 
-/// `nativeMediaFile(long key) -> String`: always Java `null`. A media value
-/// holds content, never a file path.
+/// `nativeMediaName(long key) -> String`: the base name of the file the
+/// content was read from (Java `null` when it was not read from a file).
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFile<'local>(
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaName<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     key: jlong,
 ) -> JString<'local> {
     match resolve_media(key) {
-        Some(_) => optional_string_to_jstring(&mut env, None, "nativeMediaFile"),
+        Some(media) => optional_string_to_jstring(&mut env, media.name(), "nativeMediaName"),
         None => {
-            throw_runtime_exception(&mut env, "nativeMediaFile: invalid media handle key");
+            throw_runtime_exception(&mut env, "nativeMediaName: invalid media handle key");
             JString::default()
         }
     }
+}
+
+/// `nativeMediaFromFileContent(int kind, String file, String base64, String
+/// mimeType) -> long`: base64 content read from `file`, named by its base
+/// name. Reads nothing.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromFileContent<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    kind: jint,
+    file: JString<'local>,
+    base64: JString<'local>,
+    mime: JString<'local>,
+) -> jlong {
+    let ctx = "nativeMediaFromFileContent";
+    let Some(base64) = read_required_string(&mut env, &base64, ctx) else {
+        return 0;
+    };
+    media_from(&mut env, kind, file, mime, ctx, |kind, file, mime| {
+        MediaValue::from_file_content(kind, file, base64.into(), mime)
+    })
 }
 
 /// `nativeMediaBase64(long key) -> String` (never null; empty when unavailable).

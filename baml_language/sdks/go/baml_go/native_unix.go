@@ -99,6 +99,7 @@ static const char *baml_open_library(const char *path) {
 		api->handle_release == NULL || api->media_from_url == NULL ||
 		api->media_from_file == NULL || api->media_from_base64 == NULL ||
 		api->media_url == NULL || api->media_file == NULL ||
+		api->media_name == NULL || api->media_from_file_content == NULL ||
 		api->media_base64 == NULL || api->media_mime_type == NULL ||
 		api->register_bridge == NULL ||
 		api->register_unhandled_spawn_error_callback == NULL ||
@@ -171,14 +172,12 @@ static uint32_t baml_handle_release_go(uint64_t key) { return baml_api == NULL ?
 static uint32_t baml_media_from_url_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) {
 	return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_url(kind, value, mime_type, out_key, out_handle_type);
 }
-static uint32_t baml_media_from_file_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) {
-	return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_file(kind, value, mime_type, out_key, out_handle_type);
-}
 static uint32_t baml_media_from_base64_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) {
 	return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_base64(kind, value, mime_type, out_key, out_handle_type);
 }
 static uint32_t baml_media_url_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_url(key, handle_type, out); }
-static uint32_t baml_media_file_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_file(key, handle_type, out); }
+static uint32_t baml_media_name_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_name(key, handle_type, out); }
+static uint32_t baml_media_from_file_content_go(int32_t kind, const char *file, const char *base64, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_file_content(kind, file, base64, mime_type, out_key, out_handle_type); }
 static uint32_t baml_media_base64_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_base64(key, handle_type, out); }
 static uint32_t baml_media_mime_type_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_mime_type(key, handle_type, out); }
 */
@@ -338,8 +337,6 @@ func nativeMediaConstruct(operation mediaConstructor, kind cffi.MediaTypeEnum, v
 	switch operation {
 	case mediaFromURL:
 		status = C.baml_media_from_url_go(C.int32_t(kind), cValue, cMimeType, &key, &handleType)
-	case mediaFromFile:
-		status = C.baml_media_from_file_go(C.int32_t(kind), cValue, cMimeType, &key, &handleType)
 	case mediaFromBase64:
 		status = C.baml_media_from_base64_go(C.int32_t(kind), cValue, cMimeType, &key, &handleType)
 	default:
@@ -351,14 +348,33 @@ func nativeMediaConstruct(operation mediaConstructor, kind cffi.MediaTypeEnum, v
 	return uint64(key), cffi.BamlHandleType(handleType), nil
 }
 
+func nativeMediaFromFileContent(kind cffi.MediaTypeEnum, file string, base64 string, mimeType *string) (uint64, cffi.BamlHandleType, error) {
+	cFile := C.CString(file)
+	defer C.free(unsafe.Pointer(cFile))
+	cBase64 := C.CString(base64)
+	defer C.free(unsafe.Pointer(cBase64))
+	var cMimeType *C.char
+	if mimeType != nil {
+		cMimeType = C.CString(*mimeType)
+		defer C.free(unsafe.Pointer(cMimeType))
+	}
+	var key C.uint64_t
+	var handleType C.int32_t
+	status := C.baml_media_from_file_content_go(C.int32_t(kind), cFile, cBase64, cMimeType, &key, &handleType)
+	if err := nativeHandleStatus(mediaFromFileContent.String(), uint32(status)); err != nil {
+		return 0, cffi.BamlHandleType_HANDLE_UNSPECIFIED, err
+	}
+	return uint64(key), cffi.BamlHandleType(handleType), nil
+}
+
 func nativeMediaAccess(operation mediaAccessor, key uint64, handleType cffi.BamlHandleType) (*string, error) {
 	var buffer C.BamlBuffer
 	var status C.uint32_t
 	switch operation {
 	case mediaURL:
 		status = C.baml_media_url_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
-	case mediaFile:
-		status = C.baml_media_file_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
+	case mediaName:
+		status = C.baml_media_name_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
 	case mediaBase64:
 		status = C.baml_media_base64_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
 	case mediaMIMEType:

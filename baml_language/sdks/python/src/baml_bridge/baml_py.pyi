@@ -31,11 +31,27 @@ class BamlAudio:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod
@@ -57,11 +73,27 @@ class BamlImage:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod
@@ -83,11 +115,27 @@ class BamlPdf:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod
@@ -165,11 +213,27 @@ class BamlVideo:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod
@@ -204,9 +268,17 @@ class FunctionResult:
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class _HostExecution:
+    def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
+
+def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
+
 def _complete_host_call_error(call_id: builtins.int, error: typing.Any) -> None: ...
 
 def _complete_host_call_success(call_id: builtins.int, value: typing.Any) -> None: ...
+
+def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> BamlPyHandle: ...
 
 def _discard_host_call_args(args: typing.Sequence[builtins.int]) -> None: ...
 
@@ -265,6 +337,8 @@ def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.in
     """
 
 def _trace_selection(handle: BamlPyHandle, call_id: builtins.int) -> tuple[builtins.list[builtins.int], typing.Optional[BamlPyHandle]]: ...
+
+def _validate_host_options(options: typing.Optional[BamlPyHandle]) -> tuple[builtins.bool, builtins.bool, builtins.bool]: ...
 
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
@@ -343,12 +417,3 @@ def shutdown_runtime(timeout: typing.Optional[builtins.float] = None) -> None:
     Ctrl+C ends it with `KeyboardInterrupt`.
     """
 
-
-class _HostExecution:
-    def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
-
-def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
-
-def _validate_host_options(options: typing.Optional[BamlPyHandle]) -> tuple[builtins.bool, builtins.bool, builtins.bool]: ...
-
-def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> BamlPyHandle: ...

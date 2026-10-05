@@ -43,6 +43,7 @@ var (
 	releaseInboundHandle        = nativeHandleRelease
 	cloneOutboundMediaHandle    = nativeHandleClone
 	constructPortableMedia      = constructMedia
+	constructPortableNamedMedia = constructFileContentMedia
 	releaseMediaHandle          = nativeHandleRelease
 	releaseOutboundHandle       = nativeHandleRelease
 	validateOutboundMediaHandle = func(key uint64, handleType cffi.BamlHandleType) error {
@@ -195,18 +196,18 @@ type mediaConstructor uint8
 
 const (
 	mediaFromURL mediaConstructor = iota + 1
-	mediaFromFile
 	mediaFromBase64
+	mediaFromFileContent
 )
 
 func (operation mediaConstructor) String() string {
 	switch operation {
 	case mediaFromURL:
 		return "create BAML media from URL"
-	case mediaFromFile:
-		return "create BAML media from file"
 	case mediaFromBase64:
 		return "create BAML media from base64"
+	case mediaFromFileContent:
+		return "create BAML media from file content"
 	default:
 		return fmt.Sprintf("create BAML media (operation %d)", operation)
 	}
@@ -216,7 +217,7 @@ type mediaAccessor uint8
 
 const (
 	mediaURL mediaAccessor = iota + 1
-	mediaFile
+	mediaName
 	mediaBase64
 	mediaMIMEType
 )
@@ -225,8 +226,8 @@ func (operation mediaAccessor) String() string {
 	switch operation {
 	case mediaURL:
 		return "read BAML media URL"
-	case mediaFile:
-		return "read BAML media file"
+	case mediaName:
+		return "read BAML media name"
 	case mediaBase64:
 		return "read BAML media base64"
 	case mediaMIMEType:
@@ -339,6 +340,31 @@ func constructMedia(operation mediaConstructor, kind mediaKind, value string, mi
 		return mediaValue{}, err
 	}
 	key, handleType, err := nativeMediaConstruct(operation, mediaConstructorKind(kind), value, mimeType)
+	return adoptMedia(operation, kind, key, handleType, err)
+}
+
+// constructFileContentMedia builds media from base64 content that was read
+// from file: named by its base name, with the MIME type it implies unless
+// one is given. Reads nothing.
+func constructFileContentMedia(kind mediaKind, file string, base64 string, mimeType *string) (mediaValue, error) {
+	operation := mediaFromFileContent
+	for _, input := range []string{file, base64} {
+		if strings.IndexByte(input, 0) >= 0 {
+			return mediaValue{}, fmt.Errorf("%s: value contains a NUL byte", operation)
+		}
+	}
+	if mimeType != nil && strings.IndexByte(*mimeType, 0) >= 0 {
+		return mediaValue{}, fmt.Errorf("%s: MIME type contains a NUL byte", operation)
+	}
+	if err := ensureNativeRuntime(context.Background()); err != nil {
+		return mediaValue{}, err
+	}
+	key, handleType, err := nativeMediaFromFileContent(mediaConstructorKind(kind), file, base64, mimeType)
+	return adoptMedia(operation, kind, key, handleType, err)
+}
+
+// adoptMedia takes ownership of a handle a native constructor returned.
+func adoptMedia(operation mediaConstructor, kind mediaKind, key uint64, handleType cffi.BamlHandleType, err error) (mediaValue, error) {
 	if err != nil {
 		return mediaValue{}, err
 	}
@@ -411,20 +437,23 @@ func (media mediaValue) input(kind mediaKind) Input {
 		if url != nil {
 			payload.Value = &cffi.BamlValueMedia_Url{Url: *url}
 		} else {
-			file, err := accessInboundMedia(mediaFile, handle.key, handle.handleType)
+			base64, err := accessInboundMedia(mediaBase64, handle.key, handle.handleType)
 			if err != nil {
 				return nil, err
 			}
-			if file != nil {
-				payload.Value = &cffi.BamlValueMedia_File{File: *file}
+			if base64 == nil {
+				return nil, fmt.Errorf("BAML media value has no portable payload")
+			}
+			// Content read from a file keeps the file's name.
+			name, err := accessInboundMedia(mediaName, handle.key, handle.handleType)
+			if err != nil {
+				return nil, err
+			}
+			if name != nil {
+				payload.Value = &cffi.BamlValueMedia_FileContent{
+					FileContent: &cffi.BamlValueMediaFileContent{Name: *name, Base64: *base64},
+				}
 			} else {
-				base64, err := accessInboundMedia(mediaBase64, handle.key, handle.handleType)
-				if err != nil {
-					return nil, err
-				}
-				if base64 == nil {
-					return nil, fmt.Errorf("BAML media value has no portable payload")
-				}
 				payload.Value = &cffi.BamlValueMedia_Base64{Base64: *base64}
 			}
 		}
@@ -440,6 +469,16 @@ func (media mediaValue) access(kind mediaKind, operation mediaAccessor) (*string
 	value, err := nativeMediaAccess(operation, media.handle.key, media.handle.handleType)
 	runtime.KeepAlive(media.handle)
 	return value, err
+}
+
+// mediaFromFile calls from_file of the BAML media class for kind. Reading a
+// file is the engine's work: nothing in this package or the native library
+// reads one.
+func mediaFromFile(kind mediaKind, file string, mimeType *string) (Value, error) {
+	return Call(context.Background(), mediaClassName(kind)+".from_file", map[string]Input{
+		"file":      String(file),
+		"mime_type": Optional(mimeType, String),
+	})
 }
 
 func newImage(operation mediaConstructor, value string, mimeType *string) (Image, error) {
@@ -462,8 +501,25 @@ func newPdf(operation mediaConstructor, value string, mimeType *string) (Pdf, er
 func NewImageFromUrl(value string, mimeType *string) (Image, error) {
 	return newImage(mediaFromURL, value, mimeType)
 }
+
+// NewImageFromFile reads the file now, through the BAML function
+// baml.media.Image.from_file: the value holds its content and its base name,
+// never its path. A file that cannot be read is the BAML error
+// baml.errors.Io.
 func NewImageFromFile(value string, mimeType *string) (Image, error) {
-	return newImage(mediaFromFile, value, mimeType)
+	result, err := mediaFromFile(mediaKindImage, value, mimeType)
+	if err != nil {
+		return Image{}, err
+	}
+	return result.Image()
+}
+
+// NewImageFromFileContent builds a value from base64 content that was read from
+// file: named by its base name, with the MIME type it implies unless one is
+// given. Reads nothing.
+func NewImageFromFileContent(file string, base64 string, mimeType *string) (Image, error) {
+	media, err := constructFileContentMedia(mediaKindImage, file, base64, mimeType)
+	return Image{media: media}, err
 }
 func NewImageFromBase64(value string, mimeType *string) (Image, error) {
 	return newImage(mediaFromBase64, value, mimeType)
@@ -471,8 +527,25 @@ func NewImageFromBase64(value string, mimeType *string) (Image, error) {
 func NewAudioFromUrl(value string, mimeType *string) (Audio, error) {
 	return newAudio(mediaFromURL, value, mimeType)
 }
+
+// NewAudioFromFile reads the file now, through the BAML function
+// baml.media.Audio.from_file: the value holds its content and its base name,
+// never its path. A file that cannot be read is the BAML error
+// baml.errors.Io.
 func NewAudioFromFile(value string, mimeType *string) (Audio, error) {
-	return newAudio(mediaFromFile, value, mimeType)
+	result, err := mediaFromFile(mediaKindAudio, value, mimeType)
+	if err != nil {
+		return Audio{}, err
+	}
+	return result.Audio()
+}
+
+// NewAudioFromFileContent builds a value from base64 content that was read from
+// file: named by its base name, with the MIME type it implies unless one is
+// given. Reads nothing.
+func NewAudioFromFileContent(file string, base64 string, mimeType *string) (Audio, error) {
+	media, err := constructFileContentMedia(mediaKindAudio, file, base64, mimeType)
+	return Audio{media: media}, err
 }
 func NewAudioFromBase64(value string, mimeType *string) (Audio, error) {
 	return newAudio(mediaFromBase64, value, mimeType)
@@ -480,8 +553,25 @@ func NewAudioFromBase64(value string, mimeType *string) (Audio, error) {
 func NewVideoFromUrl(value string, mimeType *string) (Video, error) {
 	return newVideo(mediaFromURL, value, mimeType)
 }
+
+// NewVideoFromFile reads the file now, through the BAML function
+// baml.media.Video.from_file: the value holds its content and its base name,
+// never its path. A file that cannot be read is the BAML error
+// baml.errors.Io.
 func NewVideoFromFile(value string, mimeType *string) (Video, error) {
-	return newVideo(mediaFromFile, value, mimeType)
+	result, err := mediaFromFile(mediaKindVideo, value, mimeType)
+	if err != nil {
+		return Video{}, err
+	}
+	return result.Video()
+}
+
+// NewVideoFromFileContent builds a value from base64 content that was read from
+// file: named by its base name, with the MIME type it implies unless one is
+// given. Reads nothing.
+func NewVideoFromFileContent(file string, base64 string, mimeType *string) (Video, error) {
+	media, err := constructFileContentMedia(mediaKindVideo, file, base64, mimeType)
+	return Video{media: media}, err
 }
 func NewVideoFromBase64(value string, mimeType *string) (Video, error) {
 	return newVideo(mediaFromBase64, value, mimeType)
@@ -489,8 +579,25 @@ func NewVideoFromBase64(value string, mimeType *string) (Video, error) {
 func NewPdfFromUrl(value string, mimeType *string) (Pdf, error) {
 	return newPdf(mediaFromURL, value, mimeType)
 }
+
+// NewPdfFromFile reads the file now, through the BAML function
+// baml.media.Pdf.from_file: the value holds its content and its base name,
+// never its path. A file that cannot be read is the BAML error
+// baml.errors.Io.
 func NewPdfFromFile(value string, mimeType *string) (Pdf, error) {
-	return newPdf(mediaFromFile, value, mimeType)
+	result, err := mediaFromFile(mediaKindPDF, value, mimeType)
+	if err != nil {
+		return Pdf{}, err
+	}
+	return result.Pdf()
+}
+
+// NewPdfFromFileContent builds a value from base64 content that was read from
+// file: named by its base name, with the MIME type it implies unless one is
+// given. Reads nothing.
+func NewPdfFromFileContent(file string, base64 string, mimeType *string) (Pdf, error) {
+	media, err := constructFileContentMedia(mediaKindPDF, file, base64, mimeType)
+	return Pdf{media: media}, err
 }
 func NewPdfFromBase64(value string, mimeType *string) (Pdf, error) {
 	return newPdf(mediaFromBase64, value, mimeType)
@@ -518,32 +625,40 @@ func (Audio) BAMLType() BAMLType { return AudioBAMLType() }
 func (Video) BAMLType() BAMLType { return VideoBAMLType() }
 func (Pdf) BAMLType() BAMLType   { return PdfBAMLType() }
 
-func (value Image) Url() (*string, error)  { return value.media.access(mediaKindImage, mediaURL) }
-func (value Image) File() (*string, error) { return value.media.access(mediaKindImage, mediaFile) }
+func (value Image) Url() (*string, error) { return value.media.access(mediaKindImage, mediaURL) }
+
+// Name is the base name of the file the content was read from, if any.
+func (value Image) Name() (*string, error) { return value.media.access(mediaKindImage, mediaName) }
 func (value Image) Base64() (string, error) {
 	return requiredMediaString(value.media.access(mediaKindImage, mediaBase64))
 }
 func (value Image) MimeType() (*string, error) {
 	return value.media.access(mediaKindImage, mediaMIMEType)
 }
-func (value Audio) Url() (*string, error)  { return value.media.access(mediaKindAudio, mediaURL) }
-func (value Audio) File() (*string, error) { return value.media.access(mediaKindAudio, mediaFile) }
+func (value Audio) Url() (*string, error) { return value.media.access(mediaKindAudio, mediaURL) }
+
+// Name is the base name of the file the content was read from, if any.
+func (value Audio) Name() (*string, error) { return value.media.access(mediaKindAudio, mediaName) }
 func (value Audio) Base64() (string, error) {
 	return requiredMediaString(value.media.access(mediaKindAudio, mediaBase64))
 }
 func (value Audio) MimeType() (*string, error) {
 	return value.media.access(mediaKindAudio, mediaMIMEType)
 }
-func (value Video) Url() (*string, error)  { return value.media.access(mediaKindVideo, mediaURL) }
-func (value Video) File() (*string, error) { return value.media.access(mediaKindVideo, mediaFile) }
+func (value Video) Url() (*string, error) { return value.media.access(mediaKindVideo, mediaURL) }
+
+// Name is the base name of the file the content was read from, if any.
+func (value Video) Name() (*string, error) { return value.media.access(mediaKindVideo, mediaName) }
 func (value Video) Base64() (string, error) {
 	return requiredMediaString(value.media.access(mediaKindVideo, mediaBase64))
 }
 func (value Video) MimeType() (*string, error) {
 	return value.media.access(mediaKindVideo, mediaMIMEType)
 }
-func (value Pdf) Url() (*string, error)  { return value.media.access(mediaKindPDF, mediaURL) }
-func (value Pdf) File() (*string, error) { return value.media.access(mediaKindPDF, mediaFile) }
+func (value Pdf) Url() (*string, error) { return value.media.access(mediaKindPDF, mediaURL) }
+
+// Name is the base name of the file the content was read from, if any.
+func (value Pdf) Name() (*string, error) { return value.media.access(mediaKindPDF, mediaName) }
 func (value Pdf) Base64() (string, error) {
 	return requiredMediaString(value.media.access(mediaKindPDF, mediaBase64))
 }
@@ -583,19 +698,18 @@ func decodeMedia(value Value, kind mediaKind) (mediaValue, error) {
 		if item.MediaValue.Media != expected {
 			return mediaValue{}, fmt.Errorf("expected BAML media kind %s, got %s", expected, item.MediaValue.Media)
 		}
-		var operation mediaConstructor
-		var content string
+		mimeType := item.MediaValue.MimeType
 		switch encoded := item.MediaValue.Value.(type) {
 		case *cffi.BamlValueMedia_Url:
-			operation, content = mediaFromURL, encoded.Url
-		case *cffi.BamlValueMedia_File:
-			operation, content = mediaFromFile, encoded.File
+			return constructPortableMedia(mediaFromURL, kind, encoded.Url, mimeType)
 		case *cffi.BamlValueMedia_Base64:
-			operation, content = mediaFromBase64, encoded.Base64
+			return constructPortableMedia(mediaFromBase64, kind, encoded.Base64, mimeType)
+		case *cffi.BamlValueMedia_FileContent:
+			// Content read from a file keeps the file's name.
+			return constructPortableNamedMedia(kind, encoded.FileContent.GetName(), encoded.FileContent.GetBase64(), mimeType)
 		default:
 			return mediaValue{}, fmt.Errorf("BAML media value has no content")
 		}
-		return constructPortableMedia(operation, kind, content, item.MediaValue.MimeType)
 	case *cffi.BamlOutboundValue_HandleValue:
 		handle = item.HandleValue
 	case *cffi.BamlOutboundValue_ClassValue:

@@ -19272,7 +19272,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {string|null} [mimeType] BamlValueMedia mimeType
                  * @property {string|null} [url] BamlValueMedia url
                  * @property {string|null} [base64] BamlValueMedia base64
-                 * @property {string|null} [file] BamlValueMedia file
+                 * @property {baml_bridge.cffi.v1.IBamlValueMediaFileContent|null} [fileContent] BamlValueMedia fileContent
                  */
 
                 /**
@@ -19323,12 +19323,12 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 BamlValueMedia.prototype.base64 = null;
 
                 /**
-                 * BamlValueMedia file.
-                 * @member {string|null|undefined} file
+                 * BamlValueMedia fileContent.
+                 * @member {baml_bridge.cffi.v1.IBamlValueMediaFileContent|null|undefined} fileContent
                  * @memberof baml_bridge.cffi.v1.BamlValueMedia
                  * @instance
                  */
-                BamlValueMedia.prototype.file = null;
+                BamlValueMedia.prototype.fileContent = null;
 
                 // OneOf field names bound to virtual getters and setters
                 let $oneOfFields;
@@ -19341,12 +19341,12 @@ export const baml_bridge = $root.baml_bridge = (() => {
 
                 /**
                  * BamlValueMedia value.
-                 * @member {"url"|"base64"|"file"|undefined} value
+                 * @member {"url"|"base64"|"fileContent"|undefined} value
                  * @memberof baml_bridge.cffi.v1.BamlValueMedia
                  * @instance
                  */
                 Object.defineProperty(BamlValueMedia.prototype, "value", {
-                    get: $util.oneOfGetter($oneOfFields = ["url", "base64", "file"]),
+                    get: $util.oneOfGetter($oneOfFields = ["url", "base64", "fileContent"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -19386,8 +19386,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 3, wireType 2 =*/26).string(message.url);
                     if (message.base64 != null && Object.hasOwnProperty.call(message, "base64"))
                         writer.uint32(/* id 4, wireType 2 =*/34).string(message.base64);
-                    if (message.file != null && Object.hasOwnProperty.call(message, "file"))
-                        writer.uint32(/* id 5, wireType 2 =*/42).string(message.file);
+                    if (message.fileContent != null && Object.hasOwnProperty.call(message, "fileContent"))
+                        $root.baml_bridge.cffi.v1.BamlValueMediaFileContent.encode(message.fileContent, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -19444,8 +19444,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 message.base64 = reader.string();
                                 break;
                             }
-                        case 5: {
-                                message.file = reader.string();
+                        case 6: {
+                                message.fileContent = $root.baml_bridge.cffi.v1.BamlValueMediaFileContent.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -19517,12 +19517,15 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (!$util.isString(message.base64))
                             return "base64: string expected";
                     }
-                    if (message.file != null && message.hasOwnProperty("file")) {
+                    if (message.fileContent != null && message.hasOwnProperty("fileContent")) {
                         if (properties.value === 1)
                             return "value: multiple values";
                         properties.value = 1;
-                        if (!$util.isString(message.file))
-                            return "file: string expected";
+                        {
+                            let error = $root.baml_bridge.cffi.v1.BamlValueMediaFileContent.verify(message.fileContent, long + 1);
+                            if (error)
+                                return "fileContent." + error;
+                        }
                     }
                     return null;
                 };
@@ -19583,8 +19586,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         message.url = String(object.url);
                     if (object.base64 != null)
                         message.base64 = String(object.base64);
-                    if (object.file != null)
-                        message.file = String(object.file);
+                    if (object.fileContent != null) {
+                        if (!$util.isObject(object.fileContent))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlValueMedia.fileContent: object expected");
+                        message.fileContent = $root.baml_bridge.cffi.v1.BamlValueMediaFileContent.fromObject(object.fileContent, long + 1);
+                    }
                     return message;
                 };
 
@@ -19624,10 +19630,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (options.oneofs)
                             object.value = "base64";
                     }
-                    if (message.file != null && message.hasOwnProperty("file")) {
-                        object.file = message.file;
+                    if (message.fileContent != null && message.hasOwnProperty("fileContent")) {
+                        object.fileContent = $root.baml_bridge.cffi.v1.BamlValueMediaFileContent.toObject(message.fileContent, options, q + 1);
                         if (options.oneofs)
-                            object.value = "file";
+                            object.value = "fileContent";
                     }
                     return object;
                 };
@@ -19659,6 +19665,257 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 };
 
                 return BamlValueMedia;
+            })();
+
+            v1.BamlValueMediaFileContent = (function() {
+
+                /**
+                 * Properties of a BamlValueMediaFileContent.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlValueMediaFileContent
+                 * @property {string|null} [name] BamlValueMediaFileContent name
+                 * @property {string|null} [base64] BamlValueMediaFileContent base64
+                 */
+
+                /**
+                 * Constructs a new BamlValueMediaFileContent.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlValueMediaFileContent.
+                 * @implements IBamlValueMediaFileContent
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlValueMediaFileContent=} [properties] Properties to set
+                 */
+                function BamlValueMediaFileContent(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlValueMediaFileContent name.
+                 * @member {string} name
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @instance
+                 */
+                BamlValueMediaFileContent.prototype.name = "";
+
+                /**
+                 * BamlValueMediaFileContent base64.
+                 * @member {string} base64
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @instance
+                 */
+                BamlValueMediaFileContent.prototype.base64 = "";
+
+                /**
+                 * Creates a new BamlValueMediaFileContent instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlValueMediaFileContent=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlValueMediaFileContent} BamlValueMediaFileContent instance
+                 */
+                BamlValueMediaFileContent.create = function create(properties) {
+                    return new BamlValueMediaFileContent(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlValueMediaFileContent message. Does not implicitly {@link baml_bridge.cffi.v1.BamlValueMediaFileContent.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlValueMediaFileContent} message BamlValueMediaFileContent message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlValueMediaFileContent.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+                    if (message.base64 != null && Object.hasOwnProperty.call(message, "base64"))
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.base64);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlValueMediaFileContent message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlValueMediaFileContent.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlValueMediaFileContent} message BamlValueMediaFileContent message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlValueMediaFileContent.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlValueMediaFileContent message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlValueMediaFileContent} BamlValueMediaFileContent
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlValueMediaFileContent.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlValueMediaFileContent();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.name = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.base64 = reader.string();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlValueMediaFileContent message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlValueMediaFileContent} BamlValueMediaFileContent
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlValueMediaFileContent.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlValueMediaFileContent message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlValueMediaFileContent.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        if (!$util.isString(message.name))
+                            return "name: string expected";
+                    if (message.base64 != null && message.hasOwnProperty("base64"))
+                        if (!$util.isString(message.base64))
+                            return "base64: string expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlValueMediaFileContent message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlValueMediaFileContent} BamlValueMediaFileContent
+                 */
+                BamlValueMediaFileContent.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlValueMediaFileContent)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlValueMediaFileContent: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlValueMediaFileContent();
+                    if (object.name != null)
+                        message.name = String(object.name);
+                    if (object.base64 != null)
+                        message.base64 = String(object.base64);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlValueMediaFileContent message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlValueMediaFileContent} message BamlValueMediaFileContent
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlValueMediaFileContent.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        object.name = "";
+                        object.base64 = "";
+                    }
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        object.name = message.name;
+                    if (message.base64 != null && message.hasOwnProperty("base64"))
+                        object.base64 = message.base64;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlValueMediaFileContent to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlValueMediaFileContent.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlValueMediaFileContent
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlValueMediaFileContent
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlValueMediaFileContent.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlValueMediaFileContent";
+                };
+
+                return BamlValueMediaFileContent;
             })();
 
             v1.BamlValuePromptAst = (function() {

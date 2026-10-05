@@ -220,40 +220,20 @@ pub unsafe extern "C" fn baml_media_from_url(
     }
 }
 
+/// Always `UnsupportedHandleType`: a media value is built from content, never
+/// from a file path, and this library reads no file.
+///
 /// # Safety
-/// `path` and `mime_type_or_null`, when non-null, must point to valid
-/// NUL-terminated C strings. `out_key` and `out_handle_type` must be either
-/// null or valid for writing one value of their pointee type.
+/// No argument is read or written.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_media_from_file(
-    media_kind: i32,
-    path: *const libc::c_char,
-    mime_type_or_null: *const libc::c_char,
-    out_key: *mut u64,
-    out_handle_type: *mut i32,
+    _media_kind: i32,
+    _path: *const libc::c_char,
+    _mime_type_or_null: *const libc::c_char,
+    _out_key: *mut u64,
+    _out_handle_type: *mut i32,
 ) -> BamlCffiStatus {
-    if path.is_null() || out_key.is_null() || out_handle_type.is_null() {
-        return BamlCffiStatus::UnexpectedNullptr;
-    }
-    let Some(kind) = media_kind_from_proto(media_kind) else {
-        return BamlCffiStatus::UnsupportedHandleType;
-    };
-    let path = match unsafe { CStr::from_ptr(path) }.to_str() {
-        Ok(path) => path,
-        Err(_) => return BamlCffiStatus::InternalError,
-    };
-    let mime_type = if mime_type_or_null.is_null() {
-        None
-    } else {
-        match unsafe { CStr::from_ptr(mime_type_or_null) }.to_str() {
-            Ok(mime_type) => Some(mime_type),
-            Err(_) => return BamlCffiStatus::InternalError,
-        }
-    };
-    match handle_cffi::media_from_file(kind, path, mime_type) {
-        Ok(parts) => write_handle_parts(parts, out_key, out_handle_type),
-        Err(error) => error.into(),
-    }
+    BamlCffiStatus::UnsupportedHandleType
 }
 
 /// # Safety
