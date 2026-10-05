@@ -140,11 +140,18 @@ function _oai_input(
     }
 }
 
+// What a mock call saw: the non-body facts joined into one comparable string,
+// and the captured request body parsed as json.
+class OaiSent {
+    head: string,
+    body: json,
+}
+
 // ─── request shape ───────────────────────────────────────────────────────────
 
 // Every first-class typed parameter lands in the body, unset ones are absent
 // (never an explicit null), and the endpoint/auth headers are the provider's.
-function oai_request_shape() -> string {
+function oai_request_shape() -> OaiSent {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_text_response())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -162,37 +169,42 @@ function oai_request_shape() -> string {
             );
             let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             let sent = mock.last_request();
-            [
-                result.value,
-                sent.method,
-                sent.path(),
-                sent.header("authorization") ?? "",
-                sent.header("content-type") ?? "",
-                sent.body,
-            ].join("~~")
+            OaiSent {
+                head: [
+                    result.value,
+                    sent.method,
+                    sent.path(),
+                    sent.header("authorization") ?? "",
+                    sent.header("content-type") ?? "",
+                ].join("~~"),
+                body: sent.json(),
+            }
         },
     )
 }
 
 test "oai_request_shape" {
     let got = oai_request_shape();
-    assert.contains(got, "pong~~POST~~/responses~~Bearer test-key~~application/json~~");
-    // typed request fields, in the request class's declaration order
-    assert.contains(got, `"model":"gpt-4o-mini"`);
-    assert.contains(got, `"store":false`);
-    assert.contains(got, `"input":[{"role":"system","content":[{"type":"input_text","text":`);
-    assert.contains(got, "Say pong.");
-    assert.contains(got, `"temperature":0.25`);
-    assert.contains(got, `"top_p":0.5`);
-    assert.contains(got, `"max_output_tokens":128`);
-    assert.contains(got, `"reasoning":{"effort":"low","summary":"auto"}`);
-    assert.contains(got, `"text":{"verbosity":"low"}`);
-    assert.contains(got, `"parallel_tool_calls":true`);
-    // an unset optional is ABSENT, not null; no tools and no stream flag here
-    assert.is_true(!got.includes("null"));
-    assert.is_true(!got.includes(`"tools"`));
-    assert.is_true(!got.includes(`"tool_choice"`));
-    assert.is_true(!got.includes(`"stream"`))
+    assert.equal(got.head, "pong~~POST~~/responses~~Bearer test-key~~application/json");
+    // the whole body: every typed request field, and nothing else — an unset
+    // optional is ABSENT, not null; no tools and no stream flag here
+    let expected: json = {
+        "model": "gpt-4o-mini",
+        "store": false,
+        "input": [
+            {
+                "role": "system",
+                "content": [{ "type": "input_text", "text": "Reply with exactly one word.\nSay pong." }],
+            },
+        ],
+        "temperature": 0.25,
+        "top_p": 0.5,
+        "max_output_tokens": 128,
+        "reasoning": { "effort": "low", "summary": "auto" },
+        "text": { "verbosity": "low" },
+        "parallel_tool_calls": true,
+    };
+    assert.equal(got.body, expected)
 }
 
 function oai_request_timeout() -> string {
@@ -222,7 +234,7 @@ test "oai_request_timeout" {
 // request_body deep-merges over the serialized typed request: a scalar
 // replaces, a map merges key by key, and a null DELETES the key the client
 // injected. Headers and query params are the user's, authorization is not.
-function oai_passthrough() -> string {
+function oai_passthrough() -> OaiSent {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_text_response())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -245,13 +257,15 @@ function oai_passthrough() -> string {
             );
             let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             let sent = mock.last_request();
-            [
-                result.value,
-                sent.query() ?? "",
-                sent.header("x-trace") ?? "",
-                sent.header("authorization") ?? "",
-                sent.body,
-            ].join("~~")
+            OaiSent {
+                head: [
+                    result.value,
+                    sent.query() ?? "",
+                    sent.header("x-trace") ?? "",
+                    sent.header("authorization") ?? "",
+                ].join("~~"),
+                body: sent.json(),
+            }
         },
     )
 }
@@ -259,22 +273,24 @@ function oai_passthrough() -> string {
 test "oai_passthrough" {
     let got = oai_passthrough();
     // query params are percent-encoded onto the endpoint
-    assert.contains(got, "~~api-version=2024%2005~~abc~~Bearer test-key~~");
+    assert.equal(got.head, "pong~~api-version=2024%2005~~abc~~Bearer test-key");
     // scalar override replaces the typed parameter
-    assert.contains(got, `"temperature":0.75`);
-    assert.is_true(!got.includes(`"temperature":0.25`));
+    assert.equal(baml.json.path<json>(got.body, ".temperature"), 0.75);
     // map override merges: effort replaced, summary survives
-    assert.contains(got, `"reasoning":{"effort":"high","summary":"auto"}`);
+    assert.equal(
+        baml.json.path<json>(got.body, ".reasoning"),
+        { "effort": "high", "summary": "auto" },
+    );
     // a new key is added
-    assert.contains(got, `"metadata":{"tag":"unit"}`);
+    assert.equal(baml.json.path<json>(got.body, ".metadata"), { "tag": "unit" });
     // a null override deletes the client's own default
-    assert.is_true(!got.includes(`"store"`))
+    assert.equal(baml.json.to<map<string, json>>(got.body).has("store"), false)
 }
 
 // Toolbox tools become typed function tools with tool_choice "auto", the
 // journal replays as function_call items, and ai.wire.sanitize_for_client
 // closes the tool call that never got a result.
-function oai_tools_and_journal() -> string {
+function oai_tools_and_journal() -> json {
     let spec = OaiEcho@spec("Say pong.");
     let properties: map<string, unknown> = { };
     let required: string[] = [];
@@ -311,31 +327,47 @@ function oai_tools_and_journal() -> string {
     };
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let req = openai.internal.render(cl, _oai_input(spec, journal, toolbox));
-    req.body
+    baml.json.parse(req.body)
 }
 
 test "oai_tools_and_journal" {
     let got = oai_tools_and_journal();
-    assert.contains(
-        got,
-        `"tools":[{"type":"function","name":"lookup","description":"Look something up","parameters":{`,
-    );
-    assert.contains(got, `"strict":false}]`);
-    assert.contains(got, `"tool_choice":"auto"`);
-    // journal replay, in order
-    assert.contains(got, `{"role":"user","content":[{"type":"input_text","text":"earlier question"}]}`);
-    assert.contains(got, `{"role":"assistant","content":[{"type":"output_text","text":"on it"}]}`);
-    assert.contains(got, `{"type":"function_call","call_id":"call_1","name":"lookup","arguments":"{}"}`);
-    // the orphaned call is closed by the shared sanitizer
-    assert.contains(got, `{"type":"function_call_output","call_id":"call_1","output":`);
-    assert.contains(got, "No result provided")
+    let tools: json = [
+        {
+            "type": "function",
+            "name": "lookup",
+            "description": "Look something up",
+            "parameters": { "type": "object", "properties": {}, "required": [] },
+            "strict": false,
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".tools"), tools);
+    assert.equal(baml.json.path<json>(got, ".tool_choice"), "auto");
+    // the prompt, the journal replay in order, then the orphaned call closed by
+    // the shared sanitizer (a function_call_output's `output` is a string on
+    // the wire, so the sanitizer's error object arrives serialized)
+    let input: json = [
+        {
+            "role": "system",
+            "content": [{ "type": "input_text", "text": "Reply with exactly one word.\nSay pong." }],
+        },
+        { "role": "user", "content": [{ "type": "input_text", "text": "earlier question" }] },
+        { "role": "assistant", "content": [{ "type": "output_text", "text": "on it" }] },
+        { "type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": "{}" },
+        {
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": `{"error":"No result provided"}`,
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".input"), input)
 }
 
 // Prompt media becomes typed Responses content parts: an image data URL with
 // `detail`, audio NESTED under `input_audio` (the Responses API's shape — the
 // flat `data`/`format` sys_llm sent was wrong), and a PDF URL as `file_url`
 // with the basename as filename.
-function oai_media_input() -> string {
+function oai_media_input() -> json {
     let spec = OaiLook@spec(
         baml.media.Image.from_base64("aW1n", "image/png"),
         baml.media.Audio.from_base64("YXVk", "audio/wav"),
@@ -344,41 +376,65 @@ function oai_media_input() -> string {
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let empty = ai.tools.Toolbox.new([]);
     let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
-    req.body
+    baml.json.parse(req.body)
 }
 
 test "oai_media_input" {
     let got = oai_media_input();
-    assert.contains(got, `{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}`);
-    assert.contains(got, `{"type":"input_audio","input_audio":{"data":"YXVk","format":"wav"}}`);
-    assert.contains(
-        got,
-        `{"type":"input_file","filename":"report.pdf","file_url":"https://example.test/files/report.pdf?token=1"}`,
-    )
+    let expected: json = [
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Look:" },
+                {
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,aW1n",
+                    "detail": "auto",
+                },
+                { "type": "input_audio", "input_audio": { "data": "YXVk", "format": "wav" } },
+                {
+                    "type": "input_file",
+                    "filename": "report.pdf",
+                    "file_url": "https://example.test/files/report.pdf?token=1",
+                },
+            ],
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".input"), expected)
 }
 
 // Responses compatibility permits image input in a system message. This is
 // important for role-less prompts, which the compiler lowers to system for
 // legacy parity, and for explicitly authored system prompts alike.
-function oai_system_image_input() -> string {
+function oai_system_image_input() -> json {
     let spec = OaiSystemLook@spec(baml.media.Image.from_base64("aW1n", "image/png"));
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let empty = ai.tools.Toolbox.new([]);
-    _oai_render_body(cl, _oai_input(spec, ai.Journal.new(spec), empty))
+    baml.json.parse(_oai_render_body(cl, _oai_input(spec, ai.Journal.new(spec), empty)))
 }
 
 test "oai_system_image_input" {
     let got = oai_system_image_input();
-    assert.contains(
-        got,
-        `{"role":"system","content":[{"type":"input_text","text":"Look:"},{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}]}`,
-    )
+    let expected: json = [
+        {
+            "role": "system",
+            "content": [
+                { "type": "input_text", "text": "Look:" },
+                {
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,aW1n",
+                    "detail": "auto",
+                },
+            ],
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".input"), expected)
 }
 
 // An `-> image` return type enables the provider-side image_generation tool and
 // pins tool_choice to it (sys_llm's image_generation_mode), and the
 // image_generation_call output item comes back as the run's value.
-function oai_image_generation() -> string {
+function oai_image_generation() -> OaiSent {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_image_response())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -389,27 +445,26 @@ function oai_image_generation() -> string {
             );
             let result = ai.Agent.new(client = cl).run(OaiPicture@spec("a red apple"));
             let sent = mock.last_request();
-            [
-                result.value.base64(),
-                result.value.mime_type() ?? "",
-                sent.body,
-            ].join("~~")
+            OaiSent {
+                head: [result.value.base64(), result.value.mime_type() ?? ""].join("~~"),
+                body: sent.json(),
+            }
         },
     )
 }
 
 test "oai_image_generation" {
     let got = oai_image_generation();
-    assert.contains(got, "aGVsbG8=~~image/jpeg~~");
-    assert.contains(got, `"tools":[{"type":"image_generation"}]`);
-    assert.contains(got, `"tool_choice":{"type":"image_generation"}`)
+    assert.equal(got.head, "aGVsbG8=~~image/jpeg");
+    assert.equal(baml.json.path<json>(got.body, ".tools"), [{ "type": "image_generation" }]);
+    assert.equal(baml.json.path<json>(got.body, ".tool_choice"), { "type": "image_generation" })
 }
 
 // A tool's `parameters` is the CALLER's JSON Schema, where `"default": null`
 // and `"const": null` are legitimate members. The null-prune that drops the
 // typed request classes' unset optionals used to run over them too, so the
 // schema on the wire was not the schema the caller declared.
-function oai_tool_schema_keeps_nulls() -> string {
+function oai_tool_schema_keeps_nulls() -> json {
     let spec = OaiEcho@spec("Say pong.");
     let city: map<string, unknown> = { "type": "string", "default": null };
     let properties: map<string, unknown> = { "city": city };
@@ -435,17 +490,23 @@ function oai_tool_schema_keeps_nulls() -> string {
     );
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), toolbox));
-    req.body
+    baml.json.parse(req.body)
 }
 
 test "oai_tool_schema_keeps_nulls" {
     let got = oai_tool_schema_keeps_nulls();
-    assert.contains(got, `"default":null`);
-    assert.contains(got, `"const":null`);
+    let parameters: json = {
+        "type": "object",
+        "properties": { "city": { "type": "string", "default": null } },
+        "required": [],
+        "const": null,
+    };
+    assert.equal(baml.json.path<json>(got, ".tools[0].parameters"), parameters);
     // the TYPED layer is still pruned: no unset optional reaches the wire
-    assert.is_true(!got.includes(`"temperature":null`));
-    assert.is_true(!got.includes(`"reasoning":null`));
-    assert.contains(got, `"tool_choice":"auto"`)
+    let top = baml.json.to<map<string, json>>(got);
+    assert.equal(top.has("temperature"), false);
+    assert.equal(top.has("reasoning"), false);
+    assert.equal(baml.json.path<json>(got, ".tool_choice"), "auto")
 }
 
 // A `${cache(args)}` in the prompt is `prompt_cache_breakpoint: args` on the
@@ -714,7 +775,7 @@ test "oai_http_error_taxonomy" {
 
 // Text deltas accumulate into the final value; the terminal event carries the
 // usage and stop reason.
-function oai_stream_text() -> string {
+function oai_stream_text() -> OaiSent {
     let completed = `{"type":"response.completed","response":{"status":"completed","model":"gpt-4o-mini","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}}`;
     root.llm_mock.mock_sse_serve(
         [
@@ -744,7 +805,7 @@ function oai_stream_text() -> string {
             );
             let value = stream.final();
             let sent = mock.last_request();
-            [value, sent.body].join("~~")
+            OaiSent { head: value, body: sent.json() }
         },
     )
 }
@@ -752,8 +813,8 @@ function oai_stream_text() -> string {
 test "oai_stream_text" {
     let got = oai_stream_text();
     // `output_text.done` must NOT duplicate the deltas that already arrived
-    assert.is_true(got.starts_with("pong~~"));
-    assert.contains(got, `"stream":true`)
+    assert.equal(got.head, "pong");
+    assert.equal(baml.json.path<json>(got.body, ".stream"), true)
 }
 
 // A streamed turn reports the cache split a non-streamed one does:

@@ -345,7 +345,7 @@ test "chat_tools_and_journal_replay" {
 
 // `tool_calls` on the response become `ai.content.ToolUse` blocks with parsed
 // arguments — net-new behaviour, neither Rust implementation parsed them.
-function chat_parses_tool_calls() -> string {
+function chat_parses_tool_calls() -> json {
     let canned = "{\"id\":\"chatcmpl-2\",\"model\":\"gpt-4o-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_9\",\"type\":\"function\",\"function\":{\"name\":\"chat_get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}";
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
@@ -354,14 +354,14 @@ function chat_parses_tool_calls() -> string {
             let turn = cl.invoke(_chat_input("weather?"));
             let uses = turn.tool_uses();
             let use = uses.at(0);
-            [
-                uses.length().to_string(),
-                use?.id ?? "-",
-                use?.name ?? "-",
-                baml.json.stringify(baml.json.to_json(use?.args)),
-                `${turn.stop_reason}`,
-                turn.terminal_text() ?? "no-text",
-            ].join("|")
+            {
+                "count": uses.length(),
+                "id": use?.id,
+                "name": use?.name,
+                "args": baml.json.to_json(use?.args),
+                "stop_reason": `${turn.stop_reason}`,
+                "text": turn.terminal_text(),
+            }
         },
     )
 }
@@ -369,7 +369,14 @@ function chat_parses_tool_calls() -> string {
 test "chat_parses_tool_calls" {
     assert.equal(
         chat_parses_tool_calls(),
-        "1|call_9|chat_get_weather|{\"city\":\"Paris\"}|ToolUse|no-text",
+        {
+            "count": 1,
+            "id": "call_9",
+            "name": "chat_get_weather",
+            "args": { "city": "Paris" },
+            "stop_reason": "ToolUse",
+            "text": null,
+        },
     )
 }
 
@@ -1189,7 +1196,7 @@ test "chat_generic_stream_ttft_allows_prompt_first_event" {
 // `ai.stream.Event` cannot carry them to the runner yet (PLAN §6), so they
 // are buffered in the decoder and readable when the turn ends — this drives the
 // decoder over a real SSE connection and asserts the assembled call.
-function chat_sse_assembles_tool_calls() -> string {
+function chat_sse_assembles_tool_calls() -> json {
     root.llm_mock.mock_sse_serve(
         [
             root.llm_mock.sse_data("{\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_7\",\"type\":\"function\",\"function\":{\"name\":\"chat_get_weather\",\"arguments\":\"\"}}]}}]}"),
@@ -1232,13 +1239,13 @@ function chat_sse_assembles_tool_calls() -> string {
             sse.close();
             let uses = decoder.tool_uses();
             let use = uses.at(0);
-            [
-                uses.length().to_string(),
-                use?.id ?? "-",
-                use?.name ?? "-",
-                baml.json.stringify(baml.json.to_json(use?.args)),
-                stops.join(","),
-            ].join("|")
+            {
+                "count": uses.length(),
+                "id": use?.id,
+                "name": use?.name,
+                "args": baml.json.to_json(use?.args),
+                "stops": baml.json.to_json(stops),
+            }
         },
     )
 }
@@ -1246,7 +1253,13 @@ function chat_sse_assembles_tool_calls() -> string {
 test "chat_sse_assembles_tool_calls" {
     assert.equal(
         chat_sse_assembles_tool_calls(),
-        "1|call_7|chat_get_weather|{\"city\":\"Paris\"}|ToolUse",
+        {
+            "count": 1,
+            "id": "call_7",
+            "name": "chat_get_weather",
+            "args": { "city": "Paris" },
+            "stops": ["ToolUse"],
+        },
     )
 }
 
@@ -1373,7 +1386,7 @@ test "chat_pdf_base64_and_unfetchable" {
 // DATA (`"default": null`, a nullable union member), not an unset option, and
 // pruning it changes the schema the model is shown and breaks strict-schema
 // servers. The null-pruning pass must not walk into it.
-function chat_tool_schema_keeps_nulls() -> string {
+function chat_tool_schema_keeps_nulls() -> json {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -1402,28 +1415,22 @@ function chat_tool_schema_keeps_nulls() -> string {
             };
             let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
             let _ = cl.invoke(input);
-            let params = baml.json.path<json>(
-                mock.last_request().json(),
-                ".tools[0].function.parameters",
-            );
-            match (params) {
-                let object: map<string, json> => {
-                    let properties = baml.json.path<json>(params, ".properties.x");
-                    match (properties) {
-                        let field: map<string, json> => {
-                            `${field.has("default")}|${baml.json.stringify(field.get("default"))}`
-                        },
-                        _ => "not-an-object",
-                    }
-                },
-                _ => "not-an-object",
-            }
+            baml.json.path<json>(mock.last_request().json(), ".tools[0].function.parameters")
         },
     )
 }
 
 test "chat_tool_schema_keeps_nulls" {
-    assert.equal(chat_tool_schema_keeps_nulls(), "true|null")
+    // Deep equality tells a `null`-valued key from an absent one, so this
+    // fails if `"default": null` was pruned.
+    assert.equal(
+        chat_tool_schema_keeps_nulls(),
+        {
+            "type": "object",
+            "properties": { "x": { "type": ["string", "null"], "default": null } },
+            "required": [],
+        },
+    )
 }
 
 // `data: [DONE]` is chat completions' explicit terminator. A connection that

@@ -540,19 +540,28 @@ test "bedrock_reasoning_only_turn_mid_conversation" {
 // `${picture}` in `BedrockVision`), and Converse rejects an empty `text`
 // member — so a blank part must produce no block at all rather than
 // `{"text":""}`. Exactly the two blocks that carry something survive.
-function bedrock_blank_prompt_parts_are_dropped() -> string {
+function bedrock_blank_prompt_parts_are_dropped() -> json {
     let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
     let input = _turn_input(BedrockVision@spec(picture), _empty_journal(), _no_tools());
-    let body = _body(_client(null), input);
-    [
-        `blocks=${_array_len(body, ".messages[0].content")}`,
-        baml.json.path<string>(body, ".messages[0].content[0].text"),
-        `empty_text=${baml.json.stringify(body).includes(`"text":""`)}`,
-    ].join("|")
+    _body(_client(null), input)
 }
 
 test "bedrock_blank_prompt_parts_are_dropped" {
-    assert.equal(bedrock_blank_prompt_parts_are_dropped(), "blocks=2|Look at|empty_text=false")
+    // The whole body: exactly two blocks, and no `{"text":""}` anywhere.
+    assert.equal(
+        bedrock_blank_prompt_parts_are_dropped(),
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        { "text": "Look at" },
+                        { "image": { "format": "png", "source": { "bytes": "SGVsbG8=" } } },
+                    ],
+                },
+            ],
+        },
+    )
 }
 
 // ─── 5. toolConfig (NET-NEW — neither sys_llm nor the engine sent one) ────────
