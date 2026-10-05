@@ -372,9 +372,11 @@ function mr_variant_method_let() -> string throws never {
 }
 "#,
     );
-    // The callee is the `to_string` sugar's target, `string.from<T>`, with
-    // `T` the receiver's type.
-    let callee = |receiver: &str| format!("(value: {receiver}) -> string throws never");
+    // The callee is the `to_string` method of the implicit `ToString`
+    // implementation, dispatched on the receiver's type.
+    let callee = |receiver: &str| {
+        format!("(self: {receiver}) -> string throws never/InterfaceVirtualMethod")
+    };
     assert_eq!(
         ladders,
         vec![
@@ -406,7 +408,7 @@ function mr_variant_method_let() -> string throws never {
 
 /// A path that names an item through its last segment is not a member read
 /// off a variant: a static of the enum's sibling class, a namespaced
-/// function, and the `from_json` decode sugar on the variant TYPE record no
+/// function, and the `from_json` static of the variant TYPE record no
 /// ladder.
 #[test]
 fn variant_rooted_ladder_leaves_item_paths_alone() {

@@ -68,8 +68,8 @@ function evmp_namespaced_to_json() -> string {
 
 // ── paths that keep their meaning ──────────────────────────────────────────
 
-// `Type.from_json` is the decode sugar on the written type, and a variant is a
-// type too: the last segment is not a member of the variant's value.
+// `Type.from_json` is a static of the written type, and a variant is a type
+// too: the last segment is not a member of the variant's value.
 function evmp_variant_from_json() -> EvmpColor {
     EvmpColor.Red.from_json(baml.json.from("Red"))
 }
@@ -121,7 +121,7 @@ test "a_variant_of_a_namespaced_enum_takes_a_method_call" {
     assert.equal(evmp_namespaced_to_json(), "\"Cool\"")
 }
 
-test "from_json_on_a_variant_path_is_still_the_decode_sugar" {
+test "from_json_on_a_variant_path_is_the_static_of_the_type" {
     assert.equal(evmp_variant_from_json(), EvmpColor.Red)
 }
 
