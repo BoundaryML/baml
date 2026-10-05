@@ -296,8 +296,12 @@ impl Store {
     pub fn read(&self) -> Result<Option<StoredSession>> {
         match self.entry.get_password() {
             Ok(json) => {
-                let mut session: StoredSession = serde_json::from_str(&json)
-                    .map_err(|_| Error::Protocol("Invalid stored Boundary login"))?;
+                // JSON errors can echo credential data. Retain only the local
+                // store location, never the stored contents or parser message.
+                let mut session: StoredSession =
+                    serde_json::from_str(&json).map_err(|_| Error::InvalidStoredLogin {
+                        location: self.location.clone(),
+                    })?;
                 if !session
                     .refresh_token
                     .expose()

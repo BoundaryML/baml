@@ -81,8 +81,18 @@ impl Client {
                 )?,
                 Record::QueryOutcome(outcome) => {
                     require(
-                        width.is_some() && outcome["queryId"] == query_id,
+                        outcome["queryId"] == query_id,
                         "Cloud query outcome does not match the request",
+                    )?;
+                    // Planning can fail, time out or be cancelled before columns
+                    // exist. Successful results must still declare their columns.
+                    require(
+                        width.is_some()
+                            || matches!(
+                                outcome["status"].as_str(),
+                                Some("failed" | "cancelled" | "truncated")
+                            ),
+                        "Cloud query ended without columns",
                     )?;
                     ended = true;
                 }

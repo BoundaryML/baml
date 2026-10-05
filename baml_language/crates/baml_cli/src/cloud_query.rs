@@ -87,9 +87,28 @@ pub(crate) fn run(
     }
     match outcome["status"].as_str() {
         Some("complete") => Ok(ExitCode::Success),
+        Some("incomplete") => {
+            eprintln!(
+                "warning: Cloud query results are incomplete because some requested data was unavailable."
+            );
+            Ok(ExitCode::Success)
+        }
         Some("truncated") => Ok(ExitCode::QueryBudgetExhausted),
         Some("failed") => {
-            eprintln!("cloud query failed: {}", outcome["error"]);
+            let error = &outcome["error"];
+            match (error["code"].as_str(), error["message"].as_str()) {
+                (Some(code), Some(message)) => {
+                    eprintln!(
+                        "error: Cloud query failed ({}): {}",
+                        code.escape_debug(),
+                        message.escape_debug()
+                    );
+                }
+                (None, Some(message)) => {
+                    eprintln!("error: Cloud query failed: {}", message.escape_debug());
+                }
+                _ => eprintln!("error: Cloud query failed: {error}"),
+            }
             Ok(ExitCode::QueryFailed)
         }
         Some("cancelled") => Ok(ExitCode::QueryCancelled),

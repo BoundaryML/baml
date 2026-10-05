@@ -312,7 +312,7 @@ impl LogoutArgs {
             Ok(None) => None,
             // Malformed local state must remain removable through logout. Without
             // a readable session we cannot confirm server-side revocation.
-            Err(error @ bcs_api::Error::Protocol(_)) => Some(Err(error)),
+            Err(error @ bcs_api::Error::InvalidStoredLogin { .. }) => Some(Err(error)),
             Err(error) => return Err(error.into()),
         };
         if let Some(revocation) = revocation {

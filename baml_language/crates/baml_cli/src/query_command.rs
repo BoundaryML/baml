@@ -211,11 +211,18 @@ impl QueryArgs {
             // against it without requiring a separate environment override.
             let credential = match api_key {
                 Some(key) => Some(bcs_api::Secret::new(key)),
-                // Optional saved login must not block local queries on hosts without a keyring.
-                // Explicit cloud selection below still requires a credential.
+                // Only confirmed absence may select local recordings. An unreadable
+                // credential store must not silently change the query's data source.
                 None => bcs_api::Store::new(&endpoint)
                     .and_then(|store| store.read())
-                    .unwrap_or(None)
+                    .map_err(|error| {
+                        bcs_api::diagnostics::Context {
+                            endpoint: Some(endpoint.clone()),
+                            source,
+                            operation: bcs_api::diagnostics::Operation::Query,
+                        }
+                        .report(error, bcs_api::diagnostics::Outcome::QueryFailed)
+                    })?
                     .map(|session| session.refresh_token),
             };
             if credential.is_some() || self.project.is_some() || self.environment.is_some() {
