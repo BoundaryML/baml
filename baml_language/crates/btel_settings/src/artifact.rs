@@ -458,7 +458,11 @@ impl ArtifactTelemetry {
             if embedded.bytecode_digest != build_digest(payload, self)? {
                 return Err(PolicyError("Embedded telemetry does not match this artifact. Rebuild with `baml pack --embed-telemetry` or `baml generate --embed-telemetry`.".into()));
             }
-            if !embedded.token.expose().starts_with("bdry_public_") || embedded.build_id.is_empty()
+            if !embedded.token.expose().starts_with("bdry_public_")
+                || embedded.build_id.is_empty()
+                || embedded.destination.org_id.is_empty()
+                || embedded.destination.project_id.is_empty()
+                || embedded.destination.environment_id.is_empty()
             {
                 return Err(PolicyError("The embedded telemetry credential is invalid. Rebuild the artifact with `--embed-telemetry`.".into()));
             }
@@ -832,6 +836,25 @@ mod ingestion_tests {
                 .to_string(),
             r#"BOUNDARY_PROJECT must be a non-empty UTF-8 value."#
         );
+    }
+    #[test]
+    fn incomplete_embedded_destinations_fail_local_validation() {
+        for field in ["org_id", "project_id", "environment_id"] {
+            let mut policy = ArtifactTelemetry::default();
+            let mut credential = embedded(&policy, b"program");
+            match field {
+                "org_id" => credential.destination.org_id.clear(),
+                "project_id" => credential.destination.project_id.clear(),
+                "environment_id" => credential.destination.environment_id.clear(),
+                _ => unreachable!(),
+            }
+            policy.embedded = Some(credential);
+            assert_eq!(
+                policy.verify_build(b"program").unwrap_err().to_string(),
+                r#"The embedded telemetry credential is invalid. Rebuild the artifact with `--embed-telemetry`."#,
+                "empty {field} must fail even when the bytecode digest matches"
+            );
+        }
     }
     #[test]
     fn fingerprint_excludes_credentials_and_rejects_other_programs_or_policy() {
