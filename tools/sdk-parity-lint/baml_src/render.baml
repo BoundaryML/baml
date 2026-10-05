@@ -69,13 +69,28 @@ function render_parity_row(row: ParityRow, sdk_envs: string[]) -> string {
     `| ${escape_markdown_cell(row.sdk_test_id)} | ${markers} | ${escape_markdown_cell(required_label(row, sdk_envs))} | ${escape_markdown_cell(row.reason)} |`
 }
 
+/// Whether `row` is a test ID that the Python-baselined percentages measure:
+/// `python_pydantic2` declares it, and at least one other SDK environment is
+/// required to declare it. A skip annotation on a test that only Python
+/// declares waives every other environment, so no SDK can match that ID.
+function is_shared_python_row(row: ParityRow) -> bool {
+    let python_present = false;
+    let required_elsewhere = false;
+    for (let cell in row.cells) {
+        if (cell.sdk_env == "python_pydantic2") {
+            python_present = cell.present;
+        } else if (cell.required) {
+            required_elsewhere = true;
+        }
+    }
+    python_present && required_elsewhere
+}
+
 function python_baseline_count(report: ParityReport) -> int {
     let count = 0;
     for (let row in report.rows) {
-        for (let cell in row.cells) {
-            if (cell.sdk_env == "python_pydantic2" && cell.present) {
-                count += 1;
-            }
+        if (is_shared_python_row(row)) {
+            count += 1;
         }
     }
     count
@@ -84,18 +99,13 @@ function python_baseline_count(report: ParityReport) -> int {
 function python_baseline_match_count(report: ParityReport, sdk_env: string) -> int {
     let count = 0;
     for (let row in report.rows) {
-        let python_present = false;
-        let sdk_present = false;
-        for (let cell in row.cells) {
-            if (cell.sdk_env == "python_pydantic2") {
-                python_present = cell.present;
-            }
-            if (cell.sdk_env == sdk_env) {
-                sdk_present = cell.present;
-            }
+        if (!is_shared_python_row(row)) {
+            continue;
         }
-        if (python_present && sdk_present) {
-            count += 1;
+        for (let cell in row.cells) {
+            if (cell.sdk_env == sdk_env && cell.present) {
+                count += 1;
+            }
         }
     }
     count
@@ -114,7 +124,7 @@ function render_python_baseline_parity(report: ParityReport) -> string[] {
     let lines = [
         "## Python-baselined parity",
         "",
-        `Parity is the share of the ${baseline_count} test IDs declared in \`python_pydantic2\` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.`,
+        `Parity is the share of the ${baseline_count} shared test IDs declared in \`python_pydantic2\` that are also declared in each SDK environment. A Python test ID is shared unless a skip annotation waives every other SDK environment. SDK-only test IDs do not affect these percentages.`,
         "",
         "| SDK environment | Matching Python test IDs | Parity |",
         "| --- | ---: | ---: |",

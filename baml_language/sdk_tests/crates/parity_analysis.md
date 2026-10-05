@@ -2,25 +2,25 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 887. IDs with complete required parity: 167. Required gaps: 4949.
+Distinct exact test IDs: 1036. IDs with complete required parity: 316. Required gaps: 4949.
 
 
 ## Python-baselined parity
 
-Parity is the share of the 430 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 368 shared test IDs declared in `python_pydantic2` that are also declared in each SDK environment. A Python test ID is shared unless a skip annotation waives every other SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 430 / 430 | 100.0% |
-| typescript_node | 184 / 430 | 42.8% |
-| typescript_web_chromium | 160 / 430 | 37.2% |
-| typescript_web_cloudflare_workers | 160 / 430 | 37.2% |
-| cpp | 130 / 430 | 30.2% |
-| csharp | 0 / 430 | 0.0% |
-| rust | 229 / 430 | 53.3% |
-| go | 13 / 430 | 3.0% |
-| java | 299 / 430 | 69.5% |
-| swift | 184 / 430 | 42.8% |
+| python_pydantic2 | 368 / 368 | 100.0% |
+| typescript_node | 184 / 368 | 50.0% |
+| typescript_web_chromium | 160 / 368 | 43.5% |
+| typescript_web_cloudflare_workers | 160 / 368 | 43.5% |
+| cpp | 131 / 368 | 35.6% |
+| csharp | 0 / 368 | 0.0% |
+| rust | 229 / 368 | 62.2% |
+| go | 14 / 368 | 3.8% |
+| java | 300 / 368 | 81.5% |
+| swift | 185 / 368 | 50.3% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -41,7 +41,15 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | docstrings_etc/main_undocumented_field_listed_as_bare_name_under_attributes | y | - | - | - | y | - | y | - | y | - | all |  |
 | docstrings_etc/no_inline_field_or_variant_doc_artifacts | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/undocumented_field_has_no_doc_artifact | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/adt_media_generic_decodes_to_pyhandle | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
 | function_calls/ambient_context_survives_await_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
+| function_calls/argument_of_another_kind_without_generated_class_is_a_type_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/argument_types_class_rejects_a_field_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
+| function_calls/argument_types_int_rejects_a_value_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
+| function_calls/argument_types_int_rejects_a_value_of_another_kind_async | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
+| function_calls/argument_types_list_rejects_an_item_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
+| function_calls/argument_types_scalars_reject_a_value_of_another_kind | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a value of another Python type than the generated annotation; a statically typed SDK cannot write that call |
+| function_calls/argument_types_values_that_the_boundary_converts_are_accepted | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a Python dict and a Python int where the generated annotations are a class and a float |
 | function_calls/async_callback_can_use_originating_loop_resources_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
 | function_calls/async_callback_can_use_originating_loop_resources_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/async_callback_inherits_application_context_across_suspension_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
@@ -51,6 +59,10 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/async_entry_sync_callback_inherits_application_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
 | function_calls/async_host_runs_in_calling_task_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python asyncio task and event-loop identity |
 | function_calls/async_reentry_preserves_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/async_stream_schema_failure_is_parse_failed | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | exercises the Python asyncio streaming bridge |
+| function_calls/audio_from_base64 | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/audio_from_file | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/audio_from_url | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
 | function_calls/baml_closure_decodes_multiple_args_and_structured_return_values | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
 | function_calls/baml_closure_is_a_native_callable_with_host_language_arguments | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
 | function_calls/baml_closure_is_reusable_and_retains_mutable_captures | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
@@ -63,11 +75,27 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/baml_time_nullable_and_defaulted_positions | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/baml_time_raw_class_transport_does_not_enforce_semantic_invariants | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/baml_trace_is_embedded_in_go_error_string | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/baml_ty_int_returns_int | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/baml_ty_list_int_returns_typing_list_int | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/baml_ty_optional_string_returns_optional_str | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/baml_ty_string_returns_str | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/baml_ty_union_preserves_members | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/baml_ty_union_single_member_unwraps | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/baml_ty_union_with_unknown_member_keeps_any_arm | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/baml_ty_unknown_returns_typing_any | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/base_class_for_fqn_passes_non_generic_through | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/base_class_for_fqn_strips_parameterization | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
 | function_calls/boolean_timeout_rejected_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
+| function_calls/call_by_name_returns_a_generated_class | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/call_by_name_returns_the_result | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
 | function_calls/callable_entry_invokes_callback | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callable_entry_waits_for_callback_completion | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callable_parameter_aliases_map_positional_and_keyword_calls_to_wire_names | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's identifier aliases |
+| function_calls/callable_returning_hostile_object_still_completes | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
+| function_calls/callable_returning_unencodable_surfaces_as_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
 | function_calls/callback_bound_method_adoption_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python bound method identity via its exact SDK function |
 | function_calls/callback_captures_internal_baml_context | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/callback_exception_without_generated_class_is_the_original | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
 | function_calls/callback_frame_and_reentry | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/callback_frame_is_installed_and_restored | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/callback_marker_adopts_once_during_recursion | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
@@ -151,6 +179,21 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/coroutine_entry_uses_execution_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python coroutine creation versus first execution |
 | function_calls/current_context_returns_detached_snapshot | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/deadline_reentry_does_not_reset_budget | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/decode_class_graceful_degradation_when_args_empty | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/decode_class_nested_generic | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/decode_class_parameterizes_with_generic_args | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/decode_failure_counts_repeated_keys_and_ignores_borrowed_host_keys | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's ownership of wire handles |
+| function_calls/decode_failure_preserves_transferred_owner_and_releases_remaining | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's ownership of wire handles |
+| function_calls/decode_failure_releases_untransferred_callable_and_media | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's ownership of wire handles |
+| function_calls/decode_value_class_keeps_projected_handle_alias_as_model_field | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/decode_value_class_unregistered_fqn_raises | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/decode_value_class_uses_typemap_get_class | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/decode_value_unknown_class_as_fields_keeps_a_generated_class | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/decode_value_unknown_class_as_fields_reaches_every_nested_class | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/decoded_pyhandle_releases_on_drop | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/define_function_preserves_generated_callable_metadata_and_generic_wrapping | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's identifier aliases |
+| function_calls/discarded_args_do_not_release_borrowed_host_registry_keys | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's ownership of wire handles |
+| function_calls/discarded_args_release_each_nested_wire_owner_once | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's ownership of wire handles |
 | function_calls/dropping_started_future_cancels_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust task scopes and lazy future cancellation are specific to Rust |
 | function_calls/dynamic_application_map_preserves_control_like_keys | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/dynamic_call_accepts_controls | y | y | y | y | - | - | - | - | - | - | all |  |
@@ -160,17 +203,32 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/dynamic_type_bindings_async_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python dynamic type bindings accept Python classes and reflected BamlType handles |
 | function_calls/empty_class_self_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/empty_controls | y | y | y | y | - | - | y | - | y | - | all |  |
+| function_calls/encode_error_releases_registered_callables | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
+| function_calls/encode_failure_releases_every_cloned_capability_handle | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/encode_success_does_not_release | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
 | function_calls/encoding_time_counts_against_deadline_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
+| function_calls/enum_strings_callback_receives_the_variant | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call |
+| function_calls/enum_strings_plain_string_becomes_the_variant | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call |
+| function_calls/enum_strings_plain_string_becomes_the_variant_async | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call |
+| function_calls/enum_strings_string_stays_a_string_beside_a_string_member | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call |
+| function_calls/enum_strings_string_that_names_no_variant_is_a_type_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call |
+| function_calls/enum_strings_union_mismatch_names_types_as_written | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | passes a plain Python str where the generated annotation is an enum; a statically typed SDK cannot write that call |
 | function_calls/error_call_cancellation_preserves_context_identity | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/error_string_is_non_empty | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/errors_async_sibling_throws_typed | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/errors_baml_error_carries_baml_trace | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/errors_baml_trace_spliced_into_python_traceback | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/errors_cancellation_surfaces_as_baml_panic | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/errors_cancelled_async_call_stays_an_asyncio_cancellation | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python exception class hierarchy |
+| function_calls/errors_cancelled_sync_call_is_caught_as_baml_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python exception class hierarchy |
 | function_calls/errors_clean_exit_terminates_process_with_code | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/errors_clean_exit_terminates_process_with_code_0 | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/errors_clean_exit_terminates_process_with_code_7 | y | - | - | - | - | - | - | - | y | - | all |  |
+| function_calls/errors_every_baml_exception_class_is_a_baml_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python exception class hierarchy |
 | function_calls/errors_host_invalid_argument_wraps_baml_errors_invalid_argument | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/errors_panic_is_caught_as_baml_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python exception class hierarchy |
+| function_calls/errors_rejected_argument_is_caught_as_baml_error_and_as_type_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python exception class hierarchy |
+| function_calls/errors_sdk_panic_is_caught_as_baml_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python exception class hierarchy |
 | function_calls/errors_stdlib_error_surfaces_as_baml_error | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/errors_stdlib_error_surfaces_typed | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/errors_str_is_non_empty | y | - | - | - | - | - | y | - | y | y | all |  |
@@ -178,11 +236,21 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/errors_union_throws_preserves_class_name | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/errors_user_panic_surfaces_as_baml_panic | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/errors_user_throw_surfaces_declared_instance | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/exit_wait_ends_on_ctrl_c | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
 | function_calls/explicit_controls_are_applied | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/explicit_controls_are_applied_async | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/failed_admission_does_not_consume_reservation | - | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/four_call_forms | y | y | y | y | - | - | y | - | y | y | all |  |
 | function_calls/four_call_forms_async | y | y | y | y | - | - | y | - | y | y | all |  |
+| function_calls/from_lazy_entries_resolves_class_via_importlib | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
+| function_calls/function_not_found_is_a_panic | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/function_not_found_without_generated_class_is_a_panic | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/function_ref_decodes_to_callable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/function_spec_uses_canonical_method_fqns_and_wire_argument_names | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/generated_bytecode_version_skew_fails_before_deserialization | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/generic_callable_explicit_types_still_works | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/generic_callable_subscript_arity_mismatch_raises | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/generic_callable_subscript_desugars_to_types_dict | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
 | function_calls/generic_calls_choose_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_consume_int_wrapper_baseline | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_extract_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
@@ -276,10 +344,17 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_values_of_nonempty_returns_values | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_wrap_infers_and_returns_bound_generic | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_wrap_infers_and_returns_generic | y | - | - | - | - | - | - | - | y | y | all |  |
+| function_calls/generic_instance_carries_sparse_value_type | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
 | function_calls/generic_nullable_type_variables_preserve_every_pointer_boundary | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_over_union_round_trips | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
 | function_calls/generic_receiver_and_static_helpers | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_return_only_type_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_union_input_and_engine_validation | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/get_class_unknown_fqn_raises | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
+| function_calls/get_class_unresolvable_module_raises | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
+| function_calls/get_enum_unknown_fqn_raises | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
+| function_calls/get_type_alias_unknown_fqn_raises | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
+| function_calls/get_version | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
 | function_calls/go_codegen_context_deadline | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_default_argument_serialization_error_names_argument | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_defaulted_argument_type_matrix | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -287,6 +362,7 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/go_codegen_option_name_collisions | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_optional_arg_last_value_wins | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_person_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/heap_handles_dedup_to_one_refcounted_key | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
 | function_calls/hello_world_returns_literal | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/hidden_mode_does_not_inherit | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_baml_cancellation_remains_live_after_exit | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
@@ -375,8 +451,19 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_preserves_call_shape_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS receivers, variadic arguments, and native Promise results |
 | function_calls/host_rejects_unsupported_configuration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers unsupported Python generator/decorator shapes |
 | function_calls/host_rejects_unsupported_configuration_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS generator and marker configuration rejection |
+| function_calls/host_result_encode_failure_releases_capability_clone | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
+| function_calls/host_result_successful_encode_transfers_capability_clone_to_engine | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
 | function_calls/host_supplied_json_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/host_thread_context_handoff_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python ContextVar handoff to a thread pool |
+| function_calls/host_throw_encode_failure_releases_capability_clone | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
+| function_calls/image_from_base64 | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/image_from_base64_with_mime | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/image_from_file | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/image_from_file_with_mime | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/image_from_url | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/image_from_url_with_mime | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/inbound_class_value_carries_base_fqn | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/initialize_runtime_from_source_reports_compile_errors | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
 | function_calls/instance_method_cancellation_returns_exact_context_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_media_receiver_default_and_ownership_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_optional_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -387,6 +474,7 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/instrument_preserves_sync_execution_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python signatures and positional argument binding |
 | function_calls/invalid_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/invalid_function_arguments_surface_baml_error | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/invalid_response_preserves_wire_diagnostics | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | exercises Python BamlError and generated Pydantic payloads |
 | function_calls/invalid_timeout_rejected | y | y | y | y | - | - | y | - | y | - | all |  |
 | function_calls/invocation_inheritance | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/invocation_inheritance_multi_layer_context_patch_inherits_and_restores | - | - | - | - | y | - | - | - | - | - | all |  |
@@ -408,6 +496,8 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/layered_callback_context_inheritance_and_restoration_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
 | function_calls/layered_callback_context_restores_after_returned_callable | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/legacy_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/live_capability_methods_use_async_cancellation_decoder | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/live_handle_kinds_select_trusted_wrappers | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
 | function_calls/live_token_cancels_after_admission | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_hello_world_returns_literal | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/main_returns_the_literal_async | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -415,6 +505,7 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/main_round_trips_a_single_positional_argument | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_round_trips_ints_bools_strings_and_floats | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_single_required_arg_round_trips | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/media_decodes_and_reencodes_as_portable_payload | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's portable values |
 | function_calls/method_generated_name_collisions_stay_callable | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/method_self_all_supported_positions_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/methods_accept_controls | y | y | y | y | - | - | y | - | y | - | all |  |
@@ -430,10 +521,13 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/methods_on_classes_static_create_async_round_trips | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/methods_on_classes_static_create_round_trips | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/methods_on_classes_who_returns_a_field_off_self_async_plus_sync | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/missing_argument_raises_invalid_argument | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/missing_argument_without_generated_class_keeps_its_message | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
 | function_calls/multi_layer_context_patch_inherits_and_restores | - | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/native_closure_can_cross_sync_and_async_entries_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node sync calls support native closures whose captures need no host dispatch |
 | function_calls/native_signal_cancels_without_cancelling_input_token_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
 | function_calls/nil_host_callable_fails_before_dispatch | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/non_generic_instance_value_type_has_no_type_args | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
 | function_calls/null_controls_preserve_inherited_context | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/omitted_argument_is_not_null | y | y | y | y | - | - | y | - | y | y | all |  |
 | function_calls/optional_args_async_samples | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -448,13 +542,28 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/optional_args_unset_and_null_differ_in_one_call | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/options_snapshot_at_async_entry_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
 | function_calls/options_snapshot_when_coroutine_starts_python_only | y | - | - | - | - | - | - | - | - | - | all |  |
+| function_calls/panic_value_of_unknown_class_reaches_the_caller_as_its_fields | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/panic_without_generated_class_is_its_fields | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/parameterize_applies_to_generic_type_alias | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/parameterize_falls_back_for_fully_bound_alias | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/parameterize_falls_back_for_non_generic_class | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/parameterize_no_args_returns_base | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/parameterize_single_arg_int | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
 | function_calls/parse_json_successful_value_uses_generated_json_projection | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/pdf_from_base64 | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/pdf_from_file | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/pdf_from_url | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/pdf_from_url_with_mime | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
 | function_calls/pre_aborted_call_does_not_dispatch_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/pre_aborted_native_signal_does_not_enter_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
 | function_calls/pre_cancelled_call_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | all |  |
 | function_calls/promise_all_failure_with_explicit_sibling_abort_preserves_error_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/promise_callback_preserves_async_local_storage_across_suspension_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/promise_callback_sync_reentry_rejects_host_callback_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
+| function_calls/prompt_wrapper_reencodes_repeatedly_without_a_handle | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's portable values |
+| function_calls/provider_error_preserves_native_error_metadata | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | exercises Python BamlError and generated Pydantic payloads |
+| function_calls/py_type_to_baml_type_returns_empty_for_unknown | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
+| function_calls/py_type_to_baml_type_walks_mro | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
 | function_calls/raises_async_sibling_also_has_raises | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_imports | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/raises_imports_symbols_reachable | y | - | - | - | y | - | - | - | y | - | all |  |
@@ -469,7 +578,11 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/reflected_type_composes_through_optional_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_primitive_literal_and_nominal_descriptors | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_top_level_and_runtime_produced_values | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/rehydrate_host_value_reads_handle_of_undecoded_fields | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/rehydrate_host_value_reads_projected_handle_alias | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
 | function_calls/rejected_admission_does_not_consume_reservation | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/renamed_enum_member_encodes_raw_value_for_scalar_and_map_key | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's identifier aliases |
+| function_calls/renamed_pydantic_field_populates_both_ways_and_encodes_raw_name | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's identifier aliases |
 | function_calls/repeated_abort_does_not_interrupt_async_callback_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback cancellation under an explicit controller |
 | function_calls/repeated_cooperative_abort_does_not_interrupt_callback_cleanup_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/repeated_dispatches_each_start_with_entry_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
@@ -477,6 +590,11 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/repeated_dispatches_invoke_callback_in_order | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/reservation_does_not_inherit | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/reservation_is_single_use | - | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/resolve_types_accepts_only_a_dict_for_generic | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/resolve_types_dict_maps_by_name_in_declaration_order | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/resolve_types_empty_params_rejects_types_kwarg | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/resolve_types_leaves_unnamed_params_for_the_engine_to_infer | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/resolve_types_rejects_unknown_keys | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
 | function_calls/retained_callback_uses_invocation_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/retained_context_survives_parent_completion | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/retained_effective_token_observes_late_parent_cancellation | - | - | - | - | - | - | y | - | y | - | all |  |
@@ -485,8 +603,11 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/retained_invocation_resolves_token_after_callback | y | - | - | - | - | - | - | - | - | - | all |  |
 | function_calls/returned_callable_accepts_controls | y | y | y | y | - | - | y | - | y | - | all |  |
 | function_calls/returned_callable_accepts_controls_async | - | - | - | - | - | - | y | - | - | - | all |  |
+| function_calls/returned_callable_parameter_aliases_preserve_controls | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/returned_class_without_generated_class_is_an_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
 | function_calls/returned_closure_preserves_callback_error_and_remains_reusable | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/returned_closure_retains_host_callback | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/returned_value_of_unknown_class_is_an_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
 | function_calls/reused_callback_uses_current_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/runtime_executes_the_generated_sdk_in_a_browser | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
 | function_calls/runtime_executes_the_generated_sdk_in_node | - | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
@@ -494,6 +615,10 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/runtime_imports_the_generated_sdk_in_the_configured_runtime | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/same_callback_recurses_through_baml | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/same_callback_recurses_through_baml_without_reusing_an_entry_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | sync callback re-entry differs between Python and Node |
+| function_calls/sdk_panic_wire_envelope_decodes_to_baml_panic | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | reads the Python bridge's host-callable registry and handle table |
+| function_calls/set_unhandled_spawn_error_handler_returns_the_handler_it_replaces | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/shutdown_timeout_bounds_an_in_flight_call | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/shutdown_timeout_is_validated | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
 | function_calls/single_required_arg_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/specialized_callable_rejects_type_bindings | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/static_method_errors_never_cancellation_and_collision_names | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -504,6 +629,17 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/stdlib_entrypoints_native_baml_sys_argv_is_callable_as_an_entry_point | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point | y | y | - | - | y | - | y | - | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/stdlib_error_surfaces_as_go_error | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/stdlib_error_without_generated_class_is_its_fields | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/stdlib_reverse_overrides_seeded | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's type map |
+| function_calls/stream_async_forwards_python_task_cancellation | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/stream_async_preserves_cancellation_when_native_cancel_fails | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/stream_companion_calls_its_exact_fqn | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's identifier aliases |
+| function_calls/stream_exact_fqn_is_preserved_on_the_wire | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's identifier aliases |
+| function_calls/stream_handle_kind_ignores_misleading_type_metadata | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/stream_schema_failure_is_parse_failed | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | exercises Python BamlError and generated Pydantic payloads |
+| function_calls/stream_uses_canonical_method_fqns | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
+| function_calls/successful_decode_transfers_ownership_to_callback | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's ownership of wire handles |
+| function_calls/successful_encode_retains_clone_until_wire_owner_consumes_it | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's handle wrappers |
 | function_calls/suspended_callback_survives_gc_until_cancellation_cleanup_finishes_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | asyncio tasks retain callback bodies until actual completion |
 | function_calls/sync_call_returns_null | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/sync_callback_can_run_async_baml_with_its_own_application_loop_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Node cannot synchronously drive an application loop |
@@ -536,10 +672,20 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/sync_retained_closure_rejects_before_dispatch_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node cannot run JS callbacks while a sync native call blocks its event loop |
 | function_calls/task_factory_failure_completes_dispatch_and_preserves_exception_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python asyncio task factory failures during dispatch |
 | function_calls/taskgroup_failure_cancels_sibling_baml_call_and_preserves_error_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
+| function_calls/thrown_class_without_generated_class_is_its_fields | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | calls the Python bridge by function name, without the generated wrappers |
+| function_calls/thrown_value_of_unknown_class_reaches_the_caller_as_its_fields | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
 | function_calls/timeout_upper_bound_accepted | y | y | y | y | - | - | y | - | y | - | all |  |
 | function_calls/to_thread_sync_entry_inherits_copied_application_context_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
 | function_calls/two_application_loops_on_two_threads_share_callback_without_rerouting_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python thread, event loop, and ContextVar semantics |
-| function_calls/unhandled_spawn_error_uses_host_default | - | - | - | - | y | - | - | y | y | y | cpp, go, java, swift | requires subprocess-level SDK harness support |
+| function_calls/type_mismatch_without_generated_class_is_a_type_error | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's wire decoder |
+| function_calls/unbound_generic_instance_carries_nominal_sparse_value_type | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's encoding of generic types |
+| function_calls/unhandled_spawn_error_default_prints_a_cancelled_task_and_continues | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/unhandled_spawn_error_handler_can_keep_the_default_for_some_errors | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/unhandled_spawn_error_handler_is_told_when_the_task_was_cancelled | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/unhandled_spawn_error_handler_none_restores_the_default | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/unhandled_spawn_error_handler_replaces_the_default | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/unhandled_spawn_error_handler_that_raises_is_reported_and_the_process_continues | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | observes process-wide state of the Python bridge |
+| function_calls/unhandled_spawn_error_uses_host_default | y | - | - | - | y | - | - | y | y | y | python_pydantic2, cpp, go, java, swift | requires subprocess-level SDK harness support |
 | function_calls/union_throws_preserves_concrete_class_identity | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/unknown_control_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/unmarked_callback_explicit_context_and_reentry | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
@@ -547,6 +693,9 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | function_calls/unset_and_none_differ_in_one_call | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/user_panic_surfaces_as_go_error_without_panicking | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/user_throw_surfaces_declared_class_identity | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/video_from_base64 | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/video_from_file | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
+| function_calls/video_from_url | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | unit test of the Python bridge's media constructors |
 | function_calls/web_sysops_maps_fetch_failures_and_timeouts_into_declared_baml_errors | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/web_sysops_rejects_http_streaming_and_unrelated_sysops | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/web_sysops_rejects_sync_and_async_baml_fs_read_promptly | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
@@ -564,9 +713,7 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | host_reflect/runtime_class_definition_preserves_nested_metadata | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/runtime_enum_definition_decodes_alias | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
-| integration/baml_closure_decodes_multiple_args_and_structured_return_values | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
-| integration/baml_closure_is_a_native_callable_with_host_language_arguments | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
-| integration/baml_closure_is_reusable_and_retains_mutable_captures | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
+| integration/baml_closures_execute_host_arguments_structured_returns_and_mutable_captures | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
 | integration/basic_calls_executes_sync_and_async | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/cancel_token_any_propagates_native_cancellation | - | - | - | - | - | y | - | - | - | - | csharp | isolates the flaky native cancellation propagation check |
 | integration/canonical_documentation_consumer_compiles_and_executes | - | - | - | - | - | y | - | - | - | - | csharp | validates the C#-specific documentation consumer |
@@ -785,6 +932,8 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | type_shapes/primitives_return_null | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_return_string | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_bigint | y | - | - | - | y | - | - | - | y | - | all |  |
+| type_shapes/primitives_round_trip_bigint_async | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python async entry of the bigint round trip |
+| type_shapes/primitives_round_trip_bigint_in_i64_range | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python has one int type; a value in the i64 range rides the int channel and the engine widens it to bigint |
 | type_shapes/primitives_round_trip_bool | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_float | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_float_accepts_int | y | - | - | - | y | - | y | - | y | - | all |  |
@@ -911,3 +1060,8 @@ Parity is the share of the 430 test IDs declared in `python_pydantic2` that are 
 | type_shapes/unions_union_is_a_plain_std_variant | - | - | - | - | y | - | - | - | - | - | all |  |
 | type_shapes/void_no_op | y | y | y | y | y | - | y | - | y | y | all |  |
 | unsupported_only/compile_unsupported_only_package_compiles | - | - | - | - | - | - | - | y | - | - | all |  |
+
+## Baseline comparison
+
+No required coverage pairs changed.
+

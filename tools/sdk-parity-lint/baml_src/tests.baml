@@ -268,13 +268,43 @@ test "Python-baselined parity ignores SDK-only test IDs" {
         ],
     );
     let rendered = render_python_baseline_parity(report).join("\n");
-    assert.contains(rendered, "the 2 test IDs declared in `python_pydantic2`");
+    assert.contains(rendered, "the 2 shared test IDs declared in `python_pydantic2`");
     assert.contains(rendered, "| python_pydantic2 | 2 / 2 | 100.0% |");
     assert.contains(rendered, "| rust | 1 / 2 | 50.0% |");
     assert.contains(rendered, "| go | 0 / 2 | 0.0% |");
     assert.equal(render_percentage(1, 3), "33.3%");
     assert.equal(render_percentage(2, 3), "66.7%");
     assert.equal(render_percentage(0, 0), "n/a")
+}
+
+test "Python-baselined parity ignores Python test IDs that a skip annotation waives everywhere else" {
+    let sdk_envs = ["python_pydantic2", "rust", "go"];
+    let report = fixture_parity_report(
+        sdk_envs,
+        [
+            fixture_parity_row("type_shapes/shared", sdk_envs, [true, true, false], sdk_envs, ""),
+            fixture_parity_row("type_shapes/python_gap", sdk_envs, [true, false, false], sdk_envs, ""),
+            fixture_parity_row(
+                "type_shapes/python_only",
+                sdk_envs,
+                [true, false, false],
+                ["python_pydantic2"],
+                "Python bridge unit test",
+            ),
+            fixture_parity_row(
+                "type_shapes/python_and_go",
+                sdk_envs,
+                [true, false, true],
+                ["python_pydantic2", "go"],
+                "requires a subprocess harness",
+            ),
+        ],
+    );
+    let rendered = render_python_baseline_parity(report).join("\n");
+    assert.contains(rendered, "the 3 shared test IDs declared in `python_pydantic2`");
+    assert.contains(rendered, "| python_pydantic2 | 3 / 3 | 100.0% |");
+    assert.contains(rendered, "| rust | 1 / 3 | 33.3% |");
+    assert.contains(rendered, "| go | 1 / 3 | 33.3% |")
 }
 
 function fixture_parity_row(
