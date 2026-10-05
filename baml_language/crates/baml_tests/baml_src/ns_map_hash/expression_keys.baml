@@ -29,6 +29,25 @@ test "bare map keys resolve variables and quoted keys remain strings" {
     assert.equal(values["key"], 2)
 }
 
+test "map keys and values share ordinary string expression semantics" {
+    let escaped = "line\nquote\"slash\\";
+    let escaped_map = { "line\nquote\"slash\\": "line\nquote\"slash\\" };
+    assert.equal(escaped_map[escaped], escaped);
+
+    let raw = ``literal\n"quote``;
+    let raw_map = { ``literal\n"quote``: ``literal\n"quote`` };
+    assert.equal(raw_map[raw], raw);
+
+    let suffix = "bar";
+    let interpolated = `foo${suffix}`;
+    let template_map = { `foo${suffix}`: `foo${suffix}` };
+    assert.equal(template_map[interpolated], interpolated);
+
+    let bytes = b"foo";
+    let byte_map = { b"foo": b"foo" };
+    assert.equal(byte_map[bytes], bytes)
+}
+
 test "map keys accept calls arithmetic indexing and constructors" {
     let integers = [3];
     let numbers = {

@@ -5333,33 +5333,20 @@ impl LoweringContext {
                 let mut seen_colon = false;
 
                 for elem in field_node.children_with_tokens() {
-                    match elem {
-                        rowan::NodeOrToken::Token(t) => {
-                            if t.kind() == SyntaxKind::COLON {
-                                seen_colon = true;
-                            } else if !seen_colon
-                                && key_expr.is_none()
-                                && t.kind() == SyntaxKind::STRING_LITERAL
-                            {
-                                key_expr = Some(self.alloc_expr(
-                                    Expr::Literal(Literal::String(strip_string_delimiters(
-                                        t.text(),
-                                    ))),
-                                    t.text_range(),
-                                ));
-                            } else if !seen_colon && key_expr.is_none() {
-                                key_expr = self.try_lower_bare_token(&t);
-                            } else if seen_colon && val_expr.is_none() {
-                                val_expr = self.try_lower_bare_token(&t);
-                            }
-                        }
-                        rowan::NodeOrToken::Node(n) => {
-                            if !seen_colon && key_expr.is_none() {
-                                key_expr = Some(self.lower_expr(&n));
-                            } else if seen_colon && val_expr.is_none() {
-                                val_expr = Some(self.lower_expr(&n));
-                            }
-                        }
+                    if elem.kind() == SyntaxKind::COLON {
+                        seen_colon = true;
+                        continue;
+                    }
+                    let target = if seen_colon {
+                        &mut val_expr
+                    } else {
+                        &mut key_expr
+                    };
+                    if target.is_none() {
+                        *target = match elem {
+                            rowan::NodeOrToken::Node(node) => Some(self.lower_expr(&node)),
+                            rowan::NodeOrToken::Token(token) => self.try_lower_bare_token(&token),
+                        };
                     }
                 }
 
