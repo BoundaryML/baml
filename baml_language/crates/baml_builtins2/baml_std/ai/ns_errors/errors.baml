@@ -45,8 +45,7 @@ type NormalizedError = Failure
 /// A client method that classifies its errors itself, with
 /// `catch_all (e) { _ => throw ai.errors.normalize(e) }`, throws a
 /// `NormalizedError`. Write that in its `throws` clause, or write no clause.
-type InvokeError = NormalizedError
-    | baml.errors.Io;
+type InvokeError = NormalizedError | baml.errors.Io;
 
 /// Every raw type the client stack is known to raise before classification.
 /// This union is deliberately CLOSED: when a new throw appears anywhere in

@@ -6149,12 +6149,27 @@ mod union_container_selection_tests {
         let text = || BexExternalValue::String("x".into());
         let cases = [
             (text(), RuntimeTy::int(), "string", "int"),
-            (BexExternalValue::Float(1.5), RuntimeTy::int(), "float", "int"),
-            (BexExternalValue::Bool(true), RuntimeTy::int(), "bool", "int"),
+            (
+                BexExternalValue::Float(1.5),
+                RuntimeTy::int(),
+                "float",
+                "int",
+            ),
+            (
+                BexExternalValue::Bool(true),
+                RuntimeTy::int(),
+                "bool",
+                "int",
+            ),
             (BexExternalValue::Null, RuntimeTy::int(), "null", "int"),
             (text(), RuntimeTy::float(), "string", "float"),
             (BexExternalValue::Int(1), RuntimeTy::bool(), "int", "bool"),
-            (BexExternalValue::Int(1), RuntimeTy::string(), "int", "string"),
+            (
+                BexExternalValue::Int(1),
+                RuntimeTy::string(),
+                "int",
+                "string",
+            ),
             (text(), RuntimeTy::Bigint, "string", "bigint"),
             (text(), RuntimeTy::Uint8Array, "string", "uint8array"),
             (text(), RuntimeTy::null(), "string", "null"),
@@ -6169,7 +6184,9 @@ mod union_container_selection_tests {
         for (value, declared, value_kind, written) in cases {
             assert_eq!(
                 mismatch_message(coerce_with_person(value, &declared)),
-                format!("Value of type '{value_kind}' does not match the declared type `{written}`"),
+                format!(
+                    "Value of type '{value_kind}' does not match the declared type `{written}`"
+                ),
             );
         }
     }
@@ -6178,7 +6195,10 @@ mod union_container_selection_tests {
     #[test]
     fn scalar_that_the_boundary_converts_is_accepted() {
         let float = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::float()).unwrap();
-        assert!(matches!(float, BexExternalValue::Float(value) if value == 7.0), "{float:?}");
+        assert!(
+            matches!(float, BexExternalValue::Float(value) if value == 7.0),
+            "{float:?}"
+        );
         let bigint = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::Bigint).unwrap();
         assert!(matches!(bigint, BexExternalValue::Bigint(_)), "{bigint:?}");
         let int = coerce_with_person(BexExternalValue::JsNumber(3.0), &RuntimeTy::int()).unwrap();
@@ -6188,7 +6208,10 @@ mod union_container_selection_tests {
             &string_literal("draft"),
         )
         .unwrap();
-        assert!(matches!(literal, BexExternalValue::String(_)), "{literal:?}");
+        assert!(
+            matches!(literal, BexExternalValue::String(_)),
+            "{literal:?}"
+        );
         let unknown = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::Unknown).unwrap();
         assert!(matches!(unknown, BexExternalValue::Int(7)), "{unknown:?}");
     }
@@ -6222,7 +6245,12 @@ mod union_container_selection_tests {
         let person = RuntimeTy::Class(person_name(), Box::new([]));
         let cases = [
             (text(), list(RuntimeTy::string()), "string", "string[]"),
-            (text(), map(RuntimeTy::string()), "string", "map<string, string>"),
+            (
+                text(),
+                map(RuntimeTy::string()),
+                "string",
+                "map<string, string>",
+            ),
             (text(), person.clone(), "string", "Person"),
             (BexExternalValue::Null, person, "null", "Person"),
             (
@@ -6238,7 +6266,9 @@ mod union_container_selection_tests {
         for (value, declared, value_kind, written) in cases {
             assert_eq!(
                 mismatch_message(coerce_with_person(value, &declared)),
-                format!("Value of type '{value_kind}' does not match the declared type `{written}`"),
+                format!(
+                    "Value of type '{value_kind}' does not match the declared type `{written}`"
+                ),
             );
         }
     }
