@@ -218,13 +218,17 @@ fn baml_run_uploads_from_boundary_env() {
             server.reset().await;
             run(temp.path(), &boundary_url, "off", true);
             assert!(server.received_requests().await.unwrap().is_empty());
-            // Plain HTTP to a non-loopback host fails engine startup.
-            run(
-                temp.path(),
-                "http://example.invalid/publisher",
-                "medium",
-                false,
-            );
+            // Invalid cloud configuration cancels execution before any request.
+            let output = execute_case(temp.path(), "http://example.invalid/publisher", KEY, &["run", "main"]);
+            assert!(!output.status.success(), "{output:?}");
+            assert_eq!(diagnostic(&output), r#"error: Boundary configuration is invalid: Boundary API URL must use HTTPS, or HTTP on loopback.
+
+  To continue, choose one:
+    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml.
+    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with BAML_TELEMETRY=off.
+
+  Execution cancelled."#);
             assert!(server.received_requests().await.unwrap().is_empty());
         });
 }
@@ -586,7 +590,7 @@ fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_cre
             r#"error: Boundary configuration is invalid: Boundary API URL must be a base URL without credentials, query or fragment.
 
   To continue, choose one:
-    • Check BOUNDARY_API_URL and [boundary] settings in baml.toml.
+    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml.
     • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
 
   Query failed."#
@@ -594,7 +598,7 @@ fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_cre
             r#"error: Boundary configuration is invalid: Boundary API URL must be a base URL without credentials, query or fragment.
 
   To continue, choose one:
-    • Check BOUNDARY_API_URL and [boundary] settings in baml.toml.
+    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml.
 
   Authentication command failed."#
         };
@@ -734,4 +738,58 @@ async fn standalone_binary_reports_initial_refusal_after_a_fast_main() {
         .unwrap();
     assert!(!output.status.success(), "{output:?}");
     assert_api_key_rejection(&output, &server.uri(), false);
+}
+
+#[test]
+fn invalid_boundary_url_cancels_with_or_without_credentials_unless_local_is_selected() {
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    let invalid = "not a URL";
+    for manifest_url in [false, true] {
+        for key in [None, Some(KEY), Some("local")] {
+            let manifest = if manifest_url {
+                "[package]\nname = \"invalid-url-test\"\n[boundary]\napi_url = \"not a URL\"\n"
+            } else {
+                "[package]\nname = \"invalid-url-test\"\n"
+            };
+            std::fs::write(temp.path().join("baml.toml"), manifest).unwrap();
+            let mut command = Command::new(common::baml_cli());
+            command
+                .args(["--agent-skill-check", "off", "run", "main"])
+                .current_dir(temp.path())
+                .env("BAML_TELEMETRY", "medium")
+                .env("BAML_HOME", common::shared_baml_home())
+                .env("BAML_CLI_ALLOW_DIRECT", "1")
+                .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+                .env("DO_NOT_TRACK", "1")
+                .env_remove("BOUNDARY_PROJECT")
+                .env_remove("BOUNDARY_API_KEY")
+                .env_remove("BOUNDARY_API_URL");
+            if !manifest_url {
+                command.env("BOUNDARY_API_URL", invalid);
+            }
+            if let Some(key) = key {
+                command.env("BOUNDARY_API_KEY", key);
+            }
+            let output = command.output().unwrap();
+            if key == Some("local") {
+                assert!(output.status.success(), "{output:?}");
+                assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+            } else {
+                assert!(!output.status.success(), "{output:?}");
+                assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+                assert_eq!(
+                    diagnostic(&output),
+                    r#"error: Boundary configuration is invalid: Boundary API URL must be a valid absolute URL.
+
+  To continue, choose one:
+    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml.
+    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with BAML_TELEMETRY=off.
+
+  Execution cancelled."#
+                );
+            }
+        }
+    }
 }

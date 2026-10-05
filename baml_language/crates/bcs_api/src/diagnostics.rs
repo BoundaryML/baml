@@ -369,6 +369,12 @@ impl fmt::Display for Diagnostic {
                 writeln!(f, "    • Run `baml auth login`.")?;
                 writeln!(f, "    • Set BOUNDARY_API_KEY to a valid API key.")?;
             }
+            FailureKind::InvalidConfiguration(reason) if reason.starts_with("Boundary API URL") => {
+                writeln!(
+                    f,
+                    "    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml."
+                )?
+            }
             FailureKind::InvalidConfiguration(_) => writeln!(
                 f,
                 "    • Check BOUNDARY_API_URL and [boundary] settings in baml.toml."

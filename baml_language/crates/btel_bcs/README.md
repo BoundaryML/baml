@@ -24,19 +24,19 @@ from the engine level: the former engine-level spelling `auto` is replaced by
 
 ## Transport
 
-`baml run`, `baml test`, packed binaries, and native SDK runtimes select cloud
-recording when `BOUNDARY_API_KEY` or a saved Boundary login supplies a credential.
-`BOUNDARY_API_URL` selects the Boundary HTTPS endpoint, including any path prefix;
-it overrides `[boundary].api_url` and defaults to `https://api.cloud.boundaryml.com`.
-`BOUNDARY_PROJECT` overrides `[boundary].project` for the recording target.
-The language server and WASM playground do not use this configuration.
+`baml run`, `baml test`, and native SDK runtimes select cloud recording from
+`BOUNDARY_API_KEY` or a saved `baml auth login` session. `BOUNDARY_API_URL`
+overrides `[boundary].api_url` and defaults to `https://api.cloud.boundaryml.com`.
+User sessions write to the user's personal environment; API keys enforce their
+provisioned ingestion scope. `BOUNDARY_PROJECT` overrides `[boundary].project`.
 
-Invalid endpoint configuration fails engine startup. With a valid endpoint and
-no cloud credential, hosts keep their existing local recording behavior: the
-CLI records under the project, packed binaries under the user's home, and SDKs
-do not persist recordings. `BAML_TELEMETRY=off` disables all recording regardless
-of the Boundary variables. Cloud recordings omit process arguments. Environment
-reads live in `bex_engine::TelemetryRecording`, not this transport crate.
+Without cloud credentials, hosts use their local recording defaults. Explicit
+`BOUNDARY_API_KEY=local` selects local recording and bypasses Boundary endpoint
+validation. Otherwise an invalid Boundary URL cancels execution with an actionable
+configuration diagnostic. Initial authorization rejection also cancels execution;
+later revocation disables cloud recording and lets execution continue.
+`BAML_TELEMETRY=off` disables recording. Cloud recordings omit process arguments.
+Environment reads live in `bex_engine::TelemetryRecording`, not this transport crate.
 
 Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.
 The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and

@@ -433,7 +433,7 @@ impl TestArgs {
                     session.root(),
                     crate::runtime_telemetry::session_sources(&session),
                 )
-                .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
+                .context("failed to create engine")?,
             )
         };
         let unhandled_spawn_failures = Arc::new(AtomicUsize::new(0));

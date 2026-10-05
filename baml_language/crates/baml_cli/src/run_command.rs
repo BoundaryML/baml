@@ -349,7 +349,7 @@ impl Prepared {
             self.recording_sources,
             self.launch_context,
         )
-        .map_err(|e| anyhow!("failed to create engine: {e:?}"))
+        .context("failed to create engine")
     }
 }
 

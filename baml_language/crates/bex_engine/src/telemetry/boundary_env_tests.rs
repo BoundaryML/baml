@@ -13,12 +13,13 @@ fn from_boundary_env() {
         (Some(URL), Some(KEY), true),
         (None, Some(KEY), true),
         (Some(URL), None, false),
+        (Some("not a URL"), None, true),
+        (Some("http://example.invalid/"), None, true),
         (Some(""), Some(KEY), true),
         (Some("  "), Some(KEY), true),
         (Some(URL), Some(""), false),
         (Some(""), Some(""), false),
         (Some("not a URL"), Some(KEY), true),
-        (Some("not a URL"), None, true),
         (Some("http://example.invalid/"), Some(KEY), true),
         // Endpoint validation happens before discovering credentials.
         (Some("http://localhost:1234/"), Some(KEY), true),
@@ -69,7 +70,12 @@ fn from_boundary_env() {
     };
 
     let (url, key, enabled) = cases[case.parse::<usize>().unwrap()];
-    let recording = TelemetryRecording::from_boundary_env();
+    let recording = if url == Some(URL) && key != Some("local") {
+        // The supported endpoint override wins over the manifest default.
+        TelemetryRecording::from_boundary_defaults(None, Some("not a URL"))
+    } else {
+        TelemetryRecording::from_boundary_env()
+    };
     assert_eq!(recording.is_some(), enabled);
     if let Some(recording) = recording {
         if key == Some("local") {
@@ -77,15 +83,34 @@ fn from_boundary_env() {
             assert!(TelemetryRecording::from_boundary_defaults(None, url).is_none());
             return;
         }
-        if let Destination::InvalidConfiguration { reason } = &recording.destination {
-            let expected = bcs_api::auth::Endpoint::parse(url.unwrap())
-                .unwrap_err()
-                .to_string();
-            assert_eq!(reason, &expected);
+        if matches!(recording.destination, Destination::InvalidConfiguration(_)) {
             let Err(error) = recording.start(None, Arc::default(), &Context::default()) else {
-                panic!("invalid Boundary configuration must fail startup");
+                panic!("invalid Boundary configuration must stop execution");
             };
-            assert_eq!(error.to_string(), expected);
+            let crate::EngineError::CloudAuthorization(diagnostic) = error else {
+                panic!("invalid Boundary configuration must use the shared diagnostic");
+            };
+            assert_eq!(diagnostic.kind.code(), "BOUNDARY_CONFIG_INVALID");
+            let reason = if url == Some("not a URL") {
+                "Boundary API URL must be a valid absolute URL"
+            } else if url == Some("http://example.invalid/") {
+                "Boundary API URL must use HTTPS, or HTTP on loopback"
+            } else {
+                "Boundary API URL must be a base URL without credentials, query or fragment"
+            };
+            assert_eq!(
+                diagnostic.to_string(),
+                format!(
+                    r#"Boundary configuration is invalid: {reason}.
+
+  To continue, choose one:
+    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml.
+    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with BAML_TELEMETRY=off.
+
+  Execution cancelled."#
+                )
+            );
             return;
         }
         let Destination::Cloud { delivery, .. } = recording.destination else {

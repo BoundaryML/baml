@@ -26,9 +26,7 @@ pub struct TelemetryRecording {
     exit: Arc<btel_types::ProcessExitSlot>,
 }
 enum Destination {
-    InvalidConfiguration {
-        reason: String,
-    },
+    InvalidConfiguration(Box<bcs_api::diagnostics::Diagnostic>),
     LocalFiles {
         recordings: PathBuf,
         cas: PathBuf,
@@ -136,9 +134,9 @@ impl TelemetryRecording {
     }
 
     /// Hosts pass artifact/project defaults; process environment variables take precedence.
-    /// Invalid cloud configuration fails engine startup rather than falling back to
-    /// local files. `None` selects the host's local default, either because there
-    /// is no cloud credential or the key is `local`.
+    /// Invalid Boundary configuration cancels engine startup with a shared diagnostic.
+    /// `None` selects the host's local
+    /// default, either because there is no cloud credential or the key is `local`.
     pub fn from_boundary_defaults(project: Option<&str>, api_url: Option<&str>) -> Option<Self> {
         let api_key = baml_env::string_var(BOUNDARY_API_KEY).ok()?;
         if api_key.as_deref() == Some(bcs_api::credentials::LOCAL_API_KEY) {
@@ -148,9 +146,15 @@ impl TelemetryRecording {
             Ok(endpoint) => endpoint,
             Err(error) => {
                 let mut recording = Self::user_files(RecordingConfig::default());
-                recording.destination = Destination::InvalidConfiguration {
-                    reason: error.to_string(),
-                };
+                recording.destination = Destination::InvalidConfiguration(Box::new(
+                    AuthorizationContext {
+                        endpoint: None,
+                        source: CredentialSource::Configured,
+                        operation: Operation::Ingest,
+                    }
+                    .report(error, Outcome::ExecutionCancelled)
+                    .diagnostic,
+                ));
                 return Some(recording);
             }
         };
@@ -362,7 +366,9 @@ impl TelemetryRecording {
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
         let root = match self.destination {
-            Destination::InvalidConfiguration { reason } => return Err(EngineError::Other(reason)),
+            Destination::InvalidConfiguration(diagnostic) => {
+                return Err(EngineError::CloudAuthorization(diagnostic));
+            }
             Destination::Cloud {
                 publisher,
                 delivery,

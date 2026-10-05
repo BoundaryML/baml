@@ -143,6 +143,10 @@ pub use baml_exec::{print_error, print_warning};
 pub fn print_anyhow_error(error: &anyhow::Error) {
     if let Some(reported) = error.downcast_ref::<bcs_api::diagnostics::ReportedError>() {
         print_error(&reported.diagnostic);
+    } else if let Some(bex_engine::EngineError::CloudAuthorization(diagnostic)) =
+        error.downcast_ref::<bex_engine::EngineError>()
+    {
+        print_error(diagnostic);
     } else {
         baml_exec::print_anyhow_error(error);
     }
