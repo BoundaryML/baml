@@ -4,9 +4,11 @@
 //! The actual resources (files, sockets) are managed by the sys provider.
 
 pub mod host_value;
+pub mod retained;
 use std::sync::Arc;
 
 pub use host_value::{HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch};
+pub use retained::RetainedBytes;
 
 /// Type of resource for identification and cleanup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +50,9 @@ struct ResourceHandleInner {
     display_name: String,
     /// Reference to registry for cleanup on drop.
     registry: Option<Arc<dyn ResourceRegistryRef>>,
+    /// Bytes the resource buffers on the handle's behalf, kept current by
+    /// whoever fills and drains it.
+    retained: Option<Arc<RetainedBytes>>,
 }
 
 impl ResourceHandle {
@@ -64,8 +69,38 @@ impl ResourceHandle {
                 kind,
                 display_name,
                 registry: Some(registry),
+                retained: None,
             }),
         }
+    }
+
+    /// A handle to a resource that buffers data, reporting `retained` as its
+    /// footprint.
+    pub fn new_retaining(
+        key: usize,
+        kind: ResourceType,
+        display_name: String,
+        registry: Arc<dyn ResourceRegistryRef>,
+        retained: Arc<RetainedBytes>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(ResourceHandleInner {
+                key,
+                kind,
+                display_name,
+                registry: Some(registry),
+                retained: Some(retained),
+            }),
+        }
+    }
+
+    /// Bytes the resource buffers right now, or zero for one that buffers
+    /// nothing.
+    pub fn retained_bytes(&self) -> usize {
+        self.inner
+            .retained
+            .as_ref()
+            .map_or(0, |retained| retained.get())
     }
 
     /// Get the registry key for this handle.

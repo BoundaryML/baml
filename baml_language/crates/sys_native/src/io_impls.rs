@@ -2970,7 +2970,9 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                         return Ok(None);
                     }
                     if !buf.events.is_empty() {
-                        let events: Vec<serde_json::Value> = std::mem::take(&mut buf.events)
+                        let taken = std::mem::take(&mut buf.events);
+                        buf.publish_retained();
+                        let events: Vec<serde_json::Value> = taken
                             .into_iter()
                             .map(|e| {
                                 serde_json::json!({
@@ -3230,10 +3232,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 .get(reqwest::header::CONTENT_TYPE)
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
+            let retained = Arc::new(sys_types::RetainedBytes::new(0));
             let buffer = Arc::new(TokioMutex::new(SseBuffer {
                 events: Vec::new(),
                 done: false,
                 error: None,
+                retained: Arc::clone(&retained),
             }));
             let closed = Arc::new(AtomicBool::new(false));
             let notify = Arc::new(Notify::new());
@@ -3303,6 +3307,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                                 push_events(network, &events);
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
+                                buf.publish_retained();
                                 notify_clone.notify_waiters();
                             }
                         }
@@ -3343,6 +3348,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 let mut buf = buf_clone.lock().await;
                 if !final_events.is_empty() {
                     buf.events.extend(final_events);
+                    buf.publish_retained();
                 }
                 buf.done = true;
                 notify_clone.notify_waiters();
@@ -3355,6 +3361,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 notify,
                 consumer.abort_handle(),
                 url.clone(),
+                retained,
             );
             Ok(owned::http::SseStream {
                 url,

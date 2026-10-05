@@ -11,12 +11,12 @@ use std::{
     any::{Any, TypeId},
     fmt,
     sync::{
-        Arc,
+        Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicUsize, Ordering},
     },
 };
 
-use crate::Meter;
+use crate::{AllocDebt, Meter};
 
 /// A Rust value that can be stored on the heap.
 ///
@@ -101,33 +101,90 @@ impl RustDataArc for Arc<dyn BexRustData> {
     }
 }
 
-/// Bytes a payload keeps alive that change after it is stored: whoever
-/// mutates the payload keeps this current, and [`BexRustData::measure`] reads
-/// it without touching the payload's own synchronization.
-#[derive(Debug, Default)]
-pub struct RetainedBytes(AtomicUsize);
+pub use bex_resource_types::RetainedBytes;
 
-impl RetainedBytes {
-    pub const fn new(bytes: usize) -> Self {
-        Self(AtomicUsize::new(bytes))
+/// What a value keeps alive beyond its own allocation, for a value that is
+/// mutated behind a [`MeteredMutex`].
+pub trait RetainedFootprint {
+    fn retained_bytes(&self) -> usize;
+}
+
+/// A mutex around a payload that grows: every unlock publishes the payload's
+/// retained bytes, and every [`lock`](Self::lock) charges the growth since the
+/// last charge to the account it is given. Growth is therefore charged one
+/// lock late, which the VM's settle points make the only delay, and the
+/// census reads the published size with no lock at all.
+///
+/// A mutator with no account, running off the VM thread, locks with
+/// [`lock_uncharged`](Self::lock_uncharged): its growth is published, seen by
+/// the census, and charged by the next lock that has an account.
+#[derive(Debug)]
+pub struct MeteredMutex<T> {
+    state: Mutex<T>,
+    retained: RetainedBytes,
+    /// What the budget has been charged for; the allocation charge covers the
+    /// initial size.
+    charged: AtomicUsize,
+}
+
+impl<T: RetainedFootprint> MeteredMutex<T> {
+    pub fn new(value: T) -> Self {
+        let initial = value.retained_bytes();
+        Self {
+            state: Mutex::new(value),
+            retained: RetainedBytes::new(initial),
+            charged: AtomicUsize::new(initial),
+        }
     }
 
-    pub fn get(&self) -> usize {
-        self.0.load(Ordering::Relaxed)
+    /// Lock, charging `debt` the growth published since the last charge.
+    pub fn lock(&self, debt: &AllocDebt) -> MeteredGuard<'_, T> {
+        let now = self.retained.get();
+        let before = self.charged.swap(now, Ordering::Relaxed);
+        debt.add(
+            isize::try_from(now).unwrap_or(isize::MAX)
+                - isize::try_from(before).unwrap_or(isize::MAX),
+        );
+        self.lock_uncharged()
     }
 
-    /// Publish the current size. Returns how much it grew, or zero.
-    pub fn set(&self, bytes: usize) -> usize {
-        let before = self.0.swap(bytes, Ordering::Relaxed);
-        bytes.saturating_sub(before)
+    /// Lock without an account; see the type's docs.
+    pub fn lock_uncharged(&self) -> MeteredGuard<'_, T> {
+        MeteredGuard {
+            guard: self.state.lock().unwrap_or_else(PoisonError::into_inner),
+            retained: &self.retained,
+        }
     }
 
-    pub fn add(&self, bytes: usize) {
-        self.0.fetch_add(bytes, Ordering::Relaxed);
+    /// The payload's retained bytes as last published.
+    pub fn retained_bytes(&self) -> usize {
+        self.retained.get()
     }
+}
 
-    pub fn sub(&self, bytes: usize) {
-        self.0.fetch_sub(bytes, Ordering::Relaxed);
+/// Exclusive access through a [`MeteredMutex`]; publishes the payload's size
+/// when dropped.
+pub struct MeteredGuard<'a, T: RetainedFootprint> {
+    guard: MutexGuard<'a, T>,
+    retained: &'a RetainedBytes,
+}
+
+impl<T: RetainedFootprint> std::ops::Deref for MeteredGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.guard
+    }
+}
+
+impl<T: RetainedFootprint> std::ops::DerefMut for MeteredGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.guard
+    }
+}
+
+impl<T: RetainedFootprint> Drop for MeteredGuard<'_, T> {
+    fn drop(&mut self) {
+        self.retained.set(self.guard.retained_bytes());
     }
 }
 
@@ -151,8 +208,9 @@ impl BexRustData for bex_resource_types::HostValueArc {
 
 impl BexRustData for bex_resource_types::ResourceHandle {
     fn measure(&self, meter: &mut Meter) {
-        // The resource lives in a registry the handle only names.
-        meter.bytes(self.display_name().len());
+        // The resource lives in a registry the handle only names; what it
+        // buffers on the handle's behalf is published by whoever fills it.
+        meter.bytes(self.display_name().len() + self.retained_bytes());
     }
 }
 
@@ -200,13 +258,47 @@ mod tests {
         assert_eq!(Arc::strong_count(&typed), 2);
     }
 
+    struct Buffer(Vec<u8>);
+
+    impl RetainedFootprint for Buffer {
+        fn retained_bytes(&self) -> usize {
+            self.0.capacity()
+        }
+    }
+
+    /// Growth under one lock is published at unlock and charged by the next
+    /// lock with an account; a shrink is credited the same way; an unlock
+    /// with no account defers the charge rather than losing it.
     #[test]
-    fn retained_bytes_reports_growth() {
-        let retained = RetainedBytes::new(100);
-        assert_eq!(retained.set(150), 50);
-        assert_eq!(retained.set(120), 0);
-        retained.add(5);
-        retained.sub(25);
-        assert_eq!(retained.get(), 100);
+    fn a_metered_mutex_charges_growth_one_lock_late() {
+        let metered = MeteredMutex::new(Buffer(Vec::with_capacity(100)));
+        let debt = AllocDebt::new();
+        assert_eq!(
+            metered.retained_bytes(),
+            100,
+            "the initial size is published"
+        );
+
+        metered.lock(&debt).0 = Vec::with_capacity(500);
+        assert_eq!(metered.retained_bytes(), 500);
+        assert_eq!(debt.balance(), 0, "not charged until the next lock");
+
+        drop(metered.lock(&debt));
+        assert_eq!(debt.balance(), 400);
+
+        metered.lock_uncharged().0 = Vec::new();
+        assert_eq!(metered.retained_bytes(), 0);
+        assert_eq!(
+            debt.balance(),
+            400,
+            "an unlock without an account charges nothing"
+        );
+
+        drop(metered.lock(&debt));
+        assert_eq!(
+            debt.balance(),
+            -100,
+            "the shrink is credited by the next charge"
+        );
     }
 }

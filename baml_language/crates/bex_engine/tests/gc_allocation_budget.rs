@@ -50,6 +50,12 @@ function Concat(chunk: string, n: int) -> int {
     while (i < n) { text = text + chunk; i = i + 1; }
     text.length()
 }
+function CsvGrow(cell: string, n: int) -> int {
+    let w = baml.csv.buffer();
+    let i = 0;
+    while (i < n) { w.write_record([cell, cell]); i = i + 1; }
+    w.records_written()
+}
 function Async(n: int) -> int {
     let values = Empty();
     Grow(values, n);
@@ -255,6 +261,37 @@ async fn string_concatenation_collects_during_the_call() {
     assert!(
         collections >= 4,
         "{collections} collections while 64 growing strings were built"
+    );
+    engine.shutdown().await;
+}
+
+/// A `$rust_type` payload that grows behind its lock spends the budget as it
+/// grows: a CSV buffer writer accumulating 256 MiB of text in one call must
+/// bring collections during the call, though the call allocates almost no
+/// heap objects (one two-element record per iteration) and never reads the
+/// text back. The first collection comes at 32 MiB; it finds the buffer live
+/// and sets the budget to four times that, so the rest brings at least one
+/// more.
+#[tokio::test(start_paused = true)]
+async fn payload_growth_behind_a_lock_collects_during_the_call() {
+    let engine = engine();
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let before = engine.heap().gc_budget().full_collections;
+    let cell = 1024 * 1024;
+    assert_eq!(
+        call(
+            &engine,
+            "CsvGrow",
+            vec![Ext::String("x".repeat(cell).into()), Ext::Int(128)],
+            true,
+        )
+        .await,
+        Ext::Int(128)
+    );
+    let collections = engine.heap().gc_budget().full_collections - before;
+    assert!(
+        collections >= 2,
+        "{collections} collections while a buffer writer grew to 256 MiB"
     );
     engine.shutdown().await;
 }

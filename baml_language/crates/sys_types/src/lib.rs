@@ -18,7 +18,10 @@ use async_trait::async_trait;
 pub use bex_external_types::{AsBexExternalValue, BexExternalValue, Handle};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
-pub use bex_vm_types::{BexRustData, Meter, RetainedBytes, RustDataArc, SysOp, TestRustData};
+pub use bex_vm_types::{
+    BexRustData, Meter, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc, SysOp,
+    TestRustData,
+};
 pub use tokio_util::sync::CancellationToken;
 
 pub mod network;

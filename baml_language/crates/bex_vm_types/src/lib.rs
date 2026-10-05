@@ -53,7 +53,10 @@ pub use runtime_compile::{
     RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
     RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
-pub use rust_data::{BexRustData, RetainedBytes, RustDataArc, TestRustData};
+pub use rust_data::{
+    BexRustData, MeteredGuard, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc,
+    TestRustData,
+};
 pub use type_head::TypeHead;
 
 // ── The runtime's instantiation of the `baml_type` family ────────────────────

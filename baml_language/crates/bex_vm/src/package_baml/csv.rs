@@ -33,12 +33,12 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Write as _,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::Arc,
 };
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    ValueKind,
+    MeteredGuard, MeteredMutex, RetainedFootprint, ValueKind,
     types::{Instance, Object, Value},
 };
 use indexmap::IndexMap;
@@ -190,8 +190,10 @@ fn done_value(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
 // Handle-state access
 // =============================================================================
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+/// Lock a reader's or writer's state, charging what it grew by since the
+/// last call to the VM's allocation account.
+fn lock<'a, T: RetainedFootprint>(m: &'a MeteredMutex<T>, vm: &BexVm) -> MeteredGuard<'a, T> {
+    m.lock(vm.tlab.alloc_debt())
 }
 
 // =============================================================================
@@ -618,39 +620,46 @@ impl bex_vm_types::BexRustData for RecordData {
     }
 }
 
-/// A reader's state as `$rust_type` data. Natives hold the lock only for the
-/// duration of one call, so a `try_lock` that fails means a native on
-/// another fiber is mid-call; the buffer is then left uncounted.
-struct CsvReaderHandle(Mutex<ReaderState>);
+/// A reader's state as `$rust_type` data: its input buffer grows as it is
+/// fed, and the growth is charged through [`lock`].
+struct CsvReaderHandle(MeteredMutex<ReaderState>);
+
+impl RetainedFootprint for ReaderState {
+    fn retained_bytes(&self) -> usize {
+        self.buf.capacity()
+    }
+}
 
 impl bex_vm_types::BexRustData for CsvReaderHandle {
     fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        if let Ok(state) = self.0.try_lock() {
-            meter.bytes(state.buf.capacity());
-        }
+        meter.bytes(self.0.retained_bytes());
     }
 }
 
 impl std::ops::Deref for CsvReaderHandle {
-    type Target = Mutex<ReaderState>;
+    type Target = MeteredMutex<ReaderState>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 /// A writer's state as `$rust_type` data; see [`CsvReaderHandle`].
-struct CsvWriterHandle(Mutex<WriterState>);
+struct CsvWriterHandle(MeteredMutex<WriterState>);
+
+impl RetainedFootprint for WriterState {
+    fn retained_bytes(&self) -> usize {
+        self.buffer.as_ref().map_or(0, String::capacity)
+    }
+}
 
 impl bex_vm_types::BexRustData for CsvWriterHandle {
     fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        if let Ok(state) = self.0.try_lock() {
-            meter.bytes(state.buffer.as_ref().map_or(0, String::capacity));
-        }
+        meter.bytes(self.0.retained_bytes());
     }
 }
 
 impl std::ops::Deref for CsvWriterHandle {
-    type Target = Mutex<WriterState>;
+    type Target = MeteredMutex<WriterState>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -2111,7 +2120,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
         let Ok(st) = vm.rust_data_field::<CsvReaderHandle>(csvreader, 0) else {
             return Vec::new();
         };
-        let infos: Vec<ErrInfo> = lock(&st).skipped.clone();
+        let infos: Vec<ErrInfo> = lock(&st, vm).skipped.clone();
         infos
             .iter()
             .filter_map(|info| error_value(vm, info).ok())
@@ -2119,14 +2128,14 @@ impl BamlClassCsvReader for PackageBamlImpl {
     }
 
     fn skipped_count(vm: &BexVm, csvreader: &view::csv::Reader<'_>) -> i64 {
-        lock(csvreader._handle::<CsvReaderHandle>(vm)).skipped_count
+        lock(csvreader._handle::<CsvReaderHandle>(vm), vm).skipped_count
     }
 
     fn position(vm: &mut BexVm, csvreader: &Value) -> Value {
         match vm.rust_data_field::<CsvReaderHandle>(csvreader, 0) {
             Ok(st) => {
                 let (byte, line, record) = {
-                    let s = lock(&st);
+                    let s = lock(&st, vm);
                     (s.byte, s.line, s.record)
                 };
                 copy::csv::Position { byte, line, record }.to_value(vm)
@@ -2143,7 +2152,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
     fn _poll(vm: &mut BexVm, csvreader: &Value) -> Result<Value, VmRustFnError> {
         let st = vm.rust_data_field::<CsvReaderHandle>(csvreader, 0)?;
         let polled = {
-            let mut s = lock(&st);
+            let mut s = lock(&st, vm);
             poll_record(&mut s)
         };
         match polled {
@@ -2164,7 +2173,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
     fn _poll_headers(vm: &mut BexVm, csvreader: &Value) -> Result<Value, VmRustFnError> {
         let st = vm.rust_data_field::<CsvReaderHandle>(csvreader, 0)?;
         let polled = {
-            let mut s = lock(&st);
+            let mut s = lock(&st, vm);
             poll_headers(&mut s)
         };
         match polled {
@@ -2188,20 +2197,20 @@ impl BamlClassCsvReader for PackageBamlImpl {
     }
 
     fn _feed(vm: &BexVm, csvreader: &view::csv::Reader<'_>, chunk: &[u8]) {
-        let mut s = lock(csvreader._handle::<CsvReaderHandle>(vm));
+        let mut s = lock(csvreader._handle::<CsvReaderHandle>(vm), vm);
         s.buf.extend_from_slice(chunk);
     }
 
     fn _feed_eof(vm: &BexVm, csvreader: &view::csv::Reader<'_>) {
-        lock(csvreader._handle::<CsvReaderHandle>(vm)).eof = true;
+        lock(csvreader._handle::<CsvReaderHandle>(vm), vm).eof = true;
     }
 
     fn _mark_closed(vm: &BexVm, csvreader: &view::csv::Reader<'_>) {
-        lock(csvreader._handle::<CsvReaderHandle>(vm)).closed = true;
+        lock(csvreader._handle::<CsvReaderHandle>(vm), vm).closed = true;
     }
 
     fn _mark_exhausted(vm: &BexVm, csvreader: &view::csv::Reader<'_>) {
-        lock(csvreader._handle::<CsvReaderHandle>(vm)).finished = true;
+        lock(csvreader._handle::<CsvReaderHandle>(vm), vm).finished = true;
     }
 }
 
@@ -2273,13 +2282,13 @@ impl BamlClassCsvRecord for PackageBamlImpl {
 
 impl BamlClassCsvWriter for PackageBamlImpl {
     fn records_written(vm: &BexVm, csvwriter: &view::csv::Writer<'_>) -> i64 {
-        lock(csvwriter._handle::<CsvWriterHandle>(vm)).records_written
+        lock(csvwriter._handle::<CsvWriterHandle>(vm), vm).records_written
     }
 
     fn text(vm: &mut BexVm, csvwriter: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(csvwriter, 0)?;
         let text = {
-            let s = lock(&st);
+            let s = lock(&st, vm);
             s.buffer.clone()
         };
         match text {
@@ -2300,7 +2309,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         record: &[Value],
     ) -> Result<bex_str::BexStr, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(csvwriter, 0)?;
-        let mut s = lock(&st);
+        let mut s = lock(&st, vm);
         if s.closed {
             drop(s);
             let info = ErrInfo::new(Kind::Closed, "writer is closed");
@@ -2335,7 +2344,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         names: &[Value],
     ) -> Result<bex_str::BexStr, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(csvwriter, 0)?;
-        let mut s = lock(&st);
+        let mut s = lock(&st, vm);
         if s.closed {
             drop(s);
             let info = ErrInfo::new(Kind::Closed, "writer is closed");
@@ -2363,11 +2372,11 @@ impl BamlClassCsvWriter for PackageBamlImpl {
     }
 
     fn _bytes_written(vm: &BexVm, csvwriter: &view::csv::Writer<'_>) -> i64 {
-        lock(csvwriter._handle::<CsvWriterHandle>(vm)).bytes_written
+        lock(csvwriter._handle::<CsvWriterHandle>(vm), vm).bytes_written
     }
 
     fn _mark_closed(vm: &BexVm, csvwriter: &view::csv::Writer<'_>) {
-        lock(csvwriter._handle::<CsvWriterHandle>(vm)).closed = true;
+        lock(csvwriter._handle::<CsvWriterHandle>(vm), vm).closed = true;
     }
 }
 
@@ -2400,7 +2409,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
 
         let state = ReaderState::new(opts, initial, eof);
         Ok(copy::csv::Reader {
-            _handle: Arc::new(CsvReaderHandle(Mutex::new(state))),
+            _handle: Arc::new(CsvReaderHandle(MeteredMutex::new(state))),
             _file: file,
             _on_skip: on_skip,
             _owns_file: owns_file && !file.is_null(),
@@ -2416,7 +2425,9 @@ impl BamlNamespaceCsv for PackageBamlImpl {
     ) -> Result<Value, VmRustFnError> {
         let opts = parse_writer_options(vm, options)?;
         Ok(copy::csv::Writer {
-            _handle: Arc::new(CsvWriterHandle(Mutex::new(WriterState::new(opts, false)))),
+            _handle: Arc::new(CsvWriterHandle(MeteredMutex::new(WriterState::new(
+                opts, false,
+            )))),
             _file: *file,
             _owns_file: owns_file,
         }
@@ -2426,7 +2437,9 @@ impl BamlNamespaceCsv for PackageBamlImpl {
     fn _buffer(vm: &mut BexVm, options: Option<&Value>) -> Result<Value, VmRustFnError> {
         let opts = parse_writer_options(vm, options)?;
         Ok(copy::csv::Writer {
-            _handle: Arc::new(CsvWriterHandle(Mutex::new(WriterState::new(opts, true)))),
+            _handle: Arc::new(CsvWriterHandle(MeteredMutex::new(WriterState::new(
+                opts, true,
+            )))),
             _file: Value::NULL,
             _owns_file: false,
         }
@@ -2453,7 +2466,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         };
 
         let st = vm.rust_data_field::<CsvReaderHandle>(r, 0)?;
-        let header = lock(&st).header.clone();
+        let header = lock(&st, vm).header.clone();
 
         for cf in &class_fields {
             let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
@@ -2501,7 +2514,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             Err(DecodeFail::Info(info)) => {
                 let skip = info.kind == Kind::Decode && {
                     let st = vm.rust_data_field::<CsvReaderHandle>(r, 0)?;
-                    let mut s = lock(&st);
+                    let mut s = lock(&st, vm);
                     if s.opts.skip_on_error {
                         s.register_skip(&info);
                         true
@@ -2578,7 +2591,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         row: &Value,
     ) -> Result<bex_str::BexStr, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(w, 0)?;
-        let mut s = lock(&st);
+        let mut s = lock(&st, vm);
         if s.closed {
             drop(s);
             let info = ErrInfo::new(Kind::Closed, "writer is closed");
@@ -2605,7 +2618,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         rows: &[Value],
     ) -> Result<bex_str::BexStr, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(w, 0)?;
-        let mut s = lock(&st);
+        let mut s = lock(&st, vm);
         if s.closed {
             drop(s);
             let info = ErrInfo::new(Kind::Closed, "writer is closed");
