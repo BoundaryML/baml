@@ -301,8 +301,8 @@ fn find_export<T>(
         })
 }
 
-/// The name `package` keeps the top-level binding under that its source
-/// writes as `written`.
+/// The name under which `package` keeps the top-level binding that its
+/// source writes as `written`.
 ///
 /// A package keeps a binding under the name it was written with. A Session
 /// does not: each submission's bindings are stored under hygienic names, and
