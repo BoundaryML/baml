@@ -17,8 +17,7 @@ pub extern "C" fn version() -> Buffer {
 
 /// Version-1 C representation of bridge registration metadata.
 ///
-/// Fields may only be appended. Existing fields must retain their order,
-/// types, and semantics for the lifetime of ABI version 1. The `language`
+/// Like `BamlApiV1`, this struct is not stable across releases. The `language`
 /// field is a raw `uint32_t` at the C boundary and is validated before it is
 /// interpreted as a `BamlBridgeLanguage` value. Consumers set `struct_size` to
 /// the size they provide. Each string pointer is borrowed for its corresponding

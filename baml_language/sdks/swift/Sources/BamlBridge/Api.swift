@@ -8,11 +8,10 @@ import Foundation
 /// The table is immutable runtime-owned storage, valid for the life of
 /// the process (we link the runtime statically, so it can never unload).
 ///
-/// V1 is append-only: fields beyond the original prefix may exist in a
-/// newer runtime (`struct_size` grows), and a truncated prefix means an
-/// incompatible library — both are checked once here, at first use.
-/// All V1-prefix function pointers are required, so they are unwrapped
-/// once into non-optional members.
+/// The ABI is not stable across releases: this package links the runtime
+/// from the same BAML release. The version and size check below only
+/// rejects a mismatched library, once, at first use. All function pointers
+/// are required, so they are unwrapped once into non-optional members.
 enum BamlApi {
     private static let v1: BamlApiV1 = {
         guard let ptr = baml_get_api_v1() else {

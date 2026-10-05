@@ -261,8 +261,7 @@ typedef BamlCffiStatus (*BamlMediaAccessorFn)(uint64_t key,
 /**
  * Version-1 C representation of bridge registration metadata.
  *
- * Fields may only be appended. Existing fields must retain their order,
- * types, and semantics for the lifetime of ABI version 1. The `language`
+ * Like `BamlApiV1`, this struct is not stable across releases. The `language`
  * field is a raw `uint32_t` at the C boundary and is validated before it is
  * interpreted as a `BamlBridgeLanguage` value. Consumers set `struct_size` to
  * the size they provide. Each string pointer is borrowed for its corresponding
@@ -344,11 +343,13 @@ typedef BamlCffiStatus (*BamlInvocationContextFn)(uint64_t key, struct BamlBuffe
  * An otherwise unexpected panic aborts the process rather than crossing into
  * foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
  *
- * V1 is append-only: existing fields may never be reordered, removed, or
- * change type or semantics. New fields may only be appended. Before reading a
- * field, consumers must verify that `struct_size` reaches the end of that
- * field. `baml_api_v1_is_compatible` performs the check for the original V1
- * prefix. A larger unknown size is compatible; a truncated prefix is not.
+ * The ABI is not stable across releases. An SDK always ships with the native
+ * library from the same BAML release, and `register_bridge` rejects any other
+ * pairing. Any release may add, remove, reorder or change fields. Only
+ * `abi_version` and `struct_size` keep their place, so a host can reject a
+ * mismatched library before it reads anything else. Bump
+ * `BAML_API_V1_ABI_VERSION` whenever the layout changes. Don't add
+ * compatibility shims, or tests and probes for older or newer tables.
  */
 typedef struct BamlApiV1 {
   /**
@@ -578,10 +579,10 @@ struct BamlBuffer initialize_runtime_from_blob_with_metadata(const uint8_t *byte
 
 /* ABI revision 3 requires every invocation operation below. */
 #define BAML_API_V1_MIN_SIZE \
-  (offsetof(BamlApiV1, register_host_cancel_callback) + sizeof(((BamlApiV1 *)0)->register_host_cancel_callback))
+  (offsetof(BamlApiV1, invocation_context) + sizeof(((BamlApiV1 *)0)->invocation_context))
 
 /*
- * Validate the complete revision-3 table while permitting appended fields.
+ * Reject a native library built for a different ABI revision.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&
