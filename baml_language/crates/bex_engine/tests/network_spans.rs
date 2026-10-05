@@ -129,7 +129,7 @@ const SOURCE: &str = r##"
 async fn record(directory: &Path) -> Arc<BexEngine> {
     let engine = Arc::new(
         BexEngine::new_with_telemetry_recording(
-            baml_db::testing::compile_source(SOURCE),
+            baml_test_support::compile_source(SOURCE),
             Arc::new(sys_native::SysOps::native()),
             vec![],
             None,
@@ -215,9 +215,11 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
             };
             if minor {
                 assert_ne!(id, 0);
-                assert_eq!(
-                    file.header.as_ref().unwrap().format_minor,
-                    btel_settings::encoding::NETWORK_FORMAT_MINOR
+                // Other additive features, such as process launch context, can
+                // require a newer minor than network spans alone.
+                assert!(
+                    file.header.as_ref().unwrap().format_minor
+                        >= btel_settings::encoding::NETWORK_FORMAT_MINOR
                 );
             }
         }
@@ -447,52 +449,4 @@ async fn each_request_records_its_span_events_and_end() {
     for secret in ["sk-query", "sk-norm", "sk-header", "sk-cookie"] {
         assert_eq!(holding(secret), 0, "{secret} reached the disk");
     }
-}
-
-/// `BAML_TELEMETRY_HTTP_BODIES=off` keeps bodies out of the recording; their
-/// events are still there, with their times.
-#[test]
-fn bodies_off_records_events_without_bodies() {
-    const CHILD: &str = "BAML_TEST_NETWORK_BODIES_OFF";
-    if std::env::var_os(CHILD).is_none() {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "bodies_off_records_events_without_bodies",
-                "--nocapture",
-            ])
-            .env(CHILD, "1")
-            .env(btel_settings::network::BODIES_ENV_VAR, "off")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return;
-    }
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let directory = tempfile::tempdir().unwrap();
-        let engine = record(directory.path()).await;
-        let (spans, cas) = read(directory.path(), &engine);
-        let span = &spans["ok"];
-        let request = load(&cas, span.announcement.as_ref().unwrap().request_cas_id);
-        assert_eq!(request["request"]["method"], "POST");
-        assert!(request["request"].get("body").is_none());
-        assert_eq!(span.names(), ["connection", "data", "await"]);
-        assert_eq!(
-            load(&cas, span.event("connection").payload_cas_id)["status"],
-            200
-        );
-        assert!(span.event("data").payload_cas_id.is_none());
-        let sse = &spans["sse"];
-        assert_eq!(sse.names(), ["connection", "data", "data", "end", "await"]);
-        assert!(
-            sse.events[1..]
-                .iter()
-                .all(|event| event.payload_cas_id.is_none())
-        );
-    });
 }

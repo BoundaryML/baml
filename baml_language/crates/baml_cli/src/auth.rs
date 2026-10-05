@@ -22,11 +22,11 @@ use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use serde::{Deserialize, Serialize};
 
-// WorkOS client id: baked in at build time from BAML_WORKOS_CLIENT_ID (set
+// WorkOS client id: baked in at build time from BAML_AUTH_CLIENT_ID (set
 // by release CI), overridable at runtime by the same variable. A public
 // OAuth identifier, not a secret — but environment-specific, so it doesn't
 // belong in source.
-const BUILD_CLIENT_ID: Option<&str> = option_env!("BAML_WORKOS_CLIENT_ID");
+const BUILD_CLIENT_ID: Option<&str> = option_env!("BAML_AUTH_CLIENT_ID");
 const DEFAULT_API_DOMAIN: &str = "https://api.workos.com";
 
 /// Hard cap on how long the device-authorization poll loop waits for the
@@ -52,15 +52,14 @@ pub(crate) fn http_client() -> reqwest::blocking::Client {
 }
 
 fn env_or(var: &str, default: &str) -> String {
-    std::env::var(var)
-        .ok()
+    baml_env::raw_var(var)
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| default.to_string())
 }
 
 /// WorkOS API domain: hosts the CLI Auth device-authorization endpoints.
 fn api_domain() -> String {
-    env_or("BAML_WORKOS_API_DOMAIN", DEFAULT_API_DOMAIN)
+    env_or("BAML_AUTH_API_DOMAIN", DEFAULT_API_DOMAIN)
 }
 
 /// Resolves the WorkOS client id from the runtime environment or the
@@ -70,8 +69,7 @@ fn api_domain() -> String {
 /// Errors:
 /// - When neither source provides a non-blank value.
 fn client_id() -> Result<String> {
-    std::env::var("BAML_WORKOS_CLIENT_ID")
-        .ok()
+    baml_env::raw_var("BAML_AUTH_CLIENT_ID")
         .filter(|v| !v.trim().is_empty())
         .or_else(|| {
             BUILD_CLIENT_ID
@@ -80,7 +78,7 @@ fn client_id() -> Result<String> {
         })
         .context(
             "This build has no WorkOS environment configured. Set \
-             BAML_WORKOS_CLIENT_ID (release builds bake it in at compile time).",
+             BAML_AUTH_CLIENT_ID (release builds bake it in at compile time).",
         )
 }
 

@@ -269,9 +269,9 @@ function check_on_canary(r: Repro, n: int) -> Verdict {
         baml.fs.write(path, r.files.get(name) ?? "");
     }
     let env = sandbox_env(false);
-    let v = baml.env.get("BAML_VERSION");
+    let v = baml.env.get("BAML_TOOLCHAIN");
     if (v != null) {
-        env.set("BAML_VERSION", v ?? "");
+        env.set("BAML_TOOLCHAIN", v ?? "");
     };
     //# run it with canary's baml-cli (check, or run for should_evaluate_to)
     let evaluate = match (r.expectation) {

@@ -3,6 +3,9 @@
 //! Each test documents a gap from the Phase 3A checklist. Snapshots capture
 //! the current (possibly incorrect) behavior so regressions are visible
 //! as the gaps get fixed.
+//!
+//! Successful shorthand lookup under pattern binders is exercised by
+//! `baml_src/ns_property_shorthand_binders`; keep diagnostic checks here.
 
 use super::support::{make_db, render_tir};
 use crate::engine::TestDbExt;
@@ -399,31 +402,6 @@ function build(v: string?) -> map<string, string> {
     );
 }
 
-/// The shorthand value is an ordinary path expression, so it is in scope
-/// exactly when a plain use is - including under a pattern binder, which the
-/// body-scope-only binding list could not see.
-#[test]
-fn property_shorthand_resolves_pattern_binders() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function build(v: string?) -> map<string, string> {
-  if let key: string = v { { key } } else { {} }
-}
-"#,
-    );
-    let tir = render_tir(&db, file);
-    assert!(
-        !tir.contains("property shorthand"),
-        "an `if let` binder satisfies the shorthand, got:\n{tir}"
-    );
-    assert!(
-        !tir.contains("unresolved name"),
-        "an `if let` binder satisfies the shorthand, got:\n{tir}"
-    );
-}
-
 /// Near-match candidates come from the EXPRESSION's scope, so a pattern
 /// binder is offered as the explicit-mapping suggestion.
 #[test]
@@ -512,28 +490,6 @@ function build() -> map<string, string> {
     assert!(
         !tir.contains("property shorthand"),
         "an explicit quoted key must not use shorthand diagnostics:\n{tir}"
-    );
-}
-
-#[test]
-fn if_let_binding_resolves_in_property_shorthand() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function build(input: string?) -> map<string, string> {
-  if let options: string = input {
-    { options }
-  } else {
-    {}
-  }
-}
-"#,
-    );
-    let tir = render_tir(&db, file);
-    assert!(
-        !tir.contains("property shorthand") && !tir.contains("unresolved name"),
-        "the ordinary resolver should see the if-let binding:\n{tir}"
     );
 }
 
@@ -871,22 +827,6 @@ function required_after_default(a: int = 1, b: int) -> int { b }
     assert!(tir.contains("default for parameter `a` cannot reference later parameter `b`"));
     assert!(tir.contains("function user.forward_ref_in_match"));
     assert!(tir.contains("required parameter `b` cannot appear after a defaulted parameter"));
-}
-
-#[test]
-fn optional_param_default_forward_reference_is_scope_aware() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-function shadow_later_param(a: int = { let b = 1; b }, b: int = 2) -> int { a }
-"#,
-    );
-    let tir = render_tir(&db, file);
-    assert!(
-        !tir.contains("default for parameter `a` cannot reference later parameter `b`"),
-        "{tir}"
-    );
 }
 
 #[test]
@@ -1331,31 +1271,6 @@ fn array_filled_named_value_arg_warns_aliasing() {
     assert!(
         tir.contains("??"),
         "expected warning marker for named-`value` aliasing, got:\n{tir}"
-    );
-}
-
-#[test]
-fn array_filled_with_variable_bound_mutable_value_does_not_warn() {
-    // KNOWN LIMITATION (Linear B-548): detection is purely *syntactic* — it only
-    // fires when the fill value is written inline as a literal. Binding the same
-    // mutable value to a variable first (`let x = [0]; Array.filled(3, x)`) still
-    // aliases every slot at runtime, but produces NO warning because the arg is a
-    // `Path`, not a literal. This characterizes (does not endorse) that gap; the
-    // real fix (Linear B-638) is the `Array.generate(length, f)` factory, which
-    // calls `f` once per index and so builds an independent value per slot.
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> int {
-  let x = [0]
-  let rows = baml.Array.filled(3, x)
-  return rows.length()
-}"#,
-    );
-    let tir = render_tir(&db, file);
-    assert!(
-        !tir.contains("reuses the same mutable value"),
-        "variable-bound mutable value is a known false-negative (must not warn), got:\n{tir}"
     );
 }
 

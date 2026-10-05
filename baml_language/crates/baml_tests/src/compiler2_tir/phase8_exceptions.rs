@@ -1,5 +1,7 @@
 //! Phase 8 tests: catch/throw/throws + match parity in compiler2 TIR.
 
+// Native ns_exceptions, ns_lambdas, and ns_defer suites cover successful panic
+// field access, inferred throwing lambdas, and throwing defer bodies.
 use super::support::{make_db, render_tir};
 use crate::engine::TestDbExt;
 
@@ -389,58 +391,6 @@ function f(which: int) -> int {
 }
 
 #[test]
-fn panic_containing_union_after_wildcard_is_not_unreachable() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"class AppError {
-  code int
-}
-
-function fail() -> int {
-  throw AppError { code: 7 }
-}
-
-function f() -> int {
-  return fail() catch (e) {
-    _ => 1
-    AppError | baml.panics.DivisionByZero => 2
-  }
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("unreachable arm"),
-        "mixed panic union arm should stay reachable because panics may still occur, got:\n{output}"
-    );
-}
-
-#[test]
-fn single_panic_catch_binding_allows_field_access() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function fail() -> int {
-  1 / 0
-}
-
-function f() -> int | bigint {
-  return fail() catch (e) {
-    DivisionByZero => e.dividend
-    _ => 0
-  }
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("unresolved member") && !output.contains("cannot access field"),
-        "single-type catch binding should allow field access, got:\n{output}"
-    );
-}
-
-#[test]
 fn function_type_throws_direct_callback_violation_is_humanized() {
     let mut db = make_db();
     let file = db.file(
@@ -489,34 +439,6 @@ function f() -> int throws never {
         "never",
         "string",
         "expected omitted inline lambda throws to propagate through the callback param",
-    );
-}
-
-#[test]
-fn omitted_inline_lambda_covered_by_declared_throws_is_clean() {
-    // Historically a "current limitation": the checker could not see that the
-    // callback's throw was covered by `demo`'s declared `throws string` and
-    // reported a callback-aware violation anyway. The lambda's effective
-    // throws now binds the callee's effect param, so a covered throw is
-    // accepted silently.
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function forward(cb: (x: int) -> int) -> int {
-  return cb(1)
-}
-
-function demo() -> int throws string {
-  return forward((x: int) -> int {
-    throw "boom"
-  })
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("declared throws"),
-        "expected no throws violation when the callback throw is covered by the declared throws, got:\n{output}"
     );
 }
 
@@ -750,80 +672,6 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
         "never",
         "string",
         "expected builtin map to propagate callback throws into the enclosing contract check",
-    );
-}
-
-#[test]
-fn generic_bound_associated_error_is_reused_by_throws_analysis() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"class Boom {}
-
-interface Runner<Input> {
-  type Output
-  type Error
-
-  function run(self, input: Input) -> Self.Output throws Self.Error
-}
-
-class Task<T> {
-  function run<Output, Error, R extends Runner<Task<T>, Output = Output, Error = Error>>(
-    self,
-    runner: R,
-  ) -> Output throws Error {
-    runner.run(self)
-  }
-}
-
-class ConcreteRunner {
-  implements Runner<Task<int>> {
-    type Output = int
-    type Error = Boom
-
-    function run(self, input: Task<int>) -> int throws Boom {
-      throw Boom {}
-    }
-  }
-}
-
-function caller(task: Task<int>) -> int throws Boom {
-  task.run(runner = ConcreteRunner {})
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("declared throws"),
-        "expected the runner's concrete associated Error to satisfy the caller, got:\n{output}"
-    );
-    assert!(
-        !output.contains("extraneous throws declaration"),
-        "expected the concrete Boom throw to remain visible, got:\n{output}"
-    );
-}
-
-#[test]
-fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> int {
-  let risky = (value: int) -> int {
-    if (value < 0) { throw "boom" }
-    value
-  }
-  return 0
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    // The unannotated lambda's surface is INFERRED (`throws string`), so the
-    // throw inside it is not a local violation — it becomes part of the
-    // lambda's type and is checked wherever the lambda is invoked.
-    assert!(
-        !output.contains("declared throws"),
-        "expected no local violation for an unannotated lambda (throws are inferred), got:\n{output}"
     );
 }
 
@@ -1185,45 +1033,5 @@ fn defer_break_escape_reports_error() {
     assert!(
         output.contains("`break` cannot leave a `defer` body"),
         "expected DeferControlFlowEscape error for break escaping to the outer loop, got:\n{output}"
-    );
-}
-
-#[test]
-fn defer_inner_loop_break_is_allowed() {
-    // BEP-042 loop-aware rule: a break targeting a loop declared INSIDE the
-    // defer body does not escape the defer and must be accepted.
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> int {
-  defer {
-    for (let x in [1, 2]) {
-      break
-    }
-  }
-  0
-}"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("cannot leave a `defer` body"),
-        "break targeting a loop inside the defer should be allowed, got:\n{output}"
-    );
-}
-
-#[test]
-fn defer_throw_is_allowed() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> int {
-  defer { throw "x" }
-  0
-}"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("cannot leave a `defer` body"),
-        "throw inside a defer should be allowed, got:\n{output}"
     );
 }

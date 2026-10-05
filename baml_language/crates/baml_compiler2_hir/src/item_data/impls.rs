@@ -13,7 +13,7 @@ use crate::{
 ///
 /// Unifying the owner with the for-target makes "in-body with an explicit
 /// for-target" and "out-of-body without one" both unrepresentable.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub enum ImplSubjectData<'db> {
     /// `implements I { … }` in a class body. The for-type is the class itself.
     /// `out_of_body` records the syntactic origin for diagnostics only — it must
@@ -31,7 +31,7 @@ pub enum ImplSubjectData<'db> {
 }
 
 /// Span-free semantic data for one `implements` block (either kind).
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ImplBlockData<'db> {
     pub subject: ImplSubjectData<'db>,
     /// Every type reference in this block's header — the for-target, its generic

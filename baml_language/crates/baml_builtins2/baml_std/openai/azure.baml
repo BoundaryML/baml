@@ -183,6 +183,8 @@ class AzureClient {
             api_key_required = true,
             default_max_tokens = 4096,
             compat_query = query,
+            cache_breakpoints = true,
+            default_cache_args = self.default_cache_args(),
         )
     }
 
@@ -213,6 +215,16 @@ class AzureClient {
     }
 
     implements ai.Client {
+        /// A `${cache()}` sends nothing on Azure. `model` is a deployment
+        /// name, so whether the model behind it takes
+        /// `prompt_cache_breakpoint` (GPT-5.6 and later) or rejects it cannot
+        /// be told from here, and a default must not turn a working request
+        /// into a 400. For a deployment that takes it, write
+        /// `${cache({ "mode": "explicit" })}`, which is sent as written.
+        function default_cache_args(self) -> baml.json.json {
+            null
+        }
+
         function id(self) -> string {
             `azure/${self.model}`
         }

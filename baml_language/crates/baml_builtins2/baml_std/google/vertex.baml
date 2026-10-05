@@ -137,6 +137,17 @@ class VertexClient {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }
+
+        /// What a `${cache()}` sends. A Claude model is served over the
+        /// Anthropic Messages wire and takes its `cache_control`; Gemini has
+        /// no cache marker, so a `${cache()}` sends nothing there.
+        function default_cache_args(self) -> baml.json.json {
+            if (root.internal._vertex_publisher(self) == "anthropic") {
+                anthropic.internal.default_cache_control()
+            } else {
+                null
+            }
+        }
     }
 
     implements ai.stream.StreamingClient {

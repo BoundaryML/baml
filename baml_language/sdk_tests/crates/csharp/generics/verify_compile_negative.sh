@@ -4,7 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly script_dir
-project="$script_dir/Generics.csproj"
+project="$script_dir/CompileNegative/CompileNegative.csproj"
 readonly project
 artifact_root="$(mktemp -d "${TMPDIR:-/tmp}/baml-csharp-generics-compile.XXXXXXXX")"
 readonly artifact_root
@@ -17,6 +17,9 @@ fail() {
   fi
   exit 1
 }
+
+[[ -f "$script_dir/bin/Debug/net10.0/Baml.CSharp.Generics.dll" ]] \
+  || fail "run C# fixture setup before the negative compile matrix"
 
 verify_negative() {
   local case_name="$1"
@@ -60,7 +63,7 @@ verify_negative() {
 }
 
 # Each case restores and builds into its own artifacts directory, so the
-# four builds share nothing and can run concurrently. `wait -n`-free
+# four builds only read the prebuilt fixture assemblies and can run concurrently. `wait -n`-free
 # collection: wait on each pid and fold failures, so one bad case never
 # hides another's log (fail() output goes to stderr as before).
 pids=()

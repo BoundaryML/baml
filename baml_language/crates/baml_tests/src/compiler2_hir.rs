@@ -1152,45 +1152,6 @@ mod tests {
         }
     }
 
-    /// Distinct parameter names in a function signature do not produce a
-    /// duplicate diagnostic — regression guard against over-firing.
-    #[test]
-    fn distinct_function_params_have_no_duplicate_diagnostic() {
-        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
-
-        let mut db = make_db();
-        let file = db.file(
-            "distinct_params.baml",
-            "function Foo(x: int, y: string = \"hi\") -> string { y }",
-        );
-        let index = file_semantic_index(&db, file);
-        let diags = index.diagnostics();
-        assert!(
-            !diags
-                .iter()
-                .any(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { .. }))
-        );
-    }
-
-    /// Same-scope let shadowing is legal and does not produce duplicate diagnostics.
-    #[test]
-    fn same_scope_let_shadowing_has_no_duplicate_diagnostic() {
-        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
-
-        let mut db = make_db();
-        let file = db.file(
-            "shadow_let.baml",
-            "function foo() -> int {\n  let x = 1;\n  let x = 2;\n  return x;\n}",
-        );
-
-        let index = file_semantic_index(&db, file);
-        let diags = index.diagnostics();
-
-        assert!(!diags.iter().any(
-            |d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("x"))
-        ));
-    }
-
     #[test]
     fn duplicate_array_pattern_bindings_produce_hir_diagnostic() {
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;

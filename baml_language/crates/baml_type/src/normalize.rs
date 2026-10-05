@@ -414,17 +414,18 @@ pub trait TypeContext<H: Head = DeclName> {
         if sub == sup {
             return true;
         }
-        // Narrow definite-mismatch filter. Unlike `equivalent`, differing heads
-        // do NOT generally refute subtyping (a literal is a subtype of its base,
-        // a member of its union, a class of an interface it implements) — but
-        // those pairs are different `Ty` *variants*, for which
-        // `heads_definitely_differ` already answers `false`. Of the same-variant
-        // nominal pairs it does claim, only interface-to-interface can still be
-        // a subtype under different names (`A <: B` iff `A` requires `B`), so it
-        // is excluded. For the rest the canonical walk below is a foregone
-        // `false`: class heads are preserved by canonicalization and the class
-        // subtype rule requires equal names (generic args are invariant), while
-        // enums and enum variants are nominal with no cross-name rule at all.
+        // Definite-mismatch filter. Unlike `equivalent`, differing heads do NOT
+        // generally refute subtyping (a literal is a subtype of its base, a
+        // member of its union, a class of an interface it implements) — but
+        // `heads_definitely_differ` claims none of those pairs: a literal and
+        // its base share a category, and unions and interfaces have none. Of
+        // the same-variant nominal pairs it does claim, only
+        // interface-to-interface can still be a subtype under different names
+        // (`A <: B` iff `A` requires `B`), so it is excluded. For the rest the
+        // canonical walk below is a foregone `false`: class heads are preserved
+        // by canonicalization and the class subtype rule requires equal names
+        // (generic args are invariant), enums and enum variants are nominal
+        // with no cross-name rule at all, and no rule relates two categories.
         if !matches!((sub, sup), (Ty::Interface(..), Ty::Interface(..)))
             && heads_definitely_differ(sub, sup)
         {
@@ -631,22 +632,32 @@ pub fn is_string_key<H: Head, C: TypeContext<H>>(key: &Ty<H>, ctx: &C) -> bool {
 /// are rewritten), and equality is nominal, so two of the same kind with
 /// different names can never share a canonical form.
 ///
-/// This is deliberately *conservative* — it decides only same-kind pairs whose
-/// heads are stable and never uses a cross-kind "different discriminant ⇒
-/// differ" catch-all. That catch-all would be unsound under the current
-/// normalization: `TypeAlias` / `Union` / `AssociatedTypeProjection` / generic `Media` /
-/// `Infer` heads can be rewritten into any other shape. Leaving every such case
-/// undecided (`false`) preserves correctness; only the unambiguous nominal
-/// misses are fast-rejected. Context-independent: canonicalization preserves
-/// these nominal heads regardless of the `TypeContext`.
+/// Across kinds it decides only pairs whose heads both have a [`Category`]
+/// (see [`Category::of_head`]), never with a "different discriminant ⇒ differ"
+/// catch-all. That catch-all would be unsound: `TypeAlias` / `Union` /
+/// `AssociatedTypeProjection` heads can be rewritten into any other shape, so
+/// they have no category and stay undecided (`false`). Canonicalization keeps
+/// every head that has a category, so two different categories never share a
+/// canonical form — and no subtyping rule relates them either: no concrete type
+/// is a subtype of another (TYPE_SYSTEM.md §Concrete Types), and a literal and
+/// its base, or a variant and its enum, share a category. This is the common
+/// miss of a runtime `match` on a `json` value: a string or a list tested
+/// against `map<string, json>` would otherwise expand the recursive alias on
+/// every test. Context-independent: canonicalization preserves these heads
+/// regardless of the `TypeContext`.
 fn heads_definitely_differ<H: Head>(a: &Ty<H>, b: &Ty<H>) -> bool {
     match (a, b) {
         (Ty::Class(q1, ..), Ty::Class(q2, ..))
         | (Ty::Interface(q1, ..), Ty::Interface(q2, ..))
         | (Ty::Enum(q1, ..), Ty::Enum(q2, ..)) => q1 != q2,
         (Ty::EnumVariant(q1, v1, ..), Ty::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
-        _ => false,
+        _ => categories_differ(Category::of_head(a), Category::of_head(b)),
     }
+}
+
+/// Whether two heads are of different, known categories.
+fn categories_differ(a: Option<Category>, b: Option<Category>) -> bool {
+    matches!((a, b), (Some(a), Some(b)) if a != b)
 }
 
 /// Free-function form of [`TypeContext::definitely_disjoint`], for a context held
@@ -780,10 +791,11 @@ impl<H: Head> NormalTy<H> {
 // CONCRETE-TYPE DISJOINTNESS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Top-level concrete category of a ground-headed type, used only for the
-/// cross-category check (a value of one category is never a value of another).
-/// Same-category pairs are decided by the structural arms of
-/// [`NormalTy::is_disjoint_from`], not by this.
+/// Top-level concrete category of a ground-headed type, for the cross-category
+/// checks: a value of one category is never a value of another
+/// ([`NormalTy::is_disjoint_from`]), and no subtyping rule or canonical form
+/// relates two categories ([`heads_definitely_differ`]). Same-category pairs
+/// are decided by the structural arms, not by this.
 #[derive(PartialEq, Eq)]
 enum Category {
     Int,
@@ -1024,6 +1036,47 @@ impl<H: Head> NormalTy<H> {
     }
 }
 
+/// The one table behind [`Category::of_head`] and
+/// [`Category::of_interned_head`]. Both are `ty_family!` members with the same
+/// variant names, so `$member` is the enum's path and `$none` adds the member's own
+/// variants that have no category. Exhaustive on purpose: a new variant must
+/// be classified here.
+macro_rules! family_head_category {
+    ($ty:expr, $($member:ident)::+ $(, $none:pat)*) => {
+        Some(match $ty {
+            $($member)::+::Int => Category::Int,
+            $($member)::+::Bigint => Category::Bigint,
+            $($member)::+::Float => Category::Float,
+            $($member)::+::String => Category::String,
+            $($member)::+::Bool => Category::Bool,
+            $($member)::+::Literal(lit, _) => Category::of_literal(lit),
+            $($member)::+::Null => Category::Null,
+            $($member)::+::Uint8Array => Category::Uint8Array,
+            $($member)::+::Media(kind) => Category::Media(*kind),
+            $($member)::+::Void => Category::Void,
+            $($member)::+::RustType => Category::RustType,
+            $($member)::+::Type => Category::Type,
+            $($member)::+::Resource => Category::Resource,
+            $($member)::+::PromptAst => Category::PromptAst,
+            $($member)::+::Class(..) => Category::Class,
+            $($member)::+::List(_) => Category::List,
+            $($member)::+::Map { .. } => Category::Map,
+            $($member)::+::Enum(_) | $($member)::+::EnumVariant(..) => Category::Enum,
+            $($member)::+::Function { .. } => Category::Function,
+            $($member)::+::Future(..) => Category::Future,
+            $($member)::+::Interface(..)
+            | $($member)::+::Union(_)
+            | $($member)::+::TypeAlias(_)
+            | $($member)::+::TypeVar(_)
+            | $($member)::+::AssociatedTypeProjection { .. }
+            | $($member)::+::Unknown
+            | $($member)::+::Never
+            | $($member)::+::Error
+            $(| $none)* => return None,
+        })
+    };
+}
+
 impl Category {
     fn of_literal(lit: &Literal) -> Category {
         match lit {
@@ -1033,6 +1086,22 @@ impl Category {
             Literal::String(_) => Category::String,
             Literal::Bool(_) => Category::Bool,
         }
+    }
+
+    /// The category of a head that canonicalization keeps, read before
+    /// canonicalizing: the [`Ty`] twin of [`NormalTy::head_category`]. `None`
+    /// for a head canonicalization can rewrite into another kind (an alias, a
+    /// union, a projection), one a context-driven rule relates across kinds
+    /// (an interface, a type variable), and the sentinels (`unknown`, `never`,
+    /// the error type).
+    fn of_head<H: Head>(ty: &Ty<H>) -> Option<Category> {
+        family_head_category!(ty, Ty)
+    }
+
+    /// [`Category::of_head`] for the interned kind. A live inference variable
+    /// can still become any type, so it has no category.
+    fn of_interned_head(ty: &interned::InferTy) -> Option<Category> {
+        family_head_category!(ty, interned::InferTy, interned::InferTy::InferVar { .. })
     }
 }
 
@@ -3173,7 +3242,7 @@ fn interned_heads_definitely_differ(a: &interned::Ty, b: &interned::Ty) -> bool 
         | (K::Interface(q1, ..), K::Interface(q2, ..))
         | (K::Enum(q1, ..), K::Enum(q2, ..)) => q1 != q2,
         (K::EnumVariant(q1, v1, ..), K::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
-        _ => false,
+        (a, b) => categories_differ(Category::of_interned_head(a), Category::of_interned_head(b)),
     }
 }
 

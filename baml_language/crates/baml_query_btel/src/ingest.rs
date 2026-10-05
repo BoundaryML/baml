@@ -346,7 +346,8 @@ pub(super) fn record_process(
                baml_version = COALESCE(baml_version, ?3), host = COALESCE(host, ?4),
                command = COALESCE(command, ?5),
                process_started_ns = COALESCE(process_started_ns, ?6),
-               source_cas = COALESCE(source_cas, ?7)
+               source_cas = COALESCE(source_cas, ?7),
+               initial_context_cas = COALESCE(initial_context_cas, ?8)
              WHERE rec = ?1",
         )?
         .execute(params![
@@ -356,8 +357,15 @@ pub(super) fn record_process(
             header.host,
             command,
             header.process_started_at_unix_ns,
-            header.source_cas_id.as_ref().map(cas_id)
+            header.source_cas_id.as_ref().map(cas_id),
+            header.initial_context_cas_id.as_ref().map(cas_id)
         ])?;
+        if let Some(context) = &header.initial_context_cas_id {
+            tx.execute(
+                "INSERT OR IGNORE INTO context_snapshot (cas) VALUES (?1)",
+                [cas_id(context)],
+            )?;
+        }
     }
     if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref()) {
         tx.prepare_cached(
@@ -595,7 +603,7 @@ fn reconcile(
             tx.execute(
                 "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                    source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-                   generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
+                   generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, initial_context_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
                  WHERE rec = ?1",
                 [rec_key],
             )?;
@@ -834,7 +842,7 @@ fn apply_fresh<'p>(
         tx.execute(
             "UPDATE recording SET indexed_sequence = 0, terminal_sequence = NULL,
                source_snapshot_id = NULL, indexed_bytes = 0, format_minor = 0,
-               generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
+               generation = generation + 1, process_id = NULL, baml_version = NULL, host = NULL, command = NULL, process_started_ns = NULL, source_cas = NULL, initial_context_cas = NULL, process_end_status = NULL, process_end_ns = NULL, folded = 0
              WHERE rec = ?1",
             [rec],
         )?;
@@ -2159,7 +2167,7 @@ fn forget_nodes(tx: &Transaction<'_>, rec: i64, functions: &HashSet<u64>) -> Res
     }
 }
 
-/// Crash injection for recovery tests: `BAML_QUERY_FAULT=<point>[:<n>]`
+/// Crash injection for recovery tests: `DEV_BAML_QUERY_FAULT=<point>[:<n>]`
 /// aborts the process at the n-th (default first) arrival at `point`.
 /// Compiled only with the `fault-injection` feature.
 mod fault {
@@ -2167,7 +2175,7 @@ mod fault {
     pub(super) fn point(name: &str) {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static ARRIVALS: AtomicUsize = AtomicUsize::new(0);
-        let Ok(spec) = std::env::var("BAML_QUERY_FAULT") else {
+        let Some(spec) = baml_env::raw_var("DEV_BAML_QUERY_FAULT") else {
             return;
         };
         let (point, nth) = spec.split_once(':').unwrap_or((&spec, "1"));

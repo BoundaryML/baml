@@ -10,7 +10,7 @@ experimental = ["setup-scripts"]
 # the cold build of the shared stack before tests fan out.
 [test-groups]
 rust-sdk-fixture = { max-threads = 2 }
-# Java: every fixture's javac+junit gate invokes `gradle` against the SAME
+# Java: every fixture's compile-and-test gate invokes `gradle` against the SAME
 # shared GRADLE_USER_HOME (target/gradle-home). Gradle's daemon registry and
 # file-lock port reservation live under that home, so two concurrent `gradle`
 # launches race on it even when their project dirs differ. On Windows that race
@@ -126,7 +126,8 @@ filter = 'package(=baml_bridge)'
 platform = { host = 'cfg(windows)' }
 setup = 'rust_bridge_engine_win'
 
-# `pack_e2e` needs the `baml-pack-host` executable from another Cargo package.
+# Pack end-to-end tests, including telemetry recording from packed binaries,
+# need the `baml-pack-host` executable from another Cargo package.
 # Build it once before nextest fans the individual cases out into separate
 # processes. The setup scripts mark matching tests through NEXTEST_ENV, so the
 # test helper validates the prebuilt sibling instead of recursively invoking
@@ -140,12 +141,12 @@ command = './crates/baml_cli/tests/build-pack-host.sh'
 command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './crates/baml_cli/tests/build-pack-host.ps1']
 
 [[profile.default.scripts]]
-filter = 'binary(=pack_e2e)'
+filter = 'binary(=pack_e2e) | (binary(=telemetry_recording_e2e) & test(=packed_modes_write_to_user_home_even_when_launched_in_another_project))'
 platform = { host = 'cfg(unix)' }
 setup = 'baml_pack_host_unix'
 
 [[profile.default.scripts]]
-filter = 'binary(=pack_e2e)'
+filter = 'binary(=pack_e2e) | (binary(=telemetry_recording_e2e) & test(=packed_modes_write_to_user_home_even_when_launched_in_another_project))'
 platform = { host = 'cfg(windows)' }
 setup = 'baml_pack_host_win'
 
@@ -170,15 +171,10 @@ filter = 'package(=sdk_test_java)'
 platform = { host = 'cfg(windows)' }
 setup = 'java_gradle_win'
 
-# The java sdk-test emits two gates per green fixture — `javac`
-# (compileTestJava) and `junit` (test) — and every one shells out to `gradle`
-# against the shared GRADLE_USER_HOME. Two gates race two ways: within a fixture
-# on the project lock, and across fixtures on the shared daemon registry (the
-# latter is what broke the Windows leg — 4 concurrent gradle launches, one timed
-# out connecting to its forked daemon). A single package-wide override funnels
-# the entire sdk_test_java suite through the one-slot `java-gradle-serial` group,
-# which closes both races; it subsumes the old per-fixture groups. The two
-# non-gradle gates (`setup_guard`, `fixture_manifest`) ride along harmlessly.
+# Java fixtures compile and run in one Gradle invocation each, but different
+# fixtures still share GRADLE_USER_HOME and its daemon registry. Keep them
+# serial: concurrent launches previously timed out connecting to their forked
+# daemons on Windows. The non-Gradle setup and manifest checks ride along.
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_java)'
 test-group = 'java-gradle-serial'
@@ -284,23 +280,3 @@ setup = 'csharp_cdylib_unix'
 filter = 'package(=sdk_test_csharp)'
 platform = { host = 'cfg(windows)' }
 setup = 'csharp_cdylib_win'
-
-# JUnit reporting for Trunk Flaky Tests uploads. The test-groups and setup
-# scripts on profile.default above still apply: nextest resolves both against
-# the default profile for every named profile.
-#
-# No retries: retrying masks the flakes this reporting exists to find, and
-# quarantining is the intended replacement.
-[profile.ci.junit]
-path = "junit.xml"
-
-# baml_bridge runs after the sdk suite in the same job, so it needs a
-# separate report: sharing `ci` would republish the stale sdk report
-# under the bridge outcome whenever the bridge run dies before writing.
-[profile.ci-bridge.junit]
-path = "junit.xml"
-
-# The windows CLI e2e step runs after the job's `ci` report is already
-# uploaded, so it reports separately for the same reason as the bridge.
-[profile.ci-cli-e2e.junit]
-path = "junit.xml"

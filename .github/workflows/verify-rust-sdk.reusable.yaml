@@ -11,10 +11,11 @@ name: BAML SDK Release - Verify Rust
 #      override of the extracted crate — no repo paths; every other dep comes
 #      from real crates.io, exactly as a published consumer's would.
 #   3. Exercise BOTH engine-acquisition paths against the built consumer:
-#        (a) offline  — `BAML_LIBRARY_PATH` at the downloaded dylib;
-#        (b) download — a local server (`BAML_LIBRARY_DOWNLOAD_BASE`) serving
-#            the release-asset layout, so the loader downloads + checksums +
-#            caches + loads;
+#        (a) offline  — `BAML_BRIDGE_PATH` at the downloaded dylib;
+#        (b) download — a local server (`BAML_MANIFEST_BASE_URL`) serving a
+#            release manifest and the dylib, so the loader resolves the
+#            manifest, downloads, checksums, caches under `BAML_HOME` and
+#            loads;
 #      and assert the offline/disable switch actually blocks the network.
 #   4. Assert the version triple: crate == dylib `version()` == plan canonical.
 #   5. Inspect artifacts: `.crate` has no absolute build paths; dylib exports
@@ -107,13 +108,15 @@ jobs:
           fi
           scripts/baml-language-version stamp --plan release-plan.json
           echo "CANONICAL=$(jq -r .canonical_version release-plan.json)" >> "$GITHUB_ENV"
-          # The engine cdylib asset name the loader constructs for this target.
+          # The engine cdylib release asset name for this target, and the
+          # filename the loader installs it under in its cache.
           case "$TARGET" in
-            *apple*)   asset="libbaml_cffi-${TARGET}.dylib" ;;
-            *windows*) asset="baml_cffi-${TARGET}.dll" ;;
-            *)         asset="libbaml_cffi-${TARGET}.so" ;;
+            *apple*)   asset="libbaml_cffi-${TARGET}.dylib"; lib="libbridge_cffi.dylib" ;;
+            *windows*) asset="baml_cffi-${TARGET}.dll"; lib="bridge_cffi.dll" ;;
+            *)         asset="libbaml_cffi-${TARGET}.so"; lib="libbridge_cffi.so" ;;
           esac
           echo "ASSET=$asset" >> "$GITHUB_ENV"
+          echo "LIB=$lib" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -213,15 +216,15 @@ jobs:
           baml_bridge = { path = "${crate_dir}" }
           EOF
           # Pre-build once so the acquisition-path runs below only re-link.
-          (cd "$consumer" && BAML_LIBRARY_PATH="${{ steps.art.outputs.dylib }}" \
-            BAML_LIBRARY_DISABLE_DOWNLOAD=true cargo build --quiet)
+          (cd "$consumer" && BAML_BRIDGE_PATH="${{ steps.art.outputs.dylib }}" \
+            BAML_BRIDGE_DISABLE_DOWNLOAD=true cargo build --quiet)
 
-      - name: "Acquisition path (a): offline (BAML_LIBRARY_PATH)"
+      - name: "Acquisition path (a): offline (BAML_BRIDGE_PATH)"
         if: ${{ !matrix.compile_only }}
         working-directory: ${{ runner.temp }}/verify/consumer
         env:
-          BAML_LIBRARY_PATH: ${{ steps.art.outputs.dylib }}
-          BAML_LIBRARY_DISABLE_DOWNLOAD: "true"
+          BAML_BRIDGE_PATH: ${{ steps.art.outputs.dylib }}
+          BAML_BRIDGE_DISABLE_DOWNLOAD: "true"
         run: cargo run --quiet
 
       - name: "Acquisition path (b): download rehearsal (local server)"
@@ -229,24 +232,29 @@ jobs:
         working-directory: ${{ runner.temp }}/verify/consumer
         run: |
           set -euo pipefail
-          # Serve the release-asset layout the loader constructs.
-          assets="$RUNNER_TEMP/verify/served"
-          mkdir -p "$assets"
-          cp "${{ steps.art.outputs.dylib }}" "$assets/$ASSET"
+          # Serve a release manifest (schema 1, `cffi` map) plus the dylib it
+          # points at.
+          served="$RUNNER_TEMP/verify/served"
+          mkdir -p "$served/version"
+          cp "${{ steps.art.outputs.dylib }}" "$served/$ASSET"
           # sha256sum (GNU) vs shasum (macOS) — same `<hash>  <name>` output.
           if command -v sha256sum >/dev/null 2>&1; then
-            (cd "$assets" && sha256sum "$ASSET" > "$ASSET.sha256")
+            sha="$(sha256sum "$served/$ASSET" | cut -d' ' -f1)"
           else
-            (cd "$assets" && shasum -a 256 "$ASSET" > "$ASSET.sha256")
+            sha="$(shasum -a 256 "$served/$ASSET" | cut -d' ' -f1)"
           fi
-          (cd "$assets" && python3 -m http.server 8799 >"$RUNNER_TEMP/verify/srv.log" 2>&1 &)
-          for _ in $(seq 1 20); do curl -sf "http://127.0.0.1:8799/$ASSET.sha256" >/dev/null && break; sleep 0.3; done
+          base="http://127.0.0.1:8799"
+          jq -n --arg v "$CANONICAL" --arg t "$TARGET" --arg url "$base/$ASSET" --arg sha "$sha" \
+            '{schema: 1, version: $v, cffi: {($t): {url: $url, sha256: $sha}}}' \
+            > "$served/version/$CANONICAL.json"
+          (cd "$served" && python3 -m http.server 8799 >"$RUNNER_TEMP/verify/srv.log" 2>&1 &)
+          for _ in $(seq 1 20); do curl -sf "$base/version/$CANONICAL.json" >/dev/null && break; sleep 0.3; done
 
-          cache="$RUNNER_TEMP/verify/cache"
-          rm -rf "$cache"
-          BAML_LIBRARY_DOWNLOAD_BASE="http://127.0.0.1:8799" BAML_CACHE_DIR="$cache" \
-            cargo run --quiet
-          test -f "$cache/$ASSET" || { echo "::error::loader did not cache the download"; exit 1; }
+          home="$RUNNER_TEMP/verify/home"
+          rm -rf "$home"
+          BAML_MANIFEST_BASE_URL="$base" BAML_HOME="$home" cargo run --quiet
+          test -f "$home/bridges/$CANONICAL/$TARGET/$LIB" || {
+            echo "::error::loader did not cache the download"; exit 1; }
 
       - name: "Acquisition path (c): offline switch blocks the network"
         if: ${{ !matrix.compile_only }}
@@ -255,9 +263,9 @@ jobs:
           set -euo pipefail
           # Disabled download + empty cache + no explicit path => the loader
           # must fail rather than fetch anything.
-          rm -rf "$RUNNER_TEMP/verify/cache2"
-          if BAML_LIBRARY_DISABLE_DOWNLOAD=true \
-             BAML_CACHE_DIR="$RUNNER_TEMP/verify/cache2" \
+          rm -rf "$RUNNER_TEMP/verify/home2"
+          if BAML_BRIDGE_DISABLE_DOWNLOAD=true \
+             BAML_HOME="$RUNNER_TEMP/verify/home2" \
              cargo run --quiet 2>/dev/null; then
             echo "::error::consumer succeeded with downloads disabled and no local library"
             exit 1

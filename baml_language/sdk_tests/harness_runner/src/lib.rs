@@ -20,6 +20,7 @@
 //!
 //! The rows are source rather than generated because `sdk_test_codegen` runs
 //! from `setup.sh`, which nextest fires *after* these test binaries are built.
+#![allow(clippy::disallowed_methods)]
 
 use std::{
     env, fs,
@@ -171,7 +172,7 @@ pub fn run_go_test(fixture: &str) {
             // target tree behind. `-modcacherw` keeps those directories
             // writable, which is exactly what this flag exists for.
             .env("GOFLAGS", "-modcacherw")
-            .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root)),
+            .env("BAML_BRIDGE_PATH", go_runtime_library(workspace_root)),
         &format!("fixture `{fixture}` `{}` test ./...", go.display()),
     );
 }
@@ -220,7 +221,7 @@ pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cach
 }
 
 /// Java-fixture variant of [`run_test_cmd`]: injects
-/// `BAML_JAVA_BRIDGE_LIB` pointing at the workspace-built
+/// `BAML_BRIDGE_PATH` pointing at the workspace-built
 /// `bridge_java` cdylib (produced by `crates/java/setup.sh`), so the
 /// generated `Baml` anchor can `System.load` the engine during tests.
 pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
@@ -244,7 +245,7 @@ pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env
         cmd,
         cache_subdir,
         cache_env_var,
-        &[("BAML_JAVA_BRIDGE_LIB", lib_str.as_str())],
+        &[("BAML_BRIDGE_PATH", lib_str.as_str())],
     );
 }
 
@@ -741,22 +742,20 @@ macro_rules! __java_gate {
 
 /// Java generator's test-side glue. Invoked from `crates/java/src/lib.rs`.
 pub mod java {
-    /// Declare the Java suite: a `javac` and a `junit` gate per fixture, plus
-    /// the shared setup guard and fixture-manifest oracle.
+    /// Declare one compile-and-test gate per Java fixture, plus the shared
+    /// setup guard and fixture-manifest oracle. Gradle's `test` task compiles
+    /// both the generated SDK and test sources before running JUnit.
     ///
     /// Each gate is marked `on` or `later`. `later` emits the test `#[ignore]`d
-    /// — the generated API is not complete enough for that fixture yet, and
-    /// un-ignoring is the signal that its parity tests are expected to pass.
-    /// A green `junit` requires a green `javac`: the `test` task compiles the
-    /// test sources first.
+    /// until the generated API supports that fixture.
     ///
     /// ```text
-    /// fixture type_shapes      { javac: on,    junit: on    }
-    /// fixture unsupported_only { javac: later, junit: later }
+    /// fixture type_shapes      { junit: on    }
+    /// fixture unsupported_only { junit: later }
     /// ```
     #[macro_export]
     macro_rules! java_test_suite {
-        ( $( fixture $name:ident { javac: $javac:ident, junit: $junit:ident } )+ ) => {
+        ( $( fixture $name:ident { junit: $junit:ident } )+ ) => {
             $crate::setup_guard!("SDK_TEST_JAVA_SETUP");
             $crate::fixture_manifest!( $( $name ),+ );
 
@@ -774,17 +773,14 @@ pub mod java {
                         );
                     }
 
-                    $crate::__java_gate!($javac, javac, {
-                        cmd("gradle --no-daemon --console=plain compileTestJava");
-                    });
-
                     $crate::__java_gate!($junit, junit, {
-                        // A fixture whose overlay has no `.java` sources has
-                        // nothing for `gradle test` to compile or run.
+                        // Fixtures without test sources still check that the
+                        // generated SDK compiles.
                         if !$crate::has_file_with_suffix(
                             &$crate::fixture_path(stringify!($name), "customizable"),
                             ".java",
                         ) {
+                            cmd("gradle --no-daemon --console=plain compileTestJava");
                             return;
                         }
                         $crate::run_java_test_cmd(
@@ -881,8 +877,9 @@ pub mod swift {
 
 /// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs`.
 pub mod cpp {
-    /// Declare the C++ suite: two toolchain checks per fixture, plus the
-    /// shared setup guard and fixture-manifest oracle.
+    /// Declare one compile-and-run check per C++ fixture, plus the shared
+    /// setup guard and fixture-manifest oracle. Run mode also compiles SDKs
+    /// for fixtures that have no executable tests yet.
     ///
     /// The fixture list is source rather than build-script output because
     /// `sdk_test_codegen` runs from `setup.sh`, which nextest fires *after*
@@ -912,14 +909,8 @@ pub mod cpp {
                         );
                     }
 
-                    #[test]
-                    fn compile() {
-                        cmd("bash test.sh compile");
-                    }
-
-                    /// Recompiles rather than reusing `compile`'s output:
-                    /// nextest runs each test in its own process, so the two
-                    /// cannot share state or assume an order.
+                    /// Compile and execute in one process so nextest does
+                    /// not build the same SDK and protobuf stack twice.
                     #[test]
                     fn run() {
                         cmd("bash test.sh run");
@@ -947,7 +938,7 @@ pub mod rust {
     /// intentionally not checked — the emitter's pretty-printer is its
     /// canonical format), `clippy` lints the generated library, and
     /// `cargo_test` compiles and runs the enabled ports. Only `cargo_test`
-    /// gets `BAML_LIBRARY_PATH`: `baml_bridge` is dylib-only, so the fixture's
+    /// gets `BAML_BRIDGE_PATH`: `baml_bridge` is dylib-only, so the fixture's
     /// tests load the engine cdylib at run time, while fmt and clippy never
     /// execute it.
     #[macro_export]
@@ -1012,10 +1003,10 @@ pub mod rust {
                             "cargo test --manifest-path Cargo.toml",
                             &[
                                 (
-                                    "BAML_LIBRARY_PATH",
+                                    "BAML_BRIDGE_PATH",
                                     engine.to_str().expect("engine path is valid UTF-8"),
                                 ),
-                                ("BAML_LIBRARY_DISABLE_DOWNLOAD", "true"),
+                                ("BAML_BRIDGE_DISABLE_DOWNLOAD", "true"),
                             ],
                         );
                     }

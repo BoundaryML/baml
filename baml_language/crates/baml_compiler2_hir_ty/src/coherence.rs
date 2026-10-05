@@ -842,27 +842,15 @@ pub struct CoherenceViolation<'db> {
     pub indeterminate: bool,
 }
 
-/// Wrapper for the manual `salsa::Update` impl (the `ImplFacts`
+/// Wrapper for the manual `salsa::SalsaValue` impl (the `ImplFacts`
 /// precedent).
 #[derive(Debug, Clone, PartialEq)]
 pub struct CoherenceReport<'db>(pub Vec<CoherenceViolation<'db>>);
 
-// SAFETY: PartialEq-driven overwrite, the ImplFacts precedent.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for CoherenceReport<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for CoherenceReport<'_> {}
 
 /// Per-package coherence: overlapping implementations across the package
 /// and its dependency closure - rustc's per-crate coherence plus
@@ -1184,26 +1172,14 @@ pub struct OrphanViolation<'db> {
     pub uncovered_param: Option<Name>,
 }
 
-/// Wrapper for the manual `salsa::Update` impl.
+/// Wrapper for the manual `salsa::SalsaValue` impl.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrphanReport<'db>(pub Vec<OrphanViolation<'db>>);
 
-// SAFETY: PartialEq-driven overwrite, the ImplFacts precedent.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for OrphanReport<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        unsafe {
-            let changed = *old_pointer != new_value;
-            if changed {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            changed
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for OrphanReport<'_> {}
 
 /// Per-package orphan check: every impl must implement a local interface
 /// or cover a local type (RFC-2451: the first local class/enum in the

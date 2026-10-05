@@ -112,6 +112,7 @@ sys_regex = { path = "crates/sys_regex" }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
+baml_env = { path = "crates/baml_env" }
 baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
@@ -120,6 +121,7 @@ baml_lsp = { path = "crates/baml_lsp" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
+baml_test_support = { path = "crates/baml_test_support" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
@@ -254,7 +256,7 @@ rustls-pemfile = "2"
 rusqlite = "0.37.0"
 rustc-hash = { version = "2.1" }
 xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
-salsa = { version = "0.26", default-features = false, features = [
+salsa = { version = "0.28.5", default-features = false, features = [
   "compact_str",
   "macros",
   "salsa_unstable",

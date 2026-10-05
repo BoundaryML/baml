@@ -1,6 +1,6 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
-use baml_db::testing::compile_source;
+use baml_test_support::compile_source;
 use baml_type::{CallLayout, Name};
 use bex_vm::{BexVm, BytecodeProgram, VmExecState, convert_program};
 use bex_vm_types::{Instruction, Object, bytecode::OpCode, types::Function};

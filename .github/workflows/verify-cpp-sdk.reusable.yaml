@@ -9,7 +9,7 @@ name: BAML SDK Release - Verify C++
 # This workflow is therefore verify-only: for every supported target it
 # downloads the final `bridge-cffi-<target>` artifact, renames it to the
 # canonical loader filename, compiles the in-repo bridge consumer smoke
-# (runtime_smoke.cc via CMake: load via BAML_RUNTIME_PATH, ABI-table
+# (runtime_smoke.cc via CMake: load via BAML_BRIDGE_PATH, ABI-table
 # validation, register_bridge, bytecode-init error surface, decode over the
 # pinned protobuf-lite runtime), runs it against the
 # artifact, and asserts the canonical version. musl runs inside a real
@@ -60,7 +60,7 @@ jobs:
             | select(.artifacts.cffi != null)
             | {target: .triple,
                libc: .libc,
-               runner: (if .os == "macos" then (if .arch == "aarch64" then "macos-14" else "macos-15-intel" end)
+               runner: (if .os == "macos" then (if .arch == "aarch64" then "macos-15" else "macos-15-intel" end)
                         elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)
                         else (if .arch == "aarch64" then "windows-11-arm" else "windows-2022" end) end),
                smoke_container: (if .libc == "musl" then "alpine:3.21" else null end),
@@ -117,7 +117,7 @@ jobs:
             cp "$lib" "$canonical"
           done
           test -f "$canonical"
-          echo "BAML_RUNTIME_PATH=$PWD/$canonical" >> "$GITHUB_ENV"
+          echo "BAML_BRIDGE_PATH=$PWD/$canonical" >> "$GITHUB_ENV"
 
       - name: Consumer smoke (unix)
         if: matrix.libc != 'musl' && !contains(matrix.target, 'windows')
@@ -134,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD:/work" -w /work \
-            -e BAML_RUNTIME_PATH=/work/runtime-dist/libbridge_cffi.so \
+            -e BAML_BRIDGE_PATH=/work/runtime-dist/libbridge_cffi.so \
             -e BAML_EXPECTED_VERSION \
             ${{ matrix.smoke_container }} \
             sh -c 'apk add --no-cache bash g++ cmake make git linux-headers && \
@@ -153,7 +153,7 @@ jobs:
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation `
             -DevCmdArguments "-arch=${{ matrix.msvc_arch }} -host_arch=${{ matrix.msvc_arch }}"
-          $env:BAML_RUNTIME_PATH = (Resolve-Path .\runtime-dist\bridge_cffi.dll).Path
+          $env:BAML_BRIDGE_PATH = (Resolve-Path .\runtime-dist\bridge_cffi.dll).Path
           cmake -S baml_language\sdks\cpp\bridge_cpp\tests -B smoke-build
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
           cmake --build smoke-build --target runtime_smoke -j --config Release

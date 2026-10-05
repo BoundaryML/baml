@@ -50,7 +50,7 @@ function Async(n: int) -> int {
 fn engine() -> Arc<BexEngine> {
     Arc::new(
         BexEngine::new(
-            baml_db::testing::compile_source(SOURCE),
+            baml_test_support::compile_source(SOURCE),
             Arc::new(sys_native::SysOps::native()),
             vec![],
         )

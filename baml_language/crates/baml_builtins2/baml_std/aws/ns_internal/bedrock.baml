@@ -192,10 +192,6 @@ class ContentBlock {
         ContentBlock { ..._empty_content_block(), toolResult: tool_result }
     }
 
-    function of_cache_point() -> ContentBlock {
-        ContentBlock.of_cache_delimiter(_default_cache_point())
-    }
-
     /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
     function of_cache_delimiter(args: baml.json.json) -> ContentBlock {
         ContentBlock { ..._empty_content_block(), cachePoint: args }
@@ -629,9 +625,12 @@ function _lower_blocks(blocks: ai.content.Block[], preview: bool = false) -> Con
 
 /// (internal) System content is text-only; a media part in a system message is rejected
 /// rather than silently dropped (`build_request/bedrock.rs:174-176`).
-function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
+function _prompt_system(
+    message: ai.PromptMessage,
+    default_cache_args: baml.json.json,
+) -> SystemContentBlock[] {
     let blocks: SystemContentBlock[] = [];
-    for (let part in ai.wire.prompt_parts(message)) {
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
         match (part) {
             let text: string => {
                 // Blank text is dropped here too: Converse rejects an empty
@@ -665,9 +664,10 @@ function _prompt_system(message: ai.PromptMessage) -> SystemContentBlock[] {
 ///     and a `cachePoint` that leads a message is a ValidationException.
 ///   * The last block is already a `cachePoint`: two in a row mark the same
 ///     prefix, and each one counts against the four a request may carry.
-///   * `cache(null)`: there is no value to embed, and a null member is dropped
+///   * Null `args`: there is no value to embed, and a null member is dropped
 ///     from the body, which would leave an empty block behind.
-///     (`ai.wire.prompt_parts` already removes these; this is the backstop.)
+///     (`ai.wire.prompt_parts` has already given a `${cache()}` the client's
+///     default, or removed it when there is none; this is the backstop.)
 function _takes_cache_point(
     previous: baml.json.json?,
     lowered: int,
@@ -684,9 +684,13 @@ function _takes_cache_point(
 /// becomes a `cachePoint` block at the position it was written, with `args`
 /// embedded as written, and the text on either side of it is trimmed where it
 /// faces the checkpoint (`ai.wire.prompt_parts`).
-function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> ContentBlock[] {
+function _prompt_content(
+    message: ai.PromptMessage,
+    default_cache_args: baml.json.json,
+    preview: bool = false,
+) -> ContentBlock[] {
     let content: ContentBlock[] = [];
-    for (let part in ai.wire.prompt_parts(message)) {
+    for (let part in ai.wire.prompt_parts(message, default_cache_args = default_cache_args)) {
         match (part) {
             let text: string => {
                 let block = ai.content.Text { text: text };
@@ -715,27 +719,6 @@ function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> Co
     content
 }
 
-/// (internal) The per-message metadata key that requests a Bedrock prompt-caching
-/// checkpoint after the message's content.
-///
-/// The engine emits `{"cachePoint":{"type":"default"}}` whenever a message
-/// carries `cache_control` metadata
-/// (`engine/.../aws_client.rs:123-155`). BAML's neutral spelling of that is a
-/// `ai.PromptMessage.metadata` entry, and Bedrock's own name for the feature
-/// is a cache *point*, so the key is `cache_point` — any non-null value
-/// (`true` is the idiomatic one) turns the checkpoint on.
-///
-/// NOTE: `ai.internal.make_role` currently builds every role marker with empty
-/// metadata, so nothing populates this yet from the prompt DSL. Until that
-/// lands, use the client's `cache_system_prompt` / `cache_tools` options,
-/// which do not depend on per-message metadata.
-function _wants_cache_point(metadata: map<string, baml.json.json>) -> bool {
-    match (metadata.get("cache_point")) {
-        null => false,
-        _ => true,
-    }
-}
-
 /// (internal) The Converse conversation roles are `user` and `assistant` only. `system`
 /// is hoisted out above; every other authored role (including the role-less
 /// default and `tool`) becomes `user`, matching the native Anthropic client and
@@ -758,27 +741,25 @@ function _conversation_role(role: string) -> string {
 /// demoting would silently move authored instructions into the conversation.
 /// The native Anthropic client (`messages.baml:308-337`) merges for the same
 /// reason.
-function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPrompt {
+function _lower_prompt(
+    prompt: ai.Prompt,
+    default_cache_args: baml.json.json,
+    preview: bool = false,
+) -> BedrockPrompt {
     let system: SystemContentBlock[] = [];
     let messages: Message[] = [];
     for (let message in prompt.messages()) {
         if (message.role == "system") {
-            for (let block in _prompt_system(message)) {
+            for (let block in _prompt_system(message, default_cache_args)) {
                 system.push(block);
-            }
-            if (_wants_cache_point(message.metadata)) {
-                system.push(SystemContentBlock.of_cache_point());
             }
             null
         } else {
-            let content = _prompt_content(message, preview = preview);
+            let content = _prompt_content(message, default_cache_args, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
             if (content.length() > 0) {
-                if (_wants_cache_point(message.metadata)) {
-                    content.push(ContentBlock.of_cache_point());
-                }
                 messages.push(Message { role: _conversation_role(message.role), content: content });
             }
             null
@@ -812,6 +793,20 @@ class PendingMessage {
 /// omits the field; the result's text still carries the error message, so only
 /// the flag is lost.
 function _supports_tool_result_status(model: string) -> bool {
+    let id = model.to_lower_case();
+    id.includes("anthropic.claude") || id.includes("amazon.nova")
+}
+
+/// (internal) Whether a `${cache()}` sends a `cachePoint` to this model. Converse
+/// accepts a checkpoint for Anthropic Claude and Amazon Nova, and answers 403
+/// ("You invoked an unsupported model or your request did not allow prompt
+/// caching") for the other families it serves — Llama, Mistral, DeepSeek and
+/// gpt-oss were checked. So the default is given only to what is known to
+/// take one, by the same substring test as `_supports_tool_result_status`. An
+/// unrecognized id (an application inference profile ARN, a custom model)
+/// gets none; its author writes `${cache({ "type": "default" })}`, which is
+/// always sent.
+function _supports_cache_point(model: string) -> bool {
     let id = model.to_lower_case();
     id.includes("anthropic.claude") || id.includes("amazon.nova")
 }
@@ -857,9 +852,6 @@ function _lower_journal(
             let user: ai.events.UserMessage => {
                 let content = _lower_blocks(user.content, preview = preview);
                 if (content.length() > 0) {
-                    if (_wants_cache_point(user.metadata)) {
-                        content.push(ContentBlock.of_cache_point());
-                    }
                     pending.push(
                         PendingMessage {
                             message: Message { role: "user", content: content },
@@ -1084,7 +1076,11 @@ function converse_request(
     input: ai.ModelTurnInput,
     preview: bool = false,
 ) -> ConverseRequest {
-    let prompt = _lower_prompt(input.prompt(ai.internal.build_output_format(input.output_type)), preview = preview);
+    let prompt = _lower_prompt(
+        input.prompt(ai.internal.build_output_format(input.output_type)),
+        client.default_cache_args(),
+        preview = preview,
+    );
     let system = prompt.system;
     if (client.cache_system_prompt && system.length() > 0) {
         system.push(SystemContentBlock.of_cache_point());
@@ -1300,7 +1296,7 @@ function sign(client: root.BedrockClient, request: baml.http.Request) -> baml.ht
 //
 // Every member is optional: Converse omits `usage` on some model families,
 // omits `output.message` on a guardrail intervention, and adds members over
-// time. A non-optional field here would be a `ParseFailed` waiting to happen
+// time. A non-optional field here would be an `InvalidResponse` waiting to happen
 // (PLAN §1.5).
 // ---------------------------------------------------------------------------
 
@@ -1367,13 +1363,8 @@ class ConverseResponse {
 /// could not assemble into a message) and `malformed_tool_use` (it emitted a
 /// tool call the service could not assemble into a `toolUse` block).
 ///
-/// Neither is a stop *reason* in the `ai.content.StopReason` sense — there is
-/// no answer to stop on — so `parse_response` throws `ai.errors.ParseFailed`
-/// with the whole response as `raw_output` instead of returning a turn. That
-/// is the honest identity (it IS a failure to produce parseable output), it is
-/// `RetrySafety.Safe` so a Retry policy re-asks, and it keeps the raw bytes
-/// for the caller. `MaxTokens` would falsely blame the token limit and
-/// `Refused` would falsely claim the model declined.
+/// Neither is a successful stop reason: the provider explicitly reported
+/// unusable generation. The response is delivered as ai.errors.ProviderError.
 function _is_malformed_stop(raw: string) -> bool {
     raw == "malformed_model_output" || raw == "malformed_tool_use"
 }
@@ -1411,17 +1402,23 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
     // a truncated or garbled "answer" (see `_is_malformed_stop`).
     if let raw: string = response.stopReason {
         if (_is_malformed_stop(raw)) {
-            throw ai.errors.ParseFailed {
+            throw ai.errors.ProviderError {
                 provider: "aws-bedrock",
-                raw_output: baml.json.stringify(baml.json.to_json(response)),
+                message: `the model could not produce a valid turn: ${raw}`,
+                error_type: raw,
+                error_code: null,
+                raw_body: baml.json.stringify(baml.json.to_json(response)),
+                status_code: null,
             }
         }
     }
     let message = response.output?.message;
     if (message == null) {
-        throw ai.errors.ParseFailed {
+        throw ai.errors.InvalidResponse {
             provider: "aws-bedrock",
-            raw_output: baml.json.stringify(baml.json.to_json(response)),
+            message: "the Converse response is missing output.message",
+            raw_body: baml.json.stringify(baml.json.to_json(response)),
+            status_code: null,
         }
     }
     let content: ai.content.ModelBlock[] = [];
@@ -1462,7 +1459,13 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
         null => null,
         let reported: ConverseUsage => {
             ai.events.Usage {
-                input_tokens: reported.inputTokens ?? 0,
+                // inputTokens excludes both cache counts.
+                input_tokens: ai.internal.total_input_tokens(
+                    reported.inputTokens,
+                    reported.cacheReadInputTokens,
+                    reported.cacheWriteInputTokens,
+                )
+                    ?? 0,
                 output_tokens: reported.outputTokens ?? 0,
                 cached_input_tokens: reported.cacheReadInputTokens,
                 // Converse reports no separate reasoning-token count; the
@@ -1681,20 +1684,25 @@ class ServiceUnavailableException {
     message: string?,
 }
 
-/// (internal) The HTTP status Bedrock documents for each ConverseStream
-/// exception, so a mid-stream failure classifies (and retries) exactly like
-/// the same failure on `invoke`.
-function _stream_exception_status(exception_type: string) -> int {
-    match (exception_type) {
-        "throttlingException" => 429,
-        "serviceUnavailableException" => 503,
-        "internalServerException" => 500,
-        "modelStreamErrorException" => 424,
-        "modelTimeoutException" => 408,
-        "validationException" => 400,
-        "accessDeniedException" => 403,
-        "resourceNotFoundException" => 404,
-        _ => 500,
+// Exception frame metadata reports a provider failure, not an HTTP status.
+function _stream_provider_error(kind: string, data: string) -> ai.errors.Failure {
+    let body = baml.json.parse(data) catch_all (e) {
+        let parse => {
+            return ai.errors.InvalidResponse {
+                provider: "aws-bedrock",
+                message: parse.to_string(),
+                raw_body: data,
+                status_code: null,
+            };
+        },
+    };
+    ai.errors.ProviderError {
+        provider: "aws-bedrock",
+        message: baml.json.path_or<string>(body, ".message", kind),
+        error_type: kind,
+        error_code: null,
+        raw_body: data,
+        status_code: null,
     }
 }
 
@@ -1708,12 +1716,31 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
         let data = raw.data ?? "";
         if (name.starts_with("exception:")) {
             let exception_type = name.slice(10, name.length());
-            throw ai.errors.classify_http("aws-bedrock", _stream_exception_status(exception_type), data);
+            throw _stream_provider_error(exception_type, data);
         }
         if (name.starts_with("error:")) {
-            throw ai.errors.classify_http("aws-bedrock", 500, `${name.slice(6, name.length())}: ${data}`);
+            // Unmodeled error frames carry a plain-text :error-message header,
+            // unlike modeled exception frames with JSON payloads.
+            throw ai.errors.ProviderError {
+                provider: "aws-bedrock",
+                message: data,
+                error_type: name,
+                error_code: name.slice(6, name.length()),
+                raw_body: data,
+                status_code: null,
+            };
         }
-        match (decode_stream_event(name, data)) {
+        let decoded = decode_stream_event(name, data) catch_all (e) {
+            let parse => {
+                throw ai.errors.InvalidResponse {
+                provider: "aws-bedrock",
+                message: parse.to_string(),
+                raw_body: data,
+                status_code: null,
+            }
+            },
+        };
+        match (decoded) {
             let event: ContentBlockDeltaEvent => {
                 if let text: string = event.delta?.text {
                     out.push(ai.stream.TextDelta { text: text });
@@ -1729,7 +1756,14 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
             let event: MessageStopEvent => {
                 if let raw_stop: string = event.stopReason {
                     if (_is_malformed_stop(raw_stop)) {
-                        throw ai.errors.ParseFailed { provider: "aws-bedrock", raw_output: data }
+                        throw ai.errors.ProviderError {
+                            provider: "aws-bedrock",
+                            message: `the model could not produce a valid turn: ${raw_stop}`,
+                            error_type: raw_stop,
+                            error_code: null,
+                            raw_body: data,
+                            status_code: null,
+                        }
                     }
                     out.push(
                         ai.stream.TurnMeta {
@@ -1745,8 +1779,16 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
                 out.push(
                     ai.stream.TurnMeta {
                         stop_reason: null,
-                        input_tokens: event.usage?.inputTokens,
+                        input_tokens: ai.internal.total_input_tokens(
+                            event.usage?.inputTokens,
+                            event.usage?.cacheReadInputTokens,
+                            event.usage?.cacheWriteInputTokens,
+                        ),
                         output_tokens: event.usage?.outputTokens,
+                        cached_input_tokens: event.usage?.cacheReadInputTokens,
+                        cache_write_input_tokens: event.usage?.cacheWriteInputTokens,
+                        // inputTokens excludes both cache counts.
+                        uncached_input_tokens: event.usage?.inputTokens,
                     },
                 );
                 out.push(ai.stream.TurnDone {});

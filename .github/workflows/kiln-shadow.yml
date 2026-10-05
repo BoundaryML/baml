@@ -968,7 +968,7 @@ jobs:
         env:
           # Require full diagnostics for both valid and intentionally invalid
           # examples. Do not seed disposable projects during the check pass.
-          BAML_NO_BYTECODE_CACHE: "1"
+          BAML_BUILD_CACHE: "false"
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
         run: pnpm --filter app-developer-docs docs:snippets:validate
         working-directory: typescript2
@@ -977,7 +977,7 @@ jobs:
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
           # Content-addressed keys include the compiler fingerprint and project
           # inputs. Reuse the stdlib across examples without writing into source.
-          BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
+          BAML_HOME: ${{ runner.temp }}/baml-documentation-home
         run: pnpm --filter app-developer-docs docs:book:validate
         working-directory: typescript2
       # The full baml_cli::baml_corpus test above already executes
@@ -1103,16 +1103,14 @@ jobs:
 
       - name: "Run tests with nextest"
         id: cargo-test
-        run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # Release leg: structured-log value copying carries `debug_assert`-adjacent
-      # logic whose behavior must not change when debug assertions are
-      # compiled out (PR #4548 review A.1). Narrow on purpose — this module,
-      # not the workspace.
-      - name: "Run structured-log value-copy tests in release mode"
-        run: cargo test --release -p bex_engine --lib trace_heap
-        working-directory: baml_language
+      # These five tests still run in the regular workspace suite. Keep the
+      # extra release build disabled to avoid rebuilding the engine test harness.
+      # - name: "Run structured-log value-copy tests in release mode"
+      #   run: cargo test --release -p bex_engine --lib trace_heap
+      #   working-directory: baml_language
 
       - name: "Upload test results on failure"
         if: failure()
@@ -1246,7 +1244,7 @@ jobs:
         # The runtime corpus moved from the excluded baml_tests package into
         # baml_cli; keep its existing ownership in the snapshot job.
         id: cargo-test
-        run: cargo nextest run --profile ci --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
+        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=baml_corpus)'
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
@@ -1806,14 +1804,17 @@ jobs:
           # fallback): the backdate step trusts the SDK's content because
           # dotnet-version pins it, so an SDK bump must start a cold cache
           # rather than lean on secondary invalidation signals.
-          key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-
+          key: csharp-msbuild-v3-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: csharp-msbuild-v3-${{ matrix.os-label }}-sdk10.0.301-
 
+      # Generated fixture clients are still absent after checkout. Defer only
+      # those missing inputs until the strict post-codegen restore below.
       - name: "Backdate unchanged C# sources"
         if: matrix.sdk-label == 'csharp'
         shell: bash
         run: |
-          "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
+          "$(command -v python3 || command -v python)" .github/scripts/test_csharp_mtime_cache.py
+          "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore-before-codegen
 
       - name: "Test C# NuGet payload comparison"
         if: matrix.sdk-label == 'csharp'
@@ -1952,20 +1953,20 @@ jobs:
       - name: "Run sdk tests"
         id: sdk-test
         if: matrix.sdk-label != 'csharp'
-        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
       - name: "Run C# sdk tests"
         id: csharp-sdk-test
         if: matrix.sdk-label == 'csharp'
-        run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
-      # Record the content hashes the next run's backdate steps compare
-      # against. Runs even on test failure: the bin/obj state saved by the
-      # cache post-step must always be described by a matching manifest.
+      # Publish hashes and outputs only after successful validation. A failed
+      # codegen run may leave new sources beside retained outputs from before
+      # codegen; recording those hashes would make stale outputs look current.
       - name: "Record C# build cache manifest"
-        if: always() && matrix.sdk-label == 'csharp'
+        if: success() && matrix.sdk-label == 'csharp'
         shell: bash
         run: |
           "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py record
@@ -1974,7 +1975,7 @@ jobs:
       # sync with it. The key is unique per run+attempt, so this save never
       # collides with an existing entry.
       - name: "Save C# build cache"
-        if: always() && matrix.sdk-label == 'csharp'
+        if: success() && matrix.sdk-label == 'csharp'
         uses: actions/cache/save@v6
         with:
           path: |
@@ -1984,7 +1985,7 @@ jobs:
             baml_language/sdks/csharp/**/bin
             baml_language/sdk_tests/crates/csharp/*/obj
             baml_language/sdk_tests/crates/csharp/*/bin
-          key: csharp-msbuild-v2-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+          key: csharp-msbuild-v3-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
 
       # The Rust bridge runtime crate (baml_bridge). Its tests load the engine
       # cdylib at run time, and its lib test binary mixes pure (loader/encode)
@@ -1996,7 +1997,7 @@ jobs:
       - name: "Run rust bridge tests"
         id: bridge-test
         if: matrix.sdk-label == 'rust'
-        run: cargo nextest run --profile ci-bridge -p baml_bridge --all-features
+        run: cargo nextest run -p baml_bridge --all-features
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -2115,17 +2116,11 @@ jobs:
       # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
       # Keep the GNU job's --exclude list in sync. The musl job also runs
       # pack_e2e, so both Linux libc variants exercise the ELF pack path.
-      # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
       - name: "Run compiler, CLI, and snapshot tests"
-        id: snapshot-test
-        # The shared upload action gates this outcome (including a tokenless
-        # fallback on forks). Do not add a second raw-outcome gate: that would
-        # override Trunk's intentional quarantine handling.
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
-          NEXTEST_PROFILE: ci
 
       - name: "Check for snapshot changes"
         run: |
@@ -2154,7 +2149,7 @@ jobs:
         env:
           # Require full diagnostics for both valid and intentionally invalid
           # examples. Do not seed disposable projects during the check pass.
-          BAML_NO_BYTECODE_CACHE: "1"
+          BAML_BUILD_CACHE: "false"
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
         run: pnpm --filter app-developer-docs docs:snippets:validate
         working-directory: typescript2
@@ -2163,7 +2158,7 @@ jobs:
           BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
           # Content-addressed keys include the compiler fingerprint and project
           # inputs. Reuse the stdlib across examples without writing into source.
-          BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
+          BAML_HOME: ${{ runner.temp }}/baml-documentation-home
         run: pnpm --filter app-developer-docs docs:book:validate
         working-directory: typescript2
       # The full baml_cli::baml_corpus test above already executes

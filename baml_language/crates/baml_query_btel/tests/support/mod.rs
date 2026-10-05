@@ -89,7 +89,7 @@ function crash(i: int) -> int {
 pub const CAPTURED: &[&str] = &["Extract", "Classify", "Validate", "Link"];
 
 pub fn program() -> bex_vm_types::Program {
-    let mut program = baml_db::testing::compile_source(SOURCE);
+    let mut program = baml_test_support::compile_source(SOURCE);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && f.name
@@ -210,7 +210,7 @@ pub async fn record_program_with(
     calls: &[(&str, i64)],
     config: RecordingConfig,
 ) -> Vec<Result<BexExternalValue, String>> {
-    let mut program = baml_db::testing::compile_source(source);
+    let mut program = baml_test_support::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && f.name

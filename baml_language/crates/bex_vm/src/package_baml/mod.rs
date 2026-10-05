@@ -46,6 +46,7 @@ mod regex;
 pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
+mod sap;
 mod spawn;
 pub use spawn::{
     SpawnLaunch, alloc_projected_cancel_token, cancel_token_members, plan_body,
@@ -393,6 +394,10 @@ type NativeResolver = fn(&str) -> Option<NativeFunction>;
 const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     ("baml.", PackageBamlImpl::get_native_fn),
     (
+        "testing.",
+        <crate::package_testing::PackageTestingImpl as crate::package_testing::BamlPackageTesting>::get_native_fn,
+    ),
+    (
         "ai.",
         <crate::package_ai::PackageAiImpl as crate::package_ai::BamlPackageAi>::get_native_fn,
     ),
@@ -413,8 +418,8 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
 /// load, rather than at first call: an unkeyed native body (no key can ever
 /// resolve it) and a VM-owned key with no native behind it (the package's
 /// generated trait requires an implementation for every `$rust_function` it
-/// declares). Keyed functions from other stdlib packages (`assert.*`,
-/// `testing.*`, …) stay `NativeUnresolved` for a future implementation to
+/// declares). Keyed functions from other stdlib packages (`assert.*`, …)
+/// stay `NativeUnresolved` for a future implementation to
 /// wire up, and fail only if actually called.
 pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
     Ok(match object {

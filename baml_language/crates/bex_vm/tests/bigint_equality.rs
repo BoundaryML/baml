@@ -10,7 +10,7 @@
 
 use std::sync::{Arc, atomic::AtomicBool};
 
-use baml_db::testing::compile_source;
+use baml_test_support::compile_source;
 use bex_vm::{
     BexVm,
     package_baml::{BamlPackageBaml, NativeCallResult, PackageBamlImpl},

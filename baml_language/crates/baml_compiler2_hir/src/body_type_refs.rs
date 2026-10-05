@@ -324,7 +324,7 @@ mod tests {
 /// bodies-own-their-type-refs shape): every type expression written inside
 /// the body, lowered once into a span-free store. Salsa-tracked, so
 /// downstream type queries depend on structure only.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn function_body_type_refs<'db>(
     db: &'db dyn crate::Db,
     function: crate::loc::FunctionLoc<'db>,
@@ -368,7 +368,7 @@ pub fn body_type_ref_spans(
 }
 
 /// Per-body type references for a top-level let's initializer.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn let_body_type_refs<'db>(
     db: &'db dyn crate::Db,
     let_binding: crate::loc::LetLoc<'db>,
@@ -395,7 +395,7 @@ pub fn body_type_refs<'db>(
 }
 
 /// Per-body type references for a function's parameter-default arena.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn parameter_defaults_type_refs<'db>(
     db: &'db dyn crate::Db,
     function: crate::loc::FunctionLoc<'db>,

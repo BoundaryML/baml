@@ -48,29 +48,10 @@ pub struct ImplData<'db> {
     pub origin: InterfaceImplOrigin,
 }
 
-/// # Safety
-///
-/// `ImplData<'db>` holds Salsa interned locs with a db-tied lifetime, so it
-/// can't auto-derive `salsa::Update`; `maybe_update` uses `PartialEq` for
-/// proper early-cutoff.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for ImplData<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for ImplData<'_> {}
 
 /// Where in an `implements` block a diagnostic originated. Span-free
 /// (Salsa-stable); check.rs maps it to a source range via [`impl_data_source_map`].
@@ -136,7 +117,7 @@ pub fn interface_loc_qtn<'db>(
 }
 
 /// Why [`impl_data`] could not produce an [`ImplData`].
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub enum ImplDataError {
     /// The implements target does not name an interface. The diagnostics
     /// lowered before the failure ride along so check.rs still surfaces them.
@@ -1247,7 +1228,7 @@ pub fn validate_impl_signatures<'db>(
 
     // The canonical algebra context: hir_ty's fact oracle carrying the impl's
     // own param env (TIR's `GlobalTypeContext` role).
-    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     let aliases = super::package_resolved_aliases(db, pkg_id);
     let bounds: TypeVarBoundsMap = data.generic_params.iter().cloned().collect();
     let ctx = crate::facts::Facts::with_bounds(db, bounds.clone().into_iter().collect());
@@ -1442,7 +1423,7 @@ pub fn validate_impl_signatures<'db>(
         let impl_method_params = &impl_scope_generics[impl_generic_names.len()..];
         let mut impl_fn = realize_with_symbolic_self(
             db,
-            &res_ctx.own_items,
+            pkg_items,
             &pkg_info.namespace_path,
             &impl_scope_generics,
             &iface_self_param,
@@ -1499,7 +1480,7 @@ pub fn validate_impl_signatures<'db>(
         // be entailed by the interface method's bound at the same position.
         let impl_bounds = method_generic_bound_interfaces(
             db,
-            &res_ctx.own_items,
+            pkg_items,
             &pkg_info.namespace_path,
             &impl_scope_generics,
             &impl_spec,

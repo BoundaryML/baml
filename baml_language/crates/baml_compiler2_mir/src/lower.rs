@@ -125,26 +125,6 @@ impl std::ops::Deref for PackageAliases {
     }
 }
 
-// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
-// `Update` impl uses `PartialEq` for early-cutoff.
-#[expect(unsafe_code)]
-unsafe impl salsa::Update for PackageAliases {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[expect(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[expect(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 // ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
 
 /// Lower a type expression, treating the `bindings` map's keys as the in-scope type variables,
@@ -787,6 +767,37 @@ pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<
         // type variable handled at the top — a failure is a compiler invariant
         // violation, not silent erasure.
         other => Some(realized_leaf_template(other)),
+    }
+}
+
+/// The value an enclosing `match` scrutinizes, for the coarse-tag proofs.
+struct MatchScrutinee {
+    /// The local the match evaluated its scrutinee into, then each snapshot a
+    /// narrowing arm (`let x: T`) copies it into and tests in its place.
+    locals: Vec<Local>,
+    /// The scrutinee's resolved static type.
+    ty: RuntimeTy,
+}
+
+impl MatchScrutinee {
+    fn new(local: Local, ty: RuntimeTy) -> Self {
+        Self {
+            locals: vec![local],
+            ty,
+        }
+    }
+
+    /// The scrutinee's static type when `local` holds the scrutinee.
+    fn ty_held_by(&self, local: Local) -> Option<&RuntimeTy> {
+        self.locals.contains(&local).then_some(&self.ty)
+    }
+
+    /// Records that `copy` was assigned a copy of `source`: if `source` holds
+    /// the scrutinee, so does `copy`.
+    fn record_copy(&mut self, source: Local, copy: Local) {
+        if self.locals.contains(&source) {
+            self.locals.push(copy);
+        }
     }
 }
 
@@ -1549,30 +1560,6 @@ struct PackageLoweringData {
     interface_method_names: FxHashSet<Name>,
 }
 
-/// # Safety
-///
-/// Mirrors [`baml_compiler2_hir::package::PackageItems`]'s impl. The contained
-/// maps hold no Salsa-interned (`'db`) data, so storing them by value is sound;
-/// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
-#[expect(unsafe_code)]
-unsafe impl salsa::Update for PackageLoweringData {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[expect(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[expect(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 /// Build the package-invariant [`PackageLoweringData`] once per package,
 /// memoized by Salsa and shared across every function's `LoweringContext`.
 #[salsa::tracked(returns(ref))]
@@ -1678,14 +1665,14 @@ struct LoweringContext<'db> {
     // baml.ops.Compare`). Saved/restored across nested lambdas.
     lambda_param_tir_types: FxHashMap<Name, Tir2Ty>,
 
-    /// The `(local, resolved static type)` of the value the enclosing `match` is
-    /// scrutinizing, set for the duration of its arm lowering (save/restored
-    /// across nested matches). A container arm's runtime type test consults this
-    /// — guarded on the local matching — to decide whether a coarse `LIST`/`MAP`
-    /// tag suffices in place of a structural element check (see
+    /// The value the enclosing `match` is scrutinizing, set for the duration of
+    /// its arm lowering (save/restored across nested matches). A container
+    /// arm's runtime type test consults this — guarded on the tested local
+    /// holding the scrutinee — to decide whether a coarse `LIST`/`MAP` tag
+    /// suffices in place of a structural element check (see
     /// [`parametric_arm_tag_sufficient`]). `None` outside a match, and the local
     /// guard keeps `is` / standalone tests element-precise even inside one.
-    match_scrutinee: Option<(Local, RuntimeTy)>,
+    match_scrutinee: Option<MatchScrutinee>,
 
     /// Stable values read while testing patterns, keyed by pattern identity.
     /// Binding lowering reuses these exact values instead of rereading mutable
@@ -12335,9 +12322,10 @@ impl<'db> LoweringContext<'db> {
         // Expose the scrutinee's static type to each arm's container type test so
         // it can decide whether a coarse `LIST`/`MAP` tag suffices; restore the
         // enclosing match's scrutinee (if any) once the arms are lowered.
-        let saved_scrutinee = self
-            .match_scrutinee
-            .replace((scrutinee_local, self.expr_ty(scrutinee)));
+        let saved_scrutinee = self.match_scrutinee.replace(MatchScrutinee::new(
+            scrutinee_local,
+            self.expr_ty(scrutinee),
+        ));
 
         let switched = self.try_lower_as_switch(
             scrutinee_local,
@@ -12413,8 +12401,8 @@ impl<'db> LoweringContext<'db> {
         let scrutinee_static_ty: Option<RuntimeTy> = self
             .match_scrutinee
             .as_ref()
-            .filter(|(local, _)| *local == scrutinee)
-            .map(|(_, ty)| ty.clone());
+            .and_then(|match_scrutinee| match_scrutinee.ty_held_by(scrutinee))
+            .cloned();
 
         // Classify arms: collect (key, arm_index) for int literal, enum
         // variant, or type patterns, and check for a trailing wildcard/binding.
@@ -13036,14 +13024,14 @@ impl<'db> LoweringContext<'db> {
             // If this is a parametric arm whose type arguments the emitter would
             // otherwise check structurally, but the enclosing match's scrutinee
             // statically proves a coarse `LIST`/`MAP`/`FUTURE` tag suffices,
-            // emit the tag test directly. Guarded on the scrutinee local so an
+            // emit the tag test directly. Guarded on the tested local holding
+            // the scrutinee (itself, or a narrowing arm's snapshot of it) so an
             // `is` / nested test against a different value stays arg-precise.
             if self
                 .match_scrutinee
                 .as_ref()
-                .is_some_and(|(local, scrutinee_ty)| {
-                    *local == scrutinee && parametric_arm_tag_sufficient(&ty, scrutinee_ty)
-                })
+                .and_then(|match_scrutinee| match_scrutinee.ty_held_by(scrutinee))
+                .is_some_and(|scrutinee_ty| parametric_arm_tag_sufficient(&ty, scrutinee_ty))
             {
                 let tag = match &ty {
                     RuntimeTy::List(..) => baml_type::typetag::LIST,
@@ -13598,6 +13586,9 @@ impl<'db> LoweringContext<'db> {
                 Place::local(snapshot),
                 Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
             );
+            if let Some(match_scrutinee) = self.match_scrutinee.as_mut() {
+                match_scrutinee.record_copy(scrutinee, snapshot);
+            }
             self.tested_pattern_values
                 .insert(self.pat_metadata_key(pat_id), snapshot);
             snapshot

@@ -58,7 +58,7 @@ fn captured_slots(root: &std::path::Path, id: proto::CasId) -> u64 {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn recorded_argument_layouts_align_with_captured_input_slots() {
     let root = tempfile::tempdir().unwrap();
-    let mut program = baml_db::testing::compile_source(SOURCE);
+    let mut program = baml_test_support::compile_source(SOURCE);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && matches!(
@@ -102,7 +102,12 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
     let mut paths = HashMap::new();
     let mut inputs = Vec::new();
     for file in &read.files {
+        let header = file.header.as_ref().unwrap();
         let mut expected_minor = btel_settings::encoding::FORMAT_MINOR;
+        if header.process_id.is_some() {
+            expected_minor =
+                expected_minor.max(btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR);
+        }
         if file.spans.as_ref().is_some_and(|spans| {
             spans
                 .sections
@@ -111,7 +116,7 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
         }) {
             expected_minor = expected_minor.max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
         }
-        assert_eq!(file.header.as_ref().unwrap().format_minor, expected_minor);
+        assert_eq!(header.format_minor, expected_minor);
         let definitions = file.definitions.as_ref().unwrap();
         for function in &definitions.functions {
             match function.resolution.as_ref().unwrap() {

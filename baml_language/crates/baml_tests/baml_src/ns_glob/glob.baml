@@ -126,16 +126,11 @@ function scan_finds_txt_files() -> string[] {
     result
 }
 
-test "glob_scan_finds_txt_files_length" {
-    assert.equal(scan_finds_txt_files().length(), 2)
-}
-
-test "glob_scan_finds_txt_files_has_a" {
-    assert.is_true(scan_finds_txt_files().includes("a.txt"))
-}
-
-test "glob_scan_finds_txt_files_has_b" {
-    assert.is_true(scan_finds_txt_files().includes("b.txt"))
+test "glob_scan_finds_txt_files" {
+    let files = scan_finds_txt_files();
+    assert.equal(files.length(), 2);
+    assert.is_true(files.includes("a.txt"));
+    assert.is_true(files.includes("b.txt"))
 }
 
 // ─── glob_scan_returns_empty_for_no_match ────────────────────────────────────
@@ -167,10 +162,7 @@ function scan_only_files_by_default_checks() -> bool[] {
     baml.fs.mkdir(root + "/dir.txt", baml.fs.MkdirOptions { recursive: false });
     let g = baml.glob.new("*.txt");
     let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("file.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes("file.txt")];
     let _ = baml.sys.shell("rm -rf " + root, null);
     ok
 }
@@ -218,12 +210,10 @@ function scan_matches_dot_slash_pattern() -> string[] {
     result
 }
 
-test "glob_scan_matches_dot_slash_pattern_length" {
-    assert.equal(scan_matches_dot_slash_pattern().length(), 1)
-}
-
-test "glob_scan_matches_dot_slash_pattern_has_file" {
-    assert.is_true(scan_matches_dot_slash_pattern().includes("file.txt"))
+test "glob_scan_matches_dot_slash_pattern" {
+    let files = scan_matches_dot_slash_pattern();
+    assert.equal(files.length(), 1);
+    assert.is_true(files.includes("file.txt"))
 }
 
 // ─── glob_scan_matches_absolute_pattern ──────────────────────────────────────
@@ -235,10 +225,7 @@ function scan_matches_absolute_pattern_checks() -> bool[] {
     let pattern = root + "/**/*.txt";
     let g = baml.glob.new(pattern);
     let result = g.scan(baml.glob.ScanOptions { cwd: root, absolute: true });
-    let ok = [
-        result.length() == 1,
-        result.includes(root + "/file.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes(root + "/file.txt")];
     let _ = baml.sys.shell("rm -rf " + root, null);
     ok
 }
@@ -261,12 +248,10 @@ function scan_dot_pattern_matches_only_dot_files() -> string[] {
     result
 }
 
-test "glob_scan_dot_pattern_matches_only_dot_files_length" {
-    assert.equal(scan_dot_pattern_matches_only_dot_files().length(), 1)
-}
-
-test "glob_scan_dot_pattern_matches_only_dot_files_has_hidden" {
-    assert.is_true(scan_dot_pattern_matches_only_dot_files().includes(".hidden"))
+test "glob_scan_dot_pattern_matches_only_dot_files" {
+    let files = scan_dot_pattern_matches_only_dot_files();
+    assert.equal(files.length(), 1);
+    assert.is_true(files.includes(".hidden"))
 }
 
 // ─── glob_scan_default_prunes_dot_directories ────────────────────────────────
@@ -282,10 +267,7 @@ function scan_default_prunes_dot_directories_checks() -> bool[] {
     let _ = baml.fs.write(root + "/.git/HEAD", "x");
     let g = baml.glob.new("**/*.txt");
     let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("visible.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes("visible.txt")];
     let _ = baml.sys.shell("rm -rf " + root, null);
     ok
 }
@@ -308,10 +290,7 @@ function scan_follows_symlinked_directory_checks() -> bool[] {
     let _ = baml.sys.shell("ln -s " + target + " " + outer_root + "/link_dir", null);
     let g = baml.glob.new("**/*.txt");
     let result = g.scan(baml.glob.ScanOptions { cwd: outer_root, follow_symlinks: true });
-    let ok = [
-        result.length() == 1,
-        result.includes("link_dir/hidden_via_link.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes("link_dir/hidden_via_link.txt")];
     let _ = baml.sys.shell("rm -rf " + outer_root + " " + target, null);
     ok
 }
@@ -356,11 +335,13 @@ function scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
     let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", null);
     let g = baml.glob.new("*.txt");
     let threw = {
-        let _ = g.scan(baml.glob.ScanOptions {
-            cwd: root,
-            follow_symlinks: true,
-            throw_error_on_broken_symlink: true,
-        });
+        let _ = g.scan(
+            baml.glob.ScanOptions {
+                cwd: root,
+                follow_symlinks: true,
+                throw_error_on_broken_symlink: true,
+            },
+        );
         false
     } catch (e) {
         baml.errors.Io => true

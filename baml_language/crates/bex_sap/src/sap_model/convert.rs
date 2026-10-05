@@ -2,10 +2,7 @@
 
 use std::borrow::Cow;
 
-use ::std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use ::std::collections::{HashMap, HashSet};
 use ::sys_types::{ClassDefinition, DefKey, EnumDefinition, SapTy};
 use indexmap::IndexMap;
 
@@ -50,7 +47,9 @@ pub enum ConvertError {
 
 const MAX_RECURSION_DEPTH: usize = 16;
 
-/// Contains stuff from [`sys_types::SysOpContext`] that we need for converting to the sap model.
+/// The class, enum, and type-alias definitions one parse target reaches, which the converter
+/// needs to build the sap model. The caller reads them off the target's heap declarations, so a
+/// parse pays only for the types its target uses, not for the whole program's.
 ///
 /// ## Representation
 /// - Unions should be flattened:
@@ -67,17 +66,18 @@ const MAX_RECURSION_DEPTH: usize = 16;
 #[allow(clippy::struct_field_names)]
 pub struct TypeCtx {
     class_definitions: IndexMap<DefKey, ClassDefinition>,
-    enum_definitions: Arc<IndexMap<DefKey, EnumDefinition>>,
+    enum_definitions: IndexMap<DefKey, EnumDefinition>,
     type_alias_definitions: HashMap<DefKey, SapTy>,
     sap_parseable: HashMap<DefKey, bool>,
 }
 impl TypeCtx {
-    /// The reason `enum_definitions` is an `Arc` while the others aren't is that
-    /// we do transformations on the others (so we don't need arc) but we don't
-    /// need to transform `enum_definitions` so we can just share it.
-    pub fn new(
-        class_definitions: &IndexMap<DefKey, ClassDefinition>,
-        enum_definitions: Arc<IndexMap<DefKey, EnumDefinition>>,
+    /// Builds the context from definitions that are closed under reference:
+    /// every name a class field or an alias body refers to is present too (the
+    /// declarations a type reaches on the heap are such a set). A missing name
+    /// makes the types that refer to it unparsable.
+    pub fn new<'d>(
+        class_definitions: impl IntoIterator<Item = (&'d DefKey, &'d ClassDefinition)>,
+        enum_definitions: IndexMap<DefKey, EnumDefinition>,
         type_alias_definitions: &HashMap<DefKey, SapTy>,
     ) -> Self {
         // todo: we can hold more of this by reference probably
@@ -94,7 +94,7 @@ impl TypeCtx {
             })
             .collect();
         let class_definitions: IndexMap<DefKey, ClassDefinition> = class_definitions
-            .iter()
+            .into_iter()
             .map(|(k, v)| {
                 let fields = v.fields.iter().map(|field| {
                     let mut field = field.clone();
@@ -150,22 +150,6 @@ impl TypeCtx {
         }
     }
 
-    pub fn from_sys_op_context<E: Send + Sync + 'static>(
-        ctx: &::sys_types::SysOpContext<E>,
-    ) -> Self {
-        let type_alias_definitions = ctx
-            .type_alias_definitions
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty.clone()))
-            .collect();
-
-        Self::new(
-            &ctx.class_definitions,
-            ctx.enum_definitions.clone(),
-            &type_alias_definitions,
-        )
-    }
-
     /// Normalize a runtime-materialized parse target before converting it to
     /// the SAP model. Generic substitution happens after [`TypeCtx::new`] has
     /// simplified the declared class and alias definitions, so it can create a
@@ -208,7 +192,7 @@ impl TypeCtx {
                 TyResolved::Class(self.convert_class(name, cls)?),
             )?;
         }
-        for (name, enum_def) in &*self.enum_definitions {
+        for (name, enum_def) in &self.enum_definitions {
             add(
                 &mut types,
                 name,

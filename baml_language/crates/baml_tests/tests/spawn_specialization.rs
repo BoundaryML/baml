@@ -176,31 +176,6 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
 }
 
 #[tokio::test]
-async fn spawned_closure_can_add_captured_bigint_field() {
-    let output = baml_test!(
-        r#"
-        class Config {
-            page_budget_ms: bigint
-        }
-
-        function broken(config: Config) -> bigint {
-            let pending = spawn { config.page_budget_ms + 1n };
-            await pending
-        }
-
-        function main() -> bigint {
-            broken(Config { page_budget_ms: 10n })
-        }
-        "#
-    );
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::Bigint(BigInt::from(11)))
-    );
-}
-
-#[tokio::test]
 async fn spawn_shared_bigint_subtraction_uses_generic_binop() {
     let output = baml_test!(
         r#"

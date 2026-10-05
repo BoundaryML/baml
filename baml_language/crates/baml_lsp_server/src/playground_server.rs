@@ -2,10 +2,10 @@
 //!
 //! Two modes controlled by environment variables:
 //!
-//! **Dev mode** (`BAML_PLAYGROUND_DEV_PORT` is set):
+//! **Dev mode** (`DEV_BAML_PLAYGROUND_PORT` is set):
 //!   Reverse-proxies all non-API requests to a local Vite dev server.
 //!
-//! **Prod mode** (`BAML_PLAYGROUND_DIR` is set):
+//! **Prod mode** (`DEV_BAML_PLAYGROUND_DIR` is set):
 //!   Serves pre-built static assets with SPA fallback.
 
 use std::{
@@ -61,7 +61,7 @@ use crate::{
 };
 
 #[derive(Debug, thiserror::Error)]
-#[error("Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR")]
+#[error("Playground server requires either DEV_BAML_PLAYGROUND_PORT or DEV_BAML_PLAYGROUND_DIR")]
 pub struct PlaygroundNotConfigured;
 
 fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
@@ -813,13 +813,13 @@ fn build_router(
     let fallback = if let Some(dir) = playground_dir_override {
         tracing::info!("Playground: serving static files from {}", dir.display());
         static_router(dir.to_string_lossy().into_owned())
-    } else if let Ok(dev_port) = std::env::var("BAML_PLAYGROUND_DEV_PORT") {
+    } else if let Some(dev_port) = baml_env::raw_var("DEV_BAML_PLAYGROUND_PORT") {
         let dev_port: u16 = dev_port
             .parse()
-            .map_err(|e| anyhow::anyhow!("Invalid BAML_PLAYGROUND_DEV_PORT: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Invalid DEV_BAML_PLAYGROUND_PORT: {e}"))?;
         tracing::info!("Playground: dev proxy -> http://localhost:{dev_port}");
         dev_proxy_router(format!("http://localhost:{dev_port}"))
-    } else if let Ok(dir) = std::env::var("BAML_PLAYGROUND_DIR") {
+    } else if let Some(dir) = baml_env::raw_var("DEV_BAML_PLAYGROUND_DIR") {
         tracing::info!("Playground: serving static files from {dir}");
         static_router(dir)
     } else {
@@ -1414,7 +1414,7 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
         // Only these keys are worth blocking a run to prompt for; everything
         // else resolves to unset without stalling. See `playground_env`.
         state.env_state.set_declared_keys(&names);
-        let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
+        let vars = collect_referenced_env_vars(&names, baml_env::raw_var);
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()
         {

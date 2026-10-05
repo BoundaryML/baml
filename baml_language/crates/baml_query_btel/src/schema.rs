@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 16;
+pub const SCHEMA_VERSION: i64 = 17;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -55,6 +55,7 @@ CREATE TABLE recording (
   process_started_ns INTEGER,
   -- CAS id of the project's sources, a map<path, content> snapshot.
   source_cas BLOB,
+  initial_context_cas BLOB,
   -- How the process ended, when this recording's end marker says so:
   -- 1 success, 2 error, 3 panicked.
   process_end_status INTEGER,
@@ -66,6 +67,7 @@ CREATE TABLE recording (
   folded INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 CREATE INDEX recording_by_process ON recording (process_id);
+CREATE INDEX recording_by_context ON recording (initial_context_cas);
 
 -- Identity is resolved once per snapshot. State 0 retries changed files on refresh,
 -- 1 is resolved (including a null identity), 2 is invalid context data.

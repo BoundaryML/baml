@@ -376,9 +376,11 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
         }
     }
     if (content.length() == 0) {
-        throw ai.errors.ParseFailed {
+        throw ai.errors.InvalidResponse {
             provider: "openai-images",
-            raw_output: "the images response contained no image data in data[]",
+            message: "the images response contained no image data in data[]",
+            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            status_code: null,
         }
     }
     let usage: ai.events.Usage? = if let reported: OaImagesUsage = resp.usage {

@@ -185,6 +185,17 @@ pub fn ensure_version_compatible(expected_version: &str) -> Result<(), String> {
     }
 }
 
+/// Env var that lets a locally built library load under a bridge stamped with
+/// a different toolchain version. Dev-only; the ABI table check is never
+/// skipped.
+pub const SKIP_VERSION_CHECK_ENV: &str = "DEV_BAML_BRIDGE_SKIP_VERSION_CHECK";
+
+fn skip_version_check() -> Result<bool, String> {
+    baml_env::bool_var(SKIP_VERSION_CHECK_ENV)
+        .map(|skip| skip.unwrap_or(false))
+        .map_err(|error| error.to_string())
+}
+
 pub fn register_bridge(info: BridgeInfo) -> Result<&'static BridgeInfo, String> {
     if info.bridge_runtime_name.is_empty() {
         return Err("BAML bridge runtime name must not be empty".to_string());
@@ -192,7 +203,7 @@ pub fn register_bridge(info: BridgeInfo) -> Result<&'static BridgeInfo, String> 
     if info.bridge_runtime_version.is_empty() {
         return Err("BAML bridge runtime version must not be empty".to_string());
     }
-    if ensure_version_compatible(&info.toolchain_version).is_err() {
+    if !skip_version_check()? && ensure_version_compatible(&info.toolchain_version).is_err() {
         return Err(format!(
             "BAML {} {} cannot use native runtime {} because it requires BAML toolchain {}",
             info.bridge_runtime_name,

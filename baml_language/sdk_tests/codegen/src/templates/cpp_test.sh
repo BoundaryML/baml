@@ -24,10 +24,9 @@ case "$MODE" in
 esac
 
 # Build trees live under target/ (not generated/, which codegen wipes), so
-# the FetchContent protobuf build survives regeneration. The compile and
-# run checks execute concurrently under nextest; each mode gets its own
-# build tree so they cannot clobber each other mid-execution. The pinned
-# protobuf/abseil *clones* are shared read-only from setup.sh.
+# the FetchContent protobuf build survives regeneration. Nextest uses run
+# mode once per fixture; keep compile mode in its own tree for manual checks.
+# The pinned protobuf/abseil clones are shared read-only from setup.sh.
 BUILD_DIR="$WORKSPACE_ROOT/target/cpp-fixture-builds/$FIXTURE-$MODE"
 
 HAVE_TESTS=0
@@ -79,7 +78,7 @@ cmake -S "$BUILD_DIR" -B "$BUILD_DIR/build" \
     -DFETCHCONTENT_SOURCE_DIR_ABSL="$WORKSPACE_ROOT/target/cpp-absl-src" \
     > "$BUILD_DIR/configure.log" 2>&1 ||
     { cat "$BUILD_DIR/configure.log" >&2 && exit 1; }
-# Bounded parallelism: up to eight fixture builds run concurrently under
+# Bounded parallelism: multiple fixture builds can run concurrently under
 # nextest, and a bare `-j` (unbounded with Makefiles) can starve the CI
 # runner to death. Quarter of the cores per build tree, minimum 2.
 NPROC="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
@@ -98,11 +97,11 @@ if [ "$MODE" = run ]; then
         MSYS* | MINGW* | CYGWIN*) RUNTIME_LIB="bridge_cffi.dll" ;;
         *) RUNTIME_LIB="libbridge_cffi.so" ;;
     esac
-    BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
+    BAML_BRIDGE_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
         "$BUILD_DIR/build/fixture_tests"
     if [ "$HAVE_CXX20_TESTS" = 1 ]; then
         if [ -x "$BUILD_DIR/build/fixture_tests_cxx20" ]; then
-            BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
+            BAML_BRIDGE_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
                 "$BUILD_DIR/build/fixture_tests_cxx20"
         else
             echo "note: toolchain lacks C++20; tests/cxx20 skipped"

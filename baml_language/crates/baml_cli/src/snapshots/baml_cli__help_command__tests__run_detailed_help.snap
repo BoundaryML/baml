@@ -58,6 +58,14 @@ Target options:
           Use `-e @file` to read an expression from a file or `-e -` for standard input. Mutually
           exclusive with `<TARGET>` and `--function`.
 
+      --context <SOURCE>
+          Set process launch context from JSON.
+
+          Accepts `distinct_id` (string or null) and `metadata` (a map whose values are strings,
+          integers, floats, or booleans).
+
+          Use `--context @file` to read JSON from a file or `--context -` for standard input.
+
       --list
           List runnable targets (scripts, functions)
 
@@ -82,6 +90,15 @@ Run output options:
 
       --include-generated
           Include compiler-synthesized functions in `--list` output
+
+Shutdown options:
+      --shutdown-timeout <DURATION>
+          Wait at most this long at exit for in-flight calls and background futures.
+
+          Accepts durations such as `500ms`, `15s` or `2m`; `none` waits forever. Ctrl+C still
+          cancels immediately.
+
+          [default: 15s]
 
 Global options:
   -q, --quiet...

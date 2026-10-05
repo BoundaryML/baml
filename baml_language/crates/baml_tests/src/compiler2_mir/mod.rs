@@ -23,6 +23,25 @@ fn make_db() -> ProjectDatabase {
     db
 }
 
+/// The rendered MIR of the user function `name`, out of [`render_mir`]'s output.
+fn function_mir<'a>(output: &'a str, name: &str) -> &'a str {
+    output
+        .split(&format!("fn user.{name}("))
+        .nth(1)
+        .and_then(|tail| tail.split("\nfn ").next())
+        .unwrap_or_else(|| panic!("no MIR for `user.{name}`:\n{output}"))
+}
+
+/// Whether a line of MIR is a structural type test against a list or map type:
+/// an `is_type` (which renders the type, `int[]`) or a `narrow_bind` (which
+/// renders the type test, `List(Int)`).
+fn is_structural_container_test(line: &str) -> bool {
+    (line.contains("is_type(") || line.contains("narrow_bind"))
+        && ["[]", "map<", "List(", "Map {"]
+            .iter()
+            .any(|spelling| line.contains(spelling))
+}
+
 /// Lower all functions in a file to MIR and pretty-print them.
 fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
     // Dump in source order (by declaration span) — intrinsic and
@@ -567,16 +586,72 @@ fn generic_class_destructure_field_projection_uses_instantiated_type() {
     // Scope the check to `user.f`'s body — auto-derived `to_json` /
     // `from_json` methods on `Box<T>` legitimately have `void` locals
     // because T isn't instantiated in the auto-derive body.
-    let f_body = output
-        .split("fn user.f(")
-        .nth(1)
-        .and_then(|tail| tail.split("\nfn ").next())
-        .unwrap_or(&output);
+    let f_body = function_mir(&output, "f");
     assert!(
         !f_body
             .lines()
             .any(|line| line.trim_start().starts_with("let _") && line.contains(": void")),
         "generic class destructure lowered a projected field through a void local:\n{output}"
+    );
+}
+
+/// `json[]` and `map<string, json>` are a `json` scrutinee's only list and map
+/// members, so arms of exactly those types test only the runtime tag, also
+/// when they bind the value (a narrowing arm tests a snapshot of the
+/// scrutinee).
+#[test]
+fn json_container_arms_test_only_the_runtime_tag() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+        function size(value: json) -> int {
+            match (value) {
+                let object: map<string, json> => object.length(),
+                let items: json[] => items.length(),
+                _ => 0,
+            }
+        }
+        "#,
+    );
+    let output = render_mir(&db, file);
+    let body = function_mir(&output, "size");
+    assert!(
+        body.contains(", MAP);") && body.contains(", LIST);"),
+        "the json container arms do not test the runtime tag:\n{body}"
+    );
+    assert!(
+        !body.lines().any(is_structural_container_test),
+        "a json container arm kept its structural test:\n{body}"
+    );
+}
+
+/// An element-specific arm stays element-precise on a `json` scrutinee: its
+/// list member is `json[]`, so the `LIST` tag alone cannot prove `int[]`.
+#[test]
+fn json_scrutinee_keeps_element_specific_arms_structural() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+        function ints(value: json) -> int {
+            match (value) {
+                let xs: int[] => xs.length(),
+                _ => 0,
+            }
+        }
+        "#,
+    );
+    let output = render_mir(&db, file);
+    let body = function_mir(&output, "ints");
+    assert!(
+        body.lines().any(|line| is_structural_container_test(line)
+            && (line.contains("int[]") || line.contains("List(Int)"))),
+        "the `int[]` arm lost its structural test:\n{body}"
+    );
+    assert!(
+        !body.contains(", LIST);"),
+        "the `int[]` arm tests only the LIST tag:\n{body}"
     );
 }
 

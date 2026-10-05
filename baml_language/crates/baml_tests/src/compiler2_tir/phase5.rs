@@ -172,8 +172,10 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
 
 // ── 5.1: package_items contains expected types and functions ─────────────────
 
+// These checks share one stdlib inventory so nextest does not rebuild it in
+// nine separate processes. Keep the assertions on names and HIR structure here.
 #[test]
-fn baml_package_contains_array_and_map() {
+fn baml_package_inventory() {
     let db = make_db();
     let baml_pkg = baml_compiler2_hir::package::spelling(&db)
         .root(&Name::new("baml"))
@@ -209,16 +211,8 @@ fn baml_package_contains_array_and_map() {
             "{name} should be in baml.media namespace"
         );
     }
-}
 
-#[test]
-fn baml_package_contains_http_namespace() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
-
+    // HTTP types.
     let http_ns_path = vec![Name::new("http")];
     let http_ns = items.namespaces.get(&http_ns_path);
     assert!(http_ns.is_some(), "baml.http namespace should exist");
@@ -232,15 +226,6 @@ fn baml_package_contains_http_namespace() {
         http_ns.types.contains_key(&Name::new("Response")),
         "Response should be in baml.http namespace"
     );
-}
-
-#[test]
-fn baml_package_contains_env_functions() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
 
     // baml.env has the low-level get ($rust_io_function)
     let env_ns_path = vec![Name::new("env")];
@@ -255,15 +240,6 @@ fn baml_package_contains_env_functions() {
         env_ns.values.contains_key(&Name::new("get_or_panic")),
         "baml.env.get_or_panic should be in baml.env namespace"
     );
-}
-
-#[test]
-fn baml_package_has_sys_but_not_math() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
 
     // B-712 removed the `baml.math` namespace entirely: its aggregates moved to
     // `float[]` methods (`sum`/`mean`/`median`) and `trunc` became the private
@@ -293,19 +269,8 @@ fn baml_package_has_sys_but_not_math() {
         sys_ns.values.contains_key(&Name::new("panic")),
         "baml.sys.panic should exist"
     );
-}
 
-// ── 5.2: generic_params tests ────────────────────────────────────────────────
-
-#[test]
-fn array_has_generic_param_t() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
-
-    let root_ns = items.namespaces.get(&vec![]).unwrap();
+    // Array generics and methods.
     let array_def = root_ns.types.get(&Name::new("Array")).unwrap();
     let Definition::Class(class_loc) = array_def else {
         panic!("Array should be a class");
@@ -318,70 +283,6 @@ fn array_has_generic_param_t() {
         vec![Name::new("T")],
         "Array should have generic_params [T]"
     );
-}
-
-#[test]
-fn map_has_generic_params_k_v() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
-
-    let root_ns = items.namespaces.get(&vec![]).unwrap();
-    let map_def = root_ns.types.get(&Name::new("Map")).unwrap();
-    let Definition::Class(class_loc) = map_def else {
-        panic!("Map should be a class");
-    };
-
-    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
-
-    assert_eq!(
-        generic_param_names(&class_data.generic_params),
-        vec![Name::new("K"), Name::new("V")],
-        "Map should have generic_params [K, V]"
-    );
-}
-
-#[test]
-fn string_class_has_no_generic_params() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
-
-    let root_ns = items.namespaces.get(&vec![]).unwrap();
-    let string_def = root_ns.types.get(&Name::new("String")).unwrap();
-    let Definition::Class(class_loc) = string_def else {
-        panic!("String should be a class");
-    };
-
-    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
-
-    assert!(
-        class_data.generic_params.is_empty(),
-        "String should have no generic params"
-    );
-}
-
-// ── 5.3: Array method lookup ──────────────────────────────────────────────────
-
-#[test]
-fn array_has_expected_methods() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
-
-    let root_ns = items.namespaces.get(&vec![]).unwrap();
-    let array_def = root_ns.types.get(&Name::new("Array")).unwrap();
-    let Definition::Class(class_loc) = array_def else {
-        panic!("Array should be a class");
-    };
-
-    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
@@ -402,23 +303,20 @@ fn array_has_expected_methods() {
             "Array should have method {m}, got: {method_names:?}"
         );
     }
-}
 
-#[test]
-fn map_has_expected_methods() {
-    let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
-        .unwrap();
-    let items = package_items(&db, baml_pkg);
-
-    let root_ns = items.namespaces.get(&vec![]).unwrap();
+    // Map generics and methods.
     let map_def = root_ns.types.get(&Name::new("Map")).unwrap();
     let Definition::Class(class_loc) = map_def else {
         panic!("Map should be a class");
     };
 
     let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
+
+    assert_eq!(
+        generic_param_names(&class_data.generic_params),
+        vec![Name::new("K"), Name::new("V")],
+        "Map should have generic_params [K, V]"
+    );
 
     let method_names: Vec<String> = class_data
         .methods
@@ -437,6 +335,19 @@ fn map_has_expected_methods() {
             "Map should have method {m}, got: {method_names:?}"
         );
     }
+
+    // String has no generics.
+    let string_def = root_ns.types.get(&Name::new("String")).unwrap();
+    let Definition::Class(class_loc) = string_def else {
+        panic!("String should be a class");
+    };
+
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
+
+    assert!(
+        class_data.generic_params.is_empty(),
+        "String should have no generic params"
+    );
 }
 
 // ── 5.4: Snapshot test of baml package items ─────────────────────────────────

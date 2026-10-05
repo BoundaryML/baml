@@ -14,8 +14,7 @@ fn cli(cwd: &Path, home: &Path) -> Command {
         .env("USERPROFILE", home)
         .env("BAML_HOME", home.join(".baml"))
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
-        .env("BAML_CACHE_DIR", home.join("cache"))
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env_remove("BOUNDARY_URL")
         .env_remove("BOUNDARY_API_KEY")
         .env("BAML_TELEMETRY", "medium");
@@ -141,6 +140,9 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
     common::write_project(&source, "function main() -> int { 9 }\n");
     common::write_project(&launch, "function main() -> int { 42 }\n");
     let home = home(temp.path());
+    // This case checks recording roots, not cold-cache behavior. Reuse the
+    // stdlib compiled by other CLI integration tests.
+    common::share_build_cache(&home.join(".baml"));
     for (index, target) in [vec!["main"], vec!["-f", "main"]].iter().enumerate() {
         let binary = temp.path().join(format!("packed-{index}"));
         run(

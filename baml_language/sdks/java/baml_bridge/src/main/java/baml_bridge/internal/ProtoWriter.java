@@ -266,7 +266,12 @@ public final class ProtoWriter {
             return encodeInboundValue(inner, selected, true);
         }
         BamlType exactNodeType = selectedArm ? contextualType : null;
-        baml_bridge.BamlHandle returnedHandle = baml_bridge.BamlFfi.returnedClosureHandle(value);
+        // Only a JDK proxy can be a returned BAML closure. Checking first keeps
+        // pure encoding from initializing BamlFfi, which loads the native library.
+        baml_bridge.BamlHandle returnedHandle =
+                value != null && java.lang.reflect.Proxy.isProxyClass(value.getClass())
+                        ? baml_bridge.BamlFfi.returnedClosureHandle(value)
+                        : null;
         if (returnedHandle != null) {
             return encodeInboundValue(returnedHandle, contextualType, selectedArm);
         }

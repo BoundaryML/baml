@@ -12,8 +12,7 @@ class RunStarted {
 /// client lowers the turn at its position in the journal.
 class UserMessage {
     content: root.content.Block[],
-    /// Per-message provider directives, carried verbatim like
-    /// `root.PromptMessage.metadata` (Anthropic `cache_control`, for example).
+    /// Merged verbatim into inference requests' `message` objects.
     metadata: map<string, baml.json.json>,
 
     function new(text: string) -> UserMessage {
@@ -141,6 +140,9 @@ class LLMCall {
     selected: bool,
     // Streams, only when capture_wire.
     sse_responses: SseEventRecord[]?,
+    /// The typed failure on an unsuccessful retry/fallback leg. Retains
+    /// diagnostics even when there is no HTTP status or HTTP response.
+    failure: (root.errors.Failure | baml.errors.Timeout)?,
 }
 
 type Event = RunStarted

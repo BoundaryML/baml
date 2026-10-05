@@ -81,6 +81,16 @@ jobs:
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
 
+      # cargo run builds this binary before performing the measurements.
+      # Preserve it even if the check fails so reporting needs no Rust setup.
+      - name: "Upload size-gate reporter"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-size-gate-reporter
+          path: baml_language/target/debug/cargo-size-gate
+          if-no-files-found: ignore
+
       - name: "Upload size-gate report"
         if: always()
         uses: actions/upload-artifact@v7
@@ -411,67 +421,27 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: useblacksmith/checkout@v1
-        with:
-          persist-credentials: false
-
       - name: "Download size-gate reports"
+        continue-on-error: true
         uses: actions/download-artifact@v8
         with:
           pattern: size-gate-*
           merge-multiple: true
           path: reports
 
-      # Build cargo-size-gate from source. We share the linux size-gate
-      # job's rust-cache (same shared-key, same runner OS), so this is a
-      # near-instant cache hit in the common case — no upload/download of
-      # the binary required.
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
+      # Same Linux runner image as the producer. Artifact downloads do not
+      # preserve executable permissions, so restore them before aggregation.
+      - name: "Download size-gate reporter"
+        continue-on-error: true
+        uses: actions/download-artifact@v8
         with:
-          install_args: "sccache direnv"
-
-      - name: "Verify sccache"
-        run: sccache --version
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "linux-cargo"
-          # The linux size-gate job already populated this cache; we just
-          # consume it here.
-          save-if: false
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
-
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
-
-      - name: "Build cargo-size-gate"
-        run: cargo build -p cargo-size-gate
-        working-directory: baml_language
-
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
+          name: cargo-size-gate-reporter
+          path: reporter
 
       - name: "Compose unified report"
         env:
           RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          BIN: baml_language/target/debug/cargo-size-gate
+          BIN: reporter/cargo-size-gate
           RESULT_LINUX: ${{ needs.size-gate-linux.result }}
           # RESULT_MACOS: ${{ needs.size-gate-macos.result }}
           # RESULT_WINDOWS: ${{ needs.size-gate-windows.result }}
@@ -499,10 +469,16 @@ jobs:
           done
 
           # Aggregate the JSONs we did receive.
-          "$BIN" size-gate agg \
-            "${json_files[@]}" \
-            --run-url "$RUN_URL" \
-            > unified-report.md || true
+          if [ -f "$BIN" ]; then
+            chmod +x "$BIN"
+            "$BIN" size-gate agg \
+              "${json_files[@]}" \
+              --run-url "$RUN_URL" \
+              > unified-report.md || true
+          else
+            echo "::warning::Size-gate reporter unavailable; Linux job did not upload the binary."
+            echo "> ⚠️ Size-gate reporter unavailable. See the Linux measurement job for build failures." > unified-report.md
+          fi
 
           # Prepend a "Missing platforms" callout if any expected platform
           # didn't produce a report. This fires whether the platform's job

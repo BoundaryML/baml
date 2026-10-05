@@ -235,7 +235,7 @@ impl ActiveInvocation {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
-    use baml_db::testing::compile_source;
+    use baml_test_support::compile_source;
     use sys_native::SysOpsExt;
 
     use super::*;

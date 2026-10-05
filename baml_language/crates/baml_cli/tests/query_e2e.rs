@@ -24,7 +24,7 @@ fn cli(project: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Ou
     Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         .args(args)
         .current_dir(project)
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env_remove("BAML_TELEMETRY")
         .envs(envs.iter().copied())
         .output()
@@ -55,6 +55,64 @@ fn leaf_calls(json: &Value) -> i64 {
 /// Every completed invocation per function, over each ended `baml run`.
 const STATS: &str =
     "SELECT function_name, SUM(invocation_count) FROM profiler GROUP BY function_name";
+
+#[test]
+fn launch_context_reaches_processes_roots_and_futures_without_nested_overrides() {
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("baml_src")).unwrap();
+    std::fs::write(
+        project.path().join("baml_src/main.baml"),
+        include_str!("../../baml_tests/baml_src/ns_trace_context/query.baml"),
+    )
+    .unwrap();
+    let context = r#"{"distinct_id":"launch-user","metadata":{"root":"launch","count":42,"ratio":1.5,"enabled":true}}"#;
+    std::fs::write(project.path().join("context.json"), context).unwrap();
+    for source in [context, "@context.json"] {
+        let output = cli(
+            project.path(),
+            &["run", "launch_context_main", "--context", source],
+            &[("BAML_TELEMETRY", "high")],
+        );
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "16");
+    }
+    let (code, processes) = query(
+        project.path(),
+        "SELECT context_distinct_id, context_metadata['root'], context_metadata['count'],
+          context_metadata['ratio'], context_metadata['enabled'] FROM processes
+         WHERE context_distinct_id = 'launch-user'",
+    );
+    assert_eq!(code, 0, "{processes}");
+    assert_eq!(
+        processes["rows"],
+        serde_json::json!([
+            ["launch-user", "launch", 42, 1.5, true],
+            ["launch-user", "launch", 42, 1.5, true]
+        ])
+    );
+    let (code, spans) = query(
+        project.path(),
+        "SELECT context_distinct_id, COUNT(*) FROM spans
+         WHERE span_name IN ('user.launch_context_leaf', 'user.query_context_leaf')
+         GROUP BY context_distinct_id ORDER BY context_distinct_id",
+    );
+    assert_eq!(code, 0, "{spans}");
+    assert_eq!(
+        spans["rows"],
+        serde_json::json!([["launch-user", 4], ["query-user", 4]])
+    );
+    let (code, future) = query(
+        project.path(),
+        "SELECT COUNT(*) FROM spans WHERE span_type = 'future'
+         AND context_distinct_id = 'launch-user' AND context_metadata['root'] = 'launch'",
+    );
+    assert_eq!(code, 0, "{future}");
+    assert_eq!(future["rows"], serde_json::json!([[4]]));
+}
 
 #[test]
 fn fresh_query_processes_index_once_and_then_only_new_files() {
@@ -168,7 +226,7 @@ fn schema_invalid_sql_and_stdin() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         .args(["query", "--format", "jsonl", "-"])
         .current_dir(project.path())
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()

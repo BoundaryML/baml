@@ -4,6 +4,7 @@
 //! Compare its 0-iteration and 100k-iteration medians to derive dispatch cost
 //! with the compile constant cancelled; `static_stdlib_dispatch` is the same
 //! loop compiled into the host image and uses the same delta calculation.
+#![allow(clippy::disallowed_methods)]
 
 use std::{path::Path, sync::Arc};
 

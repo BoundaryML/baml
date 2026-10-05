@@ -54,8 +54,7 @@ impl TelemetryPolicies {
         }
     }
 
-    /// Whether network spans record request and response bodies; see
-    /// `btel_settings::network::bodies_from_env`. On by default.
+    /// Whether network spans record request and response bodies. On by default.
     #[must_use]
     pub fn with_http_bodies(mut self, http_bodies: bool) -> Self {
         self.http_bodies = http_bodies;

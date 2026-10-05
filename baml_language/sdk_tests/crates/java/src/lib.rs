@@ -1,4 +1,4 @@
-//! Java sdk-test crate. A `javac` and a `junit` gate per fixture, declared
+//! Java sdk-test crate. One compile-and-JUnit gate per fixture, declared
 //! below and expanded by `sdk_test_harness_runner::java::test_suite!`.
 //!
 //! A gate marked `later` is emitted `#[ignore]`d: the generated Java API is
@@ -17,9 +17,9 @@
 //! the generated `fixture_manifest::matches_corpus` test enforces it.
 #[cfg(test)]
 sdk_test_harness_runner::java::test_suite! {
-    fixture docstrings_etc   { javac: on,    junit: on    }
-    fixture function_calls   { javac: on,    junit: on    }
-    fixture llm_functions    { javac: on,    junit: on    }
-    fixture type_shapes      { javac: on,    junit: on    }
-    fixture unsupported_only { javac: later, junit: later }
+    fixture docstrings_etc   { junit: on    }
+    fixture function_calls   { junit: on    }
+    fixture llm_functions    { junit: on    }
+    fixture type_shapes      { junit: on    }
+    fixture unsupported_only { junit: later }
 }

@@ -38,14 +38,12 @@ fn forced_color_malformed_diagnostic_fragment_falls_back_and_reports() {
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
 
     let output = Command::new(cli)
-        .args(["check", "--from", "."])
+        .args(["--color", "always", "check", "--from", "."])
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_COLOR", "always")
         .env("BAML_HOME", home)
-        .env("BAML_NO_BYTECODE_CACHE", "1")
-        .env("BAML_OUTPUT_PRESET", "human")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("BAML_BUILD_CACHE", "false")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .output()
         .expect("run baml check");
     let stderr = String::from_utf8_lossy(&output.stderr);

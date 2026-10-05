@@ -39,7 +39,7 @@ use text_size::TextRange;
 // ── OutlineItem ───────────────────────────────────────────────────────────────
 
 /// A single symbol in the file's outline, with optional children.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct OutlineItem {
     /// The symbol's name as it appears in source.
     pub name: String,
@@ -242,9 +242,6 @@ fn enum_children<'db>(
         })
         .collect()
 }
-
-// `Vec<OutlineItem>` satisfies `salsa::Update` because `Vec<T>` implements it
-// when `T: salsa::Update`, and `OutlineItem` derives it above.
 
 #[cfg(test)]
 mod tests {

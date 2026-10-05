@@ -2542,9 +2542,9 @@ pub fn generate_io_adapter(
 
     let paths = CodegenPaths::external(structs_path);
 
-    let adapter_struct = emit_adapter_struct(io_builtins);
+    let adapter_struct = emit_adapter_struct();
     let adapter_impl = emit_adapter_impl(io_builtins, &tree, &class_ns_map, &paths);
-    let build_fn = emit_build_runtime_io(io_builtins);
+    let build_fn = emit_build_runtime_io();
     let resolve_fn = emit_resolve_helper();
 
     let tokens = quote! {
@@ -2576,21 +2576,16 @@ fn emit_resolve_helper() -> TokenStream {
     }
 }
 
-fn emit_adapter_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
-    let fields: Vec<TokenStream> = io_builtins
-        .iter()
-        .map(|b| {
-            let field_ident = format_ident!("{}", runtime_io_method_name(b));
-            quote! { #field_ident: SysOpFn }
-        })
-        .collect();
-
+fn emit_adapter_struct() -> TokenStream {
     quote! {
         pub struct RuntimeIoAdapter {
             heap: Arc<BexHeap>,
             permit_manager: Arc<HeapPermitManager>,
             ctx: SysOpContext,
-            #(#fields,)*
+            // An adapter is created for every sys-op, even one that never calls
+            // back into RuntimeIo. Share the table instead of cloning every
+            // operation's Arc on each construction and dropping them afterward.
+            sys_ops: Arc<SysOps>,
         }
 
         /// SAFETY: We never catch panics across the `SysOpFn` boundaries.
@@ -2657,9 +2652,10 @@ fn emit_adapter_impl(
         }
 
         let result_conversion = emit_result_conversion(builtin, tree, class_ns_map, paths);
+        let sys_ops_field = format_ident!("{}", builtin.fn_name);
 
         let body = quote! {
-            let fn_ptr = self.#method_ident.clone();
+            let fn_ptr = self.sys_ops.#sys_ops_field.clone();
             let heap = self.heap.clone();
             let permit_manager = self.permit_manager.clone();
             let ctx = self.ctx.clone();
@@ -2879,19 +2875,10 @@ fn emit_result_conversion_for_ty(
     }
 }
 
-fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
-    let field_inits: Vec<TokenStream> = io_builtins
-        .iter()
-        .map(|b| {
-            let field_ident = format_ident!("{}", runtime_io_method_name(b));
-            let sys_ops_field = format_ident!("{}", b.fn_name);
-            quote! { #field_ident: sys_ops.#sys_ops_field.clone() }
-        })
-        .collect();
-
+fn emit_build_runtime_io() -> TokenStream {
     quote! {
         pub fn build_runtime_io(
-            sys_ops: &SysOps,
+            sys_ops: &Arc<SysOps>,
             heap: &Arc<BexHeap>,
             permit_manager: &Arc<HeapPermitManager>,
             ctx: &SysOpContext,
@@ -2900,7 +2887,7 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 heap: heap.clone(),
                 permit_manager: permit_manager.clone(),
                 ctx: ctx.clone(),
-                #(#field_inits,)*
+                sys_ops: Arc::clone(sys_ops),
             })
         }
     }

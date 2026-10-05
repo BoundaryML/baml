@@ -66,6 +66,7 @@
 //!
 //! Safety is ensured by the permit/guard coordination system described above.
 
+#![warn(clippy::disallowed_methods)]
 #![allow(unsafe_code)]
 
 mod bex_work;
@@ -342,6 +343,91 @@ pub struct UserFunctionInfo {
     /// `baml run --list` can annotate LLM functions inline without
     /// reaching back into the heap to inspect `body_meta`.
     pub is_llm: bool,
+}
+
+/// Callable signatures available without loading a VM or running package init.
+pub struct UserFunctionCatalog {
+    // Keep non-user names in resolution so ambiguous suffixes match the engine.
+    functions: HashMap<String, Option<UserFunctionInfo>>,
+}
+
+impl UserFunctionCatalog {
+    /// Read callable signatures without loading the program.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a signature names no matching declared type in
+    /// the program, rather than erasing that signature to `unknown`.
+    pub fn from_program(program: &bex_vm_types::Program) -> Result<Self, EngineError> {
+        Ok(Self {
+            functions: program
+                .rendered_callables()
+                .into_iter()
+                .map(|(name, callable)| {
+                    let info = match &program.objects[callable.object] {
+                        Object::Function(func)
+                            if func.origin.is_user_callable()
+                                && matches!(func.kind, bex_vm_types::FunctionKind::Bytecode) =>
+                        {
+                            Some(UserFunctionInfo::from_function(&name, func, &mut |ty| {
+                                crate::conversion::to_wire_ty_with(ty, &mut |head| {
+                                    program.type_head_name(head)
+                                })
+                            })?)
+                        }
+                        _ => None,
+                    };
+                    Ok((name, info))
+                })
+                .collect::<Result<_, EngineError>>()?,
+        })
+    }
+
+    pub fn find_user_function(&self, name: &str) -> Option<UserFunctionInfo> {
+        let (_, info) = sys_types::resolve_name(&self.functions, name).found()?;
+        info.clone()
+    }
+
+    pub fn user_functions(&self) -> Vec<UserFunctionInfo> {
+        self.functions.values().filter_map(Clone::clone).collect()
+    }
+}
+
+impl UserFunctionInfo {
+    fn from_function<E>(
+        name: &str,
+        func: &bex_vm_types::Function,
+        to_wire_ty: &mut impl FnMut(&bex_vm_types::RuntimeTy) -> Result<RuntimeTy, E>,
+    ) -> Result<Self, E> {
+        let display_param_types = if func.display_param_types.len() == func.param_names.len() {
+            func.display_param_types.clone()
+        } else {
+            func.param_types.iter().map(ToString::to_string).collect()
+        };
+        let display_return_type = if func.display_return_type.is_empty() {
+            func.return_type.to_string()
+        } else {
+            func.display_return_type.clone()
+        };
+        Ok(Self {
+            qualified_name: name.to_string(),
+            display_name: name.strip_prefix("user.").unwrap_or(name).to_string(),
+            origin: func.origin,
+            param_names: func.param_names.clone(),
+            param_types: func
+                .param_types
+                .iter()
+                .map(|t| to_wire_ty(&declared_symbolic(t, func)))
+                .collect::<Result<_, E>>()?,
+            param_has_default: func.param_has_default.clone(),
+            return_type: to_wire_ty(&declared_symbolic(&func.return_type, func))?,
+            display_type_params: func.display_type_params.clone(),
+            display_param_types,
+            display_return_type,
+            source_file: func.source_file.clone(),
+            is_llm: matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. })),
+        })
+    }
 }
 
 pub struct BexCallResult {
@@ -770,6 +856,31 @@ pub fn cancelled_unhandled_throw() -> EngineError {
 // BexEngine
 // ============================================================================
 
+/// Construction options applied before package initialization.
+pub struct EngineConfig {
+    /// Immutable context inherited by package initialization and root calls.
+    /// Recorded engines in one OS process must receive the same launch context:
+    /// recordings share a process identity and queries expose one process row.
+    /// The caller owns this invariant; engines do not coordinate global state.
+    pub launch_context: btel_types::context::Context,
+    pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+    pub clock_mode: btel_clock::ClockMode,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub recording: Option<TelemetryRecording>,
+}
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            launch_context: btel_types::context::Context::default(),
+            runtime_compiler: None,
+            clock_mode: btel_settings::clock::DEFAULT_MODE,
+            #[cfg(not(target_arch = "wasm32"))]
+            recording: None,
+        }
+    }
+}
+
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
@@ -837,6 +948,7 @@ pub struct BexEngine {
     #[cfg(test)]
     completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
+    launch_context: btel_types::context::Context,
     /// A panic escaped some root call: how a host that fails because of it
     /// reports the process's end.
     root_panicked: std::sync::atomic::AtomicBool,
@@ -1558,15 +1670,7 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
-        Self::build(
-            bytecode_program,
-            sys_ops,
-            argv,
-            None,
-            btel_settings::clock::DEFAULT_MODE,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
-        )
+        Self::new_with_config(bytecode_program, sys_ops, argv, EngineConfig::default())
     }
 
     /// Construct an engine with runtime compilation enabled by an injected
@@ -1577,14 +1681,14 @@ impl BexEngine {
         argv: Vec<String>,
         runtime_compiler: Arc<dyn RuntimeCompiler>,
     ) -> Result<Self, EngineError> {
-        Self::build(
+        Self::new_with_config(
             bytecode_program,
             sys_ops,
             argv,
-            Some(runtime_compiler),
-            btel_settings::clock::DEFAULT_MODE,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
+            EngineConfig {
+                runtime_compiler: Some(runtime_compiler),
+                ..EngineConfig::default()
+            },
         )
     }
 
@@ -1596,14 +1700,15 @@ impl BexEngine {
         runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
         clock_mode: btel_clock::ClockMode,
     ) -> Result<Self, EngineError> {
-        Self::build(
+        Self::new_with_config(
             bytecode_program,
             sys_ops,
             argv,
-            runtime_compiler,
-            clock_mode,
-            #[cfg(not(target_arch = "wasm32"))]
-            None,
+            EngineConfig {
+                runtime_compiler,
+                clock_mode,
+                ..EngineConfig::default()
+            },
         )
     }
 
@@ -1616,14 +1721,20 @@ impl BexEngine {
             .map(|telemetry| telemetry.clock.reset_after_restore())
     }
 
-    fn build(
+    /// Configure launch context and telemetry before package initialization.
+    pub fn new_with_config(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
-        runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
-        clock_mode: btel_clock::ClockMode,
-        #[cfg(not(target_arch = "wasm32"))] recording: Option<TelemetryRecording>,
+        config: EngineConfig,
     ) -> Result<Self, EngineError> {
+        let EngineConfig {
+            launch_context,
+            runtime_compiler,
+            clock_mode,
+            #[cfg(not(target_arch = "wasm32"))]
+            recording,
+        } = config;
         let auto_telemetry_level = btel_settings::mode::from_env()
             .map_err(|error| EngineError::Other(error.to_string()))?;
         raise_fd_soft_limit();
@@ -1788,6 +1899,7 @@ impl BexEngine {
                     Some(recording) => recording.start(
                         source_snapshot_id.map(|id| id.0),
                         Arc::new(heap.static_function_metadata()),
+                        &launch_context,
                     )?,
                     None => (
                         btel_processor::TelemetryRuntime::new().map_err(|error| {
@@ -1796,13 +1908,10 @@ impl BexEngine {
                         None,
                     ),
                 };
-                let http_bodies = btel_settings::network::bodies_from_env()
-                    .map_err(|error| EngineError::Other(error.to_string()))?;
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(
-                        bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
-                            .with_http_bodies(http_bodies),
-                    ),
+                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
+                        auto_level,
+                    )),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]
@@ -1843,6 +1952,7 @@ impl BexEngine {
                     EngineTelemetry::new_root(telemetry.as_ref()),
                     trace_scope,
                 );
+                vm.set_root_context(launch_context.clone());
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
                 // bytecode, but events and GC safepoints may still yield.
@@ -1978,6 +2088,7 @@ impl BexEngine {
             #[cfg(test)]
             completed_threads: std::sync::Mutex::new(Vec::new()),
             process_euid,
+            launch_context,
             root_panicked: std::sync::atomic::AtomicBool::new(false),
             engine_id,
             invocation_clock: invocation::InvocationClock::new(),
@@ -2135,43 +2246,7 @@ impl BexEngine {
             if let Object::Class(cls) = obj {
                 defs.insert(
                     ::sys_types::DefKey::new(cls.type_tag, cls.name.clone()),
-                    sys_types::ClassDefinition {
-                        name: cls.name.display_name().to_string(),
-                        description: cls.description.clone(),
-                        docstring: cls.docstring.clone(),
-                        alias: cls.alias.clone(),
-                        stream_done: cls.stream_done,
-                        fields: cls
-                            .fields
-                            .iter()
-                            .map(|f| sys_types::ClassFieldDefinition {
-                                name: f.name.clone(),
-                                field_type: f
-                                    .field_type
-                                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-                                    .unwrap_or_else(|_| {
-                                        unreachable!(
-                                            "compiled class fields name compiled declarations"
-                                        )
-                                    }),
-                                field_template: Some(
-                                    f.field_template
-                                        .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-                                        .unwrap_or_else(|_| {
-                                            unreachable!(
-                                                "compiled class fields name compiled declarations"
-                                            )
-                                        }),
-                                ),
-                                description: f.description.clone(),
-                                docstring: f.docstring.clone(),
-                                alias: f.alias.clone(),
-                                skip: f.skip,
-                                stream_done: f.stream_done,
-                                must_exist: f.must_exist,
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::class_definition(cls),
                 );
             }
         }
@@ -2189,109 +2264,18 @@ impl BexEngine {
             if let Object::Enum(enm) = obj {
                 defs.insert(
                     ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
-                    sys_types::EnumDefinition {
-                        name: enm.name.display_name().to_string(),
-                        description: enm.description.clone(),
-                        docstring: enm.docstring.clone(),
-                        alias: enm.alias.clone(),
-                        variants: enm
-                            .variants
-                            .iter()
-                            .filter(|v| !v.skip)
-                            .map(|v| sys_types::EnumVariantDefinition {
-                                name: v.name.clone(),
-                                description: v.description.clone(),
-                                docstring: v.docstring.clone(),
-                                alias: v.alias.clone(),
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::enum_definition(enm),
                 );
             }
         }
         defs
     }
 
-    /// Carry a declaration's field type onto the sys-op lane.
-    ///
-    /// Total by invariant: a live declaration's heads are resolved pointers to
-    /// declarations, so each yields its identity and its own name.
-    fn lane_ty(ty: &bex_vm_types::RuntimeTy) -> ::sys_types::SapTy {
-        ty.try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-            .unwrap_or_else(|head| {
-                unreachable!("a live declaration's field names a declaration: {head}")
-            })
-    }
-
-    /// [`Self::lane_ty`] for a field's symbolic template, same totality
-    /// argument: every head a live declaration's template names is resolved.
-    fn lane_template(template: &bex_vm_types::TyTemplate) -> ::sys_types::SapTyTemplate {
-        template
-            .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-            .unwrap_or_else(|head| {
-                unreachable!("a live declaration's field template names a declaration: {head}")
-            })
-    }
-
-    fn enum_definition(enm: &bex_vm_types::Enum) -> sys_types::EnumDefinition {
-        sys_types::EnumDefinition {
-            name: enm.name.display_name().to_string(),
-            description: enm.description.clone(),
-            docstring: enm.docstring.clone(),
-            alias: enm.alias.clone(),
-            variants: enm
-                .variants
-                .iter()
-                .filter(|variant| !variant.skip)
-                .map(|variant| sys_types::EnumVariantDefinition {
-                    name: variant.name.clone(),
-                    description: variant.description.clone(),
-                    docstring: variant.docstring.clone(),
-                    alias: variant.alias.clone(),
-                })
-                .collect(),
-        }
-    }
-
-    fn class_definition(
-        class: &bex_vm_types::Class,
-        _permit: bex_heap::PermitProof<'_>,
-    ) -> sys_types::ClassDefinition {
-        sys_types::ClassDefinition {
-            name: class.name.display_name().to_string(),
-            description: class.description.clone(),
-            docstring: class.docstring.clone(),
-            alias: class.alias.clone(),
-            stream_done: class.stream_done,
-            fields: class
-                .fields
-                .iter()
-                .filter(|field| !field.skip)
-                .map(|field| sys_types::ClassFieldDefinition {
-                    name: field.name.clone(),
-                    field_type: Self::lane_ty(&field.field_type),
-                    field_template: Some(Self::lane_template(&field.field_template)),
-                    description: field.description.clone(),
-                    docstring: field.docstring.clone(),
-                    alias: field.alias.clone(),
-                    skip: field.skip,
-                    stream_done: field.stream_done,
-                    must_exist: field.must_exist,
-                })
-                .collect(),
-        }
-    }
-
     /// Gather runtime definitions from the type descriptors passed directly
     /// to a sys-op. Type arguments are lowered as ordinary `Object::Type`
     /// arguments, so this is the last synchronous chokepoint before the permit
     /// is released for async work.
-    fn runtime_type_overlay(
-        &self,
-        vm: &BexVm,
-        args: &[Value],
-        permit: bex_heap::PermitProof<'_>,
-    ) -> RuntimeTypeOverlay {
+    fn runtime_type_overlay(&self, vm: &BexVm, args: &[Value]) -> RuntimeTypeOverlay {
         let mut overlay = RuntimeTypeOverlay::default();
         for value in args {
             let Some(type_ptr) = value.as_object_ptr() else {
@@ -2312,7 +2296,7 @@ impl BexEngine {
                 overlay
                     .class_definitions
                     .entry(head.clone())
-                    .or_insert_with(|| Self::class_definition(class, permit));
+                    .or_insert_with(|| bex_vm::definitions::class_definition(class));
                 overlay
                     .class_handles
                     .entry(head)
@@ -2326,7 +2310,7 @@ impl BexEngine {
                 overlay
                     .enum_definitions
                     .entry(head.clone())
-                    .or_insert_with(|| Self::enum_definition(enm));
+                    .or_insert_with(|| bex_vm::definitions::enum_definition(enm));
                 overlay
                     .enum_handles
                     .entry(head)
@@ -2386,28 +2370,7 @@ impl BexEngine {
                 };
                 classes.insert(
                     ::sys_types::DefKey::new(class.type_tag, class.name.clone()),
-                    sys_types::ClassDefinition {
-                        name: class.name.display_name().to_string(),
-                        description: class.description.clone(),
-                        docstring: class.docstring.clone(),
-                        alias: class.alias.clone(),
-                        stream_done: class.stream_done,
-                        fields: class
-                            .fields
-                            .iter()
-                            .map(|field| sys_types::ClassFieldDefinition {
-                                name: field.name.clone(),
-                                field_type: Self::lane_ty(&field.field_type),
-                                field_template: Some(Self::lane_template(&field.field_template)),
-                                description: field.description.clone(),
-                                docstring: field.docstring.clone(),
-                                alias: field.alias.clone(),
-                                skip: field.skip,
-                                stream_done: field.stream_done,
-                                must_exist: field.must_exist,
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::class_definition(class),
                 );
                 named_owners.insert(class.name.to_string(), handle.clone());
             }
@@ -2417,23 +2380,7 @@ impl BexEngine {
                 };
                 enums.insert(
                     ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
-                    sys_types::EnumDefinition {
-                        name: enm.name.display_name().to_string(),
-                        description: enm.description.clone(),
-                        docstring: enm.docstring.clone(),
-                        alias: enm.alias.clone(),
-                        variants: enm
-                            .variants
-                            .iter()
-                            .filter(|variant| !variant.skip)
-                            .map(|variant| sys_types::EnumVariantDefinition {
-                                name: variant.name.clone(),
-                                description: variant.description.clone(),
-                                docstring: variant.docstring.clone(),
-                                alias: variant.alias.clone(),
-                            })
-                            .collect(),
-                    },
+                    bex_vm::definitions::enum_definition(enm),
                 );
                 named_owners.insert(enm.name.to_string(), handle.clone());
             }
@@ -3600,6 +3547,7 @@ impl BexEngine {
         // permit's `RootHaver` is the thread (delegating to the inner VM).
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
+        vm.set_root_context(self.launch_context.clone());
         vm.thread_id = self.next_bex_thread_id().0;
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
@@ -4186,7 +4134,7 @@ impl BexEngine {
         reservation: Option<Arc<bex_vm_types::trace::ReservedSpanData>>,
         host_environment: u64,
     ) -> Result<(), EngineError> {
-        let mut context = btel_types::context::Context::default();
+        let mut context = self.launch_context.clone();
         if let Some(inherited) = inherited {
             if inherited.engine_id != self.engine_id {
                 return Err(EngineError::TypeMismatch {
@@ -4566,47 +4514,15 @@ impl BexEngine {
                 }
                 let obj = unsafe { ptr.get() };
                 match obj {
-                    Object::Function(func) if func.origin.is_user_callable() => {
-                        let display_name = name.strip_prefix("user.").unwrap_or(name).to_string();
-                        let is_llm =
-                            matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. }));
-                        let display_param_types =
-                            if func.display_param_types.len() == func.param_names.len() {
-                                func.display_param_types.clone()
-                            } else {
-                                func.param_types.iter().map(ToString::to_string).collect()
-                            };
-                        let display_return_type = if func.display_return_type.is_empty() {
-                            func.return_type.to_string()
-                        } else {
-                            func.display_return_type.clone()
-                        };
-                        Some(UserFunctionInfo {
-                            qualified_name: name.clone(),
-                            display_name,
-                            origin: func.origin,
-                            param_names: func.param_names.clone(),
-                            param_types: func
-                                .param_types
-                                .iter()
-                                .map(|t| {
-                                    crate::conversion::to_wire_ty(&declared_symbolic(t, func))
-                                        .unwrap_or_else(|_| RuntimeTy::unknown())
-                                })
-                                .collect(),
-                            param_has_default: func.param_has_default.clone(),
-                            return_type: crate::conversion::to_wire_ty(&declared_symbolic(
-                                &func.return_type,
-                                func,
-                            ))
-                            .unwrap_or_else(|_| RuntimeTy::unknown()),
-                            display_type_params: func.display_type_params.clone(),
-                            display_param_types,
-                            display_return_type,
-                            source_file: func.source_file.clone(),
-                            is_llm,
+                    Object::Function(func) if func.origin.is_user_callable() => Some(
+                        UserFunctionInfo::from_function(name, func, &mut |ty| {
+                            Ok::<_, std::convert::Infallible>(
+                                crate::conversion::to_wire_ty(ty)
+                                    .unwrap_or_else(|_| RuntimeTy::unknown()),
+                            )
                         })
-                    }
+                        .unwrap_or_else(|never| match never {}),
+                    ),
                     _ => None,
                 }
             })
@@ -5771,8 +5687,7 @@ impl BexEngine {
                         // runs its sys-ops to completion.
                         let op_cancel = thread.sysop_cancel.clone();
 
-                        let runtime_type_overlay =
-                            self.runtime_type_overlay(&thread.vm, &args, thread.proof());
+                        let runtime_type_overlay = self.runtime_type_overlay(&thread.vm, &args);
                         let runtime_compile_request = match operation {
                             SysOp::ReflectPackageCompile => {
                                 Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
@@ -7501,7 +7416,7 @@ mod trace_scope_tests {
         use sys_native::SysOpsExt;
 
         const CHILD: &str = "BAML_TEST_TRACE_SCOPE_CHILD";
-        if std::env::var_os(CHILD).is_none() {
+        if !baml_env::has_var(CHILD) {
             for mode in ["off", "medium"] {
                 let output = std::process::Command::new(std::env::current_exe().unwrap())
                     .args([
@@ -7530,7 +7445,7 @@ mod trace_scope_tests {
             );
             let scope = recording.id();
             let engine = BexEngine::new_with_telemetry_recording(
-                baml_db::testing::compile_source(""),
+                baml_test_support::compile_source(""),
                 Arc::new(sys_native::SysOps::native()),
                 vec![],
                 None,
@@ -7540,7 +7455,7 @@ mod trace_scope_tests {
             .unwrap();
             assert_eq!(engine.trace_scope, scope);
             let other = BexEngine::new(
-                baml_db::testing::compile_source(""),
+                baml_test_support::compile_source(""),
                 Arc::new(sys_native::SysOps::native()),
                 vec![],
             )
@@ -7620,7 +7535,7 @@ mod concurrent_tests {
 
         let engine = Arc::new(
             BexEngine::new(
-                baml_db::testing::compile_source("function Main() -> int { 1 }"),
+                baml_test_support::compile_source("function Main() -> int { 1 }"),
                 Arc::new(sys_native::SysOps::native()),
                 vec![],
             )
@@ -7672,7 +7587,7 @@ mod concurrent_tests {
     async fn test_concurrent_calls_safe() {
         // Note: This requires a test BAML program to be available
         // Skip if test infrastructure not set up
-        if std::env::var("BAML_TEST_CONCURRENT").is_err() {
+        if !baml_env::has_var("BAML_TEST_CONCURRENT") {
             return;
         }
 
@@ -7712,7 +7627,7 @@ mod concurrent_tests {
 mod type_identity_tests {
     use std::sync::Arc;
 
-    use baml_db::testing::compile_source;
+    use baml_test_support::compile_source;
     use bex_heap::{HeapPermit, TlabHolder};
     use bex_vm_types::Object;
     use sys_native::SysOpsExt;

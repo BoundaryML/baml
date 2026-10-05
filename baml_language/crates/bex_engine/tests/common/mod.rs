@@ -21,7 +21,9 @@
 
 use std::{io::Write, sync::Arc};
 
-use baml_db::testing::compile_source;
+// Keep the stdlib sources and identical bytecode, but reuse the build-time
+// prefix instead of recompiling it in every isolated nextest process.
+use baml_test_support::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
 use bex_vm_types::{Program, PromptAst as BuiltinPromptAst, PromptAstSimple};

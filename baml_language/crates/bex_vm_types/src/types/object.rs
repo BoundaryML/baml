@@ -134,6 +134,18 @@ const _: () = assert!(
 );
 
 impl Object {
+    /// The qualified name of a nominal declaration, if it has one.
+    #[must_use]
+    pub fn declaration_name(&self) -> Option<&baml_type::TypeName> {
+        match self {
+            Object::Class(class) => class.name.declared(),
+            Object::Enum(enm) => enm.name.declared(),
+            Object::Interface(interface) => Some(&interface.name),
+            Object::TypeAlias(alias) => Some(&alias.name),
+            _ => None,
+        }
+    }
+
     /// The tag under which this object can head a nominal type, or `None`
     /// when it is not a declaration.
     #[must_use]

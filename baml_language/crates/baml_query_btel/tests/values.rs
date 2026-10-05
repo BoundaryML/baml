@@ -285,10 +285,10 @@ async fn large_strings_are_stored_once_and_queries_read_through_them() {
         ]
     );
     // Four distinct 32 KiB strings, each stored once, and per call a small
-    // inputs root and a small output root that name them.
+    // inputs root and a small output root that name them, plus launch context.
     let sizes = blob_sizes(project.path());
     let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
-    assert_eq!(small.len(), 4, "{sizes:?}");
+    assert_eq!(small.len(), 5, "{sizes:?}");
     assert_eq!(large.len(), 4, "{sizes:?}");
     assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
 
@@ -350,11 +350,11 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
         ]
     );
     // Four distinct images, each stored once; per call a small inputs root
-    // that names them, and one output both calls share.
+    // that names them, one output both calls share, and launch context.
     let sizes = blob_sizes(project.path());
     let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
     assert_eq!(large.len(), 4, "{sizes:?}");
-    assert_eq!(small.len(), 3, "{sizes:?}");
+    assert_eq!(small.len(), 4, "{sizes:?}");
     assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
 
     let mut index = index(project.path());

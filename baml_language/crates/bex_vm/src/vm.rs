@@ -669,7 +669,7 @@ pub(crate) mod tests {
 
         // Producer events and compiler origin are invisible to a BAML test.
         // Use real compiled lambdas and both first/resumed native callbacks.
-        let mut program = baml_db::testing::compile_source(
+        let mut program = baml_test_support::compile_source(
             r#"
             function Invoke(f: (bool) -> int) -> int { f(false) }
             function F(again: bool) -> int { if (again) { Invoke(F) } else { 7 } }
@@ -774,7 +774,7 @@ pub(crate) mod tests {
                 } else {
                     "await f"
                 };
-                let program = baml_db::testing::compile_source(&format!(
+                let program = baml_test_support::compile_source(&format!(
                     "function Main(f: baml.future.Future<int, never>) -> int {{ {body} }}"
                 ));
                 let entry = program.rendered_callables()["user.Main"].object.raw();
@@ -4950,6 +4950,38 @@ impl BexVm {
         }
     }
 
+    /// Clone the `Arc` out of the `$rust_type` field `field` of the instance
+    /// `holder`, so a native can keep using the payload while it borrows
+    /// `&mut BexVm` to allocate.
+    pub fn rust_data_field<T: Send + Sync + 'static>(
+        &self,
+        holder: &Value,
+        field: usize,
+    ) -> Result<Arc<T>, VmInternalError> {
+        let handle = self.as_instance(holder)?.load_field(field);
+        let Some(ptr) = handle.as_object_ptr() else {
+            return Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::RustData),
+                got: self.type_of(&handle),
+            });
+        };
+        match self.get_object(ptr) {
+            Object::RustData(arc) => {
+                let got = arc.as_ref().type_id();
+                arc.clone()
+                    .downcast::<T>()
+                    .map_err(|_| VmInternalError::RustTypeError {
+                        expected: TypeId::of::<T>(),
+                        got,
+                    })
+            }
+            _ => Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::RustData),
+                got: self.type_of(&handle),
+            }),
+        }
+    }
+
     /// Extract an `&Instance` from a `Value` carrying a heap-object pointer.
     ///
     /// Used by generated glue code to construct `view::` structs.
@@ -7377,7 +7409,7 @@ impl BexVm {
         // exec (for example, to spawn a child) does not necessarily release
         // the heap permit. The checker resets its own counter when it polls.
 
-        // BAML_KPERF: read PMCs around this exec() on the current worker thread.
+        // DEV_BAML_VM_KPERF: read PMCs around this exec() on the current worker thread.
         let kp = crate::kperf::enabled();
         let (kp_start, ops_start) = if kp {
             (crate::kperf::exec_start(), self.op_count)

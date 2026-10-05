@@ -380,8 +380,8 @@ public final class BamlRuntime: @unchecked Sendable {
         #if DEBUG
         // Legal but rude: a sync BAML call on the main thread beachballs
         // the UI for the duration of the engine call.
-        if Thread.isMainThread, ProcessInfo.processInfo.environment["BAML_ALLOW_MAIN_THREAD_SYNC"] == nil {
-            print("warning: sync BAML call `\(fqn)` on the main thread — prefer the async form (set BAML_ALLOW_MAIN_THREAD_SYNC=1 to silence)")
+        if Thread.isMainThread, ProcessInfo.processInfo.environment["BAML_BRIDGE_SWIFT_ALLOW_MAIN_THREAD_SYNC"] == nil {
+            print("warning: sync BAML call `\(fqn)` on the main thread — prefer the async form (set BAML_BRIDGE_SWIFT_ALLOW_MAIN_THREAD_SYNC=1 to silence)")
         }
         #endif
     }

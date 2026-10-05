@@ -24,6 +24,6 @@ To run one provider, replace `-i root.llm_providers::live::` with `-i root.llm_p
 
 Vertex Gemini resolves the project from the service account document or `GOOGLE_CLOUD_PROJECT`. Vertex Model Garden uses `VERTEX_ACCESS_TOKEN` when set; otherwise it mints an OAuth token from the service account. The Llama endpoint is in `us-east5` and requires `max_tokens`. Mantle uses its `/v1` endpoint for gpt-oss.
 
-`BedrockHaiku45Cache` checks `${cache(...)}` end to end: it sends a prompt with a fresh ~12,000-token prefix and a cache delimiter twice, and asserts that the first call reports the prefix as written to the cache and the second reports the same number of tokens read from it.
+`BedrockHaiku45Cache` checks `${cache()}` end to end: it sends a prompt with a fresh ~12,000-token prefix and a cache delimiter with no args, for which the Bedrock client supplies its default `cachePoint`, twice, and asserts that the first call reports the prefix as written to the cache and the second reports the same number of tokens read from it.
 
 The default client on `HelloWorld` supplies the function spec only: every test overrides it with the corresponding provider client, so no OpenAI API key is needed. The group lives in `baml_tests` under `testset "live" with testing.Sequential()`. The default `offline` profile excludes it before any credentials are read; the command above selects only this six-model group. Missing credentials fail a selected test rather than silently reducing coverage.

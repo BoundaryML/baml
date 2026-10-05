@@ -10,10 +10,11 @@
 
 mod common;
 
-use std::path::Path;
+use std::{cell::RefCell, path::Path};
 
 use baml_compiler2_emit::{OptLevel, emit_package};
-use baml_db::{ProjectDatabase, compile_program};
+use baml_db::{ProjectDatabase, compile_program, compile_program_with, program::PackageCache};
+use baml_linker_types::EmittedPackage;
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{Object, Program};
 use common::{A_BAML, B_BAML, C_BAML, build_db};
@@ -127,9 +128,11 @@ fn assert_identity_tables(label: &str, program: &Program) {
 }
 
 fn assert_program_links(label: &str, build: impl Fn() -> ProjectDatabase) {
+    // Source/type queries are independent of the optimization level; MIR and
+    // emission remain keyed by `opt`. Check every level without redoing setup.
+    let db = build();
     for opt in LEVELS {
         let label = format!("{label}@{opt:?}");
-        let db = build();
         let linked = compile_program(&db, package(&db), opt)
             .unwrap_or_else(|e| panic!("{label}: compile_program: {e}"));
         assert_identity_tables(&label, &linked);
@@ -202,6 +205,17 @@ struct EmittedBytes {
     tail: Vec<u8>,
 }
 
+impl EmittedBytes {
+    fn new(name: String, emitted: &EmittedPackage) -> Self {
+        Self {
+            name,
+            unit: borsh::to_vec(&emitted.unit).expect("serialize unit"),
+            record: borsh::to_vec(&emitted.record).expect("serialize record"),
+            tail: borsh::to_vec(&emitted.tail).expect("serialize tail"),
+        }
+    }
+}
+
 /// Every package of the program, emitted on its own.
 fn emitted_bytes(db: &ProjectDatabase, opt: OptLevel) -> Vec<EmittedBytes> {
     let spelling = baml_compiler2_hir::package::spelling(db);
@@ -211,52 +225,87 @@ fn emitted_bytes(db: &ProjectDatabase, opt: OptLevel) -> Vec<EmittedBytes> {
         .filter(|root| !root.files(db).is_empty())
         .map(|root| {
             let emitted = emit_package(db, root, opt).expect("emit_package");
-            EmittedBytes {
-                name: spelling.of(root).to_string(),
-                unit: borsh::to_vec(&emitted.unit).expect("serialize unit"),
-                record: borsh::to_vec(&emitted.record).expect("serialize record"),
-                tail: borsh::to_vec(&emitted.tail).expect("serialize tail"),
-            }
+            EmittedBytes::new(spelling.of(root).to_string(), &emitted)
         })
         .collect()
 }
 
-/// Emission is deterministic: two databases from identical sources emit
-/// identical bytes, package by package.
-#[test]
-fn baml_src_emission_is_deterministic() {
-    let sources = baml_src_sources();
-    let first = emitted_bytes(&baml_src_db(&sources), OptLevel::Two);
-    let second = emitted_bytes(&baml_src_db(&sources), OptLevel::Two);
-    assert!(first == second, "emit_package is nondeterministic");
+/// Observe each freshly emitted package without ever serving a cache hit.
+/// This captures the exact artifacts used by the linker, in world-root order,
+/// without a second emission or a second compiler database.
+#[derive(Default)]
+struct RecordingCache(RefCell<Vec<EmittedBytes>>);
+
+impl PackageCache for RecordingCache {
+    fn load(
+        &self,
+        _db: &dyn baml_compiler2_hir::Db,
+        _root: baml_db::SourceRoot,
+        _opt: OptLevel,
+    ) -> Option<EmittedPackage> {
+        None
+    }
+
+    fn store(
+        &self,
+        db: &dyn baml_compiler2_hir::Db,
+        root: baml_db::SourceRoot,
+        _opt: OptLevel,
+        emitted: &EmittedPackage,
+    ) {
+        // Match emitted_bytes: empty roots have no cacheable source unit.
+        if !root.files(db).is_empty() {
+            let name = baml_compiler2_hir::package::spelling(db)
+                .of(root)
+                .to_string();
+            self.0.borrow_mut().push(EmittedBytes::new(name, emitted));
+        }
+    }
 }
 
-/// The parallel code pass reproduces the serial one: import ordinals interned
-/// per item and remapped at the merge land where the serial pass interns
-/// them.
-#[test]
-fn parallel_program_is_byte_identical_to_serial() {
-    let sources = baml_src_sources();
-    let run_with = |threads: usize| {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .build()
-            .expect("build rayon pool")
-            .install(|| {
-                let db = baml_src_db(&sources);
-                let program =
-                    compile_program(&db, package(&db), OptLevel::Two).expect("compile_program");
-                borsh::to_vec(&program).expect("serialize program")
-            })
-    };
-    let serial = run_with(1);
-    let parallel = run_with(4);
-    assert!(
-        serial == parallel,
-        "parallel emit diverges from serial: lengths {} vs {}",
-        serial.len(),
-        parallel.len()
+/// Capture the linked image and every cacheable package artifact from the
+/// same compilation. The recorder always misses, so both comparisons cover
+/// fresh emission while sharing the package outputs between the assertions.
+fn corpus_emission(db: &ProjectDatabase) -> (Vec<EmittedBytes>, Vec<u8>) {
+    let cache = RecordingCache::default();
+    let program =
+        compile_program_with(db, package(db), OptLevel::Two, &cache).expect("compile_program");
+    let program = borsh::to_vec(&program).expect("serialize program");
+    let packages = cache.0.into_inner();
+    let spelling = baml_compiler2_hir::package::spelling(db);
+    let expected_packages: Vec<_> = baml_compiler2_hir::package::world_roots(db, package(db))
+        .iter()
+        .copied()
+        .filter(|root| !root.files(db).is_empty())
+        .map(|root| spelling.of(root).to_string())
+        .collect();
+    assert_eq!(
+        packages
+            .iter()
+            .map(|package| &package.name)
+            .collect::<Vec<_>>(),
+        expected_packages.iter().collect::<Vec<_>>(),
+        "the recorder must capture every source package in world-root order"
     );
+    (packages, program)
+}
+
+fn assert_program_bytes_identical(label: &str, first: &[u8], second: &[u8]) {
+    if first != second {
+        let diff_at = first
+            .iter()
+            .zip(second)
+            .position(|(a, b)| a != b)
+            .unwrap_or_else(|| first.len().min(second.len()));
+        panic!(
+            "{label}: lengths {} vs {}, first difference at byte {diff_at} \
+             (context: {:02x?} vs {:02x?})",
+            first.len(),
+            second.len(),
+            &first[diff_at.saturating_sub(8)..(diff_at + 8).min(first.len())],
+            &second[diff_at.saturating_sub(8)..(diff_at + 8).min(second.len())],
+        );
+    }
 }
 
 /// Every package emitted in a rayon pool of `threads` threads: one thread
@@ -304,16 +353,42 @@ fn diverging_parts(serial: &[EmittedBytes], parallel: &[EmittedBytes]) -> Vec<St
 /// A unit is what the cache stores and serves, so the parallel code pass
 /// must reproduce the serial pass's UNITS, not only the program they link
 /// into: a unit that differs by thread count is a cache entry that differs
-/// by core count under one key.
+/// by core count under one key. A second fresh parallel compilation also pins
+/// determinism at the same thread count, sharing the first result between the
+/// two comparisons instead of compiling the whole corpus four times.
 #[test]
-fn parallel_units_are_byte_identical_to_serial() {
+fn parallel_units_and_program_are_byte_identical_to_serial() {
     let sources = baml_src_sources();
-    let serial = emitted_bytes_with(1, || baml_src_db(&sources));
-    let parallel = emitted_bytes_with(4, || baml_src_db(&sources));
-    let diverging = diverging_parts(&serial, &parallel);
+    // Explicit pools exercise both emitter paths even on a single-core runner.
+    let run_with = |threads: usize| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .expect("build rayon pool")
+            .install(|| corpus_emission(&baml_src_db(&sources)))
+    };
+    let (serial_units, serial_program) = run_with(1);
+    let (parallel_units, parallel_program) = run_with(4);
+    let diverging = diverging_parts(&serial_units, &parallel_units);
     assert!(
         diverging.is_empty(),
         "the parallel code pass diverges from the serial one: {diverging:?}"
+    );
+    assert_program_bytes_identical(
+        "parallel emit diverges from serial",
+        &serial_program,
+        &parallel_program,
+    );
+    let (repeated_units, repeated_program) = run_with(4);
+    let diverging = diverging_parts(&parallel_units, &repeated_units);
+    assert!(
+        diverging.is_empty(),
+        "nondeterministic package artifacts: {diverging:?}"
+    );
+    assert_program_bytes_identical(
+        "nondeterministic linked program",
+        &parallel_program,
+        &repeated_program,
     );
 }
 

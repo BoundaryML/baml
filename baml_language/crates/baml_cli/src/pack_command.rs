@@ -303,9 +303,6 @@ impl PackArgs {
         let needs_format_hint = session.needs_format_hint();
 
         if let Some(program) = session.try_cached_program() {
-            crate::bytecode_cache::cache_debug(format_args!(
-                "pack: bytecode cache hit — skipping compile"
-            ));
             return Ok((session.db, program, needs_format_hint));
         }
 
@@ -593,24 +590,14 @@ fn host_binary_name(target_triple: &str) -> String {
 }
 
 fn download_host_binary_from_release(target: &str, host_name: &str) -> Result<Vec<u8>> {
-    let version = release_version_for_download();
-    let fetcher = baml_release::Fetcher::default_for(
-        baml_release::ReleaseSpec {
-            version,
-            target: target.to_string(),
-        },
-        baml_release::Product::Toolchain,
-    );
+    let fetcher = baml_release::Fetcher::from_toolchain_manifest(baml_release::ReleaseSpec {
+        version: release_version().to_string(),
+        target: target.to_string(),
+    })
+    .map_err(|err| anyhow!("{err}"))?;
     fetcher
         .fetch_binary(host_name)
         .map_err(|err| anyhow!("{err}"))
-}
-
-fn release_version_for_download() -> String {
-    std::env::var("BAML_PACK_HOST_RELEASE_VERSION")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| release_version().to_string())
 }
 
 fn release_host_target_triple() -> Result<&'static str> {
@@ -688,7 +675,7 @@ mod tests {
     /// namespaced functions (`ns_<name>/foo.baml` → `<name>.foo`). Single
     /// `engine_from_source` can't express folder-based namespaces.
     fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
-        let snapshot = baml_db::testing::compile_multi_file(files);
+        let snapshot = baml_tests::stdlib_prefix::compile_multi_file(files);
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("BexEngine::new should succeed")
     }

@@ -60,9 +60,9 @@ jobs:
             before: |
               echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
           - target: aarch64-apple-darwin
-            host: macos-14
+            host: macos-15
           - target: x86_64-apple-darwin
-            host: macos-14
+            host: macos-15
           - target: x86_64-pc-windows-msvc
             host: windows-latest
           - target: aarch64-pc-windows-msvc

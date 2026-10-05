@@ -38,8 +38,8 @@ use crate::{
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
 /// packages, since process start. A warm compile that seeds the cached stdlib
 /// interface should leave this at zero; a cold compile bumps it up once per
-/// stdlib package. Exposed for the `BAML_CACHE_DEBUG` warm-run counter and the
-/// seeding tests — not part of any compile result.
+/// stdlib package. Exposed for the seeding tests — not part of any compile
+/// result.
 static STDLIB_HONEST_DERIVATIONS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
@@ -538,61 +538,12 @@ pub struct PackageResolutionContext<'db> {
     pub own: baml_base::SourceRoot,
 }
 
-// ── Salsa Update impls ─────────────────────────────────────────────────────
+// ── Salsa retention safety ─────────────────────────────────────────────────────
 
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl<N: Head> salsa::Update for PackageInterface<N> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FileInterfaceFragment {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for PackageResolutionContext<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old_ref = unsafe { &*old_pointer };
-        if *old_ref == new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for PackageResolutionContext<'_> {}
 
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
@@ -1393,7 +1344,7 @@ pub fn export_interface(
 /// closure: a change anywhere in it that alters what `root`'s dependents
 /// compile against changes this value, and a change that leaves it alone
 /// cannot change what they compile to.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn interface_digest(db: &dyn baml_compiler2_hir::Db, root: baml_base::SourceRoot) -> Digest {
     use sha2::Digest as _;
     if let Some(bytes) = root.interface(db) {
@@ -2270,26 +2221,6 @@ fn try_map_throw_sets<N: Head, M: Head, E>(
             ))
         })
         .collect()
-}
-
-// Safety: comparison-based replacement for Salsa early cutoff.
-#[allow(unsafe_code)]
-unsafe impl<N: Head> salsa::Update for FunctionThrowSets<N> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: pointer is Salsa-owned and valid for replacement.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
 }
 
 impl<N: Head> FunctionThrowSets<N> {

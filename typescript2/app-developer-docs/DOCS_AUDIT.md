@@ -109,9 +109,9 @@ From this directory, with the production-mode site running:
 python3 scripts/audit-site.py \
   --base-url http://localhost:3099 \
   --output /tmp/docs-audit.json
-BAML_VERSION=canary pnpm docs:snippets:validate
-BAML_VERSION=canary pnpm docs:book:validate
-BAML_VERSION=canary baml test --project content/code/projects/vision
+BAML_TOOLCHAIN=canary pnpm docs:snippets:validate
+BAML_TOOLCHAIN=canary pnpm docs:book:validate
+BAML_TOOLCHAIN=canary baml test --project content/code/projects/vision
 pnpm test
 pnpm lint
 pnpm typecheck

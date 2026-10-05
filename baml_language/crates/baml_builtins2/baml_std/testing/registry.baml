@@ -41,15 +41,7 @@ class TestCollector {
         } else {
             self.prefix + "::" + name
         };
-        let count = 0;
-        let hash_prefix = full_name + "#";
-        for (let t in self.tests) {
-            if (t.name == full_name || t.name.starts_with(hash_prefix)) {
-                count += 1
-            } else {
-                null
-            }
-        }
+        let count = root._test_name_count(self.tests, full_name);
         let final_name = if (count > 0) {
             full_name + "#" + string.from(count + 1)
         } else {
@@ -74,15 +66,7 @@ class TestCollector {
         } else {
             self.prefix + "::" + name
         };
-        let count = 0;
-        let hash_prefix = full_name + "#";
-        for (let ts in self.testsets) {
-            if (ts.name == full_name || ts.name.starts_with(hash_prefix)) {
-                count += 1
-            } else {
-                null
-            }
-        }
+        let count = root._testset_name_count(self.testsets, full_name);
         let final_name = if (count > 0) {
             full_name + "#" + string.from(count + 1)
         } else {
@@ -204,7 +188,7 @@ class TestRegistry {
         // Check tests in this registry's collector
         for (let t in self.collector.tests) {
             if (t.name == name) {
-                return root._run_test(t.body, t.runner);
+                return root._run_test(t.body, t.runner, root._default_test_timeout_ms());
             }
         }
         // Recurse into expanded sub-registries
@@ -221,7 +205,7 @@ class TestRegistry {
     function run_testset(self, name: string) -> TestSetReport {
         for (let ts in self.collector.testsets) {
             if (ts.name == name) {
-                let pool = root._test_pool(0);
+                let pool = root._test_pool(0, root._default_test_timeout_ms());
                 return root._run_testset(
                     root._testset_children(self._expand_testset_registry(ts), pool),
                     ts.runner,
@@ -239,7 +223,7 @@ class TestRegistry {
     }
 
     function run_all(self) -> TestSetReport {
-        self._run_all_pooled(root._test_pool(0))
+        self._run_all_pooled(root._test_pool(0, root._default_test_timeout_ms()))
     }
 
     function _run_all_pooled(self, pool: _TestPool) -> TestSetReport {
@@ -247,7 +231,7 @@ class TestRegistry {
     }
 
     function _run_selected(self, names: string[]) -> TestSetReport {
-        self._run_selected_pooled(names, root._test_pool(0))
+        self._run_selected_pooled(names, root._test_pool(0, root._default_test_timeout_ms()))
     }
 
     function _run_selected_pooled(self, names: string[], pool: _TestPool) -> TestSetReport {
@@ -266,12 +250,13 @@ class TestRegistry {
         cli_include: string[],
         cli_exclude: string[],
         max_concurrency: int,
+        timeout_ms: int,
     ) -> FlatTestReport {
         // Always discover the selected leaf IDs first. Besides supplying canonical
         // console identities, this makes structural registration errors actionable
         // even when the unfiltered execution path preserves run_all semantics.
         let selected_names = root._select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude);
-        let pool = root._test_pool(max_concurrency);
+        let pool = root._test_pool(max_concurrency, timeout_ms);
         let report = if (
             profile_include.length() == 0
                 && profile_exclude.length() == 0
@@ -343,7 +328,7 @@ class TestRegistry {
 function _testset_children(registry: TestRegistry, pool: _TestPool) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
-        children.push(root._test_child(t.name, t.body, t.runner))
+        children.push(root._test_child(t.name, t.body, t.runner, pool.timeout_ms))
     }
     for (let ts in registry.collector.testsets) {
         children.push(root._testset_child(registry, ts, pool))
@@ -359,7 +344,7 @@ function _testset_children_selected(
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         if (names.includes(t.name)) {
-            children.push(root._test_child(t.name, t.body, t.runner))
+            children.push(root._test_child(t.name, t.body, t.runner, pool.timeout_ms))
         } else {
             null
         }
@@ -384,11 +369,16 @@ function _testset_children_selected(
     children
 }
 
-function _test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSetChild {
+function _test_child(
+    name: string,
+    body: TestBody,
+    runner: TestRunner?,
+    timeout_ms: int,
+) -> TestSetChild {
     TestSetChild {
         name: name,
         run: () -> ChildReport {
-            root._run_test(body, runner)
+            root._run_test(body, runner, timeout_ms)
         },
         is_container: false,
     }
@@ -503,6 +493,9 @@ class _TestPool {
     // Token bucket. `pop` and `push` are single locked array operations, so
     // concurrent dispatchers race safely; an empty `pop` means "no slot free".
     tokens: int[],
+    // Per-test deadline in milliseconds, carried here so it travels down the
+    // same path as the slot budget. Zero or negative means no deadline.
+    timeout_ms: int,
 
     function acquire(self) -> null throws never {
         while (true) {
@@ -525,11 +518,18 @@ class _TestPool {
     }
 }
 
-/// (internal) A pool admitting `max_concurrency` leaves at once. Zero or negative means
+/// (internal) The per-test deadline when the caller does not choose one: 5 minutes.
+function _default_test_timeout_ms() -> int {
+    300000
+}
+
+/// (internal) A pool admitting `max_concurrency` leaves at once, each with a
+/// `timeout_ms` deadline. A zero or negative `max_concurrency` means
 /// "no explicit budget": fall back to a bound that keeps a pathological
 /// fan-out from creating thousands of live VM threads while staying above any
 /// real machine's core count (the CLI always passes an explicit budget).
-function _test_pool(max_concurrency: int) -> _TestPool {
+
+function _test_pool(max_concurrency: int, timeout_ms: int) -> _TestPool {
     let limit = if (max_concurrency > 0) {
         max_concurrency
     } else {
@@ -541,7 +541,7 @@ function _test_pool(max_concurrency: int) -> _TestPool {
         tokens.push(1);
         i = i + 1;
     }
-    _TestPool { tokens: tokens }
+    _TestPool { tokens: tokens, timeout_ms: timeout_ms }
 }
 
 function _run_children_parallel(
@@ -576,27 +576,16 @@ function _run_children_parallel(
 }
 
 /// (internal) Run a single test with error handling and optional runner middleware.
-/// Every test races against a deadline (default 5 minutes; override with the
-/// BAML_TEST_TIMEOUT_MS env var): a hung test — a stalled network read, a
+/// Every test races against a `timeout_ms` deadline (a non-positive value
+/// means no deadline, so no timer is spawned; the CLI defaults it to 5
+/// minutes and `--test-timeout` overrides): a hung test — a stalled network read, a
 /// deadlocked await — becomes a FAIL with a "timed out" message instead of
 /// hanging the whole run. `baml.future.race` cancels the losers when one
 /// side settles (BEP-034), so a timed-out body is actively cancelled and a
 /// finished test's leftover timer doesn't linger.
-function _run_test(body: TestBody, runner: TestRunner?) -> TestReport {
+function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> TestReport {
     let base_run: TestReportThunk = () -> TestReport {
         let start = baml.time.Instant.now();
-        let timeout_ms = match (
-            baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) {
-                _ => null
-            }
-        ) {
-            let t: string => {
-                int.parse(t) catch (e) {
-                    _ => 300000
-                }
-            },
-            _ => 300000,
-        };
         let work: baml.future.Future<RunReport, never> = spawn {
             {
                 body();
@@ -616,22 +605,26 @@ function _run_test(body: TestBody, runner: TestRunner?) -> TestReport {
                 }
             }
         };
-        let timer: baml.future.Future<RunReport, never> = spawn {
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) {
-                _ => null
+        let racers: baml.future.Future<RunReport, never>[] = [work];
+        if (timeout_ms > 0) {
+            let timer: baml.future.Future<RunReport, never> = spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) {
+                    _ => null
+                };
+                RunReport {
+                    outcome: "fail",
+                    duration_ms: 0,
+                    message: "test timed out after "
+                        + timeout_ms.to_string()
+                        + "ms (override with --test-timeout)",
+                }
             };
-            RunReport {
-                outcome: "fail",
-                duration_ms: 0,
-                message: "test timed out after "
-                    + timeout_ms.to_string()
-                    + "ms (override with BAML_TEST_TIMEOUT_MS)",
-            }
-        };
-        // Race the body against the deadline; race cancels the loser on settle
-        // (BEP-034), so a timed-out body is actively cancelled and a finished
-        // test's timer does not linger.
-        let result = (await baml.future.race([work, timer])) catch_all (e) {
+            racers.push(timer);
+        }
+        // Race the body against the deadline, if any; race cancels the loser
+        // on settle (BEP-034), so a timed-out body is actively cancelled and a
+        // finished test's timer does not linger.
+        let result = (await baml.future.race(racers)) catch_all (e) {
             _ => {
                 RunReport {
                     outcome: "fail",
@@ -1277,4 +1270,20 @@ function _collect_leaf_messages(results: ChildReport[], out: string[]) -> void {
             },
         }
     }
+}
+
+/// (internal) Count the current names that the registration suffix rule treats
+/// as duplicates. Registration records and their arrays are publicly mutable,
+/// so these scans deliberately read the current data instead of caching names.
+//baml:vm
+function _test_name_count(entries: TestRegistration[], full_name: string) -> int throws never {
+    $rust_function
+}
+
+//baml:vm
+function _testset_name_count(
+    entries: TestSetRegistration[],
+    full_name: string,
+) -> int throws never {
+    $rust_function
 }

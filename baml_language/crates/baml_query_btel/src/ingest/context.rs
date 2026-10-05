@@ -122,7 +122,9 @@ fn resolve_with(
     if facts_changed {
         conn.execute(
             "DELETE FROM context_snapshot WHERE NOT EXISTS
-             (SELECT 1 FROM event_context WHERE event_context.cas = context_snapshot.cas)",
+             (SELECT 1 FROM event_context WHERE event_context.cas = context_snapshot.cas)
+             AND NOT EXISTS
+             (SELECT 1 FROM recording WHERE recording.initial_context_cas = context_snapshot.cas)",
             [],
         )?;
     }

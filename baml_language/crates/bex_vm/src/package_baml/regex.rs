@@ -215,24 +215,7 @@ fn regex_value(vm: &mut BexVm, prog: Program) -> Value {
 /// Clone the `Arc` out of `Regex._handle` so the program stays alive while
 /// `&mut BexVm` is borrowed for allocation.
 fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<Program>, VmRustFnError> {
-    let instance = vm.as_instance(&regex)?;
-    let ptr = instance.load_field(0).as_object_ptr().ok_or_else(|| {
-        VmInternalError::MissingNativeFunction {
-            name: "baml.regex.Regex._handle is not an object".to_string(),
-        }
-    })?;
-    match vm.get_object(ptr) {
-        Object::RustData(data) => data.clone().downcast::<Program>().map_err(|_| {
-            VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-                name: "baml.regex.Regex._handle holds an unexpected Rust type".to_string(),
-            })
-        }),
-        _ => Err(VmRustFnError::InternalError(
-            VmInternalError::MissingNativeFunction {
-                name: "baml.regex.Regex._handle is not RustData".to_string(),
-            },
-        )),
-    }
+    Ok(vm.rust_data_field::<Program>(&regex, 0)?)
 }
 
 /// A search that ran out of budget is a panic, not a "no match".

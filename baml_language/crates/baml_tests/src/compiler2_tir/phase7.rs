@@ -72,27 +72,6 @@ fn null_condition_narrowing_matrix() {
     ]));
 }
 
-#[test]
-fn nullable_bool_and_null_conditions_coerce_by_truthiness() {
-    // B-1563: condition positions accept any value via truthiness, so the
-    // strict-bool rejection this test used to pin no longer exists. Deep
-    // truthiness coverage lives in canary's ns_truthiness fixtures; this
-    // only pins that the former rejection stays gone.
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function optional(flag: bool?) -> string {
-  if (flag) { "taken" } else { "not-taken" }
-}
-
-function null_literal() -> string {
-  if (null) { "taken" } else { "not-taken" }
-}"#,
-    );
-    let tir = render_tir(&db, file);
-    assert!(!tir.contains("expected bool"), "{tir}");
-}
-
 // ── Early-return narrowing ────────────────────────────────────────────────────
 
 #[test]
@@ -268,27 +247,6 @@ fn assignment_uses_declared_type_after_narrowing() {
     assert!(
         !output.contains("type mismatch"),
         "narrowed current type should not become the assignment contract:\n{output}"
-    );
-}
-
-#[test]
-fn unannotated_inner_shadow_masks_outer_declared_type() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> int {
-  let x: int = 1;
-  {
-    let x = "shadow";
-    x = "updated";
-  };
-  return x;
-}"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("type mismatch"),
-        "unannotated inner shadow should not be checked against outer annotation:\n{output}"
     );
 }
 

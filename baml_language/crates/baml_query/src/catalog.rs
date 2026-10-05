@@ -26,7 +26,7 @@ pub const VALUE_ROLE_KEY: &str = "baml.role";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Visibility {
     Public,
-    /// `CatalogProfile::internal()` only (CLI under `BAML_INTERNAL`, the
+    /// `CatalogProfile::internal()` only (CLI `--internal`, the
     /// playground): store-debugging relations and raw counters.
     Internal,
     Hidden,
@@ -206,7 +206,7 @@ impl CatalogProfile {
         }
     }
 
-    /// The internal profile (CLI under `BAML_INTERNAL`, the playground):
+    /// The internal profile (CLI `--internal`, the playground):
     /// also shows `Internal` relations such as `store_files_v1`.
     #[must_use]
     pub fn internal() -> CatalogProfile {

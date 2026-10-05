@@ -36,18 +36,6 @@ export default defineConfig({
     },
   },
   test: {
-    reporters: process.env.CI
-      ? [
-          'default',
-          [
-            'junit',
-            {
-              addFileAttribute: true,
-              outputFile: './junit.xml',
-            },
-          ],
-        ]
-      : ['default'],
     projects: [
       {
         extends: true,

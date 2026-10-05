@@ -8,7 +8,7 @@ fn retired_profile_store_commands_report_unavailable() {
     let output = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
         .arg("clean")
         .current_dir(project.path())
-        .env("BAML_AGENT_SKILL_CHECK", "off")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .output()
         .expect("run CLI");
     assert!(!output.status.success(), "clean must not report success");

@@ -10,10 +10,13 @@
 //!
 //! The instructions that the VM runs are defined in [`bex_vm_types::bytecode::Instruction`] enum.
 
+#![warn(clippy::disallowed_methods)]
+
 pub(crate) mod array_index;
 mod call_specialize;
 pub mod compile_artifact;
 pub mod debug;
+pub mod definitions;
 pub mod errors;
 pub mod indexable;
 pub mod kperf;
@@ -21,6 +24,7 @@ pub mod package_ai;
 pub mod package_baml;
 pub mod package_load;
 pub mod package_reflect;
+pub mod package_testing;
 pub mod package_trace;
 pub mod reachable;
 pub mod telemetry;

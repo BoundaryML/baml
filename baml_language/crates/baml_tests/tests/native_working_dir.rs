@@ -70,7 +70,7 @@ async fn relative_paths_resolve_against_the_hosts_working_directory() {
         "the fixture must not already be the process directory"
     );
 
-    let program = baml_db::testing::compile_source(SOURCE);
+    let program = baml_tests::stdlib_prefix::compile_source(SOURCE);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,

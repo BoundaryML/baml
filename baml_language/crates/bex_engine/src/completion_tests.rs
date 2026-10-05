@@ -10,7 +10,7 @@ use super::*;
 fn engine(source: &str) -> Arc<BexEngine> {
     Arc::new(
         BexEngine::new(
-            baml_db::testing::compile_source(source),
+            baml_test_support::compile_source(source),
             Arc::new(sys_native::SysOps::native()),
             vec![],
         )
@@ -154,7 +154,7 @@ async fn ready_and_suspended_sysop_failures_finalize() {
                 SysOpResult::Ready(failure)
             }
         });
-        let engine = Arc::new(BexEngine::new(baml_db::testing::compile_source("function Main() -> int { baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n)); 1 }"), Arc::new(ops), vec![]).unwrap());
+        let engine = Arc::new(BexEngine::new(baml_test_support::compile_source("function Main() -> int { baml.sys.sleep(baml.time.Duration.from_nanoseconds(0n)); 1 }"), Arc::new(ops), vec![]).unwrap());
         let cancel = CancellationToken::new();
         let thread = entry(&engine, &cancel, &[]).await;
         let id = thread.vm.thread_id;
@@ -358,7 +358,7 @@ async fn queued_and_running_child_cancellation_finish_once() {
         });
         let engine = Arc::new(
             BexEngine::new(
-                baml_db::testing::compile_source(source),
+                baml_test_support::compile_source(source),
                 Arc::new(ops),
                 vec![],
             )
@@ -428,7 +428,7 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
 
     let engine = Arc::new(
         BexEngine::new_with_telemetry_clock(
-            baml_db::testing::compile_source("function Main() -> int { 7 }"),
+            baml_test_support::compile_source("function Main() -> int { 7 }"),
             Arc::new(sys_native::SysOps::native()),
             vec![],
             None,

@@ -9,8 +9,8 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use baml_db::{ProjectDatabase, SourceRoot, baml_compiler_diagnostics::Severity};
 use bex_engine::{
-    BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionInfo,
-    logger::TraceLogger,
+    BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionCatalog,
+    UserFunctionInfo, logger::TraceLogger,
 };
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
@@ -143,6 +143,45 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
 // CLI Args
 // ============================================================================
 
+fn load_launch_context(source: &str) -> Result<btel_types::context::Context> {
+    use btel_types::context::{Context, ContextPatch, ContextValue};
+    use serde_json::Value;
+
+    let value = baml_exec::load_json_source(source).context("invalid --context source")?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow!("--context must be a JSON object"))?;
+    let mut patch = ContextPatch::default();
+    for (key, value) in object {
+        match (key.as_str(), value) {
+            ("distinct_id", Value::Null) => {}
+            ("distinct_id", Value::String(id)) => patch.distinct_id = Some(id.clone()),
+            ("distinct_id", _) => anyhow::bail!("--context distinct_id must be a string or null"),
+            ("metadata", Value::Object(metadata)) => {
+                for (key, value) in metadata {
+                    let scalar = match value {
+                        Value::String(value) => ContextValue::String(value.clone()),
+                        Value::Bool(value) => ContextValue::Bool(*value),
+                        Value::Number(value) if value.is_i64() => {
+                            ContextValue::Int(value.as_i64().expect("checked integer"))
+                        }
+                        Value::Number(value) if value.is_f64() => {
+                            ContextValue::Float(value.as_f64().expect("checked float"))
+                        }
+                        _ => anyhow::bail!(
+                            "--context metadata[{key:?}] must be a string, int64, float64, or bool"
+                        ),
+                    };
+                    patch.metadata.insert(key.clone(), Some(scalar));
+                }
+            }
+            ("metadata", _) => anyhow::bail!("--context metadata must be an object"),
+            _ => anyhow::bail!("unknown --context field {key:?}; expected distinct_id or metadata"),
+        }
+    }
+    Ok(Context::default().with_patch(&patch))
+}
+
 /// Run a BAML function, script, or expression.
 ///
 /// Choose one execution mode: a positional function or script, one or more
@@ -205,6 +244,16 @@ pub struct RunArgs {
     )]
     pub expression: Option<String>,
 
+    /// Set process launch context from JSON.
+    ///
+    /// Accepts `distinct_id` (string or null) and `metadata` (a map whose values
+    /// are strings, integers, floats, or booleans).
+    ///
+    /// Use `--context @file` to read JSON from a file or `--context -` for
+    /// standard input.
+    #[arg(long, value_name = "SOURCE", help_heading = "Target options")]
+    pub context: Option<String>,
+
     /// Load one standalone source file instead of discovering a project.
     ///
     /// Runs its `main` function when no target is supplied. Mutually exclusive
@@ -249,6 +298,9 @@ pub struct RunArgs {
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
 
+    #[command(flatten)]
+    pub shutdown: crate::shutdown::ShutdownArgs,
+
     /// Include compiler-synthesized functions in `--list` output.
     #[arg(long, help_heading = "Run output options")]
     pub include_generated: bool,
@@ -270,15 +322,35 @@ pub use baml_exec::OutputFormat;
 // Main entry point
 // ============================================================================
 
-/// A project compiled to an engine, with the database it was compiled from
-/// and its package — the `Workspace` root its sources were added under —
-/// which `[scripts]` and the project root are read through.
-struct Compiled {
+/// Compiled sources and recording metadata, without executing package init.
+struct Prepared {
     db: ProjectDatabase,
     package: SourceRoot,
-    engine: BexEngine,
+    program: bex_vm_types::Program,
+    recording_root: PathBuf,
+    recording_sources: Vec<(String, String)>,
+    launch_context: btel_types::context::Context,
     /// Whether any source would change under `baml fmt`.
     needs_format_hint: bool,
+}
+
+struct ResolvedInvocation {
+    function_name: String,
+    argv: Vec<String>,
+    args: baml_exec::ParsedTargetArgs,
+}
+
+impl Prepared {
+    fn into_engine(self, argv: Vec<String>) -> Result<BexEngine> {
+        crate::runtime_telemetry::create_engine_with_context(
+            self.program,
+            argv,
+            &self.recording_root,
+            self.recording_sources,
+            self.launch_context,
+        )
+        .map_err(|e| anyhow!("failed to create engine: {e:?}"))
+    }
 }
 
 /// A standalone source loaded into its own workspace database.
@@ -367,18 +439,20 @@ impl RunArgs {
         anyhow::bail!("{bail_context}");
     }
 
-    /// Compile `db` to bytecode and build a `BexEngine`.
-    fn compile_to_engine(
-        &self,
-        db: &ProjectDatabase,
-        package: SourceRoot,
-        argv: Vec<String>,
-        recording_root: &Path,
-    ) -> Result<BexEngine> {
-        let bytecode = crate::bytecode_cache::compile_program(db, package, None)
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        crate::runtime_telemetry::create_engine(bytecode, argv, recording_root, Vec::new())
-            .map_err(|e| anyhow!("failed to create engine: {e:?}"))
+    fn launch_context(&self) -> Result<btel_types::context::Context> {
+        self.context
+            .as_deref()
+            .map(load_launch_context)
+            .transpose()
+            .map(Option::unwrap_or_default)
+    }
+
+    fn validate_stdin_consumer(&self, input_source: Option<&str>, input_flag: &str) -> Result<()> {
+        anyhow::ensure!(
+            self.context.as_deref() != Some("-") || input_source != Some("-"),
+            "--context - and {input_flag} - both read stdin; only one stdin consumer is allowed"
+        );
+        Ok(())
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
@@ -423,6 +497,7 @@ impl RunArgs {
         }
 
         if let Some(expr_source) = &self.expression {
+            self.validate_stdin_consumer(Some(expr_source), "--expression")?;
             // `-e -` reads stdin / `-e @file` reads file. Load once so
             // the engine compile and `argv[1]` see the same text.
             let expr_body = load_expression_source(expr_source)?;
@@ -432,19 +507,13 @@ impl RunArgs {
         // `--list` short-circuit doesn't need a resolved target; load
         // the project and print before we get to dispatch.
         if self.list {
-            let bootstrap_argv = vec![
-                std::env::current_exe()
-                    .ok()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "baml".to_string()),
-                "--list".to_string(),
-            ];
-            let Compiled {
+            let Prepared {
                 db,
                 package,
-                engine,
+                program,
                 ..
-            } = self.load_and_compile(bootstrap_argv, reporter)?;
+            } = self.load_and_compile(reporter)?;
+            let catalog = UserFunctionCatalog::from_program(&program)?;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
             let scripts = if self.file.is_some() {
@@ -453,8 +522,8 @@ impl RunArgs {
                 let (_toml_path, toml_content) = Self::project_toml(&db, package);
                 Self::parse_scripts(&toml_content)
             };
-            let namespaces = collect_namespaces(&engine);
-            return self.print_list(&engine, &scripts, &namespaces, &self.output_format);
+            let namespaces = collect_namespaces(&catalog);
+            return self.print_list(&catalog, &scripts, &namespaces, &self.output_format);
         }
 
         if self.file.is_some() && self.target.is_none() && self.functions.is_empty() {
@@ -489,15 +558,11 @@ impl RunArgs {
     /// Positional `<TARGET>` path: one function, no subcommand layer.
     /// `[scripts]` aliases are resolved here too (positional only).
     fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
-        let argv = self.build_argv_for_single(target);
-        let Compiled {
-            db,
-            package,
-            mut engine,
-            needs_format_hint,
-        } = self.load_and_compile(argv.clone(), reporter)?;
-        Self::emit_format_hint_if_needed(reporter, needs_format_hint);
-        let project_root = Self::project_root(&db, package);
+        let mut argv = self.build_argv_for_single(target);
+        let prepared = self.load_and_compile(reporter)?;
+        let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
+        Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
+        let project_root = Self::project_root(&prepared.db, prepared.package);
 
         // `[scripts]` are a project-mode concept. In `--file` (standalone)
         // mode the project's `baml.toml` shouldn't be consulted — the
@@ -510,11 +575,11 @@ impl RunArgs {
                 HashMap::new(),
             )
         } else {
-            let (toml_path, content) = Self::project_toml(&db, package);
+            let (toml_path, content) = Self::project_toml(&prepared.db, prepared.package);
             let parsed = Self::parse_scripts(&content);
             (toml_path, content, parsed)
         };
-        self.validate_scripts(&engine, &scripts, &toml_path, &toml_content)?;
+        self.validate_scripts(&catalog, &scripts, &toml_path, &toml_content)?;
 
         // Resolve to (function_name, effective_args, was_script).
         let (function_name, effective_target_args, was_script) =
@@ -529,18 +594,18 @@ impl RunArgs {
                          entry point. Add `--function <name>` to the script body."
                     )
                 })?;
-                if engine.find_user_function(&func).is_none() {
-                    return Err(Self::function_not_found_error(&engine, &func));
+                if catalog.find_user_function(&func).is_none() {
+                    return Err(Self::function_not_found_error(&catalog, &func));
                 }
                 let mut merged_args = expansion.extra_args;
                 merged_args.extend(self.target_args.iter().cloned());
                 (func, merged_args, true)
-            } else if engine.find_user_function(target).is_some() {
+            } else if catalog.find_user_function(target).is_some() {
                 (target.to_string(), self.target_args.clone(), false)
             } else {
                 return Err(Self::target_not_found_error_in(
                     &scripts,
-                    &engine,
+                    &catalog,
                     target,
                     &project_root,
                 ));
@@ -548,19 +613,20 @@ impl RunArgs {
 
         // Patch `argv[1]` to the engine-canonical display name (strips
         // `user.` prefix) so scripts and the direct path agree.
-        if let Some(info) = engine.find_user_function(&function_name) {
+        if let Some(info) = catalog.find_user_function(&function_name) {
             let display = info.display_name.clone();
-            let mut patched: Vec<String> = engine.argv().to_vec();
-            if patched.len() >= 2 && (was_script || display != *target) {
-                patched[1] = display;
-                engine.set_argv(patched);
+            if argv.len() >= 2 && (was_script || display != *target) {
+                argv[1] = display;
             }
         }
 
-        let func_info = engine
+        let func_info = catalog
             .find_user_function(&function_name)
             .ok_or_else(|| anyhow!("function `{function_name}` not found"))?;
-        baml_exec::validate_help_param(&engine, &function_name)?;
+        baml_exec::validate_help_param_names(
+            &function_name,
+            func_info.param_names.iter().map(String::as_str),
+        )?;
 
         let target_is_typed = !func_info.param_names.is_empty();
         let parsed = if target_is_typed {
@@ -581,31 +647,25 @@ impl RunArgs {
             baml_exec::ParsedTargetArgs::default()
         };
 
-        let json_args = match parsed.json_source.as_deref() {
-            Some(source) => Some(baml_exec::load_json_source(source)?),
-            None => None,
-        };
-
-        self.dispatch_and_finish(
-            engine,
-            &function_name,
-            parsed.cli_values,
-            json_args,
+        self.execute_invocation(
+            prepared,
+            ResolvedInvocation {
+                function_name,
+                argv,
+                args: parsed,
+            },
             reporter,
         )
     }
 
     /// `-f` mode: build a multi-subcommand parser, dispatch the chosen one.
     fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
-        let argv = self.build_argv_for_subcommand();
-        let Compiled {
-            mut engine,
-            needs_format_hint,
-            ..
-        } = self.load_and_compile(argv.clone(), reporter)?;
-        Self::emit_format_hint_if_needed(reporter, needs_format_hint);
+        let mut argv = self.build_argv_for_subcommand();
+        let prepared = self.load_and_compile(reporter)?;
+        let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
+        Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
 
-        let (entries, lookups) = self.resolve_subcommand_targets(&engine)?;
+        let (entries, lookups) = self.resolve_subcommand_targets(&catalog)?;
 
         // Build the parse bin_name as the reinvocation prefix so the
         // help text is copy-pasteable.
@@ -632,18 +692,19 @@ impl RunArgs {
             .iter()
             .find(|e| e.qualified_name == chosen)
             .expect("parse returned an unregistered subcommand");
-        let mut patched = engine.argv().to_vec();
-        if patched.len() >= 2 {
-            patched[1] = chosen_entry.subcommand_name.clone();
-            engine.set_argv(patched);
+        if argv.len() >= 2 {
+            argv[1] = chosen_entry.subcommand_name.clone();
         }
 
-        let json_args = match parsed.json_source.as_deref() {
-            Some(source) => Some(baml_exec::load_json_source(source)?),
-            None => None,
-        };
-
-        self.dispatch_and_finish(engine, &chosen, parsed.cli_values, json_args, reporter)
+        self.execute_invocation(
+            prepared,
+            ResolvedInvocation {
+                function_name: chosen,
+                argv,
+                args: parsed,
+            },
+            reporter,
+        )
     }
 
     /// Walk `self.functions`, resolve each to an engine-canonical
@@ -655,7 +716,7 @@ impl RunArgs {
     /// help text.
     fn resolve_subcommand_targets(
         &self,
-        engine: &BexEngine,
+        catalog: &UserFunctionCatalog,
     ) -> Result<(
         Vec<baml_exec::TargetEntry>,
         HashMap<String, UserFunctionInfo>,
@@ -663,10 +724,13 @@ impl RunArgs {
         let mut entries: Vec<baml_exec::TargetEntry> = Vec::with_capacity(self.functions.len());
         let mut lookups: HashMap<String, UserFunctionInfo> = HashMap::new();
         for func in &self.functions {
-            let Some(info) = engine.find_user_function(func) else {
-                return Err(Self::function_not_found_error(engine, func));
+            let Some(info) = catalog.find_user_function(func) else {
+                return Err(Self::function_not_found_error(catalog, func));
             };
-            baml_exec::validate_help_param(engine, &info.qualified_name)?;
+            baml_exec::validate_help_param_names(
+                &info.qualified_name,
+                info.param_names.iter().map(String::as_str),
+            )?;
             let display = info
                 .qualified_name
                 .strip_prefix("user.")
@@ -690,6 +754,30 @@ impl RunArgs {
             lookups.insert(info.qualified_name.clone(), info);
         }
         Ok((entries, lookups))
+    }
+
+    fn execute_invocation(
+        &self,
+        mut prepared: Prepared,
+        invocation: ResolvedInvocation,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
+        self.validate_stdin_consumer(invocation.args.json_source.as_deref(), "--json-args")?;
+        let json_args = invocation
+            .args
+            .json_source
+            .as_deref()
+            .map(baml_exec::load_json_source)
+            .transpose()?;
+        prepared.launch_context = self.launch_context()?;
+        let engine = prepared.into_engine(invocation.argv)?;
+        self.dispatch_and_finish(
+            engine,
+            &invocation.function_name,
+            invocation.args.cli_values,
+            json_args,
+            reporter,
+        )
     }
 
     /// Shared tail: spawn the runtime and run dispatch. The program runs
@@ -732,7 +820,12 @@ impl RunArgs {
         };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
+            crate::shutdown::shutdown_engine_future(
+                &engine,
+                reporter,
+                status,
+                self.shutdown.shutdown_timeout,
+            ),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -813,10 +906,10 @@ impl RunArgs {
     }
 
     /// Load the project (or standalone `--file`), check diagnostics,
-    /// compile to bytecode, create engine.
-    fn load_and_compile(&self, argv: Vec<String>, reporter: &Reporter) -> Result<Compiled> {
+    /// and compile to bytecode without executing user code.
+    fn load_and_compile(&self, reporter: &Reporter) -> Result<Prepared> {
         if let Some(file) = self.file.as_deref() {
-            return self.load_and_compile_standalone(file, argv, reporter);
+            return self.load_and_compile_standalone(file, reporter);
         }
 
         let mut session = crate::project_session::ProjectSession::open(
@@ -835,23 +928,16 @@ impl RunArgs {
 
         if let Some(program) = session.try_cached_program() {
             self.vlog(format_args!("Bytecode cache hit — skipping compile"));
-            match crate::runtime_telemetry::create_engine(
-                program,
-                argv.clone(),
-                session.root(),
-                crate::runtime_telemetry::session_sources(&session),
-            ) {
-                Ok(engine) => {
-                    return Ok(Compiled {
-                        db: session.db,
-                        package: session.package,
-                        engine,
-                        needs_format_hint,
-                    });
-                }
-                Err(error) => crate::bytecode_cache::cache_debug(format_args!(
-                    "cached program rejected by VM; recompiling: {error:?}"
-                )),
+            if program.validate().is_ok() {
+                return Ok(Prepared {
+                    recording_root: session.root().to_path_buf(),
+                    launch_context: Default::default(),
+                    recording_sources: crate::runtime_telemetry::session_sources(&session),
+                    db: session.db,
+                    package: session.package,
+                    program,
+                    needs_format_hint,
+                });
             }
         }
 
@@ -906,33 +992,13 @@ impl RunArgs {
                 stdlib_interface_hit,
             )?;
         }
-        // Warm evidence: with the check rows served this is 0; a cold compile
-        // walks every scope.
-        crate::bytecode_cache::cache_debug(format_args!(
-            "body inferences: {} this process",
-            baml_db::baml_compiler2_hir_ty::infer::body_inferences()
-        ));
-        // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
-        // seed served every stdlib package); a cold run reports up to 6.
-        crate::bytecode_cache::cache_debug(format_args!(
-            "stdlib interface: {} honest derivation(s) this process",
-            baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
-        ));
-        let engine = crate::runtime_telemetry::create_engine(
-            program,
-            argv,
-            session.root(),
-            crate::runtime_telemetry::session_sources(&session),
-        )
-        .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
-        self.vlog(format_args!(
-            "Compiled {} user function(s)",
-            engine.user_functions().len()
-        ));
-        Ok(Compiled {
+        Ok(Prepared {
+            recording_root: session.root().to_path_buf(),
+            launch_context: Default::default(),
+            recording_sources: crate::runtime_telemetry::session_sources(&session),
             db: session.db,
             package: session.package,
-            engine,
+            program,
             needs_format_hint,
         })
     }
@@ -944,9 +1010,8 @@ impl RunArgs {
     fn load_and_compile_standalone(
         &self,
         file_path: &Path,
-        argv: Vec<String>,
         reporter: &Reporter,
-    ) -> Result<Compiled> {
+    ) -> Result<Prepared> {
         let display = file_path.display().to_string();
         let StandaloneSource {
             db,
@@ -963,15 +1028,15 @@ impl RunArgs {
             &format!("cannot run: compilation errors in {display}"),
             reporter,
         )?;
-        let engine = self.compile_to_engine(&db, package, argv, &root)?;
-        self.vlog(format_args!(
-            "Compiled {} function(s) from standalone file",
-            engine.user_functions().len()
-        ));
-        Ok(Compiled {
+        let program = crate::bytecode_cache::compile_program(&db, package, None)
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        Ok(Prepared {
             db,
             package,
-            engine,
+            program,
+            recording_root: root,
+            launch_context: Default::default(),
+            recording_sources: Vec::new(),
             needs_format_hint,
         })
     }
@@ -1112,12 +1177,18 @@ impl RunArgs {
         // `file` containing `2 + 2`) produce the same argv.
         // Never use the synthetic temporary compilation root as the recording root.
         let recording_root = discovered_root.map_or_else(std::env::current_dir, Ok)?;
-        let engine = self.compile_to_engine(
-            &db,
+        let program = crate::bytecode_cache::compile_program(&db, package, None)
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let prepared = Prepared {
+            db,
             package,
-            self.build_argv_for_expression(expr_body),
-            &recording_root,
-        )?;
+            program,
+            recording_root,
+            launch_context: self.launch_context()?,
+            recording_sources: Vec::new(),
+            needs_format_hint: false,
+        };
+        let engine = prepared.into_engine(self.build_argv_for_expression(expr_body))?;
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -1166,7 +1237,12 @@ impl RunArgs {
         };
         self.block_on_with_logs(
             &rt,
-            crate::shutdown::shutdown_engine_future(&engine, reporter, status),
+            crate::shutdown::shutdown_engine_future(
+                &engine,
+                reporter,
+                status,
+                self.shutdown.shutdown_timeout,
+            ),
             logs.as_ref(),
         );
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -1250,7 +1326,7 @@ impl RunArgs {
     /// Validate `[scripts]` entries at load time per BEP-027.
     fn validate_scripts(
         &self,
-        engine: &BexEngine,
+        catalog: &UserFunctionCatalog,
         scripts: &HashMap<String, Vec<String>>,
         toml_path: &Path,
         toml_content: &str,
@@ -1275,7 +1351,7 @@ impl RunArgs {
             match parse_script_body(tokens) {
                 Ok(expansion) => {
                     let target_func = if let Some(func) = &expansion.function {
-                        if engine.find_user_function(func).is_none() {
+                        if catalog.find_user_function(func).is_none() {
                             errors.push(Self::script_error(
                                 toml_path,
                                 toml_content,
@@ -1286,19 +1362,21 @@ impl RunArgs {
                         } else {
                             Some(func.as_str())
                         }
-                    } else if engine.function_exists("main") {
+                    } else if catalog.find_user_function("main").is_some() {
                         Some("main")
                     } else {
                         None
                     };
 
                     if let Some(func_name) = target_func
-                        && let Ok(params) = engine.function_params(func_name)
+                        && let Some(info) = catalog.find_user_function(func_name)
                     {
-                        let param_names: Vec<String> =
-                            params.iter().map(|(n, _, _)| (*n).to_string()).collect();
+                        let param_names = info.param_names;
                         let flag_keys = extract_flag_keys(&expansion.extra_args);
-                        for flag in flag_keys.iter().filter(|k| !param_names.contains(k)) {
+                        for flag in flag_keys
+                            .iter()
+                            .filter(|k| k.as_str() != "json-args" && !param_names.contains(k))
+                        {
                             errors.push(Self::script_error(
                                 toml_path,
                                 toml_content,
@@ -1333,10 +1411,10 @@ impl RunArgs {
 
     fn target_not_found_error(
         scripts: &HashMap<String, Vec<String>>,
-        engine: &BexEngine,
+        catalog: &UserFunctionCatalog,
         name: &str,
     ) -> anyhow::Error {
-        Self::target_not_found_error_in(scripts, engine, name, Path::new("."))
+        Self::target_not_found_error_in(scripts, catalog, name, Path::new("."))
     }
 
     /// Error for an unknown `--function` argument. Suggestion candidates
@@ -1345,8 +1423,8 @@ impl RunArgs {
     /// resolution"'s did-you-mean rule mixes three sets, but that's for
     /// *positional* targets (script / namespace / file). The `--function`
     /// dispatch path has its own one-set candidate space.
-    fn function_not_found_error(engine: &BexEngine, name: &str) -> anyhow::Error {
-        let mut candidates: Vec<String> = engine
+    fn function_not_found_error(catalog: &UserFunctionCatalog, name: &str) -> anyhow::Error {
+        let mut candidates: Vec<String> = catalog
             .user_functions()
             .into_iter()
             .map(|f| f.display_name)
@@ -1382,11 +1460,11 @@ impl RunArgs {
 
     fn target_not_found_error_in(
         scripts: &HashMap<String, Vec<String>>,
-        engine: &BexEngine,
+        catalog: &UserFunctionCatalog,
         name: &str,
         cwd: &Path,
     ) -> anyhow::Error {
-        let namespaces = collect_namespaces(engine);
+        let namespaces = collect_namespaces(catalog);
         struct Candidate {
             name: String,
             label: String,
@@ -1405,7 +1483,7 @@ impl RunArgs {
                 label: format!("{ns} (namespace)"),
             });
         }
-        for f in &engine.user_functions() {
+        for f in &catalog.user_functions() {
             candidates.push(Candidate {
                 name: f.display_name.clone(),
                 label: f.display_name.clone(),
@@ -1460,12 +1538,12 @@ impl RunArgs {
 
     fn print_list(
         &self,
-        engine: &BexEngine,
+        catalog: &UserFunctionCatalog,
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
         output: &OutputFormat,
     ) -> Result<crate::ExitCode> {
-        let mut functions = engine.user_functions();
+        let mut functions = catalog.user_functions();
         functions.sort_by(|a, b| a.display_name.cmp(&b.display_name));
 
         // Empty-target case must still honor `--output-format json` so
@@ -1739,8 +1817,8 @@ const RESERVED_VERBS: &[&str] = &[
 ///
 /// A function named `foo.Bar` contributes namespace `foo`; `main` (no dot)
 /// contributes nothing.
-fn collect_namespaces(engine: &BexEngine) -> HashSet<String> {
-    engine
+fn collect_namespaces(catalog: &UserFunctionCatalog) -> HashSet<String> {
+    catalog
         .user_functions()
         .iter()
         .filter_map(|f| {
@@ -2088,17 +2166,94 @@ mod tests {
 
     // ── Default-valued `RunArgs` fixture for behavior tests ───────────
 
-    /// Engine fixture for namespace tests — `compile_multi_file`
+    /// Signature fixture for namespace tests; `compile_multi_file`
     /// supports folder-based namespaces (`ns_<name>/foo.baml`) which the
     /// single-source `compile_source` helper can't express.
-    fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
-        let snapshot = baml_db::testing::compile_multi_file(files);
-        BexEngine::new(
-            snapshot,
-            std::sync::Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
+    fn engine_from_files(files: &[(&str, &str)]) -> UserFunctionCatalog {
+        let snapshot = baml_tests::stdlib_prefix::compile_multi_file(files);
+        UserFunctionCatalog::from_program(&snapshot).unwrap()
+    }
+
+    #[test]
+    fn signature_catalog_matches_loaded_engine() {
+        let program = baml_tests::stdlib_prefix::compile_multi_file(&[
+            ("main.baml", "function Identity<T>(value: T) -> T { value }"),
+            (
+                "ns_nominal/main.baml",
+                include_str!("../tests/fixtures/catalog_types/baml_src/main.baml"),
+            ),
+            (
+                "ns_one/main.baml",
+                "function Echo(value: string = \"default\") -> string { value }",
+            ),
+            (
+                "ns_two/main.baml",
+                "function Echo(value: int?) -> int? { value }",
+            ),
+        ]);
+        let catalog = UserFunctionCatalog::from_program(&program).unwrap();
+        let engine =
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap();
+        let mut planned = catalog.user_functions();
+        let mut loaded = engine.user_functions();
+        planned.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+        loaded.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+        assert_eq!(format!("{planned:?}"), format!("{loaded:?}"));
+        for name in [
+            "Identity",
+            "user.Identity",
+            "one.Echo",
+            "two.Echo",
+            "nominal.EnumArg",
+            "nominal.ClassArg",
+            "nominal.Nested",
+            "nominal.UnionArg",
+            "nominal.RecursiveArg",
+            "nominal.InterfaceArg",
+            "nominal.GenericBox",
+            "Echo",
+            "missing",
+        ] {
+            assert_eq!(
+                format!("{:?}", catalog.find_user_function(name)),
+                format!("{:?}", engine.find_user_function(name)),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn launch_context_precedes_package_init() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("main.baml");
+        std::fs::write(
+            &file,
+            include_str!("../tests/fixtures/launch_context/baml_src/main.baml"),
         )
-        .expect("BexEngine::new should succeed")
+        .unwrap();
+        let mut args = run_args();
+        args.file = Some(file);
+        args.context =
+            Some(r#"{"distinct_id":"pipe-user","metadata":{"phase":"launch"}}"#.to_string());
+        let reporter = Reporter::new();
+        let mut prepared = args.load_and_compile(&reporter).unwrap();
+        // User BAML cannot declare top-level lets. Exercise the loader's init
+        // path by installing this native fixture function as the root's init.
+        let init = prepared.program.rendered_callables()["user.Initialize"].object;
+        prepared.program.packages[prepared.program.root as usize].init = Some(init);
+        prepared.program.init_order.push(prepared.program.root);
+        let result = args
+            .execute_invocation(
+                prepared,
+                ResolvedInvocation {
+                    function_name: "Args".to_string(),
+                    argv: vec!["baml".to_string(), "Args".to_string()],
+                    args: baml_exec::ParsedTargetArgs::default(),
+                },
+                &reporter,
+            )
+            .unwrap();
+        assert!(matches!(result, crate::ExitCode::Success));
     }
 
     /// Build a `RunArgs` with default everything; tests flip individual
@@ -2109,15 +2264,57 @@ mod tests {
             target: None,
             functions: Vec::new(),
             expression: None,
+            context: None,
             file: None,
             list: false,
             output_format: OutputFormat::Debug,
             log: RunLogLevel::Off,
             log_file: None,
+            shutdown: crate::shutdown::ShutdownArgs::default(),
             include_generated: false,
             from: None,
             target_args: Vec::new(),
         }
+    }
+
+    #[test]
+    fn launch_context_validates_shape_and_preserves_scalar_types() {
+        use btel_types::context::ContextValue;
+
+        for source in ["{}", r#"{"distinct_id":null,"metadata":{}}"#] {
+            assert!(load_launch_context(source).unwrap().is_empty());
+        }
+        let context = load_launch_context(
+            r#"{"distinct_id":"user","metadata":{"s":"","i":-9223372036854775808,"f":1.0,"b":false}}"#,
+        )
+        .unwrap();
+        assert_eq!(context.distinct_id(), Some("user"));
+        assert_eq!(context.metadata()["s"], ContextValue::String(String::new()));
+        assert_eq!(context.metadata()["i"], ContextValue::Int(i64::MIN));
+        assert_eq!(context.metadata()["f"], ContextValue::Float(1.0));
+        assert_eq!(context.metadata()["b"], ContextValue::Bool(false));
+        for invalid in [
+            "not JSON",
+            "[]",
+            "null",
+            r#"{"unknown":1}"#,
+            r#"{"distinct_id":42}"#,
+            r#"{"metadata":null}"#,
+            r#"{"metadata":{"x":null}}"#,
+            r#"{"metadata":{"x":[]}}"#,
+            r#"{"metadata":{"x":{}}}"#,
+            r#"{"metadata":{"x":9223372036854775808}}"#,
+            r#"{"metadata":{"x":18446744073709551616}}"#,
+            r#"{"metadata":{"x":-9223372036854775809}}"#,
+            r#"{"metadata":{"x":1e400}}"#,
+        ] {
+            assert!(load_launch_context(invalid).is_err(), "{invalid}");
+        }
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), r#"{"metadata":{"x":null}}"#).unwrap();
+        assert!(load_launch_context(&format!("@{}", file.path().display())).is_err());
+        std::fs::write(file.path(), "{").unwrap();
+        assert!(load_launch_context(&format!("@{}", file.path().display())).is_err());
     }
 
     // ── Dispatch-mode mutex ───────────────────────────────────────────

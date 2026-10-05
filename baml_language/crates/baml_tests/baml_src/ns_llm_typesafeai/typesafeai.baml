@@ -730,6 +730,9 @@ function malformed(body: string, ty: reflect.Type? = null) -> bool {
             let failed: ai.errors.ParseFailed => {
                 return true;
             },
+            let invalid: ai.errors.InvalidResponse => {
+                return true;
+            },
             _ => {
                 return false;
             },

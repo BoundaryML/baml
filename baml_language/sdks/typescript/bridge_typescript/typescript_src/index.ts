@@ -1,5 +1,7 @@
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 
+// Must stay first: honors BAML_BRIDGE_PATH before the generated native loader runs.
+import './bridge_path.js';
 import {
     BamlRuntime,
     BamlHandle,
