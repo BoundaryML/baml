@@ -974,6 +974,7 @@ fn clock(multiplier: Option<i64>, shift: Option<i64>, status: Option<i64>) -> Cl
             })
         }),
         status: status.and_then(EpochStatus::from_code),
+        ..Default::default()
     }
 }
 
@@ -1053,7 +1054,11 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
     })?;
     conn.create_scalar_function("__btel_timing", 6, pure, |ctx| {
         Ok(match interval(ctx)? {
-            Ok(ns) if i64::try_from(ns).is_ok() => TimingState::Valid.label(),
+            Ok(ns) if i64::try_from(ns).is_ok() => clock_at(ctx, 2)?
+                .expect("successful interval")
+                .precision
+                .state()
+                .label(),
             Ok(_) => TimingState::Overflow.label(),
             Err(state) => state.label(),
         })
@@ -1069,7 +1074,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
             Err(state) => return Ok(state.label()),
         };
         Ok(match clock.total_ns(ticks) {
-            Ok(ns) if i64::try_from(ns).is_ok() => TimingState::Valid.label(),
+            Ok(ns) if i64::try_from(ns).is_ok() => clock.precision.state().label(),
             Ok(_) => TimingState::Overflow.label(),
             Err(state) => state.label(),
         })
@@ -1618,10 +1623,17 @@ pub(crate) fn epoch_clock(
     if epoch == 2 {
         return Err(TimingState::Conflicted);
     }
-    if epoch == 1 && multiplier.is_none() {
+    if matches!(epoch, 1 | 3) && multiplier.is_none() {
         return Err(TimingState::Overflow);
     }
-    Ok(clock(multiplier, shift, status))
+    let mut clock = clock(multiplier, shift, status);
+    clock.precision = match epoch {
+        3 => btel_reader::timing::Precision::Estimated,
+        4 => btel_reader::timing::Precision::Pending,
+        5 => btel_reader::timing::Precision::BelowPrecision,
+        _ => btel_reader::timing::Precision::Calibrated,
+    };
+    Ok(clock)
 }
 
 /// An accumulated tick total in nanoseconds, as `__btel_total_ns` computes

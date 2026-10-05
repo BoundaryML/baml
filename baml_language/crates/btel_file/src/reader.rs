@@ -270,12 +270,20 @@ fn validate_definitions(file: &proto::RecordingFile) -> Result<(), String> {
         {
             return Err("invalid thread definition".into());
         }
+        if defs
+            .clock_anchors
+            .iter()
+            .any(|c| c.epoch_id == 0 || c.domain_id == 0 || !(1..=6).contains(&c.source))
+        {
+            return Err("invalid clock anchor metadata".into());
+        }
         if defs.clock_epochs.iter().any(|c| {
             c.epoch_id == 0
                 || c.domain_id == 0
                 || c.multiplier == 0
                 || c.shift > 127
-                || !(1..=5).contains(&c.source)
+                || !(1..=6).contains(&c.source)
+                || !(0..=3).contains(&c.precision)
         }) {
             return Err("invalid clock conversion metadata".into());
         }
@@ -327,6 +335,9 @@ fn check_references(read: &mut RecordingRead) {
                 if t.spawn_call_path_id != 0 {
                     references.insert(("call path", u64::from(t.spawn_call_path_id)));
                 }
+            }
+            for c in &defs.clock_anchors {
+                clocks.insert(c.epoch_id);
             }
             for c in &defs.clock_epochs {
                 clocks.insert(c.epoch_id);

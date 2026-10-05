@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 18;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -224,7 +224,9 @@ CREATE TABLE epoch (
   shift INTEGER,
   utc_ticks INTEGER,
   utc_unix_ns INTEGER,
-  -- Encoded wire definition: the clocks relation reads every field from it.
+  precision INTEGER NOT NULL DEFAULT 0,
+  anchor BLOB,
+  -- Immutable finalized conversion, separate from its startup anchor.
   definition BLOB,
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, epoch_id)
@@ -237,6 +239,8 @@ CREATE TABLE epoch_state (
   epoch_id BLOB NOT NULL,
   status INTEGER NOT NULL,
   final INTEGER NOT NULL,
+  elapsed_reference_ns INTEGER,
+  elapsed_uncertainty_ns INTEGER,
   PRIMARY KEY (rec, epoch_id)
 ) STRICT, WITHOUT ROWID;
 

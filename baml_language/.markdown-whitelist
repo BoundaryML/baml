@@ -11,6 +11,7 @@ RELEASING.md
 ENV_VARS.md
 
 # Test documentation
+crates/baml/BENCHMARKS.md
 crates/baml_tests/BENCHMARKS.md
 crates/baml_tests/NATIVE_BAML_TEST_MIGRATION_SURVEY.md
 crates/baml_tests/NATIVE_BAML_TEST_RUST_SURVIVORS.md

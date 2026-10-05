@@ -40,3 +40,6 @@ pub const NETWORK_FORMAT_MINOR: u32 = 7;
 pub const TYPE_ARGS_FORMAT_MINOR: u32 = 8;
 /// Process headers capture immutable launch context independently of spans.
 pub const PROCESS_CONTEXT_FORMAT_MINOR: u32 = 9;
+
+/// Independent clock anchors, delayed mappings, precision and final elapsed bounds.
+pub const CLOCK_MAPPING_FORMAT_MINOR: u32 = 10;

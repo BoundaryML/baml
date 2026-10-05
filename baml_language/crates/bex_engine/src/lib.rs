@@ -1889,6 +1889,7 @@ impl BexEngine {
 
         let telemetry = auto_telemetry_level
             .map(|auto_level| {
+                let clock = Arc::new(btel_clock::ClockRuntime::new(clock_mode));
                 #[cfg(not(target_arch = "wasm32"))]
                 let recording_id = recording.as_ref().map(TelemetryRecording::id);
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1900,11 +1901,14 @@ impl BexEngine {
                         source_snapshot_id.map(|id| id.0),
                         Arc::new(heap.static_function_metadata()),
                         &launch_context,
+                        Arc::clone(&clock),
                     )?,
                     None => (
-                        btel_processor::TelemetryRuntime::new().map_err(|error| {
-                            EngineError::Other(format!("telemetry processor startup: {error}"))
-                        })?,
+                        btel_processor::TelemetryRuntime::with_clock(Arc::clone(&clock)).map_err(
+                            |error| {
+                                EngineError::Other(format!("telemetry processor startup: {error}"))
+                            },
+                        )?,
                         None,
                     ),
                 };
@@ -1912,7 +1916,7 @@ impl BexEngine {
                     policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
                         auto_level,
                     )),
-                    clock: btel_clock::ClockRuntime::new(clock_mode),
+                    clock,
                     network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]
                     recording_id,

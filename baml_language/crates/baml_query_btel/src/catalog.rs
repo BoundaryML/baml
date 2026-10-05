@@ -266,7 +266,8 @@ pub const SPANS: Relation = Relation {
             "RFC 3339 UTC; for a future, when it began running (when it was cancelled, if it never ran)",
         ),
         col("end_time", "text", "RFC 3339 UTC"),
-        col("duration", "integer", "nanoseconds, start_time to end_time"),
+        col("duration", "integer", "nanoseconds, start_time to end_time; see timing_status for precision"),
+        col("timing_status", "text", "valid, estimated, pending, below_precision or the reason timing is unavailable"),
         value("type_args", TYPE_ARGS_DOC),
         value(
             "input_args",
@@ -355,7 +356,8 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   __btel_utc(c.exited_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS end_time,
   __btel_duration(c.entered_ticks, c.exited_ticks, e.multiplier, e.shift, s.status,
-    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+    CASE WHEN e.conflict = 1 THEN 2 WHEN e.defined = 1 THEN IIF(e.precision = 3, 3, 1) WHEN e.anchor IS NOT NULL THEN IIF(s.final = 1, 5, 4) ELSE 0 END) AS duration,
+  __btel_timing(c.entered_ticks, c.exited_ticks, e.multiplier, e.shift, s.status, CASE WHEN e.conflict = 1 THEN 2 WHEN e.defined = 1 THEN IIF(e.precision = 3, 3, 1) WHEN e.anchor IS NOT NULL THEN IIF(s.final = 1, 5, 4) ELSE 0 END) AS timing_status,
   __btel_ref(2, c.type_args_cas, NULL,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
   __btel_ref(1, c.inputs_cas, f.argument_names,
@@ -388,7 +390,7 @@ LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path p ON p.rec = c.rec AND p.call_path_id = c.call_path_id
 LEFT JOIN main.function_def f ON f.rec = c.rec AND f.function_id = p.callee_function_id
 LEFT JOIN main.thread t ON t.rec = c.rec AND t.thread_id = c.thread_id
-LEFT JOIN main.epoch e ON e.rec = c.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+LEFT JOIN main.epoch e ON e.rec = c.rec AND e.epoch_id = t.epoch_id
 LEFT JOIN main.epoch_state s ON s.rec = c.rec AND s.epoch_id = t.epoch_id
 WHERE c.outcome IS NOT NULL
 UNION ALL
@@ -414,7 +416,8 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_utc(t.completed_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS end_time,
   __btel_duration(COALESCE(t.ran_ticks, t.started_ticks), t.completed_ticks, e.multiplier,
-    e.shift, s.status, IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+    e.shift, s.status, CASE WHEN e.conflict = 1 THEN 2 WHEN e.defined = 1 THEN IIF(e.precision = 3, 3, 1) WHEN e.anchor IS NOT NULL THEN IIF(s.final = 1, 5, 4) ELSE 0 END) AS duration,
+  __btel_timing(COALESCE(t.ran_ticks, t.started_ticks), t.completed_ticks, e.multiplier, e.shift, s.status, CASE WHEN e.conflict = 1 THEN 2 WHEN e.defined = 1 THEN IIF(e.precision = 3, 3, 1) WHEN e.anchor IS NOT NULL THEN IIF(s.final = 1, 5, 4) ELSE 0 END) AS timing_status,
   NULL AS type_args,
   NULL AS input_args,
   NULL AS output_value,
@@ -443,7 +446,7 @@ LEFT JOIN main.call_path sp ON sp.rec = t.rec AND sp.call_path_id = t.spawn_call
 LEFT JOIN main.function_def sf ON sf.rec = t.rec AND sf.function_id = sp.callee_function_id
 LEFT JOIN main.thread pt ON pt.rec = t.rec AND pt.thread_id = t.parent_id
 LEFT JOIN main.call pc ON pc.rec = t.rec AND pc.call_id = t.parent_id
-LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+LEFT JOIN main.epoch e ON e.rec = t.rec AND e.epoch_id = t.epoch_id
 LEFT JOIN main.epoch_state s ON s.rec = t.rec AND s.epoch_id = t.epoch_id
 WHERE t.outcome IS NOT NULL
 UNION ALL
@@ -462,7 +465,8 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_utc(n.completed_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS end_time,
   __btel_duration(n.started_ticks, n.completed_ticks, e.multiplier, e.shift, s.status,
-    IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
+    CASE WHEN e.conflict = 1 THEN 2 WHEN e.defined = 1 THEN IIF(e.precision = 3, 3, 1) WHEN e.anchor IS NOT NULL THEN IIF(s.final = 1, 5, 4) ELSE 0 END) AS duration,
+  __btel_timing(n.started_ticks, n.completed_ticks, e.multiplier, e.shift, s.status, CASE WHEN e.conflict = 1 THEN 2 WHEN e.defined = 1 THEN IIF(e.precision = 3, 3, 1) WHEN e.anchor IS NOT NULL THEN IIF(s.final = 1, 5, 4) ELSE 0 END) AS timing_status,
   NULL AS type_args,
   -- The request is due while only the completion is indexed.
   __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
@@ -521,7 +525,7 @@ JOIN main.event_context ec ON ec.rec = n.rec AND ec.node_id = n.span_id AND ec.s
 LEFT JOIN main.context_snapshot cx ON cx.cas = ec.cas
 LEFT JOIN main.call_path p ON p.rec = n.rec AND p.call_path_id = n.call_path_id
 LEFT JOIN main.thread t ON t.rec = n.rec AND t.thread_id = n.thread_id
-LEFT JOIN main.epoch e ON e.rec = n.rec AND e.epoch_id = t.epoch_id AND e.defined = 1
+LEFT JOIN main.epoch e ON e.rec = n.rec AND e.epoch_id = t.epoch_id
 LEFT JOIN main.epoch_state s ON s.rec = n.rec AND s.epoch_id = t.epoch_id
 WHERE n.outcome IS NOT NULL",
 };

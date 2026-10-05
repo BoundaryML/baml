@@ -216,6 +216,36 @@ impl TelemetryRuntime {
     where
         P: Publisher<Snapshot, Snapshot> + Send + 'static,
     {
+        Self::build(config, make, None)
+    }
+
+    pub fn with_clock(clock: Arc<btel_clock::ClockRuntime>) -> std::io::Result<Arc<Self>> {
+        Self::build(
+            Config::default(),
+            |_| Ok(NoSinkPublisher::default()),
+            Some(clock),
+        )
+    }
+
+    pub fn with_publisher_factory_and_clock<P>(
+        config: Config,
+        clock: Arc<btel_clock::ClockRuntime>,
+        make: impl FnOnce(RecordingControl) -> std::io::Result<P>,
+    ) -> std::io::Result<Arc<Self>>
+    where
+        P: Publisher<Snapshot, Snapshot> + Send + 'static,
+    {
+        Self::build(config, make, Some(clock))
+    }
+
+    fn build<P>(
+        config: Config,
+        make: impl FnOnce(RecordingControl) -> std::io::Result<P>,
+        clock: Option<Arc<btel_clock::ClockRuntime>>,
+    ) -> std::io::Result<Arc<Self>>
+    where
+        P: Publisher<Snapshot, Snapshot> + Send + 'static,
+    {
         const {
             assert!(btel_settings::processor::THREADS_PER_RUNTIME == 1);
         }
@@ -259,12 +289,17 @@ impl TelemetryRuntime {
                     // Catch outside Processor: its guard first marks the pool
                     // terminal, releasing spinning producers on callback failure.
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        Processor::with_publisher(
+                        let processor = Processor::with_publisher(
                             consumer,
                             btel_settings::processor::REQUESTED_BATCH_CHUNKS,
                             publisher,
-                        )
-                        .run()
+                        );
+                        let processor = if let Some(clock) = clock {
+                            processor.with_clock_runtime(clock)
+                        } else {
+                            processor
+                        };
+                        processor.run()
                     }));
                     let result = match outcome {
                         Ok(result) => result.map_err(|error| RuntimeError(error.to_string())),
@@ -1242,5 +1277,41 @@ mod tests {
         assert_eq!(runtime.stats().active_producers, 0);
         // Also joins the failed worker instead of waiting forever for progress.
         drop(runtime);
+    }
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use btel_clock::{ClockMode, ClockRuntime, Precision};
+
+    use super::*;
+    #[test]
+    fn zero_sink_worker_calibrates_without_any_published_chunk() {
+        let clock = Arc::new(ClockRuntime::without_reported_scale(ClockMode::Auto));
+        let runtime = TelemetryRuntime::with_clock(Arc::clone(&clock)).unwrap();
+        let epoch = clock.start_run();
+        epoch.attach_thread();
+        let until = web_time::Instant::now() + std::time::Duration::from_secs(2);
+        while epoch.mapping().is_none() && web_time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(epoch.mapping().unwrap().precision, Precision::Calibrated);
+        assert_eq!(
+            clock.start_run().mapping().unwrap().precision,
+            Precision::Calibrated
+        );
+        assert_eq!(runtime.stats().sealed_records, 0);
+        epoch.finish_thread();
+        runtime.finish().unwrap();
+    }
+    #[test]
+    fn immediate_shutdown_does_not_wait_for_pending_calibration() {
+        let clock = Arc::new(ClockRuntime::without_reported_scale(ClockMode::Auto));
+        let runtime = TelemetryRuntime::with_clock(Arc::clone(&clock)).unwrap();
+        let epoch = clock.start_run();
+        epoch.attach_thread();
+        epoch.finish_thread();
+        runtime.finish().unwrap();
+        assert!(epoch.settled_status().is_some());
     }
 }

@@ -68,6 +68,9 @@ impl Conversion {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimingState {
     Valid,
+    Estimated,
+    Pending,
+    BelowPrecision,
     /// No completion observed in the indexed prefix.
     Incomplete,
     /// Thread or clock epoch definition not (yet) observed.
@@ -86,6 +89,9 @@ impl TimingState {
     pub fn label(self) -> &'static str {
         match self {
             Self::Valid => "valid",
+            Self::Estimated => "estimated",
+            Self::Pending => "pending",
+            Self::BelowPrecision => "below_precision",
             Self::Incomplete => "incomplete",
             Self::UnknownClock => "unknown_clock",
             Self::Invalidated(status) => match status {
@@ -102,10 +108,47 @@ impl TimingState {
     }
 }
 
+/// Precision is separate from validity and conversion availability.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Precision {
+    #[default]
+    Calibrated,
+    Reported,
+    Estimated,
+    Pending,
+    BelowPrecision,
+}
+impl Precision {
+    pub fn state(self) -> TimingState {
+        match self {
+            Self::Estimated => TimingState::Estimated,
+            Self::Pending => TimingState::Pending,
+            Self::BelowPrecision => TimingState::BelowPrecision,
+            _ => TimingState::Valid,
+        }
+    }
+}
+
+/// Normalize the immutable anchor carried by a complete mapping. This also
+/// reconciles legacy mappings with independent anchors arriving out of order.
+pub fn epoch_anchor(def: &proto::ClockEpochDefinition) -> proto::ClockEpochAnchor {
+    proto::ClockEpochAnchor {
+        epoch_id: def.epoch_id,
+        domain_id: def.domain_id,
+        source: def.source,
+        reference_tick: def.reference_tick,
+        reference_monotonic_ns: def.reference_monotonic_ns,
+        origin_uncertainty_ns: def.origin_uncertainty_ns,
+        fallback: def.fallback,
+        utc: def.utc,
+    }
+}
+
 /// The clock facts a derived duration depends on.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Clock {
     pub conversion: Option<Conversion>,
+    pub precision: Precision,
     /// Most severe observed status; `None` when no state was observed.
     pub status: Option<EpochStatus>,
 }
@@ -113,8 +156,18 @@ pub struct Clock {
 impl Clock {
     fn usable(self) -> Result<Conversion, TimingState> {
         match (self.conversion, self.status) {
+            (_, Some(status)) if status != EpochStatus::Valid => {
+                Err(TimingState::Invalidated(status))
+            }
             (Some(conversion), Some(EpochStatus::Valid)) => Ok(conversion),
-            (Some(_), Some(status)) => Err(TimingState::Invalidated(status)),
+            (None, _)
+                if matches!(
+                    self.precision,
+                    Precision::Pending | Precision::BelowPrecision
+                ) =>
+            {
+                Err(self.precision.state())
+            }
             _ => Err(TimingState::UnknownClock),
         }
     }
@@ -233,6 +286,7 @@ mod tests {
                 shift: 0,
             }),
             status: Some(EpochStatus::Valid),
+            ..Default::default()
         };
         assert_eq!(valid.interval_ns(Some(5), Some(9)), Ok(4));
         assert_eq!(

@@ -240,6 +240,7 @@ impl TelemetryRecording {
         source_snapshot: Option<[u8; 32]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
         launch_context: &btel_types::context::Context,
+        clock: Arc<btel_clock::ClockRuntime>,
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
@@ -266,6 +267,7 @@ impl TelemetryRecording {
                     functions,
                     transport,
                     process,
+                    clock,
                 );
             }
             Destination::UserFiles => std::env::home_dir()
@@ -279,8 +281,10 @@ impl TelemetryRecording {
             Destination::LocalFiles { recordings, cas } => Ok((recordings, cas)),
         };
         let mut delivery = None;
-        let runtime =
-            btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
+        let runtime = btel_processor::TelemetryRuntime::with_publisher_factory_and_clock(
+            transport,
+            clock,
+            |control| {
                 let failure = control.clone();
                 let writer = root.and_then(|(root, cas)| {
                     btel_file::LocalDelivery::create_with_cas(
@@ -316,8 +320,9 @@ impl TelemetryRecording {
                     }
                 };
                 Ok(publisher)
-            })
-            .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
+            },
+        )
+        .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
         Ok((runtime, delivery.map(RecordingDelivery::Local)))
     }
 
@@ -331,6 +336,7 @@ impl TelemetryRecording {
         functions: Arc<btel_types::FunctionMetadataTable>,
         transport: btel_settings::transport::ChunkConfig,
         process: btel_recorder::ProcessRecording,
+        clock: Arc<btel_clock::ClockRuntime>,
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
@@ -339,8 +345,10 @@ impl TelemetryRecording {
         EngineError,
     > {
         let mut delivery = None;
-        let runtime =
-            btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
+        let runtime = btel_processor::TelemetryRuntime::with_publisher_factory_and_clock(
+            transport,
+            clock,
+            |control| {
                 let failure = control.clone();
                 let handle = match btel_bcs::delivery::BcsDelivery::new(
                     delivery_config.clone(),
@@ -367,8 +375,9 @@ impl TelemetryRecording {
                             .with_process(process)
                     })
                     .map_err(std::io::Error::other)
-            })
-            .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
+            },
+        )
+        .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
         Ok((runtime, delivery))
     }
 }
