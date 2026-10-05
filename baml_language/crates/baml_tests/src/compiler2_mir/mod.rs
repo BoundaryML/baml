@@ -135,11 +135,8 @@ fn structural_defaults_call_native_helpers_directly() {
     let file = db.file(
         "test.baml",
         r#"
-class Record {
-  value int
-}
-function roundtrip(value: Record) -> bool {
-  let decoded = Record.from_json(value.to_json());
+function roundtrip(value: int) -> bool {
+  let decoded = int.from_json(value.to_json());
   value.to_string();
   value == decoded
 }
@@ -151,7 +148,6 @@ function roundtrip(value: Record) -> bool {
         "_to_json_default",
         "_from_json_structural_default",
         "_to_string_default",
-        "_equals_structural_default",
     ] {
         assert!(output.contains(native), "missing {native}:\n{output}");
     }
@@ -200,6 +196,42 @@ function erased(value: unknown) -> string {
     let output = render_mir(&db, file);
     assert_eq!(output.matches("virtual_call").count(), 3, "{output}");
     assert!(!output.contains("_to_string_default"), "{output}");
+}
+
+#[test]
+fn structural_defaults_keep_nominal_receivers_virtual() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Record { value int }
+enum Choice { A B }
+function roundtrip(value: Record) -> bool {
+  let decoded = Record.from_json(value.to_json());
+  value.to_string();
+  value.hash(baml.hash.DefaultHasher.new());
+  value == decoded
+}
+function enum_value(value: Choice) -> string { value.to_string() }
+function enum_variant(value: Choice.A) -> string { value.to_string() }
+function list(value: Record[]) -> string { value.to_string() }
+function map_value(value: map<string, Record>) -> string { value.to_string() }
+function map_key(value: map<Record, int>) -> string { value.to_string() }
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    assert!(output.contains("virtual_call"), "{output}");
+    assert!(output.contains("make_virtual_function"), "{output}");
+    for native in [
+        "_to_json_default",
+        "_from_json_structural_default",
+        "_to_string_default",
+        "_hash_structural_default",
+        "_equals_structural_default",
+    ] {
+        assert!(!output.contains(native), "unexpected {native}:\n{output}");
+    }
 }
 
 #[test]

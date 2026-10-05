@@ -10552,13 +10552,15 @@ impl<'db> LoweringContext<'db> {
         };
         use baml_type::interned::{InferInterface, Ty};
 
-        // A closed outer class is insufficient: a specialized impl can still
-        // override `Box<T>` when its type argument becomes known at runtime.
-        fn is_static(ty: &Tir2Ty) -> bool {
+        // Concrete nominal types are not closed: a later Session submission
+        // can add an impl while retaining previously compiled callers. Only
+        // builtin types with recursively closed components can be devirtualized.
+        fn has_closed_implementations(ty: &Tir2Ty) -> bool {
             match ty {
-                Tir2Ty::Class(_, args) => args.iter().all(is_static),
-                Tir2Ty::List(inner) => is_static(inner),
-                Tir2Ty::Map { key, value } => is_static(key) && is_static(value),
+                Tir2Ty::List(inner) => has_closed_implementations(inner),
+                Tir2Ty::Map { key, value } => {
+                    has_closed_implementations(key) && has_closed_implementations(value)
+                }
                 Tir2Ty::Int
                 | Tir2Ty::Bigint
                 | Tir2Ty::Float
@@ -10567,14 +10569,12 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::Null
                 | Tir2Ty::Uint8Array
                 | Tir2Ty::Type
-                | Tir2Ty::Enum(_)
-                | Tir2Ty::EnumVariant(..)
                 | Tir2Ty::Literal(..) => true,
                 _ => false,
             }
         }
         structural_interface(self.db, interface)?;
-        if !is_static(self_ty) {
+        if !has_closed_implementations(self_ty) {
             return None;
         }
         let interface = InferInterface::new(interface.clone(), Box::new([]), Box::new([]));
