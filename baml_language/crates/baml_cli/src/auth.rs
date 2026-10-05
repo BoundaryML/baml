@@ -327,6 +327,8 @@ impl Credentials {
         .with_context(|| format!("Failed to read {}", path.display()))?;
         let mut creds: Credentials = serde_json::from_str(&content)
             .with_context(|| format!("Malformed credentials in {}", path.display()))?;
+        // Invalid endpoint configuration must fail even for anonymous feedback;
+        // a credential-store outage can omit identity, but cannot change the endpoint.
         let endpoint = crate::cloud_config::login_endpoint()?;
         // Anonymous feedback remains usable when an OS credential store is
         // unavailable. Explicit auth commands report that failure themselves.

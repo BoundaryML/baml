@@ -738,3 +738,26 @@ fn status_list_view_read_the_local_store() {
     assert!(!ok, "{out}");
     assert!(out.contains("no report with id"), "{out}");
 }
+
+#[test]
+fn invalid_boundary_url_rejects_anonymous_feedback() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let (ok, out) = run_baml_posthog(
+        home.path(),
+        "not a URL",
+        &base,
+        &["feedback", "--anonymous", "--title", "Invalid endpoint"],
+        None,
+    );
+    assert!(!ok, "{out}");
+    assert_eq!(
+        out.trim(),
+        r#"error: Invalid BOUNDARY_API_URL
+
+caused by:
+    0: relative URL without a base"#
+    );
+    assert_eq!(feedback_events(&state).len(), 0);
+}
