@@ -530,15 +530,20 @@ async fn blobs_a_sealed_file_left_queued_are_delivered_without_another_record() 
     tokio::time::sleep(deadline.saturating_duration_since(std::time::Instant::now())).await;
     publisher.after_batch(0);
     assert!(publisher.deadline().is_none());
-    let uploaded = async {
-        while pool.stats().in_use != 0 {
+    let delivered = async {
+        loop {
+            let requests = server.received_requests().await.unwrap();
+            // Releasing the last capture precedes finalizing its recording file.
+            // Observe both before asserting the complete request sequence.
+            if pool.stats().in_use == 0 && recording_ends(&requests).len() >= 3 {
+                break requests;
+            }
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     };
-    tokio::time::timeout(Duration::from_secs(10), uploaded)
+    let requests = tokio::time::timeout(Duration::from_secs(10), delivered)
         .await
-        .expect("the capture is let go without waiting for shutdown");
-    let requests = server.received_requests().await.unwrap();
+        .expect("the capture is released and its file finalized without waiting for shutdown");
     let prepares = prepare_requests(&requests);
     assert_eq!(
         prepares
