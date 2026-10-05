@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
     ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
-    MapContainer, Uint8ArrayContainer, Value, Variant,
+    Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
         RuntimeImplRule, TypeAliasDef,
@@ -270,11 +270,8 @@ enum ObjectWire {
     ),
     Uint8Array(Vec<u8>),
     Array(Box<crate::RealizedTy>, Vec<Value>),
-    Map(
-        Box<crate::RealizedTy>,
-        Box<crate::RealizedTy>,
-        Vec<(u64, Value, Value)>,
-    ),
+    // Reserved tag. Runtime maps need VM Hash callbacks to rebuild their index.
+    Map,
     Float(f64),
     Future(crate::Future),
     /// Carries the described type, which is the whole of a `type` value: two
@@ -311,14 +308,12 @@ impl BorshSerialize for Object {
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
             Self::Array(v) => ObjectWire::Array(v.element_ty.clone(), v.data.lock().clone()),
-            Self::Map(v) => ObjectWire::Map(
-                v.key_ty.clone(),
-                v.value_ty.clone(),
-                v.lock()
-                    .entries()
-                    .map(|(_, entry)| (entry.hash, entry.key, entry.value))
-                    .collect(),
-            ),
+            Self::Map(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "runtime maps cannot be serialized; hash indexes require the VM",
+                ));
+            }
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
@@ -369,11 +364,12 @@ impl BorshDeserialize for Object {
                 element_ty: ty,
                 data: ArrayContainer::new(data),
             }),
-            ObjectWire::Map(key_ty, value_ty, data) => Self::Map(Map {
-                key_ty,
-                value_ty,
-                data: MapContainer::new(Box::new(crate::MapData::from_hashed_entries(data))),
-            }),
+            ObjectWire::Map => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "runtime maps cannot be deserialized; hash indexes require the VM",
+                ));
+            }
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
@@ -532,11 +528,51 @@ impl std::fmt::Display for ObjectType {
 }
 
 #[cfg(test)]
-mod type_wire_tests {
+mod wire_tests {
     use borsh::BorshDeserialize;
 
     use super::*;
     use crate::types::TypeValue;
+
+    #[test]
+    fn runtime_maps_do_not_persist_cached_hashes() {
+        for data in [
+            crate::MapData::new(),
+            crate::MapData::from_hashed_entries([(123, Value::int(1), Value::int(2))]),
+        ] {
+            let object = Object::Map(Map::new(
+                crate::RealizedTy::int(),
+                crate::RealizedTy::int(),
+                data,
+            ));
+            let error = borsh::to_vec(&object).expect_err("runtime map has no artifact wire form");
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+            assert!(
+                error
+                    .to_string()
+                    .contains("runtime maps cannot be serialized")
+            );
+        }
+    }
+
+    #[test]
+    fn reserved_map_wire_tag_is_rejected_without_changing_later_tags() {
+        let encoded = borsh::to_vec(&ObjectWire::Map).unwrap();
+        assert_eq!(encoded, vec![16]);
+        let error = Object::try_from_slice(&encoded).expect_err("runtime map tag is reserved");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(
+            error
+                .to_string()
+                .contains("runtime maps cannot be deserialized")
+        );
+        let float = borsh::to_vec(&Object::Float(1.0)).unwrap();
+        assert_eq!(float[0], 17);
+        assert!(matches!(
+            Object::try_from_slice(&float),
+            Ok(Object::Float(1.0))
+        ));
+    }
 
     #[test]
     fn type_wire_round_trips_the_described_type() {

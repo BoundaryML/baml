@@ -116,7 +116,7 @@ fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
     if !vm.stdlib_heads().is_cache_delimiter(head) {
         return None;
     }
-    Some(super::json::value_to_serde(vm, args))
+    Some(super::json::json_value_to_serde(vm, args))
 }
 
 /// Trim leading whitespace off a run of content parts: whitespace-only text
@@ -215,7 +215,7 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
         _ => return None,
     };
     let name = vm.as_string(fields.get(name_index)?).ok()?;
-    let mut metadata = super::json::value_to_serde(vm, *fields.get(metadata_index)?);
+    let mut metadata = super::json::json_value_to_serde(vm, *fields.get(metadata_index)?);
     let mut synthetic = false;
     if let serde_json::Value::Object(entries) = &mut metadata {
         synthetic = entries.remove("__baml_synthetic_role").is_some();

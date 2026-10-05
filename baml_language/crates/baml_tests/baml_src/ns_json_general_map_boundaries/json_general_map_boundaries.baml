@@ -70,6 +70,66 @@ test "string_maps_preserve_round_trip" {
 
 type StringKeys = "a" | "b"
 
+type RecursiveMap = int | RecursiveMap[] | map<string, RecursiveMap> | map<int, RecursiveMap>
+
+class RecursiveMapRow {
+    data: RecursiveMap,
+}
+
+test "recursive_alias_markdown_fallback_rejects_non_string_maps" {
+    let values: map<int, RecursiveMap> = {};
+    values[1] = 2;
+    let children: RecursiveMap[] = [values];
+    let nested: map<string, RecursiveMap> = {};
+    nested["children"] = children;
+    let rendered = baml.csv.to_markdown<RecursiveMapRow>([RecursiveMapRow { data: nested }]);
+    assert.contains(rendered, "<unrepresentable>");
+}
+
+test "recursive_alias_rejects_non_string_maps" {
+    let values: map<int, RecursiveMap> = {};
+    values[1] = 2;
+    let children: RecursiveMap[] = [values];
+    let nested: map<string, RecursiveMap> = {};
+    nested["children"] = children;
+    {
+        baml.json.to_string(nested);
+        baml.sys.panic("expected recursive map rejection")
+    } catch (e) {
+        let err: baml.json.SerializationError => {
+            assert.contains(err.message, "string keys");
+        }
+    }
+}
+
+test "recursive_alias_rejects_empty_non_string_maps" {
+    let values: map<int, RecursiveMap> = {};
+    let nested: RecursiveMap = [values];
+    {
+        baml.json.to_string(nested);
+        baml.sys.panic("expected empty recursive map rejection")
+    } catch (e) {
+        let err: baml.json.SerializationError => {
+            assert.contains(err.message, "string keys");
+        }
+    }
+}
+
+test "recursive_alias_string_maps_preserve_nested_json" {
+    let leaf: map<string, RecursiveMap> = {};
+    leaf["value"] = 2;
+    let children: RecursiveMap[] = [1, leaf];
+    let nested: map<string, RecursiveMap> = {};
+    nested["children"] = children;
+    let encoded = baml.json.to_string(nested);
+    assert.equal(encoded, "{\"children\":[1,{\"value\":2}]}");
+    let rendered = baml.csv.to_markdown<RecursiveMapRow>([RecursiveMapRow { data: nested }]);
+    assert.contains(rendered, encoded);
+    let json = baml.json.parse(encoded);
+    assert.equal(baml.json.stringify(json), encoded);
+    assert.equal(baml.json.stringify(baml.json.field(json, "children")), "[1,{\"value\":2}]");
+}
+
 test "encode_accepts_declared_string_subtypes" {
     let values: map<StringKeys, int> = {};
     assert.equal(baml.json.to_string(values), "{}");

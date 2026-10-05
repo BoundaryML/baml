@@ -361,15 +361,17 @@ impl TraceSnapshotBuilder {
                 }
                 self.alloc(TraceValue::Array(items))
             }
-            Object::Map(map) => {
+            Object::Map(map) => 'map: {
                 let map = map.data.lock();
                 let mut entries = Self::vec_with_capacity(map.len())?;
                 for (key, value) in map.iter() {
-                    let key_ptr = key.as_object_ptr().ok_or(CopyError::CopyFailed)?;
                     // SAFETY: the copy holds a heap permit for the entire traversal.
-                    let Object::String(key) = (unsafe { key_ptr.get() }) else {
-                        // Trace maps cannot represent non-string keys.
-                        return Err(CopyError::CopyFailed);
+                    let key = key.as_object_ptr().map(|ptr| unsafe { ptr.get() });
+                    let Some(Object::String(key)) = key else {
+                        break 'map self.omitted(
+                            TraceOmissionReason::UnsupportedValue,
+                            "map with non-string keys",
+                        );
                     };
                     let key = Self::copy_str(key.as_str())?;
                     let value = self.copy_value(heap, permit, *value)?;
@@ -585,6 +587,65 @@ mod tests {
 
         fn tlab_mut(&mut self) -> &mut Tlab {
             &mut self.tlab
+        }
+    }
+
+    #[tokio::test]
+    async fn trace_heap_omits_only_the_unsupported_map_and_unwinds_its_visit() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let unsupported = permit
+            .tlab_mut()
+            .alloc(Object::Map(bex_vm_types::types::Map::new(
+                bex_vm_types::RealizedTy::int(),
+                bex_vm_types::RealizedTy::int(),
+                bex_vm_types::MapData::from_hashed_entries([(0, Value::int(1), Value::int(2))]),
+            )));
+        let outer = permit.tlab_mut().alloc_map(
+            bex_vm_types::RealizedTy::string(),
+            bex_vm_types::RealizedTy::unknown(),
+            [
+                ("before".into(), Value::int(7)),
+                ("unsupported".into(), Value::object(unsupported)),
+                ("again".into(), Value::object(unsupported)),
+                ("after".into(), Value::int(8)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let trace_heap = TraceHeap::new();
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(unsupported));
+        let root = trace_heap.release(handle).expect("root snapshot retained");
+        assert!(matches!(
+            root.value(root.root()),
+            Some(TraceValue::Omitted(descriptor))
+                if descriptor.reason == TraceOmissionReason::UnsupportedValue
+        ));
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(outer));
+        let snapshot = trace_heap
+            .release(handle)
+            .expect("sibling snapshot retained");
+        let Some(TraceValue::Map(entries)) = snapshot.value(snapshot.root()) else {
+            panic!("supported containing map must survive");
+        };
+        assert_eq!(entries.len(), 4);
+        assert_eq!(snapshot.value(entries[0].1), Some(&TraceValue::Int(7)));
+        assert_eq!(snapshot.value(entries[3].1), Some(&TraceValue::Int(8)));
+        for (_, reference) in &entries[1..3] {
+            assert!(matches!(
+                snapshot.value(*reference),
+                Some(TraceValue::Omitted(descriptor))
+                    if descriptor.reason == TraceOmissionReason::UnsupportedValue
+            ));
         }
     }
 
