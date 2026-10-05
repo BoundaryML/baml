@@ -629,7 +629,7 @@ match:
       _             => fallback,
     }
   details: |
-    The scrutinee is parenthesized: `match (value) { ... }`. Each arm is `pattern => expr`. Patterns include literals (`0`, `"ok"`), a binding with a type (`let x: int`) which both matches and narrows, the wildcard `_`, and optional guards (`let n: int if n > 0 => ...`). Use `let x: T => ...`, not `x is T => ...`, for type-based arms. Arms must be exhaustive, and a `_` arm is only allowed when earlier arms leave something uncovered.
+    The scrutinee is parenthesized: `match (value) { ... }`. Each arm is `pattern => expr`. Patterns include literals (`0`, `"ok"`), a binding with a type (`let x: int`) which both matches and narrows, the wildcard `_`, and optional guards (`let n: int if n > 0 => ...`). Use `let x: T => ...`, not `x is T => ...`, for type-based arms. Arms must be exhaustive, and a `_` arm is only allowed when earlier arms leave something uncovered. A catch-all binding (`let rest => ...`) has the type that the earlier arms left: after a `null` arm it is not null. `match` reads its scrutinee one time, so it is the form to use for a field (`match (holder.value) { let v: T => ... }`): `is` does not narrow a field path (see `baml describe is`).
 
 is:
   summary: "Tests whether a value matches a type or pattern."
@@ -637,6 +637,42 @@ is:
     if x is string {
       // x is narrowed to string here
     }
+
+    // The right side of `&&` and `||` has the facts of the left side.
+    if x is User && x.name == "ada" { ... }
+    if s == null || s.length() == 0 { ... }
+
+    // A field is not narrowed. Bind it first, or use `if let` or `match`.
+    let v = holder.value;
+    if v is User && v.name == "ada" { ... }
+    if let user: User = holder.value { user.name } else { "" }
+    match (holder.value) { let user: User => user.name, _ => "" }
+  details: |
+    `x is T` is a `bool`. It also narrows `x` when `x` is a local binding (a
+    `let` or a parameter) that no closure captures. A null test (`x != null`)
+    and a truthiness test (`if (x)`) narrow in the same places:
+
+    - in the `if` branch or the `while` body that the test guards;
+    - after an early exit: after `if (!(x is T)) { return ...; }`, `x` is a `T`
+      for the rest of the block;
+    - on the right side of `&&` (the left side was true) and of `||` (the left
+      side was false): `x is T && x.f == 1`, `x == null || x.f == 1`. The two
+      operators short-circuit, so the right side runs only then.
+
+    These are not narrowed: a local that a closure captures, a field path
+    (`holder.value is T`) and an index path (`items[0] is T`). BAML tasks can
+    interleave between statements. So another task, or another name for the
+    same object, can change a field between the test and the read. A local
+    that no closure captures belongs to one call, and the type of a value does
+    not change after the value is created, so the test stays true for it.
+
+    For a field, bind the value first (`let v = holder.value;`), or use
+    `if let v: T = holder.value { ... }` or
+    `match (holder.value) { let v: T => ... }`. Each form reads the field one
+    time and tests the value that it read.
+
+    An assignment to the binding replaces the fact with the type of the
+    assigned value. `assert.is_type<T>(x)` checks only: it does not narrow.
 
 as:
   summary: "Projects a value or type through an interface, and maps interface fields to class fields."
@@ -1067,6 +1103,11 @@ patterns:
     `[a, ..]` / `[.., z]`; or-patterns `A | B` (bindings must line up); guards
     `<pattern> if cond`. `match` must be exhaustive — a `_` arm is allowed only
     when earlier arms leave a gap. Same topic: `baml describe match`.
+
+    `is` narrows a local binding that no closure captures, also on the right
+    side of `&&` / `||`. It does not narrow a field path or an index path:
+    use `if let` or `match` for those. The rule and the reason are in
+    `baml describe is`.
 
 pattern:
   summary: "Pattern matching — see `baml describe patterns` (or `match`)."
