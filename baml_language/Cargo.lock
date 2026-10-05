@@ -1962,7 +1962,6 @@ dependencies = [
  "btel_types",
  "num-bigint",
  "prost",
- "serde",
  "serde_json",
  "tempfile",
  "xxhash-rust",

@@ -302,6 +302,44 @@ pub const SPANS: Relation = Relation {
     ],
     view: "
 CREATE TEMP VIEW spans AS
+-- Which provider a model request went to, by its URL. A URL can match
+-- several routes, such as a gateway's path that holds another API's: the
+-- lowest priority wins, so OpenAI's paths go before Anthropic's.
+WITH network_route (url, provider, priority) AS (VALUES
+  ('%/v1/messages%', 'anthropic', 3),
+  -- Claude on Vertex: :rawPredict and :streamRawPredict.
+  ('%rawPredict%', 'anthropic', 4),
+  ('%/chat/completions%', 'openai_chat', 1),
+  ('%/responses%', 'openai_responses', 2),
+  -- Gemini, also on Vertex: :generateContent and :streamGenerateContent.
+  ('%generateContent%', 'gemini', 5),
+  -- converse and converse-stream.
+  ('%/model/%/converse%', 'bedrock', 6),
+  ('%/systemone%', 'jev', 7)),
+-- Where each provider's response reports its usage: JSON paths into a body,
+-- or into a stream event's data. A stream event whose usage is wrapped (in
+-- `message` or `response`) is read inside its `envelope`. `url_model`
+-- precedes the model in the URL. `input_has_cache`: `input` counts cache
+-- reads too, which are subtracted.
+network_provider (provider, envelope, model, url_model, input, input_has_cache, cache_read,
+  cache_write, output, reasoning) AS (VALUES
+  ('anthropic', '$.message', '$.model', '/models/', '$.usage.input_tokens', 0,
+    '$.usage.cache_read_input_tokens', '$.usage.cache_creation_input_tokens',
+    '$.usage.output_tokens', '$.usage.output_tokens_details.thinking_tokens'),
+  ('openai_chat', NULL, '$.model', NULL, '$.usage.prompt_tokens', 1,
+    '$.usage.prompt_tokens_details.cached_tokens', NULL,
+    '$.usage.completion_tokens', '$.usage.completion_tokens_details.reasoning_tokens'),
+  ('openai_responses', '$.response', '$.model', NULL, '$.usage.input_tokens', 1,
+    '$.usage.input_tokens_details.cached_tokens', NULL,
+    '$.usage.output_tokens', '$.usage.output_tokens_details.reasoning_tokens'),
+  ('gemini', NULL, '$.modelVersion', '/models/', '$.usageMetadata.promptTokenCount', 1,
+    '$.usageMetadata.cachedContentTokenCount', NULL,
+    '$.usageMetadata.candidatesTokenCount', '$.usageMetadata.thoughtsTokenCount'),
+  ('bedrock', NULL, NULL, '/model/', '$.usage.inputTokens', 0,
+    '$.usage.cacheReadInputTokens', '$.usage.cacheWriteInputTokens',
+    '$.usage.outputTokens', NULL),
+  ('jev', NULL, NULL, NULL, '$.usage.input_tokens', 0, NULL, NULL,
+    '$.usage.output_tokens', NULL))
 SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   'function' AS span_type,
   f.fqn AS span_name,
@@ -335,9 +373,10 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
      u.cache_write_tokens, u.reasoning_tokens)
    FROM main.model_usage u WHERE u.rec = c.rec AND u.node_id = c.call_id
      AND NOT EXISTS (SELECT 1 FROM main.network_span x
+       JOIN network_route ON x.url LIKE network_route.url
        JOIN main.network_event v ON v.rec = x.rec AND v.span_id = x.span_id
          AND v.name = 'data' AND v.payload_cas IS NOT NULL
-       WHERE x.rec = c.rec AND x.parent_id = c.call_id AND __btel_provider_route(x.url))) AS temporary_projections,
+       WHERE x.rec = c.rec AND x.parent_id = c.call_id)) AS temporary_projections,
   IIF(c.late = 1, 'policy_promoted', 'other') AS span_reason,
   c.rec AS __span_id_rec, c.call_id AS __span_id_key,
   c.rec AS __future_id_rec, c.thread_id AS __future_id_key,
@@ -388,9 +427,10 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
      u.cache_write_tokens, u.reasoning_tokens)
    FROM main.model_usage u WHERE u.rec = t.rec AND u.node_id = t.thread_id
      AND NOT EXISTS (SELECT 1 FROM main.network_span x
+       JOIN network_route ON x.url LIKE network_route.url
        JOIN main.network_event v ON v.rec = x.rec AND v.span_id = x.span_id
          AND v.name = 'data' AND v.payload_cas IS NOT NULL
-       WHERE x.rec = t.rec AND x.parent_id = t.thread_id AND __btel_provider_route(x.url))) AS temporary_projections,
+       WHERE x.rec = t.rec AND x.parent_id = t.thread_id)) AS temporary_projections,
   'other' AS span_reason,
   t.rec AS __span_id_rec, t.thread_id AS __span_id_key,
   t.rec AS __future_id_rec, COALESCE(pt.thread_id, pc.thread_id) AS __future_id_key,
@@ -438,9 +478,38 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   -- the data events, which covers one whole body and a stream's cumulative
   -- counts alike. The model is the response's, else the request body's,
   -- else the URL's. NULL for an unknown URL or a response without usage.
-  (SELECT __btel_network_usage(n.url, n.request_cas, v.payload_cas)
-   FROM main.network_event v
-   WHERE v.rec = n.rec AND v.span_id = n.span_id AND v.name = 'data') AS temporary_projections,
+  (SELECT __btel_usage(
+       CAST(COALESCE(u.model,
+         (SELECT json_extract(IIF(json_valid(q.text), q.text, NULL), '$.model')
+          FROM (SELECT __btel_body_text(n.request_cas) AS text) q),
+         __btel_path_segment(n.url, u.url_model)) AS TEXT),
+       CAST(u.input AS INTEGER), CAST(u.output AS INTEGER), CAST(u.cache_read AS INTEGER),
+       CAST(u.cache_write AS INTEGER), CAST(u.reasoning AS INTEGER))
+   FROM (
+     SELECT max(json_extract(d.body, d.model)) AS model, d.url_model,
+       IIF(d.input_has_cache,
+         max(0, max(json_extract(d.body, d.input))
+           - COALESCE(max(json_extract(d.body, d.cache_read)), 0)),
+         max(json_extract(d.body, d.input))) AS input,
+       max(json_extract(d.body, d.output)) AS output,
+       max(json_extract(d.body, d.cache_read)) AS cache_read,
+       max(json_extract(d.body, d.cache_write)) AS cache_write,
+       max(json_extract(d.body, d.reasoning)) AS reasoning
+     -- LIMIT -1 keeps SQLite from copying a subquery's expressions into
+     -- each use of its columns, which would read every body many times.
+     FROM (
+       SELECT pv.*, COALESCE(jsonb_extract(doc.body, pv.envelope), doc.body) AS body
+       FROM (SELECT network_provider.* FROM network_route JOIN network_provider USING (provider)
+             WHERE n.url LIKE network_route.url ORDER BY network_route.priority LIMIT 1) pv
+       JOIN (SELECT IIF(json_valid(raw.text), jsonb(raw.text), NULL) AS body
+             FROM (SELECT __btel_body_text(e.payload_cas) AS text FROM main.network_event e
+                   WHERE e.rec = n.rec AND e.span_id = n.span_id AND e.name = 'data'
+                   LIMIT -1) raw
+             LIMIT -1) doc
+       LIMIT -1
+     ) d
+   ) u
+   WHERE u.input IS NOT NULL OR u.output IS NOT NULL) AS temporary_projections,
   'other' AS span_reason,
   n.rec AS __span_id_rec, n.span_id AS __span_id_key,
   n.rec AS __future_id_rec, n.thread_id AS __future_id_key,
