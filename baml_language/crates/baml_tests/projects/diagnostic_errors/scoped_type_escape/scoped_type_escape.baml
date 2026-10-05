@@ -201,7 +201,7 @@ function outer_map_through_an_inner_variable(t: reflect.Type) -> unknown {
 function block_value_is_a_map_literal(t: reflect.Type) -> unknown {
     let escaped = {
         type T = unreflect(t)
-        map { key: as_t<T>(1) }
+        map { "key": as_t<T>(1) }
     }
     escaped
 }

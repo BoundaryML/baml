@@ -189,9 +189,9 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × scoped type `T` cannot leave the block that binds it
      ╭─[scoped_type_escape.baml:204:9]
- 204 │         map { key: as_t<T>(1) }
-     ·         ───────────┬───────────
-     ·                    ╰── this has type `map<string, T>`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
+ 204 │         map { "key": as_t<T>(1) }
+     ·         ────────────┬────────────
+     ·                     ╰── this has type `map<string, T>`; a value leaves the block only through a type that does not mention `T`, such as `unknown`
      ╰────
 
   [type] E0002

@@ -1,7 +1,7 @@
-// Native runtime coverage for object/map property shorthand.
+// Native runtime coverage for class property shorthand and quoted map keys.
 //
-// A bare property name is equivalent to `name: name`; explicit properties can
-// be mixed with shorthand in any position.
+// A bare class property name is equivalent to `name: name`; maps require
+// explicit key-value entries.
 
 class PropertyShorthandRequest {
     options map<string, string>
@@ -42,10 +42,10 @@ test "class properties use shorthand" {
 }
 
 function property_shorthand_map(count: int, retries: int) -> map<string, int> {
-    { count, retries }
+    { "count": count, "retries": retries }
 }
 
-test "map entries use shorthand" {
+test "map entries use quoted keys" {
     let result = property_shorthand_map(7, 3);
     assert.equal(result.get("count"), 7);
     assert.equal(result.get("retries"), 3)
@@ -96,7 +96,7 @@ class PropertyShorthandError {
 function property_shorthand_if_let(input: string?) -> string {
     if let name: string = input {
         let quoted: map<string, string> = { "name": name };
-        let shorthand: map<string, string> = { name };
+        let shorthand: map<string, string> = { "name": name };
         (quoted.get("name") ?? "") + (shorthand.get("name") ?? "")
     } else {
         ""
@@ -106,7 +106,7 @@ function property_shorthand_if_let(input: string?) -> string {
 function property_shorthand_match(input: string?) -> string {
     match (input) {
         let name: string => {
-            let shorthand: map<string, string> = { name };
+            let shorthand: map<string, string> = { "name": name };
             shorthand.get("name") ?? ""
         },
         null => "",
@@ -116,7 +116,7 @@ function property_shorthand_match(input: string?) -> string {
 function property_shorthand_for(names: string[]) -> string {
     let output = "";
     for (let name in names) {
-        let shorthand: map<string, string> = { name };
+        let shorthand: map<string, string> = { "name": name };
         output = output + (shorthand.get("name") ?? "");
     }
     output
@@ -129,7 +129,7 @@ function property_shorthand_throw() -> string throws PropertyShorthandError {
 function property_shorthand_catch() -> string {
     property_shorthand_throw() catch (error) {
         PropertyShorthandError => {
-            let shorthand = { error };
+            let shorthand = { "error": error };
             error.message
         }
     }
@@ -137,14 +137,14 @@ function property_shorthand_catch() -> string {
 
 function property_shorthand_destructure() -> string {
     let PropertyShorthandBinder { value } = PropertyShorthandBinder { value: "destructured" };
-    let shorthand: map<string, string> = { value };
+    let shorthand: map<string, string> = { "value": value };
     shorthand.get("value") ?? ""
 }
 
 function property_shorthand_nested_block() -> string {
     {
         let name = "nested";
-        let shorthand: map<string, string> = { name };
+        let shorthand: map<string, string> = { "name": name };
         shorthand.get("name") ?? ""
     }
 }
@@ -157,11 +157,11 @@ function property_shorthand_class_if_let(input: string?) -> string {
     }
 }
 
-test "if let binders work in explicit and shorthand map entries" {
+test "if let binders work in quoted map entries" {
     assert.equal(property_shorthand_if_let("if-let"), "if-letif-let")
 }
 
-test "shorthand uses every lexical binder scope" {
+test "map values use every lexical binder scope" {
     assert.equal(property_shorthand_match("match"), "match");
     assert.equal(property_shorthand_for(["for", "-binder"]), "for-binder");
     assert.equal(property_shorthand_catch(), "caught");

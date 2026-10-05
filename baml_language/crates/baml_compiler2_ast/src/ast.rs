@@ -796,13 +796,12 @@ impl Default for AstSourceMap {
     }
 }
 
-/// How a property value was written in source.
+/// How a class property value was written in source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertySyntax {
-    /// An explicit key/value pair such as `{ "name": value }` or
-    /// `Config { name: value }`.
+    /// An explicit field such as `Config { name: value }`.
     Explicit,
-    /// A shorthand property such as `{ name }` or `Config { name }`.
+    /// A shorthand property such as `Config { name }`.
     Shorthand,
 }
 
@@ -835,24 +834,11 @@ impl ObjectExprField {
 pub struct MapExprEntry {
     pub key: ExprId,
     pub value: ExprId,
-    pub syntax: PropertySyntax,
 }
 
 impl MapExprEntry {
     pub fn explicit(key: ExprId, value: ExprId) -> Self {
-        Self {
-            key,
-            value,
-            syntax: PropertySyntax::Explicit,
-        }
-    }
-
-    pub fn shorthand(key: ExprId, value: ExprId) -> Self {
-        Self {
-            key,
-            value,
-            syntax: PropertySyntax::Shorthand,
-        }
+        Self { key, value }
     }
 }
 

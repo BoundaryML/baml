@@ -11,8 +11,8 @@ function box_array() -> LcBox<(int | string)[]> throws never {
 }
 
 function box_map() -> LcBox<map<string, int | string>> throws never {
-    LcBox { value: {key: 1} }
-                // ^^^^^^^^ map<string, int | string>
+    LcBox { value: {"key": 1} }
+                // ^^^^^^^^^^ map<string, int | string>
 }
 
 // Controls: a scalar field, and a generic object inside a list literal.

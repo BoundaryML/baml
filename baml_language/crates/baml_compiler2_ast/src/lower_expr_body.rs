@@ -5323,75 +5323,35 @@ impl LoweringContext {
 
     fn lower_map_literal(&mut self, node: &SyntaxNode) -> ExprId {
         // MAP_LITERAL uses OBJECT_FIELD children (same as OBJECT_LITERAL).
-        // Each OBJECT_FIELD is `key: value` or shorthand `key`.
-        // For maps the key can also be a string literal or expression.
+        // Both sides of `key: value` are ordinary expressions.
         let entries = node
             .children()
             .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
             .filter_map(|field_node| {
-                // Key: first child node that can be an expression, or first WORD token
                 let mut key_expr = None;
                 let mut val_expr = None;
                 let mut seen_colon = false;
-                let mut shorthand_name = None;
 
                 for elem in field_node.children_with_tokens() {
-                    match elem {
-                        rowan::NodeOrToken::Token(t) => {
-                            if t.kind() == SyntaxKind::COLON {
-                                seen_colon = true;
-                            } else if !seen_colon
-                                && key_expr.is_none()
-                                && is_ident_token(t.kind())
-                                && !matches!(
-                                    t.kind(),
-                                    SyntaxKind::KW_TRUE
-                                        | SyntaxKind::KW_FALSE
-                                        | SyntaxKind::KW_NULL
-                                )
-                            {
-                                let span = t.text_range();
-                                shorthand_name = Some((Name::new(t.text()), span));
-                                key_expr = Some(self.alloc_expr(
-                                    Expr::Literal(Literal::String(t.text().to_string())),
-                                    span,
-                                ));
-                            } else if !seen_colon
-                                && key_expr.is_none()
-                                && t.kind() == SyntaxKind::STRING_LITERAL
-                            {
-                                let content = strip_string_delimiters(t.text());
-                                let span = t.text_range();
-                                key_expr = Some(
-                                    self.alloc_expr(Expr::Literal(Literal::String(content)), span),
-                                );
-                            } else if !seen_colon && key_expr.is_none() {
-                                key_expr = self.try_lower_bare_token(&t);
-                            } else if seen_colon && val_expr.is_none() {
-                                val_expr = self.try_lower_bare_token(&t);
-                            }
-                        }
-                        rowan::NodeOrToken::Node(n) => {
-                            if !seen_colon && key_expr.is_none() {
-                                key_expr = Some(self.lower_expr(&n));
-                            } else if seen_colon && val_expr.is_none() {
-                                val_expr = Some(self.lower_expr(&n));
-                            }
-                        }
+                    if elem.kind() == SyntaxKind::COLON {
+                        seen_colon = true;
+                        continue;
+                    }
+                    let target = if seen_colon {
+                        &mut val_expr
+                    } else {
+                        &mut key_expr
+                    };
+                    if target.is_none() {
+                        *target = match elem {
+                            rowan::NodeOrToken::Node(node) => Some(self.lower_expr(&node)),
+                            rowan::NodeOrToken::Token(token) => self.try_lower_bare_token(&token),
+                        };
                     }
                 }
 
-                if !seen_colon && let Some((name, span)) = shorthand_name {
-                    let value = self.alloc_expr(Expr::Path(vec![name]), span);
-                    val_expr = Some(value);
-                }
-
                 match (key_expr, val_expr) {
-                    (Some(k), Some(v)) => Some(if seen_colon {
-                        MapExprEntry::explicit(k, v)
-                    } else {
-                        MapExprEntry::shorthand(k, v)
-                    }),
+                    (Some(k), Some(v)) => Some(MapExprEntry::explicit(k, v)),
                     _ => None,
                 }
             })

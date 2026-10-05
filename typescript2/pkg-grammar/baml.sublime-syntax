@@ -492,6 +492,18 @@ contexts:
   boolean-literal:
     - match: '\b(?:true|false)\b'
       scope: constant.language.boolean.baml
+  braced-expression--body:
+    - meta_scope: meta.expression.braced.baml
+    - match: '\}'
+      scope: punctuation.definition.block.end.baml
+      pop: true
+    - include: block-contents
+    - include: colon-separator
+    - include: comma
+  braced-expression:
+    - match: '\{'
+      scope: punctuation.definition.block.begin.baml
+      push: braced-expression--body
   break-statement--body:
     - meta_scope: meta.statement.break.baml
     - match: '(?=[;}]|$)'
@@ -706,7 +718,7 @@ contexts:
     - include: match-expression
     - include: spawn-expression
     - include: map-expression
-    - include: code-block
+    - include: braced-expression
     - include: await-expression
     - include: throw-expression
     - include: catch-expression
@@ -964,9 +976,9 @@ contexts:
     - include: if-expression
     - include: match-expression
     - include: spawn-expression
-    - include: constructor-expression
     - include: map-expression
-    - include: code-block
+    - include: constructor-expression
+    - include: braced-expression
     - include: await-expression
     - include: throw-expression
     - include: catch-expression
@@ -1529,39 +1541,15 @@ contexts:
         1: keyword.other.llm.prompt.baml
         2: punctuation.separator.colon.baml
       push: llm-prompt-field--body
-  map-entry--body:
-    - meta_scope: meta.map.entry.baml
-    - match: '(?=,|\})'
-      pop: true
-    - include: comments
-    - include: map-entry-key
-    - include: string-literal
-    - include: raw-string
-    - include: colon-separator
-    - include: expression
-  map-entry:
-    - match: '\s*(?=(?:"|#|\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*(?:\s*\.\s*\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)*\s*:))'
-      push: map-entry--body
-  map-entry-key:
-    - match: '\b(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)((?:\s*\.\s*\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)*)\b(?=\s*:)'
-      scope: meta.map-entry-key.baml
-      captures:
-        1: variable.other.property.baml
-        2: variable.other.property.baml
-  map-entry-key-segment:
-    - match: '\b\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\b'
-      scope: variable.other.property.baml
   map-expression--body:
     - meta_scope: meta.expression.map.baml
-    - match: '\}'
-      scope: punctuation.definition.map.end.baml
+    - match: '(?<=\})'
       pop: true
     - include: comments
-    - include: map-entry
-    - include: comma
+    - include: braced-expression
   map-expression:
-    - match: '\{(?=\s*(?:\}|["#]|\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*(?:\s*\.\s*\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)*\s*:))'
-      scope: punctuation.definition.map.begin.baml
+    - match: '\bmap\b(?=\s*\{)'
+      scope: support.type.primitive.baml
       push: map-expression--body
   match-arm--body:
     - meta_scope: meta.match.arm.baml
