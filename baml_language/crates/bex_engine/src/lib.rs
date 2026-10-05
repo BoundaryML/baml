@@ -2908,8 +2908,10 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
-        self.collect_garbage_parked(level, reason, heap_guard, cycle)
-            .await
+        // Boxed so a collection's state (roots, forwarding map, statistics) is
+        // not laid out inside every call's future: this is awaited from the VM
+        // event loop, and a collection is rare and already allocates.
+        Box::pin(self.collect_garbage_parked(level, reason, heap_guard, cycle)).await
     }
 
     async fn collect_garbage_parked(

@@ -43,7 +43,7 @@
 use std::{cell::UnsafeCell, collections::HashMap};
 
 use bex_vm_types::{
-    FutureRead, HeapPtr, Object, Value,
+    FutureRead, HeapPtr, Meter, Object, Value,
     types::{Future, Objects, Slots},
 };
 
@@ -95,6 +95,10 @@ pub struct GcStats {
     pub promoted_to_gen1: usize,
     /// Objects promoted from Gen1 to Gen2 during this cycle.
     pub promoted_to_gen2: usize,
+    /// Bytes the survivors keep alive outside their slots, with storage shared
+    /// between them counted once. Only a major collection visits every
+    /// survivor, so a minor collection has no figure.
+    pub live_payload_bytes: Option<usize>,
     /// Detailed diagnostics in profiling builds; a zero-sized marker otherwise.
     pub profile: crate::GcProfile,
 }
@@ -517,11 +521,10 @@ impl BexHeap {
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
-        // Patch all intra-heap pointers in the inactive space to their new locations.
+        // Patch all intra-heap pointers in the inactive space to their new
+        // locations, and take the census of what the survivors hold.
         // SAFETY: All live objects have been copied; no VMs are executing.
-        unsafe {
-            self.fixup_references_in_inactive(&forwarding);
-        }
+        let live_payload_bytes = unsafe { self.fixup_and_measure_survivors(&forwarding) };
 
         // Resolve weak function lookups before destroying from-space. These
         // pointers are deliberately absent from the root set.
@@ -601,6 +604,7 @@ impl BexHeap {
             level: CollectionLevel::Major,
             promoted_to_gen1: 0,
             promoted_to_gen2: live_count,
+            live_payload_bytes: Some(live_payload_bytes),
         };
 
         (stats, remapped_roots, forwarding)
@@ -871,18 +875,27 @@ impl BexHeap {
         }
     }
 
-    /// Fix up all object references in the inactive space to use forwarded addresses.
+    /// Visit every survivor of a major collection once in the inactive space:
+    /// repoint its references to their forwarded addresses, and measure what it
+    /// keeps alive outside its slot. Returns the total measured, with storage
+    /// shared between survivors counted once.
+    ///
+    /// The census depends on survivors having been moved rather than copied:
+    /// a second copy of each would double every reference count it divides by.
     ///
     /// # Safety
-    /// Must be called after all live objects have been copied to inactive.
-    unsafe fn fixup_references_in_inactive(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        // SAFETY: All live objects have been copied to inactive, and no VMs are executing.
+    /// Must be called after all live objects have been moved to inactive.
+    unsafe fn fixup_and_measure_survivors(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> usize {
+        let mut census = Meter::census();
+        // SAFETY: All live objects have been moved to inactive, and no VMs are executing.
         unsafe {
             let inactive = self.inactive_mut();
             for obj in inactive.iter_mut() {
                 self.fixup_object_references(obj, forwarding);
+                obj.measure(&mut census);
             }
         }
+        census.total()
     }
 
     /// Fix up references within a single object.
@@ -1087,7 +1100,8 @@ impl BexHeap {
 
     /// Fix up all object references in an arbitrary space.
     ///
-    /// Like `fixup_references_in_inactive`, but works on any `ChunkedVec`.
+    /// The minor-collection counterpart of `fixup_and_measure_survivors`: it
+    /// works on any `ChunkedVec` and takes no census.
     ///
     /// # Safety
     ///
@@ -1622,6 +1636,7 @@ impl BexHeap {
             level: CollectionLevel::Minor,
             promoted_to_gen1: new_gen1_count,
             promoted_to_gen2,
+            live_payload_bytes: None,
         };
 
         (stats, remapped_roots, forwarding)
@@ -3472,5 +3487,107 @@ mod tests {
             panic!("variant.enm not Enum")
         };
         assert_eq!(e.name.item_name().as_str(), "E");
+    }
+
+    /// A major collection reports exactly what an independent census of its
+    /// survivors finds: every survivor once, and nothing that died.
+    #[test]
+    fn test_census_matches_an_independent_measurement_of_survivors() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        // Shared text: two clones and a slice of one buffer, and a
+        // concatenation that has never been read.
+        let text = bex_str::BexStr::from("x".repeat(100_000));
+        let clone_a = tlab.alloc_string(text.clone());
+        let clone_b = tlab.alloc_string(text.clone());
+        let slice = tlab.alloc_string(text.substring(10, 5_000));
+        let rope = tlab.alloc_string(bex_str::BexStr::concat(
+            text,
+            bex_str::BexStr::from("y".repeat(1_000)),
+        ));
+
+        // A container with spare capacity, a byte buffer, a map, and one big
+        // integer held by two objects.
+        let mut elements = Vec::with_capacity(1_000);
+        elements.push(Value::int(1));
+        let array = tlab.alloc_array(RealizedTy::int(), elements);
+        let bytes = tlab.alloc_uint8array(vec![0; 10_000]);
+        let map = tlab.alloc_map(
+            RealizedTy::string(),
+            RealizedTy::int(),
+            indexmap::IndexMap::from([(bex_str::BexStr::from("key"), Value::int(1))]),
+        );
+        let bigint = Arc::new(num_bigint::BigInt::from(1u8) << 80_000);
+        let bigint_a = tlab.alloc(Object::Bigint(Arc::clone(&bigint)));
+        let bigint_b = tlab.alloc(Object::Bigint(bigint));
+
+        // Garbage with payloads much larger than everything above.
+        tlab.alloc_uint8array(vec![0; 1_000_000]);
+        tlab.alloc_string("z".repeat(500_000));
+
+        let roots = [
+            clone_a, clone_b, slice, rope, array, bytes, map, bigint_a, bigint_b,
+        ];
+        let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
+
+        let mut independent = Meter::census();
+        // SAFETY: single-threaded test; the collection has finished.
+        for object in unsafe { heap.gen2_mut() }.iter_mut() {
+            object.measure(&mut independent);
+        }
+        assert_eq!(stats.live_payload_bytes, Some(independent.total()));
+
+        // The array's capacity, the byte buffer, the text and the integer.
+        let floor = 1_000 * size_of::<Value>() + 10_000 + 100_000 + 10_000;
+        assert!(independent.total() >= floor, "{}", independent.total());
+        assert!(
+            independent.total() < floor + 500_000,
+            "{} bytes includes payload that died",
+            independent.total()
+        );
+    }
+
+    /// The census is exact for a container, splits shared text between its
+    /// holders, and is taken only by a major collection.
+    #[test]
+    fn test_census_counts_capacity_and_shared_text_once() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let mut elements = Vec::with_capacity(1_000);
+        elements.push(Value::int(1));
+        let array = tlab.alloc_array(RealizedTy::int(), elements);
+        tlab.alloc_uint8array(vec![0; 1_000_000]);
+
+        let (stats, roots, _) =
+            unsafe { heap.collect_garbage_generational(&[array], CollectionLevel::Minor) };
+        tlab.invalidate();
+        assert_eq!(stats.live_payload_bytes, None);
+
+        let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
+        tlab.invalidate();
+        assert_eq!(
+            stats.live_payload_bytes,
+            Some(size_of::<bex_vm_types::RealizedTy>() + 1_000 * size_of::<Value>())
+        );
+
+        // The array is no longer rooted; three strings share one buffer.
+        let text = bex_str::BexStr::from("x".repeat(100_000));
+        let whole = text.unshared_heap_bytes();
+        let strings = [
+            tlab.alloc_string(text.clone()),
+            tlab.alloc_string(text.clone()),
+            tlab.alloc_string(text),
+        ];
+        let (stats, _, _) = unsafe { heap.collect_garbage(&strings) };
+        let payload = stats
+            .live_payload_bytes
+            .expect("a major collection takes a census");
+        assert!(payload >= whole, "{payload} < {whole}");
+        assert!(
+            payload < whole + strings.len(),
+            "{payload} counts the buffer more than once"
+        );
     }
 }

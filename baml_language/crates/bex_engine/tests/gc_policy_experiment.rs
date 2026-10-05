@@ -408,6 +408,7 @@ fn compare_gc_policy() {
                 "call":call, "at_seconds":at, "trigger":"policy_before_host_call", "level":format!("{:?}",stats.level),
                 "nursery_reserved_bytes":nursery, "budget_bytes":budget, "profile":profile_json(stats),
                 "copied_objects":stats.live_count, "reclaimed_slots":stats.collected_count,
+                "live_payload_bytes":stats.live_payload_bytes,
                 "promoted_gen1":stats.promoted_to_gen1, "promoted_gen2":stats.promoted_to_gen2,
             })).collect();
             std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
@@ -432,6 +433,7 @@ fn compare_gc_policy() {
             "cache_objects":if cache.is_some() {cache_n} else {0},
             "cache_verified":cache.is_some(), "idle_observation":idle_observation,
             "validation_gc_live_objects":validation_gc.live_count,
+            "validation_gc_live_payload_mib":validation_gc.live_payload_bytes.map(|bytes| bytes as f64/MIB as f64),
             "cycle_coverage":"harness-requested collections only; automatic cycles require engine tracing",
         }));
         kept.clear();
