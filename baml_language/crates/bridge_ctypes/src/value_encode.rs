@@ -453,18 +453,24 @@ fn bex_media_to_proto_media(
     media: &bex_project::MediaValue,
 ) -> crate::baml_bridge::cffi::BamlValueMedia {
     use crate::baml_bridge::cffi::{
-        BamlValueMedia, baml_value_media::Value as BamlValueMediaValue,
+        BamlValueMedia, BamlValueMediaFileContent, baml_value_media::Value as BamlValueMediaValue,
     };
     BamlValueMedia {
         media: media_kind_to_proto_enum(media.kind).into(),
         mime_type: media.mime_type(),
         value: Some(media.read_content(|content| match content {
             bex_project::MediaContent::Url { url, .. } => BamlValueMediaValue::Url(url.clone()),
-            // The portable payload has no place for a name yet.
             bex_project::MediaContent::Base64 {
                 base64_data,
-                name: _,
+                name: None,
             } => BamlValueMediaValue::Base64(base64_data.as_str().to_owned()),
+            bex_project::MediaContent::Base64 {
+                base64_data,
+                name: Some(name),
+            } => BamlValueMediaValue::FileContent(BamlValueMediaFileContent {
+                name: name.clone(),
+                base64: base64_data.as_str().to_owned(),
+            }),
         })),
     }
 }
@@ -903,5 +909,32 @@ mod tests {
             encoded_prompt.value,
             Some(BamlValueVariant::PromptAstValue(_))
         ));
+    }
+
+    #[test]
+    fn portable_media_carries_its_name_with_its_content() {
+        use crate::baml_bridge::cffi::baml_value_media::Value;
+
+        let named = MediaValue::from_file_content(
+            bex_project::MediaKind::Pdf,
+            "/reports/q3.pdf",
+            "JVBERi0xLjc=".into(),
+            None,
+        );
+        let encoded = bex_media_to_proto_media(&named);
+        assert_eq!(encoded.mime_type.as_deref(), Some("application/pdf"));
+        let Some(Value::FileContent(content)) = encoded.value else {
+            panic!("expected named content, got {:?}", encoded.value)
+        };
+        assert_eq!(
+            (content.name.as_str(), content.base64.as_str()),
+            ("q3.pdf", "JVBERi0xLjc=")
+        );
+
+        let plain = MediaValue::from_base64(bex_project::MediaKind::Image, "aW1hZ2U=".into(), None);
+        assert_eq!(
+            bex_media_to_proto_media(&plain).value,
+            Some(Value::Base64("aW1hZ2U=".to_string()))
+        );
     }
 }

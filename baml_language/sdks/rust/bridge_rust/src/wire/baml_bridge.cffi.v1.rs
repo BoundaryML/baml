@@ -802,7 +802,7 @@ pub struct BamlValueMedia {
     pub media: i32,
     #[prost(string, optional, tag = "2")]
     pub mime_type: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(oneof = "baml_value_media::Value", tags = "3, 4, 5")]
+    #[prost(oneof = "baml_value_media::Value", tags = "3, 4, 6")]
     pub value: ::core::option::Option<baml_value_media::Value>,
 }
 /// Nested message and enum types in `BamlValueMedia`.
@@ -813,9 +813,17 @@ pub mod baml_value_media {
         Url(::prost::alloc::string::String),
         #[prost(string, tag = "4")]
         Base64(::prost::alloc::string::String),
-        #[prost(string, tag = "5")]
-        File(::prost::alloc::string::String),
+        #[prost(message, tag = "6")]
+        FileContent(super::BamlValueMediaFileContent),
     }
+}
+/// Base64 content that was read from a file, with the base name of that file.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BamlValueMediaFileContent {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub base64: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlValuePromptAst {

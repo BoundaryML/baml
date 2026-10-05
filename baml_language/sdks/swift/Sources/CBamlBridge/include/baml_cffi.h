@@ -44,8 +44,12 @@
  * Hosts and runtimes built against different revisions must reject one another
  * before reading that slot. Revision 3 requires runtime-bound allocations,
  * an invocation clock, allocation release and V2 host dispatch/cancellation.
+ *
+ * Revision 4: a media value holds content, never a file path.
+ * `media_from_file` always fails and `media_file` is always absent;
+ * `media_name` and `media_from_file_content` are required.
  */
-#define BAML_API_V1_ABI_VERSION 3
+#define BAML_API_V1_ABI_VERSION 4
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -326,6 +330,17 @@ typedef BamlCffiStatus (*BamlTraceSelectionFn)(uint64_t call_id,
 typedef BamlCffiStatus (*BamlInvocationContextFn)(uint64_t key, struct BamlBuffer *out_context);
 
 /**
+ * Construct media from base64 content read from a file, using a raw
+ * `BamlCffiMediaKind` value.
+ */
+typedef BamlCffiStatus (*BamlMediaFromFileContentFn)(int32_t media_kind,
+                                                     const char *file,
+                                                     const char *base64,
+                                                     const char *mime_type_or_null,
+                                                     uint64_t *out_key,
+                                                     int32_t *out_handle_type);
+
+/**
  * First version of the shared BAML C API.
  *
  * The table is immutable runtime-owned storage and remains valid until the
@@ -336,7 +351,7 @@ typedef BamlCffiStatus (*BamlInvocationContextFn)(uint64_t key, struct BamlBuffe
  *
  * A host must not unload the native library while a returned buffer, owned
  * handle, registered callback, or asynchronous call can still reach it. The
- * The ABI has no callback-unregistration operation in V1. Hosts must call
+ * ABI has no callback-unregistration operation in V1. Hosts must call
  * `shutdown_runtime` before unloading the native library.
  *
  * No Rust panic may unwind across this ABI. Operations with a diagnostic or
@@ -344,11 +359,12 @@ typedef BamlCffiStatus (*BamlInvocationContextFn)(uint64_t key, struct BamlBuffe
  * An otherwise unexpected panic aborts the process rather than crossing into
  * foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
  *
- * V1 is append-only: existing fields may never be reordered, removed, or
- * change type or semantics. New fields may only be appended. Before reading a
- * field, consumers must verify that `struct_size` reaches the end of that
- * field. `baml_api_v1_is_compatible` performs the check for the original V1
- * prefix. A larger unknown size is compatible; a truncated prefix is not.
+ * V1 is append-only: existing fields may never be reordered or removed, and
+ * a field changes type or semantics only with a new ABI revision. New fields
+ * may only be appended. Before reading a field, consumers must verify that
+ * `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
+ * performs the check for the fields this revision requires. A larger unknown
+ * size is compatible; a truncated prefix is not.
  */
 typedef struct BamlApiV1 {
   /**
@@ -458,8 +474,9 @@ typedef struct BamlApiV1 {
   /**
    * Always `UnsupportedHandleType`: a media value is built from content,
    * never from a file path, and this library reads no file. A host reads
-   * the file itself or calls `baml.media.<Kind>.from_file`. The slot stays
-   * because this table is append-only.
+   * the file itself and calls `media_from_file_content`, or calls
+   * `baml.media.<Kind>.from_file`. The slot stays because this table is
+   * append-only.
    */
   BamlMediaConstructorFn media_from_file;
   /**
@@ -541,6 +558,19 @@ typedef struct BamlApiV1 {
    * The caller owns the returned buffer. This never admits an invocation.
    */
   BamlInvocationContextFn invocation_context;
+  /**
+   * Read a media value's name: the base name of the file its content was
+   * read from, absent otherwise. Ownership rules match `media_url`.
+   */
+  BamlMediaAccessorFn media_name;
+  /**
+   * Create an owned media handle from borrowed NUL-terminated base64
+   * content that was read from the file at `file`: the value is named by
+   * its base name, and its MIME type, when not given, is what the name
+   * implies. Nothing is read. Ownership and output rules match
+   * `media_from_url`.
+   */
+  BamlMediaFromFileContentFn media_from_file_content;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);
@@ -580,12 +610,13 @@ struct BamlBuffer initialize_runtime_from_blob_with_metadata(const uint8_t *byte
 }  // extern "C"
 #endif  // __cplusplus
 
-/* ABI revision 3 requires every invocation operation below. */
+/* ABI revision 4 requires every operation through media_from_file_content. */
 #define BAML_API_V1_MIN_SIZE \
-  (offsetof(BamlApiV1, invocation_context) + sizeof(((BamlApiV1 *)0)->invocation_context))
+  (offsetof(BamlApiV1, media_from_file_content) + \
+   sizeof(((BamlApiV1 *)0)->media_from_file_content))
 
 /*
- * Validate the complete revision-3 table while permitting appended fields.
+ * Validate the complete revision-4 table while permitting appended fields.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&

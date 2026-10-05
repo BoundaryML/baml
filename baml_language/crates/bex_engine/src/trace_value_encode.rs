@@ -103,7 +103,8 @@ struct BamlValueMedia {
     media: i32,
     #[prost(string, optional, tag = "2")]
     mime_type: Option<String>,
-    #[prost(oneof = "BamlValueMediaValue", tags = "3, 4, 5")]
+    // Tag 5 once named a file and is reserved.
+    #[prost(oneof = "BamlValueMediaValue", tags = "3, 4, 6")]
     value: Option<BamlValueMediaValue>,
 }
 
@@ -113,8 +114,16 @@ enum BamlValueMediaValue {
     Url(String),
     #[prost(string, tag = "4")]
     Base64(String),
-    #[prost(string, tag = "5")]
-    File(String),
+    #[prost(message, tag = "6")]
+    FileContent(BamlValueMediaFileContent),
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlValueMediaFileContent {
+    #[prost(string, tag = "1")]
+    name: String,
+    #[prost(string, tag = "2")]
+    base64: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
@@ -502,7 +511,16 @@ fn media_to_proto(media: &TraceMediaValue) -> BamlValueMedia {
         mime_type: media.mime_type.clone(),
         value: Some(match &media.content {
             TraceMediaContent::Url(url) => BamlValueMediaValue::Url(url.clone()),
-            TraceMediaContent::Base64(base64) => BamlValueMediaValue::Base64(base64.clone()),
+            TraceMediaContent::Base64 { base64, name: None } => {
+                BamlValueMediaValue::Base64(base64.clone())
+            }
+            TraceMediaContent::Base64 {
+                base64,
+                name: Some(name),
+            } => BamlValueMediaValue::FileContent(BamlValueMediaFileContent {
+                name: name.clone(),
+                base64: base64.clone(),
+            }),
         }),
     }
 }
@@ -815,29 +833,31 @@ fn render_media_value(media: &BamlValueMedia) -> String {
         .as_ref()
         .map(|mime| format!(", mime_type={mime:?}"))
         .unwrap_or_default();
+    let base64 = |value: &str, name: Option<&str>| {
+        let preview = if value.len() <= 10 {
+            value.to_owned()
+        } else {
+            format!(
+                "{}...{}",
+                &value[..5],
+                &value[value.len().saturating_sub(5)..]
+            )
+        };
+        let name = name
+            .map(|name| format!(", name={name:?}"))
+            .unwrap_or_default();
+        format!(
+            "{kind}::base64({preview:?}, len={}{name}{mime})",
+            value.len()
+        )
+    };
     match media.value.as_ref() {
         Some(BamlValueMediaValue::Url(value)) => {
             format!("{kind}::url({value:?}{mime})")
         }
-        Some(BamlValueMediaValue::File(value)) => {
-            format!("{kind}::file({value:?}{mime})")
-        }
-        Some(BamlValueMediaValue::Base64(value)) => {
-            let preview = if value.len() <= 10 {
-                value.clone()
-            } else {
-                format!(
-                    "{}...{}",
-                    &value[..5],
-                    &value[value.len().saturating_sub(5)..]
-                )
-            };
-            format!(
-                "{kind}::base64({preview:?}, len={}{}{})",
-                value.len(),
-                if mime.is_empty() { "" } else { ", " },
-                mime.trim_start_matches(", ")
-            )
+        Some(BamlValueMediaValue::Base64(value)) => base64(value, None),
+        Some(BamlValueMediaValue::FileContent(content)) => {
+            base64(&content.base64, Some(&content.name))
         }
         None => format!("{kind}::missing"),
     }
@@ -937,9 +957,10 @@ mod tests {
             vec![TraceValue::Media(crate::trace_heap::TraceMediaValue {
                 kind: bex_external_types::MediaKind::Image,
                 mime_type: Some("image/png".to_string()),
-                content: crate::trace_heap::TraceMediaContent::Base64(
-                    "aW1hZ2UtYnl0ZXM=".to_string(),
-                ),
+                content: crate::trace_heap::TraceMediaContent::Base64 {
+                    base64: "aW1hZ2UtYnl0ZXM=".to_string(),
+                    name: Some("cat.png".to_string()),
+                },
             })],
         );
 
@@ -949,10 +970,15 @@ mod tests {
             panic!("root should encode as media");
         };
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
-        assert!(matches!(
-            media.value,
-            Some(bridge_ctypes::baml_bridge::cffi::baml_value_media::Value::Base64(_))
-        ));
+        let Some(bridge_ctypes::baml_bridge::cffi::baml_value_media::Value::FileContent(content)) =
+            media.value
+        else {
+            panic!("named content should encode with its name");
+        };
+        assert_eq!(
+            (content.name.as_str(), content.base64.as_str()),
+            ("cat.png", "aW1hZ2UtYnl0ZXM=")
+        );
     }
 
     #[test]

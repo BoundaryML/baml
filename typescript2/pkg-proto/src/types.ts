@@ -16,7 +16,9 @@ export type BamlJsValue<T = unknown> =
 
 export type BamlJsMap<T = unknown> = { [key: string]: BamlJsValue<T> };
 export type BamlJsHandle<T> = { $baml: { type: '$handle' }; handle: T };
-export type BamlJsClass<T = unknown> = { $baml: { type: string } } & BamlJsMap<T>;
+export type BamlJsClass<T = unknown> = {
+  $baml: { type: string };
+} & BamlJsMap<T>;
 
 export type BamlJsMedia = {
   $baml: { type: '$media' };
@@ -24,11 +26,13 @@ export type BamlJsMedia = {
   mime_type?: string;
 } & (
   | { content_type: 'url'; url: string }
-  | { content_type: 'base64'; base64: string }
-  | { content_type: 'file'; file: string }
+  // `name` is the base name of the file the content was read from.
+  | { content_type: 'base64'; base64: string; name?: string }
 );
 
-export type BamlJsPromptAstSimple = { $baml: { type: '$prompt_ast_simple' } } & (
+export type BamlJsPromptAstSimple = {
+  $baml: { type: '$prompt_ast_simple' };
+} & (
   | { content_type: 'string'; value: string }
   | { content_type: 'media'; value: BamlJsMedia }
   | { content_type: 'multiple'; value: BamlJsPromptAstSimple[] }

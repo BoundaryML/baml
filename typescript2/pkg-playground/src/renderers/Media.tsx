@@ -1,11 +1,12 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing exported component path.
 /**
  * Renders a $media value — shows images inline, other types as a labelled badge.
  */
 
 import type { FC } from 'react';
-import type { ResultRendererProps } from '../result-renderers';
 import { Badge } from '../components/ui/badge';
 import { CodeBlock } from '../components/ui/code-block';
+import type { ResultRendererProps } from '../result-renderers';
 import { isBamlMedia, mediaLabel, mediaToSrc } from '../shared/media-values';
 
 export const MediaRenderer: FC<ResultRendererProps> = ({
@@ -30,13 +31,13 @@ export const MediaRenderer: FC<ResultRendererProps> = ({
   if (value.media_type === 'image' && src) {
     return (
       <div className="space-y-1">
-        <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">
+        <Badge className="gap-1 text-[11px] font-vsc-mono" variant="secondary">
           {label}
         </Badge>
         <img
-          src={src}
           alt="media"
           className="max-w-full max-h-[300px] rounded border border-vsc-border"
+          src={src}
         />
       </div>
     );
@@ -45,10 +46,11 @@ export const MediaRenderer: FC<ResultRendererProps> = ({
   if (value.media_type === 'audio' && src) {
     return (
       <div className="space-y-1">
-        <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">
+        <Badge className="gap-1 text-[11px] font-vsc-mono" variant="secondary">
           {label}
         </Badge>
-        <audio controls src={src} className="w-full" />
+        {/* biome-ignore lint/a11y/useMediaCaption: a BAML media value carries no captions */}
+        <audio className="w-full" controls src={src} />
       </div>
     );
   }
@@ -56,27 +58,24 @@ export const MediaRenderer: FC<ResultRendererProps> = ({
   if (value.media_type === 'video' && src) {
     return (
       <div className="space-y-1">
-        <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">
+        <Badge className="gap-1 text-[11px] font-vsc-mono" variant="secondary">
           {label}
         </Badge>
+        {/* biome-ignore lint/a11y/useMediaCaption: a BAML media value carries no captions */}
         <video
+          className="max-w-full max-h-[300px] rounded border border-vsc-border"
           controls
           src={src}
-          className="max-w-full max-h-[300px] rounded border border-vsc-border"
         />
       </div>
     );
   }
 
-  // File reference or unsupported content_type — show badge with path/url
+  // PDFs and other media are not shown inline — show badge with url/name
   const ref =
-    value.content_type === 'url'
-      ? value.url
-      : value.content_type === 'file'
-        ? value.file
-        : '(base64)';
+    value.content_type === 'url' ? value.url : (value.name ?? '(base64)');
   return (
-    <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">
+    <Badge className="gap-1 text-[11px] font-vsc-mono" variant="secondary">
       {label}: {ref}
     </Badge>
   );

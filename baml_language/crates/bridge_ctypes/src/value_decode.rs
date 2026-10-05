@@ -225,10 +225,11 @@ fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, Ct
         Some(baml_value_media::Value::Base64(base64)) => {
             Ok(MediaValue::from_base64(kind, base64.into(), mime_type))
         }
-        // A media value holds content, never a path, and nothing here reads
-        // a file.
-        Some(baml_value_media::Value::File(_)) => Err(CtypesError::InternalError(
-            "portable media payload names a file instead of holding its content".to_string(),
+        Some(baml_value_media::Value::FileContent(content)) => Ok(MediaValue::from_file_content(
+            kind,
+            &content.name,
+            content.base64.into(),
+            mime_type,
         )),
         None => Err(CtypesError::InternalError(
             "portable media payload has no content".to_string(),
@@ -545,6 +546,42 @@ mod tests {
             panic!("expected a JavaScript number")
         };
         assert_eq!(value.to_bits(), (-0.0_f64).to_bits());
+    }
+
+    #[test]
+    fn portable_media_keeps_its_name_and_never_names_a_file() {
+        let named = BamlValueMedia {
+            media: MediaTypeEnum::Pdf as i32,
+            mime_type: None,
+            value: Some(baml_value_media::Value::FileContent(
+                crate::baml_bridge::cffi::BamlValueMediaFileContent {
+                    name: "q3.pdf".to_string(),
+                    base64: "JVBERi0xLjc=".to_string(),
+                },
+            )),
+        };
+        let media = proto_media_to_bex_media(named).unwrap();
+        assert_eq!(media.name().as_deref(), Some("q3.pdf"));
+        assert_eq!(media.base64().as_str(), "JVBERi0xLjc=");
+        // Content read from a file infers its MIME type from the name.
+        assert_eq!(media.mime_type().as_deref(), Some("application/pdf"));
+        assert_eq!(media.url(), None);
+
+        let plain = BamlValueMedia {
+            media: MediaTypeEnum::Image as i32,
+            mime_type: None,
+            value: Some(baml_value_media::Value::Base64("aW1hZ2U=".to_string())),
+        };
+        let media = proto_media_to_bex_media(plain).unwrap();
+        assert_eq!((media.name(), media.mime_type()), (None, None));
+
+        // Field 5 once carried a path. It is reserved: a payload that sets
+        // only that has no content.
+        let mut old_wire = Vec::new();
+        prost::encoding::int32::encode(1, &(MediaTypeEnum::Image as i32), &mut old_wire);
+        prost::encoding::string::encode(5, &"/etc/hosts".to_string(), &mut old_wire);
+        let decoded = <BamlValueMedia as prost::Message>::decode(old_wire.as_slice()).unwrap();
+        assert!(proto_media_to_bex_media(decoded).is_err());
     }
 
     #[test]

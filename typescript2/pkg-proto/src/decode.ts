@@ -110,8 +110,13 @@ function deserializeMedia(m: BamlValueMedia): BamlJsMedia {
         base64: m.value.base64,
         content_type: 'base64' as const,
       };
-    case 'file':
-      return { ...base, content_type: 'file' as const, file: m.value.file };
+    case 'fileContent':
+      return {
+        ...base,
+        base64: m.value.fileContent.base64,
+        content_type: 'base64' as const,
+        name: m.value.fileContent.name,
+      };
     default: {
       const _exhaustive: never = m.value;
       return { ...base, content_type: 'url' as const, url: '' };

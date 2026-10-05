@@ -483,6 +483,34 @@ describe('decodeCallResult', () => {
     });
   });
 
+  it('decodes media (content read from a file keeps its name)', () => {
+    const bytes = encodeResult({
+      value: {
+        $case: 'mediaValue',
+        mediaValue: {
+          media: MediaTypeEnum.PDF,
+          mimeType: 'application/pdf',
+          value: {
+            $case: 'fileContent',
+            fileContent: { base64: 'aGk=', name: 'q3.pdf' },
+          },
+        },
+      },
+    });
+    const result = decodeCallResult(bytes, defaultWrapHandle) as Record<
+      string,
+      unknown
+    >;
+    expect(result).toEqual({
+      $baml: { type: '$media' },
+      base64: 'aGk=',
+      content_type: 'base64',
+      media_type: 'pdf',
+      mime_type: 'application/pdf',
+      name: 'q3.pdf',
+    });
+  });
+
   it('decodes prompt ast (simple string)', () => {
     const bytes = encodeResult({
       value: {
