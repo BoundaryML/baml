@@ -69,7 +69,11 @@ async fn mismatch_message(function: &str, args: Vec<BEV>) -> String {
 
 /// The message of the type mismatch that a call of the callable which
 /// `factory(factory_args)` returns ends with, for `args`.
-async fn callable_mismatch_message(factory: &str, factory_args: Vec<BEV>, args: Vec<BEV>) -> String {
+async fn callable_mismatch_message(
+    factory: &str,
+    factory_args: Vec<BEV>,
+    args: Vec<BEV>,
+) -> String {
     let engine = engine();
     let callable = engine
         .call_function(factory, factory_args, context(), false)

@@ -3482,6 +3482,7 @@ impl BexEngine {
         // concrete `param_types` also drive Gate B — a structural check that
         // hard-fails a wire value that doesn't inhabit its expected type
         // (01pt3 item 5).
+        let callee = callee_label(Some(function_name));
         let args: Vec<BexCallArg> = args
             .into_iter()
             .enumerate()
@@ -3489,9 +3490,7 @@ impl BexEngine {
                 BexCallArg::Provided(value) => {
                     let coerced = self
                         .coerce_inbound_arg(*value, &param_types[idx])
-                        .map_err(|error| {
-                            arg_coercion_mismatch(&callee_label(Some(function_name)), idx, error)
-                        })?;
+                        .map_err(|error| arg_coercion_mismatch(&callee, idx, error))?;
                     if callee_is_generic {
                         crate::conversion::check_generic_arg(
                             &coerced,
@@ -3522,9 +3521,7 @@ impl BexEngine {
                 // argument as a whole.
                 BexCallArg::Provided(arg) => self
                     .convert_external_to_vm_value_with_ty(&mut thread, *arg, param_types.get(idx))
-                    .map_err(|error| {
-                        arg_coercion_mismatch(&callee_label(Some(function_name)), idx, error)
-                    }),
+                    .map_err(|error| arg_coercion_mismatch(&callee, idx, error)),
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
