@@ -13739,7 +13739,7 @@ function f() -> int {
             "(f(`a)b`))",
             "(f(\"a\\\")b\"))",
             "name",
-            "PointType.Pointy",
+            "KeyKind.Foo",
             "key + 1",
             "f()",
             "-key",
@@ -13810,7 +13810,7 @@ function f() -> int {
     #[test]
     fn map_key_cst_shapes() {
         let (root, errors) = parse_source(
-            "function f() -> int { let m = {name: 0, \"name\": 0, 1: 0, -1: 0, true: 0, null: 0, (name): 0, PointType.Pointy: 0, name + 1: 0}; 0 }",
+            "function f() -> int { let m = {name: 0, \"name\": 0, 1: 0, -1: 0, true: 0, null: 0, (name): 0, KeyKind.Foo: 0, name + 1: 0}; 0 }",
         );
         assert_no_errors(&errors);
         let keys = root

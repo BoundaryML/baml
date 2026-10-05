@@ -98,9 +98,9 @@ describe('BAML TextMate grammar', () => {
     expect(leafScope('let values = { key: 1 };', 'key')).toBe(
       'variable.other.readwrite.baml',
     );
-    expect(
-      leafScope('let values = { PointType.Pointy: 1 };', 'PointType'),
-    ).toBe(leafScope('let value = PointType.Pointy;', 'PointType'));
+    expect(leafScope('let values = { KeyKind.Foo: 1 };', 'KeyKind')).toBe(
+      leafScope('let value = KeyKind.Foo;', 'KeyKind'),
+    );
     expect(leafScope('let value = Point { key: 1 };', 'key')).toBe(
       'variable.other.property.baml',
     );

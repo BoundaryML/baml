@@ -2340,7 +2340,7 @@ function build(name: string) -> unknown {
         let function = first_function(parse_and_lower(
             r#"
 function build(name: string) -> unknown {
-  { name: 0, "name": 1, PointType.Pointy: 2, name + "!": 3, f(): 4, keys[0]: 5 }
+  { name: 0, "name": 1, KeyKind.Foo: 2, name + "!": 3, f(): 4, keys[0]: 5 }
 }
 "#,
         ));
@@ -2363,7 +2363,7 @@ function build(name: string) -> unknown {
             matches!(&body.exprs[entries[1].key], Expr::Literal(baml_base::Literal::String(value)) if value == "name")
         );
         assert!(
-            matches!(&body.exprs[entries[2].key], Expr::Path(path) if path == &[baml_base::Name::new("PointType"), baml_base::Name::new("Pointy")])
+            matches!(&body.exprs[entries[2].key], Expr::Path(path) if path == &[baml_base::Name::new("KeyKind"), baml_base::Name::new("Foo")])
         );
         assert!(matches!(&body.exprs[entries[3].key], Expr::Binary { .. }));
         assert!(matches!(&body.exprs[entries[4].key], Expr::Call { .. }));

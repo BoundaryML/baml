@@ -1960,7 +1960,7 @@ mod map_literal_format_tests {
             "(key)",
             "(key + 1)",
             "key",
-            "PointType.Pointy",
+            "KeyKind.Foo",
             "key + 1",
             "f()",
             "keys[0]",
@@ -1973,8 +1973,8 @@ mod map_literal_format_tests {
 
     #[test]
     fn test_computed_map_keys_format_expressions() {
-        let source = "function f() -> int {\n    {key+1:1,-key:2,f(  ):3,PointType.Pointy:4,\"name\":5};\n    0\n}\n";
-        let expected = "function f() -> int {\n    { key + 1: 1, -key: 2, f(): 3, PointType.Pointy: 4, \"name\": 5 };\n    0\n}\n";
+        let source = "function f() -> int {\n    {key+1:1,-key:2,f(  ):3,KeyKind.Foo:4,\"name\":5};\n    0\n}\n";
+        let expected = "function f() -> int {\n    { key + 1: 1, -key: 2, f(): 3, KeyKind.Foo: 4, \"name\": 5 };\n    0\n}\n";
         assert_formats_to(source, expected);
     }
 

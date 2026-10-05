@@ -1,6 +1,6 @@
-enum PointType {
-    Pointy,
-    NotPointy
+enum KeyKind {
+    Foo,
+    Bar
 }
 
 class Point {
@@ -13,13 +13,13 @@ class Point {
 }
 
 test "dotted map keys resolve enum variants rather than strings" {
-    let points = {
-        PointType.Pointy: Point.new(2, 2),
-        PointType.NotPointy: Point.new(3, 4),
+    let values = {
+        KeyKind.Foo: 1,
+        KeyKind.Bar: 2,
     };
-    assert.equal(points[PointType.Pointy], Point.new(2, 2));
-    assert.equal(points[PointType.NotPointy].y, 4);
-    assert.equal(points.keys(), [PointType.Pointy, PointType.NotPointy])
+    assert.equal(values[KeyKind.Foo], 1);
+    assert.equal(values[KeyKind.Bar], 2);
+    assert.equal(values.keys(), [KeyKind.Foo, KeyKind.Bar])
 }
 
 test "bare map keys resolve variables and quoted keys remain strings" {
