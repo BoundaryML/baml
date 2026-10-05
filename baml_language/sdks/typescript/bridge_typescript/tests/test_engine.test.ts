@@ -1,4 +1,4 @@
-// test_engine.test.ts — mirrors bridge_python/tests/test_engine.py
+// test_engine.test.ts — calls through the TypeScript bridge with no generated SDK.
 
 import { BamlRuntime, callFunctionSync, callFunction,
          getRuntime, getVersion } from '../dist/index.js';

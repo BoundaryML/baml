@@ -91,11 +91,13 @@ def _fresh_typemap_with(*classes: type) -> BamlTypeMap:
 # ---------------------------------------------------------------------------
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_base_class_for_fqn_strips_parameterization():
     parameterized = Box[int]
     assert _base_class_for_fqn(parameterized) is Box
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_base_class_for_fqn_passes_non_generic_through():
     assert _base_class_for_fqn(Plain) is Plain
 
@@ -105,6 +107,7 @@ def test_base_class_for_fqn_passes_non_generic_through():
 # ---------------------------------------------------------------------------
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_inbound_class_value_carries_base_fqn():
     """13b §2.1 — `Box[int](item=5)` serializes with `value_type.class_ty.name` set to
     the base class's FQN, not the parameterized form. The runtime here is
@@ -129,18 +132,21 @@ def test_inbound_class_value_carries_base_fqn():
 # ---------------------------------------------------------------------------
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_int_returns_int():
     ty = baml_type_pb2.BamlTy()
     ty.primitive.kind = baml_type_pb2.BAML_TY_PRIMITIVE_INT
     assert _ty_to_python_type(ty, BamlTypeMap()) is int
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_string_returns_str():
     ty = baml_type_pb2.BamlTy()
     ty.primitive.kind = baml_type_pb2.BAML_TY_PRIMITIVE_STRING
     assert _ty_to_python_type(ty, BamlTypeMap()) is str
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_list_int_returns_typing_list_int():
     ty = baml_type_pb2.BamlTy()
     ty.list.item.primitive.kind = baml_type_pb2.BAML_TY_PRIMITIVE_INT
@@ -149,6 +155,7 @@ def test_baml_ty_list_int_returns_typing_list_int():
     assert typing.get_args(result) == (int,)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_optional_string_returns_optional_str():
     ty = baml_type_pb2.BamlTy()
     ty.optional.inner.primitive.kind = baml_type_pb2.BAML_TY_PRIMITIVE_STRING
@@ -159,12 +166,14 @@ def test_baml_ty_optional_string_returns_optional_str():
     assert type(None) in args
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_unknown_returns_typing_any():
     ty = baml_type_pb2.BamlTy()
     ty.unknown.SetInParent()
     assert _ty_to_python_type(ty, BamlTypeMap()) is typing.Any
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_union_preserves_members():
     # A structural union is preserved as `typing.Union[...]` (not widened to a
     # wildcard) so unions survive the baml->host type translation.
@@ -176,6 +185,7 @@ def test_baml_ty_union_preserves_members():
     assert set(typing.get_args(result)) == {int, str}
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_union_single_member_unwraps():
     # `typing.Union[X]` collapses to `X`; a one-member wire union decodes to the
     # bare member type, not a one-element union.
@@ -184,6 +194,7 @@ def test_baml_ty_union_single_member_unwraps():
     assert _ty_to_python_type(ty, BamlTypeMap()) is int
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_baml_ty_union_with_unknown_member_keeps_any_arm():
     # An unbindable member (here: an unknown ty) decodes to `typing.Any` and
     # rides along as a `typing.Any` arm of the union.
@@ -200,6 +211,7 @@ def test_baml_ty_union_with_unknown_member_keeps_any_arm():
 # ---------------------------------------------------------------------------
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_generic_over_union_round_trips():
     """A generic instantiated over a union — `Box[int | str]` — must survive
     the host->wire->host type translation without the union collapsing to a
@@ -253,10 +265,12 @@ def _wire_ty(ty_setter):
     return ty
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_parameterize_no_args_returns_base():
     assert _parameterize_tys(Box, [], BamlTypeMap()) is Box
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_parameterize_single_arg_int():
     args = [_wire_ty(_set_primitive(baml_type_pb2.BAML_TY_PRIMITIVE_INT))]
     result = _parameterize_tys(Box, args, BamlTypeMap())
@@ -264,12 +278,14 @@ def test_parameterize_single_arg_int():
     assert result is Box[int]
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_parameterize_falls_back_for_non_generic_class():
     args = [_wire_ty(_set_primitive(baml_type_pb2.BAML_TY_PRIMITIVE_INT))]
     # Plain has no TypeVars; parameterization is a no-op.
     assert _parameterize_tys(Plain, args, BamlTypeMap()) is Plain
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_parameterize_applies_to_generic_type_alias():
     """Generic type aliases (codegen emits `StringList: TypeAlias = List[T]`)
     must parameterize the same way pydantic generics do — the symbol is
@@ -279,6 +295,7 @@ def test_parameterize_applies_to_generic_type_alias():
     assert _parameterize_tys(StringList, args, BamlTypeMap()) == List[int]
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_parameterize_falls_back_for_fully_bound_alias():
     # Already-concrete alias has no TypeVars left to bind — try/except
     # catches the TypeError and returns the alias unchanged.
@@ -312,6 +329,7 @@ def _build_class_value(fqn: str, fields: list, type_args: list):
     return cv
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_decode_class_parameterizes_with_generic_args():
     """13b §3.1, §3.4 — a generic class with `type_args = [int]` decodes
     to a `Box[int]` instance, not bare `Box`."""
@@ -333,6 +351,7 @@ def test_decode_class_parameterizes_with_generic_args():
     assert meta["args"] == (int,)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_decode_class_graceful_degradation_when_args_empty():
     """13b §3.5 — when the Rust producer hasn't been updated yet,
     `type_args` is empty. Decode still produces a usable instance —
@@ -347,6 +366,7 @@ def test_decode_class_graceful_degradation_when_args_empty():
     assert result.item == 5
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_decode_class_nested_generic():
     """13b §4 — a generic class containing generic instances decodes
     layer-by-layer; the inner `Box[int]` is parameterized before the
@@ -392,9 +412,9 @@ def test_decode_class_nested_generic():
 import pytest  # noqa: E402
 
 from baml_bridge import _resolve_types_kwarg  # noqa: E402
-from baml_bridge.cffi.v1 import baml_type_pb2  # noqa: E402
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_generic_instance_carries_sparse_value_type():
     """A generic instance argument (`Box[int]`) carries its concrete class type
     args in the node-level `value_type` channel."""
@@ -405,6 +425,7 @@ def test_generic_instance_carries_sparse_value_type():
     assert inbound.value_type.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_unbound_generic_instance_carries_nominal_sparse_value_type():
     """An erased generic keeps nominal identity while omitting unknown args."""
     inbound = baml_inbound_pb2.InboundValue()
@@ -414,6 +435,7 @@ def test_unbound_generic_instance_carries_nominal_sparse_value_type():
     assert len(inbound.value_type.class_ty.type_args) == 0
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_non_generic_instance_value_type_has_no_type_args():
     """A non-generic instance still binds its class via `value_type` (the FQN
     channel, now the sole class-name source) but carries no type args."""
@@ -423,27 +445,34 @@ def test_non_generic_instance_value_type_has_no_type_args():
     assert len(inbound.value_type.class_ty.type_args) == 0
 
 
-def test_resolve_types_requires_dict_for_generic():
-    with pytest.raises(TypeError):
-        _resolve_types_kwarg(None, ["T"])  # required
-    with pytest.raises(TypeError):
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
+def test_resolve_types_accepts_only_a_dict_for_generic():
+    with pytest.raises(TypeError, match="must be a dict"):
         _resolve_types_kwarg(int, ["T"])  # single-type form gone
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="must be a dict"):
         _resolve_types_kwarg((int, str), ["A", "B"])  # positional form gone
 
 
-def test_resolve_types_missing_and_extra_keys():
-    with pytest.raises(TypeError):
-        _resolve_types_kwarg({"A": int}, ["A", "B"])  # missing B
-    with pytest.raises(TypeError):
-        _resolve_types_kwarg({"A": int, "Z": str}, ["A"])  # unknown Z
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
+def test_resolve_types_leaves_unnamed_params_for_the_engine_to_infer():
+    # `None` in a slot: the engine infers that TypeVar from the argument values.
+    assert _resolve_types_kwarg(None, ["T"]) == [None]
+    assert _resolve_types_kwarg({"A": int}, ["A", "B"]) == [int, None]
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
+def test_resolve_types_rejects_unknown_keys():
+    with pytest.raises(TypeError, match=r"unknown type parameter\(s\) \['Z'\]"):
+        _resolve_types_kwarg({"A": int, "Z": str}, ["A"])
+
+
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_resolve_types_dict_maps_by_name_in_declaration_order():
     # Keyed by name, returned in the callee's declaration order.
     assert _resolve_types_kwarg({"B": str, "A": int}, ["A", "B"]) == [int, str]
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_resolve_types_empty_params_rejects_types_kwarg():
     assert _resolve_types_kwarg(None, []) == []
     with pytest.raises(TypeError):
@@ -457,6 +486,7 @@ def test_resolve_types_empty_params_rejects_types_kwarg():
 from baml_bridge import _GenericCallable  # noqa: E402
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_generic_callable_subscript_desugars_to_types_dict():
     captured = {}
 
@@ -476,6 +506,7 @@ def test_generic_callable_subscript_desugars_to_types_dict():
     assert captured["kwargs"]["_types"] == {"T": bool}
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_generic_callable_subscript_arity_mismatch_raises():
     fn = _GenericCallable(lambda **k: None, ["A", "B"])
     import pytest
@@ -484,6 +515,7 @@ def test_generic_callable_subscript_arity_mismatch_raises():
         fn[int]()  # needs two
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's encoding of generic types
 def test_generic_callable_explicit_types_still_works():
     captured = {}
 

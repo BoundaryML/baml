@@ -1,4 +1,5 @@
-// host_callable.test.ts — mirrors sdks/python/tests/test_host_callable.py.
+// host_callable.test.ts — mirrors the host-callable tests of the Python SDK
+// (sdk_tests/crates/python_pydantic2/function_calls/customizable).
 //
 // Exercises the JS host-callable bridge: encoder auto-registration in
 // proto.ts's `setInboundValue`, the C ABI round-trip via

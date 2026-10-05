@@ -6,7 +6,6 @@ import asyncio
 import enum
 
 import pydantic
-import pytest
 
 import baml_bridge
 from baml_bridge.cffi.v1 import baml_inbound_pb2
@@ -36,6 +35,7 @@ def _identifier_typemap() -> BamlTypeMap:
     )
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's identifier aliases
 def test_renamed_enum_member_encodes_raw_value_for_scalar_and_map_key():
     saved = get_type_map()
     set_type_map(_identifier_typemap())
@@ -51,6 +51,7 @@ def test_renamed_enum_member_encodes_raw_value_for_scalar_and_map_key():
         set_type_map(saved)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's identifier aliases
 def test_renamed_pydantic_field_populates_both_ways_and_encodes_raw_name():
     by_host = KeywordModel(None_=1)
     by_wire = KeywordModel.model_validate({"None": 2})
@@ -68,6 +69,7 @@ def test_renamed_pydantic_field_populates_both_ways_and_encodes_raw_name():
         set_type_map(saved)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's identifier aliases
 def test_callable_parameter_aliases_map_positional_and_keyword_calls_to_wire_names():
     aliases = {"class_": "class", "_types_": "_types"}
 
@@ -79,6 +81,7 @@ def test_callable_parameter_aliases_map_positional_and_keyword_calls_to_wire_nam
     }
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's identifier aliases
 def test_define_function_preserves_generated_callable_metadata_and_generic_wrapping():
     direct = baml_bridge.define_function(
         "user.GenerateNote",
@@ -107,6 +110,7 @@ def test_define_function_preserves_generated_callable_metadata_and_generic_wrapp
     assert generic_method.__wrapped__.__name__ == "map_async"
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's identifier aliases
 def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     encoded_calls = []
 
@@ -119,8 +123,8 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
             assert args == b"encoded"
             return b"stream"
 
-    def fake_encode(kwargs, call_id, type_args, *, function_name):
-        encoded_calls.append((kwargs, call_id, type_args, function_name))
+    def fake_encode(kwargs, call_id, type_args, *, function_name, _baml):
+        encoded_calls.append((kwargs, call_id, type_args, function_name, _baml))
         return b"encoded"
 
     monkeypatch.setattr(baml_bridge, "new_function_call", lambda: 42)
@@ -145,14 +149,16 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
         ["on_event"],
     )
 
+    options = object()
     assert sync_stream("hello", on_event=listener) == "stream"
-    assert asyncio.run(async_stream("world", on_event=listener)) == "stream"
+    assert asyncio.run(async_stream("world", on_event=listener, _baml=options)) == "stream"
     assert encoded_calls == [
-        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan@stream"),
-        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan@stream"),
+        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan@stream", None),
+        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan@stream", options),
     ]
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's identifier aliases
 def test_stream_exact_fqn_is_preserved_on_the_wire():
     encoded = baml_bridge.encode_call_args({}, 1, function_name="user.plan@stream")
     decoded = baml_inbound_pb2.CallFunctionArgs.FromString(encoded)

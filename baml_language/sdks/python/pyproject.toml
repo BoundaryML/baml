@@ -27,9 +27,6 @@ classifiers = [
 
 [dependency-groups]
 dev = [
-    "pytest>=7",
-    "pytest-asyncio>=0.21",
-    "pytest-xdist>=3",
     "maturin>=1.9.4,<2.0",
     "grpcio-tools>=1.50",
     "pydantic>=2",
@@ -52,15 +49,8 @@ include = [{ path = "src/baml_bridge/py.typed", format = ["sdist", "wheel"] }]
 # it does not affect `maturin build` or the release workflow.
 editable-profile = "dev"
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-addopts = "-n auto"
-
 [tool.ruff]
 extend-exclude = ["src/baml_bridge/cffi/v1/*_pb2.py"]
-
-[tool.ty.environment]
-extra-paths = ["tests/sim"]
 
 [tool.ty.rules]
 # Protobuf generated stubs use metaclass patterns ty can't handle.

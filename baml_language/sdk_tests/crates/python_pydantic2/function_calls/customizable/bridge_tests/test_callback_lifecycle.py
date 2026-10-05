@@ -23,6 +23,7 @@ from baml_bridge.typemap import BamlTypeMap
 
 
 @pytest.mark.parametrize("heap", [False, True])
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's ownership of wire handles
 def test_discarded_args_release_each_nested_wire_owner_once(heap):
     key, kind = _seed_heap_handle(0xCA11BAC) if heap else _seed_generic_media_handle()
     owner = BamlPyHandle(key, kind)
@@ -52,6 +53,7 @@ def test_discarded_args_release_each_nested_wire_owner_once(heap):
     assert _handle_refcount(key) is None
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's ownership of wire handles
 def test_discarded_args_do_not_release_borrowed_host_registry_keys():
     kind = baml_handle_pb2.BamlHandleType
     key, _ = _seed_generic_media_handle()
@@ -117,6 +119,7 @@ def wire_handle(holder, key, kind):
     holder.handle_value.handle_type = kind
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's ownership of wire handles
 def test_decode_failure_releases_untransferred_callable_and_media(decoding_models):
     owners = [_seed_function_ref_handle(17), _seed_generic_media_handle()]
     call = baml_outbound_pb2.BamlToHostCall()
@@ -137,6 +140,7 @@ def test_decode_failure_releases_untransferred_callable_and_media(decoding_model
                 _release_wire_handle(key)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's ownership of wire handles
 def test_decode_failure_counts_repeated_keys_and_ignores_borrowed_host_keys(
     decoding_models,
 ):
@@ -164,6 +168,7 @@ def test_decode_failure_counts_repeated_keys_and_ignores_borrowed_host_keys(
 
 
 @pytest.mark.parametrize("container", ["arguments", "list", "map", "class", "union"])
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's ownership of wire handles
 def test_decode_failure_preserves_transferred_owner_and_releases_remaining(
     container, decoding_models
 ):
@@ -219,6 +224,7 @@ def test_decode_failure_preserves_transferred_owner_and_releases_remaining(
     assert _handle_refcount(key) is None
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's ownership of wire handles
 def test_successful_decode_transfers_ownership_to_callback():
     key, kind = _seed_generic_media_handle()
     call = baml_outbound_pb2.BamlToHostCall()
