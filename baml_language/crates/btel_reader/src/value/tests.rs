@@ -280,7 +280,7 @@ fn rendering_preserves_sharing_cycles_truncation_and_names() {
     assert_eq!(rendered.incomplete, None);
     let args = rendered.json;
     let customer = &args["customer"];
-    assert_eq!(customer["$class"], json!("Customer"));
+    assert_eq!(customer["$class"], json!("user.Customer"));
     assert_eq!(customer["age"], json!(30));
     assert_eq!(customer["nothing"], Json::Null);
     assert_eq!(customer["cell"], json!(99));
