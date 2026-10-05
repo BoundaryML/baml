@@ -223,7 +223,7 @@ FROM main.profile_node n",
 
 const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), or cancel_error (cancelled, or unwound by baml.sys.exit)";
 
-const TYPE_ARGS_DOC: &str = "the type arguments a generic function was called with, by type-parameter name: type_args['T'] is {\"$type\": \"Resume\"}. A method's include its class's (Box<int>.map<string>: {T: int, U: string}), an interface method's its Self, a lambda's its enclosing function's. NULL for a non-generic function, a future or a network span";
+const TYPE_ARGS_DOC: &str = "the type arguments a generic function was called with, by type-parameter name: type_args['T'] is {\"$type\": \"Resume\"}. A method's include its class's (Box<int>.map<string>: {T: int, U: string}), an interface method's its Self, a lambda's its enclosing function's. Captured exactly when input_args is. NULL for a non-generic function, a span whose inputs aren't captured, a future or a network span";
 
 const NETWORK_EVENTS_DOC: &str = "[{event_name, payload, timestamp}] in time order. connection: {status, headers}. data: a whole body, or one server-sent event as {event, data, id}; null when bodies are not recorded. end (the stream ended on the wire), await (the program finished reading), close (it closed the stream early) and drop: null. Other names are other protocols' events. network_event_values[0]['payload'] reads only that payload. NULL for functions and futures";
 
