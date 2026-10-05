@@ -361,23 +361,30 @@ impl TraceSnapshotBuilder {
                 }
                 self.alloc(TraceValue::Array(items))
             }
-            Object::Map(map) => 'map: {
+            Object::Map(map) => {
                 let map = map.data.lock();
-                let mut entries = Self::vec_with_capacity(map.len())?;
-                for (key, value) in map.iter() {
+                let string_key = |key: &Value| {
                     // SAFETY: the copy holds a heap permit for the entire traversal.
-                    let key = key.as_object_ptr().map(|ptr| unsafe { ptr.get() });
-                    let Some(Object::String(key)) = key else {
-                        break 'map self.omitted(
-                            TraceOmissionReason::UnsupportedValue,
-                            "map with non-string keys",
-                        );
-                    };
-                    let key = Self::copy_str(key.as_str())?;
-                    let value = self.copy_value(heap, permit, *value)?;
-                    entries.push((key, value));
+                    match key.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
+                        Some(Object::String(key)) => Some(key),
+                        _ => None,
+                    }
+                };
+                if map.keys().any(|key| string_key(key).is_none()) {
+                    self.omitted(
+                        TraceOmissionReason::UnsupportedValue,
+                        "map with non-string keys",
+                    )
+                } else {
+                    let mut entries = Self::vec_with_capacity(map.len())?;
+                    for (key, value) in map.iter() {
+                        let key = string_key(key).expect("map keys validated under the same lock");
+                        let key = Self::copy_str(key.as_str())?;
+                        let value = self.copy_value(heap, permit, *value)?;
+                        entries.push((key, value));
+                    }
+                    self.alloc(TraceValue::Map(entries))
                 }
-                self.alloc(TraceValue::Map(entries))
             }
             Object::Instance(instance) => {
                 let class_object = unsafe { instance.class.get() };
@@ -601,12 +608,27 @@ mod tests {
             .await
             .acquire()
             .await;
+        let first_key = permit.tlab_mut().alloc_string("first");
+        let discarded = permit.tlab_mut().alloc_string("must not survive omission");
         let unsupported = permit
             .tlab_mut()
             .alloc(Object::Map(bex_vm_types::types::Map::new(
-                bex_vm_types::RealizedTy::int(),
-                bex_vm_types::RealizedTy::int(),
-                bex_vm_types::MapData::from_hashed_entries([(0, Value::int(1), Value::int(2))]),
+                bex_vm_types::RealizedTy::Union(
+                    vec![
+                        bex_vm_types::RealizedTy::string(),
+                        bex_vm_types::RealizedTy::int(),
+                    ]
+                    .into(),
+                ),
+                bex_vm_types::RealizedTy::unknown(),
+                bex_vm_types::MapData::from_hashed_entries([
+                    (
+                        bex_vm_types::map_string_hash("first"),
+                        Value::object(first_key),
+                        Value::object(discarded),
+                    ),
+                    (0, Value::int(1), Value::int(2)),
+                ]),
             )));
         let outer = permit.tlab_mut().alloc_map(
             bex_vm_types::RealizedTy::string(),
@@ -624,6 +646,11 @@ mod tests {
         let handle =
             trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(unsupported));
         let root = trace_heap.release(handle).expect("root snapshot retained");
+        assert_eq!(
+            root.values.len(),
+            1,
+            "omitted map must retain no copied entries"
+        );
         assert!(matches!(
             root.value(root.root()),
             Some(TraceValue::Omitted(descriptor))
@@ -634,6 +661,11 @@ mod tests {
         let snapshot = trace_heap
             .release(handle)
             .expect("sibling snapshot retained");
+        assert_eq!(
+            snapshot.values.len(),
+            5,
+            "only reachable snapshot values survive"
+        );
         let Some(TraceValue::Map(entries)) = snapshot.value(snapshot.root()) else {
             panic!("supported containing map must survive");
         };
