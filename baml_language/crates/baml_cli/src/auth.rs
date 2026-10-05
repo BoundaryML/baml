@@ -218,8 +218,17 @@ impl LogoutArgs {
         let reporter = crate::reporter::Reporter::new();
         let endpoint = crate::cloud_config::login_endpoint()?;
         let store = Store::new(&endpoint)?;
-        if let Some(stored) = store.read()? {
-            let revocation = Client::new(endpoint).and_then(|client| client.logout(&stored));
+        let revocation = match store.read() {
+            Ok(Some(stored)) => {
+                Some(Client::new(endpoint).and_then(|client| client.logout(&stored)))
+            }
+            Ok(None) => None,
+            // Malformed local state must remain removable through logout. Without
+            // a readable session we cannot confirm server-side revocation.
+            Err(error @ bcs_api::Error::Protocol(_)) => Some(Err(error)),
+            Err(error) => return Err(error.into()),
+        };
+        if let Some(revocation) = revocation {
             store.clear()?;
             reporter.status("Logout", "local login removed");
             if let Err(error) = revocation {

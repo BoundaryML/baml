@@ -184,6 +184,8 @@ impl QueryArgs {
         if !self.local {
             let settings = crate::cloud_config::Boundary::read(&root)?;
             let endpoint = settings.endpoint()?;
+            // TOML is trusted endpoint configuration: API keys authenticate
+            // against it without requiring a separate environment override.
             let credential = match baml_env::string_var("BOUNDARY_API_KEY")? {
                 Some(key) => Some(bcs_api::Secret::new(key)),
                 // Optional saved login must not block local queries on hosts without a keyring.
