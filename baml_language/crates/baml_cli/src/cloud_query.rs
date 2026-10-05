@@ -82,7 +82,7 @@ pub(crate) fn run(
             eprintln!("cloud query failed: {}", outcome["error"]);
             Ok(ExitCode::QueryFailed)
         }
-        Some("cancelled") => Ok(ExitCode::QueryFailed),
+        Some("cancelled") => Ok(ExitCode::QueryCancelled),
         _ => anyhow::bail!("Boundary returned an unknown query outcome"),
     }
 }

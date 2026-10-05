@@ -219,11 +219,14 @@ impl LogoutArgs {
         let endpoint = crate::cloud_config::login_endpoint()?;
         let store = Store::new(&endpoint)?;
         if let Some(stored) = store.read()? {
-            Client::new(endpoint)?
-                .logout(&stored)
-                .context("Failed to revoke Boundary login; retry logout when connected")?;
+            let revocation = Client::new(endpoint).and_then(|client| client.logout(&stored));
             store.clear()?;
-            reporter.status("Logout", "logged out");
+            reporter.status("Logout", "local login removed");
+            if let Err(error) = revocation {
+                reporter.warning(format!(
+                    "Boundary could not confirm server-side logout.\nThe saved credential was removed from this machine, but the server session may still be active.\n\n{error}"
+                ));
+            }
         } else {
             reporter.status("Logout", "not logged in");
         }

@@ -20,6 +20,7 @@ struct MockState {
     captures: Mutex<Vec<Value>>,
     /// How many times device approval has been polled.
     auth_polls: Mutex<u32>,
+    reject_logout: Mutex<bool>,
 }
 
 fn spawn_mock(state: Arc<MockState>) -> String {
@@ -125,6 +126,9 @@ fn respond(state: &MockState, base: &str, path: &str, body: &str) -> (&'static s
                 serde_json::from_str::<Value>(body).unwrap()["refreshToken"],
                 "bdry_session_test"
             );
+            if *state.reject_logout.lock().unwrap() {
+                return ("500 Internal Server Error", "{}".into());
+            }
             ("200 OK", "{}".into())
         }
         _ => ("404 Not Found", "{}".into()),
@@ -163,8 +167,13 @@ fn run_baml_posthog(
     stdin: Option<&str>,
 ) -> (bool, String) {
     let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"));
-    cmd.args(args)
+    cmd.args(["--agent-skill-check", "off"])
+        .args(args)
+        .current_dir(home)
+        .env_remove("BOUNDARY_API_KEY")
+        .env_remove("BOUNDARY_PROJECT")
         .env("BAML_HOME", home)
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BOUNDARY_API_URL", boundary)
         .env("BAML_FEEDBACK_HOST", posthog)
         // Keep ordinary invocation telemetry quiet so /capture/ sees only
@@ -201,6 +210,35 @@ fn feedback_events(state: &MockState) -> Vec<Value> {
         .filter(|c| c["event"] == "baml_feedback")
         .cloned()
         .collect()
+}
+
+#[test]
+fn review_logout_clears_local_login_when_server_revocation_fails() {
+    let state = Arc::new(MockState::default());
+    let base = spawn_mock(state.clone());
+    let home = tempfile::tempdir().unwrap();
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
+    assert!(ok, "{out}");
+    let anonymous = std::fs::read_to_string(home.path().join("creds.json")).unwrap();
+
+    *state.reject_logout.lock().unwrap() = true;
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "logout"], None);
+    assert!(ok, "{out}");
+    assert_eq!(
+        out.trim(),
+        r#"Logout local login removed
+warning: Boundary could not confirm server-side logout.
+The saved credential was removed from this machine, but the server session may still be active.
+
+Boundary request failed with HTTP 500 Internal Server Error"#
+    );
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "token"], None);
+    assert!(!ok, "a revoked local login must not be reusable: {out}");
+    assert_eq!(out.trim(), r#"error: not logged in; run `baml auth login`"#);
+    assert_eq!(
+        std::fs::read_to_string(home.path().join("creds.json")).unwrap(),
+        anonymous
+    );
 }
 
 /// A dead endpoint: a listener that accepts and immediately closes every
