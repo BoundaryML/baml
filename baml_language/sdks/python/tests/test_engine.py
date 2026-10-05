@@ -10,6 +10,7 @@ Run with:
     uv run pytest tests/ -v
 """
 
+import json
 import os
 import signal
 import subprocess
@@ -20,11 +21,13 @@ import pytest
 from baml_bridge import (
     BamlRuntime,
     FunctionResult,
+    default_unhandled_spawn_error_handler,
     get_bridge_runtime_version,
     get_toolchain_version,
     get_version,
     call_function,
     call_function_sync,
+    set_unhandled_spawn_error_handler,
 )
 
 
@@ -132,6 +135,201 @@ raise SystemExit(42)
     expected_returncode = signal.SIGTERM if os.name == "nt" else 1
     assert result.returncode == expected_returncode
     assert "boom" in result.stderr
+
+
+# A host chooses what an unobserved spawn error does to its process
+# (`set_unhandled_spawn_error_handler`). The state is process-wide and the
+# default ends the process, so each case runs in a child process: `main` leaves
+# a failed task unobserved, and `cancelled_main` cancels a task whose cleanup
+# then fails. A child that survives exits with status 42.
+UNHANDLED_SPAWN_SCRIPT = """\
+import json
+import sys
+import threading
+import traceback
+
+import baml_bridge
+from baml_bridge import BamlRuntime, call_function_sync, shutdown_runtime
+
+source = '''
+function bad() -> int throws string { throw "boom" }
+function main() -> int {
+    spawn { bad() };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    1
+}
+function failing_cleanup() -> int {
+    defer { throw "cleanup boom" }
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+    1
+}
+function cancelled_main() -> int {
+    let pending = spawn { failing_cleanup() };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(20n));
+    pending.cancel();
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    1
+}
+'''
+
+seen = []
+
+
+def record(error, cancelled):
+    seen.append(
+        {
+            "type": type(error).__name__,
+            "text": str(error),
+            "cancelled": cancelled,
+            "baml_frames": "main.baml" in "".join(traceback.format_exception(error)),
+            "event_loop": _has_running_loop(),
+        }
+    )
+
+
+def _has_running_loop():
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+def run(entry):
+    runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
+    assert call_function_sync(runtime, entry, {}).result() == 1
+    shutdown_runtime()
+    print(json.dumps(seen))
+    raise SystemExit(42)
+
+
+"""
+
+
+def run_unhandled_spawn_script(body: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "-c", UNHANDLED_SPAWN_SCRIPT + body],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+
+def test_unhandled_spawn_error_handler_replaces_the_default():
+    result = run_unhandled_spawn_script(
+        """\
+previous = baml_bridge.set_unhandled_spawn_error_handler(record)
+assert previous is baml_bridge.default_unhandled_spawn_error_handler
+run("main")
+"""
+    )
+
+    # The process went on to its own exit, and the handler was the only report.
+    assert result.returncode == 42, result.stderr
+    assert "boom" not in result.stderr
+    assert json.loads(result.stdout) == [
+        {
+            "type": "BamlError",
+            "text": "str: 'boom'",
+            "cancelled": False,
+            "baml_frames": True,
+            "event_loop": False,
+        }
+    ]
+
+
+def test_unhandled_spawn_error_handler_none_restores_the_default():
+    result = run_unhandled_spawn_script(
+        """\
+baml_bridge.set_unhandled_spawn_error_handler(record)
+assert baml_bridge.set_unhandled_spawn_error_handler(None) is record
+run("main")
+"""
+    )
+
+    expected_returncode = signal.SIGTERM if os.name == "nt" else 1
+    assert result.returncode == expected_returncode
+    assert "boom" in result.stderr
+
+
+def test_unhandled_spawn_error_handler_can_keep_the_default_for_some_errors():
+    result = run_unhandled_spawn_script(
+        """\
+def fatal_unless_cancelled(error, cancelled):
+    record(error, cancelled)
+    baml_bridge.default_unhandled_spawn_error_handler(error, cancelled)
+
+baml_bridge.set_unhandled_spawn_error_handler(fatal_unless_cancelled)
+run("main")
+"""
+    )
+
+    expected_returncode = signal.SIGTERM if os.name == "nt" else 1
+    assert result.returncode == expected_returncode
+    assert "boom" in result.stderr
+
+
+def test_unhandled_spawn_error_handler_that_raises_is_reported_and_the_process_continues():
+    result = run_unhandled_spawn_script(
+        """\
+def broken(error, cancelled):
+    raise ValueError("the handler has a defect")
+
+baml_bridge.set_unhandled_spawn_error_handler(broken)
+run("main")
+"""
+    )
+
+    assert result.returncode == 42, result.stderr
+    # `sys.unraisablehook` reports the handler's exception, and with it the
+    # error of the spawned task that the handler did not report.
+    assert "the handler has a defect" in result.stderr
+    assert "boom" in result.stderr
+
+
+def test_unhandled_spawn_error_handler_is_told_when_the_task_was_cancelled():
+    result = run_unhandled_spawn_script(
+        """\
+baml_bridge.set_unhandled_spawn_error_handler(record)
+run("cancelled_main")
+"""
+    )
+
+    assert result.returncode == 42, result.stderr
+    [seen] = json.loads(result.stdout)
+    assert seen["cancelled"] is True
+    assert seen["text"] == "str: 'cleanup boom'"
+
+
+def test_unhandled_spawn_error_default_prints_a_cancelled_task_and_continues():
+    result = run_unhandled_spawn_script(
+        """\
+run("cancelled_main")
+"""
+    )
+
+    assert result.returncode == 42, result.stderr
+    assert "cleanup boom" in result.stderr
+
+
+def test_set_unhandled_spawn_error_handler_returns_the_handler_it_replaces():
+    def first(error: BaseException, cancelled: bool) -> None:
+        pass
+
+    def second(error: BaseException, cancelled: bool) -> None:
+        pass
+
+    original = set_unhandled_spawn_error_handler(first)
+    try:
+        assert original is default_unhandled_spawn_error_handler
+        assert set_unhandled_spawn_error_handler(second) is first
+        assert set_unhandled_spawn_error_handler(None) is second
+        assert set_unhandled_spawn_error_handler(None) is default_unhandled_spawn_error_handler
+    finally:
+        set_unhandled_spawn_error_handler(original)
 
 
 # A call whose cleanup outlasts it: cancelled, it unwinds into a `defer` that
