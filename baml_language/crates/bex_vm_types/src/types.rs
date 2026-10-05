@@ -132,6 +132,32 @@ pub struct Program {
 #[error("invalid program: {0}")]
 pub struct InvalidProgram(pub String);
 
+/// One validation walk, with either check-only or diagnostic failures.
+trait ValidationDiagnostics {
+    type Error;
+
+    fn invalid(message: impl FnOnce() -> String) -> Self::Error;
+}
+
+struct CheckOnly;
+
+impl ValidationDiagnostics for CheckOnly {
+    type Error = ();
+
+    fn invalid(_message: impl FnOnce() -> String) {}
+}
+
+struct ExplainError;
+
+impl ValidationDiagnostics for ExplainError {
+    type Error = InvalidProgram;
+
+    #[cold]
+    fn invalid(message: impl FnOnce() -> String) -> InvalidProgram {
+        InvalidProgram(message())
+    }
+}
+
 impl Program {
     pub fn new() -> Self {
         Self::default()
@@ -168,72 +194,80 @@ impl Program {
     /// at the one road into a VM, so a corrupt or forged artifact is refused
     /// rather than a panic in the loader.
     ///
+    /// Valid programs run a check-only pass. Only a failure repeats that same
+    /// walk with diagnostic construction enabled.
+    ///
     /// # Errors
     ///
     /// The first law broken, named.
     pub fn validate(&self) -> Result<(), InvalidProgram> {
-        let invalid = |message: String| InvalidProgram(message);
+        self.validate_with::<CheckOnly>()
+            .or_else(|()| self.validate_with::<ExplainError>())
+    }
+
+    fn validate_with<D: ValidationDiagnostics>(&self) -> Result<(), D::Error> {
         let object_count = self.objects.len();
-        let object = |index: ObjectIndex, role: &str| -> Result<&Object, InvalidProgram> {
+        let object = |index: ObjectIndex, role: &dyn Fn() -> String| -> Result<&Object, D::Error> {
             self.objects.get(index.raw()).ok_or_else(|| {
-                invalid(format!(
-                    "{role} names object {} of {object_count}",
-                    index.raw()
-                ))
+                D::invalid(|| format!("{} names object {} of {object_count}", role(), index.raw()))
             })
         };
-        let function =
-            |index: ObjectIndex, role: &str, is_body: bool| -> Result<(), InvalidProgram> {
-                match object(index, role)? {
-                    Object::Function(function) if function.is_interface_body == is_body => Ok(()),
-                    other => Err(invalid(format!(
-                        "{role} names a {:?} object where {} is required",
+        let function = |index: ObjectIndex,
+                        role: &dyn Fn() -> String,
+                        is_body: bool|
+         -> Result<(), D::Error> {
+            match object(index, role)? {
+                Object::Function(function) if function.is_interface_body == is_body => Ok(()),
+                other => Err(D::invalid(|| {
+                    format!(
+                        "{} names a {:?} object where {} is required",
+                        role(),
                         ObjectType::of(other),
                         if is_body {
                             "an interface body"
                         } else {
                             "a function"
                         }
-                    ))),
-                }
-            };
+                    )
+                })),
+            }
+        };
 
         let package_count = self.packages.len();
         if self.root as usize >= package_count {
-            return Err(invalid(format!(
-                "the root is package {} of {package_count}",
-                self.root
-            )));
+            return Err(D::invalid(|| {
+                format!("the root is package {} of {package_count}", self.root)
+            }));
         }
         for package in &self.packages {
             let name = &package.name;
             let mut edge_names = HashSet::new();
             for edge in &package.edges {
                 if edge.target as usize >= package_count {
-                    return Err(invalid(format!(
-                        "package `{name}` edge `{}` names package {} of {package_count}",
-                        edge.name, edge.target
-                    )));
+                    return Err(D::invalid(|| {
+                        format!(
+                            "package `{name}` edge `{}` names package {} of {package_count}",
+                            edge.name, edge.target
+                        )
+                    }));
                 }
                 if !edge_names.insert(&edge.name) {
-                    return Err(invalid(format!(
-                        "package `{name}` reaches two packages as `{}`",
-                        edge.name
-                    )));
+                    return Err(D::invalid(|| {
+                        format!("package `{name}` reaches two packages as `{}`", edge.name)
+                    }));
                 }
             }
             let declarations = |kind: &str,
                                 table: &IndexMap<LocalName, ObjectIndex>,
                                 holds: fn(&Object) -> bool|
-             -> Result<(), InvalidProgram> {
+             -> Result<(), D::Error> {
                 for (item, &index) in table {
-                    let role = format!("package `{name}` {kind} `{item}`");
+                    let role = || format!("package `{name}` {kind} `{item}`");
                     let pooled = object(index, &role)?;
                     if !holds(pooled) {
-                        return Err(invalid(format!(
-                            "{role} names a {:?} object",
-                            ObjectType::of(pooled)
-                        )));
+                        return Err(D::invalid(|| {
+                            format!("{} names a {:?} object", role(), ObjectType::of(pooled))
+                        }));
                     }
                 }
                 Ok(())
@@ -251,51 +285,66 @@ impl Program {
                 matches!(object, Object::TypeAlias(_))
             })?;
             for (&interface, rules) in &package.impl_rules {
-                let role = format!("package `{name}` implements object {}", interface.raw());
+                let role = || format!("package `{name}` implements object {}", interface.raw());
                 if !matches!(object(interface, &role)?, Object::Interface(_)) {
-                    return Err(invalid(format!("{role}, which is not an interface")));
+                    return Err(D::invalid(|| {
+                        format!("{}, which is not an interface", role())
+                    }));
                 }
                 for rule in rules {
                     if rule.interface_head != interface {
-                        return Err(invalid(format!(
-                            "{role} with a rule whose head is object {}",
-                            rule.interface_head.raw()
-                        )));
+                        return Err(D::invalid(|| {
+                            format!(
+                                "{} with a rule whose head is object {}",
+                                role(),
+                                rule.interface_head.raw()
+                            )
+                        }));
                     }
                     for (method, body) in &rule.methods {
-                        function(body.fqn, &format!("{role}, method `{method}`,"), true)?;
+                        function(
+                            body.fqn,
+                            &|| format!("{}, method `{method}`,", role()),
+                            true,
+                        )?;
                     }
                 }
             }
             if let Some(init) = package.init {
-                function(init, &format!("package `{name}` `$init`"), false)?;
+                function(init, &|| format!("package `{name}` `$init`"), false)?;
             }
             if let Some(test_init) = package.test_init {
-                function(test_init, &format!("package `{name}` `$init_test`"), false)?;
+                function(
+                    test_init,
+                    &|| format!("package `{name}` `$init_test`"),
+                    false,
+                )?;
             }
             for (path, &ordinal) in &package.globals {
                 if !path.owns_global_slot() {
-                    return Err(invalid(format!(
-                        "package `{name}` slots {path}, which owns no cell"
-                    )));
+                    return Err(D::invalid(|| {
+                        format!("package `{name}` slots {path}, which owns no cell")
+                    }));
                 }
                 let slot = package.slot_base.raw() + ordinal as usize;
                 let Some(cell) = self.globals.get(slot) else {
-                    return Err(invalid(format!(
-                        "package `{name}` slots {path} at cell {slot} of {}",
-                        self.globals.len()
-                    )));
+                    return Err(D::invalid(|| {
+                        format!(
+                            "package `{name}` slots {path} at cell {slot} of {}",
+                            self.globals.len()
+                        )
+                    }));
                 };
                 match path {
                     DeclPath::Function(_) | DeclPath::InterfaceBody(_) => {
                         let ConstValue::Object(index) = cell else {
-                            return Err(invalid(format!(
-                                "package `{name}` cell for {path} holds no object"
-                            )));
+                            return Err(D::invalid(|| {
+                                format!("package `{name}` cell for {path} holds no object")
+                            }));
                         };
                         function(
                             *index,
-                            &format!("package `{name}` cell for {path}"),
+                            &|| format!("package `{name}` cell for {path}"),
                             matches!(path, DeclPath::InterfaceBody(_)),
                         )?;
                     }
@@ -321,30 +370,30 @@ impl Program {
         for &ordinal in &self.init_order {
             let ordinal = ordinal as usize;
             if ordinal >= package_count {
-                return Err(invalid(format!(
-                    "the init order names package {ordinal} of {package_count}"
-                )));
+                return Err(D::invalid(|| {
+                    format!("the init order names package {ordinal} of {package_count}")
+                }));
             }
             if !ordered.insert(ordinal) {
-                return Err(invalid(format!(
-                    "the init order names package {ordinal} twice"
-                )));
+                return Err(D::invalid(|| {
+                    format!("the init order names package {ordinal} twice")
+                }));
             }
         }
         if ordered != with_init {
-            return Err(invalid(
-                "the init order is not exactly the packages with an `$init`".to_string(),
-            ));
+            return Err(D::invalid(|| {
+                "the init order is not exactly the packages with an `$init`".to_string()
+            }));
         }
 
         for (slot, cell) in self.globals.iter().enumerate() {
             if let ConstValue::Object(index) = cell {
-                object(*index, &format!("cell {slot}"))?;
+                object(*index, &|| format!("cell {slot}"))?;
             }
         }
 
         for (index, pooled) in self.objects.iter().enumerate() {
-            let role = format!("object {index}");
+            let role = || format!("object {index}");
             let mut failure = None;
             crate::head_walk::visit_object_heads(pooled, &mut |head| {
                 if failure.is_some() {
@@ -356,9 +405,12 @@ impl Program {
                     .and_then(|declaration| self.objects.get(declaration))
                     .is_some_and(|declaration| declaration.declaration_tag() == Some(tag));
                 if !bound {
-                    failure = Some(invalid(format!(
-                        "{role} carries a head with tag {tag:?}, which names no declaration"
-                    )));
+                    failure = Some(D::invalid(|| {
+                        format!(
+                            "{} carries a head with tag {tag:?}, which names no declaration",
+                            role()
+                        )
+                    }));
                 }
             });
             if let Some(failure) = failure {
@@ -379,10 +431,13 @@ impl Program {
                             }
                         };
                         if !in_range {
-                            failure = Some(invalid(format!(
-                                "{role} (function `{}`) references an operand outside the program",
-                                function.name
-                            )));
+                            failure = Some(D::invalid(|| {
+                                format!(
+                                    "{} (function `{}`) references an operand outside the program",
+                                    role(),
+                                    function.name
+                                )
+                            }));
                         }
                     });
                     if let Some(failure) = failure {
@@ -393,22 +448,28 @@ impl Program {
                             crate::bytecode::Instruction::LoadCurrentPackage(package)
                                 if *package >= package_count =>
                             {
-                                return Err(invalid(format!(
-                                    "{role} (function `{}`) loads package {package} of \
+                                return Err(D::invalid(|| {
+                                    format!(
+                                        "{} (function `{}`) loads package {package} of \
                                      {package_count}",
-                                    function.name
-                                )));
+                                        role(),
+                                        function.name
+                                    )
+                                }));
                             }
                             // The VM reads the dispatch value at `args_offset +
                             // self_arg`; past `nargs` that is past the stack.
                             crate::bytecode::Instruction::VirtualCall {
                                 nargs, self_arg, ..
                             } if self_arg >= nargs => {
-                                return Err(invalid(format!(
-                                    "{role} (function `{}`) dispatches a virtual call on \
+                                return Err(D::invalid(|| {
+                                    format!(
+                                        "{} (function `{}`) dispatches a virtual call on \
                                      argument {self_arg} of {nargs}",
-                                    function.name
-                                )));
+                                        role(),
+                                        function.name
+                                    )
+                                }));
                             }
                             _ => {}
                         }
@@ -420,10 +481,13 @@ impl Program {
                         .enumerate()
                         .find(|(_, table)| !table.dispatch.is_dispatchable())
                     {
-                        return Err(invalid(format!(
-                            "{role} (function `{}`) switch table {table} is not solved",
-                            function.name
-                        )));
+                        return Err(D::invalid(|| {
+                            format!(
+                                "{} (function `{}`) switch table {table} is not solved",
+                                role(),
+                                function.name
+                            )
+                        }));
                     }
                 }
                 Object::Interface(interface) => {
@@ -438,7 +502,7 @@ impl Program {
                         if let Some(default) = method.default {
                             function(
                                 default,
-                                &format!("{role} (interface) default of `{}`", method.name),
+                                &|| format!("{} (interface) default of `{}`", role(), method.name),
                                 true,
                             )?;
                         }
@@ -448,7 +512,7 @@ impl Program {
                     for (name, method) in &class.methods {
                         function(
                             method.function,
-                            &format!("{role} (class) method `{name}`"),
+                            &|| format!("{} (class) method `{name}`", role()),
                             false,
                         )?;
                     }
@@ -456,11 +520,14 @@ impl Program {
                 Object::GenericFunction(generic)
                     if generic.function.raw() >= self.globals.len() =>
                 {
-                    return Err(invalid(format!(
-                        "{role} (generic value) references cell {} of {}",
-                        generic.function.raw(),
-                        self.globals.len()
-                    )));
+                    return Err(D::invalid(|| {
+                        format!(
+                            "{} (generic value) references cell {} of {}",
+                            role(),
+                            generic.function.raw(),
+                            self.globals.len()
+                        )
+                    }));
                 }
                 _ => {}
             }
