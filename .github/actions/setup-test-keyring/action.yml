@@ -9,8 +9,10 @@ runs:
       run: |
         set -euo pipefail
 
-        sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends dbus gnome-keyring
+        privilege=()
+        if [ "$(id -u)" -ne 0 ]; then privilege=(sudo); fi
+        "${privilege[@]}" apt-get update -qq
+        "${privilege[@]}" apt-get install -y --no-install-recommends dbus gnome-keyring
 
         export XDG_DATA_HOME="$(mktemp -d "${RUNNER_TEMP}/baml-keyring-data.XXXXXX")"
         export XDG_RUNTIME_DIR="$(mktemp -d "${RUNNER_TEMP}/baml-keyring-runtime.XXXXXX")"

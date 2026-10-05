@@ -1240,6 +1240,9 @@ jobs:
         run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
+      - name: "Setup test credential store"
+        uses: ./.github/actions/setup-test-keyring
+
       - name: "Run tests with nextest"
         # The runtime corpus moved from the excluded baml_tests package into
         # baml_cli; keep its existing ownership in the snapshot job.
@@ -2116,6 +2119,9 @@ jobs:
       # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
       # Keep the GNU job's --exclude list in sync. The musl job also runs
       # pack_e2e, so both Linux libc variants exercise the ELF pack path.
+      - name: "Setup test credential store"
+        uses: ./.github/actions/setup-test-keyring
+
       - name: "Run compiler, CLI, and snapshot tests"
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
