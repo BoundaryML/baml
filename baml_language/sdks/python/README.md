@@ -93,6 +93,24 @@ baml_bridge.set_unhandled_spawn_error_handler(report)
   `None` restores `default_unhandled_spawn_error_handler`. A handler can call
   the default for the errors that must end the process.
 
+## Argument types
+
+The bridge checks every argument against the type that the BAML function
+declares, before the function runs. A value of another kind raises `TypeError`:
+
+```python
+Twice("7")    # TypeError: Value of type 'string' does not match the declared type `int`
+Twice(1.5)    # TypeError: a float is not an int
+Twice(True)   # TypeError: a bool is not an int
+Twice(None)   # TypeError, unless the parameter is `int?`
+```
+
+The check reaches the items of a list, the values of a map and the fields of
+a class. These conversions apply first, and no other: an `int` where a `float`
+or a `bigint` is declared, a `bigint` that fits where an `int` is declared, a
+`dict` with the fields of a class where that class is declared, and a string
+that names a variant where an enum is declared (next section).
+
 ## Enum arguments
 
 A BAML enum is generated as a `(str, enum.Enum)` class. Where a BAML function

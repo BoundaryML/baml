@@ -654,6 +654,88 @@ class TestStringForEnum:
 
 
 # ============================================================================
+# TEST: An argument must inhabit its declared type
+# ============================================================================
+
+ARGUMENT_TYPES_BAML = """
+class Reading {
+    label: string
+    count: int
+}
+
+function Twice(n: int) -> int {
+    n * 2
+}
+
+function Half(x: float) -> float {
+    x / 2.0
+}
+
+function Shout(text: string) -> string {
+    text.to_upper_case()
+}
+
+function Negate(flag: bool) -> bool {
+    !flag
+}
+
+function Total(counts: int[]) -> int {
+    counts.reduce((sum, count) -> { sum + count }, 0)
+}
+
+function Count(reading: Reading) -> int {
+    reading.count
+}
+
+function OrZero(n: int?) -> int {
+    n ?? 0
+}
+"""
+
+
+class TestArgumentTypes:
+    """The engine checks an argument against the declared type before the
+    function runs. A value of another kind entered the function as it was
+    before: `Twice("7")` ran with a string in the `int` parameter."""
+
+    @pytest.mark.parametrize(
+        ("function", "args"),
+        [
+            ("Twice", {"n": "7"}),
+            ("Twice", {"n": 1.5}),
+            ("Twice", {"n": True}),
+            ("Twice", {"n": None}),
+            ("Twice", {"n": [1]}),
+            ("Half", {"x": "1.5"}),
+            ("Shout", {"text": 7}),
+            ("Negate", {"flag": 1}),
+            ("Total", {"counts": [1, "two"]}),
+            ("Total", {"counts": "12"}),
+            ("Count", {"reading": {"label": "a", "count": "seven"}}),
+            ("Count", {"reading": "a"}),
+        ],
+    )
+    def test_value_of_another_kind_raises(self, function, args):
+        rt = make_runtime(ARGUMENT_TYPES_BAML)
+        with pytest.raises(Exception):
+            call_function_sync(rt, function, args)
+
+    def test_values_of_the_declared_kind_are_accepted(self):
+        rt = make_runtime(ARGUMENT_TYPES_BAML)
+        assert call_function_sync(rt, "Twice", {"n": 7}).result() == 14
+        assert call_function_sync(rt, "Shout", {"text": "hi"}).result() == "HI"
+        assert call_function_sync(rt, "Negate", {"flag": True}).result() is False
+        assert call_function_sync(rt, "Total", {"counts": [1, 2]}).result() == 3
+        reading = {"label": "a", "count": 7}
+        assert call_function_sync(rt, "Count", {"reading": reading}).result() == 7
+        assert call_function_sync(rt, "OrZero", {"n": None}).result() == 0
+
+    def test_int_is_accepted_where_a_float_is_declared(self):
+        rt = make_runtime(ARGUMENT_TYPES_BAML)
+        assert call_function_sync(rt, "Half", {"x": 3}).result() == 1.5
+
+
+# ============================================================================
 # TEST: Async function calls
 # ============================================================================
 

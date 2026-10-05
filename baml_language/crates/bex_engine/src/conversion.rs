@@ -4960,8 +4960,88 @@ fn coerce_arg_to_declared_type_with_aliases(
         }
 
         // ── Numeric / optional / union ───────────────────────────────────
-        (v, ty) => coerce_numeric_to_declared_type(v, ty),
+        (v, ty) => {
+            let coerced = coerce_numeric_to_declared_type(v, ty)?;
+            reject_plain_value_of_another_kind(&coerced, ty)?;
+            Ok(coerced)
+        }
     }
+}
+
+/// The last check of an inbound argument: a plain host value that no rule
+/// above took must inhabit the slot it was written for.
+///
+/// The rules above convert what the host boundary converts (an int to a float
+/// or a bigint, a bigint that fits to an int, a string to the enum variant it
+/// names, a map to the class whose shape it has) and select the member of a
+/// union. A value that is still of another kind than its slot is a caller's
+/// error, and it must not enter the program: a run-time value may never
+/// violate its declared type. Before this check, `"x"` in an `int` slot
+/// entered the function as a string, where `n is int` was false.
+///
+/// Only the plain kinds a host writes are judged (`null`, a number, a bool, a
+/// string, bytes, a list, a map), and only against the slots that are decided
+/// by kind alone. The other carriers (an instance, a variant, a handle, a host
+/// callable, a media value) and the open slots (`unknown`, a json alias, a
+/// function, a media type) keep their own rules.
+fn reject_plain_value_of_another_kind(
+    value: &BexExternalValue,
+    declared: &RuntimeTy,
+) -> Result<(), EngineError> {
+    let plain_value = matches!(
+        value,
+        BexExternalValue::Null
+            | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
+            | BexExternalValue::Float(_)
+            | BexExternalValue::JsNumber(_)
+            | BexExternalValue::Bool(_)
+            | BexExternalValue::String(_)
+            | BexExternalValue::Uint8Array(_)
+            | BexExternalValue::Array { .. }
+            | BexExternalValue::Map { .. }
+    );
+    let slot_decided_by_kind = matches!(
+        declared,
+        RuntimeTy::Null
+            | RuntimeTy::Int
+            | RuntimeTy::Bigint
+            | RuntimeTy::Float
+            | RuntimeTy::Bool
+            | RuntimeTy::String
+            | RuntimeTy::Uint8Array
+            | RuntimeTy::Literal(..)
+            | RuntimeTy::List(..)
+            | RuntimeTy::Map { .. }
+            | RuntimeTy::Class(..)
+            | RuntimeTy::Enum(..)
+            | RuntimeTy::EnumVariant(..)
+    );
+    // A string in an enum slot was judged by the enum rules above: it names
+    // a variant (and was converted), it names none (a mismatch), or the enum
+    // is one the program does not declare (built at run time), where the
+    // string is kept for the run-time lookup.
+    let string_in_enum_slot = matches!(
+        (value, declared),
+        (
+            BexExternalValue::String(_),
+            RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..)
+        )
+    );
+    if plain_value
+        && slot_decided_by_kind
+        && !string_in_enum_slot
+        && !value_matches_type(value, declared)
+    {
+        return Err(EngineError::TypeMismatch {
+            message: format!(
+                "Value of type '{}' does not match the declared type `{}`",
+                described_value_type(value),
+                declared.as_ty().render_user_facing(),
+            ),
+        });
+    }
+    Ok(())
 }
 
 /// Rewrite every container annotation in a JSON value tree to the `json`
@@ -6003,6 +6083,164 @@ mod union_container_selection_tests {
             &RuntimeTy::Enum(mood_name())
         ));
         assert!(is_variant(&value, &mood_name(), "HAPPY"), "{value:?}");
+    }
+
+    // ── a plain value of another kind ───────────────────────────────────────
+
+    fn person_name() -> TypeName {
+        TypeName::from_dotted_path("user.Person")
+    }
+
+    /// `class Person { name: string, age: int }`.
+    fn person_classes() -> indexmap::IndexMap<TypeName, WireClassDefinition> {
+        let field = |name: &str, field_type: RuntimeTy| WireClassFieldDefinition {
+            name: name.to_string(),
+            field_type,
+            alias: None,
+            skip: false,
+        };
+        indexmap::IndexMap::from([(
+            person_name(),
+            WireClassDefinition {
+                fields: vec![
+                    field("name", RuntimeTy::string()),
+                    field("age", RuntimeTy::int()),
+                ],
+            },
+        )])
+    }
+
+    fn coerce_with_person(
+        value: BexExternalValue,
+        declared: &RuntimeTy,
+    ) -> Result<BexExternalValue, EngineError> {
+        coerce_arg_to_declared_type_with_aliases(
+            value,
+            declared,
+            &indexmap::IndexMap::new(),
+            &person_classes(),
+            &mood_enums(),
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        )
+    }
+
+    fn untyped_list(items: Vec<BexExternalValue>) -> BexExternalValue {
+        BexExternalValue::Array {
+            element_type: RuntimeTy::Unknown,
+            items,
+        }
+    }
+
+    fn untyped_map(entries: &[(&str, BexExternalValue)]) -> BexExternalValue {
+        BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::Unknown,
+            entries: entries
+                .iter()
+                .map(|(key, value)| ((*key).to_string(), value.clone()))
+                .collect(),
+        }
+    }
+
+    /// A host value must inhabit the type its parameter declares. A string in
+    /// an `int` slot entered the function as a string before.
+    #[test]
+    fn scalar_of_another_kind_is_a_type_mismatch() {
+        let text = || BexExternalValue::String("x".into());
+        let cases = [
+            (text(), RuntimeTy::int(), "string", "int"),
+            (BexExternalValue::Float(1.5), RuntimeTy::int(), "float", "int"),
+            (BexExternalValue::Bool(true), RuntimeTy::int(), "bool", "int"),
+            (BexExternalValue::Null, RuntimeTy::int(), "null", "int"),
+            (text(), RuntimeTy::float(), "string", "float"),
+            (BexExternalValue::Int(1), RuntimeTy::bool(), "int", "bool"),
+            (BexExternalValue::Int(1), RuntimeTy::string(), "int", "string"),
+            (text(), RuntimeTy::Bigint, "string", "bigint"),
+            (text(), RuntimeTy::Uint8Array, "string", "uint8array"),
+            (text(), RuntimeTy::null(), "string", "null"),
+            (text(), string_literal("draft"), "string", "\"draft\""),
+            (
+                BexExternalValue::Int(4),
+                RuntimeTy::Literal(Literal::Int(3), Freshness::Regular),
+                "int",
+                "3",
+            ),
+        ];
+        for (value, declared, value_kind, written) in cases {
+            assert_eq!(
+                mismatch_message(coerce_with_person(value, &declared)),
+                format!("Value of type '{value_kind}' does not match the declared type `{written}`"),
+            );
+        }
+    }
+
+    /// The conversions of the host boundary still apply before the check.
+    #[test]
+    fn scalar_that_the_boundary_converts_is_accepted() {
+        let float = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::float()).unwrap();
+        assert!(matches!(float, BexExternalValue::Float(value) if value == 7.0), "{float:?}");
+        let bigint = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::Bigint).unwrap();
+        assert!(matches!(bigint, BexExternalValue::Bigint(_)), "{bigint:?}");
+        let int = coerce_with_person(BexExternalValue::JsNumber(3.0), &RuntimeTy::int()).unwrap();
+        assert!(matches!(int, BexExternalValue::Int(3)), "{int:?}");
+        let literal = coerce_with_person(
+            BexExternalValue::String("draft".into()),
+            &string_literal("draft"),
+        )
+        .unwrap();
+        assert!(matches!(literal, BexExternalValue::String(_)), "{literal:?}");
+        let unknown = coerce_with_person(BexExternalValue::Int(7), &RuntimeTy::Unknown).unwrap();
+        assert!(matches!(unknown, BexExternalValue::Int(7)), "{unknown:?}");
+    }
+
+    /// The check reaches the items of a list and the values of a map, because
+    /// each is coerced against its own type. The fields of a class are coerced
+    /// the same way where the engine builds the instance.
+    #[test]
+    fn nested_scalar_of_another_kind_is_a_type_mismatch() {
+        let expected = "Value of type 'string' does not match the declared type `int`";
+        let item = untyped_list(vec![
+            BexExternalValue::Int(1),
+            BexExternalValue::String("two".into()),
+        ]);
+        assert_eq!(
+            mismatch_message(coerce_with_person(item, &list(RuntimeTy::int()))),
+            expected
+        );
+        let entry = untyped_map(&[("a", BexExternalValue::String("one".into()))]);
+        assert_eq!(
+            mismatch_message(coerce_with_person(entry, &map(RuntimeTy::int()))),
+            expected
+        );
+    }
+
+    /// A plain value where a list, a map, a class or an enum is declared, and a
+    /// list or a map where a scalar is declared.
+    #[test]
+    fn plain_value_in_a_slot_of_another_shape_is_a_type_mismatch() {
+        let text = || BexExternalValue::String("x".into());
+        let person = RuntimeTy::Class(person_name(), Box::new([]));
+        let cases = [
+            (text(), list(RuntimeTy::string()), "string", "string[]"),
+            (text(), map(RuntimeTy::string()), "string", "map<string, string>"),
+            (text(), person.clone(), "string", "Person"),
+            (BexExternalValue::Null, person, "null", "Person"),
+            (
+                BexExternalValue::Int(1),
+                RuntimeTy::Enum(mood_name()),
+                "int",
+                "callbacks.Mood",
+            ),
+            (untyped_list(vec![]), RuntimeTy::int(), "array", "int"),
+            (untyped_map(&[]), RuntimeTy::string(), "map", "string"),
+            (untyped_map(&[]), list(RuntimeTy::int()), "map", "int[]"),
+        ];
+        for (value, declared, value_kind, written) in cases {
+            assert_eq!(
+                mismatch_message(coerce_with_person(value, &declared)),
+                format!("Value of type '{value_kind}' does not match the declared type `{written}`"),
+            );
+        }
     }
 
     // ── type names in mismatch messages ─────────────────────────────────────

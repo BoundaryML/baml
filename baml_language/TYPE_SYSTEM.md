@@ -36,6 +36,19 @@ The stdlib declares _companion carrier classes_ for the builtins: `baml.Int`, `b
 
 Two companions are the opposite case — the class name IS the builtin type's canonical spelling: `reflect.Type` (the metatype) and `baml.future.Future<V, E>`. Each denotes its dedicated type kind; the class declaration exists to carry members and documentation. Their long-term shape is undecided (perhaps a magic-builtin-backed alias with an inherent `implement` block), but the invariant holds either way: the spelling denotes the builtin kind, and the declaration only attaches members.
 
+#### Values from a host
+
+A host language has its own types, so a value that a host passes to a BAML function is checked against the declared type when it crosses the boundary. This is where the golden rule is enforced for arguments: a value that does not inhabit the declared type is rejected with a type mismatch, and the function does not run. It is never passed on as it is.
+
+The boundary is also the one place where a value is converted without an explicit conversion, and only where the host cannot say what it means:
+
+- an `int` where a `float` or a `bigint` is declared (hosts write `7` for both, and many have one number type);
+- a `bigint` that fits where an `int` is declared, and a JavaScript number in the numeric type that the declaration names;
+- a string that names a variant where an enum is declared;
+- a map with the shape of a class where that class is declared.
+
+Nothing else is converted: `"7"` is not an `int`, `1.5` is not an `int`, `true` is not an `int`, and `null` inhabits only a type that has `null`. Inside BAML none of these conversions exist; `let c: Color = "Red"` is an error.
+
 ### Abstract Types
 
 Abstract types can generally be viewed as set unions of different groups of concrete (and literal) types:
