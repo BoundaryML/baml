@@ -553,7 +553,7 @@ A potentially matching custom `Equals.eq` declaration blocks implicit Hash, rega
 
 ### Map keys
 
-`map<K, V>` requires Hash keys; Equals is already implicit for every type. Equal-key updates preserve the original key and insertion position. Map equality and hashing ignore insertion order. Maps do not expose hasher selection.
+`map<K, V>` explicitly requires `Hash & Equals` keys. Equal-key updates preserve the original key and insertion position. Map equality and hashing ignore insertion order. Maps do not expose hasher selection.
 
 Stored keys must keep hash and equality stable. Callbacks run without map locks; key insertion or removal during lookup causes a retry.
 

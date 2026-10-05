@@ -711,7 +711,7 @@ class Array<T> {
 /// When `V` is nullable, a `null` returned by `get`, `set` or `delete` is
 /// ambiguous between "no such key" and "the key's value is `null`". `has` is
 /// the way to tell the two apart.
-class Map<K extends root.Hash, V> {
+class Map<K extends root.Hash & root.ops.Equals, V> {
     /// Returns the number of entries. `O(1)`.
     function length(self) -> int throws never {
         $rust_function

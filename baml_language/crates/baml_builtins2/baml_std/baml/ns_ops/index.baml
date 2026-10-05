@@ -51,7 +51,7 @@ implement<T> Index<int> for T[] {
     }
 }
 
-implement<K extends root.Hash, V> Index<K> for map<K, V> {
+implement<K extends root.Hash & Equals, V> Index<K> for map<K, V> {
     type Output = V;
     function index(self, idx: K) -> V throws never {
         self[idx]
