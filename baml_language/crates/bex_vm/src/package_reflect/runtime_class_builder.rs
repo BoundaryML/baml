@@ -941,7 +941,8 @@ fn build_group(
             });
         }
         let plan = &plans[&node.id];
-        let Object::Class(class) = vm.get_object_mut(plan.ptr) else {
+        let mut metered = vm.get_object_mut(plan.ptr);
+        let Object::Class(class) = &mut *metered else {
             unreachable!("builder class placeholder changed variant")
         };
         class.fields = class_fields;

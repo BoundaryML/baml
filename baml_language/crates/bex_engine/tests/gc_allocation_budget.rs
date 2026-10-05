@@ -38,6 +38,18 @@ function SpawnTexts(texts: string[]) -> baml.future.Future<int, never> {
     spawn { texts.length() + texts[0].length() + texts[texts.length() - 1].length() }
 }
 function JoinText(job: baml.future.Future<int, never>) -> int { await job }
+function Bytes(seed: uint8array, n: int) -> int {
+    let i = 0;
+    let total = 0;
+    while (i < n) { let copy = seed.reverse(); total = total + copy.length(); i = i + 1; }
+    total
+}
+function Concat(chunk: string, n: int) -> int {
+    let text = "";
+    let i = 0;
+    while (i < n) { text = text + chunk; i = i + 1; }
+    text.length()
+}
 function Async(n: int) -> int {
     let values = Empty();
     Grow(values, n);
@@ -189,6 +201,61 @@ async fn large_payloads_trigger_gc_with_few_objects() {
             Ext::Int(4 * 1024 * 1024)
         );
     }
+    engine.shutdown().await;
+}
+
+/// A loop that makes and drops one large buffer per iteration collects
+/// during the call rather than waiting for it to end. The first collection
+/// comes after four 8 MiB iterations spend the 32 MiB budget; it finds the
+/// seed and the current copy live, 16 MiB, so the budget becomes 64 MiB and
+/// the remaining 224 MiB of churn brings at least two more.
+#[tokio::test(start_paused = true)]
+async fn large_buffers_collect_during_the_call() {
+    let engine = engine();
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let before = engine.heap().gc_budget().full_collections;
+    let size = 8 * 1024 * 1024;
+    assert_eq!(
+        call(
+            &engine,
+            "Bytes",
+            vec![Ext::Uint8Array(vec![1; size]), Ext::Int(32)],
+            true
+        )
+        .await,
+        Ext::Int(32 * i64::try_from(size).unwrap())
+    );
+    let collections = engine.heap().gc_budget().full_collections - before;
+    assert!(
+        collections >= 3,
+        "{collections} collections while 256 MiB of buffers came and went"
+    );
+    engine.shutdown().await;
+}
+
+/// String concatenation is a single instruction that can allocate any amount,
+/// so a loop of it must also collect during the call.
+#[tokio::test(start_paused = true)]
+async fn string_concatenation_collects_during_the_call() {
+    let engine = engine();
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let before = engine.heap().gc_budget().full_collections;
+    let chunk = 1024 * 1024;
+    assert_eq!(
+        call(
+            &engine,
+            "Concat",
+            vec![Ext::String("x".repeat(chunk).into()), Ext::Int(64)],
+            true
+        )
+        .await,
+        Ext::Int(64 * i64::try_from(chunk).unwrap())
+    );
+    let collections = engine.heap().gc_budget().full_collections - before;
+    assert!(
+        collections >= 4,
+        "{collections} collections while 64 growing strings were built"
+    );
     engine.shutdown().await;
 }
 

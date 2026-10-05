@@ -153,7 +153,8 @@ impl BexVm {
                 });
             }
             let head = declared[&class.name];
-            let Object::Class(declaration) = self.get_object_mut(head.ptr()) else {
+            let mut metered = self.get_object_mut(head.ptr());
+            let Object::Class(declaration) = &mut *metered else {
                 unreachable!("a just-allocated class changed variant")
             };
             declaration.fields = fields;
@@ -413,7 +414,8 @@ pub(super) fn register_class_witnesses(
             .heap()
             .write_barrier(class_ptr, Value::object(*rule));
     }
-    let Object::Class(class) = vm.get_object_mut(class_ptr) else {
+    let mut metered = vm.get_object_mut(class_ptr);
+    let Object::Class(class) = &mut *metered else {
         unreachable!("witnessed class placeholder changed variant")
     };
     let bex_vm_types::types::Owner::Anonymous { witnesses } = &mut class.owner else {

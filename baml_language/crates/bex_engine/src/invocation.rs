@@ -191,6 +191,8 @@ impl ActiveInvocation {
             // Entry setup roots the target, arguments and type values before
             // parking. GC may execute finalizers, so it belongs after admission.
             drop(vm_args);
+            // Converting the arguments allocated on this thread's account.
+            thread.vm.tlab.flush_alloc_debt();
             let inactive = thread.release();
             Box::pin(runtime.collect_before_call(&registration.work_guard)).await;
             let thread = inactive.acquire().await;
