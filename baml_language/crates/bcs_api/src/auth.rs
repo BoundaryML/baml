@@ -190,7 +190,7 @@ impl Client {
 pub struct Store(keyring::Entry);
 impl Store {
     pub fn new(endpoint: &Endpoint) -> Result<Self> {
-        let namespace = baml_release::baml_home();
+        let namespace = baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir());
         let account = hex::encode(Sha256::digest(
             format!("{}\n{}", endpoint.0, namespace.display()).as_bytes(),
         ));

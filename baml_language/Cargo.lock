@@ -1430,8 +1430,8 @@ name = "bcs_api"
 version = "0.0.0-beta"
 dependencies = [
  "baml_env",
- "baml_release",
  "bytes",
+ "dirs",
  "futures",
  "hex",
  "keyring",

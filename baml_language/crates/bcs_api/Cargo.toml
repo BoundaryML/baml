@@ -14,7 +14,7 @@ workspace = true
 default = [ "auth", "aws-crypto" ]
 auth = [
   "dep:baml_env",
-  "dep:baml_release",
+  "dep:dirs",
   "dep:hex",
   "dep:keyring",
   "dep:url",
@@ -26,8 +26,8 @@ ring-crypto = [ "reqwest/rustls-no-provider", "rustls/ring", "rustls/std" ]
 
 [dependencies]
 baml_env = { workspace = true, optional = true }
-baml_release = { workspace = true, optional = true }
 bytes.workspace = true
+dirs = { workspace = true, optional = true }
 futures.workspace = true
 hex = { workspace = true, optional = true }
 keyring = { workspace = true, optional = true }
