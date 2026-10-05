@@ -106,6 +106,59 @@ describe('BAML TextMate grammar', () => {
     );
   });
 
+  it('recognizes computed first keys without mistaking blocks for maps', () => {
+    const openingScopes = (body: string) => {
+      const { tokens } = highlighter.codeToTokens(`let value = ${body};`, {
+        includeExplanation: 'scopeName',
+        lang: 'baml',
+        theme: THEME,
+      });
+      return tokens
+        .flat()
+        .flatMap(explanationParts)
+        .find((part) => part.content === '{')
+        ?.scopes?.map((scope) => scope.scopeName);
+    };
+    for (const key of [
+      'key + 1',
+      'f()',
+      '-key',
+      'keys[0]',
+      '(key + 1)',
+      'f(g(h(key)))',
+      'Point { x: 1, y: 2 }',
+      'if (flag) { 1 } else { 2 }',
+      'f("a:b}")',
+      'f(#"a:b}"#)',
+      'f(`a:b}`)',
+      'f(``a:b}``)',
+      'f(/* : } */ key)',
+      'f<int, string>()',
+    ]) {
+      expect(openingScopes(`{ ${key}: 1 }`), key).toContain(
+        'meta.expression.map.baml',
+      );
+    }
+    for (const body of [
+      '{ key + 1 }',
+      '{ f("a:b}") }',
+      '{ f(#"a:b}"#) }',
+      '{ f(`a:b}`) }',
+      '{ f(``a:b}``) }',
+      '{ ``a:b}`` }',
+      '{ f(/* : } */ key) }',
+      '{ key // not a map: value',
+      '{ let x: int = 1; x }',
+      '{ /* comment */ let x: int = 1; x }',
+      '{ (x: int) -> int { x } }',
+      '{ Point { x: 1, y: 2 } }',
+    ]) {
+      expect(openingScopes(body), body).not.toContain(
+        'meta.expression.map.baml',
+      );
+    }
+  });
+
   for (const fixture of fixtures) {
     const name = fixtureName(fixture);
 

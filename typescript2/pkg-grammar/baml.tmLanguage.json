@@ -3092,7 +3092,7 @@
     },
     "map-expression": {
       "name": "meta.expression.map.baml",
-      "begin": "\\{(?=\\s*(?:\\}|[\"#]|\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*(?:\\s*\\.\\s*\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*\\s*:))",
+      "begin": "\\{(?=\\s*(?:\\}|(?!(?:\\s|/\\*(?:[^*]|\\*(?!/))*\\*/)*(?:let|const|while|for)\\b)(?<map_key_atom>(?>\"(?:\\\\.|[^\"\\\\\\r\\n])*\"|(?<map_key_hash>#+)\"(?:(?!\"\\k<map_key_hash>)[^\\r\\n])*\"\\k<map_key_hash>|(?<map_key_tick>\\x60+)(?!\\x60)(?:(?!\\k<map_key_tick>)[^\\r\\n])*\\k<map_key_tick>(?!\\x60)|/\\*(?:[^*]|\\*(?!/))*\\*/|//[^\\r\\n]*|\\((?:\\g<map_key_atom>|[:;])*\\)|\\[(?:\\g<map_key_atom>|[:;])*\\]|\\{(?:\\g<map_key_atom>|[:;])*\\}|/(?![/*])|[^()\\[\\]{}:;\"\\x60#/\\r\\n]))+:))",
       "beginCaptures": {
         "0": {
           "name": "punctuation.definition.map.begin.baml"
