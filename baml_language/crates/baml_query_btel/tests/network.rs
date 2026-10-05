@@ -1170,9 +1170,11 @@ fn model_requests_are_priced_from_their_responses() {
         ),
         sse("message_stop", &json!({"type": "message_stop"})),
     ];
-    // OpenAI counts cached input inside the prompt: 1000 of 1200 are fresh.
+    // OpenAI counts cache reads and writes inside the prompt: 900 of 1200
+    // are fresh.
     let chat_usage = json!({"prompt_tokens": 1200, "completion_tokens": 300,
-        "total_tokens": 1500, "prompt_tokens_details": {"cached_tokens": 200},
+        "total_tokens": 1500,
+        "prompt_tokens_details": {"cached_tokens": 200, "cache_write_tokens": 100},
         "completion_tokens_details": {"reasoning_tokens": 100}});
     let chat = json!({"id": "chatcmpl-1", "object": "chat.completion", "model": sol,
         "choices": [{"index": 0, "message": {"role": "assistant", "content": "Hi"},
@@ -1188,7 +1190,8 @@ fn model_requests_are_priced_from_their_responses() {
         json!({"event": null, "data": "[DONE]", "id": null}),
     ];
     let responses_usage = json!({"input_tokens": 1200,
-        "input_tokens_details": {"cached_tokens": 200}, "output_tokens": 300,
+        "input_tokens_details": {"cached_tokens": 200, "cache_write_tokens": 100},
+        "output_tokens": 300,
         "output_tokens_details": {"reasoning_tokens": 100}, "total_tokens": 1500});
     let responses = json!({"id": "resp_1", "object": "response", "model": sol,
         "output": [], "usage": responses_usage});
@@ -1349,11 +1352,12 @@ fn model_requests_are_priced_from_their_responses() {
         [Some(900), Some(30), Some(200), Some(100), None],
         Some(0.00474),
     );
-    // 1000 fresh at $2, 200 cached at $0.2, 300 out at $10 per million.
+    // 900 fresh at $2, 100 written at $2.5, 200 cached at $0.2, 300 out at
+    // $10 per million.
     let openai = priced(
         sol,
-        [Some(1000), Some(300), Some(200), None, Some(100)],
-        Some(0.00504),
+        [Some(900), Some(300), Some(200), Some(100), Some(100)],
+        Some(0.00509),
     );
     let gemini = |model| {
         priced(

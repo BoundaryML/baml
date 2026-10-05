@@ -320,17 +320,17 @@ WITH network_route (url, provider, priority) AS (VALUES
 -- or into a stream event's data. A stream event whose usage is wrapped (in
 -- `message` or `response`) is read inside its `envelope`. `url_model`
 -- precedes the model in the URL. `input_has_cache`: `input` counts cache
--- reads too, which are subtracted.
+-- reads and writes too, which are subtracted.
 network_provider (provider, envelope, model, url_model, input, input_has_cache, cache_read,
   cache_write, output, reasoning) AS (VALUES
   ('anthropic', '$.message', '$.model', '/models/', '$.usage.input_tokens', 0,
     '$.usage.cache_read_input_tokens', '$.usage.cache_creation_input_tokens',
     '$.usage.output_tokens', '$.usage.output_tokens_details.thinking_tokens'),
   ('openai_chat', NULL, '$.model', NULL, '$.usage.prompt_tokens', 1,
-    '$.usage.prompt_tokens_details.cached_tokens', NULL,
+    '$.usage.prompt_tokens_details.cached_tokens', '$.usage.prompt_tokens_details.cache_write_tokens',
     '$.usage.completion_tokens', '$.usage.completion_tokens_details.reasoning_tokens'),
   ('openai_responses', '$.response', '$.model', NULL, '$.usage.input_tokens', 1,
-    '$.usage.input_tokens_details.cached_tokens', NULL,
+    '$.usage.input_tokens_details.cached_tokens', '$.usage.input_tokens_details.cache_write_tokens',
     '$.usage.output_tokens', '$.usage.output_tokens_details.reasoning_tokens'),
   ('gemini', NULL, '$.modelVersion', '/models/', '$.usageMetadata.promptTokenCount', 1,
     '$.usageMetadata.cachedContentTokenCount', NULL,
@@ -489,7 +489,8 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
      SELECT max(json_extract(d.body, d.model)) AS model, d.url_model,
        IIF(d.input_has_cache,
          max(0, max(json_extract(d.body, d.input))
-           - COALESCE(max(json_extract(d.body, d.cache_read)), 0)),
+           - COALESCE(max(json_extract(d.body, d.cache_read)), 0)
+           - COALESCE(max(json_extract(d.body, d.cache_write)), 0)),
          max(json_extract(d.body, d.input))) AS input,
        max(json_extract(d.body, d.output)) AS output,
        max(json_extract(d.body, d.cache_read)) AS cache_read,
