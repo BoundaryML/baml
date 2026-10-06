@@ -48,6 +48,18 @@ function OaiSystemLook(pic: image) -> string {
     `
 }
 
+class OaiPickedTool {
+    tool: string,
+}
+
+function OaiPickTool() -> OaiPickedTool {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        Pick the tool to run.
+        ${ctx.output_format()}
+    `
+}
+
 // A per-message directive, authored on the role marker.
 function OaiMetaEcho(question: string) -> string {
     client: "openai/gpt-4o-mini"
@@ -74,6 +86,39 @@ function _oai_image_response() -> string {
 function _oai_sparse_usage_response() -> string {
     let body = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{}}`;
     body
+}
+
+// One assistant `message` output item with a `phase`.
+function _oai_phase_message(phase: string, text: string) -> map<string, unknown> {
+    {
+        "type": "message",
+        "phase": phase,
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": text }],
+    }
+}
+
+function _oai_response_with_output(output: map<string, unknown>[]) -> string {
+    _oai_json(
+        {
+            "id": "resp_commentary",
+            "model": "gpt-6-luna",
+            "status": "completed",
+            "output": output,
+            "usage": { "input_tokens": 3, "output_tokens": 1, "total_tokens": 4 },
+        },
+    )
+}
+
+// The shape gpt-6-luna returns when it splits one answer: a reasoning item,
+// `commentary` messages, then a `final_answer` message.
+function _oai_commentary_response(commentaries: string[], final_answer: string) -> string {
+    let output: map<string, unknown>[] = [{ "type": "reasoning", "content": [], "summary": [] }];
+    for (let text in commentaries) {
+        output.push(_oai_phase_message("commentary", text));
+    }
+    output.push(_oai_phase_message("final_answer", final_answer));
+    _oai_response_with_output(output)
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -706,6 +751,122 @@ function oai_sparse_usage() -> string {
 
 test "oai_sparse_usage" {
     assert.equal(oai_sparse_usage(), "pong|0|0")
+}
+
+// A commentary message that parses into a structured output type is the
+// turn's output. The final answer is the fallback.
+function oai_commentary_answer(commentaries: string[], final_answer: string) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_commentary_response(commentaries, final_answer))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            ai.Agent.new(client = cl).run(OaiPickTool@spec()).value.tool
+        },
+    )
+}
+
+test "oai_commentary_answer" {
+    let tool_call = "{\"tool\": \"search_workouts\"} \n";
+    // the commentary wins over an empty final answer and over one that parses
+    assert.equal(oai_commentary_answer([tool_call], ""), "search_workouts");
+    assert.equal(oai_commentary_answer([tool_call], `{"tool": "none"}`), "search_workouts");
+    // commentary messages are tried in order
+    assert.equal(
+        oai_commentary_answer([`{"tool": "first"}`, `{"tool": "second"}`], `{"tool": "none"}`),
+        "first",
+    );
+    assert.equal(
+        oai_commentary_answer(["Let me look that up.", `{"tool": "second"}`], `{"tool": "none"}`),
+        "second",
+    );
+    // a commentary that does not parse leaves the final answer
+    assert.equal(oai_commentary_answer(["Let me look that up."], `{"tool": "none"}`), "none")
+}
+
+// The turn's content is the whole response, in order, whatever was parsed. A
+// string output is never taken from the commentary: any text parses as a
+// string, so a preamble would replace the answer.
+function oai_commentary_string_output() -> string {
+    root.llm_mock.mock_json_serve(
+        [
+            root.llm_mock.MockResponse.ok(_oai_commentary_response(["Let me look."], "pong")),
+            root.llm_mock.MockResponse.ok(_oai_commentary_response(["Let me look."], "pong")),
+        ],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let turn = cl.invoke(_oai_input(spec, ai.Journal.new(spec), ai.tools.Toolbox.new([])));
+            let texts: string[] = [];
+            for (let block in turn.content) {
+                if let text: ai.content.Text = block {
+                    texts.push(text.text);
+                }
+            }
+            let decoded = if (turn.parsed_output == null) {
+                "not decoded"
+            } else {
+                "decoded"
+            };
+            let value = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong.")).value;
+            [texts.join("|"), decoded, value].join("~")
+        },
+    )
+}
+
+test "oai_commentary_string_output" {
+    assert.equal(oai_commentary_string_output(), "Let me look.|pong~not decoded~pong")
+}
+
+// With a native tool call in the response, the commentary is the preamble to
+// that call, not the output.
+function oai_commentary_with_tool_call() -> string {
+    let call: map<string, unknown> = {
+        "type": "function_call",
+        "id": "fc_1",
+        "call_id": "call_1",
+        "name": "lookup",
+        "arguments": "{}",
+    };
+    let body = _oai_response_with_output(
+        [_oai_phase_message("commentary", `{"tool": "search_workouts"}`), call],
+    );
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(body)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiPickTool@spec();
+            let turn = cl.invoke(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal.new(spec),
+                    toolbox: ai.tools.Toolbox.new([]),
+                    output_type: spec.output_type(),
+                },
+            );
+            let decoded = if (turn.parsed_output == null) {
+                "not decoded"
+            } else {
+                "decoded"
+            };
+            `${turn.tool_uses().length()} tool call|${decoded}`
+        },
+    )
+}
+
+test "oai_commentary_with_tool_call" {
+    assert.equal(oai_commentary_with_tool_call(), "1 tool call|not decoded")
 }
 
 // Malformed `arguments` on a function_call item is PROVIDER-malformed output:

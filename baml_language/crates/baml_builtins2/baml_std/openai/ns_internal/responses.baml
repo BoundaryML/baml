@@ -158,6 +158,8 @@ class OaOutputItem {
     // message / reasoning
     content: OaContentPart[]?,
     summary: OaContentPart[]?,
+    // message: "commentary" or "final_answer" on models that split an answer
+    phase: string?,
     // image_generation_call
     result: string?,
     revised_prompt: string?,
@@ -995,11 +997,87 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
+/// Whether any text parses as `t`: `string`, or a union with a `string` member
+/// (`string?` included).
+function _accepts_any_text(t: reflect.Type) -> bool {
+    let text = reflect.Type.of<string>();
+    if (t == text) {
+        return true;
+    }
+    if let union: reflect.union.Type = t.as_union() {
+        return union.member_types().some((member) -> {
+            member == text
+        });
+    }
+    false
+}
+
+/// `text` parsed into `output_type`, or null when it is blank or does not
+/// parse.
+function _parse_output(output_type: reflect.Type, text: string) -> ai.ParsedOutput? {
+    if (text.trim().is_empty()) {
+        return null;
+    }
+    let value = baml.sap.parse_type(output_type, text) catch_all (e) {
+        _ => {
+            return null;
+        },
+    };
+    ai.ParsedOutput { value: value }
+}
+
+/// The output that a `commentary` message holds, or null.
+///
+/// Models from gpt-5.3-codex on can answer in several messages, labeled by
+/// `phase`: `commentary` messages for the model's next step, then a
+/// `final_answer`. When the output is prompted as text and the response makes
+/// no native tool call, the model writes that step as the commentary (for
+/// example the tool calls of a prompted action schema), then writes the
+/// `final_answer` as if the step had already run. So the first commentary
+/// message that parses into the output type is the turn's output: the runner
+/// takes it and does not parse the final answer.
+///
+/// Null for a text-shaped output type: any text parses as a string, so a
+/// commentary preamble would replace the answer.
+function _commentary_output(resp: OaResponse, output_type: reflect.Type) -> ai.ParsedOutput? {
+    if (_accepts_any_text(output_type)) {
+        return null;
+    }
+    let output: OaOutputItem[] = resp.output ?? [];
+    // With a native tool call, the commentary is the preamble to that call.
+    if (
+        output.some((item) -> {
+            item.type == "function_call"
+        })
+    ) {
+        return null;
+    }
+    for (let item in output) {
+        if (item.type == "message" && item.phase == "commentary") {
+            let text = "";
+            for (let part in item.content ?? []) {
+                if ((part.type ?? "") == "output_text") {
+                    text = `${text}${part.text ?? ""}`;
+                }
+            }
+            if let parsed: ai.ParsedOutput = _parse_output(output_type, text) {
+                return parsed;
+            }
+        }
+    }
+    null
+}
+
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
     let sent = ai.wire.send_as_with_wire<OaResponse>(req, "openai", c.id(), capture_wire = c.capture_wire);
     let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
+    ai.ModelTurn {
+        ...turn,
+        parsed_output: _commentary_output(sent.value, input.output_type),
+        calls: [sent.call],
+        model: c.model,
+    }
 }
 
 // ---------------------------------------------------------------------------
