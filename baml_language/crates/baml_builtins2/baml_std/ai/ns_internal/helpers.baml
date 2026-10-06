@@ -25,12 +25,7 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
         let _ = props.set(a.name, property);
         required.push(a.name);
     }
-    let schema: map<string, unknown> = {
-        "type": "object",
-        "properties": props,
-        "required": required,
-        "additionalProperties": false,
-    };
+    let schema: map<string, unknown> = { "type": "object", "properties": props, "required": required, "additionalProperties": false };
     if (definitions.length() > 0) {
         let _ = schema.set("$defs", definitions);
     }
