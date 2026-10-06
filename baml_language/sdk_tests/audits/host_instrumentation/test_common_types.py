@@ -243,6 +243,7 @@ def test_common_typescript_capture_values(common_typescript):
         "date": "2026-10-06T12:30:45.000Z",
         "hostile_date": "2026-10-06T12:30:45.000Z",
         "exception_value": exception,
+        "exception_subclass": {"type": "ValidationError", "message": "invalid"},
         "nested": {"models": [native], "error": exception},
         "getter": {"safe": 7, "danger": {"$opaque": "host_value"}},
         "proxy": {"$opaque": "host_value"},

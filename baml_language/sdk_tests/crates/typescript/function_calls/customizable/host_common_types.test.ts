@@ -15,6 +15,7 @@ it.runIf(isTestRuntime('node'))('host_common_types_typescript_only', async () =>
   const generic = new GenericBox({ value: 7, $types: { T: 'int' } });
   const date = new Date('2026-10-06T12:30:45Z');
   const failure = new TypeError('problem');
+  class ValidationError extends Error {}
   let hooks = 0;
   const hostileDate = new Date(date);
   hostileDate.toISOString = () => { hooks++; throw new Error('date override'); };
@@ -23,6 +24,7 @@ it.runIf(isTestRuntime('node'))('host_common_types_typescript_only', async () =>
   const values: Array<[string, unknown]> = [
     ['native', native], ['generic_native', generic], ['date', date],
     ['hostile_date', hostileDate], ['exception_value', failure],
+    ['exception_subclass', new ValidationError('invalid')],
     ['nested', { models: [native], error: failure }], ['getter', getter], ['proxy', proxy],
     ['invalid_date', new Date(NaN)],
     ['value_budget', Array(600).fill(null)], ['byte_budget', 'x'.repeat(64 * 1024 + 1)],

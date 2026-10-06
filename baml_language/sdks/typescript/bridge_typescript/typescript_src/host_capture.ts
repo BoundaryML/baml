@@ -99,6 +99,12 @@ export function capture(value: unknown): string {
                         if (util.types.isProxy(proto)) break;
                         const name = Object.getOwnPropertyDescriptor(proto, 'name')?.value;
                         if (typeof name === 'string') { projected.type = name; break; }
+                        // `class ValidationError extends Error {}` has no own `name`;
+                        // record its class name, as Python records `__qualname__`.
+                        const ctor = Object.getOwnPropertyDescriptor(proto, 'constructor')?.value;
+                        const ctorName = typeof ctor === 'function' && !util.types.isProxy(ctor)
+                            ? Object.getOwnPropertyDescriptor(ctor, 'name')?.value : undefined;
+                        if (typeof ctorName === 'string' && ctorName !== '') { projected.type = ctorName; break; }
                         proto = Object.getPrototypeOf(proto);
                     }
                     const name = Object.getOwnPropertyDescriptor(value, 'name')?.value;

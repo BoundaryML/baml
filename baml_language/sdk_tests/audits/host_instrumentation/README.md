@@ -60,7 +60,7 @@ Baseline: `c3a349b05193ac07cecee0d19239a191026929fe`.
 | Sync and async generators | Both reject native generator functions explicitly. The host tracing spec defers generator lifetime support. Ordinary functions returning iterators preserve their iterators and record an opaque output. |
 | Methods and receivers | Decorated Python instance methods, classmethods and staticmethods work. Python rejects decoration of an already bound method through either decorator form; ordinary functions/coroutines are the documented supported shapes. Node preserves `this` and accepts a bound ordinary method. |
 | Per-call context and marker reuse | Concurrent callback calls retain separate distinct IDs and metadata. Per-call overwrite/removal and inherited keys work. A later direct call uses the marker defaults. Each callback has one adopted host span, under the callback future and BAML caller. |
-| Explicit error capture | Python preserves exception identity and captures `ValueError` type/args. Node preserves thrown-object identity and captures a plain object's fields. Native Node `Error` objects are opaque host values under the conservative capture policy; the error outcome is still `user_error`. |
+| Explicit error capture | Python preserves exception identity and captures `ValueError` type/args. Node preserves thrown-object identity and captures a plain object's fields. Native Node `Error` objects were opaque at the baseline; [Common host capture](#common-host-capture) now records their type and message. The error outcome is still `user_error`. |
 
 The final bridge audit has six tests: baseline **four fail, two pass**;
 fixed **six pass**. The existing Python host suite has **26 passes**, and the
