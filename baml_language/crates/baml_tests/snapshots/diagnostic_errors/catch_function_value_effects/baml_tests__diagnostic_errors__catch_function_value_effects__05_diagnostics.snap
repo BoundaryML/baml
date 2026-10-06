@@ -45,3 +45,20 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                              ──┬──
     ·                                ╰── expected `int`, found `string | baml.errors.Timeout`
     ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[catch_function_value_effects.baml:72:30]
+ 72 │             let probe: int = error;
+    ·                              ──┬──
+    ·                                ╰── expected `int`, found `string`
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `never`, but this function may also throw `string`
+    ╭─[catch_function_value_effects.baml:81:5]
+ 81 │     baml.future.with_timeout(baml.time.Duration.from_seconds(30), pass_through(body)) catch (error) {
+    ·     ─────────────────────────────────────────────────────────────────────────────────
+    ╰────

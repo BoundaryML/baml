@@ -124,3 +124,24 @@ test "with_timeout of a function value in a generic wrapper" {
         let value: string => assert.is_true(false),
     }
 }
+
+// The function value reaches `with_timeout` through another generic call.
+function with_timeout_pass_through<F>(value: F) -> F {
+    value
+}
+
+function with_timeout_of_passed_through_function_value() -> string {
+    baml.future.with_timeout(
+        baml.time.Duration.from_seconds(30),
+        with_timeout_pass_through(with_timeout_body_fails),
+    ) catch_all (e) {
+        _ => e.to_string(),
+    }
+}
+
+test "with_timeout of a function value behind a generic call: a catch_all binding is the thrown value" {
+    assert.equal(
+        with_timeout_of_passed_through_function_value(),
+        "WithTimeoutBodyError { code: 7 }",
+    )
+}

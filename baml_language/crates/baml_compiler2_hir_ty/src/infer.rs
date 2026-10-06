@@ -10377,21 +10377,32 @@ impl<'db> InferenceContext<'db> {
 
     /// A caught effect contribution, resolved for the error channel. A
     /// `catch` needs the facts of the effect now, so a still-open effect
-    /// class commits from the bounds it has, as at every structure demand
-    /// ([`InferenceContext::force_occurring_vars`]). The effect of a function
-    /// VALUE passed as an argument is such a bound: `throws string` sits
-    /// under the callee's `throws E` as a lower bound of `E`, and only the
-    /// finish fixpoint would turn it into the solution. A class with no
-    /// evidence is `never` here, so it drops out of a union and the facts
-    /// beside it stay.
+    /// class commits from the evidence it has, as at every structure
+    /// demand ([`InferenceContext::force_occurring_vars`]).
+    ///
+    /// That evidence can sit in the bounds of ANOTHER open class.
+    /// `run(ident(thrower))` passes a value of type `?F` where
+    /// `() -> T throws ?E` is expected: only an upper bound of `?F` names
+    /// `?E`, and `?E` gets its own lower bound when `?F` commits and that
+    /// bound is related again. The finish fixpoint walks this road at
+    /// quiescence; the classes behind this effect walk it here.
+    ///
+    /// A class that is still open afterwards is read as `never` (the
+    /// effect default for a class nothing flows into), and it drops out of
+    /// a union so the facts beside it stay.
     fn finalize_incoming_effect(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.force_occurring_vars(ty);
+        let mut resolved = self.force_occurring_vars(ty);
+        while resolved.has_infer() && self.force_classes_naming(&resolved) {
+            resolved = self.force_occurring_vars(&resolved);
+        }
         if !resolved.has_infer() {
             return resolved;
         }
-        // Effect vars inside the base that never got constrained: the
-        // conservative read for catching purposes is Error-free
-        // emptiness; real obligations arrive with I4.
+        // BUG: a class can also be open here WITH evidence. An explicit type
+        // parameter in throws position that takes two unrelated lower bounds
+        // (`run2(a, b)`, `a` throwing `A` and `b` throwing `B`) has no join,
+        // so it stays open, reads as `never` here, and is erased at finish
+        // with no diagnostic. It needs a ruling: the union, or an error.
         let InferTy::Union(members) = resolved.kind() else {
             return Ty::never();
         };
@@ -10405,6 +10416,36 @@ impl<'db> InferenceContext<'db> {
         } else {
             self.union_of(&known)
         }
+    }
+
+    /// One round of the finish fixpoint for the classes that hold evidence
+    /// about `ty`: commits every open class whose bounds name an inference
+    /// var of `ty`, and no other class, then relates the bounds of solved
+    /// classes against their solutions and re-drives the deferred residue.
+    /// Those two steps are not restricted to `ty`: they deposit bounds
+    /// that finish would deposit later, and commit nothing. Returns whether
+    /// anything progressed.
+    fn force_classes_naming(&mut self, ty: &Ty) -> bool {
+        let mut named = Vec::new();
+        collect_infer_vars(ty, &mut named);
+        let mut progressed = false;
+        for (var, bounds) in self.table.unsolved_bounded_vars() {
+            if named.contains(&var) {
+                continue;
+            }
+            let names_one = bounds.lowers.iter().chain(&bounds.uppers).any(|bound| {
+                let mut in_bound = Vec::new();
+                collect_infer_vars(&self.table.resolve_completely(&bound.ty), &mut in_bound);
+                in_bound.iter().any(|var| named.contains(var))
+            });
+            if names_one && self.try_solve_bounded_var(var, &bounds) {
+                progressed = true;
+            }
+        }
+        // Not short-circuited: both steps must run in a round.
+        let replayed = self.replay_solved_class_bounds();
+        let drained = self.drain_deferred_subs();
+        progressed || replayed || drained
     }
 
     /// A `?.` link whose base PROVABLY cannot be null is noise the user

@@ -63,3 +63,29 @@ function timeout_of_lambda() -> int {
         },
     }
 }
+
+function pass_through<F>(value: F) -> F {
+    value
+}
+
+// Facts: `string`. The value reaches `relay` through another generic call, so
+// the evidence of the effect parameter sits behind that call's own type
+// argument until it is decided.
+function relay_of_function_value_behind_a_generic_call(body: () -> int throws string) -> int {
+    relay(pass_through(body)) catch_all (error) {
+        _ => {
+            let probe: int = error;
+            probe
+        },
+    }
+}
+
+// A `catch` that handles the timeout only leaves `string` to the caller here
+// too.
+function timeout_arm_leaves_the_error_of_a_value_behind_a_generic_call(
+    body: () -> int throws string,
+) -> int throws never {
+    baml.future.with_timeout(baml.time.Duration.from_seconds(30), pass_through(body)) catch (error) {
+        baml.errors.Timeout => 0,
+    }
+}
