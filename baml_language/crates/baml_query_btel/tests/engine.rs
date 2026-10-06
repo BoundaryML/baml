@@ -1200,6 +1200,23 @@ function main(n: int) -> int {
 }
 "#;
 
+/// `value` without the definitions its classes and enums carry
+/// (`type_definitions.rs` covers those).
+fn without_definitions(value: &Json) -> Json {
+    match value {
+        Json::Object(map) => Json::Object(
+            map.iter()
+                .filter(|(key, _)| {
+                    !matches!(key.as_str(), "def" | "definition" | "$def" | "$definition")
+                })
+                .map(|(key, item)| (key.clone(), without_definitions(item)))
+                .collect(),
+        ),
+        Json::Array(items) => Json::Array(items.iter().map(without_definitions).collect()),
+        other => other.clone(),
+    }
+}
+
 /// Each generic call's span records its type arguments by type-parameter
 /// name, as each kind of frame holds them. Non-generic calls and futures
 /// record none, and a query that doesn't read the column loads no blob.
@@ -1280,7 +1297,17 @@ async fn generic_calls_record_their_type_args_by_name() {
                  WHERE span_type = 'function' ORDER BY span_name, start_time"
             ),
         );
-        assert_eq!(calls.rows, expected, "{relation}");
+        let rows: Vec<Vec<Json>> = calls
+            .rows
+            .iter()
+            .map(|row| row.iter().map(without_definitions).collect())
+            .collect();
+        assert_eq!(rows, expected, "{relation}");
+        // A class argument names its definition.
+        assert!(
+            calls.rows[5][1]["T"]["$type"]["def"].is_string(),
+            "{relation}"
+        );
         assert_eq!(calls.columns[1].column_type, "baml_value");
         let futures = sql(
             &mut index,
@@ -1304,10 +1331,12 @@ async fn generic_calls_record_their_type_args_by_name() {
     let inputs = loads(&mut index, "SELECT input_args FROM spans");
     let types = loads(&mut index, "SELECT type_args FROM spans");
     assert!(types > 0);
+    // The columns share only the definition groups both name: Resume's and
+    // IntHolder's, loaded once.
     assert_eq!(
         loads(&mut index, "SELECT input_args, type_args FROM spans"),
-        inputs + types,
-        "reading the inputs loads none of the type arguments' blobs"
+        inputs + types - 2,
+        "reading the inputs loads none of the type arguments' own blobs"
     );
 }
 

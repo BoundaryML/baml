@@ -218,6 +218,28 @@ impl Recording {
             (None, None) => {}
             (Some(actual), Some(expected)) => {
                 if capture_id(actual) != expected.root_id() {
+                    let expected_blobs = Blobs::of(expected);
+                    if names_declarations(&expected_blobs) {
+                        // A recorded declaration is identified by its
+                        // definition, which the expected capture does not
+                        // make: the two hold the same values.
+                        let recorded = self.blobs(capture_id(actual));
+                        if same_root(recorded.root(), expected_blobs.root()) {
+                            assert!(
+                                recorded.blobs.values().all(|blob| blob.objects.iter().all(
+                                    |object| !matches!(
+                                        object,
+                                        btel_snapshot::DecodedObject::Declaration {
+                                            definition: None,
+                                            ..
+                                        }
+                                    )
+                                )),
+                                "a recorded declaration names its definition"
+                            );
+                            return;
+                        }
+                    }
                     // Not the value itself: a failure's context around it.
                     return self.assert_error_capture(Some(actual), Some(expected));
                 }
@@ -234,6 +256,34 @@ impl Recording {
                 expected.is_some()
             ),
         }
+    }
+}
+
+/// Whether a capture names a class or enum.
+fn names_declarations(blobs: &Blobs) -> bool {
+    blobs.blobs.values().any(|blob| {
+        blob.objects
+            .iter()
+            .any(|object| matches!(object, btel_snapshot::DecodedObject::Declaration { .. }))
+    })
+}
+
+/// Whether two captures' roots hold the same values.
+fn same_root(a: Side<'_>, b: Side<'_>) -> bool {
+    use btel_snapshot::DecodedRoot as R;
+    match (&a.blob.root, &b.blob.root) {
+        (R::Value(x), R::Value(y)) => same_value(a, x, b, y),
+        (
+            R::FunctionArgs {
+                parameter_count: n,
+                slots: x,
+            },
+            R::FunctionArgs {
+                parameter_count: m,
+                slots: y,
+            },
+        ) => n == m && x.len() == y.len() && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y)),
+        (R::Value(_) | R::FunctionArgs { .. } | R::Definitions(_), _) => false,
     }
 }
 
@@ -327,6 +377,13 @@ impl<'a> Side<'a> {
     }
 }
 
+thread_local! {
+    /// Pairs of objects being compared, each in its blob: a cycle compares
+    /// equal where it closes.
+    static COMPARING: std::cell::RefCell<std::collections::HashSet<(btel_snapshot::CasId, btel_snapshot::NodeId, btel_snapshot::CasId, btel_snapshot::NodeId)>> =
+        std::cell::RefCell::default();
+}
+
 /// Structural equality across two captures: object numbers are local to each
 /// blob, and a reference into a child blob compares as what it names.
 fn same_value(
@@ -352,7 +409,15 @@ fn same_value(
         (V::Bigint(x), V::Bigint(y)) => x == y,
         (V::Type(x), V::Type(y)) => x == y,
         (V::Truncated(x), V::Truncated(y)) => x == y,
-        (V::Object(x), V::Object(y)) => same_object(a, a.blob.object(*x), b, b.blob.object(*y)),
+        (V::Object(x), V::Object(y)) => {
+            let pair = (a.blob.id, *x, b.blob.id, *y);
+            if !COMPARING.with_borrow_mut(|pairs| pairs.insert(pair)) {
+                return true;
+            }
+            let same = same_object(a, a.blob.object(*x), b, b.blob.object(*y));
+            COMPARING.with_borrow_mut(|pairs| pairs.remove(&pair));
+            same
+        }
         (
             V::Enum {
                 declaration: x,
@@ -465,9 +530,22 @@ fn same_object(
         }
         (O::Cell(x), O::Cell(y)) => same_value(a, x, b, y),
         (O::Media(x), O::Media(y)) => same_media(a, x, b, y),
+        // A recorded declaration is identified by its definition, which the
+        // expected captures here do not make: they share names and kinds.
+        (
+            O::Declaration {
+                name: name_x,
+                is_enum: enum_x,
+                ..
+            },
+            O::Declaration {
+                name: name_y,
+                is_enum: enum_y,
+                ..
+            },
+        ) => name_x == name_y && enum_x == enum_y,
         // Objects without references compare as they are.
         (O::Uint8Array { .. }, O::Uint8Array { .. })
-        | (O::Declaration { .. }, O::Declaration { .. })
         | (O::NonSnapshotable, O::NonSnapshotable)
         | (O::Descriptive { .. }, O::Descriptive { .. })
         | (O::Truncated(_), O::Truncated(_)) => x == y,
@@ -713,7 +791,7 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
     let root = match scenario {
         "cycle" | "node" => {
             let class = class("MatrixNode");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let named = b.declaration(&class.name, class.type_tag, false, None);
             let declaration = b.leaves().object(named).unwrap();
             let slot = b.leaves().reserve().unwrap();
             let object = Value::Object(slot.id());
@@ -739,7 +817,7 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
                     _ => None,
                 })
                 .unwrap();
-            let named = b.declaration(&enm.name, enm.type_tag, true);
+            let named = b.declaration(&enm.name, enm.type_tag, true, None);
             Value::Enum {
                 declaration: b.leaves().object(named).unwrap(),
                 variant: 1,
@@ -761,7 +839,7 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
         }
         "generic" => {
             let class = class("MatrixBox");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let named = b.declaration(&class.name, class.type_tag, false, None);
             let declaration = b.leaves().object(named).unwrap();
             let fields = [("value", Value::Int(7))];
             let instance = b.instance(declaration, [RealizedTy::Int], fields.into_iter(), field);
@@ -1045,7 +1123,7 @@ fn one_field_instance(
     assert_eq!(class.fields.len(), 1);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let named = b.declaration(&class.name, class.type_tag, false);
+    let named = b.declaration(&class.name, class.type_tag, false, None);
     let declaration = b.leaves().object(named).unwrap();
     let value = scalar(&mut b, field);
     let instance = b.instance(declaration, [], std::iter::once(value), |_, value| {

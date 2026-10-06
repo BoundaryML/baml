@@ -448,7 +448,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
     }
 }
 
-/// Hash format 4 input: each piece as the encoding writes it, with a leaf's
+/// Hash format 5 input: each piece as the encoding writes it, with a leaf's
 /// content replaced by its digest. One stream hashes a whole blob.
 impl Visitor for Hasher {
     type Error = std::convert::Infallible;

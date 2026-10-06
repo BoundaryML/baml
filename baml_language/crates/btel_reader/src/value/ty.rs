@@ -53,7 +53,9 @@ pub(super) fn definition_id(definition: DefinitionRef) -> String {
 }
 
 /// Names definitions by ID alone.
+#[cfg(test)]
 struct Ids;
+#[cfg(test)]
 impl Definitions for Ids {
     fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef) {
         node.insert("def".into(), Json::from(definition_id(definition)));

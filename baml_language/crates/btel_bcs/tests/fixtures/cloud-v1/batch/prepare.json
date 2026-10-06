@@ -3,11 +3,11 @@
     "recording_id": "07070707070707070707070707070707",
     "recording_file_sequence": 1,
     "encoded_length": 154,
-    "sha256": "39387b3fb825e98c53b4d2380c369c0691c48db0f1b236df61b553309e7e669e"
+    "sha256": "5b2da0a60e3e092799dae727cc7d00d22669bfc3324c2fc2afe1b14c5739ad26"
   },
   "candidates": [
-    {"snapshot_id": "be2d82ec2aaff51339924ff94ac8c98d", "snapshot_format_version": 4},
-    {"snapshot_id": "a5765c7666ebb687c426e37f73a17597", "snapshot_format_version": 4}
+    {"snapshot_id": "ad78fc866693c74ad8fc445516366c4c", "snapshot_format_version": 5},
+    {"snapshot_id": "5702f84cc09a7a3eb4779ce71cd333b7", "snapshot_format_version": 5}
   ],
   "proposed_uploads": [
     {"client_target_id": 0, "kind": "recording", "candidate_indices": []},

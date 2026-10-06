@@ -3,10 +3,10 @@
     "recording_id": "07070707070707070707070707070707",
     "recording_file_sequence": 1,
     "encoded_length": 104,
-    "sha256": "97de159285cfaa74fd3675ceda26ffada096220aad5a8fedfc0afd14e6adc1e0"
+    "sha256": "219cdc65e6edd7ce5cbdeeefaf91c1a4dfc0332140ce76c1e7f0c6fd5576d288"
   },
   "candidates": [
-    {"snapshot_id": "be2d82ec2aaff51339924ff94ac8c98d", "snapshot_format_version": 4, "size_class": "LARGE"}
+    {"snapshot_id": "ad78fc866693c74ad8fc445516366c4c", "snapshot_format_version": 5, "size_class": "LARGE"}
   ],
   "proposed_uploads": [
     {"client_target_id": 0, "kind": "recording", "candidate_indices": []},

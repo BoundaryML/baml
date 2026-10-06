@@ -1,7 +1,7 @@
 # Cloud v1 contract fixtures
 
 The cloud envelope, protobuf package, and JSON protocol remain v1. Embedded
-snapshots use CAS blob format v4 and snapshot hash format v4; `cloud-v1` names
+snapshots use CAS blob format v5 and snapshot hash format v5; `cloud-v1` names
 the outer protocol, not the embedded CAS version.
 
 Proposed client contract examples for sharing with BCS. **Not yet approved by
