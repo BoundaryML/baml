@@ -187,6 +187,16 @@ fn add_group(
     if defined.contains(&group.id()) {
         return;
     }
+    // Most groups name no group the capture lacks: no walk.
+    if group
+        .children()
+        .iter()
+        .all(|child| defined.contains(&child.id()))
+    {
+        defined.insert(group.id());
+        definitions.push(Arc::clone(group), meter);
+        return;
+    }
     // A group and the next of its children to add.
     let mut path = vec![(Arc::clone(group), 0)];
     while let Some((top, next)) = path.last_mut() {
