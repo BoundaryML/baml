@@ -235,8 +235,6 @@ pub struct Shaper {
     /// Blob index to its slot in `children`, [`UNNUMBERED`] for every other
     /// blob and between blobs.
     slots: Vec<u32>,
-    /// Definition groups the blob being shaped names, in first-use order.
-    definitions: Vec<BlobIndex>,
     /// This capture's blobs by ID: equal content is stored once.
     ids: FxHashMap<CasId, BlobIndex>,
     cuts: Cuts,
@@ -429,7 +427,6 @@ impl Shaper {
             order,
             children,
             slots,
-            definitions,
             ids,
             cuts,
             policy: _,
@@ -437,15 +434,14 @@ impl Shaper {
         slots.resize(shape.blobs.len(), UNNUMBERED);
         order.clear();
         children.clear();
-        definitions.clear();
-        let (mut h, content_bytes) = {
+        let (mut h, content_bytes, values) = {
             let mut numbering = Numbering {
                 shape,
                 local: &mut *local,
                 order: &mut *order,
                 children: &mut *children,
+                values: 0,
                 slots: &mut *slots,
-                definitions: &mut *definitions,
                 ids: &*ids,
             };
             let mut visitor = Both(Hasher::new(HashDomain::Blob), Length::default());
@@ -459,10 +455,14 @@ impl Shaper {
                 next += 1;
             }
             let Both(h, Length(content_bytes)) = visitor;
-            (h, content_bytes)
+            (h, content_bytes, numbering.values)
         };
+        // The groups the blob names follow the children its values use, each
+        // in the order it was first named.
+        if values as usize != children.len() {
+            children.sort_by_key(|child| slots[child.0 as usize] == NAMED);
+        }
         // The child table is complete only now; the ID covers it last.
-        children.extend_from_slice(definitions);
         h.size(children.len());
         for child in children.iter() {
             h.absorb(shape.blobs[child.0 as usize].id.as_bytes());
@@ -566,16 +566,20 @@ struct Numbering<'a> {
     shape: &'a Shape,
     local: &'a mut [u32],
     order: &'a mut Vec<ObjectId>,
+    /// Children in first-use order: those values use, numbered, and the
+    /// definition groups the blob names.
     children: &'a mut Vec<BlobIndex>,
+    /// How many children values use.
+    values: u32,
     slots: &'a mut [u32],
-    definitions: &'a mut Vec<BlobIndex>,
     ids: &'a FxHashMap<CasId, BlobIndex>,
 }
 impl Numbering<'_> {
     fn slot(&mut self, blob: BlobIndex) -> u32 {
         let slot = &mut self.slots[blob.0 as usize];
         if *slot == UNNUMBERED {
-            *slot = u32::try_from(self.children.len()).expect("bounded blob count");
+            *slot = self.values;
+            self.values += 1;
             self.children.push(blob);
         }
         *slot
@@ -618,7 +622,7 @@ impl Resolver for Numbering<'_> {
         let slot = &mut self.slots[blob.0 as usize];
         if *slot == UNNUMBERED {
             *slot = NAMED;
-            self.definitions.push(blob);
+            self.children.push(blob);
         }
     }
 }
