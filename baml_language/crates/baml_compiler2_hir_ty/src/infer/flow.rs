@@ -9,7 +9,15 @@
 //! - [`CondFacts`] carries a condition's `when_true`/`when_false` fact
 //!   maps, combined with walk-time De Morgan over `&&`/`||`/`!` (B-688) -
 //!   the AST still has the boolean structure, so no bind-time target
-//!   threading is required.
+//!   threading is required. The walk that types a tested expression
+//!   returns them ([`InferenceContext::infer_test`]): a test is judged
+//!   once, in the flow that holds where it is evaluated.
+//! - `&&` / `||` short-circuit, so their RIGHT operand is typed under the
+//!   left operand's facts (true facts for `&&`, false facts for `||`), and
+//!   the overlay from before the operand comes back after it. Only a bare
+//!   local that no closure captures carries a fact: BAML tasks interleave
+//!   between statements, so a field path or an index path, which is read a
+//!   second time, can change between the test and the read.
 //! - Branch merges are divergence-aware: a diverged branch contributes
 //!   nothing, so guard-with-early-return narrowing is the ordinary merge
 //!   rule, not a special case.
@@ -28,7 +36,7 @@ use baml_compiler2_hir::semantic_index::BindingId;
 use baml_type::interned::{InferTy, Ty};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::InferenceContext;
+use super::{Expectation, InferenceContext};
 
 /// A condition's narrowing consequences for each polarity.
 #[derive(Default)]
@@ -38,7 +46,7 @@ pub(super) struct CondFacts {
 }
 
 impl CondFacts {
-    fn swapped(self) -> CondFacts {
+    pub(super) fn swapped(self) -> CondFacts {
         CondFacts {
             when_true: self.when_false,
             when_false: self.when_true,
@@ -46,91 +54,177 @@ impl CondFacts {
     }
 }
 
+/// Where a test is written. A test that can never hold is reported only in
+/// a branch condition (`if`, `while`, a match guard): as a value it is a
+/// legal test that answers `false`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum TestPosition {
+    Condition,
+    Value,
+}
+
+/// The operators that evaluate their right operand for one outcome of the
+/// left operand only.
+#[derive(Clone, Copy)]
+pub(super) enum ShortCircuit {
+    And,
+    Or,
+}
+
+impl From<ShortCircuit> for baml_compiler2_ast::BinaryOp {
+    fn from(op: ShortCircuit) -> Self {
+        match op {
+            ShortCircuit::And => Self::And,
+            ShortCircuit::Or => Self::Or,
+        }
+    }
+}
+
 impl InferenceContext<'_> {
-    /// The narrowing facts a condition establishes, per polarity. Leaves:
-    /// `x == null` / `x != null` and `x is <pattern>`; combinators:
-    /// `&&`/`||`/`!` with De Morgan. Purely derived from binding flow
-    /// types - safe to call after the condition has been checked.
-    pub(super) fn condition_facts(&mut self, body: &ExprBody, condition: ExprId) -> CondFacts {
-        match &body.exprs[condition] {
+    /// Infers an expression that is tested for truthiness and returns, with
+    /// its type, what each outcome proves about bare locals. Leaves:
+    /// `x == null` / `x != null`, `x is <pattern>` and a bare `x`;
+    /// combinators: `&&`/`||`/`!` with De Morgan.
+    ///
+    /// The facts come from the same walk that types the expression, so each
+    /// test is judged in the flow that holds where it is evaluated: after
+    /// the assignments of the operands before it, and under the facts of a
+    /// left operand that had to hold for it to run.
+    pub(super) fn infer_test(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        position: TestPosition,
+    ) -> (Ty, CondFacts) {
+        use baml_compiler2_ast::{BinaryOp, UnaryOp};
+        let (ty, facts) = match &body.exprs[expr] {
             Expr::Unary {
-                op: baml_compiler2_ast::UnaryOp::Not,
-                expr,
-            } => self.condition_facts(body, *expr).swapped(),
-            Expr::Binary { op, lhs, rhs } => {
-                use baml_compiler2_ast::BinaryOp;
-                match op {
-                    BinaryOp::Eq | BinaryOp::Ne => {
-                        let facts = self.null_test_facts(body, *lhs, *rhs).unwrap_or_default();
-                        if matches!(op, BinaryOp::Eq) {
-                            facts
-                        } else {
-                            facts.swapped()
-                        }
-                    }
-                    BinaryOp::And => {
-                        let left = self.condition_facts(body, *lhs);
-                        let right = self.condition_facts(body, *rhs);
-                        CondFacts {
-                            when_true: self.all_facts(left.when_true, right.when_true),
-                            when_false: self.any_facts(&left.when_false, &right.when_false),
-                        }
-                    }
-                    BinaryOp::Or => {
-                        let left = self.condition_facts(body, *lhs);
-                        let right = self.condition_facts(body, *rhs);
-                        CondFacts {
-                            when_true: self.any_facts(&left.when_true, &right.when_true),
-                            when_false: self.all_facts(left.when_false, right.when_false),
-                        }
-                    }
-                    _ => CondFacts::default(),
-                }
-            }
-            Expr::Is { scrutinee, pattern } => {
-                let Some(binding) = self.narrowable_binding(body, *scrutinee) else {
-                    return CondFacts::default();
+                op: UnaryOp::Not,
+                expr: operand,
+            } => self.infer_not(body, *operand, position),
+            Expr::Binary {
+                op: BinaryOp::And,
+                lhs,
+                rhs,
+            } => self.infer_short_circuit(body, ShortCircuit::And, *lhs, *rhs, position),
+            Expr::Binary {
+                op: BinaryOp::Or,
+                lhs,
+                rhs,
+            } => self.infer_short_circuit(body, ShortCircuit::Or, *lhs, *rhs, position),
+            Expr::Is { scrutinee, pattern } => self.infer_is(body, *scrutinee, *pattern, position),
+            Expr::Binary {
+                op: op @ (BinaryOp::Eq | BinaryOp::Ne),
+                lhs,
+                rhs,
+            } => {
+                let ty = self.infer_expr(body, expr, &Expectation::None);
+                let facts = self.null_test_facts(body, *lhs, *rhs).unwrap_or_default();
+                let facts = if matches!(op, BinaryOp::Eq) {
+                    facts
+                } else {
+                    facts.swapped()
                 };
-                let scrut = self.binding_flow_ty(binding);
-                let scrut = self.scrutinee_demand(&scrut);
-                let outcome = self.lower_pattern(body, *pattern, &scrut);
-                let mut facts = CondFacts::default();
-                facts.when_true.insert(binding, outcome.matched_ty.clone());
-                // Subtraction only when the pattern is refutable by type
-                // alone (B-1069): a field- or length-constrained pattern
-                // failing tells us nothing type-shaped about the scrutinee.
-                if outcome.consumes_matched {
-                    let complement = self.subtract_narrow(&scrut, &outcome.matched_ty);
-                    facts.when_false.insert(binding, complement);
-                }
-                facts
+                return (ty, facts);
             }
-            // Truthiness (B-1563): a bare narrowable value as the whole
-            // condition narrows by POLARITY - the true branch drops
-            // always-falsy union members (`null`, `false`, zero/empty
-            // literals), the false branch drops always-truthy ones
-            // (instances, functions, non-falsy literals). Runtime-decided
-            // members (`string`, `int`, containers) survive both sides -
-            // the language has no "non-empty string" type to narrow to.
             _ => {
-                let Some(binding) = self.narrowable_binding(body, condition) else {
-                    return CondFacts::default();
-                };
-                let scrut = self.binding_flow_ty(binding);
-                let resolved = self.table.resolve_completely(&scrut);
-                if resolved.has_error() || resolved.has_infer() {
-                    return CondFacts::default();
+                let ty = self.infer_expr(body, expr, &Expectation::None);
+                return (ty, self.truthiness_facts(body, expr));
+            }
+        };
+        self.result.type_of_expr.insert(expr, ty.clone());
+        (ty, facts)
+    }
+
+    /// `lhs && rhs` / `lhs || rhs`.
+    ///
+    /// The operators short-circuit: the right operand runs only after the
+    /// left one was true (`&&`) or false (`||`), so it is typed under the
+    /// left operand's facts for that outcome. The facts are about bare
+    /// local bindings that no closure captures ([`Self::narrowable_binding`]):
+    /// such a binding belongs to this call, so nothing can change it between
+    /// the test on the left and the read on the right. A field path is read a
+    /// second time on the right, and another task or an alias can change it
+    /// between the two reads, so it is never narrowed.
+    ///
+    /// After the expression the overlay is the one from before the right
+    /// operand, because that operand may not have run; a binding it assigns
+    /// keeps a refinement only where both paths agree. A binding that the
+    /// right operand assigns no longer has the type that the left operand
+    /// found, so the left operand's facts about it are dropped:
+    /// `x is A && { x = b; true }` proves nothing about `x`.
+    pub(super) fn infer_short_circuit(
+        &mut self,
+        body: &ExprBody,
+        op: ShortCircuit,
+        lhs: ExprId,
+        rhs: ExprId,
+        position: TestPosition,
+    ) -> (Ty, CondFacts) {
+        let (lhs_ty, mut left) = self.check_truthy_operand(body, lhs, true, position);
+        let skipped_flow = self.flow.clone();
+        self.apply_facts(match op {
+            ShortCircuit::And => &left.when_true,
+            ShortCircuit::Or => &left.when_false,
+        });
+        let (rhs_ty, right) = self.check_truthy_operand(body, rhs, true, position);
+        let taken_flow = std::mem::replace(&mut self.flow, skipped_flow);
+        let reassigned = self.assigned_bindings(body, rhs);
+        for binding in &reassigned {
+            match (taken_flow.get(binding), self.flow.get(binding)) {
+                (Some(taken), Some(skipped)) if taken == skipped => {}
+                (Some(taken), Some(skipped)) => {
+                    let joined = self.join(&[taken.clone(), skipped.clone()]);
+                    self.flow.insert(*binding, joined);
                 }
-                let mut facts = CondFacts::default();
-                facts
-                    .when_true
-                    .insert(binding, Self::drop_members_by_truthiness(&resolved, false));
-                facts
-                    .when_false
-                    .insert(binding, Self::drop_members_by_truthiness(&resolved, true));
-                facts
+                _ => {
+                    self.flow.remove(binding);
+                }
             }
         }
+        left.when_true
+            .retain(|binding, _| !reassigned.contains(binding));
+        left.when_false
+            .retain(|binding, _| !reassigned.contains(binding));
+        let facts = match op {
+            ShortCircuit::And => CondFacts {
+                when_true: self.all_facts(left.when_true, right.when_true),
+                when_false: self.any_facts(&left.when_false, &right.when_false),
+            },
+            ShortCircuit::Or => CondFacts {
+                when_true: self.any_facts(&left.when_true, &right.when_true),
+                when_false: self.all_facts(left.when_false, right.when_false),
+            },
+        };
+        let lhs_ty = self.table.resolve_completely(&lhs_ty);
+        let rhs_ty = self.table.resolve_completely(&rhs_ty);
+        let ty = super::const_fold_binary(op.into(), &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool);
+        (ty, facts)
+    }
+
+    /// Truthiness (B-1563): a bare narrowable value as a whole test narrows
+    /// by POLARITY - the true branch drops always-falsy union members
+    /// (`null`, `false`, zero/empty literals), the false branch drops
+    /// always-truthy ones (instances, functions, non-falsy literals).
+    /// Runtime-decided members (`string`, `int`, containers) survive both
+    /// sides - the language has no "non-empty string" type to narrow to.
+    fn truthiness_facts(&mut self, body: &ExprBody, expr: ExprId) -> CondFacts {
+        let Some(binding) = self.narrowable_binding(body, expr) else {
+            return CondFacts::default();
+        };
+        let scrut = self.binding_flow_ty(binding);
+        let resolved = self.table.resolve_completely(&scrut);
+        if resolved.has_error() || resolved.has_infer() {
+            return CondFacts::default();
+        }
+        let mut facts = CondFacts::default();
+        facts
+            .when_true
+            .insert(binding, Self::drop_members_by_truthiness(&resolved, false));
+        facts
+            .when_false
+            .insert(binding, Self::drop_members_by_truthiness(&resolved, true));
+        facts
     }
 
     /// Set-subtraction on truthiness (the `subtract_narrow` discipline):

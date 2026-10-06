@@ -810,6 +810,10 @@ function f(t: reflect.Type, value: unknown) -> bool {
 /// A static right-hand side loads its template into the binding's slot; every
 /// later mention of the name reads that slot, including nested under a
 /// constructor (`Bound?`, `Bound[]`).
+///
+/// The `match` comes before the `is` test: the right operand of `&&` is typed
+/// with the left operand's facts, so after `value is Bound` the `_` arm of
+/// the `match` would be unreachable.
 #[test]
 fn static_type_binding_loads_its_template_into_the_slot() {
     let mut db = make_db();
@@ -825,11 +829,11 @@ function f(value: unknown) -> bool {
     let annotated: Bound? = null
     erase<Bound>() == "ok"
         && annotated == null
-        && value is Bound
         && match value {
             Bound => true,
             _ => false,
         }
+        && value is Bound
 }
 "#,
     );

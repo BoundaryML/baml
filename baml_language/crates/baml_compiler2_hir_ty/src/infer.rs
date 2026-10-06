@@ -51,6 +51,7 @@ use baml_type::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use self::flow::{CondFacts, ShortCircuit, TestPosition};
 use crate::{
     callable::{
         callable_builtin_kind, callable_display_name, callable_generic_frame, callable_owner_type,
@@ -2296,8 +2297,7 @@ impl<'db> InferenceContext<'db> {
                 then_branch,
                 else_branch,
             } => {
-                self.check_condition(body, *condition);
-                let facts = self.condition_facts(body, *condition);
+                let (_, facts) = self.check_condition(body, *condition);
                 let condition_diverges = self.diverges;
                 let branch_expectation = expected.adjust_for_branches(&mut self.table);
                 let base_flow = self.flow.clone();
@@ -2735,7 +2735,10 @@ impl<'db> InferenceContext<'db> {
                 let arms = arms.clone();
                 self.infer_match(body, expr, *scrutinee, &arms, expected)
             }
-            Expr::Is { scrutinee, pattern } => self.infer_is(body, *scrutinee, *pattern),
+            Expr::Is { scrutinee, pattern } => {
+                self.infer_is(body, *scrutinee, *pattern, TestPosition::Value)
+                    .0
+            }
             Expr::Catch { base, clauses } => {
                 let clauses = clauses.clone();
                 self.infer_catch(body, *base, &clauses, expected)
@@ -2846,8 +2849,7 @@ impl<'db> InferenceContext<'db> {
                 for binding in self.assigned_bindings(body, *loop_body) {
                     self.flow.remove(&binding);
                 }
-                let condition_ty = self.check_condition(body, *condition);
-                let facts = self.condition_facts(body, *condition);
+                let (condition_ty, facts) = self.check_condition(body, *condition);
                 let entry_flow = self.flow.clone();
                 self.apply_facts(&facts.when_true);
                 let saved = self.diverges;
@@ -4420,12 +4422,13 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         use baml_compiler2_ast::BinaryOp;
         match op {
-            BinaryOp::And | BinaryOp::Or => {
-                let lhs_ty = self.check_condition(body, lhs);
-                let rhs_ty = self.check_condition(body, rhs);
-                let lhs_ty = self.table.resolve_completely(&lhs_ty);
-                let rhs_ty = self.table.resolve_completely(&rhs_ty);
-                const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
+            BinaryOp::And => {
+                self.infer_short_circuit(body, ShortCircuit::And, lhs, rhs, TestPosition::Value)
+                    .0
+            }
+            BinaryOp::Or => {
+                self.infer_short_circuit(body, ShortCircuit::Or, lhs, rhs, TestPosition::Value)
+                    .0
             }
             BinaryOp::Eq | BinaryOp::Ne => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
@@ -4774,6 +4777,32 @@ impl<'db> InferenceContext<'db> {
         element
     }
 
+    /// `!operand`: its type, and the operand's facts with the outcomes
+    /// swapped.
+    fn infer_not(
+        &mut self,
+        body: &ExprBody,
+        operand: ExprId,
+        position: TestPosition,
+    ) -> (Ty, CondFacts) {
+        let (ty, facts) = self.check_truthy_operand(body, operand, false, position);
+        let facts = facts.swapped();
+        // `!` on a LITERAL constant-FOLDS through its truthiness
+        // (TIR's `try_fold_unary`, extended to the non-bool
+        // literals truthiness admits), freshness preserved.
+        let resolved = self.table.resolve_completely(&ty);
+        if let InferTy::Literal(_, freshness) = resolved.kind() {
+            let negated = match crate::infer::truthy::truthiness(&resolved) {
+                crate::infer::truthy::Truthiness::AlwaysTruthy => false,
+                crate::infer::truthy::Truthiness::AlwaysFalsy => true,
+                crate::infer::truthy::Truthiness::Runtime => return (Ty::bool(), facts),
+            };
+            let folded = Ty::intern(InferTy::Literal(Literal::Bool(negated), *freshness));
+            return (folded, facts);
+        }
+        (Ty::bool(), facts)
+    }
+
     fn infer_unary(
         &mut self,
         body: &ExprBody,
@@ -4782,20 +4811,7 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         match op {
             baml_compiler2_ast::UnaryOp::Not => {
-                let ty = self.check_not_operand(body, operand);
-                // `!` on a LITERAL constant-FOLDS through its truthiness
-                // (TIR's `try_fold_unary`, extended to the non-bool
-                // literals truthiness admits), freshness preserved.
-                let resolved = self.table.resolve_completely(&ty);
-                if let InferTy::Literal(_, freshness) = resolved.kind() {
-                    let negated = match crate::infer::truthy::truthiness(&resolved) {
-                        crate::infer::truthy::Truthiness::AlwaysTruthy => false,
-                        crate::infer::truthy::Truthiness::AlwaysFalsy => true,
-                        crate::infer::truthy::Truthiness::Runtime => return Ty::bool(),
-                    };
-                    return Ty::intern(InferTy::Literal(Literal::Bool(negated), *freshness));
-                }
-                Ty::bool()
+                self.infer_not(body, operand, TestPosition::Value).0
             }
             baml_compiler2_ast::UnaryOp::Neg => {
                 let ty = self.infer_expr(body, operand, &Expectation::None);
@@ -10359,18 +10375,77 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// A caught effect contribution, resolved for the error channel: still
-    /// live variables resolve where possible (an unconstrained effect is
-    /// `never` here too).
+    /// A caught effect contribution, resolved for the error channel. A
+    /// `catch` needs the facts of the effect now, so a still-open effect
+    /// class commits from the evidence it has, as at every structure
+    /// demand ([`InferenceContext::force_occurring_vars`]).
+    ///
+    /// That evidence can sit in the bounds of ANOTHER open class.
+    /// `run(ident(thrower))` passes a value of type `?F` where
+    /// `() -> T throws ?E` is expected: only an upper bound of `?F` names
+    /// `?E`, and `?E` gets its own lower bound when `?F` commits and that
+    /// bound is related again. The finish fixpoint walks this road at
+    /// quiescence; the classes behind this effect walk it here.
+    ///
+    /// A class that is still open afterwards is read as `never` (the
+    /// effect default for a class nothing flows into), and it drops out of
+    /// a union so the facts beside it stay.
     fn finalize_incoming_effect(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.table.resolve_completely(ty);
-        if resolved.has_infer() {
-            // Effect vars inside the base that never got constrained: the
-            // conservative read for catching purposes is Error-free
-            // emptiness - drop to never; real obligations arrive with I4.
-            return Ty::never();
+        let mut resolved = self.force_occurring_vars(ty);
+        while resolved.has_infer() && self.force_classes_naming(&resolved) {
+            resolved = self.force_occurring_vars(&resolved);
         }
-        resolved
+        if !resolved.has_infer() {
+            return resolved;
+        }
+        // BUG: a class can also be open here WITH evidence. An explicit type
+        // parameter in throws position that takes two unrelated lower bounds
+        // (`run2(a, b)`, `a` throwing `A` and `b` throwing `B`) has no join,
+        // so it stays open, reads as `never` here, and is erased at finish
+        // with no diagnostic. It needs a ruling: the union, or an error.
+        let InferTy::Union(members) = resolved.kind() else {
+            return Ty::never();
+        };
+        let known: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.has_infer())
+            .cloned()
+            .collect();
+        if known.is_empty() {
+            Ty::never()
+        } else {
+            self.union_of(&known)
+        }
+    }
+
+    /// One round of the finish fixpoint for the classes that hold evidence
+    /// about `ty`: commits every open class whose bounds name an inference
+    /// var of `ty`, and no other class, then relates the bounds of solved
+    /// classes against their solutions and re-drives the deferred residue.
+    /// Those two steps are not restricted to `ty`: they deposit bounds
+    /// that finish would deposit later, and commit nothing. Returns whether
+    /// anything progressed.
+    fn force_classes_naming(&mut self, ty: &Ty) -> bool {
+        let mut named = Vec::new();
+        collect_infer_vars(ty, &mut named);
+        let mut progressed = false;
+        for (var, bounds) in self.table.unsolved_bounded_vars() {
+            if named.contains(&var) {
+                continue;
+            }
+            let names_one = bounds.lowers.iter().chain(&bounds.uppers).any(|bound| {
+                let mut in_bound = Vec::new();
+                collect_infer_vars(&self.table.resolve_completely(&bound.ty), &mut in_bound);
+                in_bound.iter().any(|var| named.contains(var))
+            });
+            if names_one && self.try_solve_bounded_var(var, &bounds) {
+                progressed = true;
+            }
+        }
+        // Not short-circuited: both steps must run in a round.
+        let replayed = self.replay_solved_class_bounds();
+        let drained = self.drain_deferred_subs();
+        progressed || replayed || drained
     }
 
     /// A `?.` link whose base PROVABLY cannot be null is noise the user

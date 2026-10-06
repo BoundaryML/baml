@@ -1952,19 +1952,17 @@ impl io::IoNamespaceSys for NativeSysOps {
         })
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        delay: BexExternalValue,
+        delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        let nanos = match sleep_nanos_from_delay(delay) {
-            Ok(nanos) => nanos,
-            Err(err) => return SysOpOutput::err(err),
-        };
+        // Zero or negative does not wait; past `u64` nanoseconds clamps.
+        let delay = timeout_from_nanos(&delay_nanos).unwrap_or_default();
         SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
+            tokio::time::sleep(delay).await;
             Ok(())
         })
     }
@@ -1973,39 +1971,6 @@ impl io::IoNamespaceSys for NativeSysOps {
         // `std::process::id` is a `u32` on every platform this crate builds
         // for, so the widening into BAML's i63 `int` is always exact.
         SysOpOutput::ok(i64::from(std::process::id()))
-    }
-}
-
-fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
-    match delay {
-        BexExternalValue::Instance {
-            class_name,
-            mut fields,
-            ..
-        } if class_name == "baml.time.Duration" => {
-            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
-                }));
-            };
-            let BexExternalValue::Bigint(nanos) = nanos else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
-                }));
-            };
-            if nanos.sign() == num_bigint::Sign::Plus {
-                Ok(u64::try_from(&nanos).unwrap_or(u64::MAX))
-            } else {
-                Ok(0)
-            }
-        }
-        BexExternalValue::Union { value, .. } => sleep_nanos_from_delay(*value),
-        other => Err(VmRustFnError::from(VmBamlError::Io {
-            message: format!(
-                "sleep delay must be baml.time.Duration, got {}",
-                other.type_name()
-            ),
-        })),
     }
 }
 

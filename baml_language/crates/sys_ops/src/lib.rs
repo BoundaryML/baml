@@ -2156,11 +2156,11 @@ impl io::IoNamespaceSys for DefaultIoOps {
         })
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _delay: BexExternalValue,
+        _delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2967,10 +2967,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_shell(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_sleep = {
+        self.inner.baml_sys__sleep = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__sleep(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_collect_garbage = {

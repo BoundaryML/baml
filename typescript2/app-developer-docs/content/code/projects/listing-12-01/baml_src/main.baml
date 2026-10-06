@@ -174,7 +174,6 @@ function cancel_task() -> string {
                 "already cancelled"
             }
         },
-        baml.errors.Io => "sleep failed",
     }
 }
 // docs:end excerpt-53

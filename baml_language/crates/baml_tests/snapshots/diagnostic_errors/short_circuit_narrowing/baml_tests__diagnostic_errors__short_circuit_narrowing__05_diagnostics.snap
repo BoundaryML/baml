@@ -1,0 +1,149 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:24:15]
+ 24 │     x is A && x.a == 1
+    ·               ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:32:15]
+ 32 │     x is A && x.a == 1
+    ·               ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:37:24]
+ 37 │     let ok = x is A && x.a == 1;
+    ·                        ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:50:15]
+ 50 │     x is A && x.a == 1
+    ·               ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:56:48]
+ 56 │     x is A && items.filter((item) -> { item == x.a }).length() > 0
+    ·                                                ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:62:17]
+ 62 │     h.v is A && h.v.a == 1
+    ·                 ─────
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:67:22]
+ 67 │     items[0] is A && items[0].a == 1
+    ·                      ──────────
+    ╰────
+
+  [type] E0007
+
+  × type `Holder | null` has no member `v`: its members implement no common interface that declares `v`
+    ╭─[short_circuit_narrowing.baml:72:21]
+ 72 │     h?.v != null && h.v is A
+    ·                     ───
+    ╰────
+
+  [type] E0007
+
+  × type `B` has no member `a`
+    ╭─[short_circuit_narrowing.baml:77:15]
+ 77 │     x is A || x.a == 1
+    ·               ───
+    ╰────
+
+  [type] E0007
+
+  × type `null` has no member `a`
+    ╭─[short_circuit_narrowing.baml:82:18]
+ 82 │     x == null && x.a == 1
+    ·                  ───
+    ╰────
+
+  [type] E0007
+
+  × type `never` has no member `a`
+    ╭─[short_circuit_narrowing.baml:87:25]
+ 87 │     x is A || x is B || x.a == 1
+    ·                         ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:93:5]
+ 93 │     x.a
+    ·     ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[short_circuit_narrowing.baml:98:5]
+ 98 │     x.a == 1 && x is A
+    ·     ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+     ╭─[short_circuit_narrowing.baml:105:9]
+ 105 │         x.a
+     ·         ───
+     ╰────
+
+  [type] E0007
+
+  × type `B` has no member `a`
+     ╭─[short_circuit_narrowing.baml:114:42]
+ 114 │     x is A && { x = B { b: "replaced" }; x.a == 1 }
+     ·                                          ───
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[short_circuit_narrowing.baml:120:24]
+ 120 │     if (x is A && x is B) {
+     ·                        ┬
+     ·                        ╰── expected `A`, found `B`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[short_circuit_narrowing.baml:124:18]
+ 124 │         if (x is B) {
+     ·                  ┬
+     ·                  ╰── expected `A`, found `B`
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[short_circuit_narrowing.baml:137:14]
+ 137 │         _ => false,
+     ·              ─────
+     ╰────
