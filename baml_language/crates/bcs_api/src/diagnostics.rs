@@ -952,11 +952,11 @@ mod tests {
                 Error::Storage {
                     operation: "read",
                     location: crate::auth::CredentialStoreLocation {
-                        path: "test-home/auth/endpoint.json".into(),
+                        path: "test-home/login/cache/endpoint.json".into(),
                     },
                     source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
                 },
-                r#"Boundary could not access the local credential file at test-home/auth/endpoint.json.
+                r#"Boundary could not access the local credential file at test-home/login/cache/endpoint.json.
 
   To continue, choose one:
     • Check permissions for this file and its parent directory.
@@ -966,10 +966,10 @@ mod tests {
             (
                 Error::InvalidStoredLogin {
                     location: crate::auth::CredentialStoreLocation {
-                        path: "test-home/auth/endpoint.json".into(),
+                        path: "test-home/login/cache/endpoint.json".into(),
                     },
                 },
-                r#"The saved Boundary login in the local credential file at test-home/auth/endpoint.json is invalid.
+                r#"The saved Boundary login in the local credential file at test-home/login/cache/endpoint.json is invalid.
 
   To continue, choose one:
     • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`.

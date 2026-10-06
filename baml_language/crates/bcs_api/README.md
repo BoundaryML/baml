@@ -3,7 +3,7 @@
 Cloud wire contracts and native clients shared by the CLI, bridges, packed programs, and telemetry delivery.
 
 - `auth`: device login and endpoint selection.
-- `store` (exposed through `auth::Store`): endpoint-scoped, owner-only login files under `$BAML_HOME/auth/` (default `~/.baml/auth/`). CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
+- `store` (exposed through `auth::Store`): an AWS-style JSON login cache under `$BAML_HOME/login/cache/` (default `~/.baml/login/cache/`), with one owner-only file per canonical Boundary API endpoint. CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
 - `credentials`: redacted credentials, optional request targets, and shared process-local access-token state.
 - `query`: blocking NDJSON queries and cancellation.
 - `telemetry`: asynchronous upload preparation and heartbeat, plus protobuf uploads authorized by the upload plan.

@@ -1,4 +1,4 @@
-//! Endpoint-scoped login files shared by every native BAML host.
+//! Endpoint-scoped JSON login cache shared by every native BAML host.
 //!
 //! These files are private to the OS user, not encrypted. A process running as
 //! that user can read them. Access grants belong to the in-memory auth cache.
@@ -28,6 +28,7 @@ impl fmt::Display for CredentialStoreLocation {
     }
 }
 
+/// One endpoint's entry in the shared, file-backed login cache.
 pub struct Store {
     location: CredentialStoreLocation,
 }
@@ -43,7 +44,10 @@ impl Store {
         let name = hex::encode(Sha256::digest(endpoint.as_str().as_bytes()));
         Self {
             location: CredentialStoreLocation {
-                path: home.join("auth").join(format!("{name}.json")),
+                path: home
+                    .join("login")
+                    .join("cache")
+                    .join(format!("{name}.json")),
             },
         }
     }
@@ -257,7 +261,7 @@ mod tests {
         );
         assert!(store.read().unwrap().is_none());
         store.clear().unwrap();
-        assert!(!home.path().join("auth").exists());
+        assert!(!home.path().join("login").exists());
     }
 
     #[test]
@@ -325,7 +329,8 @@ mod tests {
     #[test]
     fn inaccessible_store_is_not_an_absent_login() {
         let home = tempfile::tempdir().unwrap();
-        fs::write(home.path().join("auth"), "not a directory").unwrap();
+        fs::create_dir(home.path().join("login")).unwrap();
+        fs::write(home.path().join("login").join("cache"), "not a directory").unwrap();
         let store = Store::in_home(
             &Endpoint::parse("https://example.com").unwrap(),
             home.path(),
@@ -371,7 +376,9 @@ mod tests {
             }
         });
         assert_eq!(
-            fs::read_dir(home.path().join("auth")).unwrap().count(),
+            fs::read_dir(home.path().join("login").join("cache"))
+                .unwrap()
+                .count(),
             1,
             "atomic writes must clean up temporary files"
         );
@@ -386,8 +393,8 @@ mod tests {
             &Endpoint::parse("https://example.com").unwrap(),
             home.path(),
         );
-        let directory = home.path().join("auth");
-        fs::create_dir(&directory).unwrap();
+        let directory = home.path().join("login").join("cache");
+        fs::create_dir_all(&directory).unwrap();
         fs::set_permissions(&directory, fs::Permissions::from_mode(0o755)).unwrap();
         for token in ["bdry_session_first", "bdry_session_second"] {
             store.write(&session(token)).unwrap();
@@ -416,13 +423,14 @@ mod tests {
             &Endpoint::parse("https://example.com").unwrap(),
             home.path(),
         );
-        symlink(other.path(), home.path().join("auth")).unwrap();
+        fs::create_dir(home.path().join("login")).unwrap();
+        symlink(other.path(), home.path().join("login").join("cache")).unwrap();
         assert!(matches!(
             store.write(&session("bdry_session_test")),
             Err(Error::Storage { .. })
         ));
-        fs::remove_file(home.path().join("auth")).unwrap();
-        fs::create_dir(home.path().join("auth")).unwrap();
+        fs::remove_file(home.path().join("login").join("cache")).unwrap();
+        fs::create_dir(home.path().join("login").join("cache")).unwrap();
         let target = other.path().join("login.json");
         fs::write(&target, "do not modify").unwrap();
         symlink(&target, &store.location.path).unwrap();

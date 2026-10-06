@@ -813,7 +813,7 @@ fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recordi
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
     let home = temp.path().join("home");
     let endpoint = "https://example.com";
-    let file = home.join("auth").join(format!(
+    let file = home.join("login").join("cache").join(format!(
         "{}.json",
         hex::encode(sha2::Sha256::digest(endpoint.as_bytes()))
     ));

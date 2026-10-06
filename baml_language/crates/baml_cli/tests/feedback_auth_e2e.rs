@@ -371,7 +371,7 @@ Endpoint: {base}
     let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
     assert!(ok, "{out}");
     assert!(out.contains("logged in as user@example.com"), "{out}");
-    let login_files: Vec<_> = std::fs::read_dir(home.path().join("auth"))
+    let login_files: Vec<_> = std::fs::read_dir(home.path().join("login").join("cache"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
