@@ -381,6 +381,18 @@ pub enum IntrinsicOp {
     /// compares the two directly, and a lossy conversion there would decide a
     /// soundness question (whether a template read is clobbered) by accident.
     BindType(u32),
+    /// Resolve a declaration hook and begin the target after it returns.
+    ApplyTraceHook,
+    /// Apply a standard mode hook directly, without a callable or Options value.
+    BuiltinTraceHook(BuiltinTraceHook),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinTraceHook {
+    Hidden,
+    Timing,
+    Span,
+    Rich,
 }
 
 /// The kind of a MIR statement.
@@ -910,6 +922,8 @@ impl fmt::Display for Place {
 /// side of assignments.
 #[derive(Debug, Clone)]
 pub enum Rvalue<'db> {
+    /// Detached settings, or null when hook selection is suppressed.
+    TraceHookSettings { with_settings: bool },
     /// Use an operand directly.
     Use(Operand<'db>),
 
@@ -1181,6 +1195,7 @@ impl Rvalue<'_> {
             Self::TypeTag(place) | Self::Discriminant(place) | Self::Len(place) => {
                 read(place, &in_bounds)
             }
+            Self::TraceHookSettings { .. } => false,
             Self::LoadType(_)
             | Self::CurrentPackage(_)
             | Self::Uint8Array(_)

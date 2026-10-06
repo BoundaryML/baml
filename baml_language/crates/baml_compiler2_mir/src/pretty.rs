@@ -280,6 +280,10 @@ fn write_statement(f: &mut impl Write, db: &dyn crate::Db, stmt: &Statement<'_>)
         }
         StatementKind::Intrinsic { op, args } => {
             let op_str = match op {
+                IntrinsicOp::ApplyTraceHook => "apply_trace_hook",
+                IntrinsicOp::BuiltinTraceHook(mode) => {
+                    return write!(f, "builtin_trace_hook({mode:?});");
+                }
                 IntrinsicOp::Log(LogLevel::Info) => "log_info",
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
@@ -561,6 +565,9 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
 
 fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> fmt::Result {
     match rvalue {
+        Rvalue::TraceHookSettings { with_settings } => {
+            write!(f, "trace_hook_settings({with_settings})")
+        }
         Rvalue::Use(operand) => write_operand(f, db, operand),
         Rvalue::VirtualFieldAccess {
             iface,

@@ -824,7 +824,10 @@ pub enum Instruction {
 
     /// Pops and tests the top value, stores it in `destination` on success,
     /// and pushes the `Bool` result.
-    NarrowBind { ty: usize, destination: usize },
+    NarrowBind {
+        ty: usize,
+        destination: usize,
+    },
 
     /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
     /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
@@ -1067,6 +1070,19 @@ pub enum Instruction {
     /// cancel tokens, its cancellation parent, and the future's types, so
     /// nothing else travels with the request.
     Spawn,
+    /// Direct call to a declaration with a trace hook; same operands as Call.
+    CallHooked {
+        callee: GlobalIndex,
+        ntypeargs: u16,
+    },
+    /// Enter hook evaluation; false avoids allocating a Settings snapshot.
+    BeginTraceHook(bool),
+    /// Apply the returned options and start target recording.
+    EndTraceHook,
+    TraceHookHidden,
+    TraceHookTiming,
+    TraceHookSpan,
+    TraceHookRich,
 }
 
 /// Compact bytecode opcodes.
@@ -1274,6 +1290,13 @@ pub enum OpCode {
 
     // The plan-taking spawn, appended to preserve serialized discriminants.
     Spawn,
+    CallHooked,
+    BeginTraceHook,
+    EndTraceHook,
+    TraceHookHidden,
+    TraceHookTiming,
+    TraceHookSpan,
+    TraceHookRich,
 }
 
 impl OpCode {
@@ -1412,6 +1435,13 @@ impl OpCode {
             | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
+            Self::CallHooked => 7,
+            Self::BeginTraceHook => 2,
+            Self::EndTraceHook
+            | Self::TraceHookHidden
+            | Self::TraceHookTiming
+            | Self::TraceHookSpan
+            | Self::TraceHookRich => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1563,6 +1593,14 @@ impl TryFrom<u8> for OpCode {
 
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             x if x == Self::Truthy as u8 => Ok(Self::Truthy),
+            x if x == Self::CallHooked as u8 => Ok(Self::CallHooked),
+            x if x == Self::BeginTraceHook as u8 => Ok(Self::BeginTraceHook),
+            x if x == Self::EndTraceHook as u8 => Ok(Self::EndTraceHook),
+            x if x == Self::TraceHookHidden as u8 => Ok(Self::TraceHookHidden),
+            x if x == Self::TraceHookTiming as u8 => Ok(Self::TraceHookTiming),
+            x if x == Self::TraceHookSpan as u8 => Ok(Self::TraceHookSpan),
+            x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
+
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
             _ => Err(byte),
@@ -1573,6 +1611,14 @@ impl TryFrom<u8> for OpCode {
 impl std::fmt::Display for OpCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
+            Self::CallHooked => "CALL_HOOKED",
+            Self::BeginTraceHook => "BEGIN_TRACE_HOOK",
+            Self::EndTraceHook => "END_TRACE_HOOK",
+            Self::TraceHookHidden => "TRACE_HOOK_HIDDEN",
+            Self::TraceHookTiming => "TRACE_HOOK_TIMING",
+            Self::TraceHookSpan => "TRACE_HOOK_SPAN",
+            Self::TraceHookRich => "TRACE_HOOK_RICH",
+
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
@@ -1883,6 +1929,16 @@ impl std::fmt::Display for Instruction {
             Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::AwaitAny => f.write_str("AWAIT_ANY"),
+            Instruction::BeginTraceHook(settings) => write!(f, "BEGIN_TRACE_HOOK {settings}"),
+            Instruction::EndTraceHook => f.write_str("END_TRACE_HOOK"),
+            Instruction::TraceHookHidden => f.write_str("TRACE_HOOK_HIDDEN"),
+            Instruction::TraceHookTiming => f.write_str("TRACE_HOOK_TIMING"),
+            Instruction::TraceHookSpan => f.write_str("TRACE_HOOK_SPAN"),
+            Instruction::TraceHookRich => f.write_str("TRACE_HOOK_RICH"),
+
+            Instruction::CallHooked { callee, ntypeargs } => {
+                write!(f, "CALL_HOOKED {callee} {ntypeargs}")
+            }
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
             }
@@ -2155,6 +2211,8 @@ impl CompactJumpTable {
 /// load time. The line table and exception table are translated to byte-offset PCs.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct CompactCode {
+    /// Hook decision boundary (fallback continuation for callable hooks), loaded once.
+    pub trace_hook_finish_pc: Option<usize>,
     /// The encoded instruction stream.
     pub code: Vec<u8>,
     /// `Bytecode::call_layouts` keyed by byte-offset PC.
@@ -2410,7 +2468,12 @@ impl Bytecode {
 
             match instr {
                 // ── Unit ops: no operands ────────────────────────────
-                Instruction::Return
+                Instruction::EndTraceHook
+                | Instruction::TraceHookHidden
+                | Instruction::TraceHookTiming
+                | Instruction::TraceHookSpan
+                | Instruction::TraceHookRich
+                | Instruction::Return
                 | Instruction::Await
                 | Instruction::Throw
                 | Instruction::Rethrow
@@ -2525,7 +2588,9 @@ impl Bytecode {
                 }
 
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
-                Instruction::Call { callee, ntypeargs } => {
+                Instruction::BeginTraceHook(settings) => code.push(u8::from(*settings)),
+                Instruction::CallHooked { callee, ntypeargs }
+                | Instruction::Call { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
@@ -2782,6 +2847,20 @@ impl Bytecode {
             .collect();
 
         CompactCode {
+            trace_hook_finish_pc: self
+                .instructions
+                .iter()
+                .position(|instruction| {
+                    matches!(
+                        instruction,
+                        Instruction::EndTraceHook
+                            | Instruction::TraceHookHidden
+                            | Instruction::TraceHookTiming
+                            | Instruction::TraceHookSpan
+                            | Instruction::TraceHookRich
+                    )
+                })
+                .map(|index| index_to_offset[index]),
             code,
             call_layouts: self
                 .call_layouts
@@ -2885,6 +2964,14 @@ impl Bytecode {
             Instruction::SysOp(_) => OpCode::SysOp,
 
             Instruction::Spawn => OpCode::Spawn,
+            Instruction::CallHooked { .. } => OpCode::CallHooked,
+            Instruction::BeginTraceHook(_) => OpCode::BeginTraceHook,
+            Instruction::EndTraceHook => OpCode::EndTraceHook,
+            Instruction::TraceHookHidden => OpCode::TraceHookHidden,
+            Instruction::TraceHookTiming => OpCode::TraceHookTiming,
+            Instruction::TraceHookSpan => OpCode::TraceHookSpan,
+            Instruction::TraceHookRich => OpCode::TraceHookRich,
+
             Instruction::Call { .. } => OpCode::Call,
 
             Instruction::IsType(_) => OpCode::IsType,

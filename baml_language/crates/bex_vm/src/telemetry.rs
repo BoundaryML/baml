@@ -210,6 +210,28 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
+    pub(crate) fn entry_settings(
+        &self,
+        function: &Function,
+        config: TraceConfig,
+    ) -> bex_vm_types::trace::TraceOptionsData {
+        let mut options = ordinary_settings(function, config);
+        if config.mode.is_none() && config.reserved_id.is_none() {
+            let policy_id = function.telemetry_policy_id.load();
+            options.mode = Some(if policy_id == btel_types::TelemetryPolicyId::NONE {
+                match self.auto_level {
+                    AutoTelemetryLevel::Low => InvocationMode::Hidden,
+                    AutoTelemetryLevel::Medium => {
+                        default_mode(function, self.policy_by_id(policy_id))
+                    }
+                    AutoTelemetryLevel::High => InvocationMode::Span,
+                }
+            } else {
+                default_mode(function, self.policy_by_id(policy_id))
+            });
+        }
+        options
+    }
     pub fn set_context(&mut self, context: btel_types::context::Context) {
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         if !context.same_version(&self.context) {
@@ -1476,6 +1498,40 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
             AI_DEFAULT_MODE
         }
         FunctionKind::Bytecode => BYTECODE_DEFAULT_MODE,
+    }
+}
+
+pub(crate) fn ordinary_settings(
+    function: &Function,
+    config: TraceConfig,
+) -> bex_vm_types::trace::TraceOptionsData {
+    let ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
+    bex_vm_types::trace::TraceOptionsData {
+        mode: Some(if config.reserved_id.is_some() {
+            InvocationMode::Span
+        } else {
+            config.mode.unwrap_or(if ai {
+                AI_DEFAULT_MODE
+            } else {
+                BYTECODE_DEFAULT_MODE
+            })
+        }),
+        inputs: Some(
+            config
+                .inputs
+                .unwrap_or(ai && btel_settings::policy::AI_CAPTURE_INPUTS),
+        ),
+        output: Some(
+            config
+                .output
+                .unwrap_or(ai && btel_settings::policy::AI_CAPTURE_OUTPUT),
+        ),
+        error: Some(
+            config
+                .error
+                .unwrap_or(ai && btel_settings::policy::AI_CAPTURE_ERROR),
+        ),
+        context: None,
     }
 }
 

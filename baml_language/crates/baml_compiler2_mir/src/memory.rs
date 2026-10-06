@@ -174,7 +174,10 @@ pub fn walk_rvalue_places<'a>(rvalue: &'a Rvalue<'_>, f: &mut impl FnMut(&'a Pla
                 walk_operand_places(arg, f);
             }
         }
-        Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
+        Rvalue::LoadType(_)
+        | Rvalue::TraceHookSettings { .. }
+        | Rvalue::CurrentPackage(_)
+        | Rvalue::MakeGenericFunction { .. } => {
             // No place operands — the templates are compile-time data.
         }
         Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -243,6 +246,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
         | Rvalue::TypeTag(_)
         | Rvalue::IsTypeTag { .. }
         | Rvalue::MakeBoundMethod { .. }
+        | Rvalue::TraceHookSettings { .. }
         | Rvalue::CurrentPackage(_) => {}
     }
 }
@@ -483,6 +487,10 @@ pub fn rvalue_reads(
     match rvalue {
         // A length lives with the elements: a push changes it.
         Rvalue::Len(_) => out.elements = true,
+        Rvalue::TraceHookSettings { .. } => {
+            out.heap = true;
+            out.order = true;
+        }
         // Some field of the receiver, resolved at run time — any field.
         Rvalue::VirtualFieldAccess { .. } => out.heap = true,
         Rvalue::Use(_)
@@ -555,7 +563,10 @@ pub fn statement_clobbers(
                 out.order = true;
             }
             // The evaluation may trap, and the trap is an event.
-            if rvalue_can_trap(body, value) {
+            if matches!(value, Rvalue::TraceHookSettings { .. }) {
+                out.heap = true;
+                out.order = true;
+            } else if rvalue_can_trap(body, value) {
                 out.order = true;
             }
         }
@@ -571,6 +582,10 @@ pub fn statement_clobbers(
         }
         StatementKind::Intrinsic { op, .. } => match op {
             IntrinsicOp::Log(_) => out.order = true,
+            IntrinsicOp::ApplyTraceHook | IntrinsicOp::BuiltinTraceHook(_) => {
+                out.order = true;
+                out.heap = true;
+            }
             IntrinsicOp::BindType(slot) => {
                 out.type_slots.insert(*slot);
             }
@@ -655,7 +670,8 @@ pub fn rvalue_allocates_identity(rvalue: &Rvalue<'_>) -> bool {
         | Rvalue::MakeClosure { .. }
         | Rvalue::MakeBoundMethod { .. }
         | Rvalue::MakeVirtualBoundMethod { .. }
-        | Rvalue::MakeVirtualFunction { .. } => true,
+        | Rvalue::MakeVirtualFunction { .. }
+        | Rvalue::TraceHookSettings { .. } => true,
         Rvalue::Use(_)
         | Rvalue::BinaryOp { .. }
         | Rvalue::UnaryOp { .. }
@@ -687,6 +703,9 @@ pub fn rvalue_allocates_identity(rvalue: &Rvalue<'_>) -> bool {
 /// compile here rather than default into the infallible group.
 pub fn rvalue_can_trap<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -> bool {
     match rvalue {
+        // Treat this state transition as an ordering event even when the
+        // selected hook needs no allocating snapshot.
+        Rvalue::TraceHookSettings { .. } => true,
         Rvalue::BinaryOp { op, left, right } => match op {
             // `/` rejects a zero divisor on both numeric paths — BAML throws
             // rather than yielding IEEE infinity (`OpCode::DivFloat`), so this

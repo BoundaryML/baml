@@ -493,6 +493,7 @@ struct ActiveCall {
         btel_types::context::Context,
         Option<bex_vm::telemetry::ThreadSpawnContext>,
         u64,
+        bool,
     )>,
 }
 
@@ -1799,8 +1800,11 @@ impl BexEngine {
         let init_order = bytecode_program.init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode =
-            bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
+        let bytecode = bex_vm::vm::convert_program_with_trace_hooks(
+            bytecode_program,
+            auto_telemetry_level.is_some(),
+        )
+        .map_err(EngineError::VmInternalError)?;
 
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
@@ -4249,6 +4253,9 @@ impl BexEngine {
             }
             context = inherited.context.clone();
             thread.host_environment = inherited.host_environment;
+            thread
+                .vm
+                .inherit_hook_suppression(inherited.hook_suppression);
         }
         if host_environment != 0 {
             thread.host_environment = host_environment;
@@ -4266,9 +4273,6 @@ impl BexEngine {
             options
         };
         if let Some(options) = options {
-            if let Some(patch) = &options.context {
-                context = context.with_patch(patch);
-            }
             thread.vm.set_entry_trace(&options, None);
         }
         thread.vm.set_root_context(context);
@@ -4286,6 +4290,7 @@ impl BexEngine {
                 thread.vm.current_context().clone(),
                 thread.vm.invocation_ancestry(),
                 thread.host_environment,
+                thread.vm.hooks_suppressed(),
             ));
         }
     }
@@ -4314,6 +4319,7 @@ impl BexEngine {
             context: frame.0.clone(),
             ancestry: frame.1.clone(),
             host_environment: frame.2,
+            hook_suppression: frame.3,
         })
     }
 
@@ -5348,6 +5354,7 @@ impl BexEngine {
                     child_thread_id,
                     telemetry,
                     context,
+                    thread.vm.hooks_suppressed(),
                     thread.host_environment,
                     log_capture.cloned(),
                 )
@@ -5412,6 +5419,7 @@ impl BexEngine {
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
+        hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
@@ -5426,6 +5434,7 @@ impl BexEngine {
             thread_id,
             telemetry,
             context,
+            hook_suppression,
             host_environment,
             log_capture,
         ))
@@ -5451,6 +5460,7 @@ impl BexEngine {
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
+        hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
@@ -5489,6 +5499,7 @@ impl BexEngine {
             child_vm.set_telemetry_thread_name(name);
         }
 
+        child_vm.inherit_hook_suppression(hook_suppression);
         child_vm.set_root_context(context);
         child_vm.set_entry_point(entry, &[]);
 
@@ -5924,6 +5935,7 @@ impl BexEngine {
                                 context: thread.vm.current_context().clone(),
                                 ancestry: thread.vm.invocation_ancestry(),
                                 host_environment: thread.host_environment,
+                                hook_suppression: thread.vm.hooks_suppressed(),
                             };
                             let host_options = (operation == SysOp::BamlHostCallHostValue)
                                 .then(|| thread.vm.take_host_call_options());
