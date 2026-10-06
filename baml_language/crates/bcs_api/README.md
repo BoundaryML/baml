@@ -42,13 +42,13 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
 telemetry_environment = "staging"
 ```
 
-Pack and bridge settings are independent. The environment default is used only when `--embed-telemetry` is supplied. Build-time authentication uses `BOUNDARY_API_KEY` or the saved login for the selected endpoint. The server must require project administrator access or an API key with permission to mint for that target.
+Pack and bridge settings are independent. The environment default is used only when `--embed-telemetry` is supplied. Build-time authentication uses `BOUNDARY_API_KEY` or the saved login for the selected endpoint. Authentication or build-token provisioning failure makes the pack or generate command fail. The server must require project administrator access or an API key with permission to mint for that target.
 
 An embedded credential fixes the destination by default. A publisher can explicitly name both destination variables, or set both to `false`. With named bindings, a project and API key select caller-owned ingestion; a project alone uses the caller's saved login and personal environment; a key alone lets the API infer its bound ingestion environment. The publisher's public token is never reused for a caller-selected destination. With no binding values set, the embedded credential remains selected. Without an embedded credential, omitted bindings accept the standard Boundary variables and saved login.
 
 The recording-level binding is independently explicit: omission or `false` freezes the default `medium`; a string names the accepted variable. Levels are `off`, `low`, `medium`, and `high`. `off` starts no cloud requests. A permitted API-key variable set to `local` selects local recording. `BOUNDARY_API_URL` always overrides the baked endpoint, including fixed embedded artifacts.
 
-The initial failure policy is `abort` (default), `warn`, or `ignore`. Authorization starts immediately in the background. Initial failure cancels execution for `abort`; `warn` prints the configured message and continues; `ignore` continues silently. After initial success, later revocation disables telemetry and execution continues under every policy. Bridge failure returns an operation error to its host.
+Newly packed binaries and generated bridges default to `warn` for initial telemetry failures; publishers can explicitly choose `abort`, `warn`, or `ignore`. Authorization starts immediately in the background. Initial failure cancels BAML execution for `abort`; `warn` prints the configured message and continues; `ignore` continues silently. Bridge `abort` returns an operation error while the host process stays running. Ordinary caller-configured CLI cloud recording defaults to `abort` and exits nonzero on initial failure. After initial success, later telemetry failures remain nonfatal under every policy.
 
 ### Build provisioning contract
 
