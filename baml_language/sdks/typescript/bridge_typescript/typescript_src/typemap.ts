@@ -77,7 +77,7 @@ export class BamlTypeMap {
      * its BAML FQN, or "" if it is not a codegen-emitted class. Builds the
      * reverse map lazily by resolving every class/enum thunk once.
      */
-    jsTypeToBamlType(ctor: unknown): string {
+    private ensureReverse(): void {
         if (this.reverse === null) {
             this.reverse = new Map();
             for (const [fqn, thunk] of this.classLazy) {
@@ -95,9 +95,19 @@ export class BamlTypeMap {
                 }
             }
         }
+    }
+
+    /** Identity-only lookup for capture; never inspects application prototypes. */
+    captureType(ctor: unknown): string {
+        this.ensureReverse();
+        return this.reverse!.get(ctor) ?? '';
+    }
+
+    jsTypeToBamlType(ctor: unknown): string {
+        this.ensureReverse();
         let cur: unknown = ctor;
         while (cur != null) {
-            const fqn = this.reverse.get(cur);
+            const fqn = this.reverse!.get(cur);
             if (fqn !== undefined) return fqn;
             cur = Object.getPrototypeOf(cur);
         }

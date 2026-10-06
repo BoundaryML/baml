@@ -18,6 +18,7 @@ from .baml_py import (
 )
 from ._host_marker import consume_adoption, register_marker
 from .typemap import get_type_map
+from ._host_capture import register_capture as register_capture, capture_for as capture_for
 
 
 class TraceUsageError(TypeError):
@@ -99,13 +100,9 @@ def _exit(execution, token, outcome, value):
 
 
 def _exception_capture(error):
-    try:
-        return {
-            "type": type.__getattribute__(type(error), "__qualname__"),
-            "args": BaseException.args.__get__(error, type(error)),
-        }
-    except Exception:
-        return None
+    # The capture adapter applies the same exception defaults and registered
+    # projections to passed, returned, and escaping exceptions.
+    return error
 
 
 def instrument(function_or_options=None, *, name=None):

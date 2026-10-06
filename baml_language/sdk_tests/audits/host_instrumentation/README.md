@@ -29,6 +29,7 @@ cd ../../../../..
 
 sdks/python/.venv/bin/python -m pytest -o addopts= \
   sdk_tests/audits/host_instrumentation/test_recordings.py \
+  sdk_tests/audits/host_instrumentation/test_common_types.py \
   --basetemp target/host-instrumentation-evidence
 cargo test -p baml_query_btel --lib --test engine --test context --test host_inputs
 ```
@@ -73,3 +74,54 @@ The fix changes only how the two public SQL views choose a snapshot root for
 `input_args`: host definitions (`definition_key` beginning `host:`) use a value
 root; BAML functions retain their `FunctionArgs` root. No bridge behavior,
 recording schema or capture format changes.
+
+## Common host capture
+
+The follow-up common-type audit records generated BAML classes and generic
+classes, Python generated enums, ordinary Pydantic models, Python `date` and
+`datetime`, Node `Date`, and passed, returned, and raised exceptions. SQL
+equality checks compare host classes, generic arguments, Python enums, and
+callback inputs/outputs with their native BAML counterparts. Nominal captures
+resolve names against the engine's actual declaration tags; the existing
+snapshot transport already represents classes and enums.
+
+Python Pydantic defaults copy stored declared fields using serialization aliases,
+without invoking `model_dump`, computed properties, or field serializers. Dates
+use ISO strings; Python keeps timezone offsets and naive datetimes have no
+offset. A custom Python timezone stays opaque unless registered. Python
+exceptions expose type and args; Node errors expose type, message, and an
+optional cause. Node enum members are ordinary strings and remain strings.
+
+For other application types, register a synchronous projection:
+
+```python
+@trace.capture_for(MyType)
+def capture_my_type(value):
+    return {"id": value.id}
+
+# Equivalent: trace.register_capture(MyType, capture_my_type)
+```
+
+```typescript
+trace.registerCapture(MyType, value => ({ id: value.id }));
+// Equivalent: trace.captureFor(MyType)(value => ({ id: value.id }));
+```
+
+Registrations apply to subclasses, prefer the nearest registered base, and
+replace an earlier registration for the same type. Generated BAML types and
+builtin scalars/containers take precedence; registrations can customize the
+default Pydantic, date, and exception adapters. Handler results recursively
+use the same capture policy. These projections affect explicitly requested
+trace captures and do not replace function arguments, returned values, or
+escaping exceptions. Capture remains bounded to depth 8, 512 values, and 64 KiB
+of text; cycles and unsupported objects stay opaque, and budget exhaustion
+produces a truncation marker. Projection failures produce an opaque observation
+and a bounded diagnostic. The audit includes hostile serializer/getter hooks,
+custom handler failures and cycles, native/builtin precedence, asynchronous
+functions, and value/byte budgets.
+
+The Node common-type execution case is
+`sdk_tests/crates/typescript/function_calls/customizable/host_common_types.test.ts`;
+copy it to the generated fixture's `node/` directory when editing without
+rerunning codegen. This follows the same isolated recording and shutdown
+workflow as the original catalog audit above.

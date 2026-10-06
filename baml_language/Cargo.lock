@@ -1742,6 +1742,7 @@ dependencies = [
  "bex_project",
  "bridge_ctypes",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "cbindgen",
  "cc",

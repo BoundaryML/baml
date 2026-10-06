@@ -906,6 +906,11 @@ impl Default for EngineConfig {
     }
 }
 
+type ExtractedEnumDefinitions = (
+    indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition>,
+    indexmap::IndexMap<::sys_types::DefKey, Vec<String>>,
+);
+
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
@@ -1024,6 +1029,8 @@ pub struct BexEngine {
     method_owners: HashMap<HeapPtr, HeapPtr>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
     resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
+    #[cfg(not(target_arch = "wasm32"))]
+    host_capture_declarations: HashMap<String, btel_snapshot::host::HostDeclaration>,
     /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
     resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
@@ -2052,7 +2059,38 @@ impl BexEngine {
 
         // Extract class and enum definitions for output format rendering.
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
-        let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
+        let (enum_definitions, host_enum_variants) =
+            Self::extract_enum_definitions(&resolved_enum_names);
+        #[cfg(not(target_arch = "wasm32"))]
+        let host_capture_declarations = class_definitions
+            .iter()
+            .map(|(identity, definition)| {
+                (
+                    identity.name().to_string(),
+                    btel_snapshot::host::HostDeclaration {
+                        identity: identity.clone(),
+                        fields: definition
+                            .fields
+                            .iter()
+                            .map(|field| field.name.clone())
+                            .collect(),
+                        variants: None,
+                    },
+                )
+            })
+            .chain(enum_definitions.keys().map(|identity| {
+                (
+                    identity.name().to_string(),
+                    btel_snapshot::host::HostDeclaration {
+                        identity: identity.clone(),
+                        fields: vec![],
+                        variants: host_enum_variants.get(identity).cloned(),
+                    },
+                )
+            }))
+            .collect();
+        #[cfg(target_arch = "wasm32")]
+        let _ = host_enum_variants;
 
         let bex_work = bex_work::BexWork::new(&heap);
         let heap_permit_manager = Arc::new(HeapPermitManager::new());
@@ -2144,6 +2182,8 @@ impl BexEngine {
             root_package,
             method_owners,
             resolved_class_names,
+            #[cfg(not(target_arch = "wasm32"))]
+            host_capture_declarations,
             resolved_enum_names,
             sys_ops,
             runtime_compiler,
@@ -2292,19 +2332,29 @@ impl BexEngine {
     /// Extract enum definitions from the heap for output format rendering.
     fn extract_enum_definitions(
         resolved_enum_names: &indexmap::IndexMap<String, HeapPtr>,
-    ) -> indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition> {
+    ) -> ExtractedEnumDefinitions {
         let mut defs = indexmap::IndexMap::new();
+        let mut capture_variants = indexmap::IndexMap::new();
         for (_name, ptr) in resolved_enum_names {
             // SAFETY: ptr is from resolved_enum_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Enum(enm) = obj {
+                // Captures retain the VM's complete variant ordering, including
+                // variants omitted from the LLM output-format definition.
+                capture_variants.insert(
+                    ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
+                    enm.variants
+                        .iter()
+                        .map(|variant| variant.name.clone())
+                        .collect(),
+                );
                 defs.insert(
                     ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
                     bex_vm::definitions::enum_definition(enm),
                 );
             }
         }
-        defs
+        (defs, capture_variants)
     }
 
     /// Gather runtime definitions from the type descriptors passed directly

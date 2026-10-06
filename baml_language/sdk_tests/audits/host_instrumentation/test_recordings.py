@@ -20,13 +20,15 @@ PYTHON_SDK = ROOT / "sdk_tests/crates/python_pydantic2/function_calls/generated"
 TYPESCRIPT_SDK = ROOT / "sdk_tests/crates/typescript/function_calls/generated"
 
 
-def run(command, cwd, env, evidence, name):
+def run(command, cwd, env, evidence, name, success_codes=(0,)):
     result = subprocess.run(
         command, cwd=cwd, env=env, text=True, capture_output=True, timeout=90
     )
     (evidence / f"{name}.stdout").write_text(result.stdout)
     (evidence / f"{name}.stderr").write_text(result.stderr)
-    assert result.returncode == 0, f"{command}\n{result.stdout}\n{result.stderr}"
+    assert result.returncode in success_codes, (
+        f"{command}\n{result.stdout}\n{result.stderr}"
+    )
     return result.stdout
 
 
@@ -237,7 +239,7 @@ def test_error_and_iterator_capture_states(recording):
         if language == "python"
         else [
             ["iterator", {"$opaque": "host_value"}, None],
-            ["native_error", None, {"$opaque": "host_value"}],
+            ["native_error", None, {"type": "Error", "message": "audit native Error"}],
         ]
     )
 

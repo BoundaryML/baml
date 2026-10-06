@@ -12,9 +12,18 @@ impl TelemetryState {
         &self,
         value: &btel_snapshot::host::HostValue,
     ) -> Option<btel_snapshot::Snapshot> {
+        self.capture_host_with(value, |_| None)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn capture_host_with<'a>(
+        &self,
+        value: &btel_snapshot::host::HostValue,
+        resolve: impl Fn(&str) -> Option<&'a btel_snapshot::host::HostDeclaration>,
+    ) -> Option<btel_snapshot::Snapshot> {
         self.runtime
             .acquire_snapshot()
-            .map(|builder| btel_snapshot::host::capture(builder, value))
+            .map(|builder| btel_snapshot::host::capture_with(builder, value, resolve))
     }
 
     #[cfg(not(target_arch = "wasm32"))]

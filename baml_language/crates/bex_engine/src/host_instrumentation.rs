@@ -144,9 +144,14 @@ impl BexEngine {
             telemetry.set_context(context.clone());
             telemetry.start_thread();
             telemetry.mark_running();
-            let captured_inputs = inputs
-                .filter(|_| options.inputs == Some(true))
-                .and_then(|value| telemetry.capture_host(value));
+            let captured_inputs =
+                inputs
+                    .filter(|_| options.inputs == Some(true))
+                    .and_then(|value| {
+                        telemetry.capture_host_with(value, |name| {
+                            self.host_capture_declarations.get(name)
+                        })
+                    });
             telemetry.enter_host(
                 &metadata,
                 caller_pc,
@@ -206,7 +211,11 @@ impl HostInvocation {
             if let Some(frame) = self.frame.take() {
                 let captured = value
                     .filter(|_| self.wants_value(outcome))
-                    .and_then(|value| telemetry.capture_host(value));
+                    .and_then(|value| {
+                        telemetry.capture_host_with(value, |name| {
+                            self.registration.engine.host_capture_declarations.get(name)
+                        })
+                    });
                 telemetry.complete_host(frame, outcome, captured);
             }
             telemetry.complete_thread(outcome);
@@ -330,6 +339,61 @@ pub(crate) fn capture_callback_inputs(
     };
 
     use crate::BexExternalValue as V;
+    fn type_copy(
+        value: &baml_type::RuntimeTy,
+        depth: usize,
+        nodes: &mut usize,
+        bytes: &mut usize,
+    ) -> btel_snapshot::host::HostType {
+        use baml_type::RuntimeTy as T;
+        use btel_snapshot::host::HostType as O;
+        if depth > MAX_DEPTH || *nodes == 0 {
+            return O::Unknown;
+        }
+        *nodes -= 1;
+        match value {
+            T::Int => O::Int,
+            T::String => O::String,
+            T::Bool => O::Bool,
+            T::Float => O::Float,
+            T::Null => O::Null,
+            T::List(inner) => O::List(Box::new(type_copy(inner, depth + 1, nodes, bytes))),
+            T::Map { key, value } => O::Map {
+                key: Box::new(type_copy(key, depth + 1, nodes, bytes)),
+                value: Box::new(type_copy(value, depth + 1, nodes, bytes)),
+            },
+            T::Union(options) if options.len() <= *nodes => O::Union(
+                options
+                    .iter()
+                    .map(|ty| type_copy(ty, depth + 1, nodes, bytes))
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            T::Class(name, args) if args.len() <= *nodes => {
+                let name = name.to_string();
+                if name.len() > *bytes {
+                    return O::Unknown;
+                }
+                *bytes -= name.len();
+                O::Class(
+                    name,
+                    args.iter()
+                        .map(|ty| type_copy(ty, depth + 1, nodes, bytes))
+                        .collect::<Vec<_>>()
+                        .into(),
+                )
+            }
+            T::Enum(name) => {
+                let name = name.to_string();
+                if name.len() > *bytes {
+                    return O::Unknown;
+                }
+                *bytes -= name.len();
+                O::Enum(name)
+            }
+            _ => O::Unknown,
+        }
+    }
     fn copy(value: &V, depth: usize, nodes: &mut usize, bytes: &mut usize) -> H {
         if depth > MAX_DEPTH {
             return H::Truncated(Limit::Depth);
@@ -381,6 +445,48 @@ pub(crate) fn capture_callback_inputs(
                     values.push((key.clone(), copy(value, depth + 1, nodes, bytes)));
                 }
                 H::Map(values)
+            }
+            V::Instance {
+                class_name,
+                type_args,
+                fields,
+            } => {
+                if class_name.len() > *bytes {
+                    return H::Truncated(Limit::Bytes);
+                }
+                if fields.len().saturating_add(type_args.len()) > *nodes {
+                    return H::Truncated(Limit::Values);
+                }
+                *bytes -= class_name.len();
+                let mut values = Vec::new();
+                for (key, value) in fields {
+                    if key.len() > *bytes {
+                        return H::Truncated(Limit::Bytes);
+                    }
+                    *bytes -= key.len();
+                    values.push((key.clone(), copy(value, depth + 1, nodes, bytes)));
+                }
+                H::Instance {
+                    name: class_name.clone(),
+                    fields: values,
+                    type_args: type_args
+                        .iter()
+                        .map(|ty| type_copy(ty, depth + 1, nodes, bytes))
+                        .collect(),
+                }
+            }
+            V::Variant {
+                enum_name,
+                variant_name,
+            } => {
+                if enum_name.len().saturating_add(variant_name.len()) > *bytes {
+                    return H::Truncated(Limit::Bytes);
+                }
+                *bytes -= enum_name.len() + variant_name.len();
+                H::Enum {
+                    name: enum_name.clone(),
+                    variant: variant_name.clone(),
+                }
             }
             _ => H::Unavailable,
         }
