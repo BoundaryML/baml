@@ -127,7 +127,9 @@ FROM (
     CASE MAX(CASE WHEN r.process_end_status = 4 THEN 0 ELSE r.process_end_status END)
       WHEN 0 THEN 'unknown' WHEN 1 THEN 'success' WHEN 2 THEN 'error'
       WHEN 3 THEN 'panicked' END AS ended,
-    MAX(r.process_end_ns) AS ended_ns,
+    -- A known outcome's time wins over a later unknown completion's.
+    COALESCE(MAX(IIF(r.process_end_status = 4, NULL, r.process_end_ns)),
+      MAX(r.process_end_ns)) AS ended_ns,
     SUM(r.terminal_sequence IS NULL) AS open,
     MAX(r.updated_ns) AS updated_ns
   FROM main.recording r

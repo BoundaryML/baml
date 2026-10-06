@@ -22,6 +22,7 @@ async fn shutdown_finalizes_telemetry_once_without_guessing_the_host_outcome() {
                 ])
                 .env(SCENARIO, scenario)
                 .env("HOME", home.path())
+                .env("USERPROFILE", home.path())
                 .env("BAML_HOME", home.path().join("config"))
                 .env("BAML_TELEMETRY", "high")
                 .env("BOUNDARY_API_KEY", "local")

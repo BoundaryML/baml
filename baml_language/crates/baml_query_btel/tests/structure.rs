@@ -495,10 +495,13 @@ fn sdk_completion_builds_the_profiler_with_an_unknown_exit_outcome() {
     recording.write(1, tree(vec![delta(1, false, 2, 20, ok())], vec![]));
     let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
     assert!(rows(&mut index, "SELECT * FROM profiler").is_empty());
+    // The SDK completion ends one second after the known outcome below.
+    let mut completion = process_end(proto::ProcessStatus::Unknown);
+    completion.process_end.as_mut().unwrap().at_unix_ns += 1_000_000_000;
     recording.write(
         2,
         proto::RecordingFile {
-            end: Some(process_end(proto::ProcessStatus::Unknown)),
+            end: Some(completion),
             ..Default::default()
         },
     );
@@ -526,9 +529,17 @@ fn sdk_completion_builds_the_profiler_with_an_unknown_exit_outcome() {
             ..Default::default()
         },
     );
+    // The status and its timestamp come from the same outcome.
     assert_eq!(
-        rows(&mut index, "SELECT status FROM processes"),
-        vec![vec![json!("error")]]
+        rows(
+            &mut index,
+            "SELECT status, status_history[1]['timestamp'], last_updated FROM processes"
+        ),
+        vec![vec![
+            json!("error"),
+            json!("2026-09-21T14:13:20.000001Z"),
+            json!("2026-09-21T14:13:20.000001Z")
+        ]]
     );
 }
 
