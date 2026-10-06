@@ -44,6 +44,7 @@ sys_types = { workspace = true }
 libc = { workspace = true }
 once_cell = { workspace = true }
 serde_json = { workspace = true }
+btel_snapshot = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

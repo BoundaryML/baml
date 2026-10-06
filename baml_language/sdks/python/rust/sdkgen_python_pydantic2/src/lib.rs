@@ -330,7 +330,7 @@ fn to_source_code_internal(
         };
         content.push_str(&render_leaf_body(body, &callable_child_names));
         if dir == &["vendor".to_string(), "trace".to_string()] {
-            content.push_str("\n# Host inspection reads the dispatch frame without another invocation.\nfrom baml_bridge._execution_context import current_context as current_context, current_cancel_token as current_cancel_token\nfrom baml_bridge._instrumentation import instrument as instrument, TraceUsageError as TraceUsageError\n\nasync def current_context_async():\n    return current_context()\n");
+            content.push_str("\n# Host inspection reads the dispatch frame without another invocation.\nfrom baml_bridge._execution_context import current_context as current_context, current_cancel_token as current_cancel_token\nfrom baml_bridge._instrumentation import instrument as instrument, TraceUsageError as TraceUsageError, register_capture as register_capture, capture_for as capture_for\n\nasync def current_context_async():\n    return current_context()\n");
         }
         content.push_str(&render_interface_tokens(
             interface_tokens
@@ -363,7 +363,7 @@ fn to_source_code_internal(
         pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
         if dir == &["vendor".to_string(), "trace".to_string()] {
             pyi_content.push_str("\nfrom ...baml.spawn import CancelToken as _CancelToken\n\ndef current_cancel_token() -> typing.Optional[_CancelToken]: ...\n");
-            pyi_content.push_str("\nfrom baml_bridge._instrumentation import TraceUsageError as TraceUsageError\n\n_HostP = typing_extensions.ParamSpec(\"_HostP\")\n_HostR = typing.TypeVar(\"_HostR\")\n\n@typing.overload\ndef instrument(function_or_options: typing.Callable[_HostP, _HostR], *, name: typing.Optional[str] = ...) -> typing.Callable[_HostP, _HostR]: ...\n@typing.overload\ndef instrument(function_or_options: typing.Optional[Options] = ..., *, name: typing.Optional[str] = ...) -> typing.Callable[[typing.Callable[_HostP, _HostR]], typing.Callable[_HostP, _HostR]]: ...\n");
+            pyi_content.push_str("\nfrom baml_bridge._instrumentation import TraceUsageError as TraceUsageError, register_capture as register_capture, capture_for as capture_for\n\n_HostP = typing_extensions.ParamSpec(\"_HostP\")\n_HostR = typing.TypeVar(\"_HostR\")\n\n@typing.overload\ndef instrument(function_or_options: typing.Callable[_HostP, _HostR], *, name: typing.Optional[str] = ...) -> typing.Callable[_HostP, _HostR]: ...\n@typing.overload\ndef instrument(function_or_options: typing.Optional[Options] = ..., *, name: typing.Optional[str] = ...) -> typing.Callable[[typing.Callable[_HostP, _HostR]], typing.Callable[_HostP, _HostR]]: ...\n");
         }
         pyi_content.push_str(&render_interface_tokens(
             interface_tokens

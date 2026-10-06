@@ -593,4 +593,6 @@ mod generated_metadata_tests {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub mod host_capture;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod host_instrumentation;
