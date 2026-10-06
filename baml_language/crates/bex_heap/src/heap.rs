@@ -132,6 +132,7 @@ pub struct BexHeap {
     /// These are permanent: functions, classes, enums, string literals.
     compile_time: Vec<Object>,
     pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
+    pub(crate) declarations: btel_types::DeclarationLookup<HeapPtr>,
 
     /// Gen0 nursery — all TLAB allocations land here.
     /// Uses ChunkedVec for stable pointers during concurrent access.
@@ -353,6 +354,7 @@ impl BexHeap {
         Self {
             compile_time: compile_time_objects,
             functions: btel_types::FunctionLookup::default(),
+            declarations: btel_types::DeclarationLookup::default(),
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
             gen2: UnsafeCell::new(ChunkedVec::new()),

@@ -18,11 +18,13 @@ mod flags;
 mod functions;
 mod merge;
 mod recording;
+mod types;
 pub use flags::CompletionFlags;
 pub use recording::{
     ProcessRecording, RecordingBuilder, RecordingConfig, RecordingError, RecordingId,
     RecordingPublisher, SealedFile,
 };
+pub use types::decode_declaration;
 
 /// Generated wire messages, never the VM's in-memory layout. Scalar span
 /// messages encode while borrowed; no input references escape the callback.
@@ -61,6 +63,7 @@ struct ConversionBuffer {
     aggregates: merge::PendingAggregates,
     sysops: merge::PendingSysOps,
     functions: functions::FunctionDefinitions,
+    types: types::TypeDefinitions,
     // Referenced epochs not yet observed settled, released once final. Bounded
     // by live runs plus runs settled since the last sealed file.
     unsettled_clocks: BTreeMap<u64, Arc<btel_clock::ClockEpoch>>,
@@ -153,6 +156,17 @@ impl ConversionBuffer {
                     function_id: function.get(),
                     resolution: Some(resolution),
                 },
+            );
+        }
+    }
+
+    fn define_type(&mut self, definition: btel_types::TypeDefinition) {
+        if let Some(message) = self.types.resolve(definition) {
+            push_message(
+                &mut self.pending.definitions.types,
+                &mut self.pending_encoded_bytes,
+                5,
+                message,
             );
         }
     }

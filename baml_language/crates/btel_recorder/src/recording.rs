@@ -113,7 +113,17 @@ pub struct RecordingBuilder {
     span_credit: usize,
     metadata_replay: bool,
     ended: bool,
+    /// The runtime's class and enum definitions, polled on this thread.
+    types: Option<std::sync::Arc<dyn btel_types::TypeDefinitionSource>>,
 }
+
+/// Definitions taken per poll while the recording runs.
+const TYPE_DEFINITIONS_PER_POLL: usize = 256;
+/// Polls `end_recording` makes for definitions still pending when input is
+/// exhausted. Each poll that finds heap access busy yields first; together
+/// they bound how long the end can wait on a collection.
+const FINAL_TYPE_DEFINITION_POLLS: usize = 2_000;
+
 impl RecordingBuilder {
     pub fn new(id: RecordingId, config: RecordingConfig) -> Result<Self, RecordingError> {
         config
@@ -135,6 +145,7 @@ impl RecordingBuilder {
             pending_span_reservation: 0,
             span_credit: 0,
             metadata_replay: false,
+            types: None,
             ended: false,
         })
     }
@@ -161,6 +172,32 @@ impl RecordingBuilder {
     ) -> Self {
         self.buffer.functions.set_table(functions);
         self
+    }
+
+    /// The runtime's source of class and enum definitions. Polled after each
+    /// batch and before sealing; never waits on the runtime's heap.
+    #[must_use]
+    pub fn with_type_definitions(
+        mut self,
+        types: std::sync::Arc<dyn btel_types::TypeDefinitionSource>,
+    ) -> Self {
+        self.types = Some(types);
+        self
+    }
+
+    /// Take the definitions the runtime has ready, at most one batch.
+    /// `true` when more are pending.
+    fn poll_type_definitions(&mut self) -> Option<bool> {
+        let source = self.types.as_ref()?;
+        match source.try_take(TYPE_DEFINITIONS_PER_POLL) {
+            btel_types::TypeResolution::Busy => Some(true),
+            btel_types::TypeResolution::Ready { definitions, more } => {
+                for definition in definitions {
+                    self.buffer.define_type(definition);
+                }
+                Some(more)
+            }
+        }
     }
 
     /// The process this engine runs in, written in every file header. The
@@ -252,6 +289,11 @@ impl RecordingBuilder {
                         btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
                     } else {
                         0
+                    })
+                    .max(if ready.definitions.types.is_empty() {
+                        0
+                    } else {
+                        btel_settings::encoding::TYPE_DEFINITIONS_FORMAT_MINOR
                     }),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
@@ -348,6 +390,7 @@ impl RecordingBuilder {
         self.pending_captures.drain(..)
     }
     fn service(&mut self, now: Instant, force: bool) -> Result<Option<SealedFile>, RecordingError> {
+        self.poll_type_definitions();
         if force
             || self.buffer.encoded_size_hint() >= self.config.target_bytes.get()
             || self.deadline.is_some_and(|deadline| now >= deadline)
@@ -395,6 +438,15 @@ impl RecordingBuilder {
     pub fn end_recording(&mut self) -> Result<Option<SealedFile>, RecordingError> {
         if self.ended {
             return self.seal(Sealing::Pending);
+        }
+        // No VM runs now, so pending definitions resolve as soon as no
+        // collection holds the heap. Bounded: what is still pending after the
+        // last poll is not recorded.
+        for _ in 0..FINAL_TYPE_DEFINITION_POLLS {
+            match self.poll_type_definitions() {
+                Some(true) => std::thread::yield_now(),
+                _ => break,
+            }
         }
         let settled = self.buffer.observe_unsettled_clocks(true);
         let file = self.seal(if settled {

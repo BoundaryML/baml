@@ -18,6 +18,20 @@ use crate::cas::{CasStore, CasUnavailable};
 /// verified ID is `id`, as [`CasStore`] does: walks know blobs by their IDs.
 pub trait BlobSource {
     fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable>;
+    /// The definition a type tag in a rendered value refers to, for sources
+    /// that index recorded class and enum definitions. None by default.
+    fn type_definition(&self, _tag: baml_type::typetag::TypeTag) -> Option<DefinitionRef> {
+        None
+    }
+}
+
+/// A recorded class or enum definition as a rendered value refers to it: an
+/// id unique within the source's scope, and the declaration when recorded
+/// (`None` when the runtime could only observe it as unavailable).
+#[derive(Clone, Debug)]
+pub struct DefinitionRef {
+    pub id: Arc<str>,
+    pub declaration: Option<Arc<btel_types::TypeDeclaration>>,
 }
 
 impl BlobSource for CasStore {

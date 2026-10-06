@@ -98,6 +98,8 @@ mod telemetry_network;
 mod telemetry_state;
 pub mod trace_heap;
 mod trace_value_encode;
+#[cfg(not(target_arch = "wasm32"))]
+mod type_definitions;
 use std::{
     collections::{HashMap, VecDeque},
     panic::{AssertUnwindSafe, catch_unwind},
@@ -1922,6 +1924,8 @@ impl BexEngine {
 
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
+        // Created before telemetry: its definition resolver takes heap permits.
+        let heap_permit_manager = Arc::new(HeapPermitManager::new());
 
         let telemetry = auto_telemetry_level
             .map(|auto_level| {
@@ -1935,6 +1939,10 @@ impl BexEngine {
                     Some(recording) => recording.start(
                         source_snapshot_id.map(|id| id.0),
                         Arc::new(heap.static_function_metadata()),
+                        Arc::new(crate::type_definitions::HeapTypeDefinitions::new(
+                            Arc::clone(&heap),
+                            Arc::clone(&heap_permit_manager),
+                        )),
                         &launch_context,
                     )?,
                     None => (
@@ -1950,6 +1958,8 @@ impl BexEngine {
                     )),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
+                    declarations: Arc::clone(&heap)
+                        as Arc<dyn bex_vm::telemetry::DeclarationRegistry>,
                     #[cfg(not(target_arch = "wasm32"))]
                     recording_id,
                     #[cfg(not(target_arch = "wasm32"))]
@@ -2055,7 +2065,6 @@ impl BexEngine {
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
         let bex_work = bex_work::BexWork::new(&heap);
-        let heap_permit_manager = Arc::new(HeapPermitManager::new());
         // We just created the permit manager so `new_permit` will not block:
         // the only synchronization inside is the `holders` mutex which is
         // uncontended at this point. `futures::executor::block_on` (rather

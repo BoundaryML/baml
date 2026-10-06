@@ -354,6 +354,7 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
     second.sequence = 2;
     second.aggregates = None;
     second.definitions = Some(proto::Definitions {
+        types: Vec::new(),
         functions: vec![proto::FunctionDefinition {
             function_id: 8,
             resolution: Some(proto::function_definition::Resolution::Unavailable(

@@ -207,6 +207,7 @@ fn tree(
             ],
             threads: vec![thread(ROOT, None, 0, 0), thread(CHILD, Some(ROOT), 5, 20)],
             clock_epochs: vec![epoch()],
+            types: Vec::new(),
         }),
         clock_states: Some(valid()),
         aggregates: Some(proto::AggregateBatch {

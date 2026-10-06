@@ -413,6 +413,7 @@ mod crafted {
                 call_paths: vec![path(2, 1, Some(CALLER), 12, CALLEE, 1)],
                 threads: vec![thread(T2, Some(T1), 3, 12)],
                 clock_epochs: vec![epoch(1)],
+                types: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![
@@ -461,6 +462,7 @@ mod crafted {
                 call_paths: vec![path(2, 1, Some(CALLER), 13, CALLEE, 1)],
                 threads: vec![thread(T2, Some(T1), 3, 99)],
                 clock_epochs: vec![epoch(2)],
+                types: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![
@@ -515,6 +517,7 @@ mod crafted {
         };
         let third = proto::RecordingFile {
             definitions: Some(proto::Definitions {
+                types: Vec::new(),
                 functions: vec![metadata(CALLEE, "user.Callee", 7)],
                 call_paths: vec![
                     path(1, 0, None, 0, CALLER, 1),

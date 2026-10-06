@@ -405,6 +405,9 @@ pub(super) struct Bulk {
     sysops: BTreeMap<u32, (u128, u128)>,
     /// `(sequence, position)` to one model turn's usage.
     usage: BTreeMap<(u64, usize), proto::ModelUsage>,
+    /// Type tag -> (state, encoded declaration), with the incremental path's
+    /// rule: the first declaration wins over any unavailable observation.
+    types: BTreeMap<i64, (i64, Option<Vec<u8>>)>,
     network_spans: FxHashMap<u64, NetworkRow>,
     network_events: Vec<EventRow>,
     /// The first header that names the process, and how it ended.
@@ -560,6 +563,9 @@ impl Bulk {
         if let Some(definitions) = &file.definitions {
             for function in &definitions.functions {
                 self.function(sequence, function);
+            }
+            for definition in &definitions.types {
+                self.type_definition(definition);
             }
             for path in &definitions.call_paths {
                 self.call_path(sequence, path);
@@ -874,6 +880,37 @@ impl Bulk {
         }
     }
 
+    fn type_definition(&mut self, definition: &proto::TypeDefinition) {
+        let (state, declaration) = match &definition.resolution {
+            Some(proto::type_definition::Resolution::Declaration(declaration)) => {
+                (2, Some(declaration.encode_to_vec()))
+            }
+            Some(proto::type_definition::Resolution::Unavailable(_)) => (1, None),
+            None => return,
+        };
+        let entry = self.types.entry(definition.type_tag).or_insert((0, None));
+        if entry.0 < state {
+            *entry = (state, declaration);
+        }
+    }
+
+    fn write_types(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+        let tags: Vec<i64> = self.types.keys().copied().collect();
+        insert_rows(
+            tx,
+            "type_def (rec, type_tag, state, declaration)",
+            4,
+            &tags,
+            |b, tag| {
+                let (state, declaration) = &self.types[&tag];
+                b.bind(rec)?;
+                b.bind(tag)?;
+                b.bind(*state)?;
+                b.bind(declaration.as_deref())
+            },
+        )
+    }
+
     fn function(&mut self, sequence: u64, function: &proto::FunctionDefinition) {
         match function.resolution.as_ref() {
             Some(Resolution::Metadata(metadata)) => {
@@ -1071,6 +1108,7 @@ impl Bulk {
             .sort_unstable_by_key(|event| (event.span, event.sequence, event.position));
         self.write_network_events(tx, rec)?;
         self.write_usage(tx, rec)?;
+        self.write_types(tx, rec)?;
         let mut insert = tx.prepare_cached(
             "INSERT INTO issue (rec, sequence, code, subject, detail) VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;

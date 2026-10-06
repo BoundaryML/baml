@@ -183,8 +183,31 @@ pub struct ThreadTelemetry {
     name: Option<btel_records::ThreadName>,
 }
 
+/// Where captures register the classes and enums they name: the heap's
+/// declaration lookup, so their definitions get resolved and recorded.
+pub trait DeclarationRegistry: Send + Sync {
+    /// # Safety
+    /// Called under the VM heap permit; `ptr` is the live class or enum
+    /// `tag` identifies.
+    unsafe fn register_declaration(&self, tag: baml_type::typetag::TypeTag, ptr: HeapPtr);
+}
+
+impl DeclarationRegistry for bex_heap::BexHeap {
+    unsafe fn register_declaration(&self, tag: baml_type::typetag::TypeTag, ptr: HeapPtr) {
+        // SAFETY: forwarded from the caller.
+        unsafe { self.register_telemetry_declaration(tag, ptr) }
+    }
+}
+
+/// Tags this thread registered already, kept to skip the shared lookup on
+/// repeat captures. Cleared when it reaches this size: a program minting
+/// classes must not grow it without bound, and re-registration is a no-op.
+const REGISTERED_DECLARATIONS_CACHE: usize = 4_096;
+
 pub struct TelemetryState {
     context: btel_types::context::Context,
+    declarations: Option<Arc<dyn DeclarationRegistry>>,
+    registered: rustc_hash::FxHashSet<baml_type::typetag::TypeTag>,
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
     context_snapshot: Option<(btel_types::context::Context, btel_snapshot::CasId)>,
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
@@ -248,6 +271,8 @@ impl TelemetryState {
         let started_at = clock.read();
         Self {
             context: btel_types::context::Context::default(),
+            declarations: None,
+            registered: rustc_hash::FxHashSet::default(),
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
             context_snapshot: None,
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
@@ -322,7 +347,35 @@ impl TelemetryState {
         assert!(builder.is_some(), "synchronous WASM capture consumption");
         // SAFETY: invocation entry/completion run with the VM heap permit held.
         // Scratch traversal never releases it or triggers VM allocation/GC.
-        builder.map(|builder| unsafe { self.capture_scratch.capture(builder, input) })
+        let snapshot =
+            builder.map(|builder| unsafe { self.capture_scratch.capture(builder, input) });
+        self.register_declarations();
+        snapshot
+    }
+
+    /// Where this thread's captures register the classes and enums they name.
+    pub fn set_declaration_registry(&mut self, registry: Arc<dyn DeclarationRegistry>) {
+        self.declarations = Some(registry);
+    }
+
+    /// Register the declarations the last capture named, before the capture
+    /// is published. Repeats on this thread skip the shared lookup.
+    fn register_declarations(&mut self) {
+        let named = &mut self.capture_scratch.declarations;
+        let Some(registry) = &self.declarations else {
+            named.clear();
+            return;
+        };
+        if self.registered.len() >= REGISTERED_DECLARATIONS_CACHE {
+            self.registered.clear();
+        }
+        for (tag, ptr) in named.drain(..) {
+            if self.registered.insert(tag) {
+                // SAFETY: still under the capture's heap permit, and the
+                // capture read `ptr` as the declaration `tag` identifies.
+                unsafe { registry.register_declaration(tag, ptr) };
+            }
+        }
     }
 
     /// The spawn context for a task whose body runs no BAML function (a host

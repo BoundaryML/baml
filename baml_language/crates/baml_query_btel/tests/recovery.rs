@@ -73,6 +73,7 @@ fn epoch() -> proto::ClockEpochDefinition {
 
 fn definitions(fqn: &str) -> proto::Definitions {
     proto::Definitions {
+        types: Vec::new(),
         functions: vec![proto::FunctionDefinition {
             function_id: FUNCTION,
             resolution: Some(proto::function_definition::Resolution::Metadata(

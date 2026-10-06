@@ -156,6 +156,20 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
             _marker: PhantomData,
         }
     }
+    /// [`Self::acquire`] without waiting: the active permit, or this permit
+    /// back when access would wait (a GC or other exclusive operation holds
+    /// or awaits the heap). For callers that must never block on the heap,
+    /// such as telemetry's definition resolver on the processor thread.
+    pub fn try_acquire(self) -> Result<ActiveHeapPermit<T>, Self> {
+        match Arc::clone(&self.active).try_acquire_owned() {
+            Ok(permit) => Ok(ActiveHeapPermit {
+                state: self,
+                _permit: permit,
+                _marker: PhantomData,
+            }),
+            Err(_) => Err(self),
+        }
+    }
     /// ## Safety
     ///
     /// The caller should not access the heap or use the heap roots unless the permit is active.
@@ -223,6 +237,21 @@ impl HeapPermitManager {
         };
         drop(guard);
         permit
+    }
+    /// [`Self::new_permit`] without waiting: `None` while an exclusive
+    /// operation holds the permit registry.
+    pub fn try_new_permit<T: RootHaver + 'static>(
+        &self,
+        with_roots: T,
+    ) -> Option<InactiveHeapPermit<T>> {
+        let mut guard = self.holders.try_lock().ok()?;
+        debug_assert!(guard.len() < MAX_PERMITS as usize);
+        let holder = Arc::new(PermitCell::new(with_roots));
+        guard.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
+        Some(InactiveHeapPermit {
+            active: self.active.clone(),
+            holder,
+        })
     }
     pub async fn request_park(&self) -> HeapGuard<'_> {
         // Drain the semaphore BEFORE taking the holders mutex. The semaphore

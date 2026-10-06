@@ -89,17 +89,91 @@ struct CacheState {
 }
 
 /// One query's value-resolution state.
+/// Recorded class and enum definitions, by recording (its index row) and
+/// type tag. A definition's id is `<recording id>:<type tag>`: tags are
+/// engine-scoped, so the recording scopes them.
+#[derive(Default)]
+pub struct TypeDefinitionIndex {
+    by_tag: HashMap<(i64, i64), btel_reader::value::DefinitionRef>,
+}
+
+impl TypeDefinitionIndex {
+    pub fn load(conn: &rusqlite::Connection) -> rusqlite::Result<Self> {
+        let mut statement = conn.prepare(
+            "SELECT d.rec, d.type_tag, d.state, d.declaration, r.recording_id
+             FROM type_def d JOIN recording r ON r.rec = d.rec",
+        )?;
+        let mut by_tag = HashMap::new();
+        let mut rows = statement.query([])?;
+        while let Some(row) = rows.next()? {
+            let rec: i64 = row.get(0)?;
+            let tag: i64 = row.get(1)?;
+            let state: i64 = row.get(2)?;
+            let declaration: Option<Vec<u8>> = row.get(3)?;
+            let recording: Vec<u8> = row.get(4)?;
+            let declaration = declaration
+                .filter(|_| state == 2)
+                .and_then(|bytes| {
+                    <btel_recorder::proto::TypeDeclaration as prost::Message>::decode(
+                        bytes.as_slice(),
+                    )
+                    .ok()
+                })
+                .and_then(|declaration| btel_recorder::decode_declaration(&declaration))
+                .map(Arc::new);
+            by_tag.insert(
+                (rec, tag),
+                btel_reader::value::DefinitionRef {
+                    id: format!("{}:{tag}", hex(&recording)).into(),
+                    declaration,
+                },
+            );
+        }
+        Ok(Self { by_tag })
+    }
+}
+
+/// The query context seen from one value's recording: blobs as the context
+/// loads them, definitions of that recording's type tags.
+struct Scoped<'a> {
+    context: &'a QueryContext,
+    rec: i64,
+}
+
+impl BlobSource for Scoped<'_> {
+    fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+        self.context.load(id)
+    }
+    fn type_definition(
+        &self,
+        tag: baml_type::typetag::TypeTag,
+    ) -> Option<btel_reader::value::DefinitionRef> {
+        self.context
+            .types
+            .by_tag
+            .get(&(self.rec, tag.as_i64()))
+            .cloned()
+    }
+}
+
 pub struct QueryContext {
     cas: CasStore,
+    types: Arc<TypeDefinitionIndex>,
     limits: ValueLimits,
     deadline: Option<Instant>,
     state: Mutex<CacheState>,
 }
 
 impl QueryContext {
-    pub fn new(cas: CasStore, limits: ValueLimits, deadline: Option<Instant>) -> Self {
+    pub fn new(
+        cas: CasStore,
+        types: Arc<TypeDefinitionIndex>,
+        limits: ValueLimits,
+        deadline: Option<Instant>,
+    ) -> Self {
         Self {
             cas,
+            types,
             limits,
             deadline,
             state: Mutex::new(CacheState {
@@ -280,8 +354,12 @@ impl QueryContext {
         }
         let result = match self.find(handle)? {
             Some((parsed, nav)) => {
+                let scoped = Scoped {
+                    context: self,
+                    rec: parsed.rec,
+                };
                 let presented =
-                    value::to_scalar(self, &nav, parsed.names.as_ref(), &self.limits.render);
+                    value::to_scalar(&scoped, &nav, parsed.names.as_ref(), &self.limits.render);
                 if let Some(reason) = presented.incomplete {
                     self.note(handle, reason.code());
                 }
@@ -711,9 +789,12 @@ pub struct Handle {
     /// Argument slot names; `None` when not recorded.
     pub names: Option<ArgumentNames>,
     pub path: Vec<Segment>,
+    /// The recording the value belongs to (its index row), which scopes the
+    /// type tags it names; 0 when unknown.
+    pub rec: i64,
 }
 
-const HANDLE_MAGIC: [u8; 2] = [0xB7, 0x01];
+const HANDLE_MAGIC: [u8; 2] = [0xB7, 0x02];
 const PENDING_BIT: u8 = 0x80;
 const INLINE: u8 = 4;
 const EVENTS: u8 = 7;
@@ -739,6 +820,7 @@ impl Handle {
         let mut out = Vec::with_capacity(32);
         out.extend_from_slice(&HANDLE_MAGIC);
         out.push(self.kind | if self.pending { PENDING_BIT } else { 0 });
+        out.extend_from_slice(&self.rec.to_le_bytes());
         match &self.inline {
             Some(blob) => {
                 out.extend_from_slice(&component_len(blob.len()).to_le_bytes());
@@ -765,6 +847,8 @@ impl Handle {
         let rest = bytes.strip_prefix(&HANDLE_MAGIC)?;
         let (&kind, rest) = rest.split_first()?;
         let (kind, pending) = (kind & !PENDING_BIT, kind & PENDING_BIT != 0);
+        let (rec, rest) = rest.split_at_checked(8)?;
+        let rec = i64::from_le_bytes(rec.try_into().ok()?);
         let (cas, inline, rest): (&[u8], _, _) = if kind == INLINE || kind == EVENTS {
             let (len, tail) = rest.split_at_checked(4)?;
             let len = u32::from_le_bytes(len.try_into().ok()?) as usize;
@@ -812,6 +896,7 @@ impl Handle {
             inline,
             names,
             path,
+            rec,
         })
     }
 }
@@ -1037,6 +1122,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
             inline: None,
             names: None,
             path: vec![Segment::Key("metadata".into())],
+            rec: 0,
         }
         .encode())
     })?;
@@ -1102,9 +1188,10 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
     conn.create_aggregate_function("__btel_sum", 1, pure, CheckedSum)?;
 
     // Handle construction reads nothing.
-    // `__btel_ref(kind, cas, names, pending)`: no CAS id is NULL (nothing
-    // captured) unless `pending` says the capture's evidence is still due.
-    conn.create_scalar_function("__btel_ref", 4, pure, |ctx| {
+    // `__btel_ref(kind, cas, names, pending, rec)`: no CAS id is NULL
+    // (nothing captured) unless `pending` says the capture's evidence is
+    // still due. `rec` scopes the type tags the value names.
+    conn.create_scalar_function("__btel_ref", 5, pure, |ctx| {
         let kind = opt_i64(ctx, 0)?.unwrap_or(0);
         let pending = opt_i64(ctx, 3)?.unwrap_or(0) != 0;
         let cas = match opt_blob(ctx, 1)? {
@@ -1128,6 +1215,7 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
             inline: None,
             names,
             path: Vec::new(),
+            rec: opt_i64(ctx, 4)?.unwrap_or(0),
         };
         Ok(Some(handle.encode()))
     })?;
@@ -1326,6 +1414,7 @@ pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
         inline: Some(blob),
         names: None,
         path: Vec::new(),
+        rec: 0,
     }
     .encode()
 }
@@ -1508,6 +1597,7 @@ impl Aggregate<Vec<(Option<i64>, i64, Event)>, Vec<u8>> for EventList {
             inline: Some(encode_events(&events)),
             names: None,
             path: Vec::new(),
+            rec: 0,
         }
         .encode())
     }

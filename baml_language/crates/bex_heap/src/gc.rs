@@ -529,6 +529,7 @@ impl BexHeap {
         // Resolve weak function lookups before destroying from-space. These
         // pointers are deliberately absent from the root set.
         self.update_function_lookup(&forwarding, CollectionLevel::Major);
+        self.update_declaration_lookup(&forwarding, CollectionLevel::Major);
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
@@ -1599,6 +1600,7 @@ impl BexHeap {
         // Gen2 is not collected by a minor cycle. Missing forwarding entries
         // there are retained; missing entries in young generations are dead.
         self.update_function_lookup(&forwarding, CollectionLevel::Minor);
+        self.update_declaration_lookup(&forwarding, CollectionLevel::Minor);
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 

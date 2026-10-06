@@ -90,6 +90,9 @@ pub struct Index {
     slot: functions::ContextSlot,
     options: IndexOptions,
     views_ready: bool,
+    /// Recorded class and enum definitions, loaded by the first query after
+    /// a refresh.
+    types: Option<Arc<functions::TypeDefinitionIndex>>,
     /// No recordings directory: queries run against an empty in-memory index.
     source_missing: bool,
 }
@@ -120,6 +123,7 @@ impl Index {
             slot,
             options,
             views_ready: false,
+            types: None,
             source_missing,
         })
     }
@@ -139,6 +143,7 @@ impl Index {
     /// Reconcile newly completed files. Holds the process-safe writer lock
     /// for the duration; waits up to `RefreshOptions::lock_timeout`.
     pub fn refresh(&mut self) -> Result<RefreshMetrics, Error> {
+        self.types = None;
         if self.source_missing {
             return Ok(RefreshMetrics::default());
         }
@@ -170,8 +175,17 @@ impl Index {
     /// Run one read-only query in a fixed snapshot of the index.
     pub fn query(&mut self, request: &QueryRequest) -> Result<QueryResult, Error> {
         self.ensure_views()?;
+        let types = match &self.types {
+            Some(types) => Arc::clone(types),
+            None => {
+                let types = Arc::new(functions::TypeDefinitionIndex::load(&self.conn)?);
+                self.types = Some(Arc::clone(&types));
+                types
+            }
+        };
         let context = functions::QueryContext::new(
             CasStore::new(self.layout.cas.clone(), self.options.cas),
+            types,
             self.options.values,
             request
                 .budgets

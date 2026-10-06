@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 18;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -275,6 +275,17 @@ CREATE TABLE sysop (
   PRIMARY KEY (rec, call_path_id)
 ) STRICT, WITHOUT ROWID;
 
+-- Classes and enums captured values name, by engine-scoped type tag
+-- (format minor 10). 1: unavailable observed; 2: declaration recorded, the
+-- encoded `TypeDeclaration`. A declaration supersedes an unavailable row.
+CREATE TABLE type_def (
+  rec INTEGER NOT NULL,
+  type_tag INTEGER NOT NULL,
+  state INTEGER NOT NULL,
+  declaration BLOB,
+  PRIMARY KEY (rec, type_tag)
+) STRICT, WITHOUT ROWID;
+
 -- Tokens each model turn used, in file order; several rows can name one node.
 CREATE TABLE model_usage (
   rec INTEGER NOT NULL,
@@ -442,6 +453,7 @@ pub const FACT_TABLES: &[&str] = &[
     "aggregate",
     "sysop",
     "model_usage",
+    "type_def",
     "call",
     "network_span",
     "network_event",
@@ -465,6 +477,7 @@ pub const ALL_TABLES: &[&str] = &[
     "aggregate",
     "sysop",
     "model_usage",
+    "type_def",
     "call",
     "network_span",
     "network_event",

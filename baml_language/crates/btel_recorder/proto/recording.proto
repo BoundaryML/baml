@@ -37,6 +37,7 @@ message RecordingHeader {
                                  // 7 adds network spans.
                                  // 8 adds generic call type arguments.
                                  // 9 adds process launch context.
+                                 // 10 adds class and enum definitions.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -58,6 +59,61 @@ message Definitions {
   repeated CallPathDefinition call_paths = 2;
   repeated ThreadDefinition threads = 3;
   repeated ClockEpochDefinition clock_epochs = 4;
+  repeated TypeDefinition types = 5; // Minor 10.
+}
+
+// Minor 10. A class or enum that captured values name, by the engine-scoped
+// type tag their type heads and declarations carry: never reused within the
+// engine, distinct from the name (runtime classes may share one) and from the
+// content. Published once per recording, in any file of it; a later
+// declaration supersedes an earlier unavailable observation.
+message TypeDefinition {
+  sfixed64 type_tag = 1;
+  oneof resolution {
+    TypeDeclaration declaration = 2;
+    MetadataUnavailable unavailable = 3;
+  }
+}
+
+message TypeDeclaration {
+  bool is_enum = 1;
+  bytes name = 2;               // Borsh baml_type::DeclarationName.
+  uint32 type_params = 3;       // Generic parameters, by position.
+  optional string description = 4;
+  optional string alias = 5;
+  optional string docstring = 6;
+  repeated TypeAttribute attributes = 7;
+  bool stream_done = 8;
+  repeated TypeField fields = 9;     // Classes only, in declaration order.
+  repeated TypeVariant variants = 10; // Enums only, in declaration order.
+}
+
+message TypeAttribute {
+  string key = 1;
+  string value = 2;
+}
+
+message TypeField {
+  string name = 1;
+  // Borsh baml_type::TyTemplate<btel_types::DefinitionHead>; TypeArgRef(N) is
+  // generic parameter N, and each head is a type tag with its name.
+  bytes schema = 2;
+  optional string description = 3;
+  optional string alias = 4;
+  optional string docstring = 5;
+  repeated TypeAttribute attributes = 6;
+  bool skip = 7;
+  bool stream_done = 8;
+  bool must_exist = 9;
+}
+
+message TypeVariant {
+  string name = 1;
+  optional string description = 2;
+  optional string alias = 3;
+  optional string docstring = 4;
+  repeated TypeAttribute attributes = 5;
+  bool skip = 6;
 }
 
 message FunctionDefinition {

@@ -25,7 +25,7 @@ use crate::evidence::ArgumentNames;
 pub mod equality;
 mod span;
 mod ty;
-pub use span::{BlobSource, Found, Located, media_content};
+pub use span::{BlobSource, DefinitionRef, Found, Located, media_content};
 use span::{Examine, Span, reach};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -691,7 +691,8 @@ pub fn render_arguments(
         limits.max_blobs,
         limits.max_blob_bytes,
     );
-    let mut renderer = Renderer::new(&span, limits);
+    let lookup = |tag| source.type_definition(tag);
+    let mut renderer = Renderer::new(&span, limits, &lookup);
     let json = match names.filter(|names| names.slots.len() == slots.len()) {
         Some(names) if names.slots.iter().all(|slot| slot.name.is_some()) => {
             let mut map = Map::new();
@@ -746,12 +747,22 @@ pub fn render_value(
         limits.max_blobs,
         limits.max_blob_bytes,
     );
-    let mut renderer = Renderer::new(&span, limits);
+    let lookup = |tag| source.type_definition(tag);
+    let mut renderer = Renderer::new(&span, limits, &lookup);
     let json = renderer.value(found.blob(), &value, 0);
     Rendered {
         json,
         incomplete: renderer.incomplete,
         cut: renderer.cut,
+    }
+}
+
+/// The type tag a declaration node carries: the identity its recorded
+/// definition is found by.
+fn declaration_tag(blob: &DecodedSnapshot, id: NodeId) -> Option<baml_type::typetag::TypeTag> {
+    match blob.object(id) {
+        DecodedObject::Declaration { tag, .. } => Some(*tag),
+        _ => None,
     }
 }
 
@@ -791,9 +802,28 @@ fn description_label(kind: Description) -> &'static str {
     }
 }
 
+/// The definitions one rendered cell refers to: each is written once, at its
+/// first reference.
+struct RendererDefinitions<'a> {
+    lookup: &'a dyn Fn(baml_type::typetag::TypeTag) -> Option<DefinitionRef>,
+    defined: std::collections::HashSet<Arc<str>>,
+}
+
+impl ty::CellDefinitions for RendererDefinitions<'_> {
+    fn reference(
+        &mut self,
+        tag: baml_type::typetag::TypeTag,
+    ) -> Option<(Arc<str>, Option<Arc<btel_types::TypeDeclaration>>)> {
+        let found = (self.lookup)(tag)?;
+        let first = self.defined.insert(Arc::clone(&found.id));
+        Some((found.id, found.declaration.filter(|_| first)))
+    }
+}
+
 struct Renderer<'a> {
     span: &'a Span,
     limits: &'a RenderLimits,
+    defs: RendererDefinitions<'a>,
     /// Label of each shared object already printed with its `$id`.
     rendered: HashMap<(CasId, NodeId), u32>,
     nodes: usize,
@@ -804,10 +834,18 @@ struct Renderer<'a> {
 }
 
 impl<'a> Renderer<'a> {
-    fn new(span: &'a Span, limits: &'a RenderLimits) -> Self {
+    fn new(
+        span: &'a Span,
+        limits: &'a RenderLimits,
+        lookup: &'a dyn Fn(baml_type::typetag::TypeTag) -> Option<DefinitionRef>,
+    ) -> Self {
         Self {
             span,
             limits,
+            defs: RendererDefinitions {
+                lookup,
+                defined: std::collections::HashSet::new(),
+            },
             rendered: HashMap::new(),
             nodes: 0,
             text_bytes: 0,
@@ -921,7 +959,9 @@ impl<'a> Renderer<'a> {
                 // A decoded type is at most `max_type_bytes`; its encoding
                 // stands in for the text the rendering spends.
                 let rendered = match &description.decoded {
-                    Some(decoded) if self.take_text(description.encoded.len()) => ty::json(decoded),
+                    Some(decoded) if self.take_text(description.encoded.len()) => {
+                        ty::json_with(decoded, &mut self.defs)
+                    }
                     Some(_) => self.truncated(RENDER_SIZE),
                     None => Json::Null,
                 };
@@ -933,6 +973,8 @@ impl<'a> Renderer<'a> {
                 let mut map = Map::new();
                 map.insert("$enum".into(), self.declaration_name(blob, *declaration));
                 map.insert("$variant".into(), self.text(name));
+                let tag = declaration_tag(blob, *declaration);
+                ty::reference(&mut map, "$def", "$definition", tag, &mut self.defs);
                 Json::Object(map)
             }
             DecodedValue::Truncated(limit) => {
@@ -1066,6 +1108,8 @@ impl<'a> Renderer<'a> {
                 ..
             } => {
                 map.insert("$class".into(), self.declaration_name(blob, *declaration));
+                let tag = declaration_tag(blob, *declaration);
+                ty::reference(&mut map, "$def", "$definition", tag, &mut self.defs);
                 let mut inner = Map::new();
                 let mut whole = true;
                 for (key, value) in fields {

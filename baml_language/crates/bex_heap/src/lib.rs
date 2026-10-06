@@ -63,6 +63,7 @@
 mod accessor;
 pub(crate) mod card_table;
 mod chunked_vec;
+mod declarations;
 mod functions;
 mod gc;
 pub mod gc_policy;

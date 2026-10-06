@@ -1073,6 +1073,9 @@ impl<'t> Applier<'t> {
             for function in &definitions.functions {
                 self.function(sequence, function)?;
             }
+            for definition in &definitions.types {
+                self.type_definition(definition)?;
+            }
             for path in &definitions.call_paths {
                 self.call_path(sequence, path)?;
             }
@@ -1507,6 +1510,27 @@ impl<'t> Applier<'t> {
                 NETWORK_COMPLETION_CONFLICT,
             )?;
         }
+        Ok(())
+    }
+
+    /// A class or enum definition. Unavailable observations never overwrite
+    /// a recorded declaration, and the first declaration is kept.
+    fn type_definition(&mut self, definition: &proto::TypeDefinition) -> Result<(), Error> {
+        let (state, declaration) = match &definition.resolution {
+            Some(proto::type_definition::Resolution::Declaration(declaration)) => {
+                (2_i64, Some(prost::Message::encode_to_vec(declaration)))
+            }
+            Some(proto::type_definition::Resolution::Unavailable(_)) => (1, None),
+            None => return Ok(()),
+        };
+        self.tx
+            .prepare_cached(
+                "INSERT INTO type_def (rec, type_tag, state, declaration) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT (rec, type_tag) DO UPDATE SET
+                   state = excluded.state, declaration = excluded.declaration
+                 WHERE type_def.state < excluded.state",
+            )?
+            .execute(params![self.rec, definition.type_tag, state, declaration])?;
         Ok(())
     }
 

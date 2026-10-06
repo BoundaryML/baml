@@ -530,6 +530,7 @@ impl TelemetryRecording {
         self,
         source_snapshot: Option<[u8; 32]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
+        types: Arc<dyn btel_types::TypeDefinitionSource>,
         launch_context: &btel_types::context::Context,
     ) -> Result<
         (
@@ -562,6 +563,7 @@ impl TelemetryRecording {
                     &self.recording_override,
                     source_snapshot,
                     functions,
+                    types,
                     transport,
                     process,
                 );
@@ -596,6 +598,7 @@ impl TelemetryRecording {
                     .map_err(std::io::Error::other)?
                     .with_source_snapshot(source_snapshot)
                     .with_function_metadata(functions)
+                    .with_type_definitions(types)
                     .with_process(process);
                 let publisher = match writer {
                     Ok(writer) => {
@@ -630,6 +633,7 @@ impl TelemetryRecording {
         recording_override: &RecordingOverride,
         source_snapshot: Option<[u8; 32]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
+        types: Arc<dyn btel_types::TypeDefinitionSource>,
         transport: btel_settings::transport::ChunkConfig,
         process: btel_recorder::ProcessRecording,
     ) -> Result<
@@ -711,6 +715,7 @@ impl TelemetryRecording {
                         publisher
                             .with_source_snapshot(source_snapshot)
                             .with_function_metadata(functions)
+                            .with_type_definitions(types)
                             .with_process(process)
                     })
                     .map_err(std::io::Error::other)

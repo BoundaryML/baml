@@ -166,6 +166,7 @@ fn thread(id: u64, parent: Option<u64>) -> proto::ThreadDefinition {
 /// a child thread shares the clock.
 fn definitions() -> proto::Definitions {
     proto::Definitions {
+        types: Vec::new(),
         functions: vec![function(A, "user.A"), function(B, "user.B")],
         call_paths: vec![path(1, 0, A), path(2, 1, B)],
         threads: vec![thread(ROOT, None), thread(CHILD, Some(ROOT))],

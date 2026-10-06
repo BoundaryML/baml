@@ -11,12 +11,14 @@ description = "Owned protobuf conversion for Btel recording data"
 workspace = true
 
 [dependencies]
+baml_type = { workspace = true }
 btel_clock = { workspace = true }
 btel_processor = { workspace = true }
 btel_records = { workspace = true }
 btel_settings = { workspace = true }
 btel_snapshot = { workspace = true }
 btel_types = { workspace = true }
+borsh = { workspace = true }
 prost = { workspace = true }
 rustc-hash = { workspace = true }
 web-time = { workspace = true }

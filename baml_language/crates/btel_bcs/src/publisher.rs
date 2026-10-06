@@ -237,6 +237,16 @@ impl CloudPublisher {
         self
     }
 
+    /// The runtime's class and enum definitions, published once per recording.
+    #[must_use]
+    pub fn with_type_definitions(
+        mut self,
+        types: std::sync::Arc<dyn btel_types::TypeDefinitionSource>,
+    ) -> Self {
+        self.recording = self.recording.with_type_definitions(types);
+        self
+    }
+
     fn fail(&mut self, error: DeliveryError) {
         self.failure.get_or_insert(error);
         self.owners.clear();
