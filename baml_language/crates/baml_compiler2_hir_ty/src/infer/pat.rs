@@ -113,7 +113,12 @@ impl<'db> InferenceContext<'db> {
         let pending_before = self.pending_diags.len();
         for &arm_id in arms {
             let arm = &body.match_arms[arm_id];
-            let outcome = self.lower_pattern(body, arm.pattern, &scrut_resolved);
+            // The arm's own catch-all bindings read the same way as the
+            // scrutinee does in the arm: `null => .., let rest => ..` binds
+            // `rest` to the non-null remainder. The matrix row stays a
+            // wildcard over the whole column.
+            let outcome =
+                self.lower_pattern_reaching(body, arm.pattern, &scrut_resolved, &residual);
             any_pattern_error |= outcome.matched_ty.has_error();
             // A pattern irrefutable against the full scrutinee is really
             // matching the residual; typed arms take their own refinement.
@@ -122,11 +127,6 @@ impl<'db> InferenceContext<'db> {
             } else {
                 outcome.matched_ty.clone()
             };
-            // The arm's own bindings read the same way as the scrutinee
-            // does in the arm: `null => .., let rest => ..` binds `rest`
-            // to the non-null remainder. The matrix row above stays a
-            // wildcard over the whole column.
-            self.record_unwritten_pattern_type(body, arm.pattern, &residual);
 
             let saved_flow = self.flow.clone();
             if let Some(binding) = scrut_binding {
@@ -381,28 +381,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// Records `world` as the type of a pattern that writes no type of its
-    /// own: `_`, a bare `let name`, and a chain of bare bindings
-    /// (`let outer: let inner`). Such a pattern takes whatever reaches it,
-    /// and [`Self::lower_pattern`] can only give it the scrutinee type; the
-    /// caller knows the narrower world that the earlier arms left. A pattern
-    /// that writes a type, a literal or a shape keeps what it recorded, and
-    /// so does every binding in front of it. Returns whether the pattern is
-    /// of the first kind.
-    fn record_unwritten_pattern_type(&mut self, body: &ExprBody, pat: PatId, world: &Ty) -> bool {
-        let unwritten = match &body.patterns[pat] {
-            Pattern::Wildcard => true,
-            Pattern::Bind { subpat, .. } => {
-                subpat.is_none_or(|sub| self.record_unwritten_pattern_type(body, sub, world))
-            }
-            _ => false,
-        };
-        if unwritten {
-            self.result.type_of_pat.insert(pat, world.clone());
-        }
-        unwritten
-    }
-
     /// The scrutinee's binding, when it is a bare local - the only
     /// narrowable reference shape in S10a (member chains are a documented
     /// later extension).
@@ -443,7 +421,32 @@ impl<'db> InferenceContext<'db> {
         pat: PatId,
         scrut: &Ty,
     ) -> PatternOutcome {
-        let outcome = self.lower_pattern_inner(body, pat, scrut);
+        self.lower_pattern_reaching(body, pat, scrut, scrut)
+    }
+
+    /// [`Self::lower_pattern`] for a pattern that only part of the scrutinee
+    /// can reach: `reaching` is the scrutinee minus the members that earlier
+    /// `match` arms consumed. A pattern that writes no type of its own (`_`,
+    /// a bare `let name`, a chain of bare bindings) takes whatever reaches
+    /// it, so `reaching` is its type. Every other pattern is typed by what
+    /// it writes, against `scrut`.
+    pub(super) fn lower_pattern_reaching(
+        &mut self,
+        body: &ExprBody,
+        pat: PatId,
+        scrut: &Ty,
+        reaching: &Ty,
+    ) -> PatternOutcome {
+        debug_assert!(
+            reaching == scrut || {
+                let members = scrut_members(scrut);
+                scrut_members(reaching).into_iter().all(|member| {
+                    matches!(member.kind(), InferTy::Never) || members.contains(&member)
+                })
+            },
+            "`reaching` must be made of members of the scrutinee",
+        );
+        let outcome = self.lower_pattern_inner(body, pat, scrut, reaching);
         // Every pattern node records its type (TIR's pattern_types
         // single-write-point discipline); ascriptions record the WRITTEN
         // form (ruling 3) while narrowing keeps the refined one.
@@ -455,7 +458,13 @@ impl<'db> InferenceContext<'db> {
         outcome
     }
 
-    fn lower_pattern_inner(&mut self, body: &ExprBody, pat: PatId, scrut: &Ty) -> PatternOutcome {
+    fn lower_pattern_inner(
+        &mut self,
+        body: &ExprBody,
+        pat: PatId,
+        scrut: &Ty,
+        reaching: &Ty,
+    ) -> PatternOutcome {
         let mut written_refs = Vec::new();
         written_refs.extend(self.type_refs.pattern_types.get(&pat).copied());
         written_refs.extend(self.type_refs.array_ascriptions.get(&pat).copied());
@@ -476,19 +485,21 @@ impl<'db> InferenceContext<'db> {
                 .map(|(_, type_ref)| *type_ref),
         );
         match &body.patterns[pat] {
+            // A pattern that writes no type matches what reaches it. Its
+            // matrix row is still a wildcard over the whole column.
             Pattern::Wildcard => PatternOutcome {
                 dpat: DPat::wildcard(dpat_ty(scrut)),
-                matched_ty: scrut.clone(),
+                matched_ty: reaching.clone(),
                 recorded_ty: None,
                 covers_type: true,
                 consumes_matched: true,
             },
             Pattern::Bind { subpat, .. } => {
                 let inner = match subpat {
-                    Some(sub) => self.lower_pattern(body, *sub, scrut),
+                    Some(sub) => self.lower_pattern_reaching(body, *sub, scrut, reaching),
                     None => PatternOutcome {
                         dpat: DPat::wildcard(dpat_ty(scrut)),
-                        matched_ty: scrut.clone(),
+                        matched_ty: reaching.clone(),
                         recorded_ty: None,
                         covers_type: true,
                         consumes_matched: true,
@@ -538,7 +549,9 @@ impl<'db> InferenceContext<'db> {
                 self.or_probe_depth += 1;
                 let outcomes: Vec<PatternOutcome> = alts
                     .iter()
-                    .map(|&alt| self.lower_pattern(body, alt, scrut))
+                    // Every alternative is tried on the value that reached
+                    // the whole pattern.
+                    .map(|&alt| self.lower_pattern_reaching(body, alt, scrut, reaching))
                     .collect();
                 self.or_probe_depth -= 1;
                 // The dead-pattern rule at the CHAIN level: one alt that

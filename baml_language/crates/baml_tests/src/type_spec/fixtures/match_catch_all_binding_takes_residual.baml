@@ -71,6 +71,26 @@ function guarded_arm_subtracts_nothing(item: A | B) -> int throws never {
     }
 }
 
+// An alternative of an or-pattern is tried on the value that reached the
+// arm, so a bare alternative binds the residual too, and agrees with a typed
+// alternative that names it.
+function or_alternatives(item: A?) -> int throws never {
+    match (item) {
+        null => 0,
+        let first | let first => first.a,
+         // ^^^^^ user.A
+    }
+}
+
+function typed_and_bare_alternatives(item: A | B | null) -> string throws never {
+    match (item) {
+        null => "none",
+        let a: A => "a",
+        (let rest: B) | (let rest) => rest.b,
+          // ^^^^ user.B
+    }
+}
+
 function chained_binding(item: A?) -> int throws never {
     match (item) {
         null => 0,
