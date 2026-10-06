@@ -8,8 +8,8 @@ use num_bigint::BigInt;
 use crate::{
     CasId,
     graph::{
-        BigintId, LabelId, MapEntry, NameId, ObjectId, OwnedType, Range, SnapshotObject,
-        SnapshotRoot, SnapshotValue, StringId, TypeId, Uint8ArrayData,
+        BigintId, FieldEntry, LabelId, MapEntry, NameId, ObjectId, OwnedType, Range,
+        SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId, Uint8ArrayData,
     },
     pool::Lease,
     shape::{BlobEntry, BlobIndex},
@@ -31,6 +31,7 @@ impl std::fmt::Debug for Snapshot {
             .field("values", &&*graph.values)
             .field("objects", &&*graph.objects)
             .field("entries", &&*graph.entries)
+            .field("fields", &&*graph.fields)
             .field("bytes", &&*graph.bytes)
             .field("strings", &&*graph.strings)
             .field("labels", &&*graph.labels)
@@ -160,6 +161,9 @@ impl Snapshot {
     pub fn entries(&self, range: Range<MapEntry>) -> &[MapEntry] {
         &self.0.graph.entries[range.indexes()]
     }
+    pub fn fields(&self, range: Range<FieldEntry>) -> &[FieldEntry] {
+        &self.0.graph.fields[range.indexes()]
+    }
     pub fn string(&self, id: StringId) -> &BexStr {
         &self.0.graph.strings[id.0 as usize]
     }
@@ -213,7 +217,11 @@ impl Snapshot {
         let cut = |value: &SnapshotValue| matches!(value, SnapshotValue::Truncated(_));
         stats.limited = self.roots().iter().any(cut)
             || graph.values.iter().any(cut)
-            || graph.entries.iter().any(|entry| cut(&entry.value))
+            || graph
+                .entries
+                .iter()
+                .any(|entry| cut(&entry.key) || cut(&entry.value))
+            || graph.fields.iter().any(|entry| cut(&entry.value))
             || graph.objects.iter().any(|object| {
                 object.is_cut() || matches!(object, SnapshotObject::Cell(value) if cut(value))
             });

@@ -248,20 +248,29 @@ fn json(cas: &CasStore, snapshot: &DecodedSnapshot) -> Json {
 }
 
 fn value_json(cas: &CasStore, snapshot: &DecodedSnapshot, value: &DecodedValue) -> Json {
-    let entries = |entries: &btel_snapshot::Entries| {
-        entries
-            .iter()
-            .map(|(key, value)| (key.to_string(), value_json(cas, snapshot, value)))
-            .collect::<serde_json::Map<_, _>>()
-            .into()
-    };
     match value {
         DecodedValue::Null => Json::Null,
         DecodedValue::Int(value) => (*value).into(),
         DecodedValue::String(text) => text.as_ref().into(),
         DecodedValue::Object(id) => match snapshot.object(*id) {
-            DecodedObject::Map { entries: map, .. } => entries(map),
-            DecodedObject::Instance { fields, .. } => entries(fields),
+            DecodedObject::Map { entries, .. } => entries
+                .iter()
+                .map(|(key, value)| {
+                    let key = value_json(cas, snapshot, key);
+                    (
+                        key.as_str()
+                            .expect("network map keys are strings")
+                            .to_owned(),
+                        value_json(cas, snapshot, value),
+                    )
+                })
+                .collect::<serde_json::Map<_, _>>()
+                .into(),
+            DecodedObject::Instance { fields, .. } => fields
+                .iter()
+                .map(|(key, value)| (key.to_string(), value_json(cas, snapshot, value)))
+                .collect::<serde_json::Map<_, _>>()
+                .into(),
             DecodedObject::Uint8Array { data, .. } => data.clone().into(),
             object => format!("{object:?}").into(),
         },

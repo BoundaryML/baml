@@ -1,4 +1,4 @@
-//! CAS blob format 3. Explicit little-endian scalar tags, not Rust layouts.
+//! CAS blob format 4. Explicit little-endian scalar tags, not Rust layouts.
 //!
 //! Header: `BTELCAS\0`, u32 version, 16 digest bytes, u32 child count and each
 //! child's 16-byte ID, u32 object count, root, then object definitions in
@@ -13,8 +13,10 @@
 //! that blob in the child table (the value is the child's root value), or as
 //! tag 12, slot and u32 local number for an object of the child other than
 //! its root. Slots follow first use in this byte order, like object numbers.
-//! A blob's own root value, map keys, names, types and declarations are
+//! A blob's own root value, names, types and declarations are
 //! always written in place.
+//! Map keys and values both use the generic value encoding. Instance field
+//! names remain inline strings. Readers also accept format 3 string-only keys.
 //!
 //! A media object (tag 9) writes its kind, whether a MIME type follows and
 //! that type, then a source tag: 0 with a URL, 1 with a path, each followed by
@@ -22,7 +24,7 @@
 //! u64 text length, then the base64 text as a value, so large content can be a
 //! child blob. The MIME type, URL and path are strings written in place.
 //!
-//! Value and object tags mirror hash format 3. Type/declaration metadata uses
+//! Value and object tags mirror hash format 4. Type/declaration metadata uses
 //! its Borsh representation. Floats use raw bits (including NaNs). Bigints use
 //! sign (0 negative, 1 zero, 2 positive), u64 bit length, then ceil(bits/64)
 //! little-endian u64 magnitude limbs. Any encoding change needs a version bump.

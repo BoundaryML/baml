@@ -148,31 +148,12 @@ impl Scratch {
                     let key_type = b.leaves().ty(owned_type(&data.key_ty));
                     let value_type = b.leaves().ty(owned_type(&data.value_ty));
                     let data = data.lock();
-                    let entries: Option<Vec<_>> = data
-                        .iter()
-                        .map(|(key, value)| {
-                            let ptr = key.as_object_ptr()?;
-                            // SAFETY: capture holds the heap permit throughout traversal.
-                            let Object::String(key) = (unsafe { ptr.get() }) else {
-                                return None;
-                            };
-                            Some((key, *value))
-                        })
-                        .collect();
-                    match entries {
-                        Some(entries) => b.map(
-                            key_type,
-                            value_type,
-                            entries.iter(),
-                            |leaves, (key, value)| {
-                                let key = rewritten(&self.rewrites, key).into_owned();
-                                (key, self.add(leaves, *value, depth + 1))
-                            },
-                        ),
-                        // The telemetry wire map is string-keyed. Mark the whole map
-                        // unavailable rather than omit or stringify unsupported keys.
-                        None => SnapshotObject::NonSnapshotableValue {},
-                    }
+                    b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
+                        (
+                            self.add(leaves, *key, depth + 1),
+                            self.add(leaves, *value, depth + 1),
+                        )
+                    })
                 }
                 Object::Instance(instance) => {
                     let class = Value::object(instance.class);
@@ -326,7 +307,7 @@ fn string_map(b: &mut Builder, entries: &[(String, String)]) -> SnapshotValue {
         key_type,
         value_type,
         entries.iter(),
-        |leaves, (key, value)| (key.as_str().into(), text(leaves, value)),
+        |leaves, (key, value)| (text(leaves, key), text(leaves, value)),
     );
     object(b, map)
 }
@@ -334,9 +315,12 @@ fn string_map(b: &mut Builder, entries: &[(String, String)]) -> SnapshotValue {
 fn map(b: &mut Builder, value_type: OwnedType, fields: &[(&str, SnapshotValue)]) -> SnapshotValue {
     let key_type = b.leaves().ty(OwnedType::string());
     let value_type = b.leaves().ty(value_type);
-    let map = b.map(key_type, value_type, fields.iter(), |_, (key, value)| {
-        ((*key).into(), *value)
-    });
+    let map = b.map(
+        key_type,
+        value_type,
+        fields.iter(),
+        |leaves, (key, value)| (text(leaves, key), *value),
+    );
     object(b, map)
 }
 fn object(b: &mut Builder, object: SnapshotObject) -> SnapshotValue {
@@ -412,7 +396,12 @@ pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Val
             SnapshotObject::Map { entries, .. } => snapshot
                 .entries(*entries)
                 .iter()
-                .map(|entry| (entry.key.as_str().to_owned(), json(snapshot, entry.value)))
+                .map(|entry| {
+                    (
+                        json(snapshot, entry.key).as_str().unwrap().to_owned(),
+                        json(snapshot, entry.value),
+                    )
+                })
                 .collect::<serde_json::Map<_, _>>()
                 .into(),
             SnapshotObject::Uint8Array { data } => snapshot.bytes(*data).into(),
@@ -862,7 +851,7 @@ mod tests {
         };
         let entries = snapshot.entries(*entries);
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].key.as_str(), "instance");
+        assert_eq!(json(&snapshot, entries[0].key), "instance");
         let Obj::Instance {
             declaration,
             fields,
@@ -888,7 +877,7 @@ mod tests {
         };
         assert_eq!(snapshot.name(*name).item_name().as_str(), "TestClass");
         assert_eq!(*tag, baml_type::typetag::TypeTag::from_i64(100));
-        let fields = snapshot.entries(*fields);
+        let fields = snapshot.fields(*fields);
         assert_eq!(fields[0].key.as_str(), "x");
         assert!(matches!(fields[0].value, Val::Int(10)));
         let Val::Enum {
@@ -1051,10 +1040,12 @@ mod tests {
                 scratch.work.capacity() <= 4,
                 "primitive elements must not enter work stack"
             );
-            assert!(
-                scratch.seen.capacity() <= 4,
-                "floats must not populate identity map"
-            );
+            if source != map {
+                assert!(
+                    scratch.seen.capacity() <= 4,
+                    "floats must not populate identity map"
+                );
+            }
             match captured_object(&snapshot, snapshot.value().unwrap()) {
                 Obj::List { items, .. } => {
                     let values = snapshot.values(*items);
@@ -1066,8 +1057,8 @@ mod tests {
                 Obj::Map { entries, .. } => {
                     let entries = snapshot.entries(*entries);
                     assert_eq!(entries.len(), 10_000);
-                    assert_eq!(std::mem::size_of_val(entries), 720_000);
-                    assert_eq!(entries[9999].key.as_str(), "9999");
+                    assert_eq!(std::mem::size_of_val(entries), 320_000);
+                    assert_eq!(json(&snapshot, entries[9999].key), "9999");
                     assert_eq!(entries[9999].value, Val::Int(9999));
                 }
                 _ => panic!(),

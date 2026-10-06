@@ -72,6 +72,14 @@ impl CasStore {
     }
 
     pub fn path(&self, id: CasId) -> PathBuf {
+        for &version in btel_settings::snapshot::READABLE_BLOB_VERSIONS {
+            let path = btel_file::cas_path_versioned(&self.root, id, version);
+            // Only a missing file permits fallback; unreadable current data
+            // must retain its error rather than silently selecting older data.
+            if !matches!(path.try_exists(), Ok(false)) {
+                return path;
+            }
+        }
         btel_file::cas_path(&self.root, id)
     }
 
@@ -124,6 +132,37 @@ impl CasStore {
         CasLoad {
             snapshot,
             bytes_read,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_blobs_load_from_their_original_versioned_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = CasStore::new(directory.path().to_owned(), CasLimits::default());
+        for line in
+            include_str!("../../btel_snapshot/tests/fixtures/format_v3_external.hex").lines()
+        {
+            let bytes: Vec<_> = line
+                .as_bytes()
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+                .collect();
+            let id = CasId::from_bytes(bytes[12..28].try_into().unwrap());
+            let path = btel_file::cas_path_versioned(directory.path(), id, 3);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, &bytes).unwrap();
+            assert_eq!(store.path(id), path);
+            let loaded = store.load(id);
+            assert_eq!(loaded.snapshot.unwrap().id, id);
+            assert_eq!(loaded.bytes_read, bytes.len() as u64);
+            assert!(!btel_file::cas_path(directory.path(), id).exists());
         }
     }
 }

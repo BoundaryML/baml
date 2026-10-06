@@ -22,7 +22,7 @@ impl Snapshot {
             .iter()
             .chain(graph.labels.iter())
             .map(string_bytes)
-            .chain(graph.entries.iter().map(|entry| string_bytes(&entry.key)))
+            .chain(graph.fields.iter().map(|entry| string_bytes(&entry.key)))
             .chain(graph.bigints.iter().map(|bigint| {
                 // The shared allocation: its two counts and the bigint.
                 (2 * size_of::<usize>() + size_of::<BigInt>())
@@ -46,6 +46,7 @@ impl Snapshot {
         size_of_val(&*graph.objects)
             + size_of_val(&*graph.values)
             + size_of_val(&*graph.entries)
+            + size_of_val(&*graph.fields)
             + size_of_val(&*graph.bytes)
             + size_of_val(&*graph.strings)
             + size_of_val(&*graph.labels)
@@ -212,12 +213,12 @@ mod tests {
         let mut snapshot = scalar(&pool);
         let Storage { graph, meter, .. } = &mut *snapshot.0;
         graph.strings.reserve(1, meter);
-        graph.entries.reserve(1, meter);
+        graph.fields.reserve(1, meter);
         let before = snapshot.retained_bytes();
         let Storage { graph, meter, .. } = &mut *snapshot.0;
         graph.strings.push(slice.clone(), meter);
-        graph.entries.push(
-            crate::MapEntry {
+        graph.fields.push(
+            crate::FieldEntry {
                 key: slice,
                 value: SnapshotValue::Null,
             },

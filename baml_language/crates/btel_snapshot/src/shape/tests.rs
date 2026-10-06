@@ -42,10 +42,120 @@ fn list(b: &mut Builder, items: &[V]) -> V {
 fn map(b: &mut Builder, entries: &[(&str, V)]) -> V {
     let key_type = b.leaves().ty(RealizedTy::String);
     let value_type = b.leaves().ty(RealizedTy::Unknown);
-    let map = b.map(key_type, value_type, entries.iter(), |_, (key, value)| {
-        ((*key).into(), *value)
-    });
+    let map = b.map(
+        key_type,
+        value_type,
+        entries.iter(),
+        |leaves, (key, value)| (leaves.string_value(&(*key).into()), *value),
+    );
     object(b, map)
+}
+
+fn value_map(b: &mut Builder, entries: &[(V, V)]) -> V {
+    let ty = b.leaves().ty(RealizedTy::Unknown);
+    let map = b.map(ty, ty, entries.iter().copied(), |_, entry| entry);
+    object(b, map)
+}
+
+#[test]
+fn map_keys_are_graph_edges_for_cycles_aliases_and_external_blobs() {
+    for mut shaper in [Shaper::default(), split(1, 1)] {
+        let snapshot = capture(&mut shaper, |b| {
+            let slot = b.leaves().reserve().unwrap();
+            let cycle = V::Object(slot.id());
+            let ty = b.leaves().ty(RealizedTy::Unknown);
+            let map = b.map(ty, ty, [(cycle, cycle)].into_iter(), |_, entry| entry);
+            b.fill(slot, map);
+            let key = list(b, &[V::Int(42)]);
+            let long = text(b, &"key".repeat(100));
+            value_map(b, &[(cycle, V::Null), (key, key), (long, long)])
+        });
+        let blobs = written(&snapshot);
+        let root = &blobs.last().unwrap().1;
+        let DecodedObject::Map { entries, .. } = root.object(NodeId(0)) else {
+            panic!("expected map")
+        };
+        assert_eq!(entries[1].0, entries[1].1, "key/value alias survives");
+        assert_eq!(entries[2].0, entries[2].1, "key/value leaf deduplicates");
+        let cycle_blob = match entries[0].0 {
+            DecodedValue::Object(id) => (root, id),
+            DecodedValue::External(child) => (
+                &blobs
+                    .iter()
+                    .find(|(_, blob)| blob.id == root.child(child))
+                    .unwrap()
+                    .1,
+                NodeId(0),
+            ),
+            ref other => panic!("unexpected cycle reference {other:?}"),
+        };
+        let DecodedObject::Map { entries, .. } = cycle_blob.0.object(cycle_blob.1) else {
+            panic!("expected cycle map")
+        };
+        assert_eq!(
+            entries,
+            &[(
+                DecodedValue::Object(cycle_blob.1),
+                DecodedValue::Object(cycle_blob.1)
+            )]
+        );
+        let split = snapshot.split();
+        for leaf in split.leaves {
+            let mut bytes = Vec::new();
+            leaf.write(&mut bytes).unwrap();
+            decode_blob(&bytes, &DecodeLimits::default()).unwrap();
+        }
+        for blob in split.structure.unwrap().blobs() {
+            let mut bytes = Vec::new();
+            blob.write(&mut BlobScratch::default(), &mut bytes).unwrap();
+            decode_blob(&bytes, &DecodeLimits::default()).unwrap();
+        }
+    }
+}
+
+#[test]
+fn map_key_kind_and_content_affect_identity() {
+    let snapshots = [V::Int(1), V::Bool(true), V::Float(1.0), V::Int(2)]
+        .map(|key| capture(&mut Shaper::default(), |b| value_map(b, &[(key, V::Null)])));
+    for (index, snapshot) in snapshots.iter().enumerate() {
+        written(snapshot);
+        for other in &snapshots[..index] {
+            assert_ne!(snapshot.root_id(), other.root_id());
+        }
+    }
+}
+
+#[test]
+fn map_keys_count_toward_capture_and_decode_value_limits() {
+    let pool = SnapshotPool::new(
+        1,
+        Limits {
+            max_values: Some(3),
+            ..Limits::default()
+        },
+    );
+    let mut b = pool.try_acquire().unwrap();
+    let ty = b.leaves().ty(RealizedTy::Unknown);
+    let map = b.map(
+        ty,
+        ty,
+        [(V::Int(1), V::Null), (V::Int(2), V::Null)].into_iter(),
+        |_, entry| entry,
+    );
+    assert!(matches!(map, O::Map { entries, original_len: 2, .. } if entries.len() == 1));
+    let root = object(&mut b, map);
+    let snapshot = b.finish(root, &mut Shaper::default());
+    let blobs = written(&snapshot);
+    assert!(matches!(
+        decode_blob(
+            &blobs[0].0,
+            &DecodeLimits {
+                max_values: 1,
+                ..DecodeLimits::default()
+            }
+        ),
+        Err(crate::BlobError::Limit("values"))
+    ));
 }
 
 fn bytes(b: &mut Builder, content: &[u8]) -> V {
@@ -460,7 +570,7 @@ fn every_blob_is_what_capturing_its_value_alone_produces_and_holds_nothing_anoth
 }
 
 #[test]
-fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
+fn keys_split_as_values_while_names_and_declarations_stay_inline() {
     let long = "k".repeat(200);
     let snapshot = capture(&mut split(1 << 20, 64), |b| {
         let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.{long}")));
@@ -486,7 +596,7 @@ fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
         )
     });
     let blobs = written(&snapshot);
-    // Only the string held as a value has a blob of its own.
+    // The key and value share one external string blob.
     assert_eq!(blobs.len(), 2);
     assert_eq!(
         blobs[0].1.root,
@@ -496,7 +606,7 @@ fn keys_names_and_declarations_stay_in_the_blob_that_uses_them() {
     let DecodedObject::Map { entries, .. } = root.object(NodeId(0)) else {
         panic!("expected a map")
     };
-    assert_eq!(&*entries[0].0, long);
+    assert_eq!(entries[0].0, DecodedValue::External(crate::ChildIndex(0)));
     assert_eq!(entries[0].1, DecodedValue::External(crate::ChildIndex(0)));
     let DecodedValue::Enum {
         declaration, name, ..

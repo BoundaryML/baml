@@ -442,7 +442,12 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     assert_eq!(fs::read(&path).unwrap(), expected);
     let filename = path.file_name().unwrap().to_str().unwrap();
     assert_eq!(filename.len(), 32);
-    assert_eq!(path, cas.join("v3").join(&filename[..2]).join(filename));
+    assert_eq!(
+        path,
+        cas.join(format!("v{}", btel_snapshot::BLOB_VERSION))
+            .join(&filename[..2])
+            .join(filename)
+    );
     assert_eq!(
         fs::read_dir(path.parent().unwrap()).unwrap().count(),
         1,
@@ -552,17 +557,18 @@ fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
     let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
     let path = cas_path(root.path(), value.root_id());
-    let legacy = root
-        .path()
-        .join("v2")
-        .join(path.strip_prefix(root.path().join("v3")).unwrap());
+    let legacy = crate::cas_path_versioned(
+        root.path(),
+        value.root_id(),
+        btel_snapshot::BLOB_VERSION - 1,
+    );
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-    fs::write(&legacy, b"existing v2 entry").unwrap();
+    fs::write(&legacy, b"existing legacy entry").unwrap();
     crate::cas::CasWriter::new(root.path().to_owned())
         .write(&value)
         .unwrap();
     assert_eq!(fs::read(&path).unwrap(), root_blob(&value));
-    assert_eq!(fs::read(&legacy).unwrap(), b"existing v2 entry");
+    assert_eq!(fs::read(&legacy).unwrap(), b"existing legacy entry");
 }
 
 #[test]

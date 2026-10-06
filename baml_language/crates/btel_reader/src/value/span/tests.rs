@@ -77,9 +77,12 @@ fn list(b: &mut Builder, items: &[V]) -> V {
 fn map(b: &mut Builder, entries: &[(&str, V)]) -> V {
     let key_type = b.leaves().ty(RealizedTy::String);
     let value_type = b.leaves().ty(RealizedTy::Unknown);
-    let map = b.map(key_type, value_type, entries.iter(), |_, (key, value)| {
-        ((*key).into(), *value)
-    });
+    let map = b.map(
+        key_type,
+        value_type,
+        entries.iter(),
+        |leaves, (key, value)| (leaves.string_value(&(*key).into()), *value),
+    );
     object(b, map)
 }
 

@@ -526,7 +526,7 @@ impl Composer {
             value_type: Self::untyped(),
             entries: entries
                 .into_iter()
-                .map(|(key, value)| (key.into(), value))
+                .map(|(key, value)| (DecodedValue::String(key.into()), value))
                 .collect(),
             original_len,
         })
@@ -588,7 +588,7 @@ impl Composer {
         let entries = |entries: &btel_snapshot::Entries| -> btel_snapshot::Entries {
             entries
                 .iter()
-                .map(|(key, value)| (key.clone(), shift(value)))
+                .map(|(key, value)| (shift(key), shift(value)))
                 .collect()
         };
         let content = |payload: &MediaPayload| match payload {
@@ -632,7 +632,10 @@ impl Composer {
                 } => DecodedObject::Instance {
                     type_arguments: type_arguments.clone(),
                     declaration: node(declaration),
-                    fields: entries(fields),
+                    fields: fields
+                        .iter()
+                        .map(|(key, value)| (key.clone(), shift(value)))
+                        .collect(),
                     original_len: *original_len,
                 },
                 DecodedObject::Cell(value) => DecodedObject::Cell(shift(value)),
@@ -1344,7 +1347,9 @@ fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot
                 key_type,
                 value_type,
                 entries.iter().zip(values),
-                |_, ((key, _), value)| (BexStr::from(key.as_str()), value),
+                |leaves, ((key, _), value)| {
+                    (leaves.string_value(&BexStr::from(key.as_str())), value)
+                },
             )
         }
         Inline::List(items) => {

@@ -140,6 +140,11 @@ pub enum Description {
 }
 #[derive(Debug)]
 pub struct MapEntry {
+    pub key: SnapshotValue,
+    pub value: SnapshotValue,
+}
+#[derive(Debug)]
+pub struct FieldEntry {
     pub key: BexStr,
     pub value: SnapshotValue,
 }
@@ -167,7 +172,7 @@ pub enum SnapshotObject {
     Instance {
         type_arguments: Range<OwnedType>,
         declaration: ObjectId,
-        fields: Range<MapEntry>,
+        fields: Range<FieldEntry>,
         original_len: usize,
     },
     Declaration {
@@ -206,12 +211,12 @@ impl SnapshotObject {
                 entries,
                 original_len,
                 ..
-            }
-            | Self::Instance {
-                fields: entries,
+            } => entries.len() != *original_len,
+            Self::Instance {
+                fields,
                 original_len,
                 ..
-            } => entries.len() != *original_len,
+            } => fields.len() != *original_len,
             Self::Uint8Array { .. }
             | Self::Declaration { .. }
             | Self::Cell(_)
@@ -239,7 +244,7 @@ pub enum MediaSource {
 }
 const _: () = assert!(std::mem::size_of::<SnapshotValue>() == 16);
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<MapEntry>() == 72);
+const _: () = assert!(std::mem::size_of::<MapEntry>() == 32);
 // Every object of every capture is one of these. What is large or rare is
 // held out of line: a declaration's name, and a byte array's length when its
 // bytes are not there to give it.
@@ -283,8 +288,10 @@ pub(crate) struct Graph {
     pub(crate) objects: Arena<SnapshotObject>,
     /// List items and argument slots, each list's contiguous.
     pub(crate) values: Arena<SnapshotValue>,
-    /// Map entries and instance fields, each object's contiguous.
+    /// Map entries, each object's contiguous.
     pub(crate) entries: Arena<MapEntry>,
+    /// String-named instance fields, each object's contiguous.
+    pub(crate) fields: Arena<FieldEntry>,
     /// `uint8array` content.
     pub(crate) bytes: Arena<u8>,
     /// Content: string values and media text.
@@ -304,6 +311,7 @@ impl Graph {
             objects,
             values,
             entries,
+            fields,
             bytes,
             strings,
             labels,
@@ -314,6 +322,7 @@ impl Graph {
         objects.clear();
         values.clear();
         entries.clear();
+        fields.clear();
         bytes.clear();
         strings.clear();
         labels.clear();
@@ -326,6 +335,7 @@ impl Graph {
             objects,
             values,
             entries,
+            fields,
             bytes,
             strings,
             labels,
@@ -337,6 +347,7 @@ impl Graph {
             objects.capacity_bytes(),
             values.capacity_bytes(),
             entries.capacity_bytes(),
+            fields.capacity_bytes(),
             bytes.capacity_bytes(),
             strings.capacity_bytes(),
             labels.capacity_bytes(),
