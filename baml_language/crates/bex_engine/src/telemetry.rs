@@ -640,8 +640,15 @@ impl TelemetryRecording {
         EngineError,
     > {
         delivery_config.initial_recording_id = Some(id);
-        delivery_config.terminal_initial_connection = initial_failure.is_some();
-        let initial_failure = initial_failure.cloned().unwrap_or_default();
+        // Apply the resolved policy to every initial connection failure.
+        delivery_config.terminal_initial_connection = true;
+        // Caller-configured cloud aborts by default; artifacts supply their own policy.
+        let initial_failure = initial_failure
+            .cloned()
+            .unwrap_or_else(|| InitialFailurePolicy {
+                action: InitialFailureAction::Abort,
+                ..Default::default()
+            });
         let initial_auth_cancel = crate::CancellationToken::new();
         let mut delivery = None;
         let runtime =

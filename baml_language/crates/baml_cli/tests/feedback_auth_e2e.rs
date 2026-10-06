@@ -857,7 +857,10 @@ Credential overridden by: BOUNDARY_API_KEY (verified)
 Project: acme/app (BOUNDARY_PROJECT)
 Endpoint: {base}
 "#
-        )
+        ),
+        "auth status stderr: {}; refresh requests: {}",
+        String::from_utf8_lossy(&output.stderr),
+        *state.refreshes.lock().unwrap()
     );
     assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
     assert_eq!(*state.refreshes.lock().unwrap(), 1);

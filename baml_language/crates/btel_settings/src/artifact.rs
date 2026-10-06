@@ -75,8 +75,8 @@ impl RecordingLevel {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum InitialFailureAction {
-    #[default]
     Abort,
+    #[default]
     Warn,
     Ignore,
 }
@@ -659,6 +659,11 @@ api_ur = "https://api.cloud.boundaryml.com""#,
 
     #[test]
     fn pack_and_bridge_configuration_are_independent() {
+        for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
+            let manifest = toml::Value::Table(toml::Table::new());
+            let policy = ArtifactTelemetry::from_manifest(&manifest, kind).unwrap();
+            assert_eq!(policy.initial_failure.action, InitialFailureAction::Warn);
+        }
         let manifest: toml::Value = toml::from_str(
             r#"
 [pack]
