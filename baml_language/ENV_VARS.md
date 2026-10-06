@@ -15,6 +15,8 @@ BAML files are under `BAML_HOME` (default `~/.baml`). Following the [AWS login-c
 
 Login files are plaintext and private to the OS user: directory `0700` and file `0600` on Unix, owner-only ACLs on Windows. Other processes running as the same OS user can read them. Missing files mean no saved login; unreadable or malformed files produce an error that identifies the path.
 
+Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential file to coordinate reads, atomic replacements and logout across processes. It contains no credentials and remains after logout; no lock is held during network requests.
+
 ```
 ~/.baml/
 ├── config.toml, state.toml       wrapper

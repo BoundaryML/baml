@@ -34,7 +34,8 @@ pub struct Store {
 }
 
 impl Store {
-    /// Construction and reads never create files. Only login/refresh writes.
+    /// Only login/refresh creates credential directories or writes credentials.
+    /// Windows also uses an empty lock file in an existing cache directory.
     pub fn new(endpoint: &Endpoint) -> Result<Self> {
         let home = baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir());
         Ok(Self::in_home(endpoint, &home))
@@ -61,6 +62,13 @@ impl Store {
     }
 
     pub fn read(&self) -> Result<Option<StoredSession>> {
+        if !directory_exists(self.directory()).map_err(|error| self.storage_error("read", error))? {
+            return Ok(None);
+        }
+        #[cfg(windows)]
+        let _lock = self
+            .lock(true)
+            .map_err(|error| self.storage_error("read", error))?;
         match fs::symlink_metadata(&self.location.path) {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(self.storage_error("read", error)),
@@ -120,7 +128,7 @@ impl Store {
     }
 
     fn write_atomic(&self, bytes: &[u8]) -> io::Result<()> {
-        let directory = self.location.path.parent().expect("auth file has a parent");
+        let directory = self.directory();
         let mut builder = fs::DirBuilder::new();
         builder.recursive(true);
         #[cfg(unix)]
@@ -137,6 +145,8 @@ impl Store {
         }
         // Secure the directory before any file can contain a credential.
         make_private(directory, true)?;
+        #[cfg(windows)]
+        let _lock = self.lock(false)?;
         let mut temporary = tempfile::NamedTempFile::new_in(directory)?;
         make_private(temporary.path(), false)?;
         temporary.write_all(bytes)?;
@@ -150,12 +160,79 @@ impl Store {
     }
 
     pub fn clear(&self) -> Result<()> {
+        if !directory_exists(self.directory())
+            .map_err(|error| self.storage_error("remove", error))?
+        {
+            return Ok(());
+        }
+        #[cfg(windows)]
+        let _lock = self
+            .lock(false)
+            .map_err(|error| self.storage_error("remove", error))?;
         match fs::remove_file(&self.location.path) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(error) => Err(self.storage_error("remove", error)),
         }
     }
+
+    fn directory(&self) -> &Path {
+        self.location.path.parent().expect("auth file has a parent")
+    }
+
+    #[cfg(windows)]
+    fn lock(&self, shared: bool) -> io::Result<fs::File> {
+        // Lock the stable sidecar, not the JSON file that atomic saves replace.
+        // Retain it after logout so concurrent hosts always lock the same file.
+        let path = self.location.path.with_extension("lock");
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if !metadata.is_file() => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Expected a regular credential lock file",
+                ));
+            }
+            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)?;
+        make_private(&path, false)?;
+        if shared {
+            file.lock_shared()?;
+        } else {
+            file.lock()?;
+        }
+        Ok(file)
+    }
+}
+
+/// Windows may report a missing child even when a parent is a regular file.
+/// Only a valid nearest existing directory proves that the cache is absent.
+fn directory_exists(directory: &Path) -> io::Result<bool> {
+    for (depth, path) in directory.ancestors().enumerate() {
+        let metadata = if depth == 0 {
+            fs::symlink_metadata(path)
+        } else {
+            fs::metadata(path)
+        };
+        match metadata {
+            Ok(metadata) if metadata.is_dir() => return Ok(depth == 0),
+            Ok(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Expected a regular credential directory",
+                ));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(false)
 }
 
 #[cfg(unix)]
@@ -328,27 +405,30 @@ mod tests {
 
     #[test]
     fn inaccessible_store_is_not_an_absent_login() {
-        let home = tempfile::tempdir().unwrap();
-        fs::create_dir(home.path().join("login")).unwrap();
-        fs::write(home.path().join("login").join("cache"), "not a directory").unwrap();
-        let store = Store::in_home(
-            &Endpoint::parse("https://example.com").unwrap(),
-            home.path(),
-        );
-        assert!(matches!(
-            store.read(),
-            Err(Error::Storage {
-                operation: "read",
-                ..
-            })
-        ));
-        assert!(matches!(
-            store.write(&session("bdry_session_test")),
-            Err(Error::Storage {
-                operation: "save",
-                ..
-            })
-        ));
+        for blocked in ["login", "login/cache"] {
+            let home = tempfile::tempdir().unwrap();
+            let blocked = home.path().join(blocked);
+            fs::create_dir_all(blocked.parent().unwrap()).unwrap();
+            fs::write(&blocked, "not a directory").unwrap();
+            let store = Store::in_home(
+                &Endpoint::parse("https://example.com").unwrap(),
+                home.path(),
+            );
+            assert!(matches!(
+                store.read(),
+                Err(Error::Storage {
+                    operation: "read",
+                    ..
+                })
+            ));
+            assert!(matches!(
+                store.write(&session("bdry_session_test")),
+                Err(Error::Storage {
+                    operation: "save",
+                    ..
+                })
+            ));
+        }
     }
 
     #[test]
@@ -375,11 +455,21 @@ mod tests {
                 assert_eq!(saved.caller.email, "user@example.com");
             }
         });
+        let mut entries: Vec<_> = fs::read_dir(store.directory())
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        entries.sort();
+        #[cfg(windows)]
+        let mut expected = vec![
+            store.location.path.with_extension("lock"),
+            store.location.path,
+        ];
+        #[cfg(not(windows))]
+        let mut expected = vec![store.location.path];
+        expected.sort();
         assert_eq!(
-            fs::read_dir(home.path().join("login").join("cache"))
-                .unwrap()
-                .count(),
-            1,
+            entries, expected,
             "atomic writes must clean up temporary files"
         );
     }

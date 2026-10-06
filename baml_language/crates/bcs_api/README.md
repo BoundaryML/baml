@@ -9,6 +9,8 @@ Cloud wire contracts and native clients shared by the CLI, bridges, packed progr
 - `telemetry`: asynchronous upload preparation and heartbeat, plus protobuf uploads authorized by the upload plan.
 - `wire` and `proto`: telemetry control contracts and the existing `cloud.proto` envelope.
 
+Windows cache operations use an owner-only empty `<endpoint-hash>.lock` file to coordinate readers, atomic replacement and logout across hosts. The lock file stays after logout and contains no credentials. Locks cover only local file operations, never HTTP requests. A blocked cache-directory path is a storage error, not an absent login.
+
 Create `Authentication::shared` with the canonical endpoint and original credential, then put it in a `RequestAuthorization` with the operation's optional `Target`. Authentication is shared by endpoint and original credential; targets remain specific to each operation.
 
 For a saved `bdry_session_` credential, the first successful operation can return `Boundary-Access-Token` and `Boundary-Access-Expires-At`. Query and telemetry retain that `bdry_access_` token only in process memory and reuse it across authorized operations. Expiry selects the original credential again; a cached token refused with HTTP 401 is invalidated and the operation retries once before admission. HTTP 403 does not trigger renewal. Secret API keys authenticate directly.

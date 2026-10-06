@@ -371,13 +371,25 @@ Endpoint: {base}
     let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
     assert!(ok, "{out}");
     assert!(out.contains("logged in as user@example.com"), "{out}");
-    let login_files: Vec<_> = std::fs::read_dir(home.path().join("login").join("cache"))
+    let mut login_files: Vec<_> = std::fs::read_dir(home.path().join("login").join("cache"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
-    assert_eq!(login_files.len(), 1);
-    let login_file = &login_files[0];
-    let login: Value = serde_json::from_slice(&std::fs::read(login_file).unwrap()).unwrap();
+    let login_file = login_files
+        .iter()
+        .find(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .expect("login must persist a JSON credential file")
+        .clone();
+    let mut expected_files = vec![login_file.clone()];
+    #[cfg(windows)]
+    expected_files.push(login_file.with_extension("lock"));
+    login_files.sort();
+    expected_files.sort();
+    assert_eq!(login_files, expected_files);
+    let login: Value = serde_json::from_slice(&std::fs::read(&login_file).unwrap()).unwrap();
     assert_eq!(
         login,
         serde_json::json!({
