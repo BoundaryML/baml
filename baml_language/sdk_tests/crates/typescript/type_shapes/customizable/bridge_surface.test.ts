@@ -37,6 +37,7 @@ const packageRootExports = [
   "callFunction",
   "callFunctionSync",
   "cancelFunctionCall",
+  "captureFor",
   "decodeCallResult",
   "defineFunction",
   "defineInstanceFunction",
@@ -51,6 +52,7 @@ const packageRootExports = [
   "lowerTypeToWireTy",
   "newFunctionCall",
   "reflectType",
+  "registerCapture",
   "setTypeMap",
   "wrapNativeError",
 ] as const;
