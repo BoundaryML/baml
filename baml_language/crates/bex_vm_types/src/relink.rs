@@ -57,6 +57,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::StoreGlobal(slot)
             | I::SysOp(slot)
             | I::MakeBoundMethod(slot)
+            | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
             | I::MakeGenericFunction { function: slot, .. } => {
                 $visit($operand::Global(slot));
@@ -139,6 +140,12 @@ macro_rules! visit_bytecode_index_operands {
             | I::Await
             | I::AwaitAny
             | I::CallIndirect
+            | I::BeginTraceHook(_)
+            | I::EndTraceHook
+        | I::TraceHookHidden
+        | I::TraceHookTiming
+        | I::TraceHookSpan
+        | I::TraceHookRich
             | I::SetCallTrace
             | I::Throw
             | I::Rethrow

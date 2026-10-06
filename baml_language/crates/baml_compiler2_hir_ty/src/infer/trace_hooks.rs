@@ -22,12 +22,46 @@ use crate::{
     render::Spell,
 };
 
+/// Checked invocation plan shared by diagnostics and executable lowering.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraceHookPlan<'db> {
+    pub function: crate::extern_loc::FunctionRef<'db>,
+    pub type_args: Vec<baml_type::Ty>,
+    pub arguments: Vec<HookArgument>,
+    pub return_ty: baml_type::Ty,
+}
+
+/// Parameter slots in the ordinary checked hook call, in declaration order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookArgument {
+    /// Resolved target parameter slot, including a method's receiver.
+    Target(usize),
+    /// Detached call-local tracing settings.
+    Settings,
+    /// An omitted optional slot; its default executes in the hook's frame.
+    Default,
+}
+
 pub fn declaration_diagnostics<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> Vec<TirDiagnostic<'db>> {
+    checked_declaration(db, function).0
+}
+
+pub fn declaration_plan<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: FunctionLoc<'db>,
+) -> Option<TraceHookPlan<'db>> {
+    checked_declaration(db, function).1
+}
+
+fn checked_declaration<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: FunctionLoc<'db>,
+) -> (Vec<TirDiagnostic<'db>>, Option<TraceHookPlan<'db>>) {
     let Some(path) = baml_compiler2_hir::item_data::function_trace_hook(db, function) else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
     let span = baml_compiler2_hir::item_data::function_trace_hook_span(db, function)
         .expect("hook source span");
@@ -75,10 +109,13 @@ pub fn declaration_diagnostics<'db>(
     };
     let target_body = baml_compiler2_hir::body::function_body(db, function);
     let baml_compiler2_hir::body::FunctionBody::Expr(target_body) = target_body.as_ref() else {
-        return vec![invalid(
+        return (
+            vec![invalid(
             "The target has no BAML body.\nhelp: Attach the hook to a function with a BAML body."
                 .into(),
-        )];
+        )],
+            None,
+        );
     };
     let owner = BodyOwnerId::Function(function);
     let signature = function_signature(db, function);
@@ -177,7 +214,7 @@ pub fn declaration_diagnostics<'db>(
                     "hook declared here",
                 ));
             }
-            return vec![diagnostic];
+            return (vec![diagnostic], None);
         }
         // The ordinary call checker below handles omitted defaults rather
         // than requiring an exactly parameterless type.
@@ -235,7 +272,7 @@ pub fn declaration_diagnostics<'db>(
         && default_effect
             .and_then(|expr| result.type_of_expr.get(&expr))
             .is_some_and(|ty| *ty != baml_type::Ty::Never);
-    result
+    let diagnostics: Vec<_> = result
         .diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
@@ -283,5 +320,39 @@ pub fn declaration_diagnostics<'db>(
             diagnostic.related = related;
             diagnostic
         })
-        .collect()
+        .collect();
+    let plan = if diagnostics.is_empty() {
+        hook.and_then(|function| {
+            result.call_plans.get(&call).map(|plan| TraceHookPlan {
+                function,
+                type_args: plan.type_args.clone(),
+                arguments: plan
+                    .bindings
+                    .iter()
+                    .map(|binding| match binding {
+                        super::ParamBinding::OmittedDefault { .. } => HookArgument::Default,
+                        super::ParamBinding::Provided { arg, .. } => {
+                            let index = args
+                                .iter()
+                                .position(|input| input.expr == *arg)
+                                .expect("checked hook argument");
+                            params.get(index).map_or(HookArgument::Settings, |param| {
+                                HookArgument::Target(
+                                    signature
+                                        .params
+                                        .iter()
+                                        .position(|source| source.name == param.name)
+                                        .expect("target parameter"),
+                                )
+                            })
+                        }
+                    })
+                    .collect(),
+                return_ty: result.type_of_expr[&call].clone(),
+            })
+        })
+    } else {
+        None
+    };
+    (diagnostics, plan)
 }

@@ -23,6 +23,7 @@ pub struct InheritedInvocationState {
     /// Parent IDs, call path and clock epoch only; never a recording producer.
     pub(crate) ancestry: Option<bex_vm::telemetry::ThreadSpawnContext>,
     pub(crate) host_environment: u64,
+    pub(crate) hook_suppression: bool,
 }
 
 impl InheritedInvocationState {

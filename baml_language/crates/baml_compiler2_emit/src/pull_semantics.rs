@@ -29,6 +29,7 @@ pub(crate) enum LocalPullAction<'db> {
 /// `'db` is the lifetime of the MIR the sink traverses (the inlined rvalues a
 /// [`LocalPullAction::Inline`] hands back are clones out of that MIR).
 pub(crate) trait PullSink<'db> {
+    fn trace_hook_settings(&mut self, with_settings: bool) -> Result<(), Self::Error>;
     type Error;
 
     fn pull_constant(&mut self, constant: &Constant<'db>) -> Result<(), Self::Error>;
@@ -380,6 +381,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
     rvalue: &Rvalue<'db>,
 ) -> Result<(), S::Error> {
     match rvalue {
+        Rvalue::TraceHookSettings { with_settings } => sink.trace_hook_settings(*with_settings),
         Rvalue::Use(operand) => walk_operand_pull(sink, operand),
         Rvalue::BinaryOp { op, left, right } => {
             walk_operand_pull(sink, left)?;

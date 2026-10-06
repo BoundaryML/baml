@@ -164,6 +164,7 @@ impl BexEngine {
                 .map(TelemetryState::hidden_spawn_context)
                 .or_else(|| inherited.and_then(|state| state.ancestry.clone())),
             host_environment: inherited.map_or(0, |state| state.host_environment),
+            hook_suppression: inherited.is_some_and(|state| state.hook_suppression),
         };
         Ok(HostInvocation {
             state,
