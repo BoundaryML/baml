@@ -1,4 +1,4 @@
-//! Snapshot hash format 4: XXH3-128, seed zero, little-endian digest bytes.
+//! Snapshot hash format 5: XXH3-128, seed zero, little-endian digest bytes.
 //!
 //! Leaf digests depend only on their content and are computed once, at
 //! capture: a string's is its content hash, which the string caches; bigints,
@@ -14,8 +14,15 @@
 //! need no recursive Merkle dependencies. Every hashed input is either a byte
 //! of the blob or a digest recomputed from its bytes, so a blob verifies
 //! without its children. Borsh's attribute-free type encoding is part of
-//! version 4: changes to it require a hash-format version change. Hash
+//! version 5: changes to it require a hash-format version change. Hash
 //! equality is not proof of delivery.
+//!
+//! A class or enum named by its recorded definition carries that
+//! definition's blob ID in place, in a type head or a declaration, so its
+//! name, not its runtime tag, and its definition are what the hash covers:
+//! identical runtime classes hash identically. A definition blob's ID is the
+//! hash of its root tag and its content bytes as written, which hold no
+//! leaves to replace, then its child table and an object count of zero.
 use std::io::{self, Write};
 
 use borsh::BorshSerialize;
@@ -26,7 +33,7 @@ use super::{BexStr, OwnedType, TypeIdentity, tags::HashDomain};
 
 /// Content identity of one blob. A zero digest is a valid hash, never absence.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CasId([u8; 16]);
 impl CasId {
     pub const fn as_bytes(&self) -> &[u8; 16] {
@@ -63,8 +70,11 @@ impl Hasher {
     }
     pub(crate) fn versioned(domain: HashDomain, version: u32) -> Self {
         let mut h = Self(Xxh3::new());
-        // Leaf encodings are unchanged; only blob identities change in v4.
-        if matches!(domain, HashDomain::Blob) && version >= 4 {
+        // Leaf encodings are unchanged; only blob identities change in v4
+        // and v5.
+        if matches!(domain, HashDomain::Blob) && version >= 5 {
+            h.absorb(b"baml.snapshot.xxh3-128.v5\0");
+        } else if matches!(domain, HashDomain::Blob) && version == 4 {
             h.absorb(b"baml.snapshot.xxh3-128.v4\0");
         } else {
             h.absorb(b"baml.snapshot.xxh3-128.v3\0");
@@ -129,6 +139,11 @@ impl BorshSerialize for TypeIdentity {
             Self::Unresolved(tag) => {
                 (TypeIdentityTag::Unresolved as u8).serialize(w)?;
                 tag.serialize(w)
+            }
+            Self::Defined(head) => {
+                (TypeIdentityTag::Defined as u8).serialize(w)?;
+                head.name.serialize(w)?;
+                head.definition.serialize(w)
             }
         }
     }

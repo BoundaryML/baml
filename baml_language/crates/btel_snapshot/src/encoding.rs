@@ -1,4 +1,4 @@
-//! CAS blob format 4. Explicit little-endian scalar tags, not Rust layouts.
+//! CAS blob format 5. Explicit little-endian scalar tags, not Rust layouts.
 //!
 //! Header: `BTELCAS\0`, u32 version, 16 digest bytes, u32 child count and each
 //! child's 16-byte ID, u32 object count, root, then object definitions in
@@ -24,13 +24,21 @@
 //! u64 text length, then the base64 text as a value, so large content can be a
 //! child blob. The MIME type, URL and path are strings written in place.
 //!
-//! Value and object tags mirror hash format 4. Type/declaration metadata uses
+//! A declaration (object tag 4) writes how it is identified, then whether it
+//! is an enum: 1, its Borsh `DeclarationName`, then the 16-byte ID of its
+//! recorded definition's group and its u32 position there; or 0, its Borsh
+//! `TypeTag`, then its name, as format 4 wrote it. A type head that names a
+//! recorded definition is Borsh tag 2 of `TypeIdentity`: the name, the group
+//! ID and the position. The groups a blob names this way follow its value
+//! children in the child table, in first-use order. A definition group's own
+//! blob has root tag 2; [`crate::definition`] describes its content.
+//!
+//! Value and object tags mirror hash format 5. Type/declaration metadata uses
 //! its Borsh representation. Floats use raw bits (including NaNs). Bigints use
 //! sign (0 negative, 1 zero, 2 positive), u64 bit length, then ceil(bits/64)
 //! little-endian u64 magnitude limbs. Any encoding change needs a version bump.
 use std::io::{self, Write};
 
-use baml_type::{DeclarationName, typetag::TypeTag};
 use borsh::BorshSerialize;
 pub use btel_settings::snapshot::{BLOB_MAGIC, BLOB_VERSION};
 use num_bigint::BigInt;
@@ -41,9 +49,9 @@ use crate::{
     BexStr, Blob, CasId,
     graph::{BigintId, Graph, ObjectId, OwnedType, StringId},
     hash::{Digest, TypeLeaf},
-    shape::{BlobIndex, HEADER_BYTES, Home, Shape, UNNUMBERED},
+    shape::{BlobIndex, Content, HEADER_BYTES, Home, Shape, UNNUMBERED},
     tags::{self, RootTag, ValueTag},
-    walk::{self, Reference, Resolver, Visitor},
+    walk::{self, DeclarationIdentity, Reference, Resolver, Visitor},
 };
 
 fn size(w: &mut impl Write, n: usize) -> io::Result<()> {
@@ -107,6 +115,11 @@ impl Blob<'_> {
         let s = &self.snapshot.0.graph;
         let shape = &self.snapshot.0.shape;
         let entry = self.entry();
+        let root = match entry.content {
+            Content::Capture(root) => root,
+            // Encoded once, when the group was made.
+            Content::Definition(at) => return w.write_all(s.definitions[at as usize].bytes()),
+        };
         let members = &shape.members[entry.members.indexes()];
         let children = &shape.children[entry.children.indexes()];
         w.write_all(&BLOB_MAGIC)?;
@@ -119,7 +132,7 @@ impl Blob<'_> {
         size(w, members.len())?;
         let mut stored = Stored::new(scratch, s, shape, members, children);
         let mut writer = Writer(w);
-        walk::root(&mut writer, &mut stored, s, entry.root)?;
+        walk::root(&mut writer, &mut stored, s, root)?;
         for id in members {
             walk::object(&mut writer, &mut stored, s, &s.objects[id.0 as usize])?;
         }
@@ -128,7 +141,7 @@ impl Blob<'_> {
             // Shaping measured this blob; a second walk checks that writing
             // agrees, without costing release builds anything.
             let mut length = Length::default();
-            walk::infallible(walk::root(&mut length, &mut stored, s, entry.root));
+            walk::infallible(walk::root(&mut length, &mut stored, s, root));
             for id in members {
                 let object = &s.objects[id.0 as usize];
                 walk::infallible(walk::object(&mut length, &mut stored, s, object));
@@ -277,9 +290,8 @@ impl<W: Write> Visitor for Writer<'_, W> {
         size(self.0, bytes.len())?;
         self.0.write_all(bytes)
     }
-    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> io::Result<()> {
-        tag.serialize(self.0)?;
-        name.serialize(self.0)
+    fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> io::Result<()> {
+        identity.serialize(self.0)
     }
     fn begin_range(&mut self, len: usize) -> io::Result<()> {
         size(self.0, len)

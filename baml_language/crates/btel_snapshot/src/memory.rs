@@ -28,8 +28,20 @@ impl Snapshot {
                 (2 * size_of::<usize>() + size_of::<BigInt>())
                     .saturating_add(bigint_limb_bytes(&bigint.value))
             }))
-            .chain(graph.names.iter().map(declaration_bytes))
-            .chain(graph.types.iter().map(|ty| type_bytes(&ty.ty)));
+            .chain(
+                graph
+                    .names
+                    .iter()
+                    .map(|declared| declaration_bytes(&declared.name)),
+            )
+            .chain(graph.types.iter().map(|ty| type_bytes(&ty.ty)))
+            .chain(graph.definitions.iter().map(|group| {
+                // The shared allocation: its two counts, the blob and its
+                // bytes and child list.
+                (2 * size_of::<usize>() + size_of::<btel_types::DefinitionBlob>())
+                    .saturating_add(group.bytes().len())
+                    .saturating_add(array_bytes::<usize>(group.children().len()))
+            }));
         leaves.fold(
             size_of::<Self>().saturating_add(storage.capacity_bytes()),
             usize::saturating_add,
@@ -53,6 +65,7 @@ impl Snapshot {
             + size_of_val(&*graph.bigints)
             + size_of_val(&*graph.types)
             + size_of_val(&*graph.names)
+            + size_of_val(&*graph.definitions)
             + shape.live_bytes()
     }
 }
@@ -98,6 +111,7 @@ fn identity_bytes(identity: &TypeIdentity) -> usize {
     match identity {
         TypeIdentity::Resolved(name) => declaration_bytes(name.name()),
         TypeIdentity::Unresolved(_) => 0,
+        TypeIdentity::Defined(head) => declaration_bytes(&head.name),
     }
 }
 
@@ -293,7 +307,13 @@ mod tests {
         let before = snapshot.retained_bytes();
         let charge = declaration_bytes(&declaration);
         let Storage { graph, meter, .. } = &mut *snapshot.0;
-        graph.names.push(declaration, meter);
+        graph.names.push(
+            crate::graph::Declared {
+                name: declaration,
+                definition: None,
+            },
+            meter,
+        );
         assert_eq!(snapshot.retained_bytes() - before, charge);
     }
 

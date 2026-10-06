@@ -1,4 +1,4 @@
-//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 4.
+//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 5.
 //! Changing an assignment requires a format version change.
 
 use baml_type::MediaKind;
@@ -9,6 +9,8 @@ use crate::{Description, Limit};
 pub(super) enum RootTag {
     Value = 0,
     FunctionArgs = 1,
+    /// A group of class and enum definitions (format 5).
+    Definitions = 2,
 }
 
 #[repr(u8)]
@@ -55,6 +57,32 @@ pub(super) enum MediaSourceTag {
 pub(super) enum TypeIdentityTag {
     Unresolved = 0,
     Resolved = 1,
+    /// A class or enum named by its recorded definition (format 5).
+    Defined = 2,
+}
+
+/// How a format 5 declaration identifies itself.
+#[repr(u8)]
+pub(super) enum DeclarationTag {
+    /// By its runtime type tag, as format 4 does.
+    Tagged = 0,
+    /// By its recorded definition.
+    Defined = 1,
+}
+
+/// A head in a recorded definition's field type.
+#[repr(u8)]
+pub(super) enum DefinitionHeadTag {
+    Member = 0,
+    Defined = 1,
+    Named = 2,
+}
+
+/// What a recorded definition is of.
+#[repr(u8)]
+pub(super) enum DefinitionKind {
+    Class = 0,
+    Enum = 1,
 }
 
 /// What a hash is of. Strings need none: their digest is their content hash.

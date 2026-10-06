@@ -11,7 +11,7 @@ use crate::{
     encoding::{STRING_BLOB_HEADER_BYTES, string_blob_header},
     graph::{SnapshotRoot, SnapshotValue, StringId},
     pool::Storage,
-    shape::BlobEntry,
+    shape::{BlobEntry, Content},
 };
 
 /// A blob that is one string, on its own: what the blob holds before the
@@ -111,9 +111,10 @@ pub struct Split {
 
 /// Whether the blob is one string.
 fn is_string(entry: &BlobEntry) -> bool {
-    match entry.root {
-        SnapshotRoot::Value(SnapshotValue::String(_)) => true,
-        SnapshotRoot::Value(
+    match entry.content {
+        Content::Capture(SnapshotRoot::Value(SnapshotValue::String(_))) => true,
+        Content::Definition(_) => false,
+        Content::Capture(SnapshotRoot::Value(
             SnapshotValue::Null
             | SnapshotValue::OmittedArg
             | SnapshotValue::Bool(_)
@@ -124,8 +125,8 @@ fn is_string(entry: &BlobEntry) -> bool {
             | SnapshotValue::Type(_)
             | SnapshotValue::Enum { .. }
             | SnapshotValue::Truncated(_),
-        )
-        | SnapshotRoot::FunctionArgs(_) => false,
+        ))
+        | Content::Capture(SnapshotRoot::FunctionArgs(_)) => false,
     }
 }
 
@@ -139,7 +140,8 @@ impl Snapshot {
         let mut leaves = Vec::new();
         let mut kept = false;
         for entry in shape.blobs.iter() {
-            let SnapshotRoot::Value(SnapshotValue::String(id)) = entry.root else {
+            let Content::Capture(SnapshotRoot::Value(SnapshotValue::String(id))) = entry.content
+            else {
                 debug_assert!(!is_string(entry));
                 kept = true;
                 continue;

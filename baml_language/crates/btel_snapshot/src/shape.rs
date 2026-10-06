@@ -43,6 +43,14 @@
 //! the first visited then starts it, and the blob can differ between
 //! captures. Other blobs name its other members by blob and local number. A
 //! capture's own root blob always starts at the captured value.
+//!
+//! # Definitions
+//!
+//! The definition groups a capture names are blobs of the capture too, made
+//! once and shared ([`crate::definition`]): they come first in the blob
+//! table, each after the groups it names. A blob's child table lists the
+//! blobs its values continue in, in first-use order, then the groups its
+//! type heads and declarations name, in first-use order.
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -64,10 +72,29 @@ pub struct BlobIndex(pub(crate) u32);
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BlobEntry {
     pub(crate) id: CasId,
-    pub(crate) root: SnapshotRoot,
+    pub(crate) content: Content,
     pub(crate) members: Range<ObjectId>,
     pub(crate) children: Range<BlobIndex>,
     pub(crate) encoded_len: u64,
+}
+impl BlobEntry {
+    /// The root of a blob of the capture's own content: never a definition
+    /// group, which a capture's root blob is not.
+    pub(crate) fn capture_root(&self) -> &SnapshotRoot {
+        match &self.content {
+            Content::Capture(root) => root,
+            Content::Definition(_) => unreachable!("a capture's root blob holds the capture"),
+        }
+    }
+}
+/// What a blob holds.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Content {
+    /// Part of the capture, from this root.
+    Capture(SnapshotRoot),
+    /// The definition group at this index of the capture's definitions,
+    /// encoded already.
+    Definition(u32),
 }
 /// Where other blobs find an object stored in a blob of its own.
 #[derive(Clone, Copy, Debug)]
@@ -208,6 +235,8 @@ pub struct Shaper {
     /// Blob index to its slot in `children`, [`UNNUMBERED`] for every other
     /// blob and between blobs.
     slots: Vec<u32>,
+    /// Definition groups the blob being shaped names, in first-use order.
+    definitions: Vec<BlobIndex>,
     /// This capture's blobs by ID: equal content is stored once.
     ids: FxHashMap<CasId, BlobIndex>,
     cuts: Cuts,
@@ -215,6 +244,9 @@ pub struct Shaper {
 
 /// Local number of an object outside the blob being shaped or written.
 pub(crate) const UNNUMBERED: u32 = u32::MAX;
+/// The slot of a definition group the blob being shaped names: it has none
+/// until the value children are all known.
+const NAMED: u32 = u32::MAX - 1;
 
 impl Shaper {
     pub fn new(policy: ShapePolicy) -> Self {
@@ -242,6 +274,7 @@ impl Shaper {
         self.local.resize(graph.objects.len(), UNNUMBERED);
         self.slots.clear();
         self.ids.clear();
+        self.add_definitions(graph, shape, meter);
         match self.policy {
             ShapePolicy::Whole => {}
             ShapePolicy::Split {
@@ -264,6 +297,31 @@ impl Shaper {
         );
         #[cfg(debug_assertions)]
         check_nothing_copied(graph, shape);
+    }
+
+    /// Make a blob of each definition group the capture names. Each comes
+    /// after the groups it names, which are its children.
+    fn add_definitions(&mut self, graph: &Graph, shape: &mut Shape, meter: &Meter) {
+        for (at, group) in graph.definitions.iter().enumerate() {
+            let id = CasId::from_bytes(group.id());
+            let index = BlobIndex(u32::try_from(shape.blobs.len()).expect("bounded blob count"));
+            let start = shape.children.len();
+            for child in group.children() {
+                let child = self.ids[&CasId::from_bytes(child.id())];
+                shape.children.push(child, meter);
+            }
+            shape.blobs.push(
+                BlobEntry {
+                    id,
+                    content: Content::Definition(u32::try_from(at).expect("bounded definitions")),
+                    members: Range::empty(),
+                    children: Range::new(start, group.children().len()),
+                    encoded_len: group.bytes().len() as u64,
+                },
+                meter,
+            );
+            self.ids.insert(id, index);
+        }
     }
 
     /// The pass a capture under both thresholds skips would have cut nothing.
@@ -371,6 +429,7 @@ impl Shaper {
             order,
             children,
             slots,
+            definitions,
             ids,
             cuts,
             policy: _,
@@ -378,6 +437,7 @@ impl Shaper {
         slots.resize(shape.blobs.len(), UNNUMBERED);
         order.clear();
         children.clear();
+        definitions.clear();
         let (mut h, content_bytes) = {
             let mut numbering = Numbering {
                 shape,
@@ -385,6 +445,8 @@ impl Shaper {
                 order: &mut *order,
                 children: &mut *children,
                 slots: &mut *slots,
+                definitions: &mut *definitions,
+                ids: &*ids,
             };
             let mut visitor = Both(Hasher::new(HashDomain::Blob), Length::default());
             infallible(walk::root(&mut visitor, &mut numbering, graph, root));
@@ -400,6 +462,7 @@ impl Shaper {
             (h, content_bytes)
         };
         // The child table is complete only now; the ID covers it last.
+        children.extend_from_slice(definitions);
         h.size(children.len());
         for child in children.iter() {
             h.absorb(shape.blobs[child.0 as usize].id.as_bytes());
@@ -425,7 +488,7 @@ impl Shaper {
                 shape.blobs.push(
                     BlobEntry {
                         id,
-                        root,
+                        content: Content::Capture(root),
                         members,
                         children: child_range,
                         encoded_len,
@@ -505,6 +568,8 @@ struct Numbering<'a> {
     order: &'a mut Vec<ObjectId>,
     children: &'a mut Vec<BlobIndex>,
     slots: &'a mut [u32],
+    definitions: &'a mut Vec<BlobIndex>,
+    ids: &'a FxHashMap<CasId, BlobIndex>,
 }
 impl Numbering<'_> {
     fn slot(&mut self, blob: BlobIndex) -> u32 {
@@ -544,6 +609,17 @@ impl Resolver for Numbering<'_> {
     }
     fn bigint(&mut self, id: BigintId) -> Option<u32> {
         self.shape.bigint_home(id).map(|blob| self.slot(blob))
+    }
+    fn definition(&mut self, group: CasId) {
+        let Some(&blob) = self.ids.get(&group) else {
+            debug_assert!(false, "a capture holds every group it names");
+            return;
+        };
+        let slot = &mut self.slots[blob.0 as usize];
+        if *slot == UNNUMBERED {
+            *slot = NAMED;
+            self.definitions.push(blob);
+        }
     }
 }
 

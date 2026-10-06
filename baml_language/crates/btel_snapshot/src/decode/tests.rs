@@ -46,7 +46,7 @@ fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
 /// tests of its own.
 fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
-    let declaration = b.declaration(&customer(), TypeTag::from_i64(42), false);
+    let declaration = b.declaration(&customer(), TypeTag::from_i64(42), false, None);
     let declaration = b.leaves().object(declaration).unwrap();
 
     // The list contains itself: a cycle through a container.
@@ -179,7 +179,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
     };
     assert!(matches!(
         decoded.object(*declaration),
-        DecodedObject::Declaration { tag, .. } if *tag == TypeTag::from_i64(42)
+        DecodedObject::Declaration { tag, .. } if *tag == Some(TypeTag::from_i64(42))
     ));
     let field = |name: &str| &fields.iter().find(|(key, _)| &**key == name).unwrap().1;
     assert_eq!(field("name"), &DecodedValue::String("hello λ".into()));

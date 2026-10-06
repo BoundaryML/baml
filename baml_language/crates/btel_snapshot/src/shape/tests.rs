@@ -574,7 +574,7 @@ fn keys_split_as_values_while_names_and_declarations_stay_inline() {
     let long = "k".repeat(200);
     let snapshot = capture(&mut split(1 << 20, 64), |b| {
         let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.{long}")));
-        let declaration = b.declaration(&name, TypeTag::from_i64(7), true);
+        let declaration = b.declaration(&name, TypeTag::from_i64(7), true, None);
         let declaration = b.leaves().object(declaration).unwrap();
         let name = b.leaves().label(&long.as_str().into()).unwrap();
         let function = object(

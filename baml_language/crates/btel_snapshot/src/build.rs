@@ -12,19 +12,27 @@
 //! Limits are applied here, not by the caller, and what they cut shows in the
 //! capture: a container records how long its source was, and a value that
 //! could not be held is a truncation marker.
+//!
+//! A recorded class or enum definition is not captured content: it is a blob
+//! made once and shared. [`Leaves::define`] adds a definition's group to the
+//! capture's blobs and returns the reference a type head or declaration
+//! holds; limits do not apply to it.
 use std::sync::Arc;
 
 use baml_type::{DeclarationName, typetag::TypeTag};
 use bex_str::BexStr;
+use btel_types::{Definition, DefinitionBlob};
 use num_bigint::BigInt;
+use rustc_hash::FxHashSet;
 
 use crate::{
-    Shaper, Snapshot, SnapshotPool,
+    Shaper, Snapshot, SnapshotPool, TypeIdentity,
     arena::{Arena, Meter},
+    definition::DefinitionRef,
     graph::{
-        Bigint, FieldEntry, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId, ObjectId,
-        OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type, TypeId,
-        Uint8ArrayData,
+        Bigint, Declared, FieldEntry, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId,
+        ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type,
+        TypeId, Uint8ArrayData,
     },
     hash::{self, Absorb as _},
     pool::{Lease, Limits, Storage},
@@ -46,6 +54,8 @@ pub struct Leaves<'b> {
     labels: &'b mut Arena<BexStr>,
     bigints: &'b mut Arena<Bigint>,
     types: &'b mut Arena<Type>,
+    definitions: &'b mut Arena<Arc<DefinitionBlob>>,
+    defined: &'b mut FxHashSet<[u8; 16]>,
     meter: &'b Meter,
     limits: Limits,
 }
@@ -114,16 +124,32 @@ impl Leaves<'_> {
         );
         SnapshotValue::Bigint(id)
     }
+    /// A type description. A head that names a definition must name one
+    /// [`Self::define`] added.
     pub fn ty(&mut self, ty: OwnedType) -> TypeId {
         let id = TypeId(u32::try_from(self.types.len()).expect("type arena exhausted"));
+        let mut defined = false;
+        ty.visit_heads(&mut |head| defined |= matches!(head, TypeIdentity::Defined(_)));
         self.types.push(
             Type {
                 leaf: hash::ty(&ty),
                 ty,
+                defined,
             },
             self.meter,
         );
         id
+    }
+    /// Add `definition`'s group, and every group it names, to the capture's
+    /// blobs, and return how a type head or declaration names it.
+    pub fn define(&mut self, definition: &Definition) -> DefinitionRef {
+        add_group(
+            self.definitions,
+            self.defined,
+            self.meter,
+            &definition.group,
+        );
+        DefinitionRef::of(definition)
     }
     /// An object's identity, for what will hold it to name before its
     /// content is known. `None` once the object limit is reached.
@@ -147,6 +173,38 @@ impl Leaves<'_> {
         let id = ObjectId(u32::try_from(self.objects.len()).expect("bounded objects"));
         self.objects.push(object, self.meter);
         Some(id)
+    }
+}
+
+/// Add `group` after the groups it names, each once. Iterative: a chain of
+/// groups can be as long as a program's declarations.
+fn add_group(
+    definitions: &mut Arena<Arc<DefinitionBlob>>,
+    defined: &mut FxHashSet<[u8; 16]>,
+    meter: &Meter,
+    group: &Arc<DefinitionBlob>,
+) {
+    if defined.contains(&group.id()) {
+        return;
+    }
+    // A group and the next of its children to add.
+    let mut path = vec![(Arc::clone(group), 0)];
+    while let Some((top, next)) = path.last_mut() {
+        if let Some(child) = top.children().get(*next) {
+            *next += 1;
+            if !defined.contains(&child.id()) {
+                let child = Arc::clone(child);
+                path.push((child, 0));
+            }
+            continue;
+        }
+        let (done, _) = path
+            .pop()
+            .unwrap_or_else(|| unreachable!("a group on the path"));
+        // Groups form no cycle, but two paths can reach one group.
+        if defined.insert(done.id()) {
+            definitions.push(done, meter);
+        }
     }
 }
 
@@ -185,6 +243,8 @@ impl Builder {
             bigints,
             types,
             names: _,
+            definitions,
+            defined,
         } = graph;
         Parts {
             leaves: Leaves {
@@ -193,6 +253,8 @@ impl Builder {
                 labels,
                 bigints,
                 types,
+                definitions,
+                defined,
                 meter,
                 limits: *limits,
             },
@@ -368,15 +430,25 @@ impl Builder {
         }
     }
     /// A class or enum declaration. Its name is held beside the objects.
+    /// With its recorded definition, the declaration is identified by it
+    /// rather than by its runtime tag.
     pub fn declaration(
         &mut self,
         name: &DeclarationName,
         tag: TypeTag,
         is_enum: bool,
+        definition: Option<&Definition>,
     ) -> SnapshotObject {
+        let definition = definition.map(|definition| self.leaves().define(definition));
         let Storage { graph, meter, .. } = &mut *self.0;
         let id = NameId(u32::try_from(graph.names.len()).expect("a name per object"));
-        graph.names.push(name.clone(), meter);
+        graph.names.push(
+            Declared {
+                name: name.clone(),
+                definition,
+            },
+            meter,
+        );
         SnapshotObject::Declaration {
             name: id,
             tag,
