@@ -45,6 +45,14 @@ fn main() {
         .find(|name| name.as_str() == target || name.ends_with(&format!(".{target}")))
         .unwrap_or_else(|| panic!("missing wrapper entry point {target}"))
         .clone();
+    let program = baml_db::compile_program_selected_with(
+        &db,
+        root,
+        baml_db::OptLevel::Two,
+        &baml_db::NoCache,
+        &baml_db::LinkRoots::EntryPoints(vec![qualified_name.clone()]),
+    )
+    .expect("link wrapper entry point");
     let envelope = baml_exec::PackEnvelope {
         program,
         mode: baml_exec::PackMode::Single,

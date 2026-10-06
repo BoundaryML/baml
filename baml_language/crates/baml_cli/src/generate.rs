@@ -417,9 +417,14 @@ impl GenerateArgs {
         let pool = baml_ide::build_symbol_pool(&db);
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
-        let program = db
-            .get_bytecode(package)
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let program = baml_db::compile_program_selected_with(
+            &db,
+            package,
+            crate::bytecode_cache::CLI_OPT_LEVEL,
+            &baml_db::NoCache,
+            &baml_db::LinkRoots::HostSurface,
+        )
+        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
         if let Some(provisioning) = provisioning {

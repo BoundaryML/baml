@@ -26,16 +26,14 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity};
-use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
-use bex_engine::BexEngine;
+use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param_names};
+use bex_engine::UserFunctionCatalog;
 use bex_vm_types::types::Program;
 use clap::Args;
-use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
@@ -111,6 +109,11 @@ pub struct PackArgs {
     #[arg(long, value_name = "PATH", help_heading = "Build options")]
     pub host: Option<PathBuf>,
 
+    /// Keep the complete compiled program instead of pruning unreachable declarations.
+    /// Useful for comparing execution or diagnosing a packed application.
+    #[arg(long, help_heading = "Build options")]
+    pub no_prune: bool,
+
     #[arg(
         long,
         value_enum,
@@ -141,6 +144,14 @@ struct ResolvedPackTarget {
     subcommand_name: String,
 }
 
+struct LoadedPack {
+    db: ProjectDatabase,
+    package: baml_db::SourceRoot,
+    cache: Option<crate::bytecode_cache::CacheContext>,
+    program: Program,
+    needs_format_hint: bool,
+}
+
 impl PackArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
@@ -168,29 +179,37 @@ impl PackArgs {
             .telemetry
             .prepare(&mut telemetry, default_environment, "pack")?;
 
-        let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
-        let _ = db;
+        let loaded = self.load_and_compile(reporter)?;
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged
         // projects formatted. Pack is a release-shaped operation,
         // so a clean tree matters at least as much as for run.
-        if needs_format_hint {
+        if loaded.needs_format_hint {
             reporter.warning(crate::run_command::FORMAT_HINT);
         }
 
-        // Signature info for target resolution / reserved `help` check.
-        let engine = BexEngine::new(
-            program.clone(),
-            Arc::new(sys_native::SysOps::native()),
-            vec![],
-        )
-        .map_err(|e| anyhow!("failed to initialize engine for resolution: {e:?}"))?;
-
-        let (mode, targets) = self.resolve_targets(&engine)?;
+        // Resolve signatures without a VM: packing must not execute initializers.
+        let catalog = UserFunctionCatalog::from_program(&loaded.program)
+            .map_err(|e| anyhow!("failed to read target signatures: {e:?}"))?;
+        let (mode, targets) = self.resolve_targets(&catalog)?;
         for t in &targets {
-            validate_help_param(&engine, &t.qualified_name)?;
+            validate_catalog_help_param(&catalog, &t.qualified_name)?;
         }
+        let roots = baml_db::LinkRoots::EntryPoints(
+            targets.iter().map(|t| t.qualified_name.clone()).collect(),
+        );
+        let program = if self.no_prune {
+            loaded.program
+        } else {
+            crate::bytecode_cache::compile_program_selected(
+                &loaded.db,
+                loaded.package,
+                loaded.cache.as_ref(),
+                &roots,
+            )
+            .map_err(|e| anyhow!("failed to link packed program: {e}"))?
+        };
         let label = label_for(&targets);
         reporter.spin("Packaging", &label);
 
@@ -300,7 +319,7 @@ impl PackArgs {
         }
     }
 
-    fn load_and_compile(&self, reporter: &Reporter) -> Result<(ProjectDatabase, Program, bool)> {
+    fn load_and_compile(&self, reporter: &Reporter) -> Result<LoadedPack> {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
@@ -308,7 +327,13 @@ impl PackArgs {
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
             let program = crate::bytecode_cache::compile_program(&db, package, None)
                 .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-            return Ok((db, program, needs_format_hint));
+            return Ok(LoadedPack {
+                db,
+                package,
+                cache: None,
+                program,
+                needs_format_hint,
+            });
         }
         self.load_and_compile_project(reporter)
     }
@@ -338,14 +363,13 @@ impl PackArgs {
     /// when nothing changed, served packages plus a fresh user package on an
     /// edit. Pack shares run/check's exact cache key space, so a pack
     /// right after a run (or a
-    /// re-pack) serves the identical `Program`. The packaged bytecode is
+    /// re-pack) serves the complete `Program` for target resolution. Selected
+    /// linking reuses the package outputs; its smaller image is never written
+    /// under the shared whole-program key. The packaged bytecode is
     /// target-independent (the `--target` triple only selects the host binary
     /// bytes), and emit determinism guarantees a reused image is byte-identical
     /// to a fresh compile, so serving from cache never changes the artifact.
-    fn load_and_compile_project(
-        &self,
-        reporter: &Reporter,
-    ) -> Result<(ProjectDatabase, Program, bool)> {
+    fn load_and_compile_project(&self, reporter: &Reporter) -> Result<LoadedPack> {
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
             crate::project_session::CacheUse::ReadWrite,
@@ -358,7 +382,15 @@ impl PackArgs {
         let needs_format_hint = session.needs_format_hint();
 
         if let Some(program) = session.try_cached_program() {
-            return Ok((session.db, program, needs_format_hint));
+            // Selected linking still needs the mounted interfaces and package cache.
+            session.warm_prep();
+            return Ok(LoadedPack {
+                db: session.db,
+                package: session.package,
+                cache: session.cache,
+                program,
+                needs_format_hint,
+            });
         }
 
         // Seed the stdlib typed interface and install the served check rows —
@@ -405,7 +437,13 @@ impl PackArgs {
                 stdlib_interface_hit,
             )?;
         }
-        Ok((session.db, program, needs_format_hint))
+        Ok(LoadedPack {
+            db: session.db,
+            package: session.package,
+            cache: session.cache,
+            program,
+            needs_format_hint,
+        })
     }
 
     fn load_standalone(
@@ -428,17 +466,17 @@ impl PackArgs {
     /// layer per the spec).
     fn resolve_targets(
         &self,
-        engine: &BexEngine,
+        catalog: &UserFunctionCatalog,
     ) -> Result<(baml_exec::PackMode, Vec<ResolvedPackTarget>)> {
         if let Some(target) = self.target.as_deref() {
-            let resolved = resolve_one(engine, target)?;
+            let resolved = resolve_one(catalog, target)?;
             return Ok((baml_exec::PackMode::Single, vec![resolved]));
         }
 
         // Subcommand mode. Resolve each `-f` and reject duplicate subcommand names.
         let mut resolved: Vec<ResolvedPackTarget> = Vec::with_capacity(self.functions.len());
         for func in &self.functions {
-            resolved.push(resolve_one(engine, func)?);
+            resolved.push(resolve_one(catalog, func)?);
         }
         let mut seen: HashMap<&str, &str> = HashMap::new();
         for r in &resolved {
@@ -487,11 +525,18 @@ impl PackArgs {
     }
 }
 
-/// Resolve a single function-name string against the engine; returns
+fn validate_catalog_help_param(catalog: &UserFunctionCatalog, name: &str) -> Result<()> {
+    let info = catalog
+        .find_user_function(name)
+        .ok_or_else(|| anyhow!("failed to resolve target `{name}`"))?;
+    validate_help_param_names(name, info.param_names.iter().map(String::as_str))
+}
+
+/// Resolve a single function-name string against the catalog; returns
 /// canonical qualified/display/subcommand-name triple.
-fn resolve_one(engine: &BexEngine, func: &str) -> Result<ResolvedPackTarget> {
-    if !engine.function_exists(func) {
-        let suggestions = function_suggestions(engine, func);
+fn resolve_one(catalog: &UserFunctionCatalog, func: &str) -> Result<ResolvedPackTarget> {
+    if catalog.find_user_function(func).is_none() {
+        let suggestions = function_suggestions(catalog, func);
         if suggestions.is_empty() {
             anyhow::bail!(
                 "function `{func}` not found. Use `baml run --list` to see \
@@ -507,7 +552,7 @@ fn resolve_one(engine: &BexEngine, func: &str) -> Result<ResolvedPackTarget> {
                 .join("\n")
         );
     }
-    let qualified_name = canonicalize_function_name(engine, func);
+    let qualified_name = canonicalize_function_name(catalog, func);
     let display_name = qualified_name
         .strip_prefix("user.")
         .unwrap_or(&qualified_name)
@@ -571,13 +616,13 @@ fn bail_on_error_diagnostics(
     anyhow::bail!("{ctx}");
 }
 
-/// Return the qualified name the engine prefers when both `foo` and
+/// Return the qualified name the catalog prefers when both `foo` and
 /// `user.foo` resolve to the same function.
 /// Suggest user functions whose name is similar to `query`. Ranked by
 /// substring containment first, then jaro-winkler similarity. Returns up
 /// to 5 display names, sorted.
-fn function_suggestions(engine: &BexEngine, query: &str) -> Vec<String> {
-    let mut hits: Vec<String> = engine
+fn function_suggestions(catalog: &UserFunctionCatalog, query: &str) -> Vec<String> {
+    let mut hits: Vec<String> = catalog
         .user_functions()
         .into_iter()
         .map(|f| f.display_name)
@@ -593,8 +638,8 @@ fn function_suggestions(engine: &BexEngine, query: &str) -> Vec<String> {
     hits
 }
 
-fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
-    engine
+fn canonicalize_function_name(catalog: &UserFunctionCatalog, name: &str) -> String {
+    catalog
         .find_user_function(name)
         .map(|info| info.qualified_name)
         .unwrap_or_else(|| name.to_string())
@@ -720,19 +765,17 @@ fn write_executable(
 mod tests {
     use super::*;
 
-    fn engine_from_source(source: &str) -> BexEngine {
+    fn catalog_from_source(source: &str) -> UserFunctionCatalog {
         let snapshot = baml_tests::engine::compile_source(source);
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("BexEngine::new should succeed")
+        UserFunctionCatalog::from_program(&snapshot).expect("valid catalog")
     }
 
-    /// Build an engine from a multi-file project so we can exercise
+    /// Build an catalog from a multi-file project so we can exercise
     /// namespaced functions (`ns_<name>/foo.baml` → `<name>.foo`). Single
-    /// `engine_from_source` can't express folder-based namespaces.
-    fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
+    /// `catalog_from_source` can't express folder-based namespaces.
+    fn catalog_from_files(files: &[(&str, &str)]) -> UserFunctionCatalog {
         let snapshot = baml_tests::stdlib_prefix::compile_multi_file(files);
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("BexEngine::new should succeed")
+        UserFunctionCatalog::from_program(&snapshot).expect("valid catalog")
     }
 
     fn pack_args() -> PackArgs {
@@ -745,6 +788,7 @@ mod tests {
             output: None,
             target_triple: None,
             host: None,
+            no_prune: false,
             output_format: OutputFormat::Json,
             from: None,
             expression: None,
@@ -757,10 +801,10 @@ mod tests {
     /// name as both display and subcommand.
     #[test]
     fn test_pack_positional_single_target() {
-        let engine = engine_from_source("function main() -> int { 42 }");
+        let catalog = catalog_from_source("function main() -> int { 42 }");
         let mut args = pack_args();
         args.target = Some("main".to_string());
-        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        let (mode, targets) = args.resolve_targets(&catalog).unwrap();
         assert!(matches!(mode, baml_exec::PackMode::Single));
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].qualified_name, "user.main");
@@ -862,7 +906,7 @@ mod tests {
     /// retained, per the spec).
     #[test]
     fn test_pack_single_function_uses_subcommand_mode() {
-        let engine = engine_from_source(
+        let catalog = catalog_from_source(
             r#"
                 function main() -> int { 1 }
                 function Summarize(text: string) -> string { text }
@@ -870,7 +914,7 @@ mod tests {
         );
         let mut args = pack_args();
         args.functions = vec!["Summarize".to_string()];
-        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        let (mode, targets) = args.resolve_targets(&catalog).unwrap();
         assert!(matches!(mode, baml_exec::PackMode::Subcommand));
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].subcommand_name, "Summarize");
@@ -879,7 +923,7 @@ mod tests {
     /// Multiple `-f` → subcommand mode, one entry per `-f`.
     #[test]
     fn test_pack_multi_function_subcommand_mode() {
-        let engine = engine_from_source(
+        let catalog = catalog_from_source(
             r#"
                 function Summarize(text: string) -> string { text }
                 function Categorize(text: string) -> string { text }
@@ -887,7 +931,7 @@ mod tests {
         );
         let mut args = pack_args();
         args.functions = vec!["Summarize".to_string(), "Categorize".to_string()];
-        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        let (mode, targets) = args.resolve_targets(&catalog).unwrap();
         assert!(matches!(mode, baml_exec::PackMode::Subcommand));
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[0].subcommand_name, "Summarize");
@@ -898,10 +942,10 @@ mod tests {
     /// display name regardless of how the user spelled the `-f` flag.
     #[test]
     fn test_pack_function_flag_strips_user_prefix() {
-        let engine = engine_from_source("function Summarize(text: string) -> string { text }");
+        let catalog = catalog_from_source("function Summarize(text: string) -> string { text }");
         let mut args = pack_args();
         args.functions = vec!["user.Summarize".to_string()];
-        let (_mode, targets) = args.resolve_targets(&engine).unwrap();
+        let (_mode, targets) = args.resolve_targets(&catalog).unwrap();
         assert_eq!(targets[0].display_name, "Summarize");
         assert_eq!(targets[0].subcommand_name, "Summarize");
     }
@@ -909,10 +953,10 @@ mod tests {
     /// Unknown function → error.
     #[test]
     fn test_pack_function_unknown_errors() {
-        let engine = engine_from_source("function main() -> int { 1 }");
+        let catalog = catalog_from_source("function main() -> int { 1 }");
         let mut args = pack_args();
         args.functions = vec!["DoesNotExist".to_string()];
-        let err = args.resolve_targets(&engine).unwrap_err();
+        let err = args.resolve_targets(&catalog).unwrap_err();
         assert!(format!("{err}").contains("not found"));
     }
 
@@ -923,13 +967,13 @@ mod tests {
     /// name) is the *last* `.`-segment — `llm.Summarize` → `Summarize`.
     #[test]
     fn test_pack_namespaced_positional() {
-        let engine = engine_from_files(&[(
+        let catalog = catalog_from_files(&[(
             "ns_llm/summarize.baml",
             "function Summarize(text: string) -> string { text }",
         )]);
         let mut args = pack_args();
         args.target = Some("llm.Summarize".to_string());
-        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        let (mode, targets) = args.resolve_targets(&catalog).unwrap();
         assert!(matches!(mode, baml_exec::PackMode::Single));
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].qualified_name, "user.llm.Summarize");
@@ -941,7 +985,7 @@ mod tests {
     /// on each function's last `.`-segment.
     #[test]
     fn test_pack_namespaced_multi_function() {
-        let engine = engine_from_files(&[
+        let catalog = catalog_from_files(&[
             (
                 "ns_llm/summarize.baml",
                 "function Summarize(text: string) -> string { text }",
@@ -953,7 +997,7 @@ mod tests {
         ]);
         let mut args = pack_args();
         args.functions = vec!["llm.Summarize".into(), "util.Greet".into()];
-        let (mode, targets) = args.resolve_targets(&engine).unwrap();
+        let (mode, targets) = args.resolve_targets(&catalog).unwrap();
         assert!(matches!(mode, baml_exec::PackMode::Subcommand));
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[0].display_name, "llm.Summarize");
@@ -967,13 +1011,13 @@ mod tests {
     /// fully-qualified targets so the user can rename one.
     #[test]
     fn test_pack_namespaced_subcommand_name_collision_errors() {
-        let engine = engine_from_files(&[
+        let catalog = catalog_from_files(&[
             ("ns_llm/foo.baml", "function Foo() -> int { 1 }"),
             ("ns_util/foo.baml", "function Foo() -> int { 2 }"),
         ]);
         let mut args = pack_args();
         args.functions = vec!["llm.Foo".into(), "util.Foo".into()];
-        let err = args.resolve_targets(&engine).unwrap_err();
+        let err = args.resolve_targets(&catalog).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("share subcommand name `Foo`"), "got: {msg}");
         assert!(msg.contains("llm.Foo"), "got: {msg}");
@@ -985,13 +1029,13 @@ mod tests {
     /// when it's the unique match.
     #[test]
     fn test_pack_namespaced_resolves_via_bare_name() {
-        let engine = engine_from_files(&[(
+        let catalog = catalog_from_files(&[(
             "ns_llm/summarize.baml",
             "function Summarize(text: string) -> string { text }",
         )]);
         let mut args = pack_args();
         args.functions = vec!["Summarize".into()];
-        let (_, targets) = args.resolve_targets(&engine).unwrap();
+        let (_, targets) = args.resolve_targets(&catalog).unwrap();
         assert_eq!(targets[0].qualified_name, "user.llm.Summarize");
         assert_eq!(targets[0].subcommand_name, "Summarize");
     }
@@ -1002,10 +1046,10 @@ mod tests {
         // Without namespaces in `compile_source` we can only exercise the
         // duplicate path by repeating the same function. Engine accepts
         // duplicates in the input list — `resolve_targets` is what rejects.
-        let engine = engine_from_source("function Foo() -> int { 1 }");
+        let catalog = catalog_from_source("function Foo() -> int { 1 }");
         let mut args = pack_args();
         args.functions = vec!["Foo".to_string(), "Foo".to_string()];
-        let err = args.resolve_targets(&engine).unwrap_err();
+        let err = args.resolve_targets(&catalog).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("share subcommand name"), "got: {msg}");
     }
@@ -1015,8 +1059,8 @@ mod tests {
     /// A target whose signature declares `help` is rejected at pack time.
     #[test]
     fn test_validate_help_param_rejects_reserved_name() {
-        let engine = engine_from_source(r#"function Entry(help: string) -> string { help }"#);
-        let err = validate_help_param(&engine, "user.Entry").unwrap_err();
+        let catalog = catalog_from_source(r#"function Entry(help: string) -> string { help }"#);
+        let err = validate_catalog_help_param(&catalog, "user.Entry").unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`help`"), "got: {msg}");
         assert!(msg.to_lowercase().contains("rename"), "got: {msg}");
@@ -1025,16 +1069,17 @@ mod tests {
     /// A target without a `help` parameter passes the check.
     #[test]
     fn test_validate_help_param_allows_unrelated_names() {
-        let engine =
-            engine_from_source(r#"function Entry(text: string, verbose: bool) -> string { text }"#);
-        validate_help_param(&engine, "user.Entry").unwrap();
+        let catalog = catalog_from_source(
+            r#"function Entry(text: string, verbose: bool) -> string { text }"#,
+        );
+        validate_catalog_help_param(&catalog, "user.Entry").unwrap();
     }
 
     /// Parameterless `main()` has no params at all → passes trivially.
     #[test]
     fn test_validate_help_param_parameterless_ok() {
-        let engine = engine_from_source("function main() -> int { 1 }");
-        validate_help_param(&engine, "user.main").unwrap();
+        let catalog = catalog_from_source("function main() -> int { 1 }");
+        validate_catalog_help_param(&catalog, "user.main").unwrap();
     }
 
     // ── Default flag values — BEP-027 §"What `baml pack` changes" ─────
@@ -1249,14 +1294,14 @@ mod tests {
 
     // ── canonicalize_function_name ────────────────────────────────────
 
-    /// Bare name resolves to whatever qualified form the engine stores.
-    /// The engine uses the `user.` prefix for user functions, so lookup
+    /// Bare name resolves to whatever qualified form the catalog stores.
+    /// The catalog uses the `user.` prefix for user functions, so lookup
     /// by either form should produce the same canonical qualified name.
     #[test]
     fn test_canonicalize_function_name_resolves_bare_and_qualified() {
-        let engine = engine_from_source("function Greet(x: string) -> string { x }");
-        let canonical_bare = canonicalize_function_name(&engine, "Greet");
-        let canonical_qualified = canonicalize_function_name(&engine, "user.Greet");
+        let catalog = catalog_from_source("function Greet(x: string) -> string { x }");
+        let canonical_bare = canonicalize_function_name(&catalog, "Greet");
+        let canonical_qualified = canonicalize_function_name(&catalog, "user.Greet");
         assert_eq!(
             canonical_bare, canonical_qualified,
             "both spellings must canonicalize to the same name",
@@ -1267,8 +1312,8 @@ mod tests {
     /// elsewhere (`function_exists` check in `resolve_target`).
     #[test]
     fn test_canonicalize_function_name_unknown_passes_through() {
-        let engine = engine_from_source("function main() -> int { 1 }");
-        let name = canonicalize_function_name(&engine, "DoesNotExist");
+        let catalog = catalog_from_source("function main() -> int { 1 }");
+        let name = canonicalize_function_name(&catalog, "DoesNotExist");
         assert_eq!(name, "DoesNotExist");
     }
 
@@ -1291,7 +1336,10 @@ mod tests {
         let mut args = pack_args();
         args.from = Some(tmp.path().to_path_buf());
         let reporter = Reporter::new();
-        let err = args.load_and_compile_project(&reporter).unwrap_err();
+        let err = args
+            .load_and_compile_project(&reporter)
+            .err()
+            .expect("invalid project");
         assert!(
             format!("{err}").contains("no `.baml` files"),
             "expected no-files error; got: {err}",
@@ -1318,7 +1366,7 @@ mod tests {
     /// A typo close to an existing function name yields a suggestion.
     #[test]
     fn test_pack_resolve_function_flag_unknown_with_suggestion() {
-        let engine = engine_from_source(
+        let catalog = catalog_from_source(
             r#"
                 function Summarize(text: string) -> string { text }
                 function Categorize(text: string) -> string { text }
@@ -1326,7 +1374,7 @@ mod tests {
         );
         let mut args = pack_args();
         args.functions = vec!["Summarise".to_string()]; // British spelling
-        let err = args.resolve_targets(&engine).unwrap_err();
+        let err = args.resolve_targets(&catalog).unwrap_err();
         let msg = format!("{err}");
         assert!(
             msg.contains("Did you mean"),
@@ -1342,10 +1390,10 @@ mod tests {
     /// (which still points at `baml run --list`).
     #[test]
     fn test_pack_resolve_function_flag_unknown_with_no_suggestions() {
-        let engine = engine_from_source("function Greet() -> int { 1 }");
+        let catalog = catalog_from_source("function Greet() -> int { 1 }");
         let mut args = pack_args();
         args.functions = vec!["totally_unrelated_xyz".to_string()];
-        let err = args.resolve_targets(&engine).unwrap_err();
+        let err = args.resolve_targets(&catalog).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("not found"), "got: {msg}");
         assert!(
@@ -1358,14 +1406,14 @@ mod tests {
     /// first, then jaro-winkler matches, deduplicated.
     #[test]
     fn test_pack_function_suggestions_matches_substrings_and_similar() {
-        let engine = engine_from_source(
+        let catalog = catalog_from_source(
             r#"
                 function Summarize(text: string) -> string { text }
                 function ParseSummary() -> string { "x" }
                 function Categorize(text: string) -> string { text }
             "#,
         );
-        let hits = function_suggestions(&engine, "Summary");
+        let hits = function_suggestions(&catalog, "Summary");
         assert!(
             hits.iter().any(|n| n == "Summarize"),
             "expected Summarize (similar); got: {hits:?}"

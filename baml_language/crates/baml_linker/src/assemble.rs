@@ -19,6 +19,7 @@ use super::{
 
 /// Everything resolved; builds the image.
 pub(super) struct Assembler<'l, 'a> {
+    pub(super) selected_rules: Option<PerPackage<Vec<bool>>>,
     pub(super) set: &'l LinkSet<'a>,
     pub(super) order: &'l LayoutOrder,
     pub(super) slots: &'l Slots,
@@ -100,6 +101,15 @@ impl Assembler<'_, '_> {
             let placed = &space.objects.code;
             for bucket in Bucket::ALL {
                 for (k, object) in bucket.objects(space.unit).iter().enumerate() {
+                    let flat = Bucket::ALL
+                        .iter()
+                        .take_while(|&&b| b != bucket)
+                        .map(|b| b.objects(space.unit).len())
+                        .sum::<usize>()
+                        + k;
+                    if space.objects.local(space.unit, flat).is_none() {
+                        continue;
+                    }
                     if bucket == Bucket::Code && placed[k].is_shadow() {
                         continue;
                     }
@@ -137,9 +147,9 @@ impl Assembler<'_, '_> {
         let name = self.set.name(id);
         package.slot_base = GlobalIndex::from_raw(self.slots.units[id].func_base);
         for (path, flat) in &self.set.package(id).unit.exports.globals {
-            let slot = self.slots.units[id]
-                .local(*flat as usize)
-                .unwrap_or_else(|| unreachable!("the partition was validated"));
+            let Some(slot) = self.slots.units[id].local(*flat as usize) else {
+                continue;
+            };
             match path {
                 DeclPath::Function(_) | DeclPath::InterfaceBody(_) => {
                     let Some(&abs) = self.exports.get(&(id, path.clone())) else {
@@ -153,12 +163,9 @@ impl Assembler<'_, '_> {
                 DeclPath::Let(_) => {}
                 _ => unreachable!("the partition was validated"),
             }
-            debug_assert_eq!(
-                slot,
-                package.slot_base.raw() + *flat as usize,
-                "a unit's slots are contiguous from its base"
-            );
-            package.globals.insert(path.clone(), *flat);
+            let ordinal = u32::try_from(slot - package.slot_base.raw())
+                .map_err(|_| LinkError::invalid("package global ordinal exceeds u32"))?;
+            package.globals.insert(path.clone(), ordinal);
         }
         Ok(())
     }
@@ -166,7 +173,10 @@ impl Assembler<'_, '_> {
     /// Fill a package's declaration tables from its unit's object exports.
     fn fill_tables(&self, id: LinkPackageId, package: &mut ProgramPackage) {
         for (path, _) in &self.set.package(id).unit.exports.objects {
-            let abs = ObjectIndex::from_raw(self.exports[&(id, path.clone())]);
+            let Some(&abs) = self.exports.get(&(id, path.clone())) else {
+                continue;
+            };
+            let abs = ObjectIndex::from_raw(abs);
             let (table, item) = match path {
                 DeclPath::Class(item) => (&mut package.classes, item),
                 DeclPath::Enum(item) => (&mut package.enums, item),
@@ -180,9 +190,11 @@ impl Assembler<'_, '_> {
 
     /// Copy the package record in.
     fn fill_record(&self, id: LinkPackageId, package: &mut ProgramPackage) {
-        package
-            .interface_blob
-            .clone_from(&self.set.package(id).record.interface_blob);
+        if self.selected_rules.is_none() {
+            package
+                .interface_blob
+                .clone_from(&self.set.package(id).record.interface_blob);
+        }
     }
 
     /// Resolve a unit's impl rules: the interface head through its operand
@@ -196,8 +208,16 @@ impl Assembler<'_, '_> {
     ) -> Result<(), LinkError> {
         let space = self.unit_space(id);
         let name = space.name;
-        for rule in &space.unit.impl_rules {
-            let interface_head = ObjectIndex::from_raw(space.object(rule.interface_head.raw())?);
+        for (ordinal, rule) in space.unit.impl_rules.iter().enumerate() {
+            if self
+                .selected_rules
+                .as_ref()
+                .is_some_and(|rules| !rules[id][ordinal])
+            {
+                continue;
+            }
+            let abs_interface = space.object(rule.interface_head.raw())?;
+            let interface_head = ObjectIndex::from_raw(abs_interface);
             if !matches!(
                 program.objects.get(interface_head.raw()),
                 Some(Object::Interface(_))
@@ -212,7 +232,7 @@ impl Assembler<'_, '_> {
                     .objects
                     .code
                     .get(body.code_offset as usize)
-                    .map(|placed| placed.abs())
+                    .and_then(|placed| placed.index())
                     .ok_or_else(|| {
                         LinkError::invalid(format!(
                             "package `{name}` impl method `{method}` references code offset {} \
