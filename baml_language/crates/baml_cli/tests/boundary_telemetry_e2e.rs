@@ -759,6 +759,11 @@ async fn initial_rejection_fails_expressions_and_test_runs() {
 async fn standalone_binary_reports_initial_refusal_after_a_fast_main() {
     common::ensure_built();
     let temp = fixture("function main() -> int { 7 }\n");
+    std::fs::write(
+        temp.path().join("baml.toml"),
+        "[package]\nname = \"pack_e2e\"\n[pack]\non_initial_telemetry_failure = \"abort\"\n",
+    )
+    .unwrap();
     let binary = temp.path().join("packed");
     let packed = execute_case(
         temp.path(),

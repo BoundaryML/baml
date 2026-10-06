@@ -118,14 +118,17 @@ async fn packed_public_credentials_are_fresh_and_fixed_with_endpoint_override() 
     assert_eq!(first["bytecodeDigest"], second["bytecodeDigest"]);
     let run_server = MockServer::start().await;
     ingest_api(&run_server).await;
-    let output = Command::new(temp.path().join("out"))
-        .env("BOUNDARY_API_URL", run_server.uri())
-        .env("BOUNDARY_API_KEY", "bdry_secret_customer_do_not_use")
-        .env("BOUNDARY_PROJECT", "customer/other-project")
-        .env("BAML_TELEMETRY", "off")
-        .env("BAML_HOME", common::shared_baml_home())
-        .output()
-        .unwrap();
+    let run = || {
+        Command::new(temp.path().join("out"))
+            .env("BOUNDARY_API_URL", run_server.uri())
+            .env("BOUNDARY_API_KEY", "bdry_secret_customer_do_not_use")
+            .env("BOUNDARY_PROJECT", "customer/other-project")
+            .env("BAML_TELEMETRY", "off")
+            .env("BAML_HOME", common::shared_baml_home())
+            .output()
+            .unwrap()
+    };
+    let output = run();
     succeeded(&output);
     assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
@@ -144,6 +147,17 @@ async fn packed_public_credentials_are_fresh_and_fixed_with_endpoint_override() 
         );
     }
     assert_eq!(build_server.received_requests().await.unwrap().len(), 2);
+
+    run_server.reset().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(503))
+        .expect(4)
+        .mount(&run_server)
+        .await;
+    let output = run();
+    succeeded(&output);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("warning:"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
