@@ -11,6 +11,7 @@
 //! Each generated bench measures *pure VM execution*: the BAML source is
 //! compiled and the tokio runtime is built ONCE, outside the measured region
 //! (see `bench_vm_main`), so only the cost of calling `main()` is timed.
+#![allow(clippy::disallowed_methods)]
 
 use std::{path::Path, sync::Arc};
 

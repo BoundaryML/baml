@@ -258,10 +258,10 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         let field_name = rust_field_ident(raw_name);
         match &field.field_type {
             BamlType::RustType => {
-                // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
+                // Generic downcast accessor: fn _data<T: BexRustData>(&self, vm: &BexVm) -> &T
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{"
+                    "{inner}pub fn {field_name}<'v, T: bex_vm_types::BexRustData>(&self, vm: &'v BexVm) -> &'v T {{"
                 )
                 .unwrap();
                 writeln!(
@@ -608,7 +608,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 /// Map `BamlType` to the owned Rust type used in copy structs.
 fn copy_field_type(ty: &BamlType) -> String {
     match ty {
-        BamlType::RustType => "Arc<dyn Any + Send + Sync>".to_string(),
+        BamlType::RustType => "Arc<dyn bex_vm_types::BexRustData>".to_string(),
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
@@ -1290,7 +1290,7 @@ fn emit_single_extraction_indented(
         );
         writeln!(
             out,
-            "{indent}let {name} = if args[{idx}].is_omitted() {{ indexmap::IndexMap::new() }} else {{ vm.as_map(&args[{idx}])?.to_index_map() }};"
+            "{indent}let {name} = if args[{idx}].is_omitted() {{ indexmap::IndexMap::new() }} else {{ vm.as_string_map(&args[{idx}])? }};"
         )
         .unwrap();
         return;
@@ -1338,9 +1338,9 @@ fn emit_immut_receiver_extraction_indented(
             .unwrap();
         }
         // A read map receiver is passed as a `MapView` carrying its key/value
-        // types alongside the data. The data is owned (`to_index_map`) when the
+        // types alongside the data. The data is cloned when the
         // glue later needs `&mut vm` (may_yield / mut_vm), else a cheap read
-        // guard; both deref to the `IndexMap` so map-only builtins are unchanged.
+        // guard; both deref to `MapData`.
         "Map" => {
             writeln!(
                 out,
@@ -1353,7 +1353,7 @@ fn emit_immut_receiver_extraction_indented(
             )
             .unwrap();
             let data_expr = if arraymap_needs_owned {
-                format!("vm.as_map(&args[{idx}])?.to_index_map()")
+                format!("(*vm.as_map(&args[{idx}])?).clone()")
             } else {
                 format!("vm.as_map(&args[{idx}])?")
             };
@@ -1510,7 +1510,7 @@ fn receiver_immut_extraction_expr(
         }
         "Map" => {
             if arraymap_needs_owned {
-                format!("vm.as_map({val})?.to_index_map()")
+                format!("(*vm.as_map({val})?).clone()")
             } else {
                 format!("vm.as_map({val})?")
             }
@@ -1638,11 +1638,14 @@ fn extraction_expr(
                 format!("vm.as_array({val})?")
             }
         }
+        BamlType::Map(key, _) if matches!(&**key, BamlType::String) && !is_mut => {
+            format!("vm.as_string_map({val})?")
+        }
         BamlType::Map(_, _) => {
             if is_mut {
                 format!("vm.as_map_mut({val})?")
             } else if arraymap_needs_owned {
-                format!("vm.as_map({val})?.to_index_map()")
+                format!("(*vm.as_map({val})?).clone()")
             } else {
                 format!("vm.as_map({val})?")
             }
@@ -2066,11 +2069,14 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
                 "&[Value]".to_string()
             }
         }
+        BamlType::Map(key, _) if matches!(&**key, BamlType::String) && !is_mut => {
+            "&IndexMap<bex_str::BexStr, Value>".to_string()
+        }
         BamlType::Map(_, _) => {
             if is_mut {
-                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
+                "&mut bex_vm_types::MapData".to_string()
             } else {
-                "&IndexMap<bex_str::BexStr, Value>".to_string()
+                "&bex_vm_types::MapData".to_string()
             }
         }
         BamlType::Optional(inner) => {
@@ -2159,10 +2165,10 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
             if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
                 "&Value".to_string()
             } else if recv.receiver_type.is_mut() {
-                "&mut IndexMap<bex_str::BexStr, Value>".to_string()
+                "&mut bex_vm_types::MapData".to_string()
             } else {
                 // A read receiver carries its key/value types via `MapView`,
-                // which derefs to `IndexMap` so map-only builtins are unaffected.
+                // which derefs to `MapData`.
                 "MapView<'_>".to_string()
             }
         }
@@ -2588,9 +2594,9 @@ mod tests {
             output.contains("pub instance: &'a Instance"),
             "Pdf view should hold &Instance:\n{output}"
         );
-        // _data accessor should be generic with downcast
+        // _data accessor downcasts to any payload type.
         assert!(
-            output.contains("fn _data<'v, T: 'static>"),
+            output.contains("fn _data<'v, T: bex_vm_types::BexRustData>"),
             "Pdf._data should be generic downcast accessor:\n{output}"
         );
     }
@@ -2600,9 +2606,9 @@ mod tests {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
-        // copy::media::Pdf should have _data: Arc<dyn Any + Send + Sync>
+        // copy::media::Pdf should have _data: Arc<dyn bex_vm_types::BexRustData>
         assert!(
-            output.contains("Arc<dyn Any + Send + Sync>"),
+            output.contains("Arc<dyn bex_vm_types::BexRustData>"),
             "copy struct should have Arc<dyn Any> field:\n{output}"
         );
         // to_value method

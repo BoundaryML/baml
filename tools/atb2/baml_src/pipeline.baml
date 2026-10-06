@@ -272,9 +272,9 @@ function origin_of(fb: Feedback) -> json {
     match (fb.source) {
         FeedbackSource.Slack => slack_origin(fb, slack_intake_channel() ?? ""),
         FeedbackSource.BamlFeedback => {
-            ({ "kind": "posthog", "report_id": fb.id.slice(3, fb.id.length()) }).to_json()
+            { "kind": "posthog", "report_id": fb.id.slice(3, fb.id.length()) }
         },
-        FeedbackSource.Github => ({ "kind": "github", "id": fb.id }).to_json(),
+        FeedbackSource.Github => ({ "kind": "github", "id": fb.id }),
     }
 }
 
@@ -287,7 +287,7 @@ function triage_feedback(fb: Feedback) -> Issue? {
     let created = create_issue(fb);
     match (created) {
         null => {
-            log_event("no_issue", null, fb.id, { "reason": "fixed on this toolchain" }.to_json(), null, null);
+            log_event("no_issue", null, fb.id, { "reason": "fixed on this toolchain" }, null, null);
             null
         },
         let issue: Issue => {
@@ -297,7 +297,7 @@ function triage_feedback(fb: Feedback) -> Issue? {
             //# link the report to its issue
             save_feedback(with_issue(fb, gauged.id), origin_of(fb));
             //# open the issue's thread
-            notify("issue_created", gauged, issue_created_text(gauged), { "feedback": fb.id }.to_json());
+            notify("issue_created", gauged, issue_created_text(gauged), { "feedback": fb.id });
             gauged
         },
     }
@@ -405,7 +405,7 @@ testset "pipeline" {
             baml.json.path_or<string>(origin_of(sample_feedback()), ".report_id", ""),
             "abc",
         );
-        let sl = feedback_from_slack(baml.json.parse(`{"type":"message","user":"U1","ts":"1.000200","text":"x"}`), "C1")
+        let sl = feedback_from_slack({ "type": "message", "user": "U1", "ts": "1.000200", "text": "x" }, "C1")
             ?? baml.sys.panic("no feedback");
         assert.equal(baml.json.path_or<string>(origin_of(sl), ".kind", ""), "slack");
     }

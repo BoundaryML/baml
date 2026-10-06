@@ -25,6 +25,51 @@ fn found(nav: &Nav) -> Option<DecodedValue> {
     }
 }
 
+#[test]
+fn typed_map_keys_render_as_pairs_and_navigate_without_collisions() {
+    use DecodedValue as V;
+    let snapshot = Arc::new(DecodedSnapshot {
+        id: CasId::from_bytes([7; 16]),
+        encoded_len: 0,
+        children: vec![],
+        root: DecodedRoot::Value(V::Object(NodeId(0))),
+        objects: vec![DecodedObject::Map {
+            key_type: ty(),
+            value_type: ty(),
+            original_len: 3,
+            entries: vec![
+                (V::Int(1), s("integer")),
+                (s("1"), s("string")),
+                (V::Object(NodeId(0)), s("self")),
+            ],
+        }],
+    });
+    let blobs = Blobs::default();
+    for (segment, expected) in [
+        (Segment::Index(1), "integer"),
+        (Segment::Key("1".into()), "string"),
+    ] {
+        assert_eq!(
+            found(&navigate(
+                &blobs,
+                &snapshot,
+                Root::Value,
+                None,
+                &[segment],
+                0
+            )),
+            Some(s(expected))
+        );
+    }
+    let Nav::Value(value) = navigate(&blobs, &snapshot, Root::Value, None, &[], 0) else {
+        panic!()
+    };
+    assert_eq!(
+        render_value(&blobs, &value, &RenderLimits::default()).json,
+        json!({"$id": 0, "$map": [[1, "integer"], ["1", "string"], [{"$ref": 0}, "self"]]})
+    );
+}
+
 fn ty() -> TypeDescription {
     TypeDescription {
         encoded: Box::new([]),
@@ -74,10 +119,7 @@ fn snapshot() -> Arc<DecodedSnapshot> {
         O::Map {
             key_type: ty(),
             value_type: ty(),
-            entries: vec![
-                ("name".into(), s("widget")),
-                ("$price".into(), V::Float(1.5)),
-            ],
+            entries: vec![(s("name"), s("widget")), (s("$price"), V::Float(1.5))],
             original_len: 2,
         },
         // 4: meta map that contains itself
@@ -85,8 +127,8 @@ fn snapshot() -> Arc<DecodedSnapshot> {
             key_type: ty(),
             value_type: ty(),
             entries: vec![
-                ("self".into(), V::Object(NodeId(4))),
-                ("big".into(), V::Bigint(Arc::new(BigInt::from(1) << 80))),
+                (s("self"), V::Object(NodeId(4))),
+                (s("big"), V::Bigint(Arc::new(BigInt::from(1) << 80))),
             ],
             original_len: 2,
         },
@@ -280,7 +322,7 @@ fn rendering_preserves_sharing_cycles_truncation_and_names() {
     assert_eq!(rendered.incomplete, None);
     let args = rendered.json;
     let customer = &args["customer"];
-    assert_eq!(customer["$class"], json!("Customer"));
+    assert_eq!(customer["$class"], json!("user.Customer"));
     assert_eq!(customer["age"], json!(30));
     assert_eq!(customer["nothing"], Json::Null);
     assert_eq!(customer["cell"], json!(99));
@@ -331,7 +373,7 @@ fn shared_labels_follow_output_order_and_skip_truncated_visits() {
     let map = |value: i64| O::Map {
         key_type: ty(),
         value_type: ty(),
-        entries: vec![("v".into(), V::Int(value))],
+        entries: vec![(s("v"), V::Int(value))],
         original_len: 1,
     };
     let list = |items: Vec<DecodedValue>| O::List {

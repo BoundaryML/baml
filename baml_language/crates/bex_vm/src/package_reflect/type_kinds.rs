@@ -153,7 +153,8 @@ impl BexVm {
                 });
             }
             let head = declared[&class.name];
-            let Object::Class(declaration) = self.get_object_mut(head.ptr()) else {
+            let mut metered = self.get_object_mut(head.ptr());
+            let Object::Class(declaration) = &mut *metered else {
                 unreachable!("a just-allocated class changed variant")
             };
             declaration.fields = fields;
@@ -170,6 +171,14 @@ struct InterfaceWitness {
     interface_ptr: bex_vm_types::HeapPtr,
     interface_ty: bex_vm_types::RealizedTy,
     field_links: IndexMap<baml_type::Name, baml_type::Name>,
+}
+
+impl bex_vm_types::BexRustData for InterfaceWitness {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.bytes(
+            self.field_links.capacity() * size_of::<(baml_type::Name, baml_type::Name, usize)>(),
+        );
+    }
 }
 
 pub(super) struct WitnessField {
@@ -413,7 +422,8 @@ pub(super) fn register_class_witnesses(
             .heap()
             .write_barrier(class_ptr, Value::object(*rule));
     }
-    let Object::Class(class) = vm.get_object_mut(class_ptr) else {
+    let mut metered = vm.get_object_mut(class_ptr);
+    let Object::Class(class) = &mut *metered else {
         unreachable!("witnessed class placeholder changed variant")
     };
     let bex_vm_types::types::Owner::Anonymous { witnesses } = &mut class.owner else {
@@ -1153,9 +1163,8 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
     };
     let read = || {
         let other = vm
-            .as_map(&instance.load_field(4))
+            .as_string_map(&instance.load_field(4))
             .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())?
-            .to_index_map()
             .iter()
             .map(|(key, value)| {
                 vm.as_string(value)
@@ -1589,9 +1598,8 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 }
             };
             let other = vm
-                .as_map(&meta.load_field(3))
+                .as_string_map(&meta.load_field(3))
                 .map_err(|_| "reflect.Meta.other must be map<string, string>".to_string())?
-                .to_index_map()
                 .iter()
                 .map(|(key, value)| {
                     vm.as_string(value)

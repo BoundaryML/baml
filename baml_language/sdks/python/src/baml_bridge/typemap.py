@@ -168,6 +168,22 @@ class BamlTypeMap:
         for fqn in list(self._alias_lazy):
             self.get_type_alias(fqn)
 
+    def capture_type(self, cls: type):
+        """Identify an actual generated class/enum without instance discovery."""
+        mro = type.__dict__["__mro__"].__get__(cls)
+        for base in mro:
+            attributes = type.__dict__["__dict__"].__get__(base)
+            module = attributes.get("__module__")
+            if type(module) is not str:
+                continue
+            name = type.__dict__["__qualname__"].__get__(base)
+            fqn = self._reverse.get((module, name))
+            if fqn in self._class_lazy and self.get_class(fqn) is base:
+                return fqn, False, base
+            if fqn in self._enum_lazy and self.get_enum(fqn) is base:
+                return fqn, True, base
+        return None
+
 
 _TYPE_MAP = BamlTypeMap()
 

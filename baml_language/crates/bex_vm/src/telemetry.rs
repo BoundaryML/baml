@@ -210,6 +210,28 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
+    pub(crate) fn entry_settings(
+        &self,
+        function: &Function,
+        config: TraceConfig,
+    ) -> bex_vm_types::trace::TraceOptionsData {
+        let mut options = ordinary_settings(function, config);
+        if config.mode.is_none() && config.reserved_id.is_none() {
+            let policy_id = function.telemetry_policy_id.load();
+            options.mode = Some(if policy_id == btel_types::TelemetryPolicyId::NONE {
+                match self.auto_level {
+                    AutoTelemetryLevel::Low => InvocationMode::Hidden,
+                    AutoTelemetryLevel::Medium => {
+                        default_mode(function, self.policy_by_id(policy_id))
+                    }
+                    AutoTelemetryLevel::High => InvocationMode::Span,
+                }
+            } else {
+                default_mode(function, self.policy_by_id(policy_id))
+            });
+        }
+        options
+    }
     pub fn set_context(&mut self, context: btel_types::context::Context) {
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         if !context.same_version(&self.context) {
@@ -716,11 +738,12 @@ impl TelemetryState {
         let captured_inputs = (mode == InvocationMode::Span && capture_inputs)
             .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
             .flatten();
-        // Types are not user data: a span records them whether or not it
-        // captures its arguments.
-        let captured_type_args = (mode == InvocationMode::Span && !type_args.is_empty())
-            .then(|| self.capture_type_args(function, type_args))
-            .flatten();
+        // Type arguments are inputs too: a span that doesn't capture its
+        // arguments builds no snapshot of them either.
+        let captured_type_args =
+            (mode == InvocationMode::Span && capture_inputs && !type_args.is_empty())
+                .then(|| self.capture_type_args(function, type_args))
+                .flatten();
         if captured_inputs.is_some() || captured_type_args.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
@@ -1185,8 +1208,15 @@ impl TelemetryState {
             return;
         }
         self.start_thread();
+        self.complete_thread_at(outcome, self.clock.read());
+    }
+
+    fn complete_thread_at(&mut self, outcome: InvocationOutcome, completed_at: ClockInstant) {
+        if self.thread.completed {
+            return;
+        }
+        self.start_thread();
         self.thread.completed = true;
-        let completed_at = self.clock.read();
         if self.is_waiting() {
             // Cancelled before it ran: it starts and ends at the same instant.
             self.thread.running = true;
@@ -1475,6 +1505,40 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
             AI_DEFAULT_MODE
         }
         FunctionKind::Bytecode => BYTECODE_DEFAULT_MODE,
+    }
+}
+
+pub(crate) fn ordinary_settings(
+    function: &Function,
+    config: TraceConfig,
+) -> bex_vm_types::trace::TraceOptionsData {
+    let ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
+    bex_vm_types::trace::TraceOptionsData {
+        mode: Some(if config.reserved_id.is_some() {
+            InvocationMode::Span
+        } else {
+            config.mode.unwrap_or(if ai {
+                AI_DEFAULT_MODE
+            } else {
+                BYTECODE_DEFAULT_MODE
+            })
+        }),
+        inputs: Some(
+            config
+                .inputs
+                .unwrap_or(ai && btel_settings::policy::AI_CAPTURE_INPUTS),
+        ),
+        output: Some(
+            config
+                .output
+                .unwrap_or(ai && btel_settings::policy::AI_CAPTURE_OUTPUT),
+        ),
+        error: Some(
+            config
+                .error
+                .unwrap_or(ai && btel_settings::policy::AI_CAPTURE_ERROR),
+        ),
+        context: None,
     }
 }
 
@@ -2239,18 +2303,29 @@ mod tests {
         }
     }
 
-    /// Records of one generic call made with `type_args`: its announced
-    /// type arguments, and whether its completion depends on the
+    /// Records of one generic call made with `type_args` under a policy
+    /// capturing inputs or not and a call's own `inputs` request: its
+    /// announced type arguments, and whether its completion depends on the
     /// announcement.
     fn type_args_of(
         function: &Function,
-        inputs: bool,
+        capture_inputs: bool,
+        inputs: Option<bool>,
         type_args: CallTypeArgs<'_>,
     ) -> (Option<serde_json::Value>, bool) {
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        state
+            .set_policy(
+                function,
+                TelemetryPolicy {
+                    capture_inputs,
+                    ..TelemetryPolicy::NONE
+                },
+            )
+            .unwrap();
         let trace = TraceConfig {
             mode: Some(InvocationMode::Span),
-            inputs: Some(inputs),
+            inputs,
             ..TraceConfig::default()
         };
         // SAFETY: no heap values; the registration hook dereferences nothing.
@@ -2282,7 +2357,7 @@ mod tests {
     }
 
     #[test]
-    fn a_generic_call_records_its_type_args_by_name_whether_or_not_inputs_are() {
+    fn a_generic_call_records_its_type_args_by_name_when_it_captures_its_inputs() {
         let mut generic = function(FunctionKind::Bytecode, None);
         // A method of `Box<T>`: the class's parameter rides on the receiver,
         // the method's own is passed by the call.
@@ -2293,32 +2368,56 @@ mod tests {
             carried: &carried,
             passed: &passed,
         };
-        for inputs in [false, true] {
-            assert_eq!(
-                type_args_of(&generic, inputs, both),
-                (
-                    Some(serde_json::json!({"T": "type: int", "U": "type: string"})),
-                    true
-                ),
-                "inputs captured: {inputs}"
-            );
+        let recorded = (
+            Some(serde_json::json!({"T": "type: int", "U": "type: string"})),
+            true,
+        );
+        // The same decision as the arguments': the policy, or the call's own
+        // request. A call can ask for its inputs but not opt out of them.
+        for capture_inputs in [false, true] {
+            for inputs in [None, Some(false), Some(true)] {
+                let captured = capture_inputs || inputs == Some(true);
+                assert_eq!(
+                    type_args_of(&generic, capture_inputs, inputs, both),
+                    if captured {
+                        recorded.clone()
+                    } else {
+                        (None, false)
+                    },
+                    "policy: {capture_inputs}, call: {inputs:?}"
+                );
+            }
         }
+        // An LLM function captures its inputs by default, so its type
+        // arguments too.
+        let mut llm = function(
+            FunctionKind::Bytecode,
+            Some(FunctionMeta::Llm {
+                client: "test".into(),
+            }),
+        );
+        llm.type_param_names = vec!["T".into(), "U".into()];
+        assert_eq!(type_args_of(&llm, false, None, both), recorded);
         // Without type arguments nothing is recorded, and the completion
         // does not wait for an announcement.
         let plain = function(FunctionKind::Bytecode, None);
         assert_eq!(
-            type_args_of(&plain, false, CallTypeArgs::default()),
+            type_args_of(&plain, false, None, CallTypeArgs::default()),
             (None, false)
         );
         // A slot the compiler did not name is left out, never given a key.
         let mut partial = generic;
         partial.type_param_names.truncate(1);
         assert_eq!(
-            type_args_of(&partial, false, both),
+            type_args_of(&partial, false, Some(true), both),
             (Some(serde_json::json!({"T": "type: int"})), true)
         );
         partial.type_param_names.clear();
-        assert_eq!(type_args_of(&partial, false, both), (None, false));
+        assert_eq!(
+            type_args_of(&partial, false, Some(true), both).0,
+            None,
+            "no named slot"
+        );
     }
 
     #[test]

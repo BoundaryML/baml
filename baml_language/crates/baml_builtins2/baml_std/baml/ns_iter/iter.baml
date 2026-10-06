@@ -1,3 +1,6 @@
+// Hide primitive iterator bookkeeping and identity wrappers; user callbacks
+// and iterator consumers retain their own tracing.
+
 /// The sentinel `baml.iter.Iterator.next` returns when there are no elements
 /// left.
 ///
@@ -560,6 +563,7 @@ class ArrayIterator<T> {
 
     /// Creates an iterator positioned at the start of `arr`, which is not
     /// copied.
+    /// baml:$trace=trace.hidden
     function new(arr: T[]) -> ArrayIterator<T> throws never {
         ArrayIterator<T> { arr: arr, idx: 0 }
     }
@@ -568,6 +572,7 @@ class ArrayIterator<T> {
         type Item = T;
         type Error = never;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = never> throws never {
             self
         }
@@ -577,6 +582,7 @@ class ArrayIterator<T> {
         type Item = T;
         type Error = never;
 
+        /// baml:$trace=trace.hidden
         function next(self) -> T | Done throws never {
             // Bounds-check by index, not by matching the element against null: when
             // T is itself nullable, a stored null element must be yielded, not
@@ -629,6 +635,7 @@ class Range {
     /// - `max`: the exclusive upper bound. A `max` at or below `min` yields
     ///   nothing.
     /// - `step`: the increment between values; defaults to `1`.
+    /// baml:$trace=trace.hidden
     function new(min: int, max: int, step: int = 1) -> Range throws never {
         Range { i: min, max: max, step: step }
     }
@@ -637,6 +644,7 @@ class Range {
         type Item = int;
         type Error = never;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = int, Error = never> throws never {
             self
         }
@@ -646,6 +654,7 @@ class Range {
         type Item = int;
         type Error = never;
 
+        /// baml:$trace=trace.hidden
         function next(self) -> int | Done throws never {
             if (self.i < self.max) {
                 let cur = self.i;
@@ -679,6 +688,7 @@ class Repeat<T> {
     /// - `value`: the value to yield on every round.
     /// - `count`: how many times to yield it. `0` yields nothing; any negative
     ///   value, including the default, repeats without end.
+    /// baml:$trace=trace.hidden
     function new(value: T, count: int = -1) -> Repeat<T> throws never {
         Repeat<T> { value: value, count: count }
     }
@@ -687,6 +697,7 @@ class Repeat<T> {
         type Item = T;
         type Error = never;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = never> throws never {
             self
         }
@@ -696,6 +707,7 @@ class Repeat<T> {
         type Item = T;
         type Error = never;
 
+        /// baml:$trace=trace.hidden
         function next(self) -> T | Done throws never {
             if (self.count < 0) {
                 self.value
@@ -728,6 +740,7 @@ class Map<T, R, E, E2> {
         type Item = R;
         type Error = E | E2;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
             self
         }
@@ -761,6 +774,7 @@ class Filter<T, E, E2> {
         type Item = T;
         type Error = E | E2;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
         }
@@ -803,6 +817,7 @@ class FilterMap<T, R, E, E2> {
         type Item = R;
         type Error = E | E2;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = R, Error = E | E2> throws never {
             self
         }
@@ -853,6 +868,7 @@ class FlatMap<T, R, E, E2, E3> {
         type Item = R;
         type Error = E | E2 | E3;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = R, Error = E | E2 | E3> throws never {
             self
         }
@@ -909,6 +925,7 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
         type Item = R;
         type Error = E | E3;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = R, Error = E | E3> throws never {
             self
         }
@@ -992,6 +1009,7 @@ class Peekable<T, E> {
         type Item = T;
         type Error = E;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
         }
@@ -1032,6 +1050,7 @@ class StepBy<T, E> {
         type Item = T;
         type Error = E;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
         }
@@ -1076,6 +1095,7 @@ class Chain<T, E, E2> {
         type Item = T;
         type Error = E | E2;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
         }
@@ -1117,6 +1137,7 @@ class Take<T, E> {
         type Item = T;
         type Error = E;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
         }
@@ -1165,6 +1186,7 @@ class Skip<T, E> {
         type Item = T;
         type Error = E;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E> throws never {
             self
         }
@@ -1213,6 +1235,7 @@ class TakeWhile<T, E, E2> {
         type Item = T;
         type Error = E | E2;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
         }
@@ -1259,6 +1282,7 @@ class SkipWhile<T, E, E2> {
         type Item = T;
         type Error = E | E2;
 
+        /// baml:$trace=trace.hidden
         function iter(self) -> Iterator<Item = T, Error = E | E2> throws never {
             self
         }
@@ -1299,6 +1323,7 @@ implements<T> Iterable for T[] {
   /// This is what backs `for (x in xs)` over an array and what lets an array be
   /// passed anywhere an `Iterable` is wanted. Infallible: reading an array
   /// cannot fail.
+  /// baml:$trace=trace.hidden
   function iter(self) -> Iterator<Item = T, Error = never> throws never {
     ArrayIterator.new(self)
   }

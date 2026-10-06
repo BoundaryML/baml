@@ -11,6 +11,10 @@
 //! ([`encode`]), the result-envelope decoding ([`decode`]), the typed
 //! error surface ([`error`]), and the call machinery ([`runtime`]).
 
+// Symlink to `crates/baml_env/src/lib.rs`: this crate is published and cannot
+// depend on the workspace-only `baml_env`, so it compiles the same file.
+#[allow(dead_code, unreachable_pub)]
+mod baml_env;
 pub mod baml_value;
 mod capi;
 mod completion;

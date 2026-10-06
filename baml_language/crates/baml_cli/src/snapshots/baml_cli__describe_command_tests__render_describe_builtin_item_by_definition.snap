@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class String  (string)  <builtin>/baml/string.baml:17-848
+class String  (string)  <builtin>/baml/string.baml:17-847
 
 /// A UTF-8 encoded string.
 ///
@@ -24,15 +24,15 @@ class String {}
 
 methods:
   /// Returns the number of characters (Unicode code points).
-  function length(self) -> int throws never  <builtin>/baml/string.baml:54-56
+  function length(self) -> int throws never  <builtin>/baml/string.baml:52-54
   /// Alias for `length()`.
-  function char_count(self) -> int throws never  <builtin>/baml/string.baml:59-61
+  function char_count(self) -> int throws never  <builtin>/baml/string.baml:57-59
   /// Returns true if the string has no characters.
-  function is_empty(self) -> bool throws never  <builtin>/baml/string.baml:71-73
+  function is_empty(self) -> bool throws never  <builtin>/baml/string.baml:70-72
   /// Returns the length in UTF-8 bytes.
-  function byte_length(self) -> int throws never  <builtin>/baml/string.baml:88-90
+  function byte_length(self) -> int throws never  <builtin>/baml/string.baml:87-89
   /// Returns the lowercase equivalent of this string.
-  function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:107-109
+  function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:106-108
   … 76 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
 
 static_methods:

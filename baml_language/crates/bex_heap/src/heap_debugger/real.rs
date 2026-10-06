@@ -1,9 +1,6 @@
-use std::{
-    env,
-    sync::{
-        Mutex,
-        atomic::{AtomicU32, Ordering},
-    },
+use std::sync::{
+    Mutex,
+    atomic::{AtomicU32, Ordering},
 };
 
 use bex_vm_types::{
@@ -21,14 +18,11 @@ pub enum HeapVerifyMode {
 }
 
 impl HeapVerifyMode {
-    fn parse(value: &str) -> Option<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "off" | "0" | "false" | "no" => Some(Self::Off),
-            "quick" | "1" | "true" | "yes" => Some(Self::Quick),
-            "full" => Some(Self::Full),
-            _ => None,
-        }
-    }
+    const CHOICES: [(&'static str, Self); 3] = [
+        ("off", Self::Off),
+        ("quick", Self::Quick),
+        ("full", Self::Full),
+    ];
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -47,26 +41,17 @@ impl Default for HeapDebuggerConfig {
 }
 
 impl HeapDebuggerConfig {
+    /// Reads `DEV_BAML_HEAP_VERIFY=off|quick|full`; any value other than
+    /// `off` enables the debugger. This is a dev-only, feature-gated knob, so
+    /// an invalid value panics with a clear message instead of being ignored.
     pub fn from_env() -> Self {
-        let mut config = Self::default();
-
-        if let Ok(value) = env::var("BEX_HEAP_DEBUG")
-            && let Some(parsed) = HeapVerifyMode::parse(&value)
-        {
-            config.enabled = parsed != HeapVerifyMode::Off;
+        let verify = baml_env::choice_var("DEV_BAML_HEAP_VERIFY", &HeapVerifyMode::CHOICES)
+            .unwrap_or_else(|error| panic!("{error}"))
+            .unwrap_or(HeapVerifyMode::Off);
+        Self {
+            enabled: verify != HeapVerifyMode::Off,
+            verify,
         }
-
-        if let Ok(value) = env::var("BEX_HEAP_VERIFY")
-            && let Some(parsed) = HeapVerifyMode::parse(&value)
-        {
-            config.verify = parsed;
-        }
-
-        if config.verify != HeapVerifyMode::Off {
-            config.enabled = true;
-        }
-
-        config
     }
 }
 
@@ -252,22 +237,21 @@ impl BexHeap {
         for (handle_key, idx) in handles.iter() {
             self.debug_assert_valid_index(*idx);
             let obj = unsafe { self.get_object(*idx) };
-            if let Object::Sentinel(_) = obj {
+            if let Object::Sentinel(_) | Object::Tombstone = obj {
                 panic!("handle points to sentinel: handle_key={handle_key} idx={idx:?}");
             }
         }
     }
 
     fn debug_handle_runtime_sentinel(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) -> bool {
-        let Object::Sentinel(kind) = obj else {
-            return false;
+        let kind = match obj {
+            Object::Sentinel(kind) => kind,
+            Object::Tombstone => panic!("tombstone in active space: idx={idx:?}"),
+            _ => return false,
         };
 
         match kind {
             SentinelKind::Uninit => true,
-            SentinelKind::FromSpacePoison { .. } => {
-                panic!("from-space poison in active space: idx={idx:?}");
-            }
             SentinelKind::TlabCanary {
                 chunk_start,
                 chunk_end,
@@ -301,7 +285,7 @@ impl BexHeap {
             }
             Object::Map(values) => {
                 let data = unsafe { values.data_unchecked() };
-                for value in data.values() {
+                for value in data.keys().chain(data.values()) {
                     self.debug_assert_valid_value(value);
                 }
             }
@@ -375,7 +359,8 @@ impl BexHeap {
             | Object::Type(_)
             | Object::Float(_)
             // `HostClosure` carries no heap references.
-            | Object::HostClosure(_) => {}
+            | Object::HostClosure(_)
+            | Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
@@ -426,12 +411,13 @@ impl BexHeap {
         })
     }
 
+    /// Keep the old space's chunks alive but drop everything in them, so a
+    /// read through a stale pointer finds a tombstone instead of freed memory.
     pub(crate) fn finalize_inactive_space(&self) {
-        let epoch = self.heap_epoch();
         unsafe {
             let space = &mut *self.inactive.get();
             for slot in space.iter_mut() {
-                *slot = Object::Sentinel(SentinelKind::FromSpacePoison { epoch });
+                *slot = Object::Tombstone;
             }
         }
     }
@@ -442,8 +428,10 @@ impl BexHeap {
             return;
         }
 
-        if let Object::Sentinel(kind) = obj {
-            panic!("heap sentinel read: {kind:?}");
+        match obj {
+            Object::Sentinel(kind) => panic!("heap sentinel read: {kind:?}"),
+            Object::Tombstone => panic!("heap tombstone read"),
+            _ => {}
         }
     }
 

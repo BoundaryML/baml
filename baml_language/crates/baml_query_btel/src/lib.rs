@@ -11,6 +11,7 @@
 //!                                                  |
 //!                                      lazy, verified CAS decoding
 //! ```
+#![warn(clippy::disallowed_methods)]
 #![cfg(not(target_arch = "wasm32"))]
 
 pub mod catalog;

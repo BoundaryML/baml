@@ -66,6 +66,7 @@
 //!
 //! Safety is ensured by the permit/guard coordination system described above.
 
+#![warn(clippy::disallowed_methods)]
 #![allow(unsafe_code)]
 
 mod bex_work;
@@ -86,6 +87,8 @@ pub use host_instrumentation::{
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]
 mod telemetry;
+#[cfg(not(target_arch = "wasm32"))]
+pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
@@ -197,6 +200,22 @@ impl ParkRequestGuard {
 impl Drop for ParkRequestGuard {
     fn drop(&mut self) {
         self.park_requested.store(false, Ordering::Relaxed);
+    }
+}
+
+/// Aborts the process if a collection unwinds.
+///
+/// A collection moves survivors out of from-space, so from its first move until
+/// every root has been forwarded, parked VMs hold pointers to vacated slots.
+/// Unwinding out of that window would release the [`HeapGuard`] and resume
+/// those VMs on a heap they can no longer read, so a panic there is fatal.
+struct AbortOnCollectionUnwind;
+
+impl Drop for AbortOnCollectionUnwind {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            std::process::abort();
+        }
     }
 }
 
@@ -474,6 +493,7 @@ struct ActiveCall {
         btel_types::context::Context,
         Option<bex_vm::telemetry::ThreadSpawnContext>,
         u64,
+        bool,
     )>,
 }
 
@@ -690,6 +710,10 @@ impl Drop for RootCallWork {
 /// Errors that can occur during engine execution.
 #[derive(Debug, PartialEq, Error, Clone)]
 pub enum EngineError {
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("{0}")]
+    CloudAuthorization(Box<CloudAuthorizationFailure>),
+
     #[error("BAML engine is shutting down")]
     ShuttingDown,
 
@@ -864,6 +888,8 @@ pub struct EngineConfig {
     pub launch_context: btel_types::context::Context,
     pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     pub clock_mode: btel_clock::ClockMode,
+    /// Publisher-owned artifact settings; absent for ordinary source execution.
+    pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
 }
@@ -874,11 +900,17 @@ impl Default for EngineConfig {
             launch_context: btel_types::context::Context::default(),
             runtime_compiler: None,
             clock_mode: btel_settings::clock::DEFAULT_MODE,
+            artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
         }
     }
 }
+
+type ExtractedEnumDefinitions = (
+    indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition>,
+    indexmap::IndexMap<::sys_types::DefKey, Vec<String>>,
+);
 
 /// The async runtime that drives VM execution.
 ///
@@ -998,6 +1030,8 @@ pub struct BexEngine {
     method_owners: HashMap<HeapPtr, HeapPtr>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
     resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
+    #[cfg(not(target_arch = "wasm32"))]
+    host_capture_declarations: HashMap<String, btel_snapshot::host::HostDeclaration>,
     /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
     resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
@@ -1731,11 +1765,22 @@ impl BexEngine {
             launch_context,
             runtime_compiler,
             clock_mode,
+            artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
             recording,
         } = config;
-        let auto_telemetry_level = btel_settings::mode::from_env()
-            .map_err(|error| EngineError::Other(error.to_string()))?;
+        let auto_telemetry_level = match &artifact_telemetry {
+            Some(policy) => policy
+                .resolve_level()
+                .map_err(|error| EngineError::Other(error.to_string()))?,
+            None => btel_settings::mode::from_env()
+                .map_err(|error| EngineError::Other(error.to_string()))?,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let recording = recording.map(|recording| match artifact_telemetry {
+            Some(policy) => recording.with_artifact_telemetry(policy),
+            None => recording,
+        });
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
@@ -1755,8 +1800,11 @@ impl BexEngine {
         let init_order = bytecode_program.init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode =
-            bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
+        let bytecode = bex_vm::vm::convert_program_with_trace_hooks(
+            bytecode_program,
+            auto_telemetry_level.is_some(),
+        )
+        .map_err(EngineError::VmInternalError)?;
 
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
@@ -1907,13 +1955,10 @@ impl BexEngine {
                         None,
                     ),
                 };
-                let http_bodies = btel_settings::network::bodies_from_env()
-                    .map_err(|error| EngineError::Other(error.to_string()))?;
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(
-                        bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
-                            .with_http_bodies(http_bodies),
-                    ),
+                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
+                        auto_level,
+                    )),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]
@@ -1924,6 +1969,8 @@ impl BexEngine {
                     delivery,
                     #[cfg(not(target_arch = "wasm32"))]
                     process_exit,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    gc_function: std::sync::OnceLock::new(),
                 })
             })
             .transpose()?;
@@ -2018,7 +2065,38 @@ impl BexEngine {
 
         // Extract class and enum definitions for output format rendering.
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
-        let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
+        let (enum_definitions, host_enum_variants) =
+            Self::extract_enum_definitions(&resolved_enum_names);
+        #[cfg(not(target_arch = "wasm32"))]
+        let host_capture_declarations = class_definitions
+            .iter()
+            .map(|(identity, definition)| {
+                (
+                    identity.name().to_string(),
+                    btel_snapshot::host::HostDeclaration {
+                        identity: identity.clone(),
+                        fields: definition
+                            .fields
+                            .iter()
+                            .map(|field| field.name.clone())
+                            .collect(),
+                        variants: None,
+                    },
+                )
+            })
+            .chain(enum_definitions.keys().map(|identity| {
+                (
+                    identity.name().to_string(),
+                    btel_snapshot::host::HostDeclaration {
+                        identity: identity.clone(),
+                        fields: vec![],
+                        variants: host_enum_variants.get(identity).cloned(),
+                    },
+                )
+            }))
+            .collect();
+        #[cfg(target_arch = "wasm32")]
+        let _ = host_enum_variants;
 
         let bex_work = bex_work::BexWork::new(&heap);
         let heap_permit_manager = Arc::new(HeapPermitManager::new());
@@ -2110,6 +2188,8 @@ impl BexEngine {
             root_package,
             method_owners,
             resolved_class_names,
+            #[cfg(not(target_arch = "wasm32"))]
+            host_capture_declarations,
             resolved_enum_names,
             sys_ops,
             runtime_compiler,
@@ -2258,19 +2338,29 @@ impl BexEngine {
     /// Extract enum definitions from the heap for output format rendering.
     fn extract_enum_definitions(
         resolved_enum_names: &indexmap::IndexMap<String, HeapPtr>,
-    ) -> indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition> {
+    ) -> ExtractedEnumDefinitions {
         let mut defs = indexmap::IndexMap::new();
+        let mut capture_variants = indexmap::IndexMap::new();
         for (_name, ptr) in resolved_enum_names {
             // SAFETY: ptr is from resolved_enum_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Enum(enm) = obj {
+                // Captures retain the VM's complete variant ordering, including
+                // variants omitted from the LLM output-format definition.
+                capture_variants.insert(
+                    ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
+                    enm.variants
+                        .iter()
+                        .map(|variant| variant.name.clone())
+                        .collect(),
+                );
                 defs.insert(
                     ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
                     bex_vm::definitions::enum_definition(enm),
                 );
             }
         }
-        defs
+        (defs, capture_variants)
     }
 
     /// Gather runtime definitions from the type descriptors passed directly
@@ -2736,6 +2826,7 @@ impl BexEngine {
                 .await
                 {
                     Ok(Ok(())) => {}
+                    Ok(Err(_)) if self.initial_telemetry_failure_handled() => {}
                     Ok(Err(error)) => tracing::error!(%error, "telemetry shutdown failed"),
                     Err(error) => tracing::error!(%error, "telemetry shutdown task failed"),
                 }
@@ -2894,8 +2985,10 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
-        self.collect_garbage_parked(level, reason, heap_guard, cycle)
-            .await
+        // Boxed so a collection's state (roots, forwarding map, statistics) is
+        // not laid out inside every call's future: this is awaited from the VM
+        // event loop, and a collection is rare and already allocates.
+        Box::pin(self.collect_garbage_parked(level, reason, heap_guard, cycle)).await
     }
 
     async fn collect_garbage_parked(
@@ -2905,6 +2998,8 @@ impl BexEngine {
         mut heap_guard: HeapGuard<'_>,
         mut cycle: bex_heap::GcCycleProfiler,
     ) -> bex_heap::GcStats {
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut gc_telemetry = telemetry_state::GcTelemetry::start(self.telemetry.as_ref());
         let cleanup_version = self.bex_work.cleanup_version();
         cycle.parked();
 
@@ -2921,6 +3016,10 @@ impl BexEngine {
         );
 
         cycle.roots_scanned();
+
+        // From the first evacuated object until every root is forwarded and
+        // verified, the heap is unusable by anyone but this collection.
+        let abort_on_unwind = AbortOnCollectionUnwind;
 
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (mut stats, _remapped_roots, forwarding) =
@@ -2968,6 +3067,9 @@ impl BexEngine {
 
         self.heap.verify_quick();
 
+        // Roots are forwarded; a panic past this point leaves a readable heap.
+        drop(abort_on_unwind);
+
         // Root object-valued errors into handles before releasing the GC
         // guard. The raw queue values are post-copy pointers and must survive
         // the await needed to reacquire an ordinary permit for deep-copying.
@@ -3000,6 +3102,8 @@ impl BexEngine {
         }
         drop(heap_guard);
         cycle.released();
+        #[cfg(not(target_arch = "wasm32"))]
+        gc_telemetry.finish(self.telemetry.as_ref(), &self.heap, &stats, reason);
 
         // Flush deferred host-value releases now that the stop-the-world window
         // has closed. Collecting a dead `Object::HostClosure` runs
@@ -3100,8 +3204,18 @@ impl BexEngine {
     ) -> Result<BexCallResult, EngineError> {
         call_ctx.bind_timeout(self.engine_id, self.invocation_clock)?;
         let (function, kind) = self.lookup_function(function_name)?;
-        self.call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
-            .await
+        let result = self
+            .call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
+            .await;
+        #[cfg(not(target_arch = "wasm32"))]
+        if self
+            .initial_cloud_auth_cancel()
+            .is_some_and(CancellationToken::is_cancelled)
+            && let Some(error) = self.initial_cloud_authorization_error()
+        {
+            return Err(error);
+        }
+        result
     }
 
     /// Call a function resolved by identity — the name boundary is
@@ -4145,6 +4259,9 @@ impl BexEngine {
             }
             context = inherited.context.clone();
             thread.host_environment = inherited.host_environment;
+            thread
+                .vm
+                .inherit_hook_suppression(inherited.hook_suppression);
         }
         if host_environment != 0 {
             thread.host_environment = host_environment;
@@ -4162,9 +4279,6 @@ impl BexEngine {
             options
         };
         if let Some(options) = options {
-            if let Some(patch) = &options.context {
-                context = context.with_patch(patch);
-            }
             thread.vm.set_entry_trace(&options, None);
         }
         thread.vm.set_root_context(context);
@@ -4182,6 +4296,7 @@ impl BexEngine {
                 thread.vm.current_context().clone(),
                 thread.vm.invocation_ancestry(),
                 thread.host_environment,
+                thread.vm.hooks_suppressed(),
             ));
         }
     }
@@ -4210,6 +4325,7 @@ impl BexEngine {
             context: frame.0.clone(),
             ancestry: frame.1.clone(),
             host_environment: frame.2,
+            hook_suppression: frame.3,
         })
     }
 
@@ -4225,6 +4341,12 @@ impl BexEngine {
         let mut sources = vec![bex_vm_types::cancellation::CancellationSource::from(
             explicit,
         )];
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(token) = self.initial_cloud_auth_cancel() {
+            sources.push(bex_vm_types::cancellation::CancellationSource::from(
+                token.clone(),
+            ));
+        }
         for token in tokens {
             if let BexExternalValue::Handle(handle) = token
                 && self.resolve_handle(thread.proof(), handle).is_none()
@@ -5183,6 +5305,17 @@ impl BexEngine {
         // shield: cleanup that delegates must not hand its work a
         // cancellation that has already fired; the child stays cancellable
         // through its own handle and token.
+        #[cfg(not(target_arch = "wasm32"))]
+        let linked = {
+            let mut linked = linked;
+            if let Some(token) = self.initial_cloud_auth_cancel() {
+                // A rooted task remains subject to the execution's initial cloud authorization.
+                linked.push(bex_vm_types::cancellation::CancellationSource::from(
+                    token.clone(),
+                ));
+            }
+            linked
+        };
         let child_cancel = if root || thread.vm_thread_is_shielded() {
             TaskCancel::detached(linked)
         } else {
@@ -5227,6 +5360,7 @@ impl BexEngine {
                     child_thread_id,
                     telemetry,
                     context,
+                    thread.vm.hooks_suppressed(),
                     thread.host_environment,
                     log_capture.cloned(),
                 )
@@ -5291,6 +5425,7 @@ impl BexEngine {
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
+        hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
@@ -5305,6 +5440,7 @@ impl BexEngine {
             thread_id,
             telemetry,
             context,
+            hook_suppression,
             host_environment,
             log_capture,
         ))
@@ -5330,6 +5466,7 @@ impl BexEngine {
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
+        hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
@@ -5368,6 +5505,7 @@ impl BexEngine {
             child_vm.set_telemetry_thread_name(name);
         }
 
+        child_vm.inherit_hook_suppression(hook_suppression);
         child_vm.set_root_context(context);
         child_vm.set_entry_point(entry, &[]);
 
@@ -5803,6 +5941,7 @@ impl BexEngine {
                                 context: thread.vm.current_context().clone(),
                                 ancestry: thread.vm.invocation_ancestry(),
                                 host_environment: thread.host_environment,
+                                hook_suppression: thread.vm.hooks_suppressed(),
                             };
                             let host_options = (operation == SysOp::BamlHostCallHostValue)
                                 .then(|| thread.vm.take_host_call_options());
@@ -6848,17 +6987,10 @@ impl BexEngine {
             vm: &BexVm,
             value: Value,
         ) -> Result<IndexMap<bex_str::BexStr, Value>, EngineError> {
-            let Some(ptr) = value.as_object_ptr() else {
-                return Err(EngineError::TypeMismatch {
-                    message: "Package.compile expected a map".to_string(),
-                });
-            };
-            let Object::Map(map) = vm.get_object(ptr) else {
-                return Err(EngineError::TypeMismatch {
-                    message: "Package.compile expected a map".to_string(),
-                });
-            };
-            Ok(map.to_index_map())
+            vm.as_string_map(&value)
+                .map_err(|_| EngineError::TypeMismatch {
+                    message: "Package.compile expected a string-keyed map".to_string(),
+                })
         }
 
         let files_value = args
@@ -7019,7 +7151,8 @@ impl BexEngine {
             ));
         };
         let (history, visible, mounts, sequence) = {
-            let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+            let mut metered = vm.get_object_mut(package_ptr);
+            let Object::Package(package) = &mut *metered else {
                 return Err(invalid(
                     "Session has an invalid runtime payload".to_string(),
                 ));
@@ -7274,9 +7407,9 @@ impl BexEngine {
                     class_name: "reflect.CompileArtifact".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(
-                            bex_vm::PinnedArtifact { artifact, pins },
-                        )))),
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(
+                            bex_vm::RuntimeCompileArtifactSlot::new(bex_vm::PinnedArtifact { artifact, pins }),
+                        )),
                     },
                 }),
                 Err(diagnostics) => {
@@ -7356,7 +7489,7 @@ struct InvocationSpawner {
 
 #[async_trait]
 impl sys_types::VmSpawner for InvocationSpawner {
-    fn capture_invocation(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+    fn capture_invocation(&self) -> Option<Arc<dyn bex_vm_types::BexRustData>> {
         Some(Arc::new(self.capture.clone()))
     }
     async fn spawn_with_function(
@@ -7425,7 +7558,7 @@ mod trace_scope_tests {
         use sys_native::SysOpsExt;
 
         const CHILD: &str = "BAML_TEST_TRACE_SCOPE_CHILD";
-        if std::env::var_os(CHILD).is_none() {
+        if !baml_env::has_var(CHILD) {
             for mode in ["off", "medium"] {
                 let output = std::process::Command::new(std::env::current_exe().unwrap())
                     .args([
@@ -7596,7 +7729,7 @@ mod concurrent_tests {
     async fn test_concurrent_calls_safe() {
         // Note: This requires a test BAML program to be available
         // Skip if test infrastructure not set up
-        if std::env::var("BAML_TEST_CONCURRENT").is_err() {
+        if !baml_env::has_var("BAML_TEST_CONCURRENT") {
             return;
         }
 

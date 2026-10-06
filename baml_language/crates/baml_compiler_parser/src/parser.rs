@@ -879,6 +879,18 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            if matches!(
+                token.kind,
+                TokenKind::Quote | TokenKind::Backtick | TokenKind::Hash
+            ) {
+                // String contents are lexed as ordinary tokens, including parentheses.
+                let mut string_parser = Parser::new(&self.tokens[i..]);
+                if string_parser.parse_any_string() {
+                    i += string_parser.current;
+                    continue;
+                }
+            }
+
             match token.kind {
                 TokenKind::LParen => depth += 1,
                 TokenKind::RParen => {
@@ -6942,19 +6954,7 @@ impl<'a> Parser<'a> {
                 p.parse_qualified_projection();
             });
         } else if self.at(TokenKind::LParen) {
-            // Parenthesized expression. Parens reset the destructure and
-            // object-literal suppression: `if (x is Foo { f })` and
-            // `if (Config { enabled })` let the user opt back into syntax that
-            // condition position would otherwise confuse with the body block.
-            self.with_node(SyntaxKind::PAREN_EXPR, |p| {
-                p.bump(); // (
-                let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
-                let saved_object = std::mem::take(&mut p.suppress_object_literal_depth);
-                p.parse_expr();
-                p.suppress_destructure_pattern_depth = saved_destructure;
-                p.suppress_object_literal_depth = saved_object;
-                p.expect(TokenKind::RParen);
-            });
+            self.parse_parenthesized_expr();
         } else if self.at(TokenKind::LBracket) {
             // Array literal
             self.parse_array_literal();
@@ -7422,10 +7422,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Check if the current position looks like a map literal rather than a block
-    /// Maps start with { "string":, { identifier:, or a shorthand property
-    /// such as { identifier } / { identifier, ... }.
-    /// Blocks typically start with { keyword or { expression (but not field:value pattern)
+    /// Distinguish a map's top-level `key: value` from an executable block.
     fn looks_like_map(&self) -> bool {
         // Must start with {
         if !self.at(TokenKind::LBrace) {
@@ -7457,59 +7454,58 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Look at the token after {
-        if let Some(token_after_brace) = self.peek(1) {
-            // Empty braces - treat as empty map
-            if token_after_brace.kind == TokenKind::RBrace {
-                return true;
-            }
-
-            // Check for string literal key
-            if token_after_brace.kind == TokenKind::Quote
-                || token_after_brace.kind == TokenKind::Hash
-            {
-                // Likely a map with string key
-                return true;
-            }
-
-            // Check for identifier followed by colon (map with identifier key)
-            if token_after_brace.kind == TokenKind::Word {
-                // Check if it's a keyword that starts statements
-                let text = &token_after_brace.text;
-                if text == "let"
-                    || text == "return"
-                    || text == "if"
-                    || text == "while"
-                    || text == "for"
-                    || text == "break"
-                    || text == "continue"
-                {
-                    return false; // It's a block with a statement
-                }
-
-                // Check if word or qualified word path is followed by colon.
-                // Config-style (word value) is only allowed in config contexts, not expressions
-                let mut i = 2;
-                while self.peek(i).map(|t| t.kind) == Some(TokenKind::Dot)
-                    && self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Word)
-                {
-                    i += 2;
-                }
-                if self.peek(i).map(|t| t.kind) == Some(TokenKind::Colon) {
-                    return true; // word: pattern indicates a map
-                }
-                if i == 2
-                    && matches!(
-                        self.peek(i).map(|t| t.kind),
-                        Some(TokenKind::Comma | TokenKind::RBrace)
-                    )
-                {
-                    return true; // bare word followed by ',' / '}' is shorthand
-                }
-            }
+        if self
+            .peek(1)
+            .is_some_and(|token| token.kind == TokenKind::RBrace)
+        {
+            return true;
         }
 
-        false // Default to block
+        let mut stack = Vec::new();
+        let mut i = raw;
+        while i < self.tokens.len() {
+            i = self.skip_trivia_and_comments_from(i);
+            let Some(token) = self.tokens.get(i) else {
+                break;
+            };
+            if matches!(
+                token.kind,
+                TokenKind::Quote | TokenKind::Backtick | TokenKind::Hash
+            ) {
+                // The lexer does not hide punctuation inside strings.
+                let mut string_parser = Parser::new(&self.tokens[i..]);
+                if string_parser.parse_any_string() {
+                    i += string_parser.current;
+                    continue;
+                }
+            }
+            if token.kind == TokenKind::Less {
+                let mut args_parser = Parser::new(&self.tokens[i..]);
+                if args_parser.looks_like_generic_args() {
+                    args_parser.parse_generic_args();
+                    i += args_parser.current;
+                    continue;
+                }
+            }
+            match token.kind {
+                TokenKind::Colon if stack.is_empty() => return true,
+                TokenKind::Comma | TokenKind::Semicolon if stack.is_empty() => return false,
+                TokenKind::Let | TokenKind::While | TokenKind::For if stack.is_empty() => {
+                    return false;
+                }
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace)
+                    if stack.pop() != Some(close) =>
+                {
+                    return false;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
     }
 
     /// Check if the current position starts a lambda expression.
@@ -7609,6 +7605,19 @@ impl<'a> Parser<'a> {
         false
     }
 
+    fn parse_parenthesized_expr(&mut self) {
+        self.with_node(SyntaxKind::PAREN_EXPR, |p| {
+            p.expect(TokenKind::LParen);
+            // Parentheses opt back into syntax suppressed in condition position.
+            let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
+            let saved_object = std::mem::take(&mut p.suppress_object_literal_depth);
+            p.parse_expr();
+            p.suppress_destructure_pattern_depth = saved_destructure;
+            p.suppress_object_literal_depth = saved_object;
+            p.expect(TokenKind::RParen);
+        });
+    }
+
     /// Parse a map literal in expression context: { "key": value, ... }
     /// Colons are required. Commas are canonical but may be omitted when the
     /// following token unambiguously starts another key.
@@ -7626,7 +7635,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // Check for valid entry start
-                if p.at(TokenKind::Word) || p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
+                if p.at_map_key_start() {
                     p.parse_map_entry();
 
                     // Handle comma between entries
@@ -7635,9 +7644,7 @@ impl<'a> Parser<'a> {
                             break;
                         }
                         if !p.eat(TokenKind::Comma)
-                            && !p.at(TokenKind::Word)
-                            && !p.at(TokenKind::Quote)
-                            && !p.at(TokenKind::Hash)
+                            && !p.at_map_key_start()
                             && !p.at(TokenKind::RBrace)
                         {
                             p.error_unexpected_token("',' or '}' after map entry".to_string());
@@ -7736,44 +7743,42 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single map entry in expression context: `key: value` or the
-    /// shorthand `key`, which desugars to `key: key` during AST lowering.
+    fn at_map_key_start(&self) -> bool {
+        self.current().is_some_and(|token| {
+            matches!(
+                token.kind,
+                TokenKind::Word
+                    | TokenKind::Client
+                    | TokenKind::Quote
+                    | TokenKind::Backtick
+                    | TokenKind::Hash
+                    | TokenKind::IntegerLiteral
+                    | TokenKind::BigintLiteral
+                    | TokenKind::FloatLiteral
+                    | TokenKind::Minus
+                    | TokenKind::Not
+                    | TokenKind::Tilde
+                    | TokenKind::PlusPlus
+                    | TokenKind::MinusMinus
+                    | TokenKind::Await
+                    | TokenKind::Spawn
+                    | TokenKind::Throw
+                    | TokenKind::Return
+                    | TokenKind::Break
+                    | TokenKind::Continue
+                    | TokenKind::If
+                    | TokenKind::Match
+                    | TokenKind::LBrace
+                    | TokenKind::LBracket
+                    | TokenKind::LParen
+            )
+        })
+    }
+
+    /// Parse a map entry with ordinary expressions on both sides of `:`.
     fn parse_map_entry(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
-            // Key - can be identifier, qualified identifier, or string literal.
-            let mut shorthand_candidate = false;
-            if p.at(TokenKind::Word) {
-                shorthand_candidate = true;
-                p.bump(); // identifier key
-                while p.at(TokenKind::Dot) {
-                    shorthand_candidate = false;
-                    p.bump();
-                    if p.current().is_some_and(|t| {
-                        matches!(
-                            t.kind,
-                            TokenKind::Word
-                                | TokenKind::Spawn
-                                | TokenKind::Await
-                                | TokenKind::Class
-                                | TokenKind::Enum
-                                | TokenKind::Interface
-                                | TokenKind::Function
-                        )
-                    }) {
-                        p.bump();
-                    } else {
-                        p.error_unexpected_token("map key segment after '.'".to_string());
-                        return;
-                    }
-                }
-            } else if !p.parse_any_string() {
-                p.error_unexpected_token("map key".to_string());
-                return;
-            }
-
-            if shorthand_candidate && (p.at(TokenKind::Comma) || p.at(TokenKind::RBrace)) {
-                return;
-            }
+            p.parse_expr();
 
             // Colon required in expression context
             if !p.expect(TokenKind::Colon) {
@@ -13716,36 +13721,145 @@ function f() -> int {
     }
 
     #[test]
-    fn parses_map_property_shorthand() {
-        let source = r#"
-function build(options: string, retries: int) -> map<string, string | int> {
-    { options, retries, explicit: "value" }
-}
-"#;
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
+    fn parses_non_string_map_keys() {
+        for key in [
+            "1",
+            "-1",
+            "1n",
+            "-1n",
+            "1.5",
+            "-1.5",
+            "true",
+            "false",
+            "null",
+            "(key)",
+            "((key + 1))",
+            "(f(\"a)b\"))",
+            "(f(/* ) */ key))",
+            "(f(`a)b`))",
+            "(f(\"a\\\")b\"))",
+            "name",
+            "KeyKind.Foo",
+            "key + 1",
+            "f()",
+            "-key",
+            "!flag",
+            "keys[0]",
+            "f(\"a:b}\")",
+            "f(/* : } */ key)",
+            "f(``a:b}``)",
+            "f<int, string>()",
+            "f(`a${g(\"}:,\")}b`)",
+            "key /* : } */ + 1",
+            "key // : }\n + 1",
+            "f({ \"nested\": 1 })",
+            "match (key) { _ => 1 }",
+            "Point { x: 2, y: 2 }",
+            "if (flag) { 1 } else { 2 }",
+            "{ let x = 1; x }",
+        ] {
+            let source = format!("function f() -> int {{ let m = {{{key}: 1}}; 0 }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert!(
+                root.descendants().any(|n| {
+                    n.kind() == SyntaxKind::MAP_LITERAL
+                        && n.text().to_string().trim() == format!("{{{key}: 1}}")
+                }),
+                "key: {key}"
+            );
+        }
+    }
 
-        let map = root
+    #[test]
+    fn non_string_map_lookahead_preserves_blocks() {
+        for expr in [
+            "1",
+            "-1",
+            "true",
+            "false",
+            "null",
+            "(key)",
+            "((key + 1))",
+            "(f(\"a)b\"))",
+            "name",
+            "name.field",
+            "\"a:b}\"",
+            "``a:b}``",
+            "`a:b}`",
+            "f(\"a:b}\")",
+            "f(/* : } */ key)",
+            "Point { x: 2, y: 2 }",
+            "let x: int = 1; x",
+            "f<int, string>()",
+            "f(`a${g(\"}:,\")}b`)",
+            "key /* : } */ + 1",
+            "key // : }\n + 1",
+        ] {
+            let source = format!("function f() -> int {{ let result = {{{expr}}}; 0 }}");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert!(
+                root.descendants()
+                    .all(|n| n.kind() != SyntaxKind::MAP_LITERAL),
+                "block expression: {expr}"
+            );
+        }
+    }
+
+    #[test]
+    fn map_key_cst_shapes() {
+        let (root, errors) = parse_source(
+            "function f() -> int { let m = {name: 0, \"name\": 0, 1: 0, -1: 0, true: 0, null: 0, (name): 0, KeyKind.Foo: 0, name + 1: 0}; 0 }",
+        );
+        assert_no_errors(&errors);
+        let keys = root
             .descendants()
-            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
-            .expect("expected shorthand braces to parse as a map literal");
-        let fields = map
-            .children()
-            .filter(|node| node.kind() == SyntaxKind::OBJECT_FIELD)
+            .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
+            .map(|field| {
+                field
+                    .children_with_tokens()
+                    .find(|elem| !elem.kind().is_trivia())
+                    .unwrap()
+                    .kind()
+            })
             .collect::<Vec<_>>();
-        assert_eq!(fields.len(), 3);
-        assert!(
-            fields[0]
-                .children_with_tokens()
-                .all(|elem| elem.kind() != SyntaxKind::COLON),
-            "the shorthand field must remain distinguishable in the CST"
+        assert_eq!(
+            keys,
+            [
+                SyntaxKind::WORD,
+                SyntaxKind::STRING_LITERAL,
+                SyntaxKind::INTEGER_LITERAL,
+                SyntaxKind::UNARY_EXPR,
+                SyntaxKind::KW_TRUE,
+                SyntaxKind::KW_NULL,
+                SyntaxKind::PAREN_EXPR,
+                SyntaxKind::PATH_EXPR,
+                SyntaxKind::BINARY_EXPR,
+            ]
         );
-        assert!(
-            fields[2]
-                .children_with_tokens()
-                .any(|elem| elem.kind() == SyntaxKind::COLON),
-            "explicit fields must retain their colon"
-        );
+    }
+
+    #[test]
+    fn computed_map_keys_do_not_require_parentheses() {
+        for key in ["key + 1", "f()", "-key"] {
+            let source = format!("function f() -> int {{ let m = map {{{key}: 1}}; 0 }}");
+            let (_, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+        }
+    }
+
+    #[test]
+    fn rejects_map_property_shorthand() {
+        for expr in [
+            "map { options }",
+            "map { options, retries }",
+            "{ \"x\": 1, options }",
+        ] {
+            let source = format!("function f() -> int {{ let m = {expr}; 0 }}");
+            let (_, errors) = parse_source(&source);
+            assert!(!errors.is_empty(), "map entries require a colon: {expr}");
+        }
     }
 
     #[test]

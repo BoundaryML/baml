@@ -46,7 +46,12 @@ function NoteType(saved: SavedField[]) -> reflect.class.Type {
     reflect.class.new("VisitNote", fields)
 }
 
-function main() -> string {
+class ScenarioResult {
+    text: string,
+    note: baml.json.json,
+}
+
+function main() -> ScenarioResult {
     let note_t = NoteType(
         [
             SavedField {
@@ -75,26 +80,22 @@ function main() -> string {
     let height = reflect.class.get_field<int>(note, "height_cm");
     let complaint = reflect.class.get_field<string>(note, "chief_complaint");
     let bullets = reflect.class.get_field<string[]>(note, "bullets");
-    return prompt
-        + "\n<RESULT>"
-        + height.to_string()
-        + "|"
-        + complaint
-        + "|"
-        + bullets[1]
-        + "|"
-        + baml.json.to_string(note);
+    return ScenarioResult {
+        text: prompt + "\n<RESULT>" + height.to_string() + "|" + complaint + "|" + bullets[1],
+        note: baml.json.from(note),
+    };
 }
 
 test "scenario_2_saved_form_class_renders_parses_and_assert_reads" {
-    let result = main();
+    let scenario = main();
+    let result = scenario.text;
     let height = result.index_of("height_cm") ?? throw "height field should render";
     let complaint = result.index_of("chief_complaint") ?? throw "complaint field should render";
     let bullets = result.index_of("bullets") ?? throw "bullets field should render";
     assert.is_true(height < complaint && complaint < bullets);
-    assert.is_true(
-        result.ends_with(
-            "<RESULT>183|cough|night|{\"height_cm\":183,\"chief_complaint\":\"cough\",\"bullets\":[\"dry\",\"night\"]}",
-        ),
+    assert.is_true(result.ends_with("<RESULT>183|cough|night"));
+    assert.equal(
+        scenario.note,
+        { "height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"] },
     )
 }

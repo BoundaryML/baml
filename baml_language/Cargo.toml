@@ -70,6 +70,9 @@ license = "Apache-2.0"
 version = "0.0.0-beta"
 
 [workspace.dependencies]
+# BCS (bcs_*): shared cloud API contracts and clients.
+bcs_api = { path = "crates/bcs_api", default-features = false }
+
 #  Internal dependencies (baml_*)
 btel_bcs = { path = "crates/btel_bcs", default-features = false }
 btel_snapshot = { path = "crates/btel_snapshot" }
@@ -112,6 +115,7 @@ sys_regex = { path = "crates/sys_regex" }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
+baml_env = { path = "crates/baml_env" }
 baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
@@ -198,6 +202,7 @@ fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
+httpdate = "1.0.3"
 hmac = "0.12"
 http-body-util = "0.1"
 hyper = { version = "1", features = [ "server", "http1", "http2" ] }
@@ -324,6 +329,7 @@ pyo3-stub-gen = { version = "0.22", default-features = false }
 napi = { version = "3.9.0", default-features = false }
 napi-derive = "3.5.6"
 napi-build = "2.3.2"
+windows-sys = "0.61.2"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"

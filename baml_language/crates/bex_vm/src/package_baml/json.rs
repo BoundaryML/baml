@@ -50,7 +50,7 @@ use std::collections::HashMap;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, ValueKind,
+    HeapPtr, RustDataArc as _, ValueKind,
     types::{Array, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
@@ -62,6 +62,26 @@ use crate::{
     BexVm,
     errors::{VmInternalError, VmRustFnError},
 };
+
+const STRING_MAP_REQUIRED: &str = "JSON requires maps with string keys";
+
+fn string_map_entries(
+    vm: &BexVm,
+    map: &Map,
+) -> Result<Vec<(bex_vm_types::BexStr, Value)>, &'static str> {
+    if !baml_type::normalize::is_string_key(map.key_ty.as_ty(), vm) {
+        return Err(STRING_MAP_REQUIRED);
+    }
+    map.snapshot_entries()
+        .into_iter()
+        .map(
+            |(key, value)| match key.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
+                Some(Object::String(key)) => Ok((key.clone(), value)),
+                _ => Err(STRING_MAP_REQUIRED),
+            },
+        )
+        .collect()
+}
 
 // ─── baml.json.from / baml.ToJson default (override-honoring structural json) ──
 //
@@ -85,7 +105,7 @@ use crate::{
 // (no GC can move `pending`/`root` mid-render), unlike a value-kind walk that
 // allocated heap arrays/maps as it descended.
 
-/// Entry point for `baml._to_json_default` / `baml._to_json_shim`. Collects the
+/// Entry point for `baml._to_json_default`. Collects the
 /// override-bearing sub-values (pass 1), dispatches `to_json` on each in order
 /// (pass 2), then renders structurally splicing in the override results (pass 3).
 pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
@@ -156,7 +176,11 @@ fn collect_to_json_overrides(
     // Snapshot children (owned), dropping the heap borrow before recursing.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
-        Object::Map(map) => map.to_index_map().values().copied().collect(),
+        Object::Map(map) => map
+            .snapshot_entries()
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect(),
         Object::Instance(inst) => {
             // Media instances render as a leaf (their tagged form); their single
             // `_data` field is opaque `RustData` and carries no overrides, so
@@ -264,12 +288,15 @@ fn render_to_serde(
         Object::String(s) => Snap::Leaf(serde_json::Value::String(s.to_string())),
         Object::Bigint(b) => Snap::Leaf(bigint_to_serde(b)),
         Object::Array(values) => Snap::Seq(values.to_vec()),
-        Object::Map(map) => Snap::Entries(
-            map.to_index_map()
-                .into_iter()
-                .map(|(k, v)| (k.as_str().to_string(), v))
-                .collect(),
-        ),
+        Object::Map(map) => match string_map_entries(vm, map) {
+            Ok(entries) => Snap::Entries(
+                entries
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v))
+                    .collect(),
+            ),
+            Err(message) => Snap::Unserializable(message),
+        },
         Object::Instance(inst) => Snap::Instance {
             class_ptr: inst.class,
             fields: inst.field_values().collect(),
@@ -375,7 +402,7 @@ impl Continuation for ToJsonWalkContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         // `value` is the override's returned `json` value; normalize to serde now
         // so we hold no extra heap root for it across the next dispatch.
-        self.results.push(value_to_serde(vm, value));
+        self.results.push(json_value_to_serde(vm, value));
 
         // Dispatch the next override, if any; otherwise render. Every pending
         // pointer was collected as an override by pass 1, so a pass-2 miss is
@@ -436,14 +463,16 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn stringify(vm: &mut BexVm, j: &Value) -> bex_str::BexStr {
-        let json_val = value_to_serde(vm, *j);
-        let s = serde_json::to_string(&json_val).unwrap_or_else(|_| "null".to_string());
+        let json_val = json_value_to_serde(vm, *j);
+        let s = serde_json::to_string(&json_val)
+            .unwrap_or_else(|e| unreachable!("JSON value failed to stringify: {e}"));
         bex_str::BexStr::from(s)
     }
 
     fn stringify_pretty(vm: &mut BexVm, j: &Value) -> bex_str::BexStr {
-        let json_val = value_to_serde(vm, *j);
-        let s = serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| "null".to_string());
+        let json_val = json_value_to_serde(vm, *j);
+        let s = serde_json::to_string_pretty(&json_val)
+            .unwrap_or_else(|e| unreachable!("JSON value failed to stringify: {e}"));
         bex_str::BexStr::from(s)
     }
 
@@ -486,9 +515,14 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn field(vm: &mut BexVm, j: &Value, key: &bex_str::BexStr) -> Value {
+        // The public throws-never API accepts `json`, not arbitrary maps.
         match j.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
-                Object::Map(m) => m.get(key.as_str()).unwrap_or(Value::NULL),
+                Object::Map(m) => string_map_entries(vm, m)
+                    .unwrap_or_else(|e| unreachable!("baml.json.field received invalid json: {e}"))
+                    .into_iter()
+                    .find_map(|(k, value)| (k.as_str() == key.as_str()).then_some(value))
+                    .unwrap_or(Value::NULL),
                 _ => Value::NULL,
             },
             None => Value::NULL,
@@ -647,11 +681,10 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
                 })
                 .collect();
             // Untyped JSON object: string keys, `json` values.
-            Value::object(vm.tlab.alloc(Object::Map(Map::new(
-                RealizedTy::string(),
-                json_alias_ty(vm),
-                entries,
-            ))))
+            Value::object(
+                vm.tlab
+                    .alloc_map(RealizedTy::string(), json_alias_ty(vm), entries),
+            )
         }
     }
 }
@@ -660,9 +693,30 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
 ///
 /// Used for `RealizedTy::TypeAlias(BAML_JSON_JSON)` and for class fields whose runtime
 /// field type is intentionally untyped or unavailable.
-pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
+/// Non-string maps are rejected at any depth, retaining the failing value's path.
+pub fn value_to_serde(vm: &BexVm, v: Value) -> Result<serde_json::Value, ValueToSerdeError> {
+    value_to_serde_at(vm, v, &mut String::new())
+}
+
+#[derive(Debug)]
+pub struct ValueToSerdeError {
+    message: &'static str,
+    path: String,
+}
+
+/// Convert a statically checked `json` value at a throws-never boundary.
+pub(super) fn json_value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
+    value_to_serde(vm, v)
+        .unwrap_or_else(|e| unreachable!("invalid statically typed json value: {e:?}"))
+}
+
+fn value_to_serde_at(
+    vm: &BexVm,
+    v: Value,
+    path: &mut String,
+) -> Result<serde_json::Value, ValueToSerdeError> {
     use bex_vm_types::ValueKind;
-    match v.kind() {
+    Ok(match v.kind() {
         ValueKind::Null => serde_json::Value::Null,
         ValueKind::Bool(b) => serde_json::Value::Bool(b),
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
@@ -674,14 +728,26 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             Object::String(s) => serde_json::Value::String(s.to_string()),
             Object::Array(arr) => {
                 let arr = arr.to_vec();
-                serde_json::Value::Array(arr.iter().map(|el| value_to_serde(vm, *el)).collect())
+                let mut out = Vec::with_capacity(arr.len());
+                for (i, el) in arr.into_iter().enumerate() {
+                    out.push(with_path_segment(path, format_args!("[{i}]"), |p| {
+                        value_to_serde_at(vm, el, p)
+                    })?);
+                }
+                serde_json::Value::Array(out)
             }
             Object::Map(map) => {
-                let map = map.to_index_map();
-                let entries: serde_json::Map<String, serde_json::Value> = map
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), value_to_serde(vm, *v)))
-                    .collect();
+                let map = string_map_entries(vm, map).map_err(|message| ValueToSerdeError {
+                    message,
+                    path: path.clone(),
+                })?;
+                let mut entries = serde_json::Map::with_capacity(map.len());
+                for (k, v) in map {
+                    let value = with_path_segment(path, format_args!("[{k:?}]"), |p| {
+                        value_to_serde_at(vm, v, p)
+                    })?;
+                    entries.insert(k.to_string(), value);
+                }
                 serde_json::Value::Object(entries)
             }
             Object::Bigint(bi) => bigint_to_serde(bi),
@@ -720,10 +786,19 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             | Object::GenericFunction(_)
             | Object::HostClosure(_)
             | Object::Cell(_) => serde_json::Value::Null,
+            Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => serde_json::Value::Null,
         },
-    }
+    })
+}
+
+fn untyped_value_to_serde(
+    vm: &mut BexVm,
+    value: Value,
+    path: &mut String,
+) -> Result<serde_json::Value, VmRustFnError> {
+    value_to_serde_at(vm, value, path).map_err(|e| raise_serialize(vm, e.message, &e.path, "map"))
 }
 
 // ─── Typed JSON serialize ────────────────────────────────────────────────────
@@ -767,10 +842,10 @@ fn ty_value_to_serde(
         // which is total for scalar values.
         RealizedTy::Null => Ok(serde_json::Value::Null),
         RealizedTy::Int | RealizedTy::Float | RealizedTy::Bool | RealizedTy::String => {
-            Ok(value_to_serde(vm, value))
+            untyped_value_to_serde(vm, value, path)
         }
-        RealizedTy::Bigint => Ok(value_to_serde(vm, value)),
-        RealizedTy::Literal(_, _) => Ok(value_to_serde(vm, value)),
+        RealizedTy::Bigint => untyped_value_to_serde(vm, value, path),
+        RealizedTy::Literal(_, _) => untyped_value_to_serde(vm, value, path),
 
         RealizedTy::List(elem) => {
             let items = match value.as_object_ptr() {
@@ -790,10 +865,16 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Array(out))
         }
 
-        RealizedTy::Map { value: vty, .. } => {
+        RealizedTy::Map { key, value: vty } => {
+            if !baml_type::normalize::is_string_key(key.as_ty(), vm) {
+                return Err(raise_serialize(vm, STRING_MAP_REQUIRED, path, "map"));
+            }
             let entries = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
-                    Object::Map(m) => m.to_index_map(),
+                    Object::Map(m) => match string_map_entries(vm, m) {
+                        Ok(entries) => entries,
+                        Err(message) => return Err(raise_serialize(vm, message, path, "map")),
+                    },
                     _ => return Err(raise_serialize(vm, "expected map", path, "map")),
                 },
                 None => return Err(raise_serialize(vm, "expected map", path, "map")),
@@ -809,12 +890,12 @@ fn ty_value_to_serde(
         }
 
         RealizedTy::TypeAlias(head) if vm.stdlib_heads().is_json_alias(*head) => {
-            Ok(value_to_serde(vm, value))
+            untyped_value_to_serde(vm, value, path)
         }
 
         RealizedTy::TypeAlias(_) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
-            Ok(value_to_serde(vm, value))
+            untyped_value_to_serde(vm, value, path)
         }
 
         RealizedTy::Class(head, _type_args) | RealizedTy::Interface(head, _type_args, _) => {
@@ -916,7 +997,7 @@ fn ty_value_to_serde(
             // Use structural serialization of the produced value.
             // Instantiated generic class fields normally use `field_template`
             // substitution before reaching this point.
-            Ok(value_to_serde(vm, value))
+            untyped_value_to_serde(vm, value, path)
         }
 
         // Type-level and opaque types carry no serializable runtime value:
@@ -1067,7 +1148,10 @@ pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_ty
 
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
-        Object::RustData(arc) => arc.clone().downcast::<bex_vm_types::MediaValue>().ok(),
+        Object::RustData(arc) => arc
+            .clone()
+            .downcast_payload::<bex_vm_types::MediaValue>()
+            .ok(),
         _ => None,
     }
 }
@@ -1243,22 +1327,38 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected array", path)),
         },
 
-        RealizedTy::Map { value: vty, .. } => match json {
+        RealizedTy::Map { key, .. } if !baml_type::normalize::is_string_key(key.as_ty(), vm) => {
+            Err(raise_decode(vm, STRING_MAP_REQUIRED, path))
+        }
+        RealizedTy::Map { key, value: vty } => match json {
             serde_json::Value::Object(map) => {
                 let mut entries: IndexMap<bex_vm_types::BexStr, Value> =
                     IndexMap::with_capacity(map.len());
                 for (k, val) in map {
+                    if !baml_type::normalize::is_subtype(
+                        &baml_type::Ty::Literal(
+                            baml_type::Literal::String(k.clone()),
+                            baml_type::Freshness::Regular,
+                        ),
+                        key.as_ty(),
+                        vm,
+                    ) {
+                        return Err(raise_decode(
+                            vm,
+                            "map key does not match declared key type",
+                            path,
+                        ));
+                    }
                     let v = with_path_segment(path, format_args!("[{k:?}]"), |p| {
                         ty_serde_to_value(vm, val, vty, p)
                     })?;
                     entries.insert(bex_vm_types::BexStr::from(k.as_str()), v);
                 }
-                // BAML maps are always string-keyed at runtime.
-                Ok(Value::object(vm.tlab.alloc(Object::Map(Map::new(
-                    RealizedTy::string(),
+                Ok(Value::object(vm.tlab.alloc_map(
+                    (**key).clone(),
                     (**vty).clone(),
                     entries,
-                )))))
+                )))
             }
             _ => Err(raise_decode(vm, "expected object", path)),
         },
@@ -1548,9 +1648,7 @@ fn deserialize_media(
 /// [`json_to_dispatch`] for leaf types (primitives, enums, media, literals)
 /// that can never carry a `baml.FromJson` override.
 fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResult {
-    let serde = value_to_serde(vm, j);
-    let mut path = String::new();
-    match ty_serde_to_value(vm, &serde, ty, &mut path) {
+    match decode_value_sync(vm, j, ty) {
         Ok(v) => NativeCallResult::Done(v),
         Err(e) => NativeCallResult::Error(e),
     }
@@ -1576,14 +1674,11 @@ impl Continuation for IdentityFromJsonCont {
 // resolves a user `implements baml.FromJson { function from_json ... }` override
 // on the target type `T` and dispatches it; otherwise it decodes structurally.
 //
-// F1 (additive): the structural fallback delegates to `json_from_json_dispatch`
-// (the existing magic path — auto-derived per-field bodies still exist and honor
-// nested overrides). F2 will retire the magic path and move the per-field
-// override-honoring decode into the default itself.
+// Built-in implementations enter through `json_to_structural_default`,
+// bypassing dispatch only at the root. Fields and container elements use the
+// regular dispatch path, preserving nested explicit implementations.
 
-/// Reads the target type `T` from the call's type-args and dispatches
-/// `baml.json.to<T>(j)` — the `baml._from_json_shim` native.
-pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
+pub(super) fn json_to_structural_default(vm: &mut BexVm, j: Value) -> NativeCallResult {
     let ty = match vm.current_call_type_args().first().cloned() {
         Some(t) => t,
         None => {
@@ -1594,7 +1689,7 @@ pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
             ));
         }
     };
-    json_to_dispatch(vm, j, &ty)
+    json_to_dispatch_root(vm, j, &ty, true)
 }
 
 /// Dispatch `json.to<T>(j)` — the override-honoring structural decode.
@@ -1607,6 +1702,15 @@ pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
 /// - everything else (primitives, enums, media, literals, type-aliases): a
 ///   structural decode (no overrides possible).
 fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResult {
+    json_to_dispatch_root(vm, j, ty, false)
+}
+
+fn json_to_dispatch_root(
+    vm: &mut BexVm,
+    j: Value,
+    ty: &RealizedTy,
+    structural_root: bool,
+) -> NativeCallResult {
     match ty {
         RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null) => {
             if j.is_null() {
@@ -1616,14 +1720,19 @@ fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResu
             }
         }
         RealizedTy::List(elem) => list_from_json_start(vm, j, elem),
-        RealizedTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
+        RealizedTy::Map { key, .. } if !baml_type::normalize::is_string_key(key.as_ty(), vm) => {
+            NativeCallResult::Error(raise_decode(vm, STRING_MAP_REQUIRED, ""))
+        }
+        RealizedTy::Map { key, value: vty } => map_from_json_start(vm, j, key, vty),
         RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _)
             if vm.stdlib_heads().media_kind(*head).is_none() =>
         {
-            match try_yield_interface_from_json(vm, j, ty) {
-                Some(yld) => yld,
-                None => class_from_json_start(vm, j, *head, type_args),
+            if !structural_root {
+                if let Some(yld) = try_yield_interface_from_json(vm, j, ty) {
+                    return yld;
+                }
             }
+            class_from_json_start(vm, j, *head, type_args)
         }
         _ => structural_decode_value(vm, j, ty),
     }
@@ -1645,7 +1754,10 @@ fn class_from_json_start(
     let named = baml_type::HeadDisplay::head_display_name(&head);
     let map: IndexMap<bex_vm_types::BexStr, Value> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
-            Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
+            Object::Map(m) => match string_map_entries(vm, m) {
+                Ok(entries) => entries.into_iter().collect(),
+                Err(message) => return NativeCallResult::Error(raise_decode(vm, message, "")),
+            },
             _ => {
                 return NativeCallResult::Error(raise_decode(
                     vm,
@@ -1991,10 +2103,18 @@ impl Continuation for ListFromJsonCont {
 
 // ── Map dispatch ──────────────────────────────────────────────────────────────
 
-fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &RealizedTy) -> NativeCallResult {
+fn map_from_json_start(
+    vm: &mut BexVm,
+    j: Value,
+    key_ty: &RealizedTy,
+    val_ty: &RealizedTy,
+) -> NativeCallResult {
     let entries: Vec<(bex_vm_types::BexStr, Value)> = match j.as_object_ptr() {
         Some(p) => match vm.get_object(p) {
-            Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
+            Object::Map(m) => match string_map_entries(vm, m) {
+                Ok(entries) => entries,
+                Err(message) => return NativeCallResult::Error(raise_decode(vm, message, "")),
+            },
             _ => {
                 return NativeCallResult::Error(raise_decode(vm, "expected JSON object", ""));
             }
@@ -2003,12 +2123,36 @@ fn map_from_json_start(vm: &mut BexVm, j: Value, val_ty: &RealizedTy) -> NativeC
             return NativeCallResult::Error(raise_decode(vm, "expected JSON object", ""));
         }
     };
-    map_drive(vm, entries, val_ty.clone(), IndexMap::new(), 0)
+    for (key, _) in &entries {
+        if !baml_type::normalize::is_subtype(
+            &baml_type::Ty::Literal(
+                baml_type::Literal::String(key.to_string()),
+                baml_type::Freshness::Regular,
+            ),
+            key_ty.as_ty(),
+            vm,
+        ) {
+            return NativeCallResult::Error(raise_decode(
+                vm,
+                "map key does not match declared key type",
+                "",
+            ));
+        }
+    }
+    map_drive(
+        vm,
+        entries,
+        key_ty.clone(),
+        val_ty.clone(),
+        IndexMap::new(),
+        0,
+    )
 }
 
 fn map_drive(
     vm: &mut BexVm,
     entries: Vec<(bex_vm_types::BexStr, Value)>,
+    key_ty: RealizedTy,
     val_ty: RealizedTy,
     mut results: IndexMap<bex_vm_types::BexStr, Value>,
     mut idx: usize,
@@ -2032,6 +2176,7 @@ fn map_drive(
                 type_args: vec![val_ty.clone()],
                 continuation: Box::new(MapFromJsonCont {
                     entries,
+                    key_ty,
                     val_ty,
                     results,
                     idx,
@@ -2046,17 +2191,13 @@ fn map_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    // Type-directed: string keys, decode value type carried from `val_ty`.
-    let map_val = Value::object(vm.tlab.alloc(Object::Map(Map::new(
-        RealizedTy::string(),
-        val_ty,
-        results,
-    ))));
+    let map_val = Value::object(vm.tlab.alloc_map(key_ty, val_ty, results));
     NativeCallResult::Done(map_val)
 }
 
 struct MapFromJsonCont {
     entries: Vec<(bex_vm_types::BexStr, Value)>,
+    key_ty: RealizedTy,
     val_ty: RealizedTy,
     results: IndexMap<bex_vm_types::BexStr, Value>,
     idx: usize,
@@ -2067,7 +2208,14 @@ impl Continuation for MapFromJsonCont {
         let key = self.entries[self.idx].0.clone();
         self.results.insert(key, value);
         let next_idx = self.idx + 1;
-        map_drive(vm, self.entries, self.val_ty, self.results, next_idx)
+        map_drive(
+            vm,
+            self.entries,
+            self.key_ty,
+            self.val_ty,
+            self.results,
+            next_idx,
+        )
     }
     fn gc_roots(&self) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
@@ -2134,7 +2282,7 @@ fn peel_optional(ty: &RealizedTy) -> &RealizedTy {
 /// elements the caller must use the yield path; this helper structurally
 /// decodes everything else.
 fn decode_value_sync(vm: &mut BexVm, v: Value, ty: &RealizedTy) -> Result<Value, VmRustFnError> {
-    let serde = value_to_serde(vm, v);
+    let serde = value_to_serde(vm, v).map_err(|e| raise_decode(vm, e.message, &e.path))?;
     let mut path = String::new();
     ty_serde_to_value(vm, &serde, ty, &mut path)
 }

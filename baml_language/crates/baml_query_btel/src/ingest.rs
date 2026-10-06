@@ -2167,7 +2167,7 @@ fn forget_nodes(tx: &Transaction<'_>, rec: i64, functions: &HashSet<u64>) -> Res
     }
 }
 
-/// Crash injection for recovery tests: `BAML_QUERY_FAULT=<point>[:<n>]`
+/// Crash injection for recovery tests: `DEV_BAML_QUERY_FAULT=<point>[:<n>]`
 /// aborts the process at the n-th (default first) arrival at `point`.
 /// Compiled only with the `fault-injection` feature.
 mod fault {
@@ -2175,7 +2175,7 @@ mod fault {
     pub(super) fn point(name: &str) {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static ARRIVALS: AtomicUsize = AtomicUsize::new(0);
-        let Ok(spec) = std::env::var("BAML_QUERY_FAULT") else {
+        let Some(spec) = baml_env::raw_var("DEV_BAML_QUERY_FAULT") else {
             return;
         };
         let (point, nth) = spec.split_once(':').unwrap_or((&spec, "1"));

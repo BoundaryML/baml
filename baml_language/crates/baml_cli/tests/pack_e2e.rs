@@ -41,9 +41,12 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
         .arg(dir)
         .arg("-o")
         .arg(&out_bin);
-    // Share the bytecode cache across the suite so only the first invocation
-    // pays the stdlib compile; see `common::shared_cache_dir`.
-    cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
+    // Share the build cache across the suite so only the first invocation
+    // pays the stdlib compile; see `common::shared_baml_home`.
+    cmd.env("BAML_HOME", common::shared_baml_home());
+    // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would make the
+    // agent-skill check apply.
+    cmd.env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1");
     for arg in pack_args {
         cmd.arg(arg);
     }
@@ -81,6 +84,124 @@ fn pack_project(
 // ============================================================================
 // Tests
 // ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn artifact_recording_level_requires_explicit_permission_and_off_skips_auth() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+    let built = common::ensure_built();
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    let bin = pack(built, temp.path(), &["main"]);
+    let output = Command::new(&bin)
+        .env("BAML_TELEMETRY", "invalid")
+        .env("BOUNDARY_API_KEY", "local")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "ambient BAML_TELEMETRY must not override the baked default: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    std::fs::write(
+        temp.path().join("baml.toml"),
+        r#"[package]
+name = "test"
+[pack.env_var_names]
+BAML_TELEMETRY = "ACME_TELEMETRY"
+"#,
+    )
+    .unwrap();
+    let bin = pack(built, temp.path(), &["main"]);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(401))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let output = Command::new(&bin)
+        .env("BAML_TELEMETRY", "invalid")
+        .env("ACME_TELEMETRY", "off")
+        .env("BOUNDARY_API_KEY", "bdry_secret_test")
+        .env("BOUNDARY_API_URL", server.uri())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "status: {}; stdout: {}; stderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
+    let output = Command::new(&bin)
+        .env("ACME_TELEMETRY", "invalid")
+        .env("BOUNDARY_API_KEY", "local")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        r#"error: failed to initialize engine: ACME_TELEMETRY must be off, low, medium, or high.
+"#
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn artifact_initial_failure_warning_is_customizable_and_ignore_is_silent() {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path_regex},
+    };
+    let built = common::ensure_built();
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    for action in ["warn", "ignore"] {
+        std::fs::write(
+            temp.path().join("baml.toml"),
+            format!(
+                r#"[package]
+name = "test"
+[pack]
+on_initial_telemetry_failure = "{action}"
+initial_telemetry_warning_message = "Telemetry unavailable; continuing."
+"#
+            ),
+        )
+        .unwrap();
+        let bin = pack(built, temp.path(), &["main"]);
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path_regex(r"/heartbeat$"))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let output = Command::new(&bin)
+            .env("BOUNDARY_API_KEY", "bdry_secret_test")
+            .env("BOUNDARY_API_URL", server.uri())
+            .env("BOUNDARY_PROJECT", "acme/app")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            if action == "warn" {
+                r#"warning: Telemetry unavailable; continuing.
+"#
+            } else {
+                ""
+            }
+        );
+    }
+}
 
 /// Pack root `main`, run it, observe its return value on stdout.
 /// Validates the whole pipeline: envelope roundtrip, host dispatch,
@@ -175,11 +296,10 @@ fn pack_e2e_omits_compile_file_status() {
 
     let output = Command::new(&built.baml_cli)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
-        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
-        .env("BAML_OUTPUT_PRESET", "human")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would flip
+        // `--output-preset auto` to `agent` and hide progress lines.
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+        .env("BAML_HOME", common::shared_baml_home())
         .arg("pack")
         .arg("--from")
         .arg(tmp.path())
@@ -231,7 +351,8 @@ fn pack_e2e_hermetic_baml_file() {
     std::fs::write(&src, "function main() -> string { \"hermetic\" }\n").unwrap();
     let out_bin = tmp.path().join("out");
     let status = Command::new(&built.baml_cli)
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        .env("BAML_HOME", common::shared_baml_home())
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .arg("pack")
         .arg("--file")
         .arg(&src)

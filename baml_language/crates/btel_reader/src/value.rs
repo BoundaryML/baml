@@ -2,7 +2,7 @@
 //! CAS graphs.
 //!
 //! Navigation follows constant string keys (map entries, instance fields,
-//! named arguments) and zero-based list indices through the graph without
+//! named arguments), integer map keys and zero-based list indices without
 //! expanding it. A value may continue in other blobs; they are read only
 //! when a path or a rendering reaches them. Three outcomes stay distinct:
 //! - a captured BAML `null` is data;
@@ -24,6 +24,7 @@ use crate::evidence::ArgumentNames;
 
 pub mod equality;
 mod span;
+mod ty;
 pub use span::{BlobSource, Found, Located, media_content};
 use span::{Examine, Span, reach};
 
@@ -135,7 +136,7 @@ pub fn navigate(
         let Nav::Value(current) = nav else {
             return nav;
         };
-        nav = match step(&current, segment) {
+        nav = match step(source, &current, segment, &mut blobs_left) {
             Ok(value) => reach(source, current.blob(), value, &mut blobs_left),
             Err(nav) => nav,
         };
@@ -143,7 +144,12 @@ pub fn navigate(
     nav
 }
 
-fn step<'a>(current: &'a Located, segment: &Segment) -> Result<&'a DecodedValue, Nav> {
+fn step<'a>(
+    source: &(impl BlobSource + ?Sized),
+    current: &'a Located,
+    segment: &Segment,
+    blobs_left: &mut usize,
+) -> Result<&'a DecodedValue, Nav> {
     let id = match current.value() {
         Found::Object(id) => *id,
         // Scalars, null and enum values have no children.
@@ -192,8 +198,38 @@ fn step<'a>(current: &'a Located, segment: &Segment) -> Result<&'a DecodedValue,
                 entries,
                 original_len,
                 ..
+            },
+            segment,
+        ) => {
+            let mut unavailable = None;
+            for (key, value) in entries {
+                match reach(source, current.blob(), key, blobs_left) {
+                    Nav::Value(key) => {
+                        let matches = match (segment, key.value()) {
+                            (Segment::Key(expected), Found::String(actual)) => {
+                                expected.as_str() == actual.as_ref()
+                            }
+                            (Segment::Index(expected), Found::Int(actual)) => expected == actual,
+                            _ => false,
+                        };
+                        if matches {
+                            return Ok(value);
+                        }
+                    }
+                    Nav::Unavailable(reason) => unavailable = Some(reason),
+                    _ => {}
+                }
             }
-            | DecodedObject::Instance {
+            if let Some(reason) = unavailable {
+                Err(Nav::Unavailable(reason))
+            } else if (entries.len() as u64) < *original_len {
+                Err(Nav::Unavailable(Unavailable::Truncated(Limit::Values)))
+            } else {
+                Err(Nav::Missing)
+            }
+        }
+        (
+            DecodedObject::Instance {
                 fields: entries,
                 original_len,
                 ..
@@ -204,7 +240,7 @@ fn step<'a>(current: &'a Located, segment: &Segment) -> Result<&'a DecodedValue,
             Err(Nav::Unavailable(Unavailable::Truncated(*limit)))
         }
         (DecodedObject::List { .. }, Segment::Key(_))
-        | (DecodedObject::Map { .. } | DecodedObject::Instance { .. }, Segment::Index(_))
+        | (DecodedObject::Instance { .. }, Segment::Index(_))
         | (
             DecodedObject::Uint8Array { .. }
             | DecodedObject::Declaration { .. }
@@ -845,7 +881,7 @@ impl<'a> Renderer<'a> {
 
     fn declaration_name(&mut self, blob: &DecodedSnapshot, id: NodeId) -> Json {
         match blob.object(id) {
-            DecodedObject::Declaration { name, .. } => self.text(name.0.display_name().as_ref()),
+            DecodedObject::Declaration { name, .. } => self.text(&name.0.to_string()),
             DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
             | DecodedObject::Map { .. }
@@ -881,12 +917,15 @@ impl<'a> Renderer<'a> {
                 };
                 envelope("$bigint", digits)
             }
-            DecodedValue::Type(ty) => {
-                let ty = match &ty.decoded {
-                    Some(ty) => self.text(&ty.to_string()),
+            DecodedValue::Type(description) => {
+                // A decoded type is at most `max_type_bytes`; its encoding
+                // stands in for the text the rendering spends.
+                let rendered = match &description.decoded {
+                    Some(decoded) if self.take_text(description.encoded.len()) => ty::json(decoded),
+                    Some(_) => self.truncated(RENDER_SIZE),
                     None => Json::Null,
                 };
-                envelope("$type", ty)
+                envelope("$type", rendered)
             }
             DecodedValue::Enum {
                 declaration, name, ..
@@ -958,9 +997,47 @@ impl<'a> Renderer<'a> {
                 original_len,
                 ..
             } => {
+                let keys: Option<Vec<_>> = entries
+                    .iter()
+                    .map(|(key, _)| {
+                        let key = match key {
+                            DecodedValue::External(child) => {
+                                self.span.root_of(blob, *child).ok()?.1
+                            }
+                            key => key,
+                        };
+                        match key {
+                            DecodedValue::String(key) => Some(key.as_ref()),
+                            _ => None,
+                        }
+                    })
+                    .collect();
+                if keys.is_none() {
+                    let mut pairs = Vec::new();
+                    let mut whole = true;
+                    for (key, value) in entries {
+                        if self.full() {
+                            whole = false;
+                            break;
+                        }
+                        pairs.push(Json::Array(vec![
+                            self.value(blob, key, depth + 1),
+                            self.value(blob, value, depth + 1),
+                        ]));
+                    }
+                    map.insert("$map".into(), Json::Array(pairs));
+                    if entries.len() as u64 != *original_len {
+                        map.insert("$original_len".into(), Json::from(*original_len));
+                    }
+                    if !whole {
+                        self.end_early(&mut map);
+                    }
+                    return Json::Object(map);
+                }
+                let keys = keys.unwrap();
                 let mut inner = Map::new();
                 let mut whole = true;
-                for (key, value) in entries {
+                for (key, (_, value)) in keys.iter().zip(entries) {
                     if !self.entry(key) {
                         whole = false;
                         break;
@@ -970,7 +1047,7 @@ impl<'a> Renderer<'a> {
                 let plain = shared.is_none()
                     && whole
                     && entries.len() as u64 == *original_len
-                    && !entries.iter().any(|(key, _)| key.starts_with('$'));
+                    && !keys.iter().any(|key| key.starts_with('$'));
                 if plain {
                     return Json::Object(inner);
                 }
@@ -1031,7 +1108,7 @@ impl<'a> Renderer<'a> {
                         "$class_type"
                     }
                     .into(),
-                    self.text(name.0.display_name().as_ref()),
+                    self.text(&name.0.to_string()),
                 );
             }
             DecodedObject::Cell(value) => {

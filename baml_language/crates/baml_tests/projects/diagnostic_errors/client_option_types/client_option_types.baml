@@ -40,6 +40,13 @@ function UnknownProviderPrefix(input: string) -> string {
     prompt: `${input}`
 }
 
+// Removed: Azure has no shorthand, since a model name does not identify a
+// deployment.
+function AzureShorthand(input: string) -> string {
+    client: "azure/gpt-4o"
+    prompt: `${input}`
+}
+
 // Control: the new-world replacement compiles cleanly.
 client ValidClient = openai.ResponsesClient.new(
     model = "gpt-4",

@@ -103,9 +103,8 @@ class Run:
         return min(45, remaining)
 
     def query(self, project, fixture, phase, name, *, unchanged=False):
-        result, wall = invoke([self.args.baml, "query", "--from", project, "--format", "json",
-                               "--max-wall", "40s", QUERIES[name]], self.timeout(),
-                              dict(os.environ, BAML_AGENT_SKILL_CHECK="off"))
+        result, wall = invoke([self.args.baml, "--agent-skill-check", "off", "query", "--from", project, "--format", "json",
+                               "--max-wall", "40s", QUERIES[name]], self.timeout())
         outcome = result["outcome"]
         check(outcome["status"] == "complete", f"Incomplete result: {outcome}")
         refresh = outcome["refresh"]

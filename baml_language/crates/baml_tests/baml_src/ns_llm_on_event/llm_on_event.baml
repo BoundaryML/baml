@@ -170,3 +170,48 @@ test "claude_code_transcript_with_media" {
         "tool result id=call_text is_error=false: sunny in SF\ntool result id=call_media is_error=false: captured:[image]\nuser: Screenshot after the tool ran:[image]",
     )
 }
+
+// Tool-call ids, names, and tool descriptions are arbitrary text: the Claude
+// Code prompt must serialize them as JSON, not interpolate them into it.
+function claude_code_tricky_echo(args: map<string, unknown>) -> string {
+    "unused"
+}
+
+function claude_code_tool_catalog_json() -> json {
+    let schema: map<string, unknown> = {};
+    let _ = schema.set("type", "object");
+    let tb = ai.tools.Toolbox.new(
+        [ai.tools.raw_tool("echo", "say \"hi\"\nthen \\ stop", schema, claude_code_tricky_echo)],
+    );
+    let protocol = claude_code.internal.tool_protocol(tb);
+    baml.json.parse(protocol.split("(request via outcome.calls only):")[1].trim())
+}
+
+test "claude_code_tool_catalog_escapes_descriptions" {
+    let catalog = claude_code_tool_catalog_json();
+    assert.equal(baml.json.path<string>(catalog, "[0].name"), "echo");
+    assert.equal(baml.json.path<string>(catalog, "[0].description"), "say \"hi\"\nthen \\ stop");
+    assert.equal(baml.json.path<string>(catalog, "[0].parameters.type"), "object");
+}
+
+function claude_code_tool_call_json() -> json {
+    let args: map<string, unknown> = {};
+    let _ = args.set("q", "a \"quoted\" arg");
+    let j = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "call\"1", name: "look\nup", args: args }],
+                client_id: "claude-code/opus",
+            },
+        ],
+    };
+    let text = claude_code.internal.transcript_text(j);
+    baml.json.parse(text.split("assistant tool_call: ")[1])
+}
+
+test "claude_code_transcript_escapes_tool_calls" {
+    let call = claude_code_tool_call_json();
+    assert.equal(baml.json.path<string>(call, ".id"), "call\"1");
+    assert.equal(baml.json.path<string>(call, ".name"), "look\nup");
+    assert.equal(baml.json.path<string>(call, ".args.q"), "a \"quoted\" arg");
+}

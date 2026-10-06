@@ -108,6 +108,7 @@ fn lower_file_with_path_and_test_owner_impl(
     is_session_submission: bool,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
+    crate::docstring::reject_unsupported_trace_hooks(root, &mut diags);
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
     let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
@@ -508,6 +509,7 @@ fn lower_function(
     let attributes = lower_attributes_from_node(node);
     let docstring = crate::docstring::extract_docstring(node);
     let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
+    let trace_hook = crate::docstring::trace_hook(node, name.as_str(), diags);
 
     Some(FunctionDef {
         name,
@@ -524,6 +526,7 @@ fn lower_function(
         attributes,
         docstring,
         is_tagged_template_tag,
+        trace_hook,
         span: node.span_range(),
         name_span,
     })
@@ -870,6 +873,10 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 /// The builtin `"provider/model"` shorthand: each prefix and the provider
 /// class it constructs (`<pkg>.<class>.new(model = ...)`).
 ///
+/// Azure is deliberately absent: an Azure request goes to a deployment, which
+/// a model name does not identify, so `openai.AzureClient` must be built with
+/// its `deployment_id` or `base_url` (see `AZURE_SHORTHAND_REMOVED`).
+///
 /// The ONE provider table. A literal `client "openai/gpt-4o-mini"` lowers
 /// straight to the constructor (`spec_client_provider`); a dynamic
 /// `client:` expression lowers to `ai.clients.resolve(selector, providers)`
@@ -882,7 +889,6 @@ pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
     ("openai", "openai", "ResponsesClient"),
     ("openai-chat", "openai", "ChatClient"),
     ("openai-images", "openai", "ImageClient"),
-    ("azure", "openai", "AzureClient"),
     ("ollama", "openai", "OllamaClient"),
     ("openrouter", "openai", "OpenRouterClient"),
     ("anthropic", "anthropic", "Client"),
@@ -893,6 +899,12 @@ pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
     ("ai-gateway-images", "vercel", "AiGatewayImageClient"),
     ("claude-code", "claude_code", "ClaudeCodeClient"),
 ];
+
+/// Why a literal `client: "azure/<model>"` is rejected. `ai.clients.resolve`
+/// gives the same reason at runtime (`_from_shorthand` in `ai/ns_internal`).
+const AZURE_SHORTHAND_REMOVED: &str = "there is no \"azure/<model>\" shorthand: an Azure \
+     request goes to a deployment, which a model name does not identify; build \
+     openai.AzureClient.new(model = ..., deployment_id = ..., resource_name = ...)";
 
 /// The provider a `"provider/model"` literal names, as `(package, class)`.
 pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
@@ -992,6 +1004,14 @@ fn resolve_llm_client(
                 return None;
             };
             let Some((pkg, class)) = spec_client_provider(&text) else {
+                if prefix == "azure" {
+                    diags.push(LoweringDiagnostic::InvalidLlmClient {
+                        function_name: function_name.to_string(),
+                        reason: AZURE_SHORTHAND_REMOVED.to_string(),
+                        span,
+                    });
+                    return None;
+                }
                 diags.push(LoweringDiagnostic::InvalidLlmClient {
                     function_name: function_name.to_string(),
                     reason: format!(
@@ -1154,11 +1174,6 @@ fn lower_class(
         span: node.span_range(),
         name_span: name_token.text_range(),
     };
-
-    // No per-class JSON method synthesis: `to_json` / `from_json` are not real
-    // methods. `obj.to_json()` desugars to `baml.json.from(obj)` and
-    // `Type.from_json(j)` desugars to `baml.json.to<Type>(j)` (TIR + MIR);
-    // customization is via `implements baml.ToJson` / `baml.FromJson`.
 
     // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
     crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);
@@ -2017,6 +2032,7 @@ fn synthesize_init_test_function(
         attributes: vec![],
         docstring: None,
         is_tagged_template_tag: false,
+        trace_hook: None,
         span,
         name_span: span,
     }

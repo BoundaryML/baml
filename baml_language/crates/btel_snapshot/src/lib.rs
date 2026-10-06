@@ -32,14 +32,14 @@ mod walk;
 pub use build::{Builder, Leaves, Reserved, string_map};
 pub use decode::{
     BlobError, ChildIndex, DecodeLimits, DecodedMedia, DecodedMediaSource, DecodedName,
-    DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, MediaPayload, NodeId,
-    SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
+    DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, Fields, MediaPayload,
+    NodeId, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
 };
 pub use encoding::{BLOB_MAGIC, BLOB_VERSION, BlobScratch};
 pub use graph::{
-    BigintId, Description, FunctionArgs, LabelId, Limit, MapEntry, MediaSource, NameId, ObjectId,
-    OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId, TypeIdentity,
-    Uint8ArrayData,
+    BigintId, Description, FieldEntry, FunctionArgs, LabelId, Limit, MapEntry, MediaSource, NameId,
+    ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
+    TypeIdentity, Uint8ArrayData,
 };
 pub use hash::CasId;
 pub use pool::{Limits, PoolConfig, PoolStats, SnapshotPool};

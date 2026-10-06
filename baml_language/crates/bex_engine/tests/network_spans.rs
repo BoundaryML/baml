@@ -248,20 +248,29 @@ fn json(cas: &CasStore, snapshot: &DecodedSnapshot) -> Json {
 }
 
 fn value_json(cas: &CasStore, snapshot: &DecodedSnapshot, value: &DecodedValue) -> Json {
-    let entries = |entries: &btel_snapshot::Entries| {
-        entries
-            .iter()
-            .map(|(key, value)| (key.to_string(), value_json(cas, snapshot, value)))
-            .collect::<serde_json::Map<_, _>>()
-            .into()
-    };
     match value {
         DecodedValue::Null => Json::Null,
         DecodedValue::Int(value) => (*value).into(),
         DecodedValue::String(text) => text.as_ref().into(),
         DecodedValue::Object(id) => match snapshot.object(*id) {
-            DecodedObject::Map { entries: map, .. } => entries(map),
-            DecodedObject::Instance { fields, .. } => entries(fields),
+            DecodedObject::Map { entries, .. } => entries
+                .iter()
+                .map(|(key, value)| {
+                    let key = value_json(cas, snapshot, key);
+                    (
+                        key.as_str()
+                            .expect("network map keys are strings")
+                            .to_owned(),
+                        value_json(cas, snapshot, value),
+                    )
+                })
+                .collect::<serde_json::Map<_, _>>()
+                .into(),
+            DecodedObject::Instance { fields, .. } => fields
+                .iter()
+                .map(|(key, value)| (key.to_string(), value_json(cas, snapshot, value)))
+                .collect::<serde_json::Map<_, _>>()
+                .into(),
             DecodedObject::Uint8Array { data, .. } => data.clone().into(),
             object => format!("{object:?}").into(),
         },
@@ -449,52 +458,4 @@ async fn each_request_records_its_span_events_and_end() {
     for secret in ["sk-query", "sk-norm", "sk-header", "sk-cookie"] {
         assert_eq!(holding(secret), 0, "{secret} reached the disk");
     }
-}
-
-/// `BAML_TELEMETRY_HTTP_BODIES=off` keeps bodies out of the recording; their
-/// events are still there, with their times.
-#[test]
-fn bodies_off_records_events_without_bodies() {
-    const CHILD: &str = "BAML_TEST_NETWORK_BODIES_OFF";
-    if std::env::var_os(CHILD).is_none() {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "bodies_off_records_events_without_bodies",
-                "--nocapture",
-            ])
-            .env(CHILD, "1")
-            .env(btel_settings::network::BODIES_ENV_VAR, "off")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return;
-    }
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let directory = tempfile::tempdir().unwrap();
-        let engine = record(directory.path()).await;
-        let (spans, cas) = read(directory.path(), &engine);
-        let span = &spans["ok"];
-        let request = load(&cas, span.announcement.as_ref().unwrap().request_cas_id);
-        assert_eq!(request["request"]["method"], "POST");
-        assert!(request["request"].get("body").is_none());
-        assert_eq!(span.names(), ["connection", "data", "await"]);
-        assert_eq!(
-            load(&cas, span.event("connection").payload_cas_id)["status"],
-            200
-        );
-        assert!(span.event("data").payload_cas_id.is_none());
-        let sse = &spans["sse"];
-        assert_eq!(sse.names(), ["connection", "data", "data", "end", "await"]);
-        assert!(
-            sse.events[1..]
-                .iter()
-                .all(|event| event.payload_cas_id.is_none())
-        );
-    });
 }

@@ -295,7 +295,7 @@ function openai_images_passthrough() -> string {
                 base_url = mock.base_url(),
                 n = 2,
                 quality = "low",
-                request_body = baml.json.parse(`{"n":3,"quality":null,"partial_images":2}`),
+                request_body = { "n": 3, "quality": null, "partial_images": 2 },
                 headers = { "X-Trace-Id": "abc", "Content-Type": "application/json" },
                 query_params = { "beta": "images v2" },
             );
@@ -672,9 +672,7 @@ function gateway_images_output_format_mime() -> string {
                 n = 2,
                 size = "1024x1024",
                 seed = 7,
-                request_body = baml.json.parse(
-                    `{"providerOptions":{"blackForestLabs":{"outputFormat":"jpeg"}}}`,
-                ),
+                request_body = { "providerOptions": { "blackForestLabs": { "outputFormat": "jpeg" } } },
             );
             let pictures = ai.Agent.new(client = cl)
                 .run(GatewayDrawSet@spec("a brass desk lamp"))
@@ -976,9 +974,7 @@ function gateway_images_default_endpoint() -> string {
     let cl = vercel.AiGatewayImageClient.new(
         model = "bfl/flux-2-pro",
         api_key = "test-key",
-        request_body = baml.json.parse(
-            `{"n":2,"providerOptions":{"blackForestLabs":{"outputFormat":"jpeg"}}}`,
-        ),
+        request_body = { "n": 2, "providerOptions": { "blackForestLabs": { "outputFormat": "jpeg" } } },
     );
     let req = vercel.internal.gateway_images_render(
         cl,

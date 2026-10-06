@@ -427,6 +427,13 @@ impl Program {
                     }
                 }
                 Object::Interface(interface) => {
+                    if let Some(default) = &interface.structural_default {
+                        function(
+                            default.function,
+                            &format!("{role} structural default"),
+                            false,
+                        )?;
+                    }
                     for method in &interface.methods {
                         if let Some(default) = method.default {
                             function(
@@ -664,9 +671,6 @@ include!(concat!(env!("OUT_DIR"), "/sys_op_generated.rs"));
 #[derive(Clone, Debug)]
 pub enum SentinelKind {
     Uninit,
-    FromSpacePoison {
-        epoch: u32,
-    },
     TlabCanary {
         chunk_start: usize,
         chunk_end: usize,

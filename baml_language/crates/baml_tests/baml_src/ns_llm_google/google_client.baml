@@ -133,9 +133,10 @@ function google_request_body_passthrough() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_canned_turn())],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let overrides = baml.json.parse(
-                `{"generationConfig":{"thinkingConfig":{"thinkingBudget":0},"topK":null},"cachedContent":"projects/p/cachedContents/1"}`,
-            );
+            let overrides: json = {
+                "generationConfig": { "thinkingConfig": { "thinkingBudget": 0 }, "topK": null },
+                "cachedContent": "projects/p/cachedContents/1",
+            };
             let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "test-key",
@@ -199,11 +200,22 @@ test "google_tool_declarations" {
 // usageMetadata lands in ai.events.Usage — including cachedContentTokenCount
 // and thoughtsTokenCount, which the Rust builders dropped.
 function google_parse_thoughts_and_usage() -> string {
-    let raw = `{"candidates":[{"content":{"parts":[{"text":"weighing it up","thought":true},{"text":"answer"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":4,"cachedContentTokenCount":6,"thoughtsTokenCount":7,"totalTokenCount":27}}`;
-    let turn = google.internal.parse(
-        baml.json.from_string<google.internal.GmResponse>(raw),
-        0,
-    );
+    let raw: json = {
+        "candidates": [
+            {
+                "content": { "parts": [{ "text": "weighing it up", "thought": true }, { "text": "answer" }] },
+                "finishReason": "STOP",
+            },
+        ],
+        "usageMetadata": {
+            "promptTokenCount": 10,
+            "candidatesTokenCount": 4,
+            "cachedContentTokenCount": 6,
+            "thoughtsTokenCount": 7,
+            "totalTokenCount": 27,
+        },
+    };
+    let turn = google.internal.parse(baml.json.to<google.internal.GmResponse>(raw), 0);
     [
         turn.terminal_text() ?? "",
         turn.content.length().to_string(),
@@ -222,11 +234,17 @@ test "google_parse_thoughts_and_usage" {
 // Function calls carry no id on the wire, so one is synthesized from the
 // journal position; the turn stops for tool use.
 function google_parse_function_call() -> string {
-    let raw = `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"weather_lookup","args":{"city":"NYC"}}}]},"finishReason":"STOP"}]}`;
-    let turn = google.internal.parse(
-        baml.json.from_string<google.internal.GmResponse>(raw),
-        7,
-    );
+    let raw: json = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [{ "functionCall": { "name": "weather_lookup", "args": { "city": "NYC" } } }],
+                },
+                "finishReason": "STOP",
+            },
+        ],
+    };
+    let turn = google.internal.parse(baml.json.to<google.internal.GmResponse>(raw), 7);
     [
         turn.stop_reason.to_string(),
         turn.tool_uses().at(0)?.id ?? "",
@@ -242,11 +260,20 @@ test "google_parse_function_call" {
 // ai.content.Media blocks (so a `-> image` function has something to return)
 // while the text parts stay text.
 function google_parse_inline_media() -> string {
-    let raw = `{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGk="}},{"text":"here you go"}]},"finishReason":"STOP"}]}`;
-    let turn = google.internal.parse(
-        baml.json.from_string<google.internal.GmResponse>(raw),
-        0,
-    );
+    let raw: json = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        { "inlineData": { "mimeType": "image/png", "data": "aGk=" } },
+                        { "text": "here you go" },
+                    ],
+                },
+                "finishReason": "STOP",
+            },
+        ],
+    };
+    let turn = google.internal.parse(baml.json.to<google.internal.GmResponse>(raw), 0);
     let kinds: string[] = [];
     for (let m in turn.media()) {
         match (m) {
@@ -269,16 +296,20 @@ test "google_parse_inline_media" {
 
 // A blocked prompt and a safety-stopped candidate both mean Refused; an
 // unknown finish reason must NOT be mistaken for one.
-function _stop_reason_of(raw: string) -> string {
-    let resp = baml.json.from_string<google.internal.GmResponse>(raw);
+function _stop_reason_of(raw: json) -> string {
+    let resp = baml.json.to<google.internal.GmResponse>(raw);
     google.internal.parse(resp, 0).stop_reason.to_string()
 }
 
 function google_parse_stop_reasons() -> string {
-    let blocked = `{"promptFeedback":{"blockReason":"SAFETY"}}`;
-    let safety = `{"candidates":[{"content":{"parts":[{"text":""}]},"finishReason":"SAFETY"}]}`;
-    let truncated = `{"candidates":[{"content":{"parts":[{"text":"half"}]},"finishReason":"MAX_TOKENS"}]}`;
-    let unknown = `{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"SOMETHING_NEW"}]}`;
+    let blocked: json = { "promptFeedback": { "blockReason": "SAFETY" } };
+    let safety: json = { "candidates": [{ "content": { "parts": [{ "text": "" }] }, "finishReason": "SAFETY" }] };
+    let truncated: json = {
+        "candidates": [{ "content": { "parts": [{ "text": "half" }] }, "finishReason": "MAX_TOKENS" }],
+    };
+    let unknown: json = {
+        "candidates": [{ "content": { "parts": [{ "text": "ok" }] }, "finishReason": "SOMETHING_NEW" }],
+    };
     [
         _stop_reason_of(blocked),
         _stop_reason_of(safety),
@@ -295,8 +326,8 @@ test "google_parse_stop_reasons" {
 // candidate list, an `{"error": …}` document served with a 200 — is a FAILURE,
 // not an empty answer. A finishReason with empty content IS the provider
 // explaining itself and still parses.
-function _parse_label(raw: string) -> string {
-    let resp = baml.json.from_string<google.internal.GmResponse>(raw);
+function _parse_label(raw: json) -> string {
+    let resp = baml.json.to<google.internal.GmResponse>(raw);
     google.internal.parse(resp, 0).stop_reason.to_string() catch_all (e) {
         let invalid: ai.errors.InvalidResponse => "InvalidResponse",
         let reported: ai.errors.ProviderError => "ProviderError",
@@ -306,12 +337,12 @@ function _parse_label(raw: string) -> string {
 
 function google_parse_empty_response() -> string {
     [
-        _parse_label(`{}`),
-        _parse_label(`{"candidates":[]}`),
-        _parse_label(`{"candidates":[{}]}`),
-        _parse_label(`{"candidates":[{"content":{"parts":[]},"finishReason":"MAX_TOKENS"}]}`),
-        _parse_label(`{"error":{"code":429,"message":"quota"}}`),
-        _parse_label(`{"promptFeedback":{"blockReason":"SAFETY"}}`),
+        _parse_label({}),
+        _parse_label({ "candidates": [] }),
+        _parse_label({ "candidates": [{}] }),
+        _parse_label({ "candidates": [{ "content": { "parts": [] }, "finishReason": "MAX_TOKENS" }] }),
+        _parse_label({ "error": { "code": 429, "message": "quota" } }),
+        _parse_label({ "promptFeedback": { "blockReason": "SAFETY" } }),
     ].join("|")
 }
 
@@ -360,11 +391,22 @@ test "google_empty_response_e2e" {
 // synthesized call id (`call_<seq>_<i>~gts~<sig>`) through the journal and is
 // re-attached to the wire part on replay.
 function google_parse_thought_signature() -> string {
-    let raw = `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"weather_lookup","args":{"city":"NYC"}},"thoughtSignature":"CtwBAcu98"}]},"finishReason":"STOP"}]}`;
-    let turn = google.internal.parse(
-        baml.json.from_string<google.internal.GmResponse>(raw),
-        7,
-    );
+    let raw: json = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "functionCall": { "name": "weather_lookup", "args": { "city": "NYC" } },
+                            "thoughtSignature": "CtwBAcu98",
+                        },
+                    ],
+                },
+                "finishReason": "STOP",
+            },
+        ],
+    };
+    let turn = google.internal.parse(baml.json.to<google.internal.GmResponse>(raw), 7);
     turn.tool_uses().at(0)?.id ?? ""
 }
 
@@ -929,7 +971,7 @@ function vertex_claude_model_override() -> string {
         project_id = "my-project",
         location = "us-east5",
         api_key = "express-key",
-        request_body = baml.json.parse(`{"model":"claude-opus-4-1"}`),
+        request_body = { "model": "claude-opus-4-1" },
     );
     let body = baml.json.parse(google.internal.vertex_render(cl, input).body);
     baml.json.path_or<string>(body, ".model", "absent")

@@ -37,13 +37,6 @@ anonymously:
 
 This list is regularly audited to ensure its accuracy.
 
-You can view exactly what is being collected by setting the following
-environment variable: `BAML_TELEMETRY_DEBUG=1`.
-
-When this environment variable is set, data will not be sent to us. The
-data will only be printed out to the stderr stream, prefixed with
-`[telemetry]`.
-
 ## What about sensitive data (e.g. secrets)?
 
 We do not collect any metrics which may contain sensitive data.
@@ -84,7 +77,5 @@ running:
 baml telemetry enable
 ```
 
-You may also opt out by setting an environment variable:
-`BAML_TELEMETRY_DISABLED=1`. BAML also honors the cross-tool convention
-`DO_NOT_TRACK=1`. For backwards compatibility, the legacy
-`BAML_TELEMETRY=0` variable is honored as well.
+You may also opt out by setting the cross-tool environment variable
+`DO_NOT_TRACK=1`.

@@ -178,25 +178,17 @@ fn dispatch_op(
         return NativeCallResult::from(unresolved_op(iface, method));
     };
     let resolver = resolve::ImplResolver::for_value(vm, args[0]);
-    let Some((rule, bound_args)) =
-        resolver.resolve_implements_rule(&self_ty.into(), op_head, iface_args)
+    let Some(implementation) =
+        resolver.resolve_implementation(&self_ty.into(), op_head, iface_args)
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
-    let resolved = match resolver.rule_method_impl(&rule, method) {
+    let (callee, type_args) = match resolver.implementation_method(&implementation, method) {
         Ok(resolved) => resolved,
         Err(e) => return NativeCallResult::from(e),
     };
-    // The resolved impl's frame realizes fully against its bound args; a failure
-    // is a broken compiler/VM invariant, surfaced rather than swallowed.
-    let type_args = match resolver.realize_frame(&resolved.method.frame, &bound_args) {
-        Ok(type_args) => type_args,
-        Err(e) => return NativeCallResult::from(e),
-    };
     NativeCallResult::YieldToCall {
-        // `fqn` is the resolved callee's heap pointer (provided row or adopted
-        // interface default).
-        callee: resolved.method.fqn,
+        callee,
         args,
         type_args,
         // The operator's value *is* the impl method's return value — forward it.
@@ -305,6 +297,22 @@ fn resolve_cells(vm: &BexVm, mut v: Value) -> Option<Value> {
 struct EqualsDriver {
     stack: Vec<(Value, Value)>,
     visited: HashSet<(HeapPtr, HeapPtr)>,
+    visited_log: Vec<(HeapPtr, HeapPtr)>,
+    map_entries: Vec<MapEntryComparison>,
+    key_branches: Vec<MapKeyBranch>,
+}
+
+struct MapEntryComparison {
+    key: Value,
+    value: Value,
+    candidates: Vec<(Value, Value)>,
+}
+
+struct MapKeyBranch {
+    entry: MapEntryComparison,
+    candidate_value: Value,
+    map_entries: Vec<MapEntryComparison>,
+    visited_checkpoint: usize,
 }
 
 impl EqualsDriver {
@@ -312,17 +320,46 @@ impl EqualsDriver {
         Self {
             stack: vec![(a, b)],
             visited: HashSet::new(),
+            visited_log: Vec::new(),
+            map_entries: Vec::new(),
+            key_branches: Vec::new(),
         }
     }
 
     /// Drain the worklist: `Done(true)` if the stack empties with everything equal,
     /// `Done(false)` on the first unequal pair, or a `YieldToCall` (with `self` as the
     /// continuation) when a pair needs a user `Equals.eq` — resumed by [`Continuation::call`].
-    fn drive(mut self, vm: &BexVm) -> NativeCallResult {
-        while let Some((a, b)) = self.stack.pop() {
+    fn drive(mut self, vm: &mut BexVm) -> NativeCallResult {
+        loop {
+            let Some((a, b)) = self.stack.pop() else {
+                let Some(mut entry) = self.map_entries.pop() else {
+                    if self.finish_map_key(true) {
+                        continue;
+                    }
+                    return NativeCallResult::Done(Value::bool(true));
+                };
+                let Some((key, candidate_value)) = entry.candidates.pop() else {
+                    if self.finish_map_key(false) {
+                        continue;
+                    }
+                    return NativeCallResult::Done(Value::bool(false));
+                };
+                self.stack.push((entry.key, key));
+                self.key_branches.push(MapKeyBranch {
+                    entry,
+                    candidate_value,
+                    map_entries: std::mem::take(&mut self.map_entries),
+                    visited_checkpoint: self.visited_log.len(),
+                });
+                continue;
+            };
             match self.compare_one(vm, a, b) {
                 Cmp::Continue => {}
-                Cmp::NotEqual => return NativeCallResult::Done(Value::bool(false)),
+                Cmp::NotEqual => {
+                    if !self.finish_map_key(false) {
+                        return NativeCallResult::Done(Value::bool(false));
+                    }
+                }
                 Cmp::Error(e) => return NativeCallResult::from(e),
                 Cmp::Yield {
                     callee,
@@ -338,7 +375,26 @@ impl EqualsDriver {
                 }
             }
         }
-        NativeCallResult::Done(Value::bool(true))
+    }
+
+    fn finish_map_key(&mut self, equal: bool) -> bool {
+        let Some(branch) = self.key_branches.pop() else {
+            return false;
+        };
+        self.stack.clear();
+        self.map_entries = branch.map_entries;
+        // Keep ancestor cycle facts, but never reuse a candidate's tentative
+        // equality facts when trying another key in the same hash bucket.
+        while self.visited_log.len() > branch.visited_checkpoint {
+            self.visited.remove(&self.visited_log.pop().unwrap());
+        }
+        if equal {
+            self.stack
+                .push((branch.entry.value, branch.candidate_value));
+        } else {
+            self.map_entries.push(branch.entry);
+        }
+        true
     }
 
     /// Compare one popped pair: a leaf decides equality directly; a structural
@@ -377,6 +433,7 @@ impl EqualsDriver {
                     // Non-back-edge content was/will be checked on first visit.
                     return Cmp::Continue;
                 }
+                self.visited_log.push(key);
                 self.compare_objects(vm, pa, pb)
             }
             // Mismatched value kinds are never equal. Every kind is listed explicitly
@@ -438,12 +495,22 @@ impl EqualsDriver {
                 if xs.len() != ys.len() {
                     return Cmp::NotEqual;
                 }
-                // Order-insensitive: same keys, equal values.
-                for (k, xv) in &**xs {
-                    match ys.get(k) {
-                        Some(yv) => self.stack.push((*xv, *yv)),
-                        None => return Cmp::NotEqual,
-                    }
+                let mut buckets: HashMap<u64, Vec<(Value, Value)>> = HashMap::new();
+                for (_, entry) in ys.entries() {
+                    buckets
+                        .entry(entry.hash)
+                        .or_default()
+                        .push((entry.key, entry.value));
+                }
+                for (_, entry) in xs.entries() {
+                    let Some(candidates) = buckets.get(&entry.hash) else {
+                        return Cmp::NotEqual;
+                    };
+                    self.map_entries.push(MapEntryComparison {
+                        key: entry.key,
+                        value: entry.value,
+                        candidates: candidates.clone(),
+                    });
                 }
                 Cmp::Continue
             }
@@ -540,6 +607,8 @@ impl EqualsDriver {
             #[cfg(feature = "heap_debug")]
             (Object::Sentinel(_), _) => Cmp::NotEqual,
 
+            (Object::Tombstone, _) => Object::tombstone_reached(),
+
             (Object::RustData(x), Object::RustData(y)) => {
                 match (
                     x.downcast_ref::<bex_vm_types::trace::SpanId>(),
@@ -576,12 +645,16 @@ impl EqualsDriver {
 }
 
 impl Continuation for EqualsDriver {
-    /// Resume after a user `Equals.eq` returns: `false` → the whole comparison is
-    /// `false`; `true` → that pair is equal, keep draining the remaining stack.
-    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         match value.as_bool() {
             Some(true) => (*self).drive(vm),
-            Some(false) => NativeCallResult::Done(Value::bool(false)),
+            Some(false) => {
+                if self.finish_map_key(false) {
+                    (*self).drive(vm)
+                } else {
+                    NativeCallResult::Done(Value::bool(false))
+                }
+            }
             // `eq` is typed `-> bool throws never`, so a non-bool return is a compiler/VM
             // invariant break, not a possible runtime value — surface it as an internal
             // engine error rather than silently treating it as "unequal".
@@ -602,6 +675,12 @@ impl Continuation for EqualsDriver {
             roots.push(*pa);
             roots.push(*pb);
         }
+        for entry in &self.map_entries {
+            entry.extend_roots(&mut roots);
+        }
+        for branch in &self.key_branches {
+            branch.extend_roots(&mut roots);
+        }
         roots
     }
 
@@ -615,16 +694,64 @@ impl Continuation for EqualsDriver {
                 *b = Value::object(fwd(p));
             }
         }
+        for entry in &mut self.map_entries {
+            entry.forward(forwarding);
+        }
+        for branch in &mut self.key_branches {
+            branch.forward(forwarding);
+        }
         // Re-key the cycle set on the forwarded pointers, preserving the `(min, max)`
         // ordering the insert side uses so a re-encountered pair still matches.
-        self.visited = self
-            .visited
-            .iter()
-            .map(|&(pa, pb)| {
-                let (na, nb) = (fwd(pa), fwd(pb));
-                if na < nb { (na, nb) } else { (nb, na) }
-            })
-            .collect();
+        for pair in &mut self.visited_log {
+            let (a, b) = (fwd(pair.0), fwd(pair.1));
+            *pair = if a < b { (a, b) } else { (b, a) };
+        }
+        self.visited = self.visited_log.iter().copied().collect();
+    }
+}
+
+impl MapEntryComparison {
+    fn extend_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.extend(self.key.as_object_ptr());
+        roots.extend(self.value.as_object_ptr());
+        for (key, value) in &self.candidates {
+            roots.extend(key.as_object_ptr());
+            roots.extend(value.as_object_ptr());
+        }
+    }
+
+    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        let forward = |value: &mut Value| {
+            if let Some(ptr) = value.as_object_ptr() {
+                *value = Value::object(forwarding.get(&ptr).copied().unwrap_or(ptr));
+            }
+        };
+        forward(&mut self.key);
+        forward(&mut self.value);
+        for (key, value) in &mut self.candidates {
+            forward(key);
+            forward(value);
+        }
+    }
+}
+
+impl MapKeyBranch {
+    fn extend_roots(&self, roots: &mut Vec<HeapPtr>) {
+        self.entry.extend_roots(roots);
+        roots.extend(self.candidate_value.as_object_ptr());
+        for entry in &self.map_entries {
+            entry.extend_roots(roots);
+        }
+    }
+
+    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.entry.forward(forwarding);
+        for entry in &mut self.map_entries {
+            entry.forward(forwarding);
+        }
+        if let Some(ptr) = self.candidate_value.as_object_ptr() {
+            self.candidate_value = Value::object(forwarding.get(&ptr).copied().unwrap_or(ptr));
+        }
     }
 }
 
@@ -677,7 +804,12 @@ fn resolve_equals_eq(
     else {
         return Ok(None);
     };
-    let method = resolver.rule_method_impl(&rule, "eq")?.method;
+    let resolved = resolver.rule_method_impl(&rule, "eq")?;
+    // Keep defaults in this worklist so cyclic graphs share its visited set.
+    if resolved.is_default {
+        return Ok(None);
+    }
+    let method = resolved.method;
     // `fqn` is the resolved callee's heap pointer (the impl method or adopted
     // default) — invoke it directly. Its frame realizes fully against the bound
     // args (every projection reduced through the impl registry); a failure is
@@ -685,6 +817,10 @@ fn resolve_equals_eq(
     let callee = method.fqn;
     let type_args = resolver.realize_frame(&method.frame, &bound_args)?;
     Ok(Some((callee, type_args)))
+}
+
+pub(super) fn equals_structural_default(vm: &mut BexVm, a: Value, b: Value) -> NativeCallResult {
+    EqualsDriver::new(a, b).drive(vm)
 }
 
 /// The `baml.ops.Equals` interface name.

@@ -64,6 +64,8 @@ Examples:
     baml pack --file script.baml main")]
 pub struct PackArgs {
     #[command(flatten)]
+    pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
+    #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
 
     /// Function to package as the executable's only entry point.
@@ -142,6 +144,24 @@ impl PackArgs {
 
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         self.validate_flags()?;
+        let manifest = self.artifact_manifest()?;
+        let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
+            &manifest,
+            btel_settings::artifact::ArtifactKind::Pack,
+        )?;
+        let default_environment = manifest
+            .get("pack")
+            .and_then(|table| table.get("telemetry_environment"));
+        let default_environment = default_environment
+            .map(|value| {
+                value
+                    .as_str()
+                    .context("pack.telemetry_environment must be a string.")
+            })
+            .transpose()?;
+        let provisioning = self
+            .telemetry
+            .prepare(&mut telemetry, default_environment, "pack")?;
 
         let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
         let _ = db;
@@ -169,7 +189,7 @@ impl PackArgs {
         let label = label_for(&targets);
         reporter.spin("Packaging", &label);
 
-        let envelope = PackEnvelope {
+        let mut envelope = PackEnvelope {
             program,
             mode: mode.clone(),
             targets: targets
@@ -181,13 +201,19 @@ impl PackArgs {
                 })
                 .collect(),
             output_format: self.output_format,
+            telemetry,
         };
+        let target_triple = self.resolved_target_triple()?;
+        let host_bytes = read_host_binary(target_triple, reporter)?;
+        if let Some(provisioning) = provisioning {
+            reporter.spin("Provisioning", "embedded telemetry");
+            envelope.telemetry.embedded =
+                Some(Box::new(provisioning.mint(envelope.telemetry_digest()?)?));
+        }
         let serialized =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
                 .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
-        let target_triple = self.resolved_target_triple()?;
-        let host_bytes = read_host_binary(target_triple, reporter)?;
         let basename = self.resolve_output_basename()?;
         let output_path = self
             .output
@@ -278,6 +304,26 @@ impl PackArgs {
         self.load_and_compile_project(reporter)
     }
 
+    fn artifact_manifest(&self) -> Result<toml::Value> {
+        if self.file.is_some() {
+            return Ok(toml::Value::Table(toml::Table::new()));
+        }
+        let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
+            return Ok(toml::Value::Table(toml::Table::new()));
+        };
+        let path = root.join("baml.toml");
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                Ok(toml::from_str(&content)
+                    .with_context(|| format!("Invalid {}", path.display()))?)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(toml::Value::Table(toml::Table::new()))
+            }
+            Err(error) => Err(error).with_context(|| format!("failed to read {}", path.display())),
+        }
+    }
+
     /// Project-mode load + compile through the bytecode cache — the same warm
     /// flow as `baml run` (`run_command::load_and_compile`): whole-program hit
     /// when nothing changed, served packages plus a fresh user package on an
@@ -303,9 +349,6 @@ impl PackArgs {
         let needs_format_hint = session.needs_format_hint();
 
         if let Some(program) = session.try_cached_program() {
-            crate::bytecode_cache::cache_debug(format_args!(
-                "pack: bytecode cache hit — skipping compile"
-            ));
             return Ok((session.db, program, needs_format_hint));
         }
 
@@ -593,24 +636,14 @@ fn host_binary_name(target_triple: &str) -> String {
 }
 
 fn download_host_binary_from_release(target: &str, host_name: &str) -> Result<Vec<u8>> {
-    let version = release_version_for_download();
-    let fetcher = baml_release::Fetcher::default_for(
-        baml_release::ReleaseSpec {
-            version,
-            target: target.to_string(),
-        },
-        baml_release::Product::Toolchain,
-    );
+    let fetcher = baml_release::Fetcher::from_toolchain_manifest(baml_release::ReleaseSpec {
+        version: release_version().to_string(),
+        target: target.to_string(),
+    })
+    .map_err(|err| anyhow!("{err}"))?;
     fetcher
         .fetch_binary(host_name)
         .map_err(|err| anyhow!("{err}"))
-}
-
-fn release_version_for_download() -> String {
-    std::env::var("BAML_PACK_HOST_RELEASE_VERSION")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| release_version().to_string())
 }
 
 fn release_host_target_triple() -> Result<&'static str> {
@@ -695,6 +728,7 @@ mod tests {
 
     fn pack_args() -> PackArgs {
         PackArgs {
+            telemetry: Default::default(),
             compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
@@ -1190,6 +1224,7 @@ mod tests {
                 subcommand_name: "main".to_string(),
             }],
             output_format: OutputFormat::Json,
+            telemetry: Default::default(),
         };
         let bytes =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();

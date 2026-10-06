@@ -96,7 +96,12 @@ fn object(snapshot: &DecodedSnapshot) -> &DecodedObject {
 fn fields(entries: &btel_snapshot::Entries) -> BTreeMap<&str, &DecodedValue> {
     entries
         .iter()
-        .map(|(key, value)| (key.as_ref(), value))
+        .map(|(key, value)| {
+            let DecodedValue::String(key) = key else {
+                panic!("expected string map key");
+            };
+            (key.as_ref(), value)
+        })
         .collect()
 }
 
@@ -241,7 +246,7 @@ fn assert_logs(
     let DecodedObject::Instance { fields: values, .. } = object(named("class")) else {
         panic!("class")
     };
-    assert_eq!(fields(values)["value"], &DecodedValue::Int(7));
+    assert_eq!(values, &vec![("value".into(), DecodedValue::Int(7))]);
     assert!(
         matches!(root(named("enum")), DecodedValue::Enum { variant: 0, name, .. } if name.as_ref() == "First")
     );
@@ -279,8 +284,14 @@ async fn log_data_and_event_time_context_reach_local_cas() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn log_data_and_context_use_existing_cloud_uploads() {
     let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
     let base = server.uri();
     Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
         .respond_with(move |request: &Request| {
             ResponseTemplate::new(200).set_body_json(cloud_protocol::response(request, &base, &[]))
         })

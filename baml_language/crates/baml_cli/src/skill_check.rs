@@ -18,8 +18,8 @@ const SKILL_OUTDATED_WARNING: &str =
     "your baml skill does not match this toolchain; use `baml agent install` to upgrade it";
 const SKILL_MISSING_WARNING: &str =
     "no baml skill is installed; set it up with `baml agent install`";
-const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill does not match this toolchain; run `baml agent install`, restart the agent, then retry; set BAML_AGENT_SKILL_CHECK=off to bypass this check";
-const SKILL_MISSING_ERROR: &str = "the BAML agent skill is required but is not installed; run `baml agent install`, restart the agent, then retry; set BAML_AGENT_SKILL_CHECK=off to bypass this check";
+const SKILL_OUTDATED_ERROR: &str = "the installed BAML agent skill does not match this toolchain; run `baml agent install`, restart the agent, then retry; pass --agent-skill-check off to bypass this check";
+const SKILL_MISSING_ERROR: &str = "the BAML agent skill is required but is not installed; run `baml agent install`, restart the agent, then retry; pass --agent-skill-check off to bypass this check";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SkillStatus {
@@ -83,7 +83,7 @@ fn project_skill_status(project: Option<&Path>) -> anyhow::Result<SkillStatus> {
             Err(_) => return Ok(SkillStatus::Missing),
         },
     };
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = baml_env::os_var("HOME").map(PathBuf::from);
 
     loop {
         let statuses = [".agents/skills", ".claude/skills"]

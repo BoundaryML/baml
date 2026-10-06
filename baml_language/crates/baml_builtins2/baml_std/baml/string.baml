@@ -17,8 +17,8 @@
 class String {
     /// Renders any value as human-readable text.
     ///
-    /// Dispatches to `baml.ToString.to_string` when `value`'s runtime type
-    /// implements it, and to a default structural rendering otherwise.
+    /// Dispatches to `baml.ToString.to_string`, using the implicit structural
+    /// implementation when the runtime type has no explicit implementation.
     ///
     /// # Examples
     ///
@@ -28,10 +28,7 @@ class String {
     /// string.from([1, 2, 3])     // "[1, 2, 3]"
     /// ```
     function from<T>(value: T) -> string throws never {
-        match (value) {
-            baml.ToString => value.to_string(),
-            _ => root._to_string_default(value),
-        }
+        value.to_string()
     }
 
     /// Returns the number of characters (Unicode code points).
@@ -51,6 +48,7 @@ class String {
     /// "😀".length()     // 1
     /// "".length()       // 0
     /// ```
+    /// baml:$trace=trace.hidden
     function length(self) -> int throws never {
         self.char_count()
     }
@@ -68,6 +66,7 @@ class String {
     /// "".is_empty()       // true
     /// "hello".is_empty()  // false
     /// ```
+    /// baml:$trace=trace.hidden
     function is_empty(self) -> bool throws never {
         self.byte_length() == 0
     }

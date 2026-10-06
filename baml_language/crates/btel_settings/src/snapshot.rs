@@ -24,13 +24,13 @@ pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;
 pub const SPLIT_UNIT_BYTES: u64 = 64 * 1024;
 /// A string or bigint value, or a `uint8array`, whose content (a bigint's
 /// encoded limbs) reaches this gets a blob of its own, unless it is the
-/// captured value itself. Map keys and names are always written in place.
+/// captured value itself. Names are always written in place.
 pub const SPLIT_LEAF_BYTES: u64 = 16 * 1024;
 
 /// The one size a capture is cut for. A string, a bigint (its encoded limbs),
 /// a `uint8array` or a media value's content over this is captured as
 /// truncated: it cannot be split, and whatever stores or sends it holds it
-/// whole. A map entry whose key is over it is left out. Everything else is
+/// whole. An instance field whose name is over it is left out. Everything else is
 /// captured however large it is.
 pub const MAX_LEAF_BYTES: usize = 1 << 30;
 
@@ -39,4 +39,6 @@ pub const RECENT_CAPTURE_IDS: usize = 4096;
 
 /// CAS blob envelope. Change with the binary codec, never as a tuning knob.
 pub const BLOB_MAGIC: [u8; 8] = *b"BTELCAS\0";
-pub const BLOB_VERSION: u32 = 3;
+pub const BLOB_VERSION: u32 = 4;
+/// Supported read formats, newest first, for decoding and on-disk lookup.
+pub const READABLE_BLOB_VERSIONS: &[u32] = &[BLOB_VERSION, 3];

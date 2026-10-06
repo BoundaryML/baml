@@ -14,8 +14,8 @@ class            testing.TestRegistry             <builtin>/testing/registry.bam
 function         testing.Quorum                   <builtin>/testing/runners.baml:14
 function         testing.Retry                    <builtin>/testing/runners.baml:50
 function         testing.PassRate                 <builtin>/testing/runners.baml:85
-function         testing.Sequential               <builtin>/testing/runners.baml:117
-function         testing.FailFast                 <builtin>/testing/runners.baml:127
+function         testing.Sequential               <builtin>/testing/runners.baml:118
+function         testing.FailFast                 <builtin>/testing/runners.baml:128
 type             testing.Outcome                  <builtin>/testing/types.baml:4
 class            testing.RunReport                <builtin>/testing/types.baml:7
 class            testing.TestReport               <builtin>/testing/types.baml:19

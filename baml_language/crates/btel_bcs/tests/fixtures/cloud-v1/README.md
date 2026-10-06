@@ -1,7 +1,7 @@
 # Cloud v1 contract fixtures
 
 The cloud envelope, protobuf package, and JSON protocol remain v1. Embedded
-snapshots use CAS blob format v3 and snapshot hash format v3; `cloud-v1` names
+snapshots use CAS blob format v4 and snapshot hash format v4; `cloud-v1` names
 the outer protocol, not the embedded CAS version.
 
 Proposed client contract examples for sharing with BCS. **Not yet approved by
@@ -101,7 +101,7 @@ and explicit proposed membership. Server plans and dispositions were authored
 separately as fixed tables. Expected envelope bytes were generated using vendored
 `protoc-bin-vendored` crate 3.2.0 (compiler `libprotoc 31.1`,
 `protoc --encode=btel.cloud.v1.CloudUploadEnvelope`)
-against `proto/cloud.proto`, supplying the frozen recording/CAS bytes and authored
+against `../bcs_api/proto/cloud.proto`, supplying the frozen recording/CAS bytes and authored
 plan/upload IDs. They were also decoded using that schema. No production cloud
 envelope encoder or incoming HTTP request produced the expected envelopes.
 
@@ -192,7 +192,7 @@ vendored binary for your platform:
 
 ```sh
 xxd -r -p tests/fixtures/cloud-v1/mixed/recording.hex |
-  "$PROTOC" --decode=btel.cloud.v1.CloudUploadEnvelope proto/cloud.proto
+  "$PROTOC" --decode=btel.cloud.v1.CloudUploadEnvelope ../bcs_api/proto/cloud.proto
 ```
 
 Decode then re-encode an envelope with the same schema to check its outer wire

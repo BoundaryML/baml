@@ -3675,10 +3675,10 @@ test "ordering_on_interface_existential_type_argument_is_rejected" {
     )
 }
 
-test "compare_without_equals_is_rejected" {
-    root.compiler.AssertHasCode(
+test "compare_accepts_implicit_equals" {
+    root.compiler.AssertCompiles(
         {
-            "compare_without_equals_is_rejected.baml": `
+            "compare_accepts_implicit_equals.baml": `
                 class NoEq {
                     v: int
                     implements baml.ops.Compare {
@@ -3689,7 +3689,6 @@ test "compare_without_equals_is_rejected" {
                 }
             `,
         },
-        "E0125",
     )
 }
 

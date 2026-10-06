@@ -84,23 +84,24 @@ test "messages_yields_promptmessage_instances" {
 // like Anthropic `cache_control`. `collect_structured_messages` used to drop
 // it; it must reach `ai.PromptMessage.metadata` intact, and a message that
 // carried none must read as an empty map (never null).
-function pa_message_metadata_survives_assembly() -> string {
+function pa_message_metadata_survives_assembly() -> json {
     let cc = ai.ContextClient { name: "c", provider: "anthropic", default_role: "user", allowed_roles: ["system", "user"] };
     let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
     let cached = ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } };
     let render = prompt`${cached}Long shared preamble.${role("user")}Hi World!`;
-    let out: string[] = [];
+    let out: json[] = [];
     for (let m in render(ctx).messages()) {
-        out.push(`${m.role}=${baml.json.stringify(baml.json.to_json(m.metadata))}`)
+        out.push({ "role": m.role, "metadata": baml.json.to_json(m.metadata) })
     }
-    out.join(";")
+    out
 }
 
 test "message_metadata_survives_prompt_assembly" {
-    assert.equal(
-        pa_message_metadata_survives_assembly(),
-        "system={\"cache_control\":{\"type\":\"ephemeral\"}};user={}",
-    )
+    let expected: json = [
+        { "role": "system", "metadata": { "cache_control": { "type": "ephemeral" } } },
+        { "role": "user", "metadata": {} },
+    ];
+    assert.equal(pa_message_metadata_survives_assembly(), expected)
 }
 
 // Every media kind interpolated into a prompt must survive as its own
@@ -139,7 +140,7 @@ test "message_parts_preserve_all_media_structurally" {
 // An interpolated `ai.CacheDelimiter` is its own structural part, at the position it was
 // written and nowhere else, carrying `args` as written. It holds no text: the
 // readable projections are those of the same prompt without it.
-function pa_cache_delimiter_parts() -> string {
+function pa_cache_delimiter_parts() -> json {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] };
     let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
     let img = image.from_url("https://example.com/photo.png", "image/png");
@@ -150,26 +151,36 @@ function pa_cache_delimiter_parts() -> string {
         ${ai.CacheDelimiter { args: { "type": "default", "ttl": "1h" } }}
         question
     `;
-    let out: string[] = [];
+    let out: json[] = [];
     for (let message in render(ctx).messages()) {
-        let kinds: string[] = [];
+        let parts: json[] = [];
         for (let part in message.parts) {
             match (part) {
-                let text: string => kinds.push(`text=${text}`),
-                let delimiter: ai.CacheDelimiter => kinds.push(`cache=${baml.json.stringify(delimiter.args)}`),
-                _ => kinds.push("media"),
+                let text: string => parts.push({ "text": text }),
+                let delimiter: ai.CacheDelimiter => parts.push({ "cache": delimiter.args }),
+                _ => parts.push("media"),
             }
         }
-        out.push(`${message.role}:${kinds.join("|")}`);
+        out.push({ "role": message.role, "parts": parts });
     }
-    out.join(";")
+    out
 }
 
 test "cache_delimiter_is_a_part_where_it_was_written" {
-    assert.equal(
-        pa_cache_delimiter_parts(),
-        `system:text=Be terse.;user:text=before|media|text=after\n        |cache={"type":"default","ttl":"1h"}|text=\n        question`,
-    )
+    let expected: json = [
+        { "role": "system", "parts": [{ "text": "Be terse." }] },
+        {
+            "role": "user",
+            "parts": [
+                { "text": "before" },
+                "media",
+                { "text": "after\n        " },
+                { "cache": { "type": "default", "ttl": "1h" } },
+                { "text": "\n        question" },
+            ],
+        },
+    ];
+    assert.equal(pa_cache_delimiter_parts(), expected)
 }
 
 function pa_cache_delimiter_text() -> string {

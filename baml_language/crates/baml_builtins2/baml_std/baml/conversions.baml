@@ -1,4 +1,4 @@
-/// Opt-in human-readable string conversion.
+/// Human-readable string conversion with an implicit structural default.
 ///
 /// A type implements `baml.ToString` to control how `string.from(value)`
 /// renders it. Conversion is total — `to_string` never throws.
@@ -15,9 +15,8 @@
 /// }
 /// ```
 ///
-/// This is opt-in rather than a magic method: `to_string` exists only on types
-/// that ask for it, and `string.from` falls back to a structural rendering for
-/// everything else (see [`_to_string_default`]).
+/// Every type has an implicit implementation. An explicit implementation
+/// overrides the structural rendering (see [`_to_string_default`]).
 ///
 /// `to_string` carries that same structural rendering as its default body, so
 /// `implements baml.ToString {}` with no override is valid and renders exactly
@@ -41,8 +40,7 @@ implement root.ToString for reflect.Type {
   }
 }
 
-/// (internal) The default structural rendering `string.from` uses for values
-/// whose runtime type does not implement `baml.ToString`.
+/// (internal) The structural rendering used by the default `baml.ToString` body.
 ///
 /// Primitives render naturally (`5`, `true`, `null`); containers and class
 /// instances render structurally (`[1, 2]`, `Point { x: 1, y: 2 }`). A nested
@@ -72,12 +70,12 @@ function _cleanup_begin<T>(value: T) -> bool throws never {
     $rust_function
 }
 
-/// Opt-in JSON conversion.
+/// JSON conversion with an implicit structural default.
 ///
 /// A type implements `baml.ToJson` to control how `baml.json.from(value)`
-/// renders it — the json analog of `baml.ToString`. `baml.json.from` renders
-/// non-implementors structurally (primitives natural, lists, maps, and
-/// instances structural); an implementor customizes its own json shape.
+/// renders it, the json analog of `baml.ToString`. Implicit implementations
+/// render primitives naturally and containers and instances structurally.
+/// An explicit implementation customizes its own json shape.
 ///
 /// ```baml
 /// class Temp {
@@ -103,8 +101,7 @@ interface ToJson {
     }
 }
 
-/// (internal) The default structural json rendering `baml.json.from` uses for
-/// values whose runtime type does not implement `baml.ToJson`.
+/// (internal) The structural rendering used by the default `baml.ToJson` body.
 ///
 /// Primitives render naturally; containers and class instances render
 /// structurally (`[1, 2]`, `{"field": value}`), enums as their variant name,
@@ -118,32 +115,13 @@ function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.Serial
     $rust_function
 }
 
-/// (internal) Dispatches `to_json` on `value`'s *runtime* class, honoring a
-/// user-defined override.
-///
-/// `baml.json.from` routes through this rather than a static
-/// `match (value) { baml.ToJson => value.to_json() }`: static interface
-/// dispatch from this (stdlib) package can only see implementors visible here,
-/// not downstream user classes. Resolving on the receiver's runtime class picks up a user
-/// `implements baml.ToJson { function to_json ... }` override; a class that
-/// inherits the structural default body falls back to [`_to_json_default`].
-///
-/// TODO: temporary. Once the TIR rework moves interface conformance checks to
-/// runtime, `baml.json.from` can use the literal `is baml.ToJson` form and this
-/// shim can be removed.
-//baml:mut_vm
-//baml:may_yield
-function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.SerializationError {
-    $rust_function
-}
-
-/// Opt-in JSON deserialization — the inverse of `baml.ToJson`.
+/// JSON deserialization with an implicit structural default.
 ///
 /// A type implements `baml.FromJson` to control how `baml.json.to<T>(j)` (and
 /// JSON deserialization generally) constructs it from a `json` value. Unlike
 /// `to_json`, `from_json` has no `self`: it is an associated constructor taking
-/// a `json` and returning `Self`. `baml.json.to` decodes non-implementors
-/// structurally, field by field, honoring nested `baml.FromJson` overrides — so
+/// a `json` and returning `Self`. Implicit implementations decode
+/// structurally, field by field, honoring nested `baml.FromJson` overrides, so
 /// implement this only when a type's json shape differs from its field layout.
 ///
 /// ```baml
@@ -157,30 +135,22 @@ function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.Serializa
 /// }
 /// ```
 ///
-/// `from_json` is *required* and has no default body: an interface default
-/// method may not return `Self`, so the structural fallback lives in
-/// `baml.json.to` instead.
+/// `from_json` is required in an explicit implementation. The compiler supplies
+/// a structural implementation when no explicit implementation applies.
 interface FromJson {
     function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError;
 }
 
-/// (internal) Dispatches `from_json` on the target type `T`, honoring a
-/// user-defined override.
-///
-/// `baml.json.to` routes through this rather than a static `match` for the same
-/// package-boundary reason `baml.json.from` uses [`_to_json_shim`]: static
-/// interface dispatch from this (stdlib) package can only see implementors
-/// visible here, not downstream user classes. Resolving on the runtime target
-/// type picks up a user `implements baml.FromJson { function from_json ... }`
-/// override; a non-implementor falls back to the per-field structural decode
-/// `baml.json.to` provides (there is no default body — `FromJson.from_json` is
-/// a required method).
-///
-/// TODO: temporary. Once the TIR rework moves interface conformance checks to
-/// runtime, `baml.json.to` can use the literal `is baml.FromJson` form and this
-/// shim can be removed.
+/// Decode the root structurally while honoring nested FromJson implementations.
 //baml:mut_vm
 //baml:may_yield
-function _from_json_shim<T>(j: baml.json.json) -> T throws baml.json.DecodeError {
+function _from_json_structural_default<T>(j: baml.json.json) -> T throws baml.json.DecodeError {
+    $rust_function
+}
+
+/// Compare structurally in one cycle-aware walk, honoring nested Equals overrides.
+//baml:mut_vm
+//baml:may_yield
+function _equals_structural_default(a: unknown, b: unknown) -> bool throws never {
     $rust_function
 }

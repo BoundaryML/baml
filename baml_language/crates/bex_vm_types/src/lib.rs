@@ -21,10 +21,12 @@ pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
+pub mod meter;
 pub mod prompt;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
+pub mod rust_data;
 pub mod trace;
 pub mod type_head;
 pub mod types;
@@ -38,6 +40,7 @@ pub use indexable::{
 };
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
+pub use meter::{AllocDebt, Meter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
@@ -49,6 +52,10 @@ pub use runtime_compile::{
     RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
     RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
     RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
+};
+pub use rust_data::{
+    BexRustData, MeteredGuard, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc,
+    TestRustData,
 };
 pub use type_head::TypeHead;
 
@@ -136,14 +143,14 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
 }
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
-    ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, Enum,
+    ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, EntryId, Enum,
     EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
     GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, Instance,
     InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
-    MapContainer, MapReadGuard, MapWriteGuard, Object, ObjectType, PanicClass, Program,
-    RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory,
-    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant,
-    format_float, sys_op_for_path, type_tags,
+    MapContainer, MapData, MapEntry, MapEpochChanged, MapReadGuard, MapWriteGuard, Object,
+    ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory,
+    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
+    ValueKind, Variant, format_float, map_string_hash, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.
@@ -230,20 +237,41 @@ impl EarlyYieldCheck {
             park_requested,
         }
     }
-    /// Decrement and return true if we should yield.
-    ///
-    /// Checks every ~32M calls (~1.5s at typical IPC). GC parks at async
-    /// yield points anyway; this is just a fallback for tight compute loops.
+    /// Decrement and return true if we should yield: [`Self::tick`] followed
+    /// by [`Self::poll`] when the interval has elapsed.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn should_early_yield(&mut self) -> bool {
+        self.tick() && self.poll()
+    }
+
+    /// Count one control-flow check; true when the interval has elapsed and
+    /// the caller should [`Self::poll`].
     ///
     /// Counts down to zero so the check is a single `subs` + `b.ne` on ARM —
     /// the subtraction sets the zero flag, no separate compare needed.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub fn should_early_yield(&mut self) -> bool {
+    pub fn tick(&mut self) -> bool {
         self.counter -= 1;
-        if self.counter != 0 {
-            return false;
-        }
+        self.counter == 0
+    }
+
+    /// Make the next [`Self::tick`] elapse, so the flags are polled at the
+    /// next control-flow check instead of up to an interval later. For a VM
+    /// that has just learned it took spending over the GC budget.
+    #[inline]
+    pub fn poll_soon(&mut self) {
+        self.counter = 1;
+    }
+
+    /// Read the flags and restart the interval; true if the VM should yield.
+    ///
+    /// GC parks at async yield points anyway; this is the fallback for tight
+    /// compute loops.
+    #[cold]
+    #[inline(never)]
+    pub fn poll(&mut self) -> bool {
         self.counter = self.interval;
 
         if self

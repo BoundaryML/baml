@@ -97,11 +97,11 @@ if [ "$MODE" = run ]; then
         MSYS* | MINGW* | CYGWIN*) RUNTIME_LIB="bridge_cffi.dll" ;;
         *) RUNTIME_LIB="libbridge_cffi.so" ;;
     esac
-    BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
+    BAML_BRIDGE_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
         "$BUILD_DIR/build/fixture_tests"
     if [ "$HAVE_CXX20_TESTS" = 1 ]; then
         if [ -x "$BUILD_DIR/build/fixture_tests_cxx20" ]; then
-            BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
+            BAML_BRIDGE_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \
                 "$BUILD_DIR/build/fixture_tests_cxx20"
         else
             echo "note: toolchain lacks C++20; tests/cxx20 skipped"

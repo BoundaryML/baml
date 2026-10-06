@@ -137,7 +137,20 @@ fn format_status(verb: &str, msg: &str) -> String {
 /// `baml_cli` keep importing `crate::reporter::print_error` etc., while
 /// the pack host — which can't depend on `baml_cli` — pulls the same
 /// functions from `baml_exec` directly.
-pub use baml_exec::{print_anyhow_error, print_error, print_warning};
+pub use baml_exec::{print_error, print_warning};
+
+/// Print actionable Boundary diagnostics once, retaining their typed transport source.
+pub fn print_anyhow_error(error: &anyhow::Error) {
+    if let Some(reported) = error.downcast_ref::<bcs_api::diagnostics::ReportedError>() {
+        print_error(&reported.diagnostic);
+    } else if let Some(bex_engine::EngineError::CloudAuthorization(diagnostic)) =
+        error.downcast_ref::<bex_engine::EngineError>()
+    {
+        print_error(diagnostic);
+    } else {
+        baml_exec::print_anyhow_error(error);
+    }
+}
 
 impl Reporter {
     /// Print an error through this reporter.

@@ -23,6 +23,7 @@ pub struct InheritedInvocationState {
     /// Parent IDs, call path and clock epoch only; never a recording producer.
     pub(crate) ancestry: Option<bex_vm::telemetry::ThreadSpawnContext>,
     pub(crate) host_environment: u64,
+    pub(crate) hook_suppression: bool,
 }
 
 impl InheritedInvocationState {
@@ -71,6 +72,12 @@ pub struct InvocationCapture {
     pub cancel: Option<bex_external_types::BexExternalValue>,
     #[cfg(not(target_arch = "wasm32"))]
     pub host: Option<std::sync::Arc<crate::host_instrumentation::CallbackHostInvocation>>,
+}
+
+impl bex_vm_types::BexRustData for InvocationCapture {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {
+        // Everything here is the engine's own.
+    }
 }
 
 impl InvocationCapture {

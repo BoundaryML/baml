@@ -1,5 +1,7 @@
 # Btel cloud delivery
 
+Cloud contracts and single-attempt HTTP calls live in `bcs_api`. This crate owns recording assembly, bounded delivery, retries, heartbeat scheduling and flush.
+
 This crate implements the runtime side of a proposed BCS direct-upload contract.
 It does not imply that the BCS server already supports this protocol.
 
@@ -22,20 +24,19 @@ from the engine level: the former engine-level spelling `auto` is replaced by
 
 ## Transport
 
-`baml run`, `baml test`, packed binaries, and native SDK runtimes select cloud
-recording when both `BOUNDARY_URL` and `BOUNDARY_API_KEY` are non-empty and the
-URL parses. `BOUNDARY_URL` is the publisher's HTTPS base URL, including any path
-prefix; `BOUNDARY_API_KEY` is its bearer credential. Packed binaries read these
-variables when they run. The language server and WASM playground do not use this
-configuration.
+`baml run`, `baml test`, and native SDK runtimes select cloud recording from
+`BOUNDARY_API_KEY` or a saved `baml auth login` session. `BOUNDARY_API_URL`
+overrides `[boundary].api_url` and defaults to `https://api.cloud.boundaryml.com`.
+User sessions write to the user's personal environment; API keys enforce their
+provisioned ingestion scope. `BOUNDARY_PROJECT` overrides `[boundary].project`.
 
-With missing or empty variables, or an unparsable URL, hosts keep their existing
-behavior: the CLI records under the project, packed binaries under the user's
-home, and SDKs do not persist recordings. A parsed but rejected delivery config
-disables recording without failing execution. `BAML_TELEMETRY=off` disables all
-recording regardless of the Boundary variables. Cloud recordings omit process
-arguments. Environment reads live in `bex_engine::TelemetryRecording`, not this
-transport crate.
+Without cloud credentials, hosts use their local recording defaults. Explicit
+`BOUNDARY_API_KEY=local` selects local recording and bypasses Boundary endpoint
+validation. Otherwise an invalid Boundary URL cancels execution with an actionable
+configuration diagnostic. Initial authorization rejection also cancels execution;
+later revocation disables cloud recording and lets execution continue.
+`BAML_TELEMETRY=off` disables recording. Cloud recordings omit process arguments.
+Environment reads live in `bex_engine::TelemetryRecording`, not this transport crate.
 
 Construct `DeliveryConfig::new(endpoint.parse()?)` with an explicit BCS endpoint.
 The config retains a parsed `reqwest::Url`; startup still enforces HTTPS and
@@ -58,7 +59,7 @@ on retry; conflicting immutable contents must fail. Process liveness fields are
 fresh on each attempt and excluded from that idempotency comparison. There is
 no URL-renewal operation.
 
-`wire.rs` is the JSON schema's source of truth. Proposed and returned targets use
+`bcs_api::wire` is the JSON schema's source of truth. Proposed and returned targets use
 `kind`: `recording`, `cas_batch`, or `cas_object`, with ordered
 `candidate_indices`. Each response disposition uses a nested `disposition` with
 `kind`: `inline_with_recording`, `member_of_batch`, `separate_object`, or
@@ -71,7 +72,7 @@ target even if every snapshot is already available. Availability means validated
 content within the authorized organization, not merely an existing S3 object.
 
 Each surviving target is an ordinary HTTP PUT containing a
-`btel.cloud.v1.CloudUploadEnvelope` from `proto/cloud.proto`, format version 1.
+`btel.cloud.v1.CloudUploadEnvelope` from `bcs_api/proto/cloud.proto`, format version 1.
 It embeds the exact recording bytes and the canonical CAS v3 blobs. The blob
 SHA-256 is an integrity check separate from the snapshot identity. The body is
 sent with a fixed `Content-Length`, never chunk-encoded.

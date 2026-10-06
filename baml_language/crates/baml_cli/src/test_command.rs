@@ -128,6 +128,32 @@ pub struct TestArgs {
     /// direct scalar value can override the selected profile's value.
     #[arg(skip)]
     pub(crate) cli_log: Option<TestLogLevel>,
+
+    /// Fail any single test that runs longer than this.
+    ///
+    /// Accepts durations such as `500ms`, `30s` or `15m`; `none` disables the
+    /// per-test deadline.
+    #[arg(
+        long = "test-timeout",
+        value_name = "DURATION",
+        default_value = "5m",
+        help_heading = "Execution options"
+    )]
+    test_timeout: crate::optional_duration::OptionalDuration,
+
+    /// Run at most this many test bodies at once.
+    ///
+    /// Defaults to twice the available CPU parallelism.
+    #[arg(
+        long = "max-concurrency",
+        value_name = "N",
+        value_parser = clap::value_parser!(u32).range(1..),
+        help_heading = "Execution options"
+    )]
+    max_concurrency: Option<u32>,
+
+    #[command(flatten)]
+    shutdown: crate::shutdown::ShutdownArgs,
 }
 
 #[derive(Debug, Default)]
@@ -259,6 +285,9 @@ struct RunCtx<'a> {
     cancel: &'a CancellationToken,
     unhandled_spawn_failures: &'a AtomicUsize,
     logs: TestLogLevel,
+    shutdown_timeout: crate::optional_duration::OptionalDuration,
+    test_timeout: crate::optional_duration::OptionalDuration,
+    max_concurrency: Option<u32>,
 }
 
 impl RunCtx<'_> {
@@ -282,7 +311,14 @@ fn finish_engine(
     reporter: &Reporter,
     status: bex_engine::ProcessStatus,
 ) -> usize {
-    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter, status);
+    crate::shutdown::shutdown_engine(ctx.rt, ctx.engine, reporter, status, ctx.shutdown_timeout);
+    if let Some(error) = ctx.engine.initial_cloud_authorization_error() {
+        crate::reporter::print_error(format_args!("{error}"));
+        return ctx
+            .unhandled_spawn_failures
+            .load(Ordering::SeqCst)
+            .saturating_add(1);
+    }
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
@@ -296,7 +332,7 @@ impl TestArgs {
         )?;
         let invocation =
             self.resolve_invocation(session.resolved.manifest.as_deref(), session.root())?;
-        crate::output::init(invocation.output);
+        crate::output::init(invocation.output)?;
         if session.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -311,8 +347,8 @@ impl TestArgs {
         // Program, cached under its key. On a hit we render + select directly
         // and skip engine boot, `$init`/`$init_test`, and in-VM testset
         // expansion entirely — the whole `--list` discovery floor. Gated off
-        // under BAML_CACHE_VERIFY (the oracle must run honest discovery) and
-        // BAML_NO_DISCOVERY_CACHE; any miss/corruption falls through to the
+        // under DEV_BAML_BUILD_CACHE_VERIFY=always (the oracle must run honest
+        // discovery); any miss/corruption falls through to the
         // honest path below.
         if invocation.list {
             if let Some(exit) = self.try_cached_list(&reporter, session.cache.as_ref(), &invocation)
@@ -333,12 +369,7 @@ impl TestArgs {
                 crate::runtime_telemetry::session_sources(&session),
             ) {
                 Ok(engine) => Some(Arc::new(engine)),
-                Err(error) => {
-                    crate::bytecode_cache::cache_debug(format_args!(
-                        "cached program rejected by VM; recompiling: {error:?}"
-                    ));
-                    None
-                }
+                Err(_) => None,
             }
         });
 
@@ -394,17 +425,6 @@ impl TestArgs {
                     stdlib_interface_hit,
                 )?;
             }
-            // Warm-run evidence: with the stdlib interface seeded this is 0 (the
-            // seed served every stdlib package); a cold run reports up to 6.
-            crate::bytecode_cache::cache_debug(format_args!(
-                "stdlib interface: {} honest derivation(s) this process",
-                baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
-            ));
-            // Warm evidence: with the check rows served this is 0.
-            crate::bytecode_cache::cache_debug(format_args!(
-                "body inferences: {} this process",
-                baml_db::baml_compiler2_hir_ty::infer::body_inferences()
-            ));
 
             Arc::new(
                 crate::runtime_telemetry::create_engine(
@@ -413,7 +433,7 @@ impl TestArgs {
                     session.root(),
                     crate::runtime_telemetry::session_sources(&session),
                 )
-                .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
+                .context("failed to create engine")?,
             )
         };
         let unhandled_spawn_failures = Arc::new(AtomicUsize::new(0));
@@ -437,6 +457,9 @@ impl TestArgs {
             cancel: &cancel,
             unhandled_spawn_failures: &unhandled_spawn_failures,
             logs: invocation.logs,
+            shutdown_timeout: self.shutdown.shutdown_timeout,
+            test_timeout: self.test_timeout,
+            max_concurrency: self.max_concurrency,
         };
 
         // ── 5. Resolve the testset registry handle ─────────────────────────
@@ -508,7 +531,7 @@ impl TestArgs {
                 return Ok(crate::ExitCode::TestFailure);
             }
 
-            // Write-through the discovery cache (+ BAML_CACHE_VERIFY oracle) so a
+            // Write-through the discovery cache (+ DEV_BAML_BUILD_CACHE_VERIFY=always oracle) so a
             // later `--list` skips engine boot entirely. The cached datum is the
             // UNFILTERED flattened list, so any -i/-x is served from one entry;
             // with no filters the display list above already IS the unfiltered
@@ -773,7 +796,7 @@ impl TestArgs {
     /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
     /// `testing.leaf_selected` used on the honest path, so the selection (and
     /// hence stdout) is byte-identical to a cold run. Returns `None` when the
-    /// cache is absent/disabled, under `BAML_CACHE_VERIFY`, or on a discovery
+    /// cache is absent/disabled, under `DEV_BAML_BUILD_CACHE_VERIFY=always`, or on a discovery
     /// miss/corruption — every case falls through to honest discovery.
     fn try_cached_list(
         &self,
@@ -790,10 +813,6 @@ impl TestArgs {
             .into_iter()
             .filter(|name| invocation.includes_id(name))
             .collect();
-        crate::bytecode_cache::cache_debug(format_args!(
-            "served `test --list` from discovery cache ({} test leaf(s) selected); engine boot skipped",
-            testset_names.len(),
-        ));
         Some(render_test_list(reporter, &testset_names))
     }
 }
@@ -836,14 +855,24 @@ fn run_filtered_report(
     invocation: &TestInvocation,
 ) -> Result<BexExternalValue> {
     let (call_ctx, logs) = ctx.call_context(CallId::next());
-    // Cap concurrently RUNNING test bodies at twice the core count. The
-    // runner admits a leaf only when a slot is free, so a five-thousand-test
-    // corpus holds ~2N live VM threads instead of five thousand — which keeps
-    // per-thread GC costs bounded and keeps wall-clock timing assertions
-    // meaningful under full-corpus load.
-    let max_concurrency =
-        i64::try_from(std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2)
-            .unwrap_or(16);
+    // Cap concurrently RUNNING test bodies, by default at twice the core
+    // count. The runner admits a leaf only when a slot is free, so a
+    // five-thousand-test corpus holds ~2N live VM threads instead of five
+    // thousand, which keeps per-thread GC costs bounded and keeps wall-clock
+    // timing assertions meaningful under full-corpus load.
+    let max_concurrency = ctx.max_concurrency.map_or_else(
+        || {
+            i64::try_from(
+                std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2,
+            )
+            .unwrap_or(16)
+        },
+        i64::from,
+    );
+    // The stdlib treats a non-positive timeout as "no deadline".
+    let test_timeout_ms = ctx.test_timeout.0.map_or(0, |limit| {
+        i64::try_from(limit.as_millis()).unwrap_or(i64::MAX).max(1)
+    });
     let result = ctx.block_on_with_logs(
         ctx.engine.call_function(
             "testing.TestRegistry.run_filtered",
@@ -854,6 +883,7 @@ fn run_filtered_report(
                 string_array(&invocation.cli_include),
                 string_array(&invocation.cli_exclude),
                 BexExternalValue::Int(max_concurrency),
+                BexExternalValue::Int(test_timeout_ms),
             ],
             call_ctx,
             true,

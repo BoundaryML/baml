@@ -8,7 +8,7 @@
 use std::{
     collections::{HashSet, VecDeque},
     sync::{
-        Arc, Mutex, MutexGuard,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -19,7 +19,7 @@ use baml_compiler_diagnostics::{
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr,
+    HeapPtr, MeteredGuard, MeteredMutex, RetainedFootprint,
     types::{Class, ClassField, Object, TypeValue, Value},
 };
 use indexmap::IndexMap;
@@ -41,7 +41,27 @@ static NEXT_BUILDER_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
 struct BuilderHandle {
-    state: Arc<Mutex<BuilderState>>,
+    state: Arc<MeteredMutex<BuilderState>>,
+}
+
+impl bex_vm_types::BexRustData for BuilderHandle {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.shared(&self.state, |meter| {
+            meter.bytes(self.state.retained_bytes());
+        });
+    }
+}
+
+impl RetainedFootprint for BuilderState {
+    fn retained_bytes(&self) -> usize {
+        self.name.capacity()
+            + self.fields.capacity() * size_of::<BuilderField>()
+            + self
+                .fields
+                .iter()
+                .map(|field| field.name.capacity())
+                .sum::<usize>()
+    }
 }
 
 struct BuilderState {
@@ -68,6 +88,10 @@ enum PendingOp {
 #[derive(Clone, Copy)]
 struct PendingHandle {
     op: PendingOp,
+}
+
+impl bex_vm_types::BexRustData for PendingHandle {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
 }
 
 /// The schema metadata a field root carries, independent of how its type is
@@ -125,11 +149,10 @@ struct PreparedField {
 type PreparedGroup = IndexMap<u64, Vec<PreparedField>>;
 type BuilderDiagnostics = Vec<Diagnostic>;
 
-fn lock_state(handle: &BuilderHandle) -> MutexGuard<'_, BuilderState> {
-    handle
-        .state
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+/// Lock a builder's state, charging what it grew by since the last call to
+/// the VM's allocation account.
+fn lock_state<'a>(handle: &'a BuilderHandle, vm: &BexVm) -> MeteredGuard<'a, BuilderState> {
+    handle.state.lock(vm.tlab.alloc_debt())
 }
 
 fn class_name(vm: &BexVm, value: Value) -> Option<String> {
@@ -253,11 +276,11 @@ fn replace_array_field(
 
 fn append_unique_neighbor(vm: &mut BexVm, builder: Value, neighbor: Value) -> Result<(), String> {
     let (_, neighbor_handle) = builder_parts(vm, neighbor)?;
-    let neighbor_id = lock_state(&neighbor_handle).id;
+    let neighbor_id = lock_state(&neighbor_handle, vm).id;
     let mut values = instance_array_field(vm, builder, 2)?;
     let already_present = values.iter().any(|value| {
         builder_parts(vm, *value)
-            .map(|(_, handle)| lock_state(&handle).id == neighbor_id)
+            .map(|(_, handle)| lock_state(&handle, vm).id == neighbor_id)
             .unwrap_or(false)
     });
     if !already_present {
@@ -280,7 +303,7 @@ fn alloc_pending(vm: &mut BexVm, op: PendingOp, roots: Vec<Value>) -> Value {
 pub(crate) fn alloc_builder(vm: &mut BexVm, name: &str) -> Value {
     let class = vm.resolve_class(BUILDER_FQN);
     let handle = BuilderHandle {
-        state: Arc::new(Mutex::new(BuilderState {
+        state: Arc::new(MeteredMutex::new(BuilderState {
             id: NEXT_BUILDER_ID.fetch_add(1, Ordering::Relaxed),
             name: name.to_string(),
             fields: Vec::new(),
@@ -319,9 +342,9 @@ impl BamlClassClassBuilder for PackageReflectImpl {
     ) -> Result<Value, VmRustFnError> {
         let (_, handle) = builder_parts(vm, *builder)
             .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
-        let builder_name = lock_state(&handle).name.clone();
+        let builder_name = lock_state(&handle, vm).name.clone();
         {
-            let state = lock_state(&handle);
+            let state = lock_state(&handle, vm);
             if state.frozen {
                 return Err(compilation_error(
                     vm,
@@ -383,7 +406,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
                         let (_, target_handle) = builder_parts(vm, target).map_err(|message| {
                             compilation_error(vm, DiagnosticId::TypeMismatch, message)
                         })?;
-                        if !lock_state(&target_handle).frozen {
+                        if !lock_state(&target_handle, vm).frozen {
                             unfrozen.push(target);
                         }
                     }
@@ -402,7 +425,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
         roots.push(stored_type);
         replace_array_field(vm, *builder, 1, roots)
             .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
-        lock_state(&handle).fields.push(BuilderField {
+        lock_state(&handle, vm).fields.push(BuilderField {
             name: name.to_string(),
             root_index,
         });
@@ -491,7 +514,7 @@ fn direct_builders(vm: &BexVm, pending: Value) -> Result<Vec<Value>, String> {
             match handle.op {
                 PendingOp::Direct => {
                     let (_, builder_handle) = builder_parts(vm, root)?;
-                    let id = lock_state(&builder_handle).id;
+                    let id = lock_state(&builder_handle, vm).id;
                     if seen_builders.insert(id) {
                         builders.push(root);
                     }
@@ -522,7 +545,7 @@ fn collect_group(vm: &BexVm, start: Value) -> Result<IndexMap<u64, BuilderNode>,
     let mut queue = VecDeque::from([start]);
     while let Some(value) = queue.pop_front() {
         let (_, handle) = builder_parts(vm, value)?;
-        let state = lock_state(&handle);
+        let state = lock_state(&handle, vm);
         let id = state.id;
         if group.contains_key(&id) {
             continue;
@@ -680,7 +703,7 @@ fn validate_pending(
                     return Err("a direct pending type has invalid native state".into());
                 }
                 let (_, builder) = builder_parts(vm, roots[0])?;
-                let state = lock_state(&builder);
+                let state = lock_state(&builder, vm);
                 let resolved = instance_field(vm, roots[0], 3)?;
                 if !group.contains_key(&state.id) && (!state.frozen || resolved.is_null()) {
                     return Err(format!(
@@ -735,7 +758,7 @@ fn planned_pending_type(
                 return Err("a direct pending type has invalid native state".into());
             }
             let (_, builder) = builder_parts(vm, roots[0])?;
-            let id = lock_state(&builder).id;
+            let id = lock_state(&builder, vm).id;
             if let Some(plan) = plans.get(&id) {
                 return Ok(plan.ty.clone());
             }
@@ -817,7 +840,7 @@ fn build_group(
         .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
     let (_, start_handle) = builder_parts(vm, start)
         .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
-    let start_id = lock_state(&start_handle).id;
+    let start_id = lock_state(&start_handle, vm).id;
 
     if group.values().all(|node| node.frozen) {
         let resolved = instance_field(vm, start, 3)
@@ -941,7 +964,8 @@ fn build_group(
             });
         }
         let plan = &plans[&node.id];
-        let Object::Class(class) = vm.get_object_mut(plan.ptr) else {
+        let mut metered = vm.get_object_mut(plan.ptr);
+        let Object::Class(class) = &mut *metered else {
             unreachable!("builder class placeholder changed variant")
         };
         class.fields = class_fields;
@@ -950,7 +974,7 @@ fn build_group(
     register_class_witnesses(vm, plans[&start_id].ptr, rules);
 
     for node in group.values() {
-        lock_state(&node.handle).frozen = true;
+        lock_state(&node.handle, vm).frozen = true;
     }
     let start_value = instance_field(vm, group[&start_id].value, 3)
         .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
@@ -1037,7 +1061,7 @@ fn unresolved_builder_names(vm: &BexVm, pending: Value) -> Result<Vec<String>, S
     for builder in direct_builders(vm, pending)? {
         if instance_field(vm, builder, 3)?.is_null() {
             let (_, handle) = builder_parts(vm, builder)?;
-            let name = lock_state(&handle).name.clone();
+            let name = lock_state(&handle, vm).name.clone();
             if !names.contains(&name) {
                 names.push(name);
             }

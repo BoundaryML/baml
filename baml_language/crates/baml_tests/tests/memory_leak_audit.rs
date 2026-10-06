@@ -5,6 +5,7 @@
 //!
 //! Run with:
 //!   cargo test -p baml_tests --test memory_leak_audit -- --nocapture --ignored
+#![allow(clippy::disallowed_methods)]
 
 use baml_tests::engine::TestDbExt;
 

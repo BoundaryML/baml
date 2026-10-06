@@ -102,7 +102,6 @@ pub(crate) struct GlobalArgs {
     #[arg(
         long,
         value_name = "PATH",
-        global = true,
         help_heading = "Global options",
         display_order = 60
     )]
@@ -153,8 +152,8 @@ pub(crate) enum Commands {
     #[command(
         subcommand,
         about = "Manage authentication",
-        long_about = "Manage the identity used by BAML services.\n\nUse `baml auth login` to authenticate, `baml auth whoami` to inspect the current identity, and `baml auth logout` to remove the authenticated session.",
-        after_long_help = "Examples:\n  Log in:\n    baml auth login\n\n  Show the current identity:\n    baml auth whoami\n\n  Log out:\n    baml auth logout"
+        long_about = "Manage the identity used by BAML services.\n\nUse `baml auth login` to authenticate, `baml auth status` to verify authentication and inspect the selected project, and `baml auth logout` to remove the authenticated session.",
+        after_long_help = "Examples:\n  Log in:\n    baml auth login\n\n  Verify authentication and show the selected project:\n    baml auth status\n\n  Log out:\n    baml auth logout"
     )]
     Auth(crate::auth::AuthCommands),
 
@@ -214,19 +213,15 @@ pub(crate) enum Commands {
     #[command(about = "Display documentation for a command")]
     Help(crate::help_command::HelpArgs),
 
-    // Hidden from `baml --help` by default: the first-run notice + the
-    // `boundaryml.com/telemetry` docs page cover discovery for users who
-    // want to opt out, and hiding keeps the top-level command list from
-    // reading like an ops-console. Still fully functional (`baml
-    // telemetry`, `baml telemetry disable`, etc.) and re-listed
-    // automatically by `parse_from_smart` when `BAML_INTERNAL=1`.
-    #[command(about = "Show or change BAML CLI telemetry preferences", hide = true)]
+    #[command(
+        about = "Show or change BAML CLI telemetry preferences",
+        after_long_help = "Examples:\n  Show the current setting:\n    baml telemetry\n\n  Opt out:\n    baml telemetry disable"
+    )]
     Telemetry(crate::telemetry_command::TelemetryArgs),
 
     // The detached telemetry flush child (see `telemetry::queue`). Spawned
-    // by the CLI itself on exit / rotation; hidden even from
-    // `BAML_INTERNAL=1` listings by the `__` naming convention being
-    // self-explanatory, but marked hide for good measure.
+    // by the CLI itself on exit / rotation; hidden from help but callable
+    // by name.
     #[command(
         name = "__flush-telemetry",
         about = "(internal) drain the on-disk telemetry queue",
@@ -242,32 +237,27 @@ pub(crate) enum Commands {
 
 impl RuntimeCli {
     pub(crate) fn command() -> clap::Command {
-        Self::command_with_internal(baml_internal_env_is_truthy())
-    }
-
-    pub(crate) fn command_with_internal(include_internal: bool) -> clap::Command {
         let mut command = <Self as CommandFactory>::command();
-        configure_help_hints(&mut command, &[]);
-
-        if include_internal {
-            for subcommand in command
-                .get_subcommands_mut()
-                .filter(|subcommand| subcommand.is_hide_set())
-            {
-                let mut new_subcommand = std::mem::take(subcommand);
-                new_subcommand = new_subcommand.hide(false);
-                if let Some(about) = new_subcommand.get_about() {
-                    let new_about = format!("(internal-only) {about}");
-                    new_subcommand = new_subcommand.about(new_about);
-                }
-                *subcommand = new_subcommand;
+        // Query owns `--project` as a cloud handle. Before the subcommand, the root flag
+        // still selects a source path; other subcommands inherit the source-path flag.
+        let project = command
+            .get_arguments()
+            .find(|arg| arg.get_id() == "project")
+            .expect("the source project argument exists")
+            .clone()
+            .global(true);
+        command = command.mut_subcommands(|subcommand| {
+            if subcommand.get_name() == "query" {
+                subcommand
+            } else {
+                subcommand.arg(project.clone())
             }
-        }
-
+        });
+        configure_help_hints(&mut command, &[]);
         command
     }
 
-    /// Parse CLI arguments and optionally unhide internal subcommands.
+    /// Parse CLI arguments.
     ///
     /// Parameters:
     /// - `argv`: Raw process argument vector (`argv[0]` program name followed by CLI tokens).
@@ -346,12 +336,12 @@ impl RuntimeCli {
             return args.run();
         }
         if let Commands::Help(args) = &self.command {
-            crate::output::init(self.output);
+            crate::output::init(self.output)?;
             return args.run(crate::output::policy().stdout.color);
         }
 
         // Resolve every output dial once, before any subcommand writes.
-        crate::output::init(self.output);
+        crate::output::init(self.output)?;
 
         if self.command.requires_agent_skill() {
             crate::skill_check::check(self.command.agent_skill_project_path())?;
@@ -503,12 +493,6 @@ fn configure_help_hints(command: &mut clap::Command, path: &[String]) {
     }
 }
 
-fn baml_internal_env_is_truthy() -> bool {
-    std::env::var("BAML_INTERNAL")
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
-        .unwrap_or(false)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -519,7 +503,7 @@ mod tests {
         &["describe"],
         &["auth"],
         &["auth", "login"],
-        &["auth", "whoami"],
+        &["auth", "status"],
         &["auth", "logout"],
         &["feedback"],
         &["fmt"],
@@ -536,6 +520,7 @@ mod tests {
         &["playground"],
         &["lsp"],
         &["help"],
+        &["telemetry"],
     ];
 
     #[test]
@@ -631,6 +616,49 @@ mod tests {
     }
 
     #[test]
+    fn query_keeps_cloud_project_separate_from_source_project_path() {
+        let cli = RuntimeCli::parse_from_smart(
+            [
+                "baml",
+                "query",
+                "SELECT 1",
+                "--project",
+                "acme/app",
+                "--environment",
+                "staging",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+        );
+        assert!(cli.global.project.is_none());
+        let Commands::Query(args) = cli.command else {
+            panic!("expected query");
+        };
+        assert_eq!(args.project.as_deref(), Some("acme/app"));
+        assert_eq!(args.environment.as_deref(), Some("staging"));
+        assert!(args.from.is_none());
+
+        let cli = RuntimeCli::parse_from_smart(
+            [
+                "baml",
+                "--project",
+                "/tmp/source-app",
+                "query",
+                "SELECT 1",
+                "--project",
+                "acme/app",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+        );
+        let Commands::Query(args) = cli.command else {
+            panic!("expected query");
+        };
+        assert_eq!(args.project.as_deref(), Some("acme/app"));
+        assert_eq!(args.from.as_deref(), Some(Path::new("/tmp/source-app")));
+    }
+
+    #[test]
     fn generate_add_help_lists_every_output_type() {
         let help = help_for(&["baml-cli", "generate", "add", "--help"]);
         for &output_type in baml_sdkgen_types::OutputType::all() {
@@ -709,22 +737,20 @@ mod tests {
     }
 
     #[test]
-    fn output_dials_expose_documented_environment_variables() {
+    fn output_dials_have_no_environment_mirrors() {
         let command = RuntimeCli::command();
-        let expected = [
-            ("preset", "BAML_OUTPUT_PRESET"),
-            ("color", "BAML_COLOR"),
-            ("hyperlinks", "BAML_HYPERLINKS"),
-            ("diagnostic_format", "BAML_DIAGNOSTIC_FORMAT"),
-            ("agent_skill_check", "BAML_AGENT_SKILL_CHECK"),
-        ];
-
-        for (id, env) in expected {
+        for id in [
+            "preset",
+            "color",
+            "hyperlinks",
+            "diagnostic_format",
+            "agent_skill_check",
+        ] {
             let arg = command
                 .get_arguments()
                 .find(|arg| arg.get_id() == id)
                 .unwrap_or_else(|| panic!("missing argument {id}"));
-            assert_eq!(arg.get_env(), Some(std::ffi::OsStr::new(env)));
+            assert_eq!(arg.get_env(), None, "{id} must not read an env var");
         }
     }
 
@@ -831,7 +857,7 @@ mod tests {
         let examples: &[&[&str]] = &[
             &["baml", "check"],
             &["baml", "check", "--project", "./my-project"],
-            &["baml", "auth", "whoami"],
+            &["baml", "auth", "status"],
             &["baml", "auth", "logout"],
             &["baml", "auth", "login"],
             &["baml", "auth", "login", "--no-open"],

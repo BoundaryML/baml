@@ -796,13 +796,12 @@ impl Default for AstSourceMap {
     }
 }
 
-/// How a property value was written in source.
+/// How a class property value was written in source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertySyntax {
-    /// An explicit key/value pair such as `{ "name": value }` or
-    /// `Config { name: value }`.
+    /// An explicit field such as `Config { name: value }`.
     Explicit,
-    /// A shorthand property such as `{ name }` or `Config { name }`.
+    /// A shorthand property such as `Config { name }`.
     Shorthand,
 }
 
@@ -835,24 +834,11 @@ impl ObjectExprField {
 pub struct MapExprEntry {
     pub key: ExprId,
     pub value: ExprId,
-    pub syntax: PropertySyntax,
 }
 
 impl MapExprEntry {
     pub fn explicit(key: ExprId, value: ExprId) -> Self {
-        Self {
-            key,
-            value,
-            syntax: PropertySyntax::Explicit,
-        }
-    }
-
-    pub fn shorthand(key: ExprId, value: ExprId) -> Self {
-        Self {
-            key,
-            value,
-            syntax: PropertySyntax::Shorthand,
-        }
+        Self { key, value }
     }
 }
 
@@ -1616,6 +1602,13 @@ pub enum DeclarativeMeta {
     Llm(LlmBodyDef),
 }
 
+/// A trace hook attached with `/// baml:$trace=path.to.hook`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraceHookDirective {
+    pub path: Vec<Name>,
+    pub span: TextRange,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionDef {
     pub name: Name,
@@ -1636,6 +1629,8 @@ pub struct FunctionDef {
     /// tags (a tag name immediately followed by a backtick literal), and
     /// their first parameter must be `body: (...) -> TaggedString`.
     pub is_tagged_template_tag: bool,
+    /// Declaration-only trace policy; resolved in the declaration scope.
+    pub trace_hook: Option<TraceHookDirective>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

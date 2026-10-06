@@ -1,13 +1,16 @@
 //! Thread-Local Allocation Buffer (TLAB) for per-VM allocation.
 //!
 //! Each VM owns a bump-allocated region. Reservations begin at 32 slots and grow
-//! to 1024 as the VM allocates. Only reserved object slots spend the GC budget;
-//! backing storage is excluded. Ordinary yields preserve unused capacity.
+//! to 1024 as the VM allocates. Reserved slots spend the GC budget when they are
+//! reserved; what each object keeps alive outside its slot is measured as it is
+//! allocated and kept in a local balance, which is settled with the budget in
+//! quanta, at every refill, when the owner asks, and when the TLAB is dropped.
+//! Ordinary yields preserve unused capacity.
 
 use std::sync::Arc;
 
 use bex_vm_types::{
-    HeapPtr, Object, Value,
+    AllocDebt, HeapPtr, Meter, Object, Value,
     types::{Array, Instance, Map, Variant},
 };
 use indexmap::IndexMap;
@@ -29,6 +32,11 @@ impl TlabChunk {
         self.end - self.start
     }
 }
+
+/// Payload bytes an allocator may hold unsettled before it settles with the
+/// shared budget. Settling is one shared atomic update, so this bounds both
+/// how often that happens and how far spending can lag behind allocation.
+pub const SETTLE_QUANTUM: isize = 64 * 1024;
 
 /// Thread-Local Allocation Buffer for a BEX VM.
 ///
@@ -80,6 +88,18 @@ pub struct Tlab {
     heap: Arc<BexHeap>,
 
     next_chunk_size: usize,
+
+    /// Payload bytes allocated (less released) since the last settlement.
+    debt: AllocDebt,
+
+    /// The heap's full-collection count when `debt` last started from zero.
+    /// A full collection takes a census of everything, so a balance that
+    /// predates one is already counted and must be discarded, not settled.
+    debt_epoch: usize,
+
+    /// Set when a settlement by this TLAB took spending over the budget, until
+    /// the owner reads it with [`Self::take_budget_crossed`].
+    budget_crossed: bool,
 }
 
 impl Tlab {
@@ -120,6 +140,9 @@ impl Tlab {
             // 32, 32, 64, ... gives aligned cumulative reservations of
             // 32, 64, 128, ... rather than 32, 96, 224, ... .
             next_chunk_size: 0,
+            debt: AllocDebt::new(),
+            debt_epoch: heap.gc_budget().full_collections,
+            budget_crossed: false,
             heap,
         }
     }
@@ -129,7 +152,14 @@ impl Tlab {
     /// This is the fast path - just bump the pointer and write.
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
-    pub fn alloc(&mut self, obj: Object) -> HeapPtr {
+    pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
+        let mut charge = Meter::charge();
+        obj.measure(&mut charge);
+        self.debt.grow(charge.total());
+        if self.debt.balance().unsigned_abs() >= SETTLE_QUANTUM.unsigned_abs() {
+            self.flush_alloc_debt();
+        }
+
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
         }
@@ -147,7 +177,8 @@ impl Tlab {
             self.heap.write_runtime_object(runtime_idx, obj);
         }
 
-        // Track allocation for GC heuristic
+        // Track allocation for GC profiling
+        #[cfg(feature = "gc_profiling")]
         self.heap.record_alloc();
 
         // Get the pointer to the newly written object in Gen0.
@@ -200,6 +231,11 @@ impl Tlab {
         value_ty: bex_vm_types::RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
+        let values =
+            bex_vm_types::MapData::from_hashed_entries(values.into_iter().map(|(key, value)| {
+                let hash = bex_vm_types::map_string_hash(&key);
+                (hash, Value::object(self.alloc_string(key)), value)
+            }));
         self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
     }
 
@@ -243,7 +279,7 @@ impl Tlab {
 
     /// Allocate opaque Rust data on the heap.
     #[inline]
-    pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+    pub fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
         self.alloc(Object::RustData(data))
     }
 
@@ -276,7 +312,8 @@ impl Tlab {
         } else {
             self.next_chunk_size
         };
-        let chunk = self.heap.alloc_tlab_chunk_sized(size);
+        let (chunk, crossed) = self.heap.alloc_tlab_chunk_sized(size, self.debt.take());
+        self.budget_crossed |= crossed;
         self.next_chunk_size = if self.next_chunk_size == 0 {
             size
         } else {
@@ -303,6 +340,31 @@ impl Tlab {
     pub fn invalidate(&mut self) {
         self.alloc_limit = 0;
         self.alloc_ptr = 0;
+        // A full collection counted everything this balance covers.
+        let full_collections = self.heap.gc_budget().full_collections;
+        if full_collections != self.debt_epoch {
+            self.debt.take();
+            self.debt_epoch = full_collections;
+            self.budget_crossed = false;
+        }
+    }
+
+    /// The local balance of payload bytes, for callers that charge growth or
+    /// release against it.
+    pub fn alloc_debt(&self) -> &AllocDebt {
+        &self.debt
+    }
+
+    /// Settle the local balance with the shared budget now.
+    pub fn flush_alloc_debt(&mut self) {
+        let balance = self.debt.take();
+        self.budget_crossed |= self.heap.gc_policy.adjust(balance);
+    }
+
+    /// Whether a settlement by this TLAB took spending over the budget since
+    /// the owner last asked. The owner should reach a safe point promptly.
+    pub fn take_budget_crossed(&mut self) -> bool {
+        std::mem::take(&mut self.budget_crossed)
     }
 
     /// Check if this TLAB is valid (has an allocated chunk).
@@ -322,26 +384,28 @@ impl Tlab {
         unsafe { self.heap.get_object(idx) }
     }
 
-    /// Write an object by HeapPtr.
+    /// Write an object by HeapPtr. Test-only: it replaces an object without
+    /// measuring what either one keeps alive, so the budget does not see it.
     ///
     /// # Safety
     ///
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure exclusive access to this object
     /// - Only runtime objects can be written (compile-time objects are immutable)
-    ///
-    /// # Write Barrier
-    ///
-    /// If `ptr` points to an older-generation object, callers must fire the
-    /// generational write barrier for any `HeapPtr` references in `obj` that
-    /// point into a younger generation. During normal execution this is called
-    /// only for Gen0 objects (newly allocated), so no barrier is needed.
-    pub unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
+    #[cfg(test)]
+    pub(crate) unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
         // SAFETY: Caller ensures exclusive access
         // Direct write to the object through the pointer
         unsafe {
             *ptr.get_mut() = obj;
         }
+    }
+}
+
+impl Drop for Tlab {
+    fn drop(&mut self) {
+        // What this allocator spent must not vanish with it.
+        self.flush_alloc_debt();
     }
 }
 
@@ -400,7 +464,7 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_bigint(value)
     }
 
-    fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+    fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
         self.tlab_mut().alloc_rust_data(data)
     }
 
@@ -589,7 +653,12 @@ mod tests {
         unsafe {
             match ptr.get() {
                 Object::Map(m) => {
-                    assert_eq!(m.get("key"), Some(Value::int(42)));
+                    let entries = m.snapshot_entries();
+                    assert_eq!(entries.len(), 1);
+                    assert_eq!(entries[0].1, Value::int(42));
+                    assert!(
+                        matches!(entries[0].0.as_object_ptr().unwrap().get(), Object::String(key) if key == "key")
+                    );
                 }
                 _ => panic!("Expected Map"),
             }

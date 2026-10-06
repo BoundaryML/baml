@@ -1331,6 +1331,11 @@ struct StackCarryPullSink<'a> {
 impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
     type Error = ();
 
+    fn trace_hook_settings(&mut self, _with_settings: bool) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
+
     fn pull_constant(
         &mut self,
         _constant: &baml_compiler2_mir::Constant<'a>,

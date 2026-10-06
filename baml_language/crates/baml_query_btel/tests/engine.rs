@@ -18,9 +18,9 @@ fn rows(result: &baml_query_btel::QueryResult) -> Vec<Vec<Json>> {
 const STATS_SQL: &str = "SELECT function_name, SUM(invocation_count) AS n FROM profiler
      WHERE node_type = 'function' GROUP BY function_name ORDER BY n DESC";
 
-/// Completed spans per name: retained calls and futures, while recording.
-const SPANS_SQL: &str =
-    "SELECT span_name, COUNT(*) AS n FROM spans GROUP BY span_name ORDER BY n DESC";
+/// Application spans per name: retained calls and futures, while recording.
+const SPANS_SQL: &str = "SELECT span_name, COUNT(*) AS n FROM spans WHERE span_name != 'baml.gc'
+     GROUP BY span_name ORDER BY n DESC";
 
 fn stats(index: &mut baml_query_btel::Index) -> BTreeMap<String, i64> {
     counts_of(&sql(index, STATS_SQL))
@@ -110,7 +110,7 @@ async fn population_outcomes_include_timing_only_calls_and_recursive_errors() {
         "SELECT function_name, SUM(invocation_count), SUM(return_count), SUM(error_count),
            SUM(nonpanic_error_count), SUM(panic_error_count), SUM(future_cancel_count),
            SUM(missing_count)
-         FROM profiler GROUP BY function_name ORDER BY function_name",
+         FROM profiler WHERE node_type = 'function' GROUP BY function_name ORDER BY function_name",
     );
     let counts = |name, n, ok, errors| {
         vec![
@@ -179,7 +179,8 @@ async fn acceptance_queries_answer_from_real_recordings() {
     let roots = sql(
         &mut index,
         "SELECT span_name, status, duration > 0, start_time < end_time FROM spans
-         WHERE span_type = 'future' AND parent_span_id IS NULL ORDER BY start_time",
+         WHERE span_type = 'future' AND parent_span_id IS NULL AND span_name != 'baml.gc'
+         ORDER BY start_time",
     );
     let run = |name, status| vec![json!(name), json!(status), json!(1), json!(1)];
     assert_eq!(
@@ -229,7 +230,7 @@ async fn acceptance_queries_answer_from_real_recordings() {
     assert_eq!(column(&typed, "who"), vec![&json!("bob"); 3]);
     assert_eq!(column(&typed, "count")[0], &json!(8));
     let results = column(&typed, "result");
-    assert_eq!(results[0]["$class"], json!("Order"));
+    assert_eq!(results[0]["$class"], json!("user.Order"));
     assert_eq!(results[0]["items"].as_array().map(Vec::len), Some(8));
     assert_eq!(results[1], &json!("Premium"));
     assert_eq!(results[2], &json!(27));
@@ -1189,6 +1190,7 @@ function Through<H extends Holder<int>>(h: H) -> int { h.get_or("x") }
 function main(n: int) -> int {
     let a = Pick(n);
     let r = Pick(Resume { name: "ann" });
+    let rs = Pick([r]);
     let b = Box<int> { value: n }.map((v: int) -> string { "s" });
     let h = IntHolder { value: 3 };
     let c = h.get_or(true);
@@ -1222,7 +1224,13 @@ async fn generic_calls_record_their_type_args_by_name() {
     .await;
     assert!(results.iter().all(Result::is_ok), "{results:?}");
     let mut index = index(project.path());
-    let ty = |name: &str| json!({ "$type": name });
+    let ty = |name: &str| json!({ "$type": { "type": name } });
+    let class =
+        |name: &str| json!({ "$type": { "type": "class", "name": format!("user.{name}") } });
+    let resumes = json!({ "$type": {
+        "type": "list",
+        "item": { "type": "class", "name": "user.Resume" },
+    } });
     let expected = vec![
         // A lambda's frame is its enclosing function's.
         vec![
@@ -1241,21 +1249,26 @@ async fn generic_calls_record_their_type_args_by_name() {
         // virtual dispatch on Through's H.
         vec![
             json!("user.Holder.get_or"),
-            json!({"Self": ty("IntHolder"), "T": ty("int"), "D": ty("bool")}),
+            json!({"Self": class("IntHolder"), "T": ty("int"), "D": ty("bool")}),
             ty("int"),
         ],
         vec![
             json!("user.Holder.get_or"),
-            json!({"Self": ty("IntHolder"), "T": ty("int"), "D": ty("string")}),
+            json!({"Self": class("IntHolder"), "T": ty("int"), "D": ty("string")}),
             ty("int"),
         ],
         vec![json!("user.Pick"), json!({"T": ty("int")}), ty("int")],
-        vec![json!("user.Pick"), json!({"T": ty("Resume")}), ty("Resume")],
+        vec![
+            json!("user.Pick"),
+            json!({"T": class("Resume")}),
+            class("Resume"),
+        ],
+        vec![json!("user.Pick"), json!({"T": resumes}), resumes],
         vec![json!("user.Plain"), Json::Null, Json::Null],
         vec![json!("user.Plain"), Json::Null, Json::Null],
         vec![
             json!("user.Through"),
-            json!({"H": ty("IntHolder")}),
+            json!({"H": class("IntHolder")}),
             Json::Null,
         ],
         vec![json!("user.Wrap"), json!({"T": ty("string")}), ty("string")],
@@ -1273,7 +1286,8 @@ async fn generic_calls_record_their_type_args_by_name() {
         let futures = sql(
             &mut index,
             &format!(
-                "SELECT COUNT(*), COUNT(type_args) FROM {relation} WHERE span_type = 'future'"
+                "SELECT COUNT(*), COUNT(type_args) FROM {relation}
+                 WHERE span_type = 'future' AND span_name != 'baml.gc'"
             ),
         );
         assert_eq!(futures.rows, vec![vec![json!(2), json!(0)]], "{relation}");

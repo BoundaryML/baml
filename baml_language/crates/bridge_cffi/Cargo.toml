@@ -22,9 +22,11 @@ bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
 baml_artifact = { workspace = true }
+baml_env = { workspace = true }
 baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
+btel_settings = { workspace = true }
 btel_types = { workspace = true }
 sys_ops = { workspace = true }
 futures = { workspace = true }
@@ -42,6 +44,7 @@ sys_types = { workspace = true }
 libc = { workspace = true }
 once_cell = { workspace = true }
 serde_json = { workspace = true }
+btel_snapshot = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -54,7 +57,9 @@ cbindgen = { workspace = true }
 
 [dev-dependencies]
 baml_artifact = { workspace = true, features = [ "test-support" ] }
+baml_test_support = { workspace = true }
 cc = { workspace = true }
+wiremock = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = true

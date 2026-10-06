@@ -222,7 +222,7 @@ impl sys_ops::io::IoNamespaceEnv for PlaygroundEnv {
         }
 
         // 2. Check process environment (direnv, .envrc, .env, etc.).
-        if let Ok(value) = std::env::var(&key) {
+        if let Some(value) = baml_env::raw_var(&key) {
             // Notify the UI so it can display the shell-provided value.
             let _ = self.0.broadcast_tx.send(WsOutMessage::EnvVarFromShell {
                 variable: key.clone(),
@@ -364,7 +364,7 @@ mod tests {
         state.set_declared_keys(&["ANTHROPIC_API_KEY".to_string()]);
 
         let key = "BAMLCODE_MEMORY_DIR_TEST_UNSET";
-        assert!(std::env::var(key).is_err(), "test key must be unset");
+        assert!(!baml_env::has_var(key), "test key must be unset");
 
         let heap = Arc::new(BexHeap::build_unsealed_default(Vec::new()));
         let out =

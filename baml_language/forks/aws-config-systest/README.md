@@ -28,7 +28,7 @@ It has two layers:
 
 | Auth form | Offline test | Live scenario (`run-e2e.py`) | Tier |
 |-----------|--------------|------------------------------|------|
-| Static env vars (`AWS_ACCESS_KEY_ID`/`…SECRET…`/`…SESSION_TOKEN`, legacy `SECRET_ACCESS_KEY`) | `env_credentials.rs` | `local:env` | local |
+| Static env vars (`AWS_ACCESS_KEY_ID`/`…SECRET…`/`…SESSION_TOKEN`) | `env_credentials.rs` | `local:env` | local |
 | Shared credentials file (`[profile]` static keys) | `profile_static.rs` | `local:profile-static` | local |
 | `credential_process` subprocess | `credential_process.rs` | `local:credential_process` | local |
 | SSO (token cache → `GetRoleCredentials`) | `sso_provider.rs` | `local:sso` (+Bedrock) | local |

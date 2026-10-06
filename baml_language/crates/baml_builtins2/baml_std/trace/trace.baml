@@ -136,6 +136,11 @@ function span(
     _span(inputs, output, error)
 }
 
+/// Record this invocation individually with inputs, output, and error capture.
+function rich() -> Options throws never {
+    span(inputs = true, output = true, error = true)
+}
+
 //baml:mut_vm
 function _span(inputs: bool?, output: bool?, error: bool?) -> Options throws never {
     $rust_function

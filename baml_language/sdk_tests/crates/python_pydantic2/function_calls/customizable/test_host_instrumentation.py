@@ -2,7 +2,9 @@
 
 import asyncio
 import contextvars
+import enum
 import inspect
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -12,6 +14,8 @@ from baml_sdk import host_callable_tests as baml
 from baml_sdk import trace
 from baml_sdk import execution_context_tests as context_baml
 from baml_sdk.baml.spawn import CancelToken
+from baml_bridge import _host_capture
+from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
 
 
 # SDK_PARITY_LINT(skip): covers Python decorator forms
@@ -587,3 +591,60 @@ def test_callback_marker_sync_entry_python_only():
         == 7
     )
     assert trace.current_cancel_token() is None
+
+
+class CaptureSeverity(str, enum.Enum):
+    None_ = "None"
+    Low = "Low"
+
+
+class CountingMeta(type):
+    compared = 0
+
+    def __eq__(cls, other):
+        CountingMeta.compared += 1
+        return NotImplemented
+
+    __hash__ = type.__hash__
+
+
+class MetaCompared(metaclass=CountingMeta):
+    pass
+
+
+# SDK_PARITY_LINT(skip): checks the Python capture adapter's wire output directly
+def test_host_capture_wire_stays_decodable_python_only():
+    # A lone surrogate drops only its own string, not the whole observation.
+    assert json.loads(_host_capture.capture({"ok": 1, "path": "file\udcff.txt"})) == [
+        "map",
+        [["ok", ["number", 1]], ["path", ["unavailable"]]],
+    ]
+
+    # Depth markers count against the value budget, so the wire stays small.
+    nested = [[0] * 255] * 256
+    for _ in range(7):
+        nested = [nested]
+    wire = _host_capture.capture(nested)
+    assert len(wire) < 16 * 1024 and '["values"]' in wire
+
+    # Enum captures carry the BAML variant, not a renamed Python member name.
+    previous = get_type_map()
+    set_type_map(
+        BamlTypeMap.from_lazy_entries(
+            classes={},
+            enums={"user.CaptureSeverity": (__name__, "CaptureSeverity")},
+            type_aliases={},
+        )
+    )
+    try:
+        assert json.loads(_host_capture.capture(CaptureSeverity.None_)) == [
+            "enum",
+            "user.CaptureSeverity",
+            "None",
+        ]
+    finally:
+        set_type_map(previous)
+
+    # Base-class checks never call an application metaclass's __eq__.
+    assert json.loads(_host_capture.capture(MetaCompared())) == ["unavailable"]
+    assert CountingMeta.compared == 0

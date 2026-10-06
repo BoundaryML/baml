@@ -342,7 +342,7 @@ async fn return_only_var_still_requires_binding() {
 /// `HostValue` here (both synthesize as `HostOnly`), exercising the
 /// `T = rust_type` binding without a live host bridge.
 fn host_only() -> BEV {
-    BEV::RustData(Arc::new(()))
+    BEV::RustData(Arc::new(bex_vm_types::TestRustData(0)))
 }
 
 #[tokio::test]

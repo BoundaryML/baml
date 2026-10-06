@@ -173,7 +173,10 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
     };
     assert_eq!(
         entries[0],
-        ("distinct_id".into(), DecodedValue::String("user-42".into()))
+        (
+            DecodedValue::String("distinct_id".into()),
+            DecodedValue::String("user-42".into())
+        )
     );
     let DecodedValue::Object(metadata) = entries[1].1 else {
         panic!("metadata must be a map");
@@ -183,7 +186,10 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
     };
     assert_eq!(
         entries,
-        &vec![("order_id".into(), DecodedValue::String("123".into()))]
+        &vec![(
+            DecodedValue::String("order_id".into()),
+            DecodedValue::String("123".into())
+        )]
     );
     std::fs::remove_file(cas.path(id)).unwrap();
     assert!(matches!(

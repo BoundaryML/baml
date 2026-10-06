@@ -24,11 +24,26 @@
 //! is ever handed a compile-time pointer whose payload would have produced
 //! a runtime reference, so a regression of this invariant surfaces as an
 //! immediate panic in debug builds (and under `heap_debug`).
+//!
+//! # Invariant: a survivor's old slot is read exactly once
+//!
+//! Evacuation moves each survivor into its destination space and leaves an
+//! `Object::Tombstone` in the slot it came from (`evacuate_object`). From then
+//! on the old slot no longer holds the object: tracing, fixup, the finalizer and
+//! unhandled-error scans, and the engine's root forwarding must reach a
+//! survivor through the `forwarding` map, never through its old pointer. A
+//! from-space scan may still read slots that are *not* in `forwarding`; those
+//! are dead objects, and they stay intact until their space is cleared.
+//!
+//! Because survivors are gone from from-space, a collection cannot be
+//! abandoned halfway: once the first object has moved, the roots are stale
+//! until root forwarding completes. A panic in that window must not resume
+//! execution; the engine aborts the process instead.
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
 use bex_vm_types::{
-    FutureRead, HeapPtr, Object, Value,
+    FutureRead, HeapPtr, Meter, Object, Value,
     types::{Future, Objects, Slots},
 };
 
@@ -80,6 +95,10 @@ pub struct GcStats {
     pub promoted_to_gen1: usize,
     /// Objects promoted from Gen1 to Gen2 during this cycle.
     pub promoted_to_gen2: usize,
+    /// Bytes the survivors keep alive outside their slots, with storage shared
+    /// between them counted once. Only a major collection visits every
+    /// survivor, so a minor collection has no figure.
+    pub live_payload_bytes: Option<usize>,
     /// Detailed diagnostics in profiling builds; a zero-sized marker otherwise.
     pub profile: crate::GcProfile,
 }
@@ -101,6 +120,9 @@ impl BexHeap {
     ///
     /// Caller must ensure all VMs are at safepoints (not executing).
     /// This is typically guaranteed by the engine's epoch-based GC protocol.
+    ///
+    /// If this panics, the heap must not be used again: survivors may already
+    /// have been moved out of the slots the roots point at.
     ///
     /// # Arguments
     ///
@@ -167,8 +189,14 @@ impl BexHeap {
                 if inst.cleaned.is_cleaned() {
                     continue; // explicit/`defer` already cleaned it — SuppressFinalize
                 }
-                // The class object is compile-time/permanent — always valid.
-                let Object::Class(class) = (unsafe { inst.class.get() }) else {
+                // A runtime-created class is itself collectible, so this
+                // collection may already have evacuated it: read it where it
+                // lives now. A compile-time class, or one this collection does
+                // not move, is still at `inst.class`.
+                let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
+                // SAFETY: a forwarded pointer names an initialized destination
+                // slot; an unforwarded one names a slot no evacuation touched.
+                let Object::Class(class) = (unsafe { class_ptr.get() }) else {
                     continue;
                 };
                 if class.has_cleanup {
@@ -213,7 +241,7 @@ impl BexHeap {
                 forwarding.insert(old_ptr, old_ptr);
                 continue;
             }
-            let new_ptr = self.copy_object_to_inactive(old_ptr, forwarding);
+            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
             // SAFETY: just written into inactive; pointer valid.
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
@@ -250,13 +278,13 @@ impl BexHeap {
                     forwarding.insert(old_ptr, old_ptr);
                 }
                 Generation::Gen0 => {
-                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
                     // SAFETY: just written; pointer valid.
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
                 }
                 Generation::Gen1 => {
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, forwarding);
                     // SAFETY: just written; pointer valid.
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
@@ -345,7 +373,7 @@ impl BexHeap {
                 forwarding.insert(old_ptr, old_ptr);
                 continue;
             }
-            let new_ptr = self.copy_object_to_inactive(old_ptr, forwarding);
+            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
             // SAFETY: `new_ptr` was just initialized in inactive space.
             self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
         }
@@ -384,11 +412,11 @@ impl BexHeap {
                     forwarding.insert(old_ptr, old_ptr);
                 }
                 Generation::Gen0 => {
-                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
                     self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
                 }
                 Generation::Gen1 => {
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
+                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, forwarding);
                     self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
                     *promoted_to_gen2 += 1;
                 }
@@ -465,8 +493,8 @@ impl BexHeap {
                 continue;
             }
 
-            // Copy this object to the inactive space.
-            let new_ptr = self.copy_object_to_inactive(old_ptr, &mut forwarding);
+            // Move this object to the inactive space.
+            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, &mut forwarding);
 
             // Enqueue this object's outgoing heap references.
             // SAFETY: We just wrote the object into inactive, pointer is valid.
@@ -493,11 +521,10 @@ impl BexHeap {
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
-        // Patch all intra-heap pointers in the inactive space to their new locations.
+        // Patch all intra-heap pointers in the inactive space to their new
+        // locations, and take the census of what the survivors hold.
         // SAFETY: All live objects have been copied; no VMs are executing.
-        unsafe {
-            self.fixup_references_in_inactive(&forwarding);
-        }
+        let live_payload_bytes = unsafe { self.fixup_and_measure_survivors(&forwarding) };
 
         // Resolve weak function lookups before destroying from-space. These
         // pointers are deliberately absent from the root set.
@@ -560,10 +587,14 @@ impl BexHeap {
         // Update the handle table so external handles point to new locations.
         self.update_handles(&forwarding);
 
-        self.gc_policy
-            .after_full(live_count.saturating_mul(size_of::<Object>()));
+        self.gc_policy.after_full(
+            live_count
+                .saturating_mul(size_of::<Object>())
+                .saturating_add(live_payload_bytes),
+        );
 
         // Reset the actual-object counter used by GC profiling.
+        #[cfg(feature = "gc_profiling")]
         self.reset_gc_counter();
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
@@ -577,34 +608,65 @@ impl BexHeap {
             level: CollectionLevel::Major,
             promoted_to_gen1: 0,
             promoted_to_gen2: live_count,
+            live_payload_bytes: Some(live_payload_bytes),
         };
 
         (stats, remapped_roots, forwarding)
     }
 
-    /// Copy a single object from an active generation into the inactive space.
-    /// Returns the new HeapPtr in the inactive space.
-    fn copy_object_to_inactive(
+    /// Move a survivor out of its slot into `to` (Gen1, Gen2, or inactive) and
+    /// return its new address.
+    ///
+    /// The object is moved, not cloned: its backing storage keeps its address
+    /// and capacity, so a collection costs time proportional to the number of
+    /// survivors rather than to the bytes they own. The old slot is left
+    /// holding an [`Object::Tombstone`], which owns nothing and is discarded
+    /// when its space is cleared.
+    ///
+    /// A collection reads each survivor's old slot exactly once, here. Every
+    /// later step works from the destination and the `forwarding` map, so
+    /// anything that still needs a survivor must look it up through
+    /// `forwarding` first.
+    fn evacuate_object(
         &self,
+        to: &UnsafeCell<ChunkedVec<Object>>,
         old_ptr: HeapPtr,
         forwarding: &mut HashMap<HeapPtr, HeapPtr>,
     ) -> HeapPtr {
-        // Clone the object from its old location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let obj = unsafe { old_ptr.get().clone() };
+        debug_assert!(
+            !self.is_compile_time_ptr(old_ptr),
+            "compile-time object {old_ptr:?} must never be evacuated"
+        );
+        // Scans every chunk of `to`, so it is a `heap_debug` check rather than
+        // a `debug_assert!`: it would otherwise run once per survivor.
+        #[cfg(feature = "heap_debug")]
+        assert!(
+            // SAFETY: GC runs at safepoints; only addresses are compared.
+            !unsafe { (*to.get()).contains_ptr(old_ptr.as_ptr()) },
+            "heap_debug: {old_ptr:?} already lives in its destination space"
+        );
 
-        // Append to the inactive space and get a pointer to the new location.
+        // SAFETY: GC runs at safepoints, so nothing else references this slot.
+        // `replace` moves the object out and installs the tombstone in one
+        // step; the slot is never left uninitialized.
+        let obj = unsafe { std::ptr::replace(old_ptr.as_ptr(), Object::Tombstone) };
+
+        // Append to the destination space and get a pointer to the new location.
         // SAFETY: GC runs at safepoints, no VMs are executing.
         let new_ptr = unsafe {
-            let inactive = self.inactive_mut();
-            let new_runtime_idx = inactive.len();
-            inactive.push_with(obj, || Object::String(bex_str::BexStr::empty()));
-            let raw_ptr = inactive.get_ptr(new_runtime_idx);
+            let space = &mut *to.get();
+            let new_idx = space.len();
+            space.push_with(obj, || Object::String(bex_str::BexStr::empty()));
+            let raw_ptr = space.get_ptr(new_idx);
             self.make_heap_ptr(raw_ptr)
         };
 
         // Record forwarding pointer
-        forwarding.insert(old_ptr, new_ptr);
+        let previous = forwarding.insert(old_ptr, new_ptr);
+        debug_assert!(
+            previous.is_none(),
+            "{old_ptr:?} was evacuated twice; the second move read a vacated slot"
+        );
 
         new_ptr
     }
@@ -625,7 +687,7 @@ impl BexHeap {
             }
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked() };
-                for value in data.values() {
+                for value in data.keys().chain(data.values()) {
                     if let Some(ptr) = value.as_object_ptr() {
                         worklist.push(ptr);
                     }
@@ -720,6 +782,7 @@ impl BexHeap {
             }
             Object::Enum(enm) => trace_owner(&enm.owner, worklist),
             // Primitives have no references
+            Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
@@ -741,6 +804,11 @@ impl BexHeap {
             Object::Interface(interface) => {
                 if !interface.owner.as_ptr().is_null() {
                     worklist.push(interface.owner);
+                }
+                if let Some(default) = &interface.structural_default
+                    && !default.function_ptr.is_null()
+                {
+                    worklist.push(default.function_ptr);
                 }
                 worklist.extend(
                     interface
@@ -811,18 +879,27 @@ impl BexHeap {
         }
     }
 
-    /// Fix up all object references in the inactive space to use forwarded addresses.
+    /// Visit every survivor of a major collection once in the inactive space:
+    /// repoint its references to their forwarded addresses, and measure what it
+    /// keeps alive outside its slot. Returns the total measured, with storage
+    /// shared between survivors counted once.
+    ///
+    /// The census depends on survivors having been moved rather than copied:
+    /// a second copy of each would double every reference count it divides by.
     ///
     /// # Safety
-    /// Must be called after all live objects have been copied to inactive.
-    unsafe fn fixup_references_in_inactive(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        // SAFETY: All live objects have been copied to inactive, and no VMs are executing.
+    /// Must be called after all live objects have been moved to inactive.
+    unsafe fn fixup_and_measure_survivors(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> usize {
+        let mut census = Meter::census();
+        // SAFETY: All live objects have been moved to inactive, and no VMs are executing.
         unsafe {
             let inactive = self.inactive_mut();
             for obj in inactive.iter_mut() {
                 self.fixup_object_references(obj, forwarding);
+                obj.measure(&mut census);
             }
         }
+        census.total()
     }
 
     /// Fix up references within a single object.
@@ -838,7 +915,7 @@ impl BexHeap {
             }
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked_mut() };
-                for value in data.values_mut() {
+                for value in data.trace_values_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }
@@ -959,6 +1036,7 @@ impl BexHeap {
             }
             Object::Enum(enm) => forward_owner(&mut enm.owner, forwarding),
             // Primitives have no references
+            Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries no heap references; see
@@ -977,6 +1055,11 @@ impl BexHeap {
             Object::Interface(interface) => {
                 if let Some(&new_ptr) = forwarding.get(&interface.owner) {
                     interface.owner = new_ptr;
+                }
+                if let Some(default) = &mut interface.structural_default
+                    && let Some(&new_ptr) = forwarding.get(&default.function_ptr)
+                {
+                    default.function_ptr = new_ptr;
                 }
                 for method in &mut interface.methods {
                     if let Some(&new_ptr) = forwarding.get(&method.default_fn) {
@@ -1021,7 +1104,8 @@ impl BexHeap {
 
     /// Fix up all object references in an arbitrary space.
     ///
-    /// Like `fixup_references_in_inactive`, but works on any `ChunkedVec`.
+    /// The minor-collection counterpart of `fixup_and_measure_survivors`: it
+    /// works on any `ChunkedVec` and takes no census.
     ///
     /// # Safety
     ///
@@ -1067,36 +1151,6 @@ impl BexHeap {
                 self.fixup_object_references(obj, forwarding);
             }
         }
-    }
-
-    /// Copy a single object into an arbitrary destination space.
-    ///
-    /// Generalised version of `copy_object_to_inactive` that can target any
-    /// `ChunkedVec` (Gen1, Gen2, or inactive).
-    ///
-    /// Returns the new `HeapPtr` in the destination space.
-    fn copy_object_to_space(
-        &self,
-        space: &UnsafeCell<ChunkedVec<Object>>,
-        old_ptr: HeapPtr,
-        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
-    ) -> HeapPtr {
-        // Clone the object from its old location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let obj = unsafe { old_ptr.get().clone() };
-
-        // Append to the destination space and return a pointer to the new location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let new_ptr = unsafe {
-            let vec = &mut *space.get();
-            let new_idx = vec.len();
-            vec.push_with(obj, || Object::String(bex_str::BexStr::empty()));
-            let raw_ptr = vec.get_ptr(new_idx);
-            self.make_heap_ptr(raw_ptr)
-        };
-
-        forwarding.insert(old_ptr, new_ptr);
-        new_ptr
     }
 
     /// Scan dirty cards in `space`/`card_table` and push any references to
@@ -1185,7 +1239,8 @@ impl BexHeap {
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked() };
                 worklist.extend(
-                    data.values()
+                    data.keys()
+                        .chain(data.values())
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
@@ -1330,6 +1385,7 @@ impl BexHeap {
                 );
             }
             // Primitives/leaf variants have no heap references.
+            Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries no heap references.
@@ -1350,6 +1406,12 @@ impl BexHeap {
                     && self.generation_of(interface.owner).is_young()
                 {
                     worklist.push(interface.owner);
+                }
+                if let Some(default) = &interface.structural_default
+                    && !default.function_ptr.is_null()
+                    && self.generation_of(default.function_ptr).is_young()
+                {
+                    worklist.push(default.function_ptr);
                 }
                 worklist.extend(
                     interface
@@ -1399,6 +1461,9 @@ impl BexHeap {
     /// # Safety
     ///
     /// Caller must ensure all VMs are at safepoints (not executing).
+    ///
+    /// If this panics, the heap must not be used again: survivors may already
+    /// have been moved out of the slots the roots point at.
     pub unsafe fn collect_garbage_minor(
         &self,
         roots: &[HeapPtr],
@@ -1448,14 +1513,13 @@ impl BexHeap {
                 }
                 Generation::Gen0 => {
                     // Gen0 survivors → new Gen1 (inactive).
-                    let new_ptr =
-                        self.copy_object_to_space(&self.inactive, old_ptr, &mut forwarding);
+                    let new_ptr = self.evacuate_object(&self.inactive, old_ptr, &mut forwarding);
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
                 }
                 Generation::Gen1 => {
                     // Gen1 survivors → promote to Gen2.
-                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, &mut forwarding);
+                    let new_ptr = self.evacuate_object(&self.gen2, old_ptr, &mut forwarding);
                     let obj = unsafe { new_ptr.get() };
                     self.add_references_to_worklist(obj, &mut worklist);
                     promoted_to_gen2 += 1;
@@ -1563,6 +1627,7 @@ impl BexHeap {
         self.update_handles(&forwarding);
 
         // A minor collection does not satisfy the full-GC allocation budget.
+        #[cfg(feature = "gc_profiling")]
         self.reset_gc_counter();
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Bookkeeping);
@@ -1576,6 +1641,7 @@ impl BexHeap {
             level: CollectionLevel::Minor,
             promoted_to_gen1: new_gen1_count,
             promoted_to_gen2,
+            live_payload_bytes: None,
         };
 
         (stats, remapped_roots, forwarding)
@@ -1589,6 +1655,9 @@ impl BexHeap {
     /// # Safety
     ///
     /// Caller must ensure all VMs are at safepoints (not executing).
+    ///
+    /// If this panics, the heap must not be used again: survivors may already
+    /// have been moved out of the slots the roots point at.
     pub unsafe fn collect_garbage_generational(
         &self,
         roots: &[HeapPtr],
@@ -2012,6 +2081,35 @@ mod tests {
     }
 
     #[test]
+    fn test_gc_traces_and_forwards_structural_map_keys() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let leaf = tlab.alloc_string("key leaf");
+        let key = tlab.alloc_array(baml_type::RealizedTy::string(), vec![Value::object(leaf)]);
+        let map = tlab.alloc(Object::Map(bex_vm_types::types::Map::new(
+            baml_type::RealizedTy::unknown(),
+            baml_type::RealizedTy::int(),
+            bex_vm_types::MapData::from_hashed_entries([(17, Value::object(key), Value::int(42))]),
+        )));
+        let (stats, roots, _) = unsafe { heap.collect_garbage(&[map]) };
+        assert_eq!(stats.live_count, 3);
+        let Object::Map(map) = (unsafe { roots[0].get() }) else {
+            panic!("expected map");
+        };
+        let (_, entries) = map.snapshot_bucket(17);
+        assert_eq!(entries[0].1.value, Value::int(42));
+        let Object::Array(key) = (unsafe { entries[0].1.key.as_object_ptr().unwrap().get() })
+        else {
+            panic!("expected array key");
+        };
+        let Object::String(leaf) = (unsafe { key.get(0).unwrap().as_object_ptr().unwrap().get() })
+        else {
+            panic!("expected key leaf");
+        };
+        assert_eq!(leaf, "key leaf");
+    }
+
+    #[test]
     fn test_gc_with_map_references() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
@@ -2034,15 +2132,19 @@ mod tests {
         // Run GC with only the map as root
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[map_obj]) };
 
-        // Both map and string should survive
-        assert_eq!(stats.live_count, 2);
+        // The map, key, and value should survive.
+        assert_eq!(stats.live_count, 3);
         assert_eq!(remapped.len(), 1);
 
         // Verify the map's reference was updated correctly
         let new_map_ptr = remapped[0];
         let map_result = unsafe { new_map_ptr.get() };
         if let Object::Map(m) = map_result {
-            if let Some(str_ptr) = m.get("key").and_then(|v| v.as_object_ptr()) {
+            let entries = m.snapshot_entries();
+            assert!(
+                matches!(unsafe { entries[0].0.as_object_ptr().unwrap().get() }, Object::String(key) if key == "key")
+            );
+            if let Some(str_ptr) = entries[0].1.as_object_ptr() {
                 let str_result = unsafe { str_ptr.get() };
                 if let Object::String(s) = str_result {
                     assert_eq!(s, "value");
@@ -2172,8 +2274,8 @@ mod tests {
         // Only root the outer array
         let (stats, remapped, _forwarding) = unsafe { heap.collect_garbage(&[outer_array]) };
 
-        // All 4 objects in the chain should survive
-        assert_eq!(stats.live_count, 4);
+        // The four chain objects and the map key should survive.
+        assert_eq!(stats.live_count, 5);
         assert!(stats.collected_count >= 2);
 
         // Verify the chain is intact after forwarding
@@ -2185,7 +2287,7 @@ mod tests {
         {
             let map_obj = unsafe { map_ptr.get() };
             if let Object::Map(m) = map_obj
-                && let Some(inner_arr_ptr) = m.get("nested").and_then(|v| v.as_object_ptr())
+                && let Some(inner_arr_ptr) = m.snapshot_entries()[0].1.as_object_ptr()
             {
                 let inner_arr_obj = unsafe { inner_arr_ptr.get() };
                 if let Object::Array(inner_arr) = inner_arr_obj
@@ -3338,7 +3440,7 @@ mod tests {
         let Object::Map(m) = (unsafe { new_roots[1].get() }) else {
             panic!("new_roots[1] not Map")
         };
-        let Some(map_leaf) = m.get("k").and_then(|v| v.as_object_ptr()) else {
+        let Some(map_leaf) = m.snapshot_entries()[0].1.as_object_ptr() else {
             panic!("map[\"k\"] not Object")
         };
         let Object::String(s) = (unsafe { map_leaf.get() }) else {
@@ -3390,5 +3492,107 @@ mod tests {
             panic!("variant.enm not Enum")
         };
         assert_eq!(e.name.item_name().as_str(), "E");
+    }
+
+    /// A major collection reports exactly what an independent census of its
+    /// survivors finds: every survivor once, and nothing that died.
+    #[test]
+    fn test_census_matches_an_independent_measurement_of_survivors() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        // Shared text: two clones and a slice of one buffer, and a
+        // concatenation that has never been read.
+        let text = bex_str::BexStr::from("x".repeat(100_000));
+        let clone_a = tlab.alloc_string(text.clone());
+        let clone_b = tlab.alloc_string(text.clone());
+        let slice = tlab.alloc_string(text.substring(10, 5_000));
+        let rope = tlab.alloc_string(bex_str::BexStr::concat(
+            text,
+            bex_str::BexStr::from("y".repeat(1_000)),
+        ));
+
+        // A container with spare capacity, a byte buffer, a map, and one big
+        // integer held by two objects.
+        let mut elements = Vec::with_capacity(1_000);
+        elements.push(Value::int(1));
+        let array = tlab.alloc_array(RealizedTy::int(), elements);
+        let bytes = tlab.alloc_uint8array(vec![0; 10_000]);
+        let map = tlab.alloc_map(
+            RealizedTy::string(),
+            RealizedTy::int(),
+            indexmap::IndexMap::from([(bex_str::BexStr::from("key"), Value::int(1))]),
+        );
+        let bigint = Arc::new(num_bigint::BigInt::from(1u8) << 80_000);
+        let bigint_a = tlab.alloc(Object::Bigint(Arc::clone(&bigint)));
+        let bigint_b = tlab.alloc(Object::Bigint(bigint));
+
+        // Garbage with payloads much larger than everything above.
+        tlab.alloc_uint8array(vec![0; 1_000_000]);
+        tlab.alloc_string("z".repeat(500_000));
+
+        let roots = [
+            clone_a, clone_b, slice, rope, array, bytes, map, bigint_a, bigint_b,
+        ];
+        let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
+
+        let mut independent = Meter::census();
+        // SAFETY: single-threaded test; the collection has finished.
+        for object in unsafe { heap.gen2_mut() }.iter_mut() {
+            object.measure(&mut independent);
+        }
+        assert_eq!(stats.live_payload_bytes, Some(independent.total()));
+
+        // The array's capacity, the byte buffer, the text and the integer.
+        let floor = 1_000 * size_of::<Value>() + 10_000 + 100_000 + 10_000;
+        assert!(independent.total() >= floor, "{}", independent.total());
+        assert!(
+            independent.total() < floor + 500_000,
+            "{} bytes includes payload that died",
+            independent.total()
+        );
+    }
+
+    /// The census is exact for a container, splits shared text between its
+    /// holders, and is taken only by a major collection.
+    #[test]
+    fn test_census_counts_capacity_and_shared_text_once() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let mut elements = Vec::with_capacity(1_000);
+        elements.push(Value::int(1));
+        let array = tlab.alloc_array(RealizedTy::int(), elements);
+        tlab.alloc_uint8array(vec![0; 1_000_000]);
+
+        let (stats, roots, _) =
+            unsafe { heap.collect_garbage_generational(&[array], CollectionLevel::Minor) };
+        tlab.invalidate();
+        assert_eq!(stats.live_payload_bytes, None);
+
+        let (stats, _, _) = unsafe { heap.collect_garbage(&roots) };
+        tlab.invalidate();
+        assert_eq!(
+            stats.live_payload_bytes,
+            Some(size_of::<bex_vm_types::RealizedTy>() + 1_000 * size_of::<Value>())
+        );
+
+        // The array is no longer rooted; three strings share one buffer.
+        let text = bex_str::BexStr::from("x".repeat(100_000));
+        let whole = text.unshared_heap_bytes();
+        let strings = [
+            tlab.alloc_string(text.clone()),
+            tlab.alloc_string(text.clone()),
+            tlab.alloc_string(text),
+        ];
+        let (stats, _, _) = unsafe { heap.collect_garbage(&strings) };
+        let payload = stats
+            .live_payload_bytes
+            .expect("a major collection takes a census");
+        assert!(payload >= whole, "{payload} < {whole}");
+        assert!(
+            payload < whole + strings.len(),
+            "{payload} counts the buffer more than once"
+        );
     }
 }

@@ -51,6 +51,28 @@ Test output options:
           Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,
           warn, info, debug, trace]
 
+Execution options:
+      --test-timeout <DURATION>
+          Fail any single test that runs longer than this.
+
+          Accepts durations such as `500ms`, `30s` or `15m`; `none` disables the per-test deadline.
+
+          [default: 5m]
+
+      --max-concurrency <N>
+          Run at most this many test bodies at once.
+
+          Defaults to twice the available CPU parallelism.
+
+Shutdown options:
+      --shutdown-timeout <DURATION>
+          Wait at most this long at exit for in-flight calls and background futures.
+
+          Accepts durations such as `500ms`, `15s` or `2m`; `none` waits forever. Ctrl+C still
+          cancels immediately.
+
+          [default: 15s]
+
 Global options:
   -q, --quiet...
           Suppress nonessential output

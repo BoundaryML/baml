@@ -1,0 +1,58 @@
+[package]
+name = "bcs_api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "BCS cloud API contracts and native clients shared by BAML hosts"
+
+[lints]
+workspace = true
+
+[features]
+default = [ "auth", "aws-crypto" ]
+auth = [
+  "dep:baml_env",
+  "dep:dirs",
+  "dep:hex",
+  "dep:tempfile",
+  "dep:windows-sys",
+  "dep:url",
+  "reqwest/blocking",
+  "reqwest/json",
+]
+aws-crypto = [ "reqwest/rustls", "rustls/aws_lc_rs", "rustls/std" ]
+ring-crypto = [ "reqwest/rustls-no-provider", "rustls/ring", "rustls/std" ]
+
+[dependencies]
+baml_env = { workspace = true, optional = true }
+bytes.workspace = true
+dirs = { workspace = true, optional = true }
+futures.workspace = true
+hex = { workspace = true, optional = true }
+httpdate.workspace = true
+prost.workspace = true
+reqwest = { workspace = true, features = [ "json" ] }
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile = { workspace = true, optional = true }
+thiserror.workspace = true
+url = { workspace = true, optional = true }
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, optional = true, features = [ "Win32_Foundation", "Win32_Security_Authorization" ] }
+
+[build-dependencies]
+prost-build.workspace = true
+protoc-bin-vendored.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "macros", "rt", "time" ] }
+wiremock.workspace = true
+
+[package.metadata.ci]
+wasm_support = false

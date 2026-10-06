@@ -58,6 +58,8 @@
 //! (internal)       (FFI boundary)         (memory)     (exec)     (async)
 //! ```
 
+#![warn(clippy::disallowed_methods)]
+
 mod accessor;
 pub(crate) mod card_table;
 mod chunked_vec;
@@ -83,4 +85,4 @@ pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
 };
-pub use tlab::{Tlab, TlabHolder};
+pub use tlab::{SETTLE_QUANTUM, Tlab, TlabHolder};

@@ -16,3 +16,12 @@ doctest = false
 
 [lints]
 workspace = true
+
+[dependencies]
+baml_env = { workspace = true }
+borsh = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+strsim = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }

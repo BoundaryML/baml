@@ -173,19 +173,20 @@ fn a_leaf_over_the_leaf_limit_is_cut_and_nothing_else_is() {
     });
     assert!(!many.is_cut());
     let many = b.leaves().object(many).unwrap();
-    // A key is written with its entry, so the entry goes with it, and what
-    // the entry held is in no blob.
+    // Oversized keys truncate like values without dropping their entries.
     let dropped = b.leaves().object(whole).unwrap();
     let entries = [
         (at.clone(), SnapshotValue::Object(many)),
         (over, SnapshotValue::Object(dropped)),
         ("after".into(), SnapshotValue::Int(1)),
     ];
-    let map = b.map(ty, ty, entries.into_iter(), |_, entry| entry);
-    assert!(map.is_cut());
+    let map = b.map(ty, ty, entries.into_iter(), |leaves, (key, value)| {
+        (leaves.string_value(&key), value)
+    });
+    assert!(!map.is_cut());
     assert!(matches!(
         map,
-        SnapshotObject::Map { entries, original_len: 3, .. } if entries.len() == 2
+        SnapshotObject::Map { entries, original_len: 3, .. } if entries.len() == 3
     ));
     let map = b.leaves().object(map).unwrap();
     let snapshot = b.finish(SnapshotValue::Object(map), &mut Shaper::default());
@@ -198,9 +199,13 @@ fn a_leaf_over_the_leaf_limit_is_cut_and_nothing_else_is() {
     let keys: Vec<_> = snapshot
         .entries(*entries)
         .iter()
-        .map(|entry| entry.key.as_str())
+        .map(|entry| match entry.key {
+            SnapshotValue::String(id) => Some(snapshot.string(id).as_str()),
+            SnapshotValue::Truncated(Limit::Bytes) => None,
+            other => panic!("unexpected key {other:?}"),
+        })
         .collect();
-    assert_eq!(keys, ["12345678", "after"]);
+    assert_eq!(keys, [Some("12345678"), None, Some("after")]);
     let decoded = decode_blob(&root_blob_bytes(&snapshot), &DecodeLimits::default()).unwrap();
     assert_eq!(decoded.id, snapshot.root_id());
 }

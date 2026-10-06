@@ -1,5 +1,7 @@
 // index.ts — mirrors bridge_python/python_src/baml_py/__init__.py
 
+// Must stay first: honors BAML_BRIDGE_PATH before the generated native loader runs.
+import './bridge_path.js';
 import {
     BamlRuntime,
     BamlHandle,
@@ -160,4 +162,5 @@ installShutdownOnExit();
 export { current as _currentExecutionContext, ExecutionContext as _ExecutionContext, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, currentCancelToken as _currentCancelToken, withExecutionContext as _withExecutionContext } from './execution_context.js';
 export { invoke as _invoke, invokeAsync as _invokeAsync } from './invocation.js';
 export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
+export { registerCapture, captureFor } from './host_capture.js';
 import type { InvocationOptions } from './invocation.js';

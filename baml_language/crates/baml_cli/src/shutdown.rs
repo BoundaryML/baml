@@ -2,21 +2,33 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, ProcessStatus};
 
-use crate::reporter::Reporter;
+use crate::{optional_duration::OptionalDuration, reporter::Reporter};
 
 /// Default grace for the end-of-run wait on in-flight calls and orphaned
-/// background futures before they are cancelled and abandoned. Override with
-/// `BAML_SHUTDOWN_GRACE_MS`; `0` waits forever (the pre-deadline behavior).
+/// background futures before they are cancelled and abandoned.
 const DEFAULT_SHUTDOWN_GRACE: Duration = Duration::from_secs(15);
 
-fn shutdown_grace() -> Option<Duration> {
-    match std::env::var("BAML_SHUTDOWN_GRACE_MS") {
-        Ok(raw) => match raw.trim().parse::<u64>() {
-            Ok(0) => None,
-            Ok(ms) => Some(Duration::from_millis(ms)),
-            Err(_) => Some(DEFAULT_SHUTDOWN_GRACE),
-        },
-        Err(_) => Some(DEFAULT_SHUTDOWN_GRACE),
+/// The `--shutdown-timeout` flag shared by `baml run` and `baml test`.
+#[derive(clap::Args, Clone, Copy, Debug)]
+pub(crate) struct ShutdownArgs {
+    /// Wait at most this long at exit for in-flight calls and background futures.
+    ///
+    /// Accepts durations such as `500ms`, `15s` or `2m`; `none` waits
+    /// forever. Ctrl+C still cancels immediately.
+    #[arg(
+        long = "shutdown-timeout",
+        value_name = "DURATION",
+        default_value = "15s",
+        help_heading = "Shutdown options"
+    )]
+    pub shutdown_timeout: OptionalDuration,
+}
+
+impl Default for ShutdownArgs {
+    fn default() -> Self {
+        Self {
+            shutdown_timeout: OptionalDuration(Some(DEFAULT_SHUTDOWN_GRACE)),
+        }
     }
 }
 
@@ -25,8 +37,9 @@ pub(crate) fn shutdown_engine(
     engine: &Arc<BexEngine>,
     reporter: &Reporter,
     status: ProcessStatus,
+    timeout: OptionalDuration,
 ) {
-    rt.block_on(shutdown_engine_future(engine, reporter, status));
+    rt.block_on(shutdown_engine_future(engine, reporter, status, timeout));
 }
 
 /// The CLI exits after this: the recording ends with the process's status.
@@ -34,11 +47,12 @@ pub(crate) async fn shutdown_engine_future(
     engine: &Arc<BexEngine>,
     reporter: &Reporter,
     status: ProcessStatus,
+    timeout: OptionalDuration,
 ) {
     engine.record_process_exit(status);
     engine
         .shutdown_with_deadline(
-            shutdown_grace(),
+            timeout.0,
             |count| {
                 reporter.status("Waiting", wait_message(count));
             },
@@ -49,7 +63,9 @@ pub(crate) async fn shutdown_engine_future(
             },
         )
         .await;
-    if let Some(Err(error)) = engine.telemetry_result() {
+    if engine.initial_cloud_authorization_error().is_none()
+        && let Some(Err(error)) = engine.telemetry_result()
+    {
         reporter.warning(format_args!("telemetry recording failed: {error}"));
     }
 }
@@ -90,8 +106,8 @@ fn leak_message(leaks: &[bex_engine::LeakedFuture]) -> String {
     };
     format!(
         "abandoned {} leaked background {futures} spawned in: {listed} — the owning \
-         test or call finished without cleaning them up (BAML_SHUTDOWN_GRACE_MS \
-         adjusts the wait; 0 waits forever)",
+         test or call finished without cleaning them up (--shutdown-timeout \
+         adjusts the wait; `none` waits forever)",
         leaks.len()
     )
 }
@@ -99,6 +115,14 @@ fn leak_message(leaks: &[bex_engine::LeakedFuture]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shutdown_timeout_defaults_to_fifteen_seconds() {
+        assert_eq!(
+            ShutdownArgs::default().shutdown_timeout,
+            OptionalDuration(Some(Duration::from_secs(15)))
+        );
+    }
 
     #[test]
     fn wait_message_pluralizes_future_count() {

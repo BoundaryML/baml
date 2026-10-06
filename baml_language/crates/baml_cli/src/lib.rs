@@ -1,3 +1,4 @@
+#![warn(clippy::disallowed_methods)]
 // This crate provides the BAML CLI: project build/check/test commands and
 // standalone execution via `baml run`.
 #![allow(
@@ -16,6 +17,8 @@ pub(crate) mod bytecode_cache;
 mod cache_test_support;
 pub(crate) mod check_command;
 pub(crate) mod clean_command;
+mod cloud_config;
+mod cloud_query;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
@@ -23,6 +26,7 @@ mod describe_command_tests;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
+mod embed_telemetry;
 pub(crate) mod feedback_command;
 pub(crate) mod format;
 pub(crate) mod generate;
@@ -31,6 +35,7 @@ pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod log_output;
 pub(crate) mod lsp;
+pub(crate) mod optional_duration;
 pub(crate) mod output;
 pub(crate) mod pack_command;
 pub(crate) mod paint;

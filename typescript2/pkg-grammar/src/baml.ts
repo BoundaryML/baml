@@ -28,11 +28,10 @@ const DOTTED_IDENT = String.raw`${IDENT}(?:${ACCESSOR}${IDENT})*`;
 const TYPE_ARGS_BEFORE_BLOCK = String.raw`(?:<[^{}=;\r\n]*>\s*)?`;
 const BINDING_INTRO = String.raw`(?:let|const)`;
 
-// Capturing path regexes shared by the type/value reference rules. DOTTED_REF
+// Capturing path regex shared by the type/value reference rules. DOTTED_REF
 // has 4 groups (optional leading segment, its dot, the middle prefix, the final
-// name); DOTTED_PATH has 2 (head, dotted tail).
+// name).
 const DOTTED_REF = String.raw`\b(?:(${IDENT})\s*(\.)\s*)?((?:${IDENT}${ACCESSOR})*)(${IDENT})\b`;
-const DOTTED_PATH = String.raw`\b(${IDENT})((?:${ACCESSOR}${IDENT})*)\b`;
 
 // --- Builtins --------------------------------------------------------------
 //
@@ -568,48 +567,21 @@ const arrayExpression: Rule = {
   patterns: [comments, expression, comma],
 };
 
+// Bare braces may contain a map or a block. Tokenize their contents normally;
+// classifying the whole expression belongs to the parser, not a regex lookahead.
+const bracedExpression: Rule = braceBlock(
+  'braced-expression',
+  'meta.expression.braced.baml',
+  [blockContents, colonSeparator, comma],
+);
+
 const mapExpression: Rule = {
   key: 'map-expression',
   scope: 'meta.expression.map.baml',
-  begin: String.raw`\{(?=\s*(?:\}|["#]|${DOTTED_IDENT}\s*:))`,
-  beginCaptures: caps0('punctuation.definition.map.begin.baml'),
-  end: String.raw`\}`,
-  endCaptures: caps0('punctuation.definition.map.end.baml'),
-  patterns: [
-    comments,
-    {
-      key: 'map-entry',
-      scope: 'meta.map.entry.baml',
-      begin: String.raw`\s*(?=(?:"|#|${DOTTED_IDENT}\s*:))`,
-      end: String.raw`(?=,|\})`,
-      patterns: [
-        comments,
-        {
-          key: 'map-entry-key',
-          scope: tm.meta,
-          match: DOTTED_PATH + String.raw`(?=\s*:)`,
-          captures: {
-            '1': { scope: 'variable.other.property.baml' },
-            '2': {
-              patterns: [
-                accessorDot,
-                {
-                  key: 'map-entry-key-segment',
-                  scope: 'variable.other.property.baml',
-                  match: String.raw`\b${IDENT}\b`,
-                },
-              ],
-            },
-          },
-        },
-        stringLiteral,
-        rawStringLiteral,
-        colonSeparator,
-        expression,
-      ],
-    },
-    comma,
-  ],
+  begin: String.raw`\bmap\b(?=\s*\{)`,
+  beginCaptures: caps0('support.type.primitive.baml'),
+  end: String.raw`(?<=\})`,
+  patterns: [comments, bracedExpression],
 };
 
 function typeArgumentsRule(key: string, endLookahead: string): Rule {
@@ -845,7 +817,7 @@ const fieldAccessExpression: Rule = memberAccess(
 const dottedExpression: Rule = {
   key: 'dotted-expression',
   scope: tm.meta,
-  // Like DOTTED_PATH, but a path segment never absorbs an `.as<` projection, so
+  // A path segment never absorbs an `.as<` projection, so
   // `self.as<T>` leaves `.as<T>` for upcastExpression instead of reading `as`
   // as a member and `<`/`>` as comparisons.
   match: String.raw`\b(${IDENT})((?:${ACCESSOR}(?!as\b\s*<)${IDENT})*)\b`,
@@ -1882,9 +1854,9 @@ expression.patterns = [
   ifExpression,
   matchExpression,
   spawnExpression,
-  constructorExpression,
   mapExpression,
-  codeBlock,
+  constructorExpression,
+  bracedExpression,
   awaitExpression,
   throwExpression,
   catchExpression,

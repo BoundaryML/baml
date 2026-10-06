@@ -3,7 +3,7 @@ function empty() -> map<string, int> {
 }
 
 function nested() -> map<string, int[]> {
-    return map {values: []};
+    return map {"values": []};
 }
 
 function fail() -> void throws map<string, int> {
@@ -19,10 +19,10 @@ test "explicit_maps_construct_and_mutate" {
     assert.equal(explicit["answer"], 42)
 }
 
-test "explicit_maps_keys_shorthand_and_nesting" {
+test "explicit_maps_quoted_keys_and_nesting" {
     let answer = 42;
-    let explicit = map {answer, other: 7, "quoted-key": 9};
-    let implicit = {answer, other: 7, "quoted-key": 9};
+    let explicit = map {"answer": answer, "other": 7, "quoted-key": 9};
+    let implicit = {"answer": answer, "other": 7, "quoted-key": 9};
     assert.equal(explicit, implicit)
     assert.equal(explicit["answer"], 42)
     assert.equal(explicit["other"], 7)

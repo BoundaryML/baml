@@ -38,8 +38,8 @@ use crate::{
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
 /// packages, since process start. A warm compile that seeds the cached stdlib
 /// interface should leave this at zero; a cold compile bumps it up once per
-/// stdlib package. Exposed for the `BAML_CACHE_DEBUG` warm-run counter and the
-/// seeding tests — not part of any compile result.
+/// stdlib package. Exposed for the seeding tests — not part of any compile
+/// result.
 static STDLIB_HONEST_DERIVATIONS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 

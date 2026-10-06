@@ -80,15 +80,11 @@ pub struct TestProfileManifest {
     pub unknown: IndexMap<String, toml::Value>,
 }
 
-/// Top-level keys that are valid in `baml.toml` but are *not* consumed by
-/// this internal binary, so they legitimately land in [`BamlToml::unknown`].
-/// They must not be flagged as typos. Currently just `toolchain` (typically a
-/// `[toolchain]` table, e.g. `channel = "nightly"`), which the `baml` wrapper
-/// reads to pick a toolchain version *before* exec'ing this binary — by the
-/// time we parse the manifest the choice is already made, so there is nothing
-/// here to act on, only a key to not warn about. Matching is by key name, so
-/// both the `[toolchain]` table and a bare `toolchain = "…"` are covered.
-const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] = &["toolchain"];
+/// Top-level keys owned outside the compiler's manifest model, preserved in
+/// [`BamlToml::unknown`].
+/// The wrapper reads `toolchain` to choose the executable; the CLI's cloud
+/// configuration reads `boundary`. Matching is by top-level key name.
+const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] = &["toolchain", "boundary", "pack", "bridge"];
 
 #[derive(Debug, Deserialize)]
 pub struct Package {

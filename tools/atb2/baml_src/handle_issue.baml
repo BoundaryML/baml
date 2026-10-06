@@ -269,9 +269,9 @@ function check_on_canary(r: Repro, n: int) -> Verdict {
         baml.fs.write(path, r.files.get(name) ?? "");
     }
     let env = sandbox_env(false);
-    let v = baml.env.get("BAML_VERSION");
+    let v = baml.env.get("BAML_TOOLCHAIN");
     if (v != null) {
-        env.set("BAML_VERSION", v ?? "");
+        env.set("BAML_TOOLCHAIN", v ?? "");
     };
     //# run it with canary's baml-cli (check, or run for should_evaluate_to)
     let evaluate = match (r.expectation) {
@@ -1836,8 +1836,8 @@ function stop_reason(path: string) -> string? {
     if (lines.length() == 0) {
         return "killed at the time budget";
     };
-    let ev = baml.json.parse(lines[lines.length() - 1]) catch (_) {
-        _ => baml.json.parse("{}"),
+    let ev: json = baml.json.parse(lines[lines.length() - 1]) catch (_) {
+        _ => ({}),
     };
     if (baml.json.path_or<bool>(ev, ".is_error", false)) {
         return "cli error: " + baml.json.path_or<string>(ev, ".result", "").slice(0, 300);

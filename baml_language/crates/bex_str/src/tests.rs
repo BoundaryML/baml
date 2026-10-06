@@ -31,6 +31,69 @@ fn retained_heap_counts_complete_slice_parent() {
 }
 
 #[test]
+fn unshared_heap_bytes_counts_each_handle_in_full() {
+    assert_eq!(BexStr::from("inline").unshared_heap_bytes(), 0);
+
+    let flat = BexStr::from("x".repeat(100_000));
+    let bytes = flat.unshared_heap_bytes();
+    assert!(bytes > flat.len(), "a flat string owns its header too");
+    assert_eq!(flat.clone().unshared_heap_bytes(), bytes);
+
+    // A slice is sized by what it views, not by the parent it pins.
+    assert_eq!(flat.substring(1, 1_001).unshared_heap_bytes(), 1_000);
+
+    // A concatenation is sized by the buffer reading it would materialize,
+    // and sizing it does not materialize that buffer.
+    let rope = BexStr::concat(flat.clone(), BexStr::from("y".repeat(100)));
+    assert!(matches!(rope, BexStr::Concat(_)));
+    assert!(rope.unshared_heap_bytes() > rope.len());
+    assert!(matches!(
+        &rope,
+        BexStr::Concat(node) if matches!(
+            &*node.state.lock().unwrap(),
+            super::bex_str::ConcatState::Deferred { .. }
+        )
+    ));
+}
+
+#[test]
+fn shared_heap_bytes_splits_a_buffer_among_its_handles() {
+    assert_eq!(BexStr::from("inline").shared_heap_bytes(), 0);
+
+    let flat = BexStr::from("x".repeat(100_000));
+    let whole = flat.shared_heap_bytes();
+    assert_eq!(whole, flat.unshared_heap_bytes());
+
+    // Clones and slices all hold the same allocation, so their shares add up
+    // to it (rounding each share up).
+    let mut handles: Vec<BexStr> = (0..9)
+        .map(|i| {
+            if i % 2 == 0 {
+                flat.clone()
+            } else {
+                flat.substring(i, i + 500)
+            }
+        })
+        .collect();
+    handles.push(flat);
+    let total: usize = handles.iter().map(BexStr::shared_heap_bytes).sum();
+    assert!(total >= whole);
+    assert!(total < whole + handles.len());
+    // A small slice reports the same share as a full clone: it pins the parent.
+    assert_eq!(
+        handles[1].shared_heap_bytes(),
+        handles[0].shared_heap_bytes()
+    );
+
+    // A shared concatenation node is split the same way, without flattening.
+    let rope = BexStr::concat(BexStr::from("a".repeat(500)), BexStr::from("b".repeat(500)));
+    let alone = rope.shared_heap_bytes();
+    let other = rope.clone();
+    assert_eq!(rope.shared_heap_bytes(), alone.div_ceil(2));
+    assert_eq!(other.shared_heap_bytes(), alone.div_ceil(2));
+}
+
+#[test]
 fn retained_heap_flattens_ropes_to_stable_backing() {
     let parent = BexStr::from("x".repeat(100_000));
     let rope = BexStr::concat(parent.substring(0, 100), BexStr::from("y".repeat(100)));

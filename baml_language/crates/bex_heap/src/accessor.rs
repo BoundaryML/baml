@@ -10,6 +10,64 @@ use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
 
 use crate::BexHeap;
 
+// Key types are realized: projections and type variables were substituted before
+// allocation. Only aliases need heap facts to decide whether keys are strings.
+struct MapKeyFacts;
+
+impl baml_type::normalize::TypeContext<bex_vm_types::TypeHead> for MapKeyFacts {
+    fn well_known(&self, _: baml_type::normalize::WellKnownHead) -> Option<bex_vm_types::TypeHead> {
+        None
+    }
+    fn alias_def(
+        &self,
+        head: &bex_vm_types::TypeHead,
+    ) -> Option<baml_type::Ty<bex_vm_types::TypeHead>> {
+        match unsafe { head.ptr().get() } {
+            Object::TypeAlias(alias) => Some(alias.definition.as_ty().clone()),
+            _ => None,
+        }
+    }
+    fn implements_interface(
+        &self,
+        _: &baml_type::Ty<bex_vm_types::TypeHead>,
+        _: &baml_type::Interface<bex_vm_types::TypeHead>,
+    ) -> bool {
+        false
+    }
+    fn type_var_bound(
+        &self,
+        _: &baml_type::ParamTy,
+    ) -> Vec<baml_type::Interface<bex_vm_types::TypeHead>> {
+        Vec::new()
+    }
+    fn interface_requires(
+        &self,
+        _: &baml_type::Interface<bex_vm_types::TypeHead>,
+        _: &baml_type::Interface<bex_vm_types::TypeHead>,
+    ) -> bool {
+        false
+    }
+    fn enum_variants(&self, _: &bex_vm_types::TypeHead) -> Option<Vec<baml_type::Name>> {
+        None
+    }
+    fn associated_type_bound(
+        &self,
+        _: &baml_type::Interface<bex_vm_types::TypeHead>,
+        _: baml_type::Name,
+    ) -> Vec<baml_type::Interface<bex_vm_types::TypeHead>> {
+        Vec::new()
+    }
+    fn project(
+        &self,
+        _: &baml_type::Ty<bex_vm_types::TypeHead>,
+        _: &baml_type::Interface<bex_vm_types::TypeHead>,
+        _: &baml_type::Name,
+        _: u32,
+    ) -> baml_type::normalize::ProjectionStep<bex_vm_types::TypeHead> {
+        baml_type::normalize::ProjectionStep::Opaque
+    }
+}
+
 #[derive(Debug, PartialEq, thiserror::Error, Clone)]
 pub enum AccessError {
     #[error("Invalid handle: expected {expected}")]
@@ -159,14 +217,14 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    /// Extract an opaque `Arc<dyn Any + Send + Sync>` from a RustData value.
+    /// Extract the opaque `Arc<dyn BexRustData>` from a RustData value.
     /// Handles both external values (`BexExternalValue::RustData`) and
     /// heap values (`Object::RustData`).
     pub fn as_rust_data(
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> {
+    ) -> Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
                 Ok(std::sync::Arc::clone(data))
@@ -590,20 +648,43 @@ fn convert_object(
                 .map(|item| owned_inner(BexValue::OwnedValue(item), heap, handle_heap, lossy))
                 .collect::<Result<_, _>>()?,
         }),
-        Object::Map(map) => Ok(BexExternalValue::Map {
-            key_type: RuntimeTy::String,
-            value_type: RuntimeTy::Unknown,
-            entries: map
-                .to_index_map()
-                .into_iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k.as_str().to_owned(),
-                        owned_inner(BexValue::OwnedValue(v), heap, handle_heap, lossy)?,
-                    ))
-                })
-                .collect::<Result<_, _>>()?,
-        }),
+        Object::Map(map) => {
+            if !baml_type::normalize::is_string_key(map.key_ty.as_ty(), &MapKeyFacts) {
+                return Err(AccessError::CannotConvertToOwned {
+                    reason: "SDK interchange requires maps with string keys".to_owned(),
+                });
+            }
+            let key_type = map
+                .key_ty
+                .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+                .map(|named| RuntimeTy::from(&named))
+                .map_err(|_| AccessError::CannotConvertToOwned {
+                    reason: "cannot name map key type for SDK interchange".to_owned(),
+                })?;
+            Ok(BexExternalValue::Map {
+                key_type,
+                value_type: RuntimeTy::Unknown,
+                entries: map
+                    .snapshot_entries()
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let key = match k.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
+                            Some(Object::String(key)) => key.as_str().to_owned(),
+                            _ => {
+                                return Err(AccessError::CannotConvertToOwned {
+                                    reason: "SDK interchange requires maps with string keys"
+                                        .to_owned(),
+                                });
+                            }
+                        };
+                        Ok((
+                            key,
+                            owned_inner(BexValue::OwnedValue(v), heap, handle_heap, lossy)?,
+                        ))
+                    })
+                    .collect::<Result<_, _>>()?,
+            })
+        }
         Object::Instance(instance) => {
             let class_obj = unsafe { instance.class.get() };
             let Object::Class(class) = class_obj else {
@@ -702,6 +783,7 @@ fn convert_object(
             &hc.handle,
         ))),
         Object::Cell(_) => unconvertible("cell"),
+        Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(sentinel_kind) => unconvertible(&format!("sentinel: {:?}", sentinel_kind)),
     }
@@ -742,6 +824,86 @@ mod tests {
 
         fn tlab_mut(&mut self) -> &mut Tlab {
             &mut self.tlab
+        }
+    }
+
+    #[tokio::test]
+    async fn sdk_maps_reject_non_string_keys_even_when_empty_or_lossy() {
+        use bex_vm_types::{
+            MapData, RealizedTy,
+            types::{Map, Object, Value},
+        };
+
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        for (key_ty, data) in [
+            (RealizedTy::Int, MapData::new()),
+            (
+                RealizedTy::String,
+                MapData::from_hashed_entries([(0, Value::int(1), Value::NULL)]),
+            ),
+        ] {
+            let ptr = permit.holder_mut().tlab.alloc(Object::Map(Map::new(
+                key_ty,
+                RealizedTy::Null,
+                data,
+            )));
+            for lossy in [false, true] {
+                let error = super::convert_object(ptr, &heap, None, lossy).unwrap_err();
+                assert!(error.to_string().contains("string keys"), "{error}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn sdk_maps_preserve_string_subtype_keys() {
+        use bex_vm_types::{RealizedTy, Value};
+
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let literal = |key: &str| {
+            RealizedTy::Literal(
+                baml_type::Literal::String(key.to_owned()),
+                baml_type::Freshness::Regular,
+            )
+        };
+        for key_ty in [
+            literal("a"),
+            RealizedTy::Union(vec![literal("a"), literal("b")].into_boxed_slice()),
+        ] {
+            let expected = key_ty
+                .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+                .map(|ty| baml_type::RuntimeTy::from(&ty))
+                .unwrap();
+            for entries in [
+                indexmap::IndexMap::new(),
+                indexmap::IndexMap::from([(BexStr::from("a"), Value::int(1))]),
+            ] {
+                let ptr =
+                    permit
+                        .holder_mut()
+                        .tlab
+                        .alloc_map(key_ty.clone(), RealizedTy::Int, entries);
+                let owned = super::convert_object(ptr, &heap, None, false).unwrap();
+                let BexExternalValue::Map { key_type, .. } = owned else {
+                    panic!("expected map");
+                };
+                assert_eq!(key_type, expected);
+            }
         }
     }
 

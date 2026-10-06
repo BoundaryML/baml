@@ -239,7 +239,7 @@ async fn storage_startup_failure_preserves_status_without_preventing_execution()
         TelemetryRecording::local_files_in(destination, RecordingConfig::default()),
     );
     let failure = engine.telemetry_result().unwrap().unwrap_err();
-    assert!(failure.to_string().contains("telemetry file startup"));
+    assert!(failure.to_string().contains("telemetry recording startup"));
     assert!(engine.telemetry_recording_directory().is_none());
     assert_eq!(
         engine
@@ -301,24 +301,11 @@ async fn cas_storage_failure_disables_recording_but_execution_continues() {
 }
 
 fn assert_cas_blob(project: &std::path::Path, id: proto::CasId) {
-    use std::fmt::Write as _;
-    let bytes: Vec<_> = id
-        .low
-        .to_le_bytes()
-        .into_iter()
-        .chain(id.high.to_le_bytes())
-        .collect();
-    let mut name = String::with_capacity(32);
-    for byte in &bytes {
-        write!(&mut name, "{byte:02x}").unwrap();
-    }
-    let path = project
-        .join(".baml/btel/cas/v3")
-        .join(&name[..2])
-        .join(name);
+    let id = btel_snapshot::CasId::from(id);
+    let path = btel_file::cas_path(&project.join(".baml/btel/cas"), id);
     let blob =
         std::fs::read(path).expect("every published CAS reference must have a completed blob");
     assert!(blob.len() >= 38);
     assert_eq!(&blob[..8], b"BTELCAS\0");
-    assert_eq!(&blob[12..28], bytes);
+    assert_eq!(&blob[12..28], id.as_bytes());
 }

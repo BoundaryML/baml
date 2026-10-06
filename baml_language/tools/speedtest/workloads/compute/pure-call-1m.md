@@ -2,7 +2,7 @@
 
 T27 (BEX tracing review): the call-heavy workload that exposes *per-call*
 overhead — 1M trivial depth-1 calls, so the function-call machinery (frame
-push/pop, and with `BAML_PROFILE=1` the CallFunction/EndFunction ring pair)
+push/pop, plus the CallFunction/EndFunction ring pair when telemetry recording is on)
 dominates the runtime. The depth-100 `call-chain-100x10k` workload amortizes
 per-call cost across deep stacks; this one does not — it is the speedtest
 twin of the pure-call microbench that measured ~63 ns/pair.

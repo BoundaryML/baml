@@ -46,7 +46,7 @@ fn run(dir: &Path, args: &[&str]) -> std::process::Output {
 }
 
 fn run_with_env(dir: &Path, args: &[&str], env: Option<(&str, &str)>) -> std::process::Output {
-    run_impl(dir, args, env, &common::shared_cache_dir(), true)
+    run_impl(dir, args, env, true)
 }
 
 fn run_cache_sensitive(
@@ -54,38 +54,33 @@ fn run_cache_sensitive(
     args: &[&str],
     env: Option<(&str, &str)>,
 ) -> std::process::Output {
-    run_impl(dir, args, env, &dir.join(".baml-cache"), false)
+    run_impl(dir, args, env, false)
 }
 
 fn run_impl(
     dir: &Path,
     args: &[&str],
     env: Option<(&str, &str)>,
-    cache_dir: &Path,
-    force_honest_discovery: bool,
+    share_build_cache: bool,
 ) -> std::process::Output {
     let home = dir.join(".baml-home");
     std::fs::create_dir_all(&home).unwrap();
+    if share_build_cache {
+        // These tests exercise profile selection and lazy expansion, not cold
+        // cache behavior: share content-addressed bytecode/stdlib entries
+        // across their otherwise-isolated projects.
+        common::share_build_cache(&home);
+    }
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
     let mut command = Command::new(common::baml_cli());
     command
         .args(args)
         .current_dir(dir)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
-        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
-        .env("BAML_OUTPUT_PRESET", "human")
-        .env("BAML_AGENT_SKILL_CHECK", "off")
-        .env("BAML_HOME", home)
-        .env("BAML_CACHE_DIR", cache_dir);
-    if force_honest_discovery {
-        // These tests exercise profile selection and lazy expansion, not the
-        // discovery cache. Keep discovery honest while sharing content-addressed
-        // bytecode/stdlib entries across their otherwise-isolated projects.
-        command.env("BAML_NO_DISCOVERY_CACHE", "1");
-    } else {
-        command.env_remove("BAML_NO_DISCOVERY_CACHE");
-    }
+        // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would flip
+        // `--output-preset auto` to `agent` and hide progress lines.
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+        .env("BAML_HOME", home);
     if let Some((name, value)) = env {
         command.env(name, value);
     }

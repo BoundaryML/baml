@@ -21,8 +21,13 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// The on-disk cache is disabled (so a disk-round-trip test must skip) whenever
 /// caching is turned off wholesale or the verify tripwire forces a full compile.
 pub(crate) fn cache_disabled() -> bool {
-    std::env::var_os("BAML_NO_BYTECODE_CACHE").is_some()
-        || std::env::var_os("BAML_CACHE_VERIFY").is_some()
+    !crate::bytecode_cache::build_cache_enabled() || CacheContext::verify_enabled()
+}
+
+/// Open the cache for `resolved` in a directory of its own (beside its
+/// sources), so a test starts cold and never touches `$BAML_HOME`.
+pub(crate) fn open(resolved: &ResolvedProject) -> Option<CacheContext> {
+    CacheContext::open_in(resolved, resolved.root.join(".baml").join("cache"))
 }
 
 /// A unique on-disk project root named `<prefix>-<pid>-<n>`, anchored beneath
@@ -70,7 +75,7 @@ pub(crate) fn compile_and_store_v1(
     let _ = std::fs::remove_dir_all(root);
     let r1 = resolved(root, files);
     let (db1, pkg1) = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx1 = CacheContext::open(&r1).expect("cache opens");
+    let ctx1 = open(&r1).expect("cache opens");
     let program = compile_program(&db1, pkg1, Some(&ctx1)).expect("v1 compile succeeds");
     let fresh1 = ctx1
         .collect_diagnostics_incremental(&db1, pkg1, None)

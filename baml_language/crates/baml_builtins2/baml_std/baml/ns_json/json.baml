@@ -135,7 +135,7 @@ function to_json(value: unknown) -> json throws SerializationError {
 /// `T` selects nothing. It is the call site's static type and no more; every
 /// dispatch decision is made on the value in hand.
 ///
-/// This is the caller-facing serializer, and what `v.to_json()` desugars to.
+/// This is the caller-facing serializer, equivalent to `v.to_json()`.
 /// `to_json` is the same walk behind an `unknown` parameter.
 ///
 /// # Throws
@@ -145,7 +145,7 @@ function to_json(value: unknown) -> json throws SerializationError {
 ///   `to_hex()`), a function, a future, or any other opaque runtime object.
 ///   `reason` names which.
 function from<T>(value: T) -> json throws SerializationError {
-    root._to_json_shim(value)
+    value.to_json()
 }
 
 /// Parses JSON text and decodes it structurally into `T`, ignoring
@@ -232,8 +232,7 @@ function from_json<T>(j: json) -> T throws DecodeError {
 /// containing an optional sign followed by ASCII decimal digits, using the
 /// same rules as `from_string<T>`.
 ///
-/// This is the caller-facing decoder, and what `Type.from_json(j)` desugars
-/// to. `from_json<T>` is the same dispatcher one hop further in.
+/// This is the caller-facing decoder, equivalent to `T.from_json(j)`.
 ///
 /// # Throws
 ///
@@ -243,7 +242,7 @@ function from_json<T>(j: json) -> T throws DecodeError {
 //baml:mut_vm
 //baml:may_yield
 function to<T>(j: json) -> T throws DecodeError {
-    root._from_json_shim<T>(j)
+    T.from_json(j)
 }
 
 /// Looks up `key` in a `json` value, or `null` if `j` is not a map or the key
@@ -336,7 +335,7 @@ function _path_index(current: json, idx: int, selector: string) -> json throws P
 /// # Examples
 ///
 /// ```baml
-/// let doc = baml.json.parse("{\"users\": [{\"name\": \"Ada\", \"age\": 36}]}");
+/// let doc: json = { "users": [{ "name": "Ada", "age": 36 }] };
 /// assert.equal(baml.json.path<string>(doc, ".users[0].name"), "Ada");
 /// assert.equal(baml.json.path<int>(doc, "[\"users\"][0][\"age\"]"), 36);
 /// ```

@@ -591,6 +591,7 @@ name = "baml"
 version = "0.2.5"
 dependencies = [
  "anyhow",
+ "baml_env",
  "baml_release",
  "console",
  "reqwest",
@@ -636,6 +637,7 @@ dependencies = [
  "prost",
  "serde_json",
  "sha2",
+ "thiserror 2.0.18",
  "tokio",
  "ureq",
 ]
@@ -675,6 +677,7 @@ dependencies = [
  "baml_artifact",
  "baml_builtins2",
  "baml_db",
+ "baml_env",
  "baml_exec",
  "baml_fmt",
  "baml_ide",
@@ -687,6 +690,7 @@ dependencies = [
  "baml_type",
  "baml_version",
  "base64",
+ "bcs_api",
  "bex_cache",
  "bex_engine",
  "bex_events",
@@ -921,15 +925,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_env"
+version = "0.0.0-beta"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "baml_exec"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_artifact",
  "baml_tests",
  "baml_type",
  "bex_engine",
  "bex_vm_types",
  "borsh",
+ "btel_settings",
  "clap",
  "console",
  "indexmap",
@@ -1042,6 +1055,7 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_visualization",
  "baml_db",
+ "baml_env",
  "baml_ide",
  "baml_lsp",
  "baml_query_btel",
@@ -1089,6 +1103,7 @@ dependencies = [
  "bex_engine",
  "bex_events",
  "bex_project",
+ "bex_vm_types",
  "btel_settings",
  "libsui",
  "sys_native",
@@ -1121,6 +1136,7 @@ dependencies = [
 name = "baml_query_btel"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_query_btel",
  "baml_test_support",
  "base64",
@@ -1130,6 +1146,7 @@ dependencies = [
  "btel_clock",
  "btel_reader",
  "btel_recorder",
+ "btel_settings",
  "btel_snapshot",
  "btel_types",
  "fs2",
@@ -1151,6 +1168,7 @@ name = "baml_release"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_env",
  "dirs",
  "flate2",
  "reqwest",
@@ -1295,6 +1313,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "bcs_api"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_env",
+ "bytes",
+ "dirs",
+ "futures",
+ "hex",
+ "httpdate",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "url",
+ "uuid",
+ "windows-sys 0.61.2",
+ "wiremock",
+]
+
+[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1304,6 +1349,7 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 name = "bex_cache"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_linker_types",
  "baml_type",
  "baml_version",
@@ -1331,10 +1377,12 @@ dependencies = [
  "anyhow",
  "async-trait",
  "baml_db",
+ "baml_env",
  "baml_test_support",
  "baml_type",
  "baml_type_runtime",
  "baml_version",
+ "bcs_api",
  "bex_events",
  "bex_external_types",
  "bex_heap",
@@ -1410,6 +1458,7 @@ dependencies = [
 name = "bex_heap"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_type",
  "bex_external_types",
  "bex_str",
@@ -1466,6 +1515,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "tempfile",
  "text-size",
  "thiserror 2.0.18",
  "tokio",
@@ -1521,6 +1571,7 @@ dependencies = [
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_compiler_diagnostics",
+ "baml_env",
  "baml_linker_types",
  "baml_test_support",
  "baml_type",
@@ -1685,10 +1736,14 @@ name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
  "baml_artifact",
+ "baml_env",
+ "baml_test_support",
  "baml_version",
  "bex_events",
  "bex_project",
  "bridge_ctypes",
+ "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "cbindgen",
  "cc",
@@ -1707,6 +1762,7 @@ dependencies = [
  "toml 0.8.23",
  "vfs",
  "wasm-bindgen-futures",
+ "wiremock",
 ]
 
 [[package]]
@@ -1864,6 +1920,7 @@ dependencies = [
 name = "btel_bcs"
 version = "0.0.0-beta"
 dependencies = [
+ "bcs_api",
  "btel_clock",
  "btel_processor",
  "btel_recorder",
@@ -1876,8 +1933,6 @@ dependencies = [
  "hex",
  "num-bigint",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "reqwest",
  "rustls",
  "serde",
@@ -1989,6 +2044,15 @@ dependencies = [
 [[package]]
 name = "btel_settings"
 version = "0.0.0-beta"
+dependencies = [
+ "baml_env",
+ "borsh",
+ "serde",
+ "sha2",
+ "strsim",
+ "thiserror 2.0.18",
+ "toml 0.8.23",
+]
 
 [[package]]
 name = "btel_snapshot"
@@ -7387,6 +7451,7 @@ name = "sys_auth"
 version = "0.0.0-beta"
 dependencies = [
  "async-trait",
+ "baml_env",
  "forked_aws_config",
  "forked_aws_sigv4",
  "forked_google_cloud_auth",
@@ -7409,6 +7474,7 @@ dependencies = [
 name = "sys_native"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_env",
  "baml_type",
  "bex_external_types",
  "bex_heap",
