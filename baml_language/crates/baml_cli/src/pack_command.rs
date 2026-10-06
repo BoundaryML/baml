@@ -106,6 +106,11 @@ pub struct PackArgs {
     #[arg(long = "target", value_name = "TRIPLE", help_heading = "Build options")]
     pub target_triple: Option<String>,
 
+    /// Use a locally built pack host instead of the installed or released host.
+    /// The host must match this compiler and the requested target platform.
+    #[arg(long, value_name = "PATH", help_heading = "Build options")]
+    pub host: Option<PathBuf>,
+
     #[arg(
         long,
         value_enum,
@@ -204,7 +209,11 @@ impl PackArgs {
             telemetry,
         };
         let target_triple = self.resolved_target_triple()?;
-        let host_bytes = read_host_binary(target_triple, reporter)?;
+        let host_bytes = match &self.host {
+            Some(path) => std::fs::read(path)
+                .with_context(|| format!("failed to read pack host {}", path.display()))?,
+            None => read_host_binary(target_triple, reporter)?,
+        };
         if let Some(provisioning) = provisioning {
             reporter.spin("Provisioning", "embedded telemetry");
             envelope.telemetry.embedded =
@@ -213,6 +222,7 @@ impl PackArgs {
         let serialized =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
                 .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
+
 
         let basename = self.resolve_output_basename()?;
         let output_path = self
@@ -735,6 +745,7 @@ mod tests {
             file: None,
             output: None,
             target_triple: None,
+            host: None,
             output_format: OutputFormat::Json,
             from: None,
             expression: None,

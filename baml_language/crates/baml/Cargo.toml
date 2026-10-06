@@ -22,22 +22,23 @@ workspace = true
 
 [features]
 default = [ "self-update" ]
-self-update = [ "baml_release/self-update" ]
-no-self-update = [ "baml_release/no-self-update" ]
+self-update = [  ]
+no-self-update = [  ]
 
 [dependencies]
-baml_env = { workspace = true }
-baml_release = { workspace = true }
-anyhow = { workspace = true }
-console = { workspace = true }
-reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
-serde = { workspace = true, features = [ "derive" ] }
-serde_json = { workspace = true }
-toml = { workspace = true }
-toml_edit = { workspace = true }
+baml_artifact = { workspace = true }
+baml_pack_host = { workspace = true }
+
+[build-dependencies]
+baml_artifact = { workspace = true }
+baml_db = { workspace = true }
+baml_exec = { workspace = true }
+btel_settings = { workspace = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tempfile = { workspace = true }
+toml = { workspace = true }
 
 [[bin]]
 name = "baml"
