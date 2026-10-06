@@ -84,6 +84,11 @@ macro_rules! scenario {
 /// Calls per `main`: 10,000 for the cheap scenarios, fewer where each call
 /// also builds a class.
 const TYPES: &str = r#"
+enum Country { US, UK, FR }
+enum ContactKind { Email, Phone }
+class Address { street: string, city: string, country: Country }
+class Contact { kind: ContactKind, value: string }
+class Person { name: string, address: Address, contacts: Contact[], manager: Person? }
 class Resume { name: string, age: int? }
 class Box<T> { value: T, items: T[] }
 class A { x: int }
@@ -208,3 +213,32 @@ function main() -> int {{
 }}"
     )
 );
+
+// 8. A nested schema named by a captured type argument: one class that
+// reaches other classes and enums (and itself). Work that grows with the
+// schema shows here and not in scenario 3.
+scenario!(
+    nested_type_args_repeated,
+    &format!(
+        "{TYPES}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 10000) {{ t = t + None<Person>($trace = trace.span(inputs = true)); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 9. A captured instance of that nested schema, with nested values.
+scenario!(nested_instance_inputs_repeated, &format!("{TYPES}
+function main() -> int {{
+    let p = Person {{
+        name: \"ann\",
+        address: Address {{ street: \"1 Main\", city: \"Paris\", country: Country.FR }},
+        contacts: [Contact {{ kind: ContactKind.Email, value: \"a@b.c\" }}, Contact {{ kind: ContactKind.Phone, value: \"123\" }}],
+        manager: null,
+    }};
+    let i = 0;
+    while (i < 10000) {{ let x = Pick(p, $trace = trace.span(inputs = true)); i = i + 1; }}
+    i
+}}"));
