@@ -1,5 +1,7 @@
 # Packed BAML startup experiments
 
+**Production bytecode preparation follow-up:** [prepare compact bytecode once](prepare-once.md) moves float boxing into the shared loader and removes the engine/VM rebuild. Full launch-to-exit comparisons, CPU/memory/size, correctness checks and reproducible methodology are retained with the change.
+
 **Production validation follow-up:** normal program loading now uses one validator with two implementations of its diagnostic interface. Valid programs run check-only; only failures repeat the same walk to build the first error. The public result and ordinary artifact format remain the same. The production change improves **full packed-program launch to exit by 2–4%** on this machine.
 
 Default local recording; milliseconds, **median / p95**, 100 fresh processes per cell:

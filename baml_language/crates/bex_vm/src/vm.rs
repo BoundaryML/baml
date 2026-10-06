@@ -1832,29 +1832,25 @@ pub enum VmExecState {
     EarlyYield,
 }
 
-/// Intermediate representation of a compiled BAML program.
+/// A validated BAML program with finalized executable streams.
 ///
 /// `BytecodeProgram` holds compile-time objects in an `ObjectPool` which are
-/// transferred to the unified `BexHeap` when creating a `BexEngine`.
+/// transferred to the unified `BexHeap` when creating a `BexEngine`. Native
+/// functions are attached, floats are boxed, and compact code is finalized.
+/// Heap loading resolves object indices to pointers without rebuilding code.
 ///
 /// # Lifecycle
 ///
-/// 1. **Creation**: `convert_program()` builds `BytecodeProgram` from raw bytecode
+/// 1. **Creation**: `convert_program()` validates and prepares raw bytecode
 /// 2. **Object Transfer**: `BexEngine::new()` extracts `objects` into `BexHeap`
 /// 3. **Discard**: The `ObjectPool` is consumed; runtime uses `BexHeap` exclusively
-///
-/// # Why `ObjectPool` Here?
-///
-/// `ObjectPool` is used here (not `Vec`) because:
-/// - `convert_program()` builds objects incrementally with type-safe indexing
-/// - Preserves phantom-typed `ObjectIndex` semantics during construction
-/// - After transfer to `BexHeap`, runtime allocation uses TLABs instead
 ///
 /// See `BexEngine::new()` for the handoff to unified heap architecture.
 #[derive(Clone, Debug)]
 pub struct BytecodeProgram {
     pub objects: ObjectPool,
     /// Compile-time globals (converted to runtime Values in `BexEngine::new`).
+    /// Float globals already reference boxed objects, just like float constants.
     pub globals: Vec<bex_vm_types::ConstValue>,
     /// The executable's callables by rendered name, derived from the package
     /// tables ([`bex_vm_types::Program::rendered_callables`]): the view behind
@@ -1870,11 +1866,12 @@ pub struct BytecodeProgram {
     pub root: u32,
 }
 
-/// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
+/// Convert a compiled `Program` to a prepared `BytecodeProgram` for heap loading.
 ///
 /// This is the bridge between compilation output and VM execution. It:
-/// 1. Attaches native function implementations to builtin functions
-/// 2. Builds resolved name lookups for functions, classes, and enums
+/// 1. Validates the executable and attaches native builtin implementations
+/// 2. Boxes float constants and globals before lowering and specializing code
+/// 3. Builds the resolved lookup for host-callable functions
 pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmInternalError> {
     convert_program_with_trace_hooks(program, true)
 }
@@ -1899,7 +1896,18 @@ pub fn convert_program_with_trace_hooks(
     if !enabled {
         disable_declared_trace_hooks(&mut objects);
     }
-    prepare_compact_code(&mut objects, &program.globals);
+    // Finish changes to constants and globals before lowering. Consumers must
+    // not need to modify these inputs and rebuild the executable streams.
+    let mut globals = program.globals;
+    let float_indices = bex_vm_types::types::box_compile_time_floats(&mut objects, &globals);
+    for global in &mut globals {
+        if let bex_vm_types::ConstValue::Float(float) = global {
+            *global = bex_vm_types::ConstValue::Object(ObjectIndex::from_raw(
+                float_indices[&float.to_bits()],
+            ));
+        }
+    }
+    prepare_compact_code(&mut objects, &globals);
 
     // The by-name view of the executable's callables, from the package
     // tables: declared functions and class methods only. Lambdas, helpers,
@@ -1916,7 +1924,7 @@ pub fn convert_program_with_trace_hooks(
 
     Ok(BytecodeProgram {
         objects: ObjectPool::from_vec(objects),
-        globals: program.globals,
+        globals,
         resolved_function_names,
         packages: program.packages,
         root: program.root,
@@ -4312,15 +4320,7 @@ impl BexVm {
         let bytecode = convert_program(program)?;
 
         // Extract compile-time objects for the heap
-        let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
-
-        // Box every reachable `ConstValue::Float` into a compile-time
-        // `Object::Float` (floats can no longer live inline in `Value`).
-        let float_indices = bex_vm_types::types::box_compile_time_floats(
-            &mut compile_time_objects,
-            &bytecode.globals,
-        );
-        prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
+        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
         // Create heap with compile-time objects, additionally allocating the
         // per-package `Object::Package` / `Object::ImplRule` objects.
@@ -4337,13 +4337,7 @@ impl BexVm {
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
-            .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) => {
-                    let idx = float_indices[&f.to_bits()];
-                    Value::object(heap.compile_time_ptr(idx))
-                }
-                other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
-            })
+            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 

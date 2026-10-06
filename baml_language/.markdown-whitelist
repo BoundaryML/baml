@@ -19,6 +19,7 @@ crates/baml_tests/benches/incremental/*/description.md
 # Runtime startup benchmark methodology and retained results
 scripts/runtime-startup/compiler-linkage.md
 scripts/runtime-startup/less-work.md
+scripts/runtime-startup/prepare-once.md
 
 # LSP documentation
 crates/baml_lsp_server/CONTRIBUTING.md
