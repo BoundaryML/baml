@@ -9,7 +9,7 @@ from .baml_py import (
     _trace_selection,
     invocation_clock_ns,
 )
-from ._execution_context import current
+from ._execution_context import _current_trace_options, current
 from .cffi.v1 import baml_inbound_pb2
 
 
@@ -45,6 +45,17 @@ def normalize(options: Any, call_id: int):
     if active is not None:
         wire.inherited_state = active._key_for_invocation()
     retained = [active]
+    if "trace" not in snapshot:
+        for handle in _current_trace_options.get():
+            selection, reservation = _trace_selection(handle, call_id)
+            inherited = baml_inbound_pb2.TraceSelection.FromString(bytes(selection))
+            # Only mode/capture are defaults. Tags already flow through the
+            # runtime state; replaying their patches would overwrite contexts
+            # established inside BAML before a Python callback.
+            inherited.options.ClearField("distinct_id")
+            inherited.options.ClearField("metadata")
+            wire.trace.MergeFrom(inherited)
+            retained.extend((handle, reservation))
     trace = snapshot.get("trace")
     if trace is not None:
         type_map = get_type_map()
