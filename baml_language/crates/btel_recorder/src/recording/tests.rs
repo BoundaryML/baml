@@ -21,6 +21,47 @@ fn config() -> RecordingConfig {
 }
 
 #[test]
+fn sdk_completion_is_emitted_only_in_the_terminal_file() {
+    let exit = Arc::new(btel_types::ProcessExitSlot::default());
+    let mut builder = RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default())
+        .unwrap()
+        .with_process(ProcessRecording {
+            info: btel_types::ProcessInfo {
+                process_id: [9; 16],
+                ..Default::default()
+            },
+            sources: None,
+            context: None,
+            exit: Arc::clone(&exit),
+        });
+    exit.set(btel_types::ProcessExit {
+        status: btel_types::ProcessStatus::Unknown,
+        at_unix_ns: 123,
+    });
+    builder.aggregate(AggregateDelta {
+        node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
+        count: 1,
+        total_duration: ClockDuration::from_ticks(3),
+        ..Default::default()
+    });
+    let flushed = decode(&builder.flush_recording().unwrap().unwrap());
+    assert!(flushed.end.is_none());
+    assert_eq!(
+        flushed.header.unwrap().format_minor,
+        btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
+    );
+    let ended = decode(&builder.end_recording().unwrap().unwrap());
+    assert_eq!(
+        ended.header.unwrap().format_minor,
+        btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
+    );
+    let completion = ended.end.unwrap().process_end.unwrap();
+    assert_eq!(completion.status, proto::ProcessStatus::Unknown as i32);
+    assert_eq!(completion.at_unix_ns, 123);
+    assert!(builder.end_recording().unwrap().is_none());
+}
+
+#[test]
 fn metadata_prefix_merges_before_newer_resolution_and_clock_observations() {
     use proto::function_definition::Resolution;
 

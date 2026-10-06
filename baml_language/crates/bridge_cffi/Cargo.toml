@@ -53,6 +53,11 @@ wasm-bindgen-futures = { workspace = true }
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 cbindgen = { workspace = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+btel_file = { workspace = true }
+btel_recorder = { workspace = true }
+tempfile = { workspace = true }
+
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 
 [dev-dependencies]

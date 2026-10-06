@@ -28,7 +28,7 @@ message RecordingFile {
 
 message RecordingHeader {
   uint32 format_major = 1;       // Exactly 2.
-  uint32 format_minor = 2;       // Additive optional fields only. 1 adds argument layouts;
+  uint32 format_minor = 2;       // Additive fields and enum values. 1 adds argument layouts;
                                  // 2 adds source maps and error evidence; 3 adds process
                                  // identity, panics, future names, sysop time and usage.
                                  // 4 adds execution-context runs.
@@ -37,6 +37,7 @@ message RecordingHeader {
                                  // 7 adds network spans.
                                  // 8 adds generic call type arguments.
                                  // 9 adds process launch context.
+                                 // 10 adds completion with an unknown host outcome.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -568,8 +569,8 @@ enum UnwindResult {
 // Present only in the last file; its containing sequence declares the file count.
 // Emitted only after input, metadata attempts and final epoch states settle.
 message RecordingEnd {
-  // Minor 3. Set when the host shut this engine down because its process is
-  // exiting: how the process ended.
+  // Minor 3. Set when the host finalizes its BAML lifetime. CLI hosts report
+  // their exit outcome; SDK shutdown reports UNKNOWN (minor 10).
   ProcessEnd process_end = 1;
 }
 
@@ -583,6 +584,8 @@ enum ProcessStatus {
   PROCESS_STATUS_SUCCESS = 1;
   PROCESS_STATUS_ERROR = 2;
   PROCESS_STATUS_PANICKED = 3;
+  // Minor 10. The SDK lifetime ended; the OS process's outcome is unknown.
+  PROCESS_STATUS_UNKNOWN = 4;
 }
 
 // Minor 3. Model usage, outside span sections: a model name has no bound.

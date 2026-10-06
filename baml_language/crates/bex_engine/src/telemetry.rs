@@ -811,8 +811,9 @@ impl BexEngine {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// The process is exiting with `status`: engines shut down after this
-    /// end their recordings with it. Hosts call it once, before shutdown.
+    /// The host is finalizing its BAML lifetime with `status`: engines shut
+    /// down after this end their recordings with it. Hosts call it before
+    /// shutdown; SDK hosts use `Unknown` when the OS exit outcome is not known.
     pub fn record_process_exit(&self, status: btel_types::ProcessStatus) {
         if let Some(exit) = self
             .telemetry

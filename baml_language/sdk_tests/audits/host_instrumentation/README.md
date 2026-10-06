@@ -30,6 +30,7 @@ cd ../../../../..
 sdks/python/.venv/bin/python -m pytest -o addopts= \
   sdk_tests/audits/host_instrumentation/test_recordings.py \
   sdk_tests/audits/host_instrumentation/test_common_types.py \
+  sdk_tests/audits/host_instrumentation/test_shutdown.py \
   --basetemp target/host-instrumentation-evidence
 cargo test -p baml_query_btel --lib --test engine --test context --test host_inputs
 ```
@@ -125,3 +126,5 @@ The Node common-type execution case is
 copy it to the generated fixture's `node/` directory when editing without
 rerunning codegen. This follows the same isolated recording and shutdown
 workflow as the original catalog audit above.
+
+The shutdown audit runs actual Python and Node subprocesses to verify normal exit, repeated explicit shutdown and nonzero host exit. Each terminal recording reports SDK lifetime completion with an unknown host outcome, and `baml query` must expose all three completed BAML invocations in the profiler. This audit calls the bridges directly and needs no generated fixture.

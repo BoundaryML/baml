@@ -241,6 +241,9 @@ impl RecordingBuilder {
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
         let ready = self.buffer.take();
+        let process_exit = end
+            .then(|| self.process.as_ref().and_then(|p| p.exit.get()))
+            .flatten();
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
@@ -252,7 +255,16 @@ impl RecordingBuilder {
                         btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
                     } else {
                         0
-                    }),
+                    })
+                    .max(
+                        if process_exit
+                            .is_some_and(|exit| exit.status == btel_types::ProcessStatus::Unknown)
+                        {
+                            btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
+                        } else {
+                            0
+                        },
+                    ),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
                 process_id: self.process.as_ref().map(|p| p.info.process_id.to_vec()),
@@ -276,18 +288,15 @@ impl RecordingBuilder {
             spans: self.buffer.spans.is_empty().then(proto::SpanBatch::default),
             clock_states: Some(ready.clock_states),
             end: end.then(|| proto::RecordingEnd {
-                process_end: self
-                    .process
-                    .as_ref()
-                    .and_then(|p| p.exit.get())
-                    .map(|exit| proto::ProcessEnd {
-                        status: match exit.status {
-                            btel_types::ProcessStatus::Success => proto::ProcessStatus::Success,
-                            btel_types::ProcessStatus::Error => proto::ProcessStatus::Error,
-                            btel_types::ProcessStatus::Panicked => proto::ProcessStatus::Panicked,
-                        } as i32,
-                        at_unix_ns: exit.at_unix_ns,
-                    }),
+                process_end: process_exit.map(|exit| proto::ProcessEnd {
+                    status: match exit.status {
+                        btel_types::ProcessStatus::Unknown => proto::ProcessStatus::Unknown,
+                        btel_types::ProcessStatus::Success => proto::ProcessStatus::Success,
+                        btel_types::ProcessStatus::Error => proto::ProcessStatus::Error,
+                        btel_types::ProcessStatus::Panicked => proto::ProcessStatus::Panicked,
+                    } as i32,
+                    at_unix_ns: exit.at_unix_ns,
+                }),
             }),
             // Appended below from its pre-encoded body.
             errors: None,
