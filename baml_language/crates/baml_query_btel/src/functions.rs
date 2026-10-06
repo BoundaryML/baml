@@ -1372,8 +1372,8 @@ struct Usage {
     cache_read: Option<i64>,
     cache_write: Option<i64>,
     reasoning: Option<i64>,
-    /// `None` once any turn's model has no price.
-    cost: Option<f64>,
+    /// `None` once any turn's model has no price or the amount overflows.
+    cost: Option<crate::pricing::Usd>,
 }
 
 struct UsageSum;
@@ -1388,7 +1388,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
         let (cache_read, cache_write, reasoning) =
             (opt_i64(ctx, 3)?, opt_i64(ctx, 4)?, opt_i64(ctx, 5)?);
         let usage = acc.get_or_insert_with(|| Usage {
-            cost: Some(0.0),
+            cost: Some(crate::pricing::Usd::default()),
             ..Usage::default()
         });
         let add = |sum: Option<i64>, n: Option<i64>| match (sum, n) {
@@ -1397,14 +1397,14 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
         };
         usage.cost = usage
             .cost
-            .zip(crate::pricing::cost(
+            .zip(crate::pricing::cost_nano_usd(
                 model.as_deref(),
                 input,
                 output,
                 cache_read,
                 cache_write,
             ))
-            .map(|(a, b)| a + b);
+            .and_then(|(a, b)| a.checked_add(b));
         match model {
             Some(model) if !usage.models.contains(&model) => usage.models.push(model),
             Some(_) => {}
@@ -1427,6 +1427,15 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
             return Ok(None);
         };
         let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
+        // The local-query cost column remains dollars; convert only at presentation.
+        let dollars = |cost: crate::pricing::Usd| {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "local queries expose dollar floats after integer estimation and aggregation"
+            )]
+            let nano_usd = cost.as_nano_usd() as f64;
+            Inline::Float(nano_usd / 1_000_000_000.0)
+        };
         let model = if usage.models.is_empty() {
             Inline::Null
         } else {
@@ -1445,7 +1454,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
                 usage
                     .cost
                     .filter(|_| !usage.unnamed)
-                    .map_or(Inline::Null, Inline::Float),
+                    .map_or(Inline::Null, dollars),
             ),
         ]))))
     }
