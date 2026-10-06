@@ -38,6 +38,7 @@ const TABLES: &[(&str, &str)] = &[
     ("aggregate", "rec, node"),
     ("sysop", "rec, call_path_id"),
     ("model_usage", "rec, sequence, position"),
+    ("type_def", "rec, type_tag"),
     ("call", "rec, call_id"),
     ("network_span", "rec, span_id"),
     ("network_event", "rec, span_id, seq"),

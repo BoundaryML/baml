@@ -116,6 +116,14 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
         }) {
             expected_minor = expected_minor.max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
         }
+        if file
+            .definitions
+            .as_ref()
+            .is_some_and(|definitions| !definitions.types.is_empty())
+        {
+            expected_minor =
+                expected_minor.max(btel_settings::encoding::TYPE_DEFINITIONS_FORMAT_MINOR);
+        }
         assert_eq!(header.format_minor, expected_minor);
         let definitions = file.definitions.as_ref().unwrap();
         for function in &definitions.functions {

@@ -1200,6 +1200,23 @@ function main(n: int) -> int {
 }
 "#;
 
+/// `value` without class and enum definition references (`def`,
+/// `definition`, `$def`, `$definition`).
+fn without_definitions(value: &Json) -> Json {
+    match value {
+        Json::Object(map) => Json::Object(
+            map.iter()
+                .filter(|(key, _)| {
+                    !matches!(key.as_str(), "def" | "definition" | "$def" | "$definition")
+                })
+                .map(|(key, item)| (key.clone(), without_definitions(item)))
+                .collect(),
+        ),
+        Json::Array(items) => Json::Array(items.iter().map(without_definitions).collect()),
+        other => other.clone(),
+    }
+}
+
 /// Each generic call's span records its type arguments by type-parameter
 /// name, as each kind of frame holds them. Non-generic calls and futures
 /// record none, and a query that doesn't read the column loads no blob.
@@ -1280,7 +1297,14 @@ async fn generic_calls_record_their_type_args_by_name() {
                  WHERE span_type = 'function' ORDER BY span_name, start_time"
             ),
         );
-        assert_eq!(calls.rows, expected, "{relation}");
+        // Class definitions are the type_definitions tests' subject; here
+        // only the type arguments' shape is.
+        let rows: Vec<Vec<Json>> = calls
+            .rows
+            .iter()
+            .map(|row| row.iter().map(without_definitions).collect())
+            .collect();
+        assert_eq!(rows, expected, "{relation}");
         assert_eq!(calls.columns[1].column_type, "baml_value");
         let futures = sql(
             &mut index,

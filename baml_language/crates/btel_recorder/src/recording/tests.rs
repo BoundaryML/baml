@@ -1616,3 +1616,162 @@ fn processor_ends_the_recording_only_after_producers_stop_writing() {
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(finals.len(), 2, "both runs are final by the end");
 }
+
+/// Answers scripted resolutions, then nothing; counts its polls.
+struct Scripted {
+    answers: std::sync::Mutex<std::collections::VecDeque<btel_types::TypeResolution>>,
+    polls: std::sync::atomic::AtomicUsize,
+}
+impl Scripted {
+    fn new(answers: Vec<btel_types::TypeResolution>) -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self {
+            answers: std::sync::Mutex::new(answers.into()),
+            polls: std::sync::atomic::AtomicUsize::new(0),
+        })
+    }
+}
+impl btel_types::TypeDefinitionSource for Scripted {
+    fn try_take(&self, _: usize) -> btel_types::TypeResolution {
+        self.polls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.answers
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or(btel_types::TypeResolution::Ready {
+                definitions: Vec::new(),
+                more: false,
+            })
+    }
+}
+
+/// Never-ready heap access: the source answers Busy forever.
+struct AlwaysBusy(std::sync::atomic::AtomicUsize);
+impl btel_types::TypeDefinitionSource for AlwaysBusy {
+    fn try_take(&self, _: usize) -> btel_types::TypeResolution {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        btel_types::TypeResolution::Busy
+    }
+}
+
+fn declaration(name: &str) -> btel_types::TypeDeclaration {
+    btel_types::TypeDeclaration {
+        is_enum: false,
+        name: baml_type::DeclarationName::Anonymous(name.into()),
+        type_params: 0,
+        description: None,
+        alias: None,
+        docstring: None,
+        attributes: Vec::new(),
+        stream_done: false,
+        fields: vec![btel_types::TypeField {
+            name: "i".into(),
+            schema: baml_type::TyTemplate::Int,
+            description: Some("an int".into()),
+            alias: None,
+            docstring: None,
+            attributes: Vec::new(),
+            skip: false,
+            stream_done: false,
+            must_exist: false,
+        }],
+        variants: Vec::new(),
+    }
+}
+
+/// The drain side of the handoff's deadlock: while heap access is never
+/// available (a collection holding or awaiting it), sealing and the
+/// recording's end still complete, in bounded time.
+#[test]
+fn a_busy_definition_source_never_stalls_sealing_or_the_end() {
+    let files = RefCell::new(Vec::new());
+    let (_, _, path) = ids();
+    let busy = std::sync::Arc::new(AlwaysBusy(std::sync::atomic::AtomicUsize::new(0)));
+    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap()
+    .with_type_definitions(busy.clone());
+    p.aggregate(delta(path));
+    p.flush();
+    assert_eq!(files.borrow().len(), 1);
+    let started = std::time::Instant::now();
+    p.end_recording().unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    assert!(busy.0.load(std::sync::atomic::Ordering::Relaxed) >= 2);
+    let last = decode(files.borrow().last().unwrap());
+    assert!(last.end.is_some(), "the recording still ends");
+}
+
+/// A definition arriving after its first observation lands in a later file,
+/// supersedes the earlier unavailable observation, and is published once.
+#[test]
+fn definitions_publish_once_across_files_and_supersede_unavailable() {
+    let files = RefCell::new(Vec::new());
+    let (_, _, path) = ids();
+    let tag = baml_type::typetag::TypeTag::from_i64(900);
+    let defined = |name| btel_types::TypeDefinition {
+        tag,
+        declaration: Some(declaration(name)),
+    };
+    let source = Scripted::new(vec![
+        btel_types::TypeResolution::Ready {
+            definitions: vec![btel_types::TypeDefinition {
+                tag,
+                declaration: None,
+            }],
+            more: true,
+        },
+        btel_types::TypeResolution::Busy,
+        btel_types::TypeResolution::Ready {
+            definitions: vec![defined("Temp"), defined("Temp")],
+            more: false,
+        },
+    ]);
+    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap()
+    .with_type_definitions(source);
+    for _ in 0..3 {
+        p.aggregate(delta(path));
+        p.flush();
+    }
+    p.end_recording().unwrap();
+    let types: Vec<(u32, Vec<proto::TypeDefinition>)> = files
+        .borrow()
+        .iter()
+        .map(decode)
+        .map(|file| {
+            (
+                file.header.unwrap().format_minor,
+                file.definitions.map(|d| d.types).unwrap_or_default(),
+            )
+        })
+        .filter(|(_, types)| !types.is_empty())
+        .collect();
+    assert_eq!(types.len(), 2, "{types:?}");
+    let (first_minor, first) = &types[0];
+    assert_eq!(
+        *first_minor,
+        btel_settings::encoding::TYPE_DEFINITIONS_FORMAT_MINOR
+    );
+    assert!(matches!(
+        first[0].resolution,
+        Some(proto::type_definition::Resolution::Unavailable(_))
+    ));
+    let (_, second) = &types[1];
+    assert_eq!(second.len(), 1, "the repeat is not published again");
+    let Some(proto::type_definition::Resolution::Declaration(declaration)) = &second[0].resolution
+    else {
+        panic!("declaration");
+    };
+    let decoded = crate::decode_declaration(declaration).unwrap();
+    assert_eq!(decoded.name.to_string(), "Temp");
+    assert_eq!(decoded.fields[0].name, "i");
+    assert_eq!(decoded.fields[0].description.as_deref(), Some("an int"));
+    assert!(matches!(
+        decoded.fields[0].schema,
+        baml_type::TyTemplate::Int
+    ));
+}

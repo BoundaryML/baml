@@ -69,3 +69,95 @@ impl TypeDefinitionSource for HeapTypeDefinitions {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    };
+
+    use baml_test_support::compile_source;
+    use bex_vm_types::Object;
+    use btel_types::{TypeDefinitionSource, TypeResolution};
+    use sys_native::SysOpsExt;
+
+    use super::HeapTypeDefinitions;
+    use crate::BexEngine;
+
+    fn tag_of(ptr: bex_vm_types::HeapPtr) -> baml_type::typetag::TypeTag {
+        // SAFETY: a compile-time declaration, never moved or collected.
+        match unsafe { ptr.get() } {
+            Object::Class(class) => class.type_tag,
+            Object::Enum(enm) => enm.type_tag,
+            _ => unreachable!("a declaration"),
+        }
+    }
+
+    /// The resolver never waits for the heap: while a collection holds it
+    /// exclusively, both before and after the resolver registered its own
+    /// permit, it answers Busy at once and keeps the work, which resolves
+    /// once the heap is free.
+    #[tokio::test]
+    async fn resolution_is_busy_while_a_collection_holds_the_heap() {
+        let program = compile_source(
+            "class Foo { value int @description(\"v\") }\nenum Bar { A B }\nfunction main() -> null { null }",
+        );
+        let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine");
+        let foo = *engine.resolved_class_names.get("user.Foo").expect("Foo");
+        let bar = *engine.resolved_enum_names.get("user.Bar").expect("Bar");
+        let source = HeapTypeDefinitions::new(
+            Arc::clone(&engine.heap),
+            Arc::clone(&engine.heap_permit_manager),
+        );
+        let register = |ptr| {
+            // SAFETY: compile-time declarations; no collection runs here.
+            unsafe { engine.heap.register_telemetry_declaration(tag_of(ptr), ptr) };
+        };
+
+        register(foo);
+        {
+            // Exclusive access before the resolver has a permit: the
+            // permit registry is held, so registration does not wait.
+            let guard = engine.heap_permit_manager.request_park().await;
+            let started = Instant::now();
+            assert!(matches!(source.try_take(16), TypeResolution::Busy));
+            assert!(started.elapsed() < Duration::from_millis(200));
+            drop(guard);
+        }
+        let TypeResolution::Ready { definitions, more } = source.try_take(16) else {
+            panic!("free heap resolves");
+        };
+        assert!(!more);
+        let [definition] = definitions.as_slice() else {
+            panic!("{definitions:?}");
+        };
+        let declaration = definition.declaration.as_ref().expect("Foo's declaration");
+        assert_eq!(declaration.fields[0].name, "value");
+        assert_eq!(declaration.fields[0].description.as_deref(), Some("v"));
+
+        register(bar);
+        {
+            // Exclusive access after the resolver registered its permit:
+            // activating it does not wait either.
+            let guard = engine.heap_permit_manager.request_park().await;
+            let started = Instant::now();
+            assert!(matches!(source.try_take(16), TypeResolution::Busy));
+            assert!(started.elapsed() < Duration::from_millis(200));
+            drop(guard);
+        }
+        let TypeResolution::Ready { definitions, .. } = source.try_take(16) else {
+            panic!("free heap resolves");
+        };
+        let variants: Vec<_> = definitions[0]
+            .declaration
+            .as_ref()
+            .unwrap()
+            .variants
+            .iter()
+            .map(|v| v.name.clone())
+            .collect();
+        assert_eq!(variants, ["A", "B"]);
+    }
+}

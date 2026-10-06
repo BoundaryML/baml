@@ -605,6 +605,14 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> RecordingPublisher<F, C> {
         self.builder = self.builder.with_function_metadata(functions);
         self
     }
+    #[must_use]
+    pub fn with_type_definitions(
+        mut self,
+        types: std::sync::Arc<dyn btel_types::TypeDefinitionSource>,
+    ) -> Self {
+        self.builder = self.builder.with_type_definitions(types);
+        self
+    }
     fn snapshots(&mut self) {
         for snapshot in self.builder.take_snapshots() {
             (self.receive_snapshot)(snapshot);
