@@ -315,6 +315,41 @@ async fn initial_rejection_fails_even_if_execution_finishes_before_authorization
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn initial_connection_failures_cancel_execution() {
+    let temp = fixture("function main() -> int { 7 }\n");
+    for status in [404, 503] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path_regex(r"/heartbeat$"))
+            .respond_with(
+                ResponseTemplate::new(status).set_body_json(serde_json::json!({
+                    "code": "TELEMETRY_UNAVAILABLE",
+                    "retryable": status == 503,
+                    "message": "Cloud telemetry is unavailable for this project.",
+                })),
+            )
+            .expect(if status == 503 { 4 } else { 1 })
+            .mount(&server)
+            .await;
+        let output = execute_case(temp.path(), &server.uri(), KEY, &["run", "main"]);
+        assert!(!output.status.success(), "{output:?}");
+        let error = diagnostic(&output);
+        assert!(
+            error.contains("Cloud telemetry is unavailable for this project."),
+            "{error}"
+        );
+        assert!(error.ends_with("Execution cancelled."), "{error}");
+    }
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    drop(listener);
+    let output = execute_case(temp.path(), &endpoint, KEY, &["run", "main"]);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(diagnostic(&output).ends_with("Execution cancelled."));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn local_sentinel_records_and_queries_locally_without_boundary_requests() {
     let temp = fixture("function main() -> int { 7 }\n");
     let server = MockServer::start().await;
