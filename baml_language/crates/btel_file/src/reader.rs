@@ -234,7 +234,7 @@ pub fn validate_file(
         return Err("invalid model usage".into());
     }
     if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref())
-        && !(1..=3).contains(&end.status)
+        && !(1..=4).contains(&end.status)
     {
         return Err("invalid process end".into());
     }

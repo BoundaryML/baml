@@ -94,11 +94,11 @@ pub const PROCESSES: Relation = Relation {
         col(
             "status",
             "text",
-            "running, success, error, panicked, or unknown (its engines stopped without saying how the process ended)",
+            "running, success, error, panicked, or unknown (the host did not report the OS process's exit outcome)",
         ),
         value(
             "status_history",
-            "[{status, timestamp}]: running from the process's start, then how it ended",
+            "[{status, timestamp}]: running from the process's start, then its reported completion or exit outcome",
         ),
         col(
             "last_updated",
@@ -124,7 +124,8 @@ FROM (
     MAX(r.initial_context_cas) AS initial_context_cas,
     MAX(r.host) AS host, MAX(r.command) AS command,
     MIN(r.process_started_ns) AS started_ns,
-    CASE MAX(r.process_end_status) WHEN 1 THEN 'success' WHEN 2 THEN 'error'
+    CASE MAX(CASE WHEN r.process_end_status = 4 THEN 0 ELSE r.process_end_status END)
+      WHEN 0 THEN 'unknown' WHEN 1 THEN 'success' WHEN 2 THEN 'error'
       WHEN 3 THEN 'panicked' END AS ended,
     MAX(r.process_end_ns) AS ended_ns,
     SUM(r.terminal_sequence IS NULL) AS open,
@@ -136,7 +137,7 @@ FROM (
 
 pub const PROFILER: Relation = Relation {
     name: "profiler",
-    doc: "One row per calling-context tree node of each ended process, merged over its call sites, threads and engines. Empty for a process until its end is recorded.",
+    doc: "One row per calling-context tree node of each process whose host reported completion, merged over its call sites, threads and engines. Empty until completion is recorded; the OS process's exit outcome can remain unknown.",
     columns: &[
         col(
             "profiler_node_id",

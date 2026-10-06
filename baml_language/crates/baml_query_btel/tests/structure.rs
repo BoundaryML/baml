@@ -489,6 +489,50 @@ fn processes_merge_engines_and_rebuild_on_new_evidence() {
 }
 
 #[test]
+fn sdk_completion_builds_the_profiler_with_an_unknown_exit_outcome() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    recording.write(1, tree(vec![delta(1, false, 2, 20, ok())], vec![]));
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    assert!(rows(&mut index, "SELECT * FROM profiler").is_empty());
+    recording.write(
+        2,
+        proto::RecordingFile {
+            end: Some(process_end(proto::ProcessStatus::Unknown)),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT function_name, invocation_count, total_time FROM profiler"
+        ),
+        vec![vec![json!("user.A"), json!(2), json!(20)]]
+    );
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT status, status_history[1]['status'] FROM processes"
+        ),
+        vec![vec![json!("unknown"), json!("unknown")]]
+    );
+
+    // UNKNOWN's wire number is higher, but it must not outrank a known outcome.
+    let known = Recording::new(project.path(), 2, Some([9; 16]));
+    known.write(
+        1,
+        proto::RecordingFile {
+            end: Some(process_end(proto::ProcessStatus::Error)),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        rows(&mut index, "SELECT status FROM processes"),
+        vec![vec![json!("error")]]
+    );
+}
+
+#[test]
 fn unknown_counts_and_times_are_null_never_guessed() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path(), 1, Some([9; 16]));

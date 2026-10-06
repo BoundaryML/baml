@@ -56,8 +56,8 @@ CREATE TABLE recording (
   -- CAS id of the project's sources, a map<path, content> snapshot.
   source_cas BLOB,
   initial_context_cas BLOB,
-  -- How the process ended, when this recording's end marker says so:
-  -- 1 success, 2 error, 3 panicked.
+  -- The host's BAML lifetime ended, when this recording's end marker says so:
+  -- 1 success, 2 error, 3 panicked, 4 unknown OS exit outcome.
   process_end_status INTEGER,
   process_end_ns INTEGER,
   -- Newest modification time of an applied file, Unix nanoseconds.

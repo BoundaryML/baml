@@ -40,3 +40,6 @@ pub const NETWORK_FORMAT_MINOR: u32 = 7;
 pub const TYPE_ARGS_FORMAT_MINOR: u32 = 8;
 /// Process headers capture immutable launch context independently of spans.
 pub const PROCESS_CONTEXT_FORMAT_MINOR: u32 = 9;
+/// A terminal recording can report SDK lifetime completion with an unknown
+/// OS process outcome (`ProcessStatus.UNKNOWN`).
+pub const UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR: u32 = 10;

@@ -342,4 +342,8 @@ export declare function releaseFunctionCall(callId: string): boolean
  */
 export declare function releaseHostCallable(key: HandleKey): void
 
+/**
+ * Finalize the SDK lifetime, drain work and finish telemetry delivery.
+ * Repeated calls are harmless; the OS process's exit outcome remains unknown.
+ */
 export declare function shutdownRuntime(): Promise<void>
