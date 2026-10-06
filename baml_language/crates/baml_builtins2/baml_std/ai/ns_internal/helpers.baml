@@ -7,19 +7,20 @@
 /// at the root of the schema it returns, and its `$ref`s point there
 /// (`#/$defs/Name`). A parameter's schema is a property of this object, so
 /// its `$defs` move to this object's root, where those `$ref`s resolve. A
-/// definition is keyed by its declaration's name, so two parameters that
-/// reach one declaration contribute the same entry.
+/// parameter scopes its definitions and references, because distinct types
+/// reached by different parameters can have the same display name.
 function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unknown> {
     let sig = reflect.signature(handler);
     let props: map<string, unknown> = {};
     let required: string[] = [];
     let definitions: map<string, unknown> = {};
     for (let a in sig.args) {
-        let lowered = baml.json.schema(a.type);
+        let prefix = a.name + ".";
+        let lowered = _scope_schema_refs(baml.json.schema(a.type), prefix);
         let property = baml.json.from_json<map<string, unknown>>(lowered);
         let reached = baml.json.path_or<map<string, unknown>>(lowered, ".$defs", {});
         for (let name in reached.keys()) {
-            let _ = definitions.set(name, reached.get(name));
+            let _ = definitions.set(prefix + name, reached.get(name));
         }
         let _ = property.delete("$defs");
         let _ = props.set(a.name, property);
@@ -30,6 +31,37 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
         let _ = schema.set("$defs", definitions);
     }
     schema
+}
+
+/// Rebase local definition references, including recursive references inside
+/// definitions. Other strings, such as descriptions and literal values, stay
+/// unchanged. Existing reference tokens are already JSON Pointer escaped.
+function _scope_schema_refs(schema: json, prefix: string) -> json {
+    match (schema) {
+        let object: map<string, json> => {
+            let scoped: map<string, json> = {};
+            for (let key in object.keys()) {
+                let value = object.get(key);
+                if let reference: string = value {
+                    if (key == "$ref" && reference.starts_with("#/$defs/")) {
+                        let escaped = prefix.replace_all("~", "~0").replace_all("/", "~1");
+                        let _ = scoped.set(key, reference.replace("#/$defs/", "#/$defs/" + escaped));
+                        continue;
+                    }
+                }
+                let _ = scoped.set(key, _scope_schema_refs(value, prefix));
+            }
+            scoped
+        },
+        let items: json[] => {
+            let scoped: json[] = [];
+            for (let item in items) {
+                scoped.push(_scope_schema_refs(item, prefix));
+            }
+            scoped
+        },
+        _ => schema,
+    }
 }
 
 /// Bound as `ctx` inside a compiler-desugared `@spec` prompt template.

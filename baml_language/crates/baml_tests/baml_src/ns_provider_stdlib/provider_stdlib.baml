@@ -92,7 +92,7 @@ function provider_schema_book(
 
 // Each parameter is lowered by `baml.json.schema`, whose `$ref`s point at the
 // schema root. The definitions they name must be at the tool schema's root,
-// once, and not under the parameter that reached them.
+// scoped by parameter, and not under the parameter that reached them.
 function provider_schema_tool_definitions() -> string {
   let schema = baml.json.to_json(ai.tools.tool(provider_schema_book).input_schema)
   let reference = baml.json.path<string>(schema, ".properties.venue.properties.address.anyOf[0].$ref")
@@ -106,7 +106,44 @@ function provider_schema_tool_definitions() -> string {
 }
 
 test "a reflected tool schema keeps its definitions at the root" {
-  assert.equal(provider_schema_tool_definitions(), "true|2|string|0")
+  assert.equal(provider_schema_tool_definitions(), "true|3|string|0")
+}
+
+/// Accepts two independently reflected parameter types.
+function provider_schema_pair<A, B>(first: A, second: B) -> string {
+  "ok"
+}
+
+test "a reflected tool keeps same-name parameter definitions distinct" {
+  let left = reflect.class.new("Collision", { "left": reflect.Type.of<int>() });
+  let right = reflect.class.new("Collision", { "right": reflect.Type.of<string>() });
+  type Left = unreflect(left.as_type())
+  type Right = unreflect(right.as_type())
+  let schema = baml.json.to_json(ai.tools.tool(provider_schema_pair<Left[], Right[]>).input_schema);
+  let left_ref = baml.json.path<string>(schema, ".properties.first.items.$ref");
+  let right_ref = baml.json.path<string>(schema, ".properties.second.items.$ref");
+  let definitions = baml.json.path<map<string, json>>(schema, ".$defs");
+  assert.is_true(left_ref != right_ref);
+  assert.equal(baml.json.path<string>(definitions.get(left_ref.replace("#/$defs/", "")), ".properties.left.type"), "integer");
+  assert.equal(baml.json.path<string>(definitions.get(right_ref.replace("#/$defs/", "")), ".properties.right.type"), "string");
+}
+
+class ProviderSchemaNode {
+  value string @description("Keep #/$defs/Node as documentation.")
+  next ProviderSchemaNode?
+}
+
+test "a reflected tool rebases recursive refs without changing documentation" {
+  let schema = baml.json.to_json(ai.tools.tool(provider_schema_pair<ProviderSchemaNode, ProviderSchemaNode>).input_schema);
+  let definitions = baml.json.path<map<string, json>>(schema, ".$defs");
+  let left_ref = baml.json.path<string>(schema, ".properties.first.properties.next.anyOf[0].$ref");
+  let right_ref = baml.json.path<string>(schema, ".properties.second.properties.next.anyOf[0].$ref");
+  assert.is_true(left_ref != right_ref);
+  for (let reference in [left_ref, right_ref]) {
+    let definition = definitions.get(reference.replace("#/$defs/", ""));
+    assert.equal(baml.json.path<string>(definition, ".properties.next.anyOf[0].$ref"), reference);
+    assert.equal(baml.json.path<string>(definition, ".properties.value.description"), "Keep #/$defs/Node as documentation.");
+  }
 }
 
 test "provider stdlib JSON paths preserve brackets in quoted keys" {

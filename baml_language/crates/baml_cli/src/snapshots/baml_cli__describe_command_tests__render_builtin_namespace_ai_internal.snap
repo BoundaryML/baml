@@ -2,11 +2,11 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class            ai.internal.SpecCtx              <builtin>/ai/ns_internal/helpers.baml:37
-function         ai.internal.assemble_prompt      <builtin>/ai/ns_internal/helpers.baml:71
-function         ai.internal.assemble_llm_prompt  <builtin>/ai/ns_internal/helpers.baml:80
-function         ai.internal.total_input_tokens   <builtin>/ai/ns_internal/helpers.baml:122
-function         ai.internal.uncached_input_tokens <builtin>/ai/ns_internal/helpers.baml:132
+class            ai.internal.SpecCtx              <builtin>/ai/ns_internal/helpers.baml:69
+function         ai.internal.assemble_prompt      <builtin>/ai/ns_internal/helpers.baml:103
+function         ai.internal.assemble_llm_prompt  <builtin>/ai/ns_internal/helpers.baml:112
+function         ai.internal.total_input_tokens   <builtin>/ai/ns_internal/helpers.baml:154
+function         ai.internal.uncached_input_tokens <builtin>/ai/ns_internal/helpers.baml:164
 function         ai.internal.validate_output_type <builtin>/ai/ns_internal/prompt.baml:9
 function         ai.internal.render_output_format <builtin>/ai/ns_internal/prompt.baml:41
 type             ai.internal.OutputFormat         <builtin>/ai/ns_internal/prompt.baml:47
