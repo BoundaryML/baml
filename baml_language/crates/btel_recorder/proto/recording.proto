@@ -38,6 +38,7 @@ message RecordingHeader {
                                  // 8 adds generic call type arguments.
                                  // 9 adds process launch context.
                                  // 10 adds completion with an unknown host outcome.
+                                 // 11 adds independent clock anchors, precision and elapsed bounds.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -59,6 +60,7 @@ message Definitions {
   repeated CallPathDefinition call_paths = 2;
   repeated ThreadDefinition threads = 3;
   repeated ClockEpochDefinition clock_epochs = 4;
+  repeated ClockEpochAnchor clock_anchors = 5; // Minor 11. Independent of scale.
 }
 
 message FunctionDefinition {
@@ -177,9 +179,21 @@ message ThreadDefinition {
   optional string name = 6;    // Minor 3. The future's name, when it has one.
 }
 
+// Immutable origin emitted immediately, even when scale is still pending.
+message ClockEpochAnchor {
+  uint64 epoch_id = 1;
+  uint64 domain_id = 2;
+  ClockSource source = 3;
+  fixed64 reference_tick = 4;
+  fixed64 reference_monotonic_ns = 5;
+  uint64 origin_uncertainty_ns = 6;
+  FallbackReason fallback = 7;
+  UtcAnchor utc = 8;
+}
+
 message ClockEpochDefinition {
   uint64 epoch_id = 1;         // Nonzero.
-  uint64 domain_id = 2;        // Nonzero; immutable scale identity.
+  uint64 domain_id = 2;        // Nonzero; retained source generation.
   ClockSource source = 3;
   fixed64 reference_tick = 4;
   fixed64 reference_monotonic_ns = 5;
@@ -190,6 +204,14 @@ message ClockEpochDefinition {
   CalibrationQuality calibration = 10;
   FallbackReason fallback = 11; // NONE is meaningful.
   UtcAnchor utc = 12;
+  ClockPrecision precision = 13; // Minor 11. Unspecified is a legacy calibrated mapping.
+}
+
+enum ClockPrecision {
+  CLOCK_PRECISION_UNSPECIFIED = 0;
+  CLOCK_PRECISION_REPORTED = 1;
+  CLOCK_PRECISION_CALIBRATED = 2;
+  CLOCK_PRECISION_ESTIMATED = 3;
 }
 
 enum ClockSource {
@@ -198,6 +220,7 @@ enum ClockSource {
   CLOCK_SOURCE_WINDOWS_QPC = 2;
   CLOCK_SOURCE_X86_TSC = 3;
   CLOCK_SOURCE_ARM_SYSTEM_COUNTER = 4;
+  CLOCK_SOURCE_MACH_ABSOLUTE = 6;
   CLOCK_SOURCE_MOCK = 5;       // Test recordings only.
 }
 
@@ -246,6 +269,8 @@ message ClockEpochState {
   uint64 epoch_id = 1;
   TimingStatus status = 2;
   bool final = 3;             // Epoch lifecycle settled; status cannot change.
+  optional uint64 elapsed_reference_ns = 4; // Minor 11. Available even without scale.
+  optional uint64 elapsed_uncertainty_ns = 5;
 }
 
 enum TimingStatus {

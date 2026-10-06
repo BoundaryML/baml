@@ -27,3 +27,4 @@ protoc-bin-vendored = { workspace = true }
 
 [dev-dependencies]
 bex_chunkedringbuffer = { workspace = true }
+btel_clock = { workspace = true, features = [ "test-support" ] }

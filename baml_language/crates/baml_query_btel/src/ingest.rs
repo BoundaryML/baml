@@ -1076,6 +1076,9 @@ impl<'t> Applier<'t> {
             for path in &definitions.call_paths {
                 self.call_path(sequence, path)?;
             }
+            for anchor in &definitions.clock_anchors {
+                self.anchor(sequence, anchor)?;
+            }
             for epoch in &definitions.clock_epochs {
                 self.epoch(sequence, epoch)?;
             }
@@ -1091,12 +1094,14 @@ impl<'t> Applier<'t> {
                 };
                 self.tx
                     .prepare_cached(
-                        "INSERT INTO epoch_state (rec, epoch_id, status, final) VALUES (?1, ?2, ?3, ?4)
+                        "INSERT INTO epoch_state (rec, epoch_id, status, final, elapsed_reference_ns, elapsed_uncertainty_ns) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                          ON CONFLICT (rec, epoch_id) DO UPDATE SET
                            status = MAX(status, excluded.status),
-                           final = MAX(final, excluded.final)",
+                           final = MAX(final, excluded.final),
+                           elapsed_reference_ns = COALESCE(MAX(elapsed_reference_ns, excluded.elapsed_reference_ns), elapsed_reference_ns, excluded.elapsed_reference_ns),
+                           elapsed_uncertainty_ns = COALESCE(MAX(elapsed_uncertainty_ns, excluded.elapsed_uncertainty_ns), elapsed_uncertainty_ns, excluded.elapsed_uncertainty_ns)",
                     )?
-                    .execute(params![self.rec, id(state.epoch_id), status.code(), state.r#final])?;
+                    .execute(params![self.rec, id(state.epoch_id), status.code(), state.r#final, state.elapsed_reference_ns.and_then(quantity), state.elapsed_uncertainty_ns.and_then(quantity)])?;
             }
         }
         if let Some(batch) = &file.aggregates {
@@ -1798,7 +1803,38 @@ impl<'t> Applier<'t> {
         Ok(())
     }
 
+    fn anchor(&mut self, sequence: u64, anchor: &proto::ClockEpochAnchor) -> Result<(), Error> {
+        self.references.epochs.insert(anchor.epoch_id);
+        let encoded = anchor.encode_to_vec();
+        let utc = anchor
+            .utc
+            .as_ref()
+            .and_then(btel_reader::timing::UtcAnchor::from_wire);
+        self.tx.prepare_cached("INSERT INTO epoch (rec, epoch_id, defined, domain_id, source, utc_ticks, utc_unix_ns, anchor)
+            VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6, ?7)
+            ON CONFLICT (rec, epoch_id) DO UPDATE SET domain_id = COALESCE(domain_id, excluded.domain_id), source = COALESCE(source, excluded.source),
+            utc_ticks = COALESCE(utc_ticks, excluded.utc_ticks), utc_unix_ns = COALESCE(utc_unix_ns, excluded.utc_unix_ns), anchor = COALESCE(anchor, excluded.anchor)")?
+            .execute(params![self.rec, id(anchor.epoch_id), id(anchor.domain_id), anchor.source, utc.and_then(|u| quantity(u.ticks)), utc.and_then(|u| i64::try_from(u.unix_ns).ok()), encoded])?;
+        let previous: Vec<u8> = self
+            .tx
+            .prepare_cached("SELECT anchor FROM epoch WHERE rec = ?1 AND epoch_id = ?2")?
+            .query_row(params![self.rec, id(anchor.epoch_id)], |r| r.get(0))?;
+        if previous != encoded {
+            self.tx
+                .prepare_cached("UPDATE epoch SET conflict = 1 WHERE rec = ?1 AND epoch_id = ?2")?
+                .execute(params![self.rec, id(anchor.epoch_id)])?;
+            self.issue(
+                sequence,
+                "clock_anchor_conflict",
+                Some(&format!("c{}", anchor.epoch_id)),
+                "two different anchors for one clock epoch; timings using it are unavailable",
+            )?;
+        }
+        Ok(())
+    }
+
     fn epoch(&mut self, sequence: u64, epoch: &proto::ClockEpochDefinition) -> Result<(), Error> {
+        self.anchor(sequence, &btel_reader::timing::epoch_anchor(epoch))?;
         // Every thread definition repeats its epoch: reconcile each distinct
         // definition once per transaction.
         let encoded = epoch.encode_to_vec();
@@ -1819,21 +1855,22 @@ impl<'t> Applier<'t> {
             i64::from(epoch.shift),
             utc.and_then(|u| quantity(u.ticks)),
             utc.and_then(|u| i64::try_from(u.unix_ns).ok()),
-            encoded
+            encoded,
+            epoch.precision
         ];
         let inserted = self
             .tx
             .prepare_cached(
                 "INSERT OR IGNORE INTO epoch (rec, epoch_id, defined, domain_id, source, multiplier,
-                   shift, utc_ticks, utc_unix_ns, definition)
-                 VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                   shift, utc_ticks, utc_unix_ns, definition, precision)
+                 VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             )?
             .execute(values)?;
         let upgraded = if inserted == 0 {
             self.tx
                 .prepare_cached(
                     "UPDATE epoch SET defined = 1, domain_id = ?3, source = ?4, multiplier = ?5,
-                       shift = ?6, utc_ticks = ?7, utc_unix_ns = ?8, definition = ?9
+                       shift = ?6, utc_ticks = ?7, utc_unix_ns = ?8, definition = ?9, precision = ?10
                      WHERE rec = ?1 AND epoch_id = ?2 AND defined = 0",
                 )?
                 .execute(values)?

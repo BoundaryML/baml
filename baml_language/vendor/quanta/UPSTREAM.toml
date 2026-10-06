@@ -5,4 +5,6 @@ license = "MIT"
 # Source and LICENSE copied verbatim except the isolated fresh-calibration/
 # metadata patch in lib.rs + calibration.rs, raw-read inlining/ASM annotations,
 # and raw QPC reads with exact cold reference conversion on Windows.
+# raw.rs adds nonblocking raw selection with reported platform scale (ARM,
+# CPUID, Mach, QPC); legacy upstream Clock construction is unchanged.
 # Packaging omits upstream Markdown, benchmarks, CI, and benchmark dependency.

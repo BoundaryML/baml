@@ -374,7 +374,7 @@ fn build(tx: &Transaction<'_>, process: &[u8]) -> Result<(), Error> {
 fn part_of(tx: &Transaction<'_>, rec: i64) -> Result<FxHashMap<i64, Part>, Error> {
     let mut clocks: FxHashMap<Vec<u8>, Result<Clock, TimingState>> = FxHashMap::default();
     let mut epochs = tx.prepare_cached(
-        "SELECT e.epoch_id, e.multiplier, e.shift, s.status, 1 + e.conflict
+        "SELECT e.epoch_id, e.multiplier, e.shift, s.status, CASE WHEN e.conflict = 1 THEN 2 WHEN e.precision = 3 THEN 3 ELSE 1 END
          FROM epoch e
          LEFT JOIN epoch_state s ON s.rec = e.rec AND s.epoch_id = e.epoch_id
          WHERE e.rec = ?1 AND e.defined = 1",

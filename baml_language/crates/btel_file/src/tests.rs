@@ -408,6 +408,7 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
             multiplier: 1,
             ..Default::default()
         }],
+        clock_anchors: Vec::new(),
     });
     let path = sink.directory().join("00000000000000000002.btel");
     fs::write(&path, second.encode_to_vec()).unwrap();

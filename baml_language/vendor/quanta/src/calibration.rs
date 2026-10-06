@@ -38,6 +38,8 @@ pub enum ClockSource {
     Tsc,
     /// AArch64 generic system counter.
     SystemCounter,
+    /// Apple mach_absolute_time ticks, scaled using mach_timebase_info.
+    MachAbsolute,
     /// Test-controlled nanoseconds.
     #[cfg(feature = "mock")]
     Mock,

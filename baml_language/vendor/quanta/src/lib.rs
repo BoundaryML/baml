@@ -171,6 +171,8 @@ pub use self::instant::Instant;
 mod upkeep;
 pub use self::upkeep::{Error, Handle, Upkeep};
 mod calibration;
+mod raw;
+pub use raw::{RawClock, RawScale};
 pub use calibration::{
     CalibrationMetadata, CalibrationOptions, CalibrationQuality, CalibrationStatus, ClockSource,
 };
