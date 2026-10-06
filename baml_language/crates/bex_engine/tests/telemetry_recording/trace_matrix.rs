@@ -269,20 +269,27 @@ fn names_declarations(blobs: &Blobs) -> bool {
 }
 
 /// Whether two captures' roots hold the same values.
-fn same_root(a: Side<'_>, b: Side<'_>) -> bool {
+fn same_root(left: Side<'_>, right: Side<'_>) -> bool {
     use btel_snapshot::DecodedRoot as R;
-    match (&a.blob.root, &b.blob.root) {
-        (R::Value(x), R::Value(y)) => same_value(a, x, b, y),
+    match (&left.blob.root, &right.blob.root) {
+        (R::Value(x), R::Value(y)) => same_value(left, x, right, y),
         (
             R::FunctionArgs {
-                parameter_count: n,
-                slots: x,
+                parameter_count: count,
+                slots,
             },
             R::FunctionArgs {
-                parameter_count: m,
-                slots: y,
+                parameter_count: other_count,
+                slots: other_slots,
             },
-        ) => n == m && x.len() == y.len() && x.iter().zip(y).all(|(x, y)| same_value(a, x, b, y)),
+        ) => {
+            count == other_count
+                && slots.len() == other_slots.len()
+                && slots
+                    .iter()
+                    .zip(other_slots)
+                    .all(|(x, y)| same_value(left, x, right, y))
+        }
         (R::Value(_) | R::FunctionArgs { .. } | R::Definitions(_), _) => false,
     }
 }

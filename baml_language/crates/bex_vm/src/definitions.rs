@@ -143,7 +143,7 @@ mod tests {
             generic_param_count: 0,
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         };
 
         let definition = class_definition(&class);
@@ -168,7 +168,7 @@ mod tests {
             docstring: None,
             other: IndexMap::new(),
             owner: Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         };
 
         let definition = enum_definition(&enm);

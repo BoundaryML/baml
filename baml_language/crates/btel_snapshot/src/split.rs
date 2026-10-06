@@ -113,20 +113,22 @@ pub struct Split {
 fn is_string(entry: &BlobEntry) -> bool {
     match entry.content {
         Content::Capture(SnapshotRoot::Value(SnapshotValue::String(_))) => true,
-        Content::Definition(_) => false,
-        Content::Capture(SnapshotRoot::Value(
-            SnapshotValue::Null
-            | SnapshotValue::OmittedArg
-            | SnapshotValue::Bool(_)
-            | SnapshotValue::Int(_)
-            | SnapshotValue::Float(_)
-            | SnapshotValue::Bigint(_)
-            | SnapshotValue::Object(_)
-            | SnapshotValue::Type(_)
-            | SnapshotValue::Enum { .. }
-            | SnapshotValue::Truncated(_),
-        ))
-        | Content::Capture(SnapshotRoot::FunctionArgs(_)) => false,
+        Content::Definition(_)
+        | Content::Capture(
+            SnapshotRoot::Value(
+                SnapshotValue::Null
+                | SnapshotValue::OmittedArg
+                | SnapshotValue::Bool(_)
+                | SnapshotValue::Int(_)
+                | SnapshotValue::Float(_)
+                | SnapshotValue::Bigint(_)
+                | SnapshotValue::Object(_)
+                | SnapshotValue::Type(_)
+                | SnapshotValue::Enum { .. }
+                | SnapshotValue::Truncated(_),
+            )
+            | SnapshotRoot::FunctionArgs(_),
+        ) => false,
     }
 }
 

@@ -2553,7 +2553,7 @@ mod tests {
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2597,7 +2597,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
 
@@ -2804,7 +2804,7 @@ mod tests {
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2831,7 +2831,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2883,7 +2883,7 @@ mod tests {
             other: Default::default(),
             type_tag,
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(TypeHead::new(
             enum_ptr, type_tag,
@@ -2950,7 +2950,7 @@ mod tests {
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
             TypeHead::new(class_ptr, type_tag),
@@ -3380,7 +3380,7 @@ mod tests {
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
@@ -3398,7 +3398,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
             enm: enum_ptr,

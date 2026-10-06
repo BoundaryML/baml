@@ -1476,7 +1476,7 @@ mod renderability_tests {
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::Package(owner),
-            telemetry_definition: Default::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         (ptr, type_tag)
     }

@@ -300,23 +300,38 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
         .iter()
         .min()
         .unwrap_or_else(|| unreachable!("a member"));
-    let mut best: Option<(Vec<u8>, Vec<Arc<DefinitionBlob>>, Vec<u32>)> = None;
+    let mut best: Option<Encoding> = None;
     for start in (0..members.len()).filter(|&at| digests[at] == least) {
         let (order, positions) = first_reference(members, start);
-        let mut content = Vec::new();
-        let mut children = Vec::new();
+        let mut encoding = Encoding {
+            content: Vec::new(),
+            children: Vec::new(),
+            positions,
+        };
         put(
-            &mut content,
+            &mut encoding.content,
             &u32::try_from(members.len()).expect("bounded group"),
         );
         for &at in &order {
-            encode(&members[at], Some(&positions), &mut content, &mut children);
+            encode(
+                &members[at],
+                Some(&encoding.positions),
+                &mut encoding.content,
+                &mut encoding.children,
+            );
         }
-        if best.as_ref().is_none_or(|(least, ..)| content < *least) {
-            best = Some((content, children, positions));
+        if best
+            .as_ref()
+            .is_none_or(|least| encoding.content < least.content)
+        {
+            best = Some(encoding);
         }
     }
-    let (content, children, positions) = best.unwrap_or_else(|| unreachable!("a start"));
+    let Encoding {
+        content,
+        children,
+        positions,
+    } = best.unwrap_or_else(|| unreachable!("a start"));
 
     let mut h = Hasher::new(HashDomain::Blob);
     h.byte(RootTag::Definitions as u8);
@@ -353,6 +368,14 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
             member,
         })
         .collect()
+}
+
+/// A group's content from one starting member: the groups it names, and
+/// each member's place.
+struct Encoding {
+    content: Vec<u8>,
+    children: Vec<Arc<DefinitionBlob>>,
+    positions: Vec<u32>,
 }
 
 /// Members in first-reference order from `start`, and each member's place

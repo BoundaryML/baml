@@ -32,6 +32,7 @@ pub mod type_head;
 pub mod types;
 
 pub use bex_str::BexStr;
+pub use btel_types::DefinitionCell;
 pub use btel_types::{FunctionRegistration, TelemetryPolicyId};
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;

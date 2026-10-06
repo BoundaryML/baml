@@ -63,7 +63,7 @@ pub(super) unsafe fn of<'a>(ptr: HeapPtr) -> Option<&'a Definition> {
 /// As [`of`]; `cell` is the declaration's at `ptr`.
 #[cold]
 #[inline(never)]
-unsafe fn make<'a>(ptr: HeapPtr, cell: &'a DefinitionCell) -> &'a Definition {
+unsafe fn make(ptr: HeapPtr, cell: &DefinitionCell) -> &Definition {
     let _making = MAKING.lock().unwrap_or_else(PoisonError::into_inner);
     // Another thread may have made it while this one waited.
     if let Some(definition) = cell.get() {

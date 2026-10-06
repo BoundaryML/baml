@@ -188,7 +188,7 @@ pub(crate) fn build_class_object<'db>(
         methods: indexmap::IndexMap::new(),
         generic_param_count: class.generic_params.len(),
         owner: bex_vm_types::types::Owner::anonymous(),
-        telemetry_definition: Default::default(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     }
 }
 
@@ -226,7 +226,7 @@ pub(crate) fn build_enum_object<'db>(
         docstring: enm.docstring.clone(),
         other: indexmap::IndexMap::new(),
         owner: bex_vm_types::types::Owner::anonymous(),
-        telemetry_definition: Default::default(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     }
 }
 

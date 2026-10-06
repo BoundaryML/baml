@@ -248,7 +248,9 @@ fn blobs(project: &std::path::Path) -> Vec<(u64, Option<Vec<String>>)> {
                 pending.push(entry.path());
             } else {
                 let bytes = std::fs::read(entry.path()).unwrap();
-                let decoded = btel_snapshot::decode_blob(&bytes, &Default::default()).unwrap();
+                let decoded =
+                    btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                        .unwrap();
                 let members = match decoded.root {
                     btel_snapshot::DecodedRoot::Definitions(members) => Some(
                         members
