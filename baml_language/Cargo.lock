@@ -1231,6 +1231,8 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "borsh",
+ "btel_clock",
+ "btel_recorder",
  "codspeed-divan-compat",
  "darwin-kperf",
  "darwin-kperf-events",

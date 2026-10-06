@@ -68,3 +68,7 @@ sdks/csharp/DEVELOPMENT.md
 # Type-system quiz ledgers
 tools/type_quiz/SPEC_GAPS.md
 tools/type_quiz/COMPILER_DIVERGENCE.md
+
+# Temporary: the A/B contract for recorded type definitions. The winning branch
+# replaces it with the feature's documentation and removes this entry.
+docs/dyn-type-definitions/SPEC.md
