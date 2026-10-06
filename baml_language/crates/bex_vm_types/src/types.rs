@@ -872,6 +872,7 @@ mod tests {
             docstring: None,
             other: indexmap::IndexMap::new(),
             owner: Owner::anonymous(),
+            telemetry_definition: Default::default(),
         }));
         assert!(program.type_head_name(&head).is_err());
 

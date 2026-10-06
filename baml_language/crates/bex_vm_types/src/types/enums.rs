@@ -50,6 +50,11 @@ pub struct Enum {
     /// What this declaration belongs to; see `Class::owner`.
     #[borsh(skip)]
     pub owner: super::Owner,
+
+    /// The definition telemetry recorded for this enum; see
+    /// `Class::telemetry_definition`.
+    #[borsh(skip)]
+    pub telemetry_definition: btel_types::DefinitionCell,
 }
 
 impl std::fmt::Display for Enum {

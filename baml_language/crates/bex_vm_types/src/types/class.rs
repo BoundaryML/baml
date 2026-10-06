@@ -101,6 +101,11 @@ pub struct Class {
     /// export table names a method (`FnPath::Method`), and how a consumer
     /// binds one without a rendered spelling.
     pub methods: IndexMap<baml_type::Name, ClassMethodDef>,
+
+    /// The definition telemetry recorded for this class, made by the first
+    /// recorded capture that names it and dropped with the class.
+    #[borsh(skip)]
+    pub telemetry_definition: btel_types::DefinitionCell,
 }
 
 /// One inherent method of a [`Class`]: the pooled function on the wire, bound
