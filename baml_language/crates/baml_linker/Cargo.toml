@@ -27,3 +27,6 @@ indexmap = { workspace = true }
 
 [dev-dependencies]
 borsh = { workspace = true }
+
+[build-dependencies]
+baml_builtins2_codegen = { workspace = true }

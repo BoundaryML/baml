@@ -68,7 +68,7 @@ use bex_vm_types::Program;
 use crate::{project_load::ResolvedProject, project_session::ProjectSession};
 
 /// The optimization level every CLI compile uses (the emit default).
-const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
+pub(crate) const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
 
 /// An opened cache plus the keys for one resolved project + compile config.
 pub(crate) struct CacheContext {
@@ -710,6 +710,26 @@ pub(crate) fn compile_program(
             baml_db::compile_program_with(db, package, CLI_OPT_LEVEL, &StoreOnly(ctx))
         }
         Err(error) => Err(error),
+    }
+}
+
+/// Selected linking shares complete package-cache entries with run/check,
+/// but must never store a selected image under their whole-program cache key.
+pub(crate) fn compile_program_selected(
+    db: &ProjectDatabase,
+    package: SourceRoot,
+    cache: Option<&CacheContext>,
+    roots: &baml_db::LinkRoots,
+) -> Result<Program, CompileProgramError> {
+    let compile = |store: &dyn PackageCache| {
+        baml_db::compile_program_selected_with(db, package, CLI_OPT_LEVEL, store, roots)
+    };
+    let Some(ctx) = cache else {
+        return compile(&baml_db::NoCache);
+    };
+    match compile(ctx) {
+        Err(CompileProgramError::Link(_)) => compile(&StoreOnly(ctx)),
+        result => result,
     }
 }
 

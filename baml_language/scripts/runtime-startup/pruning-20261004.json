@@ -1,0 +1,1375 @@
+{
+  "methodology": {
+    "platform": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+    "samples_per_cell": 100,
+    "warmups": 5,
+    "seed": 20261004,
+    "order": "shuffled paired fresh processes; warmed file caches",
+    "timing": "native clock before posix_spawn until after wait4, including exit/shutdown/destruction",
+    "telemetry": "off and default local, isolated HOME, no cloud credentials",
+    "compiler_sha256": "9cd2e9279269bf22d37d41140e1b96e3daeafe773f13cd34fb8006b62bb2dba8",
+    "host_sha256": "9f2f9eb69dbc0a1a603920891eb406d95bfdc7a1c2ef88861ae255c3ec90fabb",
+    "child_sha256": "61552c3686bd5cf243a553de2581d8f50883cc87d3f86fcaf887a40898cb3361",
+    "harness_sha256": "ddf30aa97caad30761147649d29d9e868ba9d46e2093227b399cf6c030d1fe9a",
+    "helper_sha256": "c5bc440fdbcf88cfbb52d6206f4d5d64822cf9b238b0f8f3e670bd6e95445c70",
+    "git_head": "843837715c15adfaa65666b34588ea270cb6ed0f",
+    "started_ns": 1791176882953787000,
+    "finished_ns": 1791176926258838000,
+    "resources": "wait4 root-process rusage; RSS is not aggregate process-tree memory",
+    "external_activity": "round-start build-worker snapshots; ordinary desktop activity uncontrolled",
+    "command": {
+      "compiler": "target/release/baml-cli",
+      "host": "target/release/baml-pack-host",
+      "child": "target/prepare-once-end-to-end-20261004/cli-child",
+      "output": "target/pruning-production-20261004",
+      "runs": 100,
+      "seed": 20261004
+    },
+    "cpu_model": "Apple M2 Max",
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo_profile": {
+      "name": "release",
+      "lto": "fat",
+      "codegen_units": 1,
+      "opt_level": 3,
+      "panic": "unwind",
+      "strip": "symbols"
+    },
+    "baml_optimization": "Two",
+    "source_state": "production pruning working tree based on git_head; compiler/host hashes identify the measured binaries"
+  },
+  "summary": {
+    "empty/baseline/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 18.7195,
+        "p95": 19.948
+      },
+      "first_output_ms": {
+        "median": -1.0,
+        "p95": -1.0
+      },
+      "user_ms": {
+        "median": 13.259,
+        "p95": 13.924
+      },
+      "system_ms": {
+        "median": 3.9305,
+        "p95": 4.434
+      },
+      "peak_rss_bytes": {
+        "median": 29196288.0,
+        "p95": 31768576
+      },
+      "peak_footprint_bytes": {
+        "median": 20800736.0,
+        "p95": 23397632
+      },
+      "instructions": {
+        "median": 146848983.5,
+        "p95": 148051455
+      },
+      "cycles": {
+        "median": 56245427.5,
+        "p95": 59198972
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 2000.5,
+        "p95": 2155
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 92.0,
+        "p95": 106
+      },
+      "stdout_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 17.2225,
+        "p95": 18.093
+      }
+    },
+    "empty/baseline/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 20.633,
+        "p95": 36.185
+      },
+      "first_output_ms": {
+        "median": -1.0,
+        "p95": -1.0
+      },
+      "user_ms": {
+        "median": 14.765,
+        "p95": 15.37
+      },
+      "system_ms": {
+        "median": 4.654,
+        "p95": 5.289
+      },
+      "peak_rss_bytes": {
+        "median": 31965184.0,
+        "p95": 33996800
+      },
+      "peak_footprint_bytes": {
+        "median": 22856928.0,
+        "p95": 24921152
+      },
+      "instructions": {
+        "median": 166946349.0,
+        "p95": 167893194
+      },
+      "cycles": {
+        "median": 63487176.0,
+        "p95": 66554531
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 4096.0,
+        "p95": 4096
+      },
+      "minor_faults": {
+        "median": 2173.0,
+        "p95": 2297
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 109.0,
+        "p95": 120
+      },
+      "stdout_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 19.3585,
+        "p95": 20.398
+      }
+    },
+    "empty/pruned/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 7.8995,
+        "p95": 8.701
+      },
+      "first_output_ms": {
+        "median": -1.0,
+        "p95": -1.0
+      },
+      "user_ms": {
+        "median": 4.1685,
+        "p95": 4.403
+      },
+      "system_ms": {
+        "median": 2.4290000000000003,
+        "p95": 2.913
+      },
+      "peak_rss_bytes": {
+        "median": 11272192.0,
+        "p95": 11960320
+      },
+      "peak_footprint_bytes": {
+        "median": 5571616.0,
+        "p95": 6292480
+      },
+      "instructions": {
+        "median": 51467808.5,
+        "p95": 51910625
+      },
+      "cycles": {
+        "median": 21408704.5,
+        "p95": 23373463
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 904.5,
+        "p95": 946
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 89.0,
+        "p95": 100
+      },
+      "stdout_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 6.653499999999999,
+        "p95": 7.32
+      }
+    },
+    "empty/pruned/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 8.6705,
+        "p95": 12.254
+      },
+      "first_output_ms": {
+        "median": -1.0,
+        "p95": -1.0
+      },
+      "user_ms": {
+        "median": 4.5565,
+        "p95": 4.78
+      },
+      "system_ms": {
+        "median": 3.0785,
+        "p95": 3.559
+      },
+      "peak_rss_bytes": {
+        "median": 12451840.0,
+        "p95": 13008896
+      },
+      "peak_footprint_bytes": {
+        "median": 6087712.0,
+        "p95": 6669376
+      },
+      "instructions": {
+        "median": 57991217.5,
+        "p95": 58373027
+      },
+      "cycles": {
+        "median": 24616930.0,
+        "p95": 26610079
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 4096.0,
+        "p95": 4096
+      },
+      "minor_faults": {
+        "median": 982.0,
+        "p95": 1016
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 106.0,
+        "p95": 120
+      },
+      "stdout_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 7.621,
+        "p95": 8.325
+      }
+    },
+    "features/baseline/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 19.019,
+        "p95": 20.823
+      },
+      "first_output_ms": {
+        "median": 15.768,
+        "p95": 17.152
+      },
+      "user_ms": {
+        "median": 13.3935,
+        "p95": 14.128
+      },
+      "system_ms": {
+        "median": 4.0075,
+        "p95": 4.518
+      },
+      "peak_rss_bytes": {
+        "median": 30384128.0,
+        "p95": 32686080
+      },
+      "peak_footprint_bytes": {
+        "median": 21226816.0,
+        "p95": 23495808
+      },
+      "instructions": {
+        "median": 147805474.0,
+        "p95": 148876032
+      },
+      "cycles": {
+        "median": 56904952.5,
+        "p95": 59218788
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 2072.0,
+        "p95": 2211
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 97.0,
+        "p95": 112
+      },
+      "stdout_bytes": {
+        "median": 27.0,
+        "p95": 27
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 17.426000000000002,
+        "p95": 18.325
+      }
+    },
+    "features/baseline/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 20.762999999999998,
+        "p95": 26.551
+      },
+      "first_output_ms": {
+        "median": 17.231,
+        "p95": 23.135
+      },
+      "user_ms": {
+        "median": 14.9225,
+        "p95": 15.431
+      },
+      "system_ms": {
+        "median": 4.778499999999999,
+        "p95": 5.318
+      },
+      "peak_rss_bytes": {
+        "median": 32759808.0,
+        "p95": 35160064
+      },
+      "peak_footprint_bytes": {
+        "median": 23053632.0,
+        "p95": 25462144
+      },
+      "instructions": {
+        "median": 168089106.5,
+        "p95": 169092788
+      },
+      "cycles": {
+        "median": 64398842.0,
+        "p95": 66985133
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 4096.0,
+        "p95": 4096
+      },
+      "minor_faults": {
+        "median": 2223.5,
+        "p95": 2368
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 116.5,
+        "p95": 131
+      },
+      "stdout_bytes": {
+        "median": 27.0,
+        "p95": 27
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 19.750999999999998,
+        "p95": 20.553
+      }
+    },
+    "features/pruned/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 8.0815,
+        "p95": 9.214
+      },
+      "first_output_ms": {
+        "median": 7.272,
+        "p95": 8.409
+      },
+      "user_ms": {
+        "median": 4.292,
+        "p95": 4.543
+      },
+      "system_ms": {
+        "median": 2.5679999999999996,
+        "p95": 2.995
+      },
+      "peak_rss_bytes": {
+        "median": 12410880.0,
+        "p95": 12926976
+      },
+      "peak_footprint_bytes": {
+        "median": 5923840.0,
+        "p95": 6440000
+      },
+      "instructions": {
+        "median": 52454256.5,
+        "p95": 52797652
+      },
+      "cycles": {
+        "median": 22016788.5,
+        "p95": 24163348
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 972.0,
+        "p95": 1004
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 95.5,
+        "p95": 106
+      },
+      "stdout_bytes": {
+        "median": 27.0,
+        "p95": 27
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 6.8205,
+        "p95": 7.41
+      }
+    },
+    "features/pruned/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 8.872,
+        "p95": 10.061
+      },
+      "first_output_ms": {
+        "median": 7.745,
+        "p95": 8.648
+      },
+      "user_ms": {
+        "median": 4.714,
+        "p95": 4.972
+      },
+      "system_ms": {
+        "median": 3.1224999999999996,
+        "p95": 3.634
+      },
+      "peak_rss_bytes": {
+        "median": 13402112.0,
+        "p95": 14106624
+      },
+      "peak_footprint_bytes": {
+        "median": 6374464.0,
+        "p95": 7079104
+      },
+      "instructions": {
+        "median": 59090649.0,
+        "p95": 59534948
+      },
+      "cycles": {
+        "median": 25242079.0,
+        "p95": 27773981
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 4096.0,
+        "p95": 4096
+      },
+      "minor_faults": {
+        "median": 1040.0,
+        "p95": 1082
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 112.0,
+        "p95": 125
+      },
+      "stdout_bytes": {
+        "median": 27.0,
+        "p95": 27
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 7.845,
+        "p95": 8.673
+      }
+    },
+    "wrapper_version/baseline/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 24.632,
+        "p95": 26.526
+      },
+      "first_output_ms": {
+        "median": 16.189,
+        "p95": 17.469
+      },
+      "user_ms": {
+        "median": 17.008000000000003,
+        "p95": 17.62
+      },
+      "system_ms": {
+        "median": 6.16,
+        "p95": 6.792
+      },
+      "peak_rss_bytes": {
+        "median": 32587776.0,
+        "p95": 34701312
+      },
+      "peak_footprint_bytes": {
+        "median": 22480256.0,
+        "p95": 24593728
+      },
+      "instructions": {
+        "median": 156006874.0,
+        "p95": 156433735
+      },
+      "cycles": {
+        "median": 62373578.0,
+        "p95": 64698078
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 2878.0,
+        "p95": 3009
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 137.0,
+        "p95": 153
+      },
+      "stdout_bytes": {
+        "median": 154.0,
+        "p95": 154
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 23.092,
+        "p95": 24.205000000000002
+      }
+    },
+    "wrapper_version/baseline/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 26.616500000000002,
+        "p95": 31.124
+      },
+      "first_output_ms": {
+        "median": 17.763,
+        "p95": 20.049
+      },
+      "user_ms": {
+        "median": 18.4595,
+        "p95": 19.203
+      },
+      "system_ms": {
+        "median": 6.8325,
+        "p95": 7.402
+      },
+      "peak_rss_bytes": {
+        "median": 34193408.0,
+        "p95": 36372480
+      },
+      "peak_footprint_bytes": {
+        "median": 23610656.0,
+        "p95": 25855488
+      },
+      "instructions": {
+        "median": 176111185.5,
+        "p95": 177390918
+      },
+      "cycles": {
+        "median": 69681750.0,
+        "p95": 72108717
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 8192.0,
+        "p95": 8192
+      },
+      "minor_faults": {
+        "median": 2973.0,
+        "p95": 3110
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 158.5,
+        "p95": 171
+      },
+      "stdout_bytes": {
+        "median": 154.0,
+        "p95": 154
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 25.2965,
+        "p95": 26.393
+      }
+    },
+    "wrapper_version/pruned/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 13.839,
+        "p95": 16.042
+      },
+      "first_output_ms": {
+        "median": 8.0505,
+        "p95": 9.441
+      },
+      "user_ms": {
+        "median": 7.979,
+        "p95": 8.389
+      },
+      "system_ms": {
+        "median": 4.491,
+        "p95": 5.186
+      },
+      "peak_rss_bytes": {
+        "median": 14893056.0,
+        "p95": 15810560
+      },
+      "peak_footprint_bytes": {
+        "median": 7349248.0,
+        "p95": 8307904
+      },
+      "instructions": {
+        "median": 63690658.0,
+        "p95": 64310083
+      },
+      "cycles": {
+        "median": 27935486.0,
+        "p95": 30555621
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 1788.5,
+        "p95": 1844
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "involuntary_switches": {
+        "median": 135.0,
+        "p95": 152
+      },
+      "stdout_bytes": {
+        "median": 154.0,
+        "p95": 154
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 12.41,
+        "p95": 13.43
+      }
+    },
+    "wrapper_version/pruned/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 14.808,
+        "p95": 16.191
+      },
+      "first_output_ms": {
+        "median": 8.508,
+        "p95": 9.371
+      },
+      "user_ms": {
+        "median": 8.567,
+        "p95": 8.918
+      },
+      "system_ms": {
+        "median": 5.147,
+        "p95": 5.552
+      },
+      "peak_rss_bytes": {
+        "median": 16072704.0,
+        "p95": 16826368
+      },
+      "peak_footprint_bytes": {
+        "median": 8045760.0,
+        "p95": 8897728
+      },
+      "instructions": {
+        "median": 72310459.5,
+        "p95": 72870530
+      },
+      "cycles": {
+        "median": 31827479.0,
+        "p95": 34293302
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 4096
+      },
+      "disk_write_bytes": {
+        "median": 8192.0,
+        "p95": 8192
+      },
+      "minor_faults": {
+        "median": 1864.0,
+        "p95": 1910
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 0.0,
+        "p95": 1
+      },
+      "involuntary_switches": {
+        "median": 159.0,
+        "p95": 175
+      },
+      "stdout_bytes": {
+        "median": 154.0,
+        "p95": 154
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 13.7625,
+        "p95": 14.438
+      }
+    },
+    "wrapper_child/baseline/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 21.9515,
+        "p95": 24.841
+      },
+      "first_output_ms": {
+        "median": 20.907,
+        "p95": 23.606
+      },
+      "user_ms": {
+        "median": 14.587,
+        "p95": 15.232
+      },
+      "system_ms": {
+        "median": 5.1325,
+        "p95": 5.898
+      },
+      "peak_rss_bytes": {
+        "median": 32014336.0,
+        "p95": 34275328
+      },
+      "peak_footprint_bytes": {
+        "median": 22218080.0,
+        "p95": 24560960
+      },
+      "instructions": {
+        "median": 126180940.5,
+        "p95": 127517708
+      },
+      "cycles": {
+        "median": 50660433.5,
+        "p95": 53312078
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 2850.5,
+        "p95": 2979
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 2.0,
+        "p95": 3
+      },
+      "involuntary_switches": {
+        "median": 99.0,
+        "p95": 111
+      },
+      "stdout_bytes": {
+        "median": 2689.0,
+        "p95": 2689
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 19.7055,
+        "p95": 20.799
+      }
+    },
+    "wrapper_child/baseline/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 23.9555,
+        "p95": 37.026
+      },
+      "first_output_ms": {
+        "median": 22.512999999999998,
+        "p95": 25.177
+      },
+      "user_ms": {
+        "median": 16.187,
+        "p95": 16.976
+      },
+      "system_ms": {
+        "median": 5.7605,
+        "p95": 6.556
+      },
+      "peak_rss_bytes": {
+        "median": 34062336.0,
+        "p95": 36700160
+      },
+      "peak_footprint_bytes": {
+        "median": 23725344.0,
+        "p95": 26412416
+      },
+      "instructions": {
+        "median": 146809009.0,
+        "p95": 148219931
+      },
+      "cycles": {
+        "median": 57861660.0,
+        "p95": 61385828
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 8192.0,
+        "p95": 8192
+      },
+      "minor_faults": {
+        "median": 2971.0,
+        "p95": 3134
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 2.0,
+        "p95": 3
+      },
+      "involuntary_switches": {
+        "median": 116.5,
+        "p95": 128
+      },
+      "stdout_bytes": {
+        "median": 2689.0,
+        "p95": 2689
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 21.974,
+        "p95": 23.396
+      }
+    },
+    "wrapper_child/pruned/off": {
+      "n": 100,
+      "wall_ms": {
+        "median": 13.338000000000001,
+        "p95": 14.369
+      },
+      "first_output_ms": {
+        "median": 12.5705,
+        "p95": 13.622
+      },
+      "user_ms": {
+        "median": 7.4030000000000005,
+        "p95": 7.687
+      },
+      "system_ms": {
+        "median": 3.8155,
+        "p95": 4.321
+      },
+      "peak_rss_bytes": {
+        "median": 14532608.0,
+        "p95": 15220736
+      },
+      "peak_footprint_bytes": {
+        "median": 7291936.0,
+        "p95": 8012992
+      },
+      "instructions": {
+        "median": 56464724.5,
+        "p95": 56983937
+      },
+      "cycles": {
+        "median": 23516866.5,
+        "p95": 25597970
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "minor_faults": {
+        "median": 1777.5,
+        "p95": 1815
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 1.0,
+        "p95": 3
+      },
+      "involuntary_switches": {
+        "median": 97.0,
+        "p95": 106
+      },
+      "stdout_bytes": {
+        "median": 2689.0,
+        "p95": 2689
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 11.221499999999999,
+        "p95": 11.972999999999999
+      }
+    },
+    "wrapper_child/pruned/local": {
+      "n": 100,
+      "wall_ms": {
+        "median": 14.247499999999999,
+        "p95": 16.156
+      },
+      "first_output_ms": {
+        "median": 13.157,
+        "p95": 14.828
+      },
+      "user_ms": {
+        "median": 7.9755,
+        "p95": 8.448
+      },
+      "system_ms": {
+        "median": 4.444,
+        "p95": 4.941
+      },
+      "peak_rss_bytes": {
+        "median": 15679488.0,
+        "p95": 16449536
+      },
+      "peak_footprint_bytes": {
+        "median": 7906368.0,
+        "p95": 8750400
+      },
+      "instructions": {
+        "median": 64949767.5,
+        "p95": 65404161
+      },
+      "cycles": {
+        "median": 27337403.5,
+        "p95": 29469796
+      },
+      "disk_read_bytes": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "disk_write_bytes": {
+        "median": 8192.0,
+        "p95": 8192
+      },
+      "minor_faults": {
+        "median": 1848.0,
+        "p95": 1896
+      },
+      "major_faults": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "voluntary_switches": {
+        "median": 2.0,
+        "p95": 3
+      },
+      "involuntary_switches": {
+        "median": 114.0,
+        "p95": 127
+      },
+      "stdout_bytes": {
+        "median": 2689.0,
+        "p95": 2689
+      },
+      "exit": {
+        "median": 0.0,
+        "p95": 0
+      },
+      "cpu_ms": {
+        "median": 12.421,
+        "p95": 13.251000000000001
+      }
+    }
+  },
+  "smoke": {
+    "empty": "",
+    "features": "{\"name\":\"40.0\",\"count\":40}\n",
+    "wrapper_version": "baml wrapper 0.2.5\nbaml toolchain 0.20.1 (local: /Users/vbv/.codex/worktrees/81c7/baml-3/baml_language/target/prepare-once-end-to-end-20261004/cli-child)\n",
+    "wrapper_child": "Run a BAML function or script\n\nUsage: baml run [OPTIONS] [TARGET] [-- <TARGET_ARGS>...]\n\nArguments:\n  [TARGET]          Function or script to run as the sole entry point\n  [TARGET_ARGS]...  Arguments for the generated target CLI\n\nCompiler options:\n  -F, --features <FEATURES>  Enable compiler features; repeatable or comma-separated [possible\n                             values: beta, display_all_warnings]\n\nTarget options:\n  -f, --function <NAME>          Add a function to the generated target CLI. Repeatable\n  -e, --expression <EXPRESSION>  Evaluate a BAML expression\n      --context <SOURCE>         Set process launch context from JSON\n      --list                     List runnable targets (scripts, functions)\n\nProject options:\n      --file <PATH>  Load one standalone source file instead of discovering a project\n\nRun output options:\n      --output-format <FORMAT>  Format returned values [default: debug] [possible values: debug,\n                                json]\n      --log <LEVEL>             Set the BAML log level; overrides BAML_LOG [default: info] [possible\n                                values: off, error, warn, info, debug, trace]\n      --log-file <LOG_FILE>     Write CLI diagnostic logs to a file\n      --include-generated       Include compiler-synthesized functions in `--list` output\n\nShutdown options:\n      --shutdown-timeout <DURATION>  Wait at most this long at exit for in-flight calls and\n                                     background futures [default: 15s]\n\nGlobal options:\n  -q, --quiet...                    Suppress nonessential output\n  -v, --verbose...                  Increase diagnostic verbosity. Repeatable\n      --color <WHEN>                Control ANSI colors [possible values: auto, always, never]\n      --no-progress                 Disable progress output\n      --directory <PATH>            Change to this directory before running the command\n      --project <PATH>              Discover the BAML project from this path\n      --output-preset <PRESET>      Select output defaults [default: auto] [possible values: auto,\n                                    human, agent]\n      --hyperlinks <WHEN>           Control terminal hyperlinks [possible values: auto, always,\n                                    never]\n      --diagnostic-format <FORMAT>  Select the diagnostic format [possible values: human, agent,\n                                    concise]\n      --agent-skill-check <MODE>    Control BAML agent skill validation [default: auto] [possible\n                                    values: auto, require, warn, off]\n  -h, --help                        Display concise help for this command\n\nUse `baml help run` for more details.\n"
+  },
+  "artifacts": {
+    "empty/baseline": {
+      "bytes": 33058930,
+      "sha256": "ba7c8f0b11285be0dc4c53a86877b53da4b0d300bf1dde0f681c13bb571b3740"
+    },
+    "empty/pruned": {
+      "bytes": 30483058,
+      "sha256": "5b793c9828495e3b4e585de17bae1af3bb65578a2f12d3b6c2c2874b1cfbc416"
+    },
+    "features/baseline": {
+      "bytes": 33058930,
+      "sha256": "fcd08c0ec0b527713199f53baf6d027e8f5eba2c765161d7aeb933721ffa6410"
+    },
+    "features/pruned": {
+      "bytes": 30483058,
+      "sha256": "812c3223402770bd1d51b0e6db01cc571f6401ce4bbdedcae16f2a7277ecbaea"
+    },
+    "wrapper/baseline": {
+      "bytes": 33257074,
+      "sha256": "6a1fe41abbe8a3a1a75abbaa0acf80a3442f65e2943c9f952463f8636e9aad3a"
+    },
+    "wrapper/pruned": {
+      "bytes": 30747250,
+      "sha256": "2f96ef2656041ccb6bb0da537ff85b2b52cc51b0fe52d7439f0b785f2e804423"
+    }
+  },
+  "artifact_stats": {
+    "empty/baseline": {
+      "binary_bytes": 33058930,
+      "artifact_bytes": 2928371,
+      "payload_bytes": 2928266,
+      "program_bytes": 2928231,
+      "objects": 4127,
+      "functions": 1662,
+      "types": 513,
+      "kinds": {
+        "class": 464,
+        "function": 1662,
+        "other": 29,
+        "string": 1918,
+        "interface": 37,
+        "enum": 10,
+        "generic_function": 5,
+        "alias": 2
+      },
+      "stdlib_functions": 1661,
+      "stdlib_types": 513,
+      "interface_rules": 243,
+      "interface_blob_bytes": 222,
+      "interface_groups": 36
+    },
+    "empty/pruned": {
+      "binary_bytes": 30483058,
+      "artifact_bytes": 376912,
+      "payload_bytes": 376807,
+      "program_bytes": 376772,
+      "objects": 562,
+      "functions": 330,
+      "types": 110,
+      "kinds": {
+        "class": 98,
+        "function": 330,
+        "string": 102,
+        "other": 19,
+        "generic_function": 1,
+        "enum": 2,
+        "interface": 8,
+        "alias": 2
+      },
+      "stdlib_functions": 329,
+      "stdlib_types": 110,
+      "interface_rules": 82,
+      "interface_blob_bytes": 0,
+      "interface_groups": 8
+    },
+    "features/baseline": {
+      "binary_bytes": 33058930,
+      "artifact_bytes": 2932296,
+      "payload_bytes": 2932191,
+      "program_bytes": 2932156,
+      "objects": 4133,
+      "functions": 1666,
+      "types": 514,
+      "kinds": {
+        "class": 465,
+        "function": 1666,
+        "other": 29,
+        "string": 1919,
+        "interface": 37,
+        "enum": 10,
+        "generic_function": 5,
+        "alias": 2
+      },
+      "stdlib_functions": 1661,
+      "stdlib_types": 513,
+      "interface_rules": 243,
+      "interface_blob_bytes": 721,
+      "interface_groups": 36
+    },
+    "features/pruned": {
+      "binary_bytes": 30483058,
+      "artifact_bytes": 380338,
+      "payload_bytes": 380233,
+      "program_bytes": 380198,
+      "objects": 568,
+      "functions": 334,
+      "types": 111,
+      "kinds": {
+        "class": 99,
+        "function": 334,
+        "string": 103,
+        "other": 19,
+        "generic_function": 1,
+        "enum": 2,
+        "interface": 8,
+        "alias": 2
+      },
+      "stdlib_functions": 329,
+      "stdlib_types": 110,
+      "interface_rules": 82,
+      "interface_blob_bytes": 0,
+      "interface_groups": 8
+    },
+    "wrapper/baseline": {
+      "binary_bytes": 33257074,
+      "artifact_bytes": 3092722,
+      "payload_bytes": 3092617,
+      "program_bytes": 3092582,
+      "objects": 4439,
+      "functions": 1713,
+      "types": 517,
+      "kinds": {
+        "class": 468,
+        "function": 1713,
+        "other": 30,
+        "string": 2174,
+        "interface": 37,
+        "enum": 10,
+        "generic_function": 5,
+        "alias": 2
+      },
+      "stdlib_functions": 1661,
+      "stdlib_types": 513,
+      "interface_rules": 243,
+      "interface_blob_bytes": 21826,
+      "interface_groups": 36
+    },
+    "wrapper/pruned": {
+      "binary_bytes": 30747250,
+      "artifact_bytes": 612622,
+      "payload_bytes": 612517,
+      "program_bytes": 612482,
+      "objects": 1026,
+      "functions": 495,
+      "types": 136,
+      "kinds": {
+        "class": 119,
+        "interface": 12,
+        "string": 374,
+        "function": 495,
+        "alias": 2,
+        "other": 20,
+        "generic_function": 1,
+        "enum": 3
+      },
+      "stdlib_functions": 444,
+      "stdlib_types": 132,
+      "interface_rules": 94,
+      "interface_blob_bytes": 0,
+      "interface_groups": 12
+    }
+  },
+  "raw_csv": {
+    "file": "pruning-20261004.csv",
+    "sha256": "b029fbe820f264e2a98789cc5ea44bcaba7e880511e0963daa02cabcf1c605b5",
+    "rows": 1600
+  },
+  "verification": {
+    "linker_unit_tests": 43,
+    "pack_unit_tests": 40,
+    "heap_unit_tests": 99,
+    "behavioral_tests": 19,
+    "clippy": "warnings denied",
+    "release_cache_smoke": "different entry points; whole-program cache isolation; deterministic warm pack",
+    "fixture_optimization_levels": [
+      "One",
+      "Two"
+    ],
+    "other_behavioral_tests_optimization": "Two"
+  }
+}

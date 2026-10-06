@@ -237,71 +237,68 @@ pub fn visit_index_operands_ref(
     )
 }
 
-/// Visit every cross-function index operand in a pool `object`.
-///
-/// Compile-time pools contain functions (walked instruction-by-instruction),
-/// `GenericFunction` values (whose target is a global slot), and inert
-/// literals (strings, bigints, byte arrays) interned during codegen next to
-/// the functions that use them. Runtime-only heap shapes never appear in a
-/// serialized `Program`; matching them exhaustively keeps this in lockstep
-/// with the `Object` enum — a new variant must be classified here before it
-/// can slip through a relink.
-pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(IndexOperand<'_>)) {
-    use crate::Object;
-    match object {
-        Object::Function(function) => visit_index_operands(function, visit),
-        Object::GenericFunction(generic) => {
-            let mut visit = visit;
-            visit(IndexOperand::Global(&mut generic.function));
-        }
-        // An interface names each default method's pooled body — a cross-object
-        // operand relocated exactly like a code object's.
-        Object::Interface(interface) => {
-            let mut visit = visit;
-            if let Some(default) = &mut interface.structural_default {
-                visit(IndexOperand::Object(&mut default.function));
-            }
-            for method in &mut interface.methods {
-                if let Some(default) = &mut method.default {
-                    visit(IndexOperand::Object(default));
+// The mutable relocator and read-only dependency collector share one
+// exhaustive object classification, just as they share the bytecode walker.
+macro_rules! visit_object_index_operands {
+    ($doc:literal, $name:ident, $function_walk:ident, $operand:ident, $values:ident $(, $mutable:tt)?) => {
+        #[doc = $doc]
+        pub fn $name(object: &$($mutable)? crate::Object, visit: impl FnMut($operand<'_>)) {
+            use crate::Object;
+            match object {
+                Object::Function(function) => { let _ = $function_walk(function, visit); }
+                Object::GenericFunction(generic) => {
+                    let mut visit = visit;
+                    visit($operand::Global(&$($mutable)? generic.function));
                 }
+                // Defaults and inherent methods name pooled functions.
+                Object::Interface(interface) => {
+                    let mut visit = visit;
+                    if let Some(default) = &$($mutable)? interface.structural_default {
+                        visit($operand::Object(&$($mutable)? default.function));
+                    }
+                    for method in &$($mutable)? interface.methods {
+                        if let Some(default) = &$($mutable)? method.default {
+                            visit($operand::Object(default));
+                        }
+                    }
+                }
+                Object::Class(class) => {
+                    let mut visit = visit;
+                    for method in class.methods.$values() {
+                        visit($operand::Object(&$($mutable)? method.function));
+                    }
+                }
+                // Inert at relink time: no cross-object index operands.
+                Object::Enum(..) | Object::TypeAlias(..) | Object::Package(..)
+                | Object::ImplRule(..) | Object::String(..) | Object::Bigint(..)
+                | Object::Uint8Array(..) | Object::Type(..) => {}
+                #[cfg(feature = "heap_debug")]
+                Object::Sentinel(..) => {}
+                // Runtime-only heap shapes, absent from serialized programs.
+                Object::Instance(..) | Object::Variant(..) | Object::Closure(..)
+                | Object::BoundMethod(..) | Object::HostClosure(..) | Object::Cell(..)
+                | Object::Array(..) | Object::Map(..) | Object::Float(..)
+                | Object::Future(..) | Object::RustData(..) | Object::Tombstone => {}
             }
         }
-        // A class names each inherent method's pooled function — relocated
-        // exactly like an interface's default bodies.
-        Object::Class(class) => {
-            let mut visit = visit;
-            for method in class.methods.values_mut() {
-                visit(IndexOperand::Object(&mut method.function));
-            }
-        }
-        // Inert at relink time: no cross-function index operands.
-        Object::Enum(..)
-        | Object::TypeAlias(..)
-        | Object::Package(..)
-        | Object::ImplRule(..)
-        | Object::String(..)
-        | Object::Bigint(..)
-        | Object::Uint8Array(..)
-        | Object::Type(..) => {}
-        // Heap-debug sentinel: never present in a compiled pool.
-        #[cfg(feature = "heap_debug")]
-        Object::Sentinel(..) => {}
-        // Runtime-only heap shapes, unreachable in a compiled pool.
-        Object::Instance(..)
-        | Object::Variant(..)
-        | Object::Closure(..)
-        | Object::BoundMethod(..)
-        | Object::HostClosure(..)
-        | Object::Cell(..)
-        | Object::Array(..)
-        | Object::Map(..)
-        | Object::Float(..)
-        | Object::Future(..)
-        | Object::RustData(..)
-        | Object::Tombstone => {}
-    }
+    };
 }
+
+visit_object_index_operands!(
+    "Visit every cross-object index operand, including class methods and interface defaults.",
+    visit_object_operands,
+    visit_index_operands,
+    IndexOperand,
+    values_mut,
+    mut
+);
+visit_object_index_operands!(
+    "Read every cross-object index operand without cloning the executable object.",
+    visit_object_operands_ref,
+    visit_index_operands_ref,
+    IndexOperandRef,
+    values
+);
 
 #[cfg(test)]
 mod tests {
@@ -409,6 +406,31 @@ mod tests {
             loaded.telemetry_policy_id.load(),
             crate::TelemetryPolicyId::NONE
         );
+    }
+
+    #[test]
+    fn hooked_calls_share_read_only_and_mutable_global_edges() {
+        let mut function = test_function();
+        function.bytecode.instructions = vec![Instruction::CallHooked {
+            callee: GlobalIndex::from_raw(31),
+            ntypeargs: 0,
+        }];
+        let mut globals = Vec::new();
+        visit_index_operands_ref(&function, |operand| {
+            if let IndexOperandRef::Global(slot) = operand {
+                globals.push(slot.raw());
+            }
+        });
+        assert_eq!(globals, vec![31]);
+        visit_index_operands(&mut function, |operand| {
+            if let IndexOperand::Global(slot) = operand {
+                *slot = GlobalIndex::from_raw(7);
+            }
+        });
+        assert!(matches!(
+            function.bytecode.instructions[0],
+            Instruction::CallHooked { callee, .. } if callee.raw() == 7
+        ));
     }
 
     #[test]

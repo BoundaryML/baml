@@ -76,8 +76,10 @@ mod assemble;
 mod bind;
 mod error;
 mod layout;
+mod native;
 mod order;
 mod resolve;
+mod selection;
 mod space;
 #[cfg(test)]
 mod tests;
@@ -86,6 +88,7 @@ use assemble::Assembler;
 pub use error::LinkError;
 use order::{LayoutOrder, Objects, Slots};
 use resolve::{Space, export_globals, export_objects};
+pub use selection::LinkRoots;
 use space::Resolved;
 
 /// A package's position in a [`LinkSet`].
@@ -156,7 +159,19 @@ impl<'a> LinkSet<'a> {
 /// Every [`LinkError`]. A unit that imports its own package is
 /// [`LinkError::InvalidUnit`]: its own declarations are locals.
 pub fn link(set: &LinkSet<'_>) -> Result<Program, LinkError> {
-    Linker { set }.link()
+    Linker { set }.link(None)
+}
+
+/// Link only declarations reachable from the host contract. Native operations
+/// without an audited dependency contract retain the complete program. Input
+/// compilation units and their package-interface fingerprints stay unchanged.
+/// Pruned images omit compile-time interface blobs: they cannot advertise a
+/// complete package surface to runtime compilation.
+///
+/// # Errors
+/// As [`link`], including references without a retained output placement.
+pub fn link_selected(set: &LinkSet<'_>, roots: &LinkRoots) -> Result<Program, LinkError> {
+    Linker { set }.link(Some(roots))
 }
 
 /// One entry per package of the set, addressed by [`LinkPackageId`].
@@ -195,22 +210,40 @@ struct Linker<'s, 'a> {
 }
 
 impl Linker<'_, '_> {
-    fn link(self) -> Result<Program, LinkError> {
+    fn link(self, roots: Option<&LinkRoots>) -> Result<Program, LinkError> {
         self.validate()?;
         let set = self.set;
         let order = LayoutOrder::new(set)?;
         let tables = self.bind_all()?;
 
-        let slots = Slots::new(set, &order)?;
+        let mut slots = Slots::new(set, &order)?;
         let global_exports = export_globals(set, &slots)?;
         let globals = self.resolve(&tables, &global_exports, Space::Global)?;
 
-        let objects = Objects::new(set, &order, &slots, &globals, &tables)?;
-        let object_exports = export_objects(set, &objects)?;
+        let mut objects = Objects::new(set, &order, &slots, &globals, &tables)?;
+        let mut object_exports = export_objects(set, &objects)?;
         let resolved_objects = self.resolve(&tables, &object_exports, Space::Object)?;
-        let (units, tails) = Resolved::zip(resolved_objects, globals);
+        let (mut units, mut tails) = Resolved::zip(resolved_objects, globals);
 
+        let selected_rules = roots
+            .map(|roots| {
+                selection::select(
+                    set,
+                    &order,
+                    roots,
+                    selection::SelectionLayout {
+                        slots: &mut slots,
+                        objects: &mut objects,
+                        units: &mut units,
+                        tails: &mut tails,
+                        exports: &mut object_exports,
+                    },
+                )
+            })
+            .transpose()?
+            .flatten();
         let assembler = Assembler {
+            selected_rules,
             set,
             order: &order,
             slots: &slots,
@@ -219,7 +252,14 @@ impl Linker<'_, '_> {
             units,
             tails,
         };
-        assembler.assemble()
+        let selected = assembler.selected_rules.is_some();
+        let program = assembler.assemble()?;
+        if selected {
+            program.validate().map_err(|e| {
+                LinkError::invalid(format!("selected program failed validation: {e}"))
+            })?;
+        }
+        Ok(program)
     }
 
     fn validate(&self) -> Result<(), LinkError> {

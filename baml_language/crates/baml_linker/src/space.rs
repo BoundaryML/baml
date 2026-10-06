@@ -49,7 +49,7 @@ fn declaration_operand(
     name: &Name,
     raw: usize,
     entries: &[ImportEntry],
-    imports: &[usize],
+    imports: &[Option<usize>],
     local: impl Fn(usize) -> Option<usize>,
 ) -> Result<usize, LinkError> {
     match import_ordinal(raw) {
@@ -66,7 +66,7 @@ fn declaration_operand(
                     entry.key.path
                 )));
             }
-            imports.get(ordinal).copied().ok_or_else(|| {
+            imports.get(ordinal).copied().flatten().ok_or_else(|| {
                 LinkError::invalid(format!(
                     "package `{name}` references object import {ordinal} of {}",
                     imports.len()
@@ -85,11 +85,11 @@ fn declaration_operand(
 fn object_operand(
     name: &Name,
     raw: usize,
-    imports: &[usize],
+    imports: &[Option<usize>],
     local: impl Fn(usize) -> Option<usize>,
 ) -> Result<usize, LinkError> {
     match import_ordinal(raw) {
-        Some(ordinal) => imports.get(ordinal).copied().ok_or_else(|| {
+        Some(ordinal) => imports.get(ordinal).copied().flatten().ok_or_else(|| {
             LinkError::invalid(format!(
                 "package `{name}` references object import {ordinal} of {}",
                 imports.len()
@@ -106,8 +106,8 @@ fn object_operand(
 /// Resolved import tables of one unit or tail: import ordinal to image index.
 #[derive(Default)]
 pub(super) struct Imports {
-    pub(super) objects: Vec<usize>,
-    pub(super) globals: Vec<usize>,
+    pub(super) objects: Vec<Option<usize>>,
+    pub(super) globals: Vec<Option<usize>>,
 }
 
 /// One index space's resolved import tables, per unit and per tail.
@@ -125,7 +125,10 @@ impl Resolved {
                     .0
                     .into_iter()
                     .zip(globals.0)
-                    .map(|(objects, globals)| Imports { objects, globals })
+                    .map(|(objects, globals)| Imports {
+                        objects: objects.into_iter().map(Some).collect(),
+                        globals: globals.into_iter().map(Some).collect(),
+                    })
                     .collect(),
             )
         };
@@ -185,7 +188,7 @@ impl OperandSpace for UnitSpace<'_> {
     }
 
     fn global(&self, raw: usize) -> Result<usize, LinkError> {
-        global_operand(self.name, raw, &self.imports.globals, |local| {
+        selected_global(self.name, raw, &self.imports.globals, |local| {
             self.slots.local(local)
         })
     }
@@ -227,12 +230,15 @@ impl OperandSpace for TailSpace<'_> {
 
     fn object(&self, raw: usize) -> Result<usize, LinkError> {
         object_operand(self.name, raw, &self.imports.objects, |local| {
-            self.objects.get(local).map(|placed| placed.abs())
+            self.objects
+                .get(local)
+                .filter(|placed| !matches!(placed, Placed::Dropped))
+                .map(|placed| placed.abs())
         })
     }
 
     fn global(&self, raw: usize) -> Result<usize, LinkError> {
-        global_operand(self.name, raw, &self.imports.globals, |local| {
+        selected_global(self.name, raw, &self.imports.globals, |local| {
             self.slots.local(self.tail, local)
         })
     }
@@ -334,4 +340,21 @@ pub(super) fn relocate_template_heads(
         }
     });
     failure.map_or(Ok(()), Err)
+}
+
+fn selected_global(
+    name: &Name,
+    raw: usize,
+    imports: &[Option<usize>],
+    local: impl Fn(usize) -> Option<usize>,
+) -> Result<usize, LinkError> {
+    let placed = match import_ordinal(raw) {
+        Some(i) => imports.get(i).copied().flatten(),
+        None => local(raw),
+    };
+    placed.ok_or_else(|| {
+        LinkError::invalid(format!(
+            "package `{name}` reaches global {raw} with no output placement"
+        ))
+    })
 }

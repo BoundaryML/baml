@@ -21,6 +21,7 @@ crates/baml_tests/benches/incremental/*/description.md
 scripts/runtime-startup/compiler-linkage.md
 scripts/runtime-startup/less-work.md
 scripts/runtime-startup/prepare-once.md
+scripts/runtime-startup/pruning.md
 
 # LSP documentation
 crates/baml_lsp_server/CONTRIBUTING.md

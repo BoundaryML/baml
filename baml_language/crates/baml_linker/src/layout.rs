@@ -83,6 +83,7 @@ pub(super) fn validate_objects(
 /// Where one pooled object of a unit or tail landed.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Placed {
+    Dropped,
     /// At this image index.
     Own(usize),
     /// A duplicate generic value: not placed; references go to the canonical
@@ -91,14 +92,22 @@ pub(super) enum Placed {
 }
 
 impl Placed {
+    pub(super) fn index(self) -> Option<usize> {
+        match self {
+            Self::Own(i) | Self::Shadow(i) => Some(i),
+            Self::Dropped => None,
+        }
+    }
+
     pub(super) fn abs(self) -> usize {
         match self {
             Self::Own(abs) | Self::Shadow(abs) => abs,
+            Self::Dropped => panic!("an unplaced object has no output index"),
         }
     }
 
     pub(super) fn is_shadow(self) -> bool {
-        matches!(self, Self::Shadow(_))
+        matches!(self, Self::Shadow(_) | Self::Dropped)
     }
 }
 
@@ -261,8 +270,9 @@ impl Interner {
 }
 
 /// A unit's global slots: functions and interface bodies first, then `let`s.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub(super) struct SlotLayout {
+    pub(super) selected: Option<Vec<Option<usize>>>,
     pub(super) func_base: usize,
     pub(super) func_count: usize,
     pub(super) let_base: usize,
@@ -308,6 +318,9 @@ impl SlotLayout {
     }
 
     pub(super) fn local(&self, raw: usize) -> Option<usize> {
+        if let Some(map) = &self.selected {
+            return map.get(raw).copied().flatten();
+        }
         if raw < self.func_count {
             Some(self.func_base + raw)
         } else if raw < self.func_count + self.let_count {
@@ -348,6 +361,7 @@ impl TailSlots {
 /// The base of each of a unit's type buckets, and each code object's place.
 #[derive(Default)]
 pub(super) struct UnitObjects {
+    pub(super) selected: Option<Vec<Option<usize>>>,
     pub(super) class_base: usize,
     pub(super) enum_base: usize,
     pub(super) interface_base: usize,
@@ -360,6 +374,16 @@ impl UnitObjects {
     fn at(&self, unit: &CompilationUnit, bucket: Bucket, k: usize) -> Option<usize> {
         if k >= bucket.objects(unit).len() {
             return None;
+        }
+        if let Some(map) = &self.selected {
+            let mut flat = k;
+            for prior in Bucket::ALL {
+                if prior == bucket {
+                    break;
+                }
+                flat += prior.objects(unit).len();
+            }
+            return map.get(flat).copied().flatten();
         }
         Some(match bucket {
             Bucket::Class => self.class_base + k,

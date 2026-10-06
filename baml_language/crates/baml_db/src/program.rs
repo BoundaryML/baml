@@ -10,7 +10,8 @@
 use baml_base::{Name, SourceRoot};
 use baml_compiler2_emit::{LoweringError, OptLevel, emit_package, project_source_content_hash};
 use baml_compiler2_hir::package::{edge_table, spelling, world_roots};
-use baml_linker::{LinkError, LinkPackage, LinkPackageId, LinkSet, link};
+pub use baml_linker::LinkRoots;
+use baml_linker::{LinkError, LinkPackage, LinkPackageId, LinkSet, link, link_selected};
 pub use baml_linker_types::EmittedPackage;
 use bex_vm_types::Program;
 
@@ -131,6 +132,31 @@ pub fn compile_program_with(
     opt: OptLevel,
     cache: &dyn PackageCache,
 ) -> Result<Program, CompileProgramError> {
+    compile_program_impl(db, root, opt, cache, None)
+}
+
+/// Compile with explicit host roots, retaining a full image for opaque native
+/// behavior. Cache entries remain complete, reusable package outputs.
+///
+/// # Errors
+/// As [`compile_program_with`].
+pub fn compile_program_selected_with(
+    db: &dyn baml_compiler2_emit::Db,
+    root: SourceRoot,
+    opt: OptLevel,
+    cache: &dyn PackageCache,
+    roots: &LinkRoots,
+) -> Result<Program, CompileProgramError> {
+    compile_program_impl(db, root, opt, cache, Some(roots))
+}
+
+fn compile_program_impl(
+    db: &dyn baml_compiler2_emit::Db,
+    root: SourceRoot,
+    opt: OptLevel,
+    cache: &dyn PackageCache,
+    roots: Option<&LinkRoots>,
+) -> Result<Program, CompileProgramError> {
     // A dependency without files declares nothing itself. Served from its
     // interface (a mounted package), it is in the program through the output
     // the store holds for it — there is nothing to emit, and a store that
@@ -168,7 +194,11 @@ pub fn compile_program_with(
         })
         .collect::<Result<Vec<_>, CompileProgramError>>()?;
     let packages = program_order(db, root, packages);
-    let mut program = link(&link_set(db, &packages, root))?;
+    let set = link_set(db, &packages, root);
+    let mut program = match roots {
+        Some(roots) => link_selected(&set, roots)?,
+        None => link(&set)?,
+    };
     program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok(program)
 }

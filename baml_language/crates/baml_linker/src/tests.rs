@@ -1535,3 +1535,220 @@ fn load_current_package_is_rewritten_to_the_packages_ordinal() {
         "a unit says `this package`; the link says which"
     );
 }
+
+fn selected(set: &LinkSet<'_>, name: &str) -> Program {
+    link_selected(set, &LinkRoots::EntryPoints(vec![name.into()])).unwrap()
+}
+
+#[test]
+fn selection_compacts_objects_globals_and_does_not_mutate_inputs() {
+    let record = interface_record(b"complete-interface");
+    let unit = CompilationUnit {
+        code: vec![
+            func("user.dead", vec![Instruction::Return]),
+            func(
+                "user.main",
+                vec![
+                    Instruction::Call {
+                        callee: GlobalIndex::from_raw(2),
+                        ntypeargs: 0,
+                    },
+                    Instruction::Return,
+                ],
+            ),
+            func("user.helper", vec![Instruction::Return]),
+        ],
+        exports: ExportTable {
+            objects: ["dead", "main", "helper"]
+                .iter()
+                .enumerate()
+                .map(|(i, n)| (free_fn(n), LocalRef::Code(u32::try_from(i).unwrap())))
+                .collect(),
+            globals: ["dead", "main", "helper"]
+                .iter()
+                .enumerate()
+                .map(|(i, n)| (free_fn(n), u32::try_from(i).unwrap()))
+                .collect(),
+        },
+        ..CompilationUnit::default()
+    };
+    let before = borsh::to_vec(&unit).unwrap();
+    let set = LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package("user", vec![], &unit, &record)],
+    };
+    let program = selected(&set, "user.main");
+    assert_eq!(function_names(&program), ["user.main", "user.helper"]);
+    assert_eq!(program.globals.len(), 2);
+    assert_eq!(
+        function(&program, 0).bytecode.instructions[0],
+        Instruction::Call {
+            callee: GlobalIndex::from_raw(1),
+            ntypeargs: 0
+        }
+    );
+    assert!(program.packages[0].interface_blob.is_empty());
+    assert_eq!(borsh::to_vec(&unit).unwrap(), before);
+    assert_eq!(
+        link(&set).unwrap().packages[0].interface_blob,
+        record.interface_blob
+    );
+}
+
+#[test]
+fn host_surface_retains_functions_invoked_by_name_and_unused_exposed_types() {
+    let record = interface_record(b"interface");
+    let mut unit = unit_with_fn("user.main", vec![Instruction::Return]);
+    unit.classes.push(class("ExternalInput"));
+    unit.exports
+        .objects
+        .push((DeclPath::Class(item("ExternalInput")), LocalRef::Class(0)));
+    unit.code
+        .push(func("user.host_only", vec![Instruction::Return]));
+    unit.exports
+        .objects
+        .push((free_fn("host_only"), LocalRef::Code(1)));
+    unit.exports.globals.push((free_fn("host_only"), 1));
+    let set = LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package("user", vec![], &unit, &record)],
+    };
+    let program = link_selected(&set, &LinkRoots::HostSurface).unwrap();
+    assert_eq!(program.rendered_callables().len(), 2);
+    assert!(
+        program.packages[0]
+            .classes
+            .contains_key(&item("ExternalInput"))
+    );
+    assert_eq!(selected(&set, "user.main").objects.len(), 1);
+}
+
+#[test]
+fn unknown_native_contract_retains_full_image_and_complete_metadata() {
+    let record = interface_record(b"interface");
+    let mut unit = unit_with_fn("user.main", vec![Instruction::Return]);
+    let Object::Function(f) = &mut unit.code[0] else {
+        unreachable!()
+    };
+    f.kind = FunctionKind::NativeUnresolved;
+    f.native_key = Some("future.native.operation".into());
+    unit.code
+        .push(func("unreachable", vec![Instruction::Return]));
+    let set = LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package("user", vec![], &unit, &record)],
+    };
+    assert_eq!(
+        borsh::to_vec(&selected(&set, "user.main")).unwrap(),
+        borsh::to_vec(&link(&set).unwrap()).unwrap()
+    );
+}
+
+#[test]
+fn selection_does_not_hide_bad_operands_in_dead_code() {
+    let record = interface_record(b"interface");
+    let mut unit = unit_with_fn("user.main", vec![Instruction::Return]);
+    unit.code.push(func(
+        "dead",
+        vec![
+            Instruction::LoadGlobal(GlobalIndex::from_raw(99)),
+            Instruction::Return,
+        ],
+    ));
+    let set = LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![package("user", vec![], &unit, &record)],
+    };
+    assert!(matches!(
+        link_selected(&set, &LinkRoots::EntryPoints(vec!["user.main".into()])),
+        Err(LinkError::InvalidUnit(_))
+    ));
+}
+
+#[test]
+fn selection_keeps_generic_value_shadows_in_initializer_tails() {
+    let record = interface_record(b"interface");
+    let mut unit = unit_with_fn("user.main", vec![Instruction::Return]);
+    unit.code.push(generic_value(0, vec![RealizedTy::Int]));
+    let tail = InitTail {
+        objects: vec![
+            func_with_constants("$init", &[1]),
+            generic_value(import_operand(0), vec![RealizedTy::Int]),
+        ],
+        global_imports: vec![import(0, free_fn("main"))],
+        slot_objects: vec![0],
+        init: Some(0),
+        test_objects_start: 2,
+        test_slots_start: 1,
+        ..InitTail::default()
+    };
+    let mut p = package("user", vec![], &unit, &record);
+    p.tail = Some(&tail);
+    let set = LinkSet {
+        root: LinkPackageId(0),
+        packages: vec![p],
+    };
+    let program = selected(&set, "user.main");
+    assert_eq!(program.objects.len(), 3);
+    assert_eq!(
+        program
+            .objects
+            .iter()
+            .filter(|o| matches!(o, Object::GenericFunction(_)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        function(&program, 2).bytecode.constants[0],
+        ConstValue::Object(ObjectIndex::from_raw(1))
+    );
+    assert_eq!(program.init_order, [0]);
+}
+
+#[test]
+fn selection_relocates_imported_types_and_rebuilds_switch_tags() {
+    let record = interface_record(b"interface");
+    let mut provider = unit_with_class("Dead", "Dead");
+    let mut kept = class("Kept");
+    let Object::Class(c) = &mut kept else {
+        unreachable!()
+    };
+    c.type_tag = TypeHead::unresolved_operand(ObjectIndex::from_raw(1)).tag();
+    provider.classes.push(kept);
+    provider
+        .exports
+        .objects
+        .push((DeclPath::Class(item("Kept")), LocalRef::Class(1)));
+    let mut unit = unit_with_fn(
+        "user.main",
+        vec![Instruction::DenseTag(0), Instruction::Return],
+    );
+    unit.dependencies
+        .push(direct("lib", fingerprint_of(&record)));
+    unit.object_imports
+        .push(import(1, DeclPath::Class(item("Kept"))));
+    let Object::Function(f) = &mut unit.code[0] else {
+        unreachable!()
+    };
+    f.bytecode.switch_tables.push(SwitchTable::of_keys(
+        vec![SwitchKey::Declaration(ObjectIndex::from_raw(
+            import_operand(0),
+        ))],
+        vec!["Kept".into()],
+    ));
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("lib", vec![], &provider, &record),
+            package("user", vec![("lib", 0)], &unit, &record),
+        ],
+    };
+    let program = selected(&set, "user.main");
+    assert_eq!(program.objects.len(), 2);
+    assert_eq!(
+        function(&program, 1).bytecode.switch_tables[0]
+            .arm_of(TypeTag::of_static_index(0).as_i64()),
+        Some(0)
+    );
+    assert_eq!(program.packages[1].edges[0].target, 0);
+}
