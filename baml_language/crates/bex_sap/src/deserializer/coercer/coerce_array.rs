@@ -30,6 +30,22 @@ fn extract_union_winner_index<N: TypeIdent>(
         })
 }
 
+/// Whether `item`, which does not fit `element_type`, is left out of the list
+/// rather than failing it, whatever list it stands in.
+///
+/// - An item that is still arriving is not known to be unfit: a partial parse
+///   shows the list without it, and the complete parse judges it.
+/// - Media is never read from text (the caller takes it from the reply's
+///   media parts), so the text holds no item of a media list. That list is
+///   empty, not an error.
+fn leaves_out_unfit_item<N: TypeIdent>(
+    element_type: TyResolvedRef<'_, N>,
+    item: &crate::jsonish::Value<'_>,
+) -> bool {
+    item.completion_state() == &CompletionState::Incomplete
+        || matches!(element_type, TyResolvedRef::Media(_))
+}
+
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for ArrayTy<'t, N>
 where
     't: 's,
@@ -86,6 +102,14 @@ where
         ))
     }
 
+    /// A list holds only values of its element type. An item that does not fit
+    /// fails the list, with an error that names the item and carries the item's
+    /// own failure: a shorter list, or an empty one, would read as a good reply.
+    ///
+    /// Four cases leave the item out instead (see `leaves_out_unfit_item` and
+    /// the single-value arm below): the item is still arriving; the parser
+    /// inferred the list itself from separate values in the text; the element
+    /// type is media; and `null` stands where the list should be.
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
         target: &'t Self,
@@ -104,6 +128,7 @@ where
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
+                let inferred = ctx.is_inferred_array(value);
 
                 // Track the winning union variant from the previous element to hint the next
                 let mut last_union_hint: Option<usize> = None;
@@ -119,7 +144,10 @@ where
                             // The item is incomplete and has no partial parse yet.
                         }
                         // TODO(vbv): document why we penalize in proportion to how deep into an array a parse error is
-                        Err(e) => flags.add_flag(Flag::ArrayItemParseError(i, e)),
+                        Err(e) if inferred || leaves_out_unfit_item(element_type, item) => {
+                            flags.add_flag(Flag::ArrayItemParseError(i, e));
+                        }
+                        Err(e) => return Err(ctx.error_list_item(&element_type, i, e)),
                     }
                 }
             }
@@ -133,13 +161,21 @@ where
                     return Ok(None);
                 }
                 flags.add_flag(Flag::SingleToArray);
-                let ctx = ctx.visit(visited, v, true).enter_scope("<implied>");
-                match TyResolvedRef::coerce(&ctx, element_type, v) {
+                let item_ctx = ctx.visit(visited, v, true).enter_scope("<implied>");
+                match TyResolvedRef::coerce(&item_ctx, element_type, v) {
                     Ok(Some(v)) => items.push(v),
                     // The implied item has no partial parse yet, so neither does the array we
                     // are guessing around it.
                     Ok(None) => return Ok(None),
-                    Err(e) => flags.add_flag(Flag::ArrayItemParseError(0, e)),
+                    // `null` is the absence of a list, as a missing field is: an empty list.
+                    Err(e)
+                        if matches!(v, crate::jsonish::Value::Null)
+                            || leaves_out_unfit_item(element_type, v) =>
+                    {
+                        flags.add_flag(Flag::ArrayItemParseError(0, e));
+                    }
+                    // Neither a list nor one item of it.
+                    Err(e) => return Err(ctx.error_unexpected_type(target, v).with_cause(e)),
                 }
             }
         }

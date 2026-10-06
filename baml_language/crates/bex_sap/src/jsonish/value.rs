@@ -15,6 +15,8 @@ pub enum CompletionState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fixes {
     GreppedForJSON,
+    /// The array is the parser's own grouping of values it found apart in the
+    /// text, not a list the model wrote.
     InferredArray,
 }
 

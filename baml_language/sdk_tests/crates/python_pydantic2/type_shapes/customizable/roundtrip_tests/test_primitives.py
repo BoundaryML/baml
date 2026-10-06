@@ -21,6 +21,7 @@ from baml_sdk.primitives import (
     round_trip_string,
     round_trip_bool,
     round_trip_bigint,
+    round_trip_bigint_async,
     round_trip_null,
     round_trip_primitives,
 )
@@ -88,6 +89,19 @@ def test_primitives_round_trip_bigint():
     assert round_trip_bigint(x=-big) == -big
     hex_boundary = 2**64
     assert round_trip_bigint(x=hex_boundary) == hex_boundary
+
+
+# SDK_PARITY_LINT(skip): Python has one int type; a value in the i64 range rides the int channel and the engine widens it to bigint
+def test_primitives_round_trip_bigint_in_i64_range():
+    for value in (42, -42, 0):
+        result = round_trip_bigint(x=value)
+        assert type(result) is int and result == value
+
+
+# SDK_PARITY_LINT(skip): Python async entry of the bigint round trip
+async def test_primitives_round_trip_bigint_async():
+    for value in (99999999999999999999, -(2**128)):
+        assert await round_trip_bigint_async(x=value) == value
 
 
 def test_primitives_round_trip_null():

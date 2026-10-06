@@ -32,7 +32,7 @@ class ContractChunk {
 // The decoder handed to `TurnStream.from_sse`: one raw SSE batch -> events.
 // `[DONE]` is this protocol's terminal event, so it yields `TurnDone` — which
 // is exactly what makes `require_terminal` meaningful for it.
-function contract_decode(batch: string) -> ai.stream.Event[] throws ai.errors.InvokeError {
+function contract_decode(batch: string) -> ai.stream.Event[] throws ai.errors.NormalizedError {
     let out: ai.stream.Event[] = [];
     let events = ai.stream.decode_sse_batch(batch) catch_all (e) {
         _ => throw ai.errors.normalize(e),

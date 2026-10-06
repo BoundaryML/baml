@@ -1,6 +1,7 @@
 // host_callable_test.go — Go equivalent of
-// `sdks/typescript/bridge_typescript/tests/host_callable.test.ts` and
-// `sdks/python/tests/test_host_callable.py`.
+// `sdks/typescript/bridge_typescript/tests/host_callable.test.ts` and of the
+// host-callable tests of the Python SDK
+// (`sdk_tests/crates/python_pydantic2/function_calls/customizable`).
 //
 // Exercises the Go host-callable bridge end-to-end: encoder auto-registration
 // in `pkg.proto.goToInboundValueTracking` (reflective `reflect.Func` fallback), the C

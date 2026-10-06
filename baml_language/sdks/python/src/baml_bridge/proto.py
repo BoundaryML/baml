@@ -40,7 +40,13 @@ from .baml_py import (
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
-from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
+from .errors import (
+    BamlCancelledError,
+    BamlError,
+    BamlPanic,
+    BamlTypeError,
+    attach_baml_traceback,
+)
 from .typemap import BamlTypeMap, get_type_map
 
 
@@ -1020,7 +1026,11 @@ def _decode_prompt_ast(prompt_ast, type_map: BamlTypeMap) -> Any:
 
 
 def _decode_class(
-    class_value, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+    class_value,
+    type_map: BamlTypeMap,
+    ownership: Optional[Counter[int]] = None,
+    *,
+    unknown_class_as_fields: bool = False,
 ) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
@@ -1029,11 +1039,22 @@ def _decode_class(
     Generic classes parameterize before validation so static-checker
     annotations (`Box[int]`) line up with the runtime instance —
     `13b` §3.4.
+
+    A class that codegen did not emit is an error, unless
+    `unknown_class_as_fields` is set: then the instance decodes to a dict of
+    its fields (see `decode_value`).
     """
     field_dict = {
-        entry.key: decode_value(entry.value, type_map, ownership)
+        entry.key: decode_value(
+            entry.value,
+            type_map,
+            ownership,
+            unknown_class_as_fields=unknown_class_as_fields,
+        )
         for entry in class_value.fields
     }
+    if unknown_class_as_fields and not type_map.has_class(class_value.name):
+        return field_dict
     # Emit always fully qualifies, so the engine FQN already matches
     # what the typemap consumes (`12a-namespace-rules.md §5`).
     cls = type_map.get_class(class_value.name)
@@ -1356,7 +1377,11 @@ def _decode_host_call_args(data: bytes) -> Tuple[Tuple[Any, ...], Dict[str, Any]
 
 
 def decode_value(
-    holder, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+    holder,
+    type_map: BamlTypeMap,
+    ownership: Optional[Counter[int]] = None,
+    *,
+    unknown_class_as_fields: bool = False,
 ) -> Any:
     """Convert a `BamlOutboundValue` message to a typed Python value.
 
@@ -1364,6 +1389,14 @@ def decode_value(
     where the dispatcher consults the process-global registry is the
     outer `decode_call_result` callsite, which passes `get_type_map()`.
     Tests build a fresh `BamlTypeMap` and call this directly.
+
+    A class instance whose class has no entry in the type map is an error:
+    the caller of a typed function must not get a dict in place of the model
+    it declares. `unknown_class_as_fields` decodes such an instance to a dict
+    of its fields instead. `decode_call_result` sets it for a thrown value,
+    which has no declared Python type and must reach the caller: without a
+    generated SDK the type map has no classes, and an error of the decode
+    would replace the error that the function threw.
     """
     which = holder.WhichOneof("value")
     if which is None or which == "null_value":
@@ -1386,21 +1419,42 @@ def decode_value(
         return _decode_literal(holder.literal_value)
     if which == "list_value":
         return [
-            decode_value(item, type_map, ownership) for item in holder.list_value.items
+            decode_value(
+                item,
+                type_map,
+                ownership,
+                unknown_class_as_fields=unknown_class_as_fields,
+            )
+            for item in holder.list_value.items
         ]
     if which == "map_value":
         return {
-            entry.key: decode_value(entry.value, type_map, ownership)
+            entry.key: decode_value(
+                entry.value,
+                type_map,
+                ownership,
+                unknown_class_as_fields=unknown_class_as_fields,
+            )
             for entry in holder.map_value.entries
         }
     if which == "class_value":
-        return _decode_class(holder.class_value, type_map, ownership)
+        return _decode_class(
+            holder.class_value,
+            type_map,
+            ownership,
+            unknown_class_as_fields=unknown_class_as_fields,
+        )
     if which == "enum_value":
         return _decode_enum(holder.enum_value, type_map)
     if which == "union_variant_value":
         # Union metadata is discarded — Python is duck-typed. The inner
         # value self-describes (09e §3).
-        return decode_value(holder.union_variant_value.value, type_map, ownership)
+        return decode_value(
+            holder.union_variant_value.value,
+            type_map,
+            ownership,
+            unknown_class_as_fields=unknown_class_as_fields,
+        )
     if which == "handle_value":
         return _decode_handle(holder.handle_value, type_map, ownership)
     if which == "ty_value":
@@ -1416,14 +1470,12 @@ def decode_value(
     return None
 
 
-def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
-    """If `decoded` is a `baml.errors.HostCallable` pydantic instance
-    whose `_handle` points at a still-live entry in this runtime's
-    host-value registry, return the *original* Python exception object.
-    Otherwise return `None` (foreign runtime, released key, or
-    unexpected shape) so the caller falls back to the metadata-bearing
-    `BamlError` wrapper.
-    """
+def _host_callable_handle(decoded: Any) -> Any:
+    """The `_handle` of a decoded `baml.errors.HostCallable`, or `None`.
+    `decoded` is the generated pydantic instance, or the dict of its fields
+    when codegen did not emit the class."""
+    if isinstance(decoded, dict):
+        return decoded.get("_handle")
     private = getattr(decoded, "__pydantic_private__", None)
     handle = private.get("_handle") if isinstance(private, dict) else None
     if handle is None and _is_pydantic_model_class(type(decoded)):
@@ -1437,6 +1489,17 @@ def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
             if "_handle" in aliases:
                 handle = values.get(name)
                 break
+    return handle
+
+
+def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
+    """If `decoded` is a `baml.errors.HostCallable` whose `_handle` points
+    at a still-live entry in this runtime's host-value registry, return the
+    *original* Python exception object. Otherwise return `None` (foreign
+    runtime, released key, or unexpected shape) so the caller falls back to
+    the metadata-bearing `BamlError` wrapper.
+    """
+    handle = _host_callable_handle(decoded)
     if handle is None:
         return None
     from .baml_py import lookup_host_value
@@ -1487,22 +1550,18 @@ def decode_call_result(data: bytes) -> Any:
 
     if which == "error":
         msg = result.error
-        decoded = decode_value(msg.value, type_map)
+        decoded = decode_value(msg.value, type_map, unknown_class_as_fields=True)
+        class_name = _outbound_class_fqn(msg.value)
         # A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
         # synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
-        # type error — surface it as Python's native `TypeError` rather than a
-        # `BamlError` wrapper. Covers inbound-generics Gate-A failures (a
+        # type error — surface it as a `BamlTypeError`, which is also Python's
+        # native `TypeError`. Covers inbound-generics Gate-A failures (a
         # `TypeVar` that can't be inferred and must be specified, conflicting
         # variance occurrences) and ordinary argument-type mismatches.
-        if _outbound_class_fqn(msg.value) == "baml.errors.TypeMismatch":
-            message = getattr(decoded, "message", None)
-            if message is None and isinstance(decoded, dict):
-                message = decoded.get("message")
-            err = TypeError(message if message is not None else str(decoded))
-            # Let `attach_baml_traceback` splice the BAML frames onto the
-            # native exception (exception instances accept ad-hoc attributes).
-            err.baml_trace = list(msg.trace)  # type: ignore[attr-defined]
-            raise attach_baml_traceback(err)
+        if class_name == "baml.errors.TypeMismatch":
+            raise attach_baml_traceback(
+                BamlTypeError(decoded, baml_trace=list(msg.trace), class_name=class_name)
+            )
         # Same-host rehydration: a `baml.errors.HostCallable` carrying a
         # `_handle` that still resolves in this runtime's host-value
         # registry re-raises the *original* native exception object the
@@ -1510,16 +1569,12 @@ def decode_call_result(data: bytes) -> Any:
         # caught` identity. Foreign runtimes (different process) and
         # released keys (last `HostValueArc` clone already dropped) fall
         # through to the metadata-bearing `BamlError` wrapper below.
-        if _outbound_class_fqn(msg.value) == "baml.errors.HostCallable":
+        if class_name == "baml.errors.HostCallable":
             rehydrated = _try_rehydrate_host_value(decoded)
             if rehydrated is not None:
                 raise attach_baml_traceback(rehydrated)
         raise attach_baml_traceback(
-            BamlError(
-                decoded,
-                baml_trace=list(msg.trace),
-                class_name=_outbound_class_fqn(msg.value),
-            )
+            BamlError(decoded, baml_trace=list(msg.trace), class_name=class_name)
         )
 
     if which == "panic":
@@ -1535,7 +1590,7 @@ def decode_call_result(data: bytes) -> Any:
         )
         raise attach_baml_traceback(
             panic_type(
-                decode_value(msg.value, type_map),
+                decode_value(msg.value, type_map, unknown_class_as_fields=True),
                 baml_trace=list(msg.trace),
                 class_name=_outbound_class_fqn(msg.value),
             )

@@ -112,7 +112,7 @@ pub(super) fn parse_func(
                             Value::Markdown(s.into(), Box::new(v), cs)
                         })
                         .collect::<Vec<_>>();
-                    let array = Value::Array(items.clone(), CompletionState::Incomplete);
+                    let array = inferred_array(items.clone());
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(array))
@@ -149,7 +149,7 @@ pub(super) fn parse_func(
                     }
                 }
                 _n => {
-                    let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
+                    let items_clone = inferred_array(items.clone());
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(items_clone))
@@ -196,7 +196,7 @@ pub(super) fn parse_func(
                             .map(|(v, fixes)| Value::FixedJson(v.into(), fixes))
                             .collect::<Vec<_>>();
 
-                        let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
+                        let items_clone = inferred_array(items.clone());
 
                         let items = items
                             .into_iter()
@@ -222,6 +222,17 @@ pub(super) fn parse_func(
     }
 
     Err(JsonishError::ParseFailed)
+}
+
+/// The "all of them as one list" reading of several values found apart in the
+/// text. The model wrote no such list, and [`Fixes::InferredArray`] says so:
+/// the array coercer keeps the items of an inferred list that fit its element
+/// type, where an item of a list the model wrote must fit.
+fn inferred_array(items: Vec<Value<'_>>) -> Value<'_> {
+    Value::FixedJson(
+        Box::new(Value::Array(items, CompletionState::Incomplete)),
+        vec![Fixes::InferredArray],
+    )
 }
 
 pub fn parse(str: &str, options: ParseOptions, is_done: bool) -> Result<Value<'_>, JsonishError> {

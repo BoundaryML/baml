@@ -289,7 +289,8 @@ Params and return are boxed. Verified `Function<java.lang.Long, java.lang.String
 `BiFunction<…>` in generated `Fns.java` and `Array.generate(…, Function<java.lang.Long, T> f)`.
 
 > ⚠ **Deviation from Python (callables):** Python renders `typing.Callable[[...], ret]` and widens
-> to `typing.Callable[..., ret]` when **any** parameter is optional. Java has no variadic callable
+> to `typing.Callable[..., ret]` when **any** parameter is optional (for a host callback, `ret` also
+> admits the coroutine of an `async def`). Java has no variadic callable
 > type, so it maps by concrete arity to `java.util.function.*`.
 
 > **LANDED (`202883518`, decision E1):** a callable **with any optional parameter or arity > 2**
@@ -376,7 +377,7 @@ Function calls return a `BamlOutboundResult` envelope; `ProtoReader.decodeOutbou
   ref-java-outbound-decoding.md, error arm.
 - **`panic`** (non-exit) → throw an unchecked `baml_bridge.BamlPanic(value, bamlTrace, className)`.
   **`BamlPanic` re-parents to `java.lang.Error`** (`BamlPanic.java:20`) so it escapes
-  `catch (Exception)` — the analog of Python raising `BamlPanic` off `BaseException`. **LANDED
+  `catch (Exception)`. (Python differs: its `BamlPanic` is a `BamlError`.) **LANDED
   (`74782a679`).**
 - **Exit panics** (`baml.sys.exit`, `is_exit_panic`) → `Runtime.getRuntime().halt(exitCode)`
   (hard exit, bypasses shutdown hooks — analog of Python `os._exit`). `ProtoReader.decodePanic`

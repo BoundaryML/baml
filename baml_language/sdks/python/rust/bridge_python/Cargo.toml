@@ -10,7 +10,7 @@ name = "baml_py"
 crate-type = [ "cdylib", "rlib" ]
 # Rust unit/doc tests cannot run — the test binary references Python C API
 # symbols at startup (via #[pyclass]) and there's no libpython to load.
-# All testing is done via `uv run pytest tests/`.
+# All testing is done by pytest, in the `sdk_test_python_pydantic2` suite.
 doc = false
 test = false
 doctest = false

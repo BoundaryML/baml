@@ -23,6 +23,7 @@ def _prompt_typemap() -> BamlTypeMap:
     )
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's portable values
 def test_media_decodes_and_reencodes_as_portable_payload():
     outbound = baml_outbound_pb2.BamlOutboundValue()
     outbound.media_value.media = baml_outbound_pb2.IMAGE
@@ -40,6 +41,7 @@ def test_media_decodes_and_reencodes_as_portable_payload():
     assert inbound.media_value.base64 == "aW1hZ2U="
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's portable values
 def test_prompt_wrapper_reencodes_repeatedly_without_a_handle():
     outbound = baml_outbound_pb2.BamlOutboundValue()
     message = outbound.prompt_ast_value.message

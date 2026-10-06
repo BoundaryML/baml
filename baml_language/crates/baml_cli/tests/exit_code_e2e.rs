@@ -2045,6 +2045,181 @@ fn run_expr_ignores_unrelated_project_compile_errors() {
     );
 }
 
+/// A project with two clients (one in a namespace) and a function that
+/// resolves one of them by name.
+const CLIENT_NAMES_PROJECT: &str = "\
+client Fast = openai.ResponsesClient.new(model = \"fast\", api_key = \"unused\");
+
+function ResolveFast() -> string {
+    ai.clients.resolve(\"Fast\").id()
+}
+";
+
+fn create_client_names_project(dir: &Path) {
+    create_project(dir, CLIENT_NAMES_PROJECT);
+    let billing = dir.join("baml_src").join("ns_billing");
+    std::fs::create_dir_all(&billing).unwrap();
+    std::fs::write(
+        billing.join("clients.baml"),
+        "client Slow = openai.ResponsesClient.new(model = \"slow\", api_key = \"unused\");\n",
+    )
+    .unwrap();
+}
+
+/// A name that an identifier in the expression can reach also resolves as a
+/// string. `ai.clients.resolve("Fast")` names the project's client only at run
+/// time, so the expression compiles without the project: it must still be
+/// evaluated in the project, because it reads the package it is compiled in.
+#[test]
+fn run_expr_resolves_a_project_client_by_name() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_client_names_project(tmp.path());
+
+    for (expression, expected) in [
+        // By identifier, and through a project function: these already
+        // needed the project to compile.
+        ("Fast.id()", r#""openai/fast""#),
+        ("ResolveFast()", r#""openai/fast""#),
+        // By name alone.
+        (r#"ai.clients.resolve("Fast").id()"#, r#""openai/fast""#),
+        (
+            r#"ai.clients.resolve("billing.Slow").id()"#,
+            r#""openai/slow""#,
+        ),
+        // A name that arrives as a value, inside a lambda of the expression.
+        (
+            r#"["Fast", "billing.Slow"].map((name) -> { ai.clients.resolve(name).id() }).join(",")"#,
+            r#""openai/fast,openai/slow""#,
+        ),
+        // The package itself, read directly.
+        (
+            r#"reflect.Package.current().get_let("Fast") != null"#,
+            "true",
+        ),
+        (
+            r#"reflect.Package.current().functions().has("root.ResolveFast")"#,
+            "true",
+        ),
+        // A shorthand needs no package: it resolves the same either way.
+        (
+            r#"ai.clients.resolve("openai/gpt-4o-mini").id()"#,
+            r#""openai/gpt-4o-mini""#,
+        ),
+    ] {
+        let output = run_baml_cli(built, tmp.path(), &["run", "-e", expression, "--from", "."]);
+        assert!(
+            output.status.success(),
+            "`{expression}` failed: {:?}\nstdout: {}\nstderr: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            expected,
+            "`{expression}`"
+        );
+    }
+}
+
+/// A name the project does not declare is still the typed
+/// `ai.errors.InvalidRequest`, in the project and outside one.
+#[test]
+fn run_expr_rejects_a_client_name_nothing_declares() {
+    let built = &common::baml_cli();
+    let project = tempfile::tempdir().unwrap();
+    create_client_names_project(project.path());
+    let empty = tempfile::tempdir().unwrap();
+
+    for (dir, name) in [(project.path(), "Missing"), (empty.path(), "Fast")] {
+        let expression = format!(r#"ai.clients.resolve("{name}").id()"#);
+        let output = run_baml_cli(built, dir, &["run", "-e", &expression]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success(),
+            "`{expression}` should fail\nstdout: {}\nstderr: {stderr}",
+            String::from_utf8_lossy(&output.stdout),
+        );
+        assert!(
+            stderr.contains("ai.errors.InvalidRequest")
+                && stderr.contains(&format!("no `client {name} = ...` is declared")),
+            "`{expression}` should report the undeclared name, got:\n{stderr}"
+        );
+    }
+}
+
+/// An expression that reads its package needs the project, so a project that
+/// does not compile fails it with the project's errors. An independent probe
+/// in the same project still runs
+/// (`run_expr_ignores_unrelated_project_compile_errors`).
+#[test]
+fn run_expr_that_reads_its_package_reports_project_compile_errors() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "client Fast = openai.ResponsesClient.new(model = \"fast\", api_key = \"unused\");\n\nfunction broken() -> int {\n    Int.parse(\"1\")\n}\n",
+    );
+
+    let independent = run_baml_cli(built, tmp.path(), &["run", "-e", "1 + 2", "--from", "."]);
+    assert_eq!(String::from_utf8_lossy(&independent.stdout).trim(), "3");
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "-e",
+            r#"ai.clients.resolve("Fast").id()"#,
+            "--from",
+            ".",
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "Expected the project's error to fail the expression\nstdout: {}\nstderr: {stderr}",
+        String::from_utf8_lossy(&output.stdout),
+    );
+    assert!(
+        stderr.contains("unresolved name: `Int.parse`"),
+        "Expected the project's diagnostic, got:\n{stderr}"
+    );
+}
+
+/// With `--file` the expression is compiled in the file's package, so a client
+/// the file declares resolves by name there too.
+#[test]
+fn run_expr_resolves_a_standalone_file_client_by_name() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("clients.baml"), CLIENT_NAMES_PROJECT).unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "--file",
+            "clients.baml",
+            "-e",
+            r#"ai.clients.resolve("Fast").id()"#,
+        ],
+    );
+
+    assert!(
+        output.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        r#""openai/fast""#
+    );
+}
+
 /// `baml test` reaches test discovery on a manifest-less `baml_src/`
 /// project — a project with no test blocks returns the `NoTestsRun` code (5),
 /// proving the loader accepted it rather than bailing on the missing manifest.

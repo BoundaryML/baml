@@ -43,6 +43,12 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     /// array element. Used to optimize arrays of unions by trying the likely
     /// variant first.
     pub union_variant_hint: Option<usize>,
+    /// The array the parser inferred from separate values in the text
+    /// ([`jsonish::Fixes::InferredArray`]) that is being coerced, by address:
+    /// the one array whose items the array coercer may leave out when they do
+    /// not fit. An address names that array alone, so the mark is carried into
+    /// every nested context without reaching the lists inside it.
+    inferred_array: Option<*const jsonish::Value<'s>>,
     /// Tie `'v` to the struct so callers still parameterize over the value lifetime.
     _phantom: PhantomData<&'v ()>,
 }
@@ -55,8 +61,28 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: HashSet::new(),
             db,
             union_variant_hint: None,
+            inferred_array: None,
             _phantom: PhantomData,
         }
+    }
+
+    /// The same context, with `array` marked as the inferred array in hand.
+    pub(crate) fn with_inferred_array(&self, array: &'v jsonish::Value<'s>) -> Self {
+        ParsingContext {
+            scope: self.scope.clone(),
+            visited_during_coerce: self.visited_during_coerce.clone(),
+            visited_during_try_cast: self.visited_during_try_cast.clone(),
+            db: self.db,
+            union_variant_hint: self.union_variant_hint,
+            inferred_array: Some(::core::ptr::from_ref(array)),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Whether `value` is the array the parser inferred, not one the model
+    /// wrote.
+    pub(crate) fn is_inferred_array(&self, value: &'v jsonish::Value<'s>) -> bool {
+        self.inferred_array == Some(::core::ptr::from_ref(value))
     }
 
     pub(crate) fn enter_scope(&self, scope: &str) -> Self {
@@ -69,6 +95,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             db: self.db,
             // Don't propagate hint to nested scopes by default
             union_variant_hint: None,
+            inferred_array: self.inferred_array,
             _phantom: PhantomData,
         }
     }
@@ -84,6 +111,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: self.visited_during_try_cast.clone(),
             db: self.db,
             union_variant_hint: hint,
+            inferred_array: self.inferred_array,
             _phantom: PhantomData,
         }
     }
@@ -126,6 +154,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: new_visited_try_cast,
             db: self.db,
             union_variant_hint: None,
+            inferred_array: self.inferred_array,
             _phantom: PhantomData,
         }
     }
@@ -190,6 +219,21 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                     causes: Vec::new(),
                 }],
             },
+        }
+    }
+
+    /// Item `index` of a list does not fit the list's element type, for the
+    /// reason `cause` gives.
+    pub(crate) fn error_list_item(
+        &self,
+        element: &impl std::fmt::Display,
+        index: usize,
+        cause: ParsingError,
+    ) -> ParsingError {
+        ParsingError {
+            reason: format!("Failed to parse list item {index} as {element}"),
+            scope: self.scope.clone(),
+            causes: vec![cause],
         }
     }
 

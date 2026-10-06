@@ -479,10 +479,17 @@ impl<'db, T> MemberResolution<'db, T> {
 /// `MemberResolution`; this table is for paths whose ROOT is a value.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedPath<'db, T = baml_type::Ty> {
-    /// One entry per written segment: entry 0 is the root (a local,
-    /// parameter, or template param - no member resolution), entry
-    /// `i > 0` the member access the `i`-th segment performs.
+    /// One entry per written segment. The first `root_len` entries spell
+    /// the root value, and every later entry is the member access that
+    /// segment performs.
     pub segments: Vec<ResolvedPathSegment<'db, T>>,
+    /// How many leading segments spell the root value. A local, parameter,
+    /// template param or top-level `let` takes one, with no member
+    /// resolution. An enum variant written as a path takes the whole type
+    /// path (`Color.Red`, `ns.Color.Red`): its last entry carries the
+    /// variant's type and `Variant` resolution, and the entries before it
+    /// are qualifiers that hold no value (the error type, no resolution).
+    pub root_len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -493,12 +500,25 @@ pub struct ResolvedPathSegment<'db, T = baml_type::Ty> {
 }
 
 impl<'db, T> ResolvedPath<'db, T> {
+    /// A ladder whose root is one written segment of type `ty` (a local, a
+    /// parameter, a template param, a top-level `let`), with no member
+    /// walked yet.
+    fn rooted_at(ty: T) -> Self {
+        ResolvedPath {
+            segments: vec![ResolvedPathSegment {
+                ty,
+                resolution: None,
+            }],
+            root_len: 1,
+        }
+    }
+
     /// The member segments (everything after the root, which performs no
     /// member access), when every one of them resolved: a partial ladder
     /// still types each segment, but its members cannot be consumed
     /// positionally.
     fn resolved_members(&self) -> Option<&[ResolvedPathSegment<'db, T>]> {
-        let members = self.segments.get(1..)?;
+        let members = self.segments.get(self.root_len..)?;
         members
             .iter()
             .all(|segment| segment.resolution.is_some())
@@ -518,6 +538,18 @@ impl<'db, T> ResolvedPath<'db, T> {
     /// unresolved.
     pub fn final_member_resolution(&self) -> Option<&MemberResolution<'db, T>> {
         self.resolved_members()?.last()?.resolution.as_ref()
+    }
+
+    /// The entry of the root value: the last of the `root_len` segments
+    /// that spell it.
+    pub fn root(&self) -> Option<&ResolvedPathSegment<'db, T>> {
+        self.segments.get(self.root_len.checked_sub(1)?)
+    }
+
+    /// The member index (0 = the first member after the root) of written
+    /// segment `segment`, or `None` for a segment of the root.
+    pub fn member_index(&self, segment: usize) -> Option<usize> {
+        segment.checked_sub(self.root_len)
     }
 }
 
@@ -4422,7 +4454,7 @@ impl<'db> InferenceContext<'db> {
         match op {
             BinaryOp::And | BinaryOp::Or => {
                 let lhs_ty = self.check_condition(body, lhs);
-                let rhs_ty = self.check_condition(body, rhs);
+                let rhs_ty = self.check_short_circuit_operand(body, op, lhs, rhs);
                 let lhs_ty = self.table.resolve_completely(&lhs_ty);
                 let rhs_ty = self.table.resolve_completely(&rhs_ty);
                 const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
@@ -5941,6 +5973,18 @@ impl<'db> InferenceContext<'db> {
                 self.write_member_resolution(callee, MemberResolution::Free { func: callable });
                 return (fn_ty, false);
             }
+            // `Color.Red.to_string()`: an enum variant is a value as well
+            // as a type. A method that a value of the enum exposes through
+            // `self` is called ON the variant, as on a local that holds
+            // it. The type-qualified tier below would read the same path
+            // as the UFCS spelling and ask for the receiver as a written
+            // argument; it stays the road for statics
+            // (`Color.Red.from_json(j)`).
+            if let Some(root) = self.enum_variant_method_root(segments) {
+                let segments = segments.clone();
+                let members = &segments[root.root_len..];
+                return self.path_member_callee(call, callee, root, members);
+            }
             // A type-qualified method path (`Array.filled(3, 0)`,
             // `baml.Array.generate(...)`): statics call directly, and the
             // UFCS spelling of an instance method takes the receiver as
@@ -6029,21 +6073,57 @@ impl<'db> InferenceContext<'db> {
                 // Intermediate segments walk the ladder; the FINAL member
                 // resolves as the callee, and its step completes the
                 // recorded path.
-                let (receiver, mut steps) =
-                    self.walk_path_members(callee, root, &segments[1..segments.len() - 1]);
-                let member = segments.last().expect("checked len");
-                let (ty, bound, resolution) = self.member_callee(call, callee, &receiver, member);
-                self.result.type_of_expr.insert(callee, ty.clone());
-                steps.push(ResolvedPathSegment {
-                    ty: ty.clone(),
-                    resolution,
-                });
-                self.write_resolved_path(callee, steps);
-                return (ty, bound);
+                return self.path_member_callee(
+                    call,
+                    callee,
+                    ResolvedPath::rooted_at(root),
+                    &segments[1..],
+                );
+            }
+            // `Color.Red.nope()`: the leading segments spell an enum
+            // variant, a value like a local, and the call reads its last
+            // segment off it. Every road that reads the whole path as a
+            // name ran first (a function, a static, an interface item), so
+            // `ai.clients.resolve(..)` and `Class.method(..)` never arrive
+            // here, and a method of the variant was called above. What is
+            // left is a member the variant does not have, reported as a
+            // missing member of the variant's type.
+            Expr::Path(segments) if segments.len() >= 3 => {
+                let segments = segments.clone();
+                if let Some(root) = self.enum_variant_path_root(&segments) {
+                    let members = &segments[root.root_len..];
+                    return self.path_member_callee(call, callee, root, members);
+                }
             }
             _ => {}
         }
         (self.infer_expr(body, callee, &Expectation::None), false)
+    }
+
+    /// A value-rooted path in callee position (`local.field.method(..)`,
+    /// `Color.Red.method(..)`): `root` holds the root's entries and
+    /// `members` every segment after it. The intermediate members walk the
+    /// ladder; the FINAL member resolves as the callee, and its step
+    /// completes the recorded path.
+    fn path_member_callee(
+        &mut self,
+        call: ExprId,
+        callee: ExprId,
+        root: ResolvedPath<'db, Ty>,
+        members: &[baml_type::Name],
+    ) -> (Ty, bool) {
+        let Some((member, intermediate)) = members.split_last() else {
+            return (Ty::error(), false);
+        };
+        let (receiver, mut path) = self.walk_path_members(callee, root, intermediate);
+        let (ty, bound, resolution) = self.member_callee(call, callee, &receiver, member);
+        self.result.type_of_expr.insert(callee, ty.clone());
+        path.segments.push(ResolvedPathSegment {
+            ty: ty.clone(),
+            resolution,
+        });
+        self.write_resolved_path(callee, path);
+        (ty, bound)
     }
 
     /// `receiver.member` in callee position: a method (instantiated - the
@@ -6531,8 +6611,9 @@ impl<'db> InferenceContext<'db> {
             // segments are member accesses (the AST cannot split `b.v` into
             // base+member before name resolution).
             let root_ty = self.infer_path(expr);
-            let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
-            self.write_resolved_path(expr, steps);
+            let (ty, path) =
+                self.walk_path_members(expr, ResolvedPath::rooted_at(root_ty), &segments[1..]);
+            self.write_resolved_path(expr, path);
             return ty;
         }
         // Tagged-template body params (`prompt`'s `role`/`ctx`): the
@@ -6543,8 +6624,9 @@ impl<'db> InferenceContext<'db> {
             .first()
             .and_then(|root| self.template_param_ty(root))
         {
-            let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
-            self.write_resolved_path(expr, steps);
+            let (ty, path) =
+                self.walk_path_members(expr, ResolvedPath::rooted_at(root_ty), &segments[1..]);
+            self.write_resolved_path(expr, path);
             return ty;
         }
         if let Some(ResolvedValue::Source(
@@ -6745,8 +6827,9 @@ impl<'db> InferenceContext<'db> {
                 // binding), and a session cannot annotate one to opt out, so
                 // the widening is unconditional here.
                 let root_ty = self.widen_fresh(&Ty::from_plain(&root_ty));
-                let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
-                self.write_resolved_path(expr, steps);
+                let (ty, path) =
+                    self.walk_path_members(expr, ResolvedPath::rooted_at(root_ty), &segments[1..]);
+                self.write_resolved_path(expr, path);
                 return ty;
             }
         }
@@ -6777,6 +6860,16 @@ impl<'db> InferenceContext<'db> {
         // (`lower_path` fallback 2; r-a resolves the value namespace to
         // the variant the same way).
         if let Some(ty) = self.enum_variant_value(segments, Some(expr)) {
+            return ty;
+        }
+        // An enum variant with members read off it (`Color.Red.name` as a
+        // value): the variant is the root of a value ladder, as in the
+        // callee road (`path_member_callee`). Last among the roads, so a
+        // path that names an item as a whole never arrives here.
+        if let Some(root) = self.enum_variant_path_root(segments) {
+            let members = &segments[root.root_len..];
+            let (ty, path) = self.walk_path_members(expr, root, members);
+            self.write_resolved_path(expr, path);
             return ty;
         }
         // A name that RESOLVES to a definition kind this road doesn't
@@ -7628,6 +7721,20 @@ impl<'db> InferenceContext<'db> {
         segments: &[baml_type::Name],
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
+        let (ty, resolution) = self.enum_variant(segments)?;
+        if let (Some(record_at), Some(resolution)) = (record_at, resolution) {
+            self.write_member_resolution(record_at, resolution);
+        }
+        Some(ty)
+    }
+
+    /// The enum variant `segments` names as a whole: its singleton type,
+    /// and its resolution when the enum's declaration is in reach (a
+    /// source enum, or one of a package served from its interface).
+    fn enum_variant(
+        &self,
+        segments: &[baml_type::Name],
+    ) -> Option<(Ty, Option<MemberResolution<'db, Ty>>)> {
         if segments.len() < 2 {
             return None;
         }
@@ -7636,29 +7743,17 @@ impl<'db> InferenceContext<'db> {
             return None;
         };
         let ty = crate::impls::interned_ty(&crate::lower::reject_holes(&lowered));
-        if let Some(record_at) = record_at
-            && let Some(baml_compiler2_hir::contributions::Definition::Enum(enum_loc)) =
-                self.facts.definition_of(qtn)
-        {
-            self.write_member_resolution(
-                record_at,
-                MemberResolution::Variant {
-                    enum_loc: DeclRef::Source(enum_loc),
-                    variant: variant.clone(),
-                },
-            );
-        } else if let Some(record_at) = record_at
-            && let Some(enum_loc) = mounted_enum_loc(self.db, qtn)
-        {
-            self.write_member_resolution(
-                record_at,
-                MemberResolution::Variant {
-                    enum_loc: DeclRef::External(enum_loc),
-                    variant: variant.clone(),
-                },
-            );
-        }
-        Some(ty)
+        let enum_loc = match self.facts.definition_of(qtn) {
+            Some(baml_compiler2_hir::contributions::Definition::Enum(enum_loc)) => {
+                Some(DeclRef::Source(enum_loc))
+            }
+            _ => mounted_enum_loc(self.db, qtn).map(DeclRef::External),
+        };
+        let resolution = enum_loc.map(|enum_loc| MemberResolution::Variant {
+            enum_loc,
+            variant: variant.clone(),
+        });
+        Some((ty, resolution))
     }
 
     /// The `MemberAccess` spelling of a type-qualified callee uses the
@@ -10359,18 +10454,36 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// A caught effect contribution, resolved for the error channel: still
-    /// live variables resolve where possible (an unconstrained effect is
-    /// `never` here too).
+    /// A caught effect contribution, resolved for the error channel. A
+    /// `catch` needs the facts of the effect now, so a still-open effect
+    /// class commits from the bounds it has, as at every structure demand
+    /// ([`InferenceContext::force_occurring_vars`]). The effect of a function
+    /// VALUE passed as an argument is such a bound: `throws string` sits
+    /// under the callee's `throws E` as a lower bound of `E`, and only the
+    /// finish fixpoint would turn it into the solution. A class with no
+    /// evidence is `never` here, so it drops out of a union and the facts
+    /// beside it stay.
     fn finalize_incoming_effect(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.table.resolve_completely(ty);
-        if resolved.has_infer() {
-            // Effect vars inside the base that never got constrained: the
-            // conservative read for catching purposes is Error-free
-            // emptiness - drop to never; real obligations arrive with I4.
-            return Ty::never();
+        let resolved = self.force_occurring_vars(ty);
+        if !resolved.has_infer() {
+            return resolved;
         }
-        resolved
+        // Effect vars inside the base that never got constrained: the
+        // conservative read for catching purposes is Error-free
+        // emptiness; real obligations arrive with I4.
+        let InferTy::Union(members) = resolved.kind() else {
+            return Ty::never();
+        };
+        let known: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.has_infer())
+            .cloned()
+            .collect();
+        if known.is_empty() {
+            Ty::never()
+        } else {
+            self.union_of(&known)
+        }
     }
 
     /// A `?.` link whose base PROVABLY cannot be null is noise the user
@@ -10664,42 +10777,93 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Walks the MEMBER segments of a value-rooted path (everything after
-    /// the root name), returning the final type and the recorded ladder.
-    /// Shared by the value road and the callee road; callers append their
-    /// final segment when they resolve it differently (a callee's last
-    /// member goes through `member_callee`) and then write the tables.
+    /// the root), returning the final type and the recorded ladder. `path`
+    /// arrives holding the root's entries only. Shared by the value road
+    /// and the callee road; callers append their final segment when they
+    /// resolve it differently (a callee's last member goes through
+    /// `member_callee`) and then write the tables.
     fn walk_path_members(
         &mut self,
         expr: ExprId,
-        root_ty: Ty,
+        mut path: ResolvedPath<'db, Ty>,
         members: &[baml_type::Name],
-    ) -> (Ty, Vec<ResolvedPathSegment<'db, Ty>>) {
-        let mut steps = vec![ResolvedPathSegment {
-            ty: root_ty.clone(),
-            resolution: None,
-        }];
-        let mut ty = root_ty;
+    ) -> (Ty, ResolvedPath<'db, Ty>) {
+        let mut ty = path.root().map_or_else(Ty::error, |root| root.ty.clone());
         for member in members {
             let (next, resolution) = self.field_access_resolved(expr, &ty, member);
-            steps.push(ResolvedPathSegment {
+            path.segments.push(ResolvedPathSegment {
                 ty: next.clone(),
                 resolution,
             });
             ty = next;
         }
-        (ty, steps)
+        (ty, path)
     }
 
-    fn write_resolved_path(&mut self, expr: ExprId, steps: Vec<ResolvedPathSegment<'db, Ty>>) {
-        if steps.len() < 2 {
+    fn write_resolved_path(&mut self, expr: ExprId, path: ResolvedPath<'db, Ty>) {
+        // A root with no member read off it records nothing.
+        if path.segments.len() <= path.root_len {
             return;
         }
-        if let Some(last) = steps.last().and_then(|step| step.resolution.clone()) {
+        if let Some(last) = path
+            .segments
+            .last()
+            .and_then(|step| step.resolution.clone())
+        {
             self.write_member_resolution(expr, last);
         }
-        self.result
-            .path_resolutions
-            .insert(expr, ResolvedPath { segments: steps });
+        self.result.path_resolutions.insert(expr, path);
+    }
+
+    /// The ladder root of a path whose leading segments spell an enum
+    /// variant and whose later segments read members off that value
+    /// (`Color.Red.to_string`, `ns.Color.Red.to_json`). The parser hands
+    /// over one flat path, so only name resolution can tell the variant
+    /// from the member. `None` when no proper prefix of at least two
+    /// segments names a variant.
+    fn enum_variant_path_root(
+        &self,
+        segments: &[baml_type::Name],
+    ) -> Option<ResolvedPath<'db, Ty>> {
+        (2..segments.len()).find_map(|root_len| {
+            let (ty, resolution) = self.enum_variant(&segments[..root_len])?;
+            // The qualifiers before the variant's own segment are a type
+            // path, not values.
+            let mut entries: Vec<ResolvedPathSegment<'db, Ty>> = (1..root_len)
+                .map(|_| ResolvedPathSegment {
+                    ty: Ty::error(),
+                    resolution: None,
+                })
+                .collect();
+            entries.push(ResolvedPathSegment { ty, resolution });
+            Some(ResolvedPath {
+                segments: entries,
+                root_len,
+            })
+        })
+    }
+
+    /// The ladder root of `Enum.Variant.method`: a path whose prefix spells
+    /// an enum variant and whose one remaining segment names a method that
+    /// a value of the enum exposes through `self` (`to_string`, `to_json`,
+    /// `eq`, an `implements` method). `None` for a static of the variant's
+    /// type and for a name the value does not have.
+    fn enum_variant_method_root(
+        &self,
+        segments: &[baml_type::Name],
+    ) -> Option<ResolvedPath<'db, Ty>> {
+        let (member, _) = segments.split_last()?;
+        let root = self.enum_variant_path_root(segments)?;
+        if root.root_len + 1 != segments.len() {
+            return None;
+        }
+        let closed = ClosedTy::try_from(&root.root()?.ty).ok()?;
+        crate::method_resolution::member_candidates(self.db, self.viewer(), &self.facts, &closed)
+            .iter()
+            .any(|candidate| {
+                candidate.name == *member && candidate.is_method && !candidate.is_static
+            })
+            .then_some(root)
     }
 
     fn untyped_empty_container_ty(
@@ -13613,6 +13777,7 @@ impl<'db> InferenceContext<'db> {
                                     }),
                                 })
                                 .collect(),
+                            root_len: path.root_len,
                         },
                     )
                 })

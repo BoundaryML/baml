@@ -1,4 +1,5 @@
-// test_media.test.ts — mirrors bridge_python/tests/test_media.py.
+// test_media.test.ts — mirrors the Python bridge test
+// sdk_tests/crates/python_pydantic2/function_calls/customizable/bridge_tests/test_media.py.
 // Constructors round-trip through the native accessors.
 
 import {

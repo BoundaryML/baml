@@ -251,11 +251,11 @@ rules digest, not the rationale log).
     — `BamlTraceback.java`). Best-effort: a malformed line is skipped and
     delivery never depends on the splice. Applied to the remapped IAE,
     `BamlError`, `BamlPanic`, and `BamlCancelledError`.
-  - **`BamlPanic extends Error`** (not `RuntimeException`) — the analog of
-    Python's `BamlPanic` subclassing `BaseException`: a bare
+  - **`BamlPanic extends Error`** (not `RuntimeException`): a bare
     `catch (Exception)` no longer swallows a panic
     (`BamlPanic.java:20`). Callers intercept a panic via `catch (BamlPanic)`
-    or `catch (Throwable)`. A clean `baml.sys.exit` never reaches here —
+    or `catch (Throwable)`. Python differs: its `BamlPanic` is a `BamlError`,
+    which `except Exception` catches. A clean `baml.sys.exit` never reaches here —
     the decoder halts the process via `Runtime.getRuntime().halt(code)`.
   - `BamlError` / `BamlPanic` accessors are snake_case (`baml_trace()`,
     `class_name()`) for 1:1 cross-language parity.

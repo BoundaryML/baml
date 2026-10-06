@@ -1,4 +1,5 @@
-// test_decode_handle.test.ts — mirrors bridge_python/tests/test_decode_handle.py.
+// test_decode_handle.test.ts — mirrors the Python bridge test
+// sdk_tests/crates/python_pydantic2/function_calls/customizable/bridge_tests/test_decode_handle.py.
 // Exercises the handle-table free functions added in Phase 1.1.
 
 import { BamlHandle, _seedFunctionRefHandle, _seedGenericMediaHandle } from '../dist/index.js';

@@ -2897,8 +2897,8 @@ impl<'db> LoweringContext<'db> {
         Self::virtual_field_view_of(self.tir_resolution(key)?)
     }
 
-    /// The recorded virtual-field view of member segment `seg_idx` of a path
-    /// ladder (1-based within the path: segment 0 is the root). The checker
+    /// The recorded virtual-field view of written segment `seg_idx` of a path
+    /// ladder, or `None` for a segment that spells the root. The checker
     /// records one resolution per member segment and the writeback finalizes
     /// each, so a ladder's interface field reads resolve exactly like an
     /// expression's — through the interface the access was CHECKED against,
@@ -2908,7 +2908,7 @@ impl<'db> LoweringContext<'db> {
         key: ExprMetadataKey,
         seg_idx: usize,
     ) -> Option<(InterfaceTypeView, u32)> {
-        let member_index = seg_idx.checked_sub(1)?;
+        let member_index = self.tir_path(key.scope, key.expr)?.member_index(seg_idx)?;
         Self::virtual_field_view_of(self.tir_path_member_resolution(key, member_index)?)
     }
 
@@ -2928,8 +2928,7 @@ impl<'db> LoweringContext<'db> {
 
     fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
         self.tir_path(key.scope, key.expr)?
-            .segments
-            .first()
+            .root()
             .map(|segment| &segment.ty)
     }
 
@@ -6471,6 +6470,9 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
     ) -> Lowered<()> {
         let root_place = self.place_for_path(expr_id, &segments[0]);
+        // The members start after the root, which is one segment unless the
+        // root is an enum variant written as a type path.
+        let mut root_len = 1;
         let (mut current_place, mut current_ty) = if let Some(place) = root_place {
             let ty = match place {
                 // The local itself, or the value in its cell: either way the
@@ -6487,6 +6489,10 @@ impl<'db> LoweringContext<'db> {
             };
             (place, ty)
         } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0])? {
+            let ty = self.builder.local_ty(root_local);
+            (Place::Local(root_local), ty)
+        } else if let Some((variant_len, root_local)) = self.load_variant_path_root(expr_id)? {
+            root_len = variant_len;
             let ty = self.builder.local_ty(root_local);
             (Place::Local(root_local), ty)
         } else if self.is_default_receiver_root(expr_id, segments)
@@ -6511,12 +6517,13 @@ impl<'db> LoweringContext<'db> {
         };
 
         let mut skip_next_segment = false;
-        for (offset, seg) in segments[1..].iter().enumerate() {
+        let members = segments.get(root_len..).unwrap_or_default();
+        for (offset, seg) in members.iter().enumerate() {
             if skip_next_segment {
                 skip_next_segment = false;
                 continue;
             }
-            let seg_idx = offset + 1;
+            let seg_idx = offset + root_len;
             let is_last = seg_idx + 1 == segments.len();
             let interface_prefix =
                 self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, seg);
@@ -8149,7 +8156,10 @@ impl<'db> LoweringContext<'db> {
                 {
                     // Decide how many leading segments form the receiver
                     // value (the rest are type qualifiers).
-                    let prefix_is_qualifier = segments.len() >= 3
+                    // A qualifier is a member segment: the segments that
+                    // spell an enum-variant root (`Color.Red`) are the
+                    // receiver, whatever the variant is called.
+                    let prefix_is_qualifier = prefix_idx >= self.path_root_len(callee)
                         && segments[prefix_idx].as_str() == view.0.name().as_str();
                     let receiver_segments_end = if prefix_is_qualifier {
                         prefix_idx
@@ -10890,13 +10900,61 @@ impl<'db> LoweringContext<'db> {
         );
     }
 
+    /// The place holding the root value of the path `expr_id`, whose first
+    /// segment is `name`: a binding's place, a top-level `let` loaded into a
+    /// temp, or the enum variant the path's leading segments spell.
     fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Lowered<Option<Place>> {
-        match self.place_for_path(expr_id, name) {
-            Some(place) => Ok(Some(place)),
-            None => Ok(self
-                .load_top_level_let_root(expr_id, name)?
-                .map(Place::local)),
+        if let Some(place) = self.place_for_path(expr_id, name) {
+            return Ok(Some(place));
         }
+        if let Some(local) = self.load_top_level_let_root(expr_id, name)? {
+            return Ok(Some(Place::local(local)));
+        }
+        Ok(self
+            .load_variant_path_root(expr_id)?
+            .map(|(_, local)| Place::local(local)))
+    }
+
+    /// How many leading segments of the path `expr_id` spell its root value:
+    /// one, except for a root TIR recorded as an enum variant written as a
+    /// type path (`Color.Red.to_string` has a root of two segments).
+    fn path_root_len(&self, expr_id: AstExprId) -> usize {
+        self.tir_path(self.current_metadata_scope, expr_id)
+            .map_or(1, |path| path.root_len)
+    }
+
+    /// Materialize the **enum variant** that roots the path `expr_id` into a
+    /// temp, when TIR recorded one: `Color.Red.to_string()` reads a member off
+    /// the value `Color.Red`, which is a constant with no binding and no
+    /// `Place` of its own. Returns the number of segments that spell the
+    /// variant along with the temp.
+    fn load_variant_path_root(&mut self, expr_id: AstExprId) -> Lowered<Option<(usize, Local)>> {
+        let Some(path) = self.tir_path(self.current_metadata_scope, expr_id) else {
+            return Ok(None);
+        };
+        // A root of one segment is a binding, whatever its type: a local that
+        // holds a variant is read from its place, not rebuilt.
+        if path.root_len < 2 {
+            return Ok(None);
+        }
+        let Some(root) = path.root() else {
+            return Ok(None);
+        };
+        let Tir2Ty::EnumVariant(qtn, variant) = &root.ty else {
+            return Err(self.internal_error(
+                "a path root of several segments is not an enum variant",
+                expr_id,
+            ));
+        };
+        let enum_ref = self.enum_ref_of(qtn)?;
+        let index = self.enum_variant_index(enum_ref, variant)?;
+        let root_ty = self.convert_tir_ty_for_runtime(&root.ty);
+        let root_local = self.builder.temp(root_ty);
+        self.builder.assign(
+            Place::local(root_local),
+            Rvalue::Use(Operand::Constant(Constant::EnumVariant { enum_ref, index })),
+        );
+        Ok(Some((path.root_len, root_local)))
     }
 
     /// Lower a receiver path, excluding its method or field, to a local.
@@ -10913,7 +10971,9 @@ impl<'db> LoweringContext<'db> {
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
             .unwrap_or(RuntimeTy::Unknown);
-        if receiver_segments.len() == 1 {
+        // The receiver is the root itself (one segment, or the segments that
+        // spell an enum variant): no member to project.
+        if receiver_segments.len() == self.path_root_len(callee) {
             return Ok(self.operand_to_local(Operand::Copy(recv_root), recv_ty));
         }
         let local = self.builder.temp(recv_ty);

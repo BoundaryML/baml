@@ -1,5 +1,4 @@
 //! Runs the Vitest test suite for bridge_typescript.
-//! Mirrors bridge_python/tests/run_pytest.rs.
 
 use std::process::Command;
 

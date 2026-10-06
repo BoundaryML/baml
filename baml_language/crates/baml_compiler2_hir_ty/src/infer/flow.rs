@@ -10,6 +10,12 @@
 //!   maps, combined with walk-time De Morgan over `&&`/`||`/`!` (B-688) -
 //!   the AST still has the boolean structure, so no bind-time target
 //!   threading is required.
+//! - `&&` / `||` short-circuit, so their RIGHT operand is typed under the
+//!   left operand's facts (true facts for `&&`, false facts for `||`), and
+//!   the overlay from before the operand comes back after it. Only a bare
+//!   local that no closure captures carries a fact: BAML tasks interleave
+//!   between statements, so a field path or an index path, which is read a
+//!   second time, can change between the test and the read.
 //! - Branch merges are divergence-aware: a diverged branch contributes
 //!   nothing, so guard-with-early-return narrowing is the ordinary merge
 //!   rule, not a special case.
@@ -69,16 +75,14 @@ impl InferenceContext<'_> {
                         }
                     }
                     BinaryOp::And => {
-                        let left = self.condition_facts(body, *lhs);
-                        let right = self.condition_facts(body, *rhs);
+                        let (left, right) = self.short_circuit_facts(body, *op, *lhs, *rhs);
                         CondFacts {
                             when_true: self.all_facts(left.when_true, right.when_true),
                             when_false: self.any_facts(&left.when_false, &right.when_false),
                         }
                     }
                     BinaryOp::Or => {
-                        let left = self.condition_facts(body, *lhs);
-                        let right = self.condition_facts(body, *rhs);
+                        let (left, right) = self.short_circuit_facts(body, *op, *lhs, *rhs);
                         CondFacts {
                             when_true: self.any_facts(&left.when_true, &right.when_true),
                             when_false: self.all_facts(left.when_false, right.when_false),
@@ -131,6 +135,99 @@ impl InferenceContext<'_> {
                 facts
             }
         }
+    }
+
+    /// The facts of the two operands of `&&` / `||`, in evaluation order.
+    ///
+    /// The operators short-circuit: the right operand runs only after the
+    /// left one was true (`&&`) or false (`||`). So the right operand's facts
+    /// are derived under the left operand's facts of that polarity, the same
+    /// environment [`Self::check_short_circuit_operand`] types it in. Without
+    /// that, a pattern of an `is` on the right would be lowered a second time
+    /// against the wider type, and its bindings would record that type.
+    ///
+    /// A binding that the right operand assigns no longer has the type that
+    /// the left operand found, so the left operand's facts about it are
+    /// dropped: `x is A && { x = b; true }` proves nothing about `x`.
+    fn short_circuit_facts(
+        &mut self,
+        body: &ExprBody,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: ExprId,
+        rhs: ExprId,
+    ) -> (CondFacts, CondFacts) {
+        let mut left = self.condition_facts(body, lhs);
+        let reached_with = Self::short_circuit_polarity(op, &left).clone();
+        let entry_flow = self.flow.clone();
+        self.apply_facts(&reached_with);
+        let right = self.condition_facts(body, rhs);
+        self.flow = entry_flow;
+        let reassigned = self.assigned_bindings(body, rhs);
+        left.when_true
+            .retain(|binding, _| !reassigned.contains(binding));
+        left.when_false
+            .retain(|binding, _| !reassigned.contains(binding));
+        (left, right)
+    }
+
+    /// The facts of the left operand that hold when the right operand of
+    /// `&&` / `||` runs.
+    fn short_circuit_polarity(
+        op: baml_compiler2_ast::BinaryOp,
+        left: &CondFacts,
+    ) -> &FxHashMap<BindingId, Ty> {
+        match op {
+            baml_compiler2_ast::BinaryOp::Or => &left.when_false,
+            _ => &left.when_true,
+        }
+    }
+
+    /// Types the right operand of `&&` / `||` with what the left operand
+    /// proved: `x is A && x.a == 1`, `s == null || s.length() == 0`.
+    ///
+    /// The operators short-circuit, so the right operand runs only after the
+    /// left one was true (`&&`) or false (`||`). The facts are about bare
+    /// local bindings that no closure captures ([`Self::narrowable_binding`]):
+    /// such a binding belongs to this call, so nothing can change it between
+    /// the test on the left and the read on the right. A field path is read a
+    /// second time on the right, and another task or an alias can change it
+    /// between the two reads, so it is never narrowed.
+    ///
+    /// The facts are for the right operand only. After it, the overlay is the
+    /// one from before it, because the operand may not have run. A binding
+    /// that the operand assigns keeps a refinement only where both paths
+    /// agree. The facts of the whole expression are [`Self::condition_facts`]'
+    /// business, for the `if`, `while` or guard that asks.
+    pub(super) fn check_short_circuit_operand(
+        &mut self,
+        body: &ExprBody,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: ExprId,
+        rhs: ExprId,
+    ) -> Ty {
+        // An `is` outside a condition is a silent probe (`infer_is`): the
+        // facts pass must not turn it into a dead-pattern error here. A
+        // condition position reports through its own `condition_facts` call.
+        self.or_probe_depth += 1;
+        let left = self.condition_facts(body, lhs);
+        self.or_probe_depth -= 1;
+        let skipped_flow = self.flow.clone();
+        self.apply_facts(Self::short_circuit_polarity(op, &left));
+        let rhs_ty = self.check_condition(body, rhs);
+        let taken_flow = std::mem::replace(&mut self.flow, skipped_flow);
+        for binding in self.assigned_bindings(body, rhs) {
+            match (taken_flow.get(&binding), self.flow.get(&binding)) {
+                (Some(taken), Some(skipped)) if taken == skipped => {}
+                (Some(taken), Some(skipped)) => {
+                    let joined = self.join(&[taken.clone(), skipped.clone()]);
+                    self.flow.insert(binding, joined);
+                }
+                _ => {
+                    self.flow.remove(&binding);
+                }
+            }
+        }
+        rhs_ty
     }
 
     /// Set-subtraction on truthiness (the `subtract_narrow` discipline):

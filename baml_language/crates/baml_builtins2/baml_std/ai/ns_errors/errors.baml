@@ -11,28 +11,49 @@ interface Failure {
     function retry_safety(self) -> RetrySafety throws never;
 }
 
-/// The closed error channel of the client surface: every typed failure the
-/// stack can produce, the deadline signal that must survive each boundary
-/// untouched, and schema-compilation failures from output-format rendering.
+/// The closed error channel above a client: every typed failure the stack can
+/// produce, the deadline signal that must survive each boundary untouched, and
+/// schema-compilation failures from output-format rendering. It is what
+/// `normalize` returns, so it is what the agent loop, the reliability clients
+/// and a stream throw for a failed model call.
 /// `throws unknown` is not used on this surface; stored callback positions
-/// declare this alias explicitly (TYPE_SYSTEM.md rule 5) and parameter
+/// declare an alias explicitly (TYPE_SYSTEM.md rule 5) and parameter
 /// positions infer per call site.
 ///
 /// Cancellation is absent by construction: `baml.panics.Cancelled` is a panic,
 /// so it unwinds past this channel rather than travelling in it. It reaches a
 /// caller only through an arm that names it.
-type InvokeError = Failure
+type NormalizedError = Failure
     | baml.errors.Timeout
     | baml.errors.UnknownError
     | reflect.errors.CompilationError;
+
+/// The error channel of a client: what `ai.Client.render`, `ai.Client.invoke`
+/// and `ai.stream.StreamingClient.invoke_stream` may throw. It is a
+/// `NormalizedError`, or a raw `baml.errors.Io`.
+///
+/// The `Io` member lets a client use the system directly: an `invoke` that
+/// calls `baml.sys.sleep`, reads a file or starts a process needs no `catch`.
+/// A caller that holds a client gets that `Io` as it is. The stack above the
+/// client does not pass it on: the agent loop, `build_request`,
+/// `ai.stream.from_spec` and the reliability clients classify it with
+/// `normalize`, into a `NetworkFailure` from the provider `"client"`. That
+/// failure is safe to try again, so `ai.clients.Retry` makes another attempt
+/// and `ai.clients.Fallback` moves to the next member, and `retry_if` can
+/// refuse it. An LLM function therefore never throws `baml.errors.Io`.
+///
+/// A client method that classifies its errors itself, with
+/// `catch_all (e) { _ => throw ai.errors.normalize(e) }`, throws a
+/// `NormalizedError`. Write that in its `throws` clause, or write no clause.
+type InvokeError = NormalizedError | baml.errors.Io;
 
 /// Every raw type the client stack is known to raise before classification.
 /// This union is deliberately CLOSED: when a new throw appears anywhere in
 /// the provider stack, the call into `normalize` stops compiling and the new
 /// type must be added here with an explicit classification below.
+/// `baml.errors.Io` is a member through `InvokeError`.
 type RaisedInClient = InvokeError
     | baml.errors.InvalidArgument
-    | baml.errors.Io
     | baml.errors.ParseError
     | baml.json.SerializationError
     | baml.json.ParseError
@@ -51,7 +72,7 @@ type RaisedInClient = InvokeError
 ///   baml.json.ParseError / baml.json.DecodeError -> InvalidResponse
 ///     (malformed provider wire payload)
 ///   Timeout / CompilationError / Failure / UnknownError -> as-is
-function normalize(error: RaisedInClient) -> InvokeError throws never {
+function normalize(error: RaisedInClient) -> NormalizedError throws never {
     match (error) {
         let failure: Failure => failure,
         let unknown_error: baml.errors.UnknownError => {
@@ -130,7 +151,7 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
 }
 
 /// Kept as a named boundary for the invoke-path call sites; identical gate.
-function normalize_invoke(error: RaisedInClient) -> InvokeError throws never {
+function normalize_invoke(error: RaisedInClient) -> NormalizedError throws never {
     normalize(error)
 }
 

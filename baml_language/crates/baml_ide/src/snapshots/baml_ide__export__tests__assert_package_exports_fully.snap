@@ -152,11 +152,11 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "id": "V:assert.is_type",
       "kind": "function",
       "name": "is_type",
-      "docstring": "Asserts that `actual` is of type `T`.\n\n# Returns\n\n`actual` if it is of type `T`. This can be used to assert the type of a value and use it in further computations.\n\n# Panics\n\n- `baml.panics.AssertionFailed` when `actual` is not of type `T`.",
+      "docstring": "Asserts that `actual` is of type `T`.\n\nThe function checks the type and returns nothing. It does not narrow\n`actual`: after the call, the argument has the type that it had before the\ncall. To use a value as a `T`, narrow it with `is`:\n\n```baml\nif (x is T) {\n    // `x` is a `T` here.\n}\n```\n\n`is` narrows a local binding (a `let` or a parameter) that no closure\ncaptures. It does not narrow a field path such as `holder.value`: bind the\nfield first (`let value = holder.value;`), or use\n`if let value: T = holder.value { ... }` or `match`.\n\n# Panics\n\n- `baml.panics.AssertionFailed` when `actual` is not of type `T`.",
       "source": {
         "file": "<builtin>/assert/assert.baml",
-        "start": 3845,
-        "end": 4180
+        "start": 4263,
+        "end": 4543
       },
       "detail": "function",
       "signature": {
@@ -175,7 +175,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "T"
+          "display": "void"
         },
         "throws": {
           "display": "never"

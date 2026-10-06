@@ -213,6 +213,13 @@ where
                 ret.with_flag(flag)
             }
             crate::jsonish::Value::FixedJson(v, fixes) => {
+                let inferred;
+                let ctx = if fixes.contains(&jsonish::Fixes::InferredArray) {
+                    inferred = ctx.with_inferred_array(v);
+                    &inferred
+                } else {
+                    ctx
+                };
                 let Some(ret) = Self::coerce(ctx, target, v)? else {
                     return Ok(None);
                 };

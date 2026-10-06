@@ -783,8 +783,8 @@ Retain the behavior covered by:
 - `sdk_tests/crates/python_pydantic2/llm_functions/customizable/test_dynamic_runtime_streaming.py`
 - `sdk_tests/crates/python_pydantic2/llm_functions/customizable/stream_accessors_static.py`
 - prompt portability tests under the same SDK fixture;
-- `sdks/python/tests/test_identifier_aliases.py`;
-- `sdks/python/tests/test_decode_handle.py` cancellation cases.
+- `sdk_tests/crates/python_pydantic2/function_calls/customizable/bridge_tests/test_identifier_aliases.py`;
+- `sdk_tests/crates/python_pydantic2/function_calls/customizable/bridge_tests/test_decode_handle.py` cancellation cases.
 
 Add/retain assertions that generated modules expose direct/spec/stream but not render-prompt/build-request/parse companions.
 

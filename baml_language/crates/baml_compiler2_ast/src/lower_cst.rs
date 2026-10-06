@@ -879,8 +879,9 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 ///
 /// The ONE provider table. A literal `client "openai/gpt-4o-mini"` lowers
 /// straight to the constructor (`spec_client_provider`); a dynamic
-/// `client:` expression lowers to `ai.clients.resolve(selector, providers)`
-/// where `providers` is a lambda synthesized from this same table
+/// `client:` expression lowers to
+/// `ai.clients.resolve(selector, providers, prefixes, package)` where
+/// `providers` is a lambda synthesized from this same table
 /// (`synthesize_llm_spec_body`). The stdlib never names a provider package —
 /// every provider implements `ai.Client`, so `ai` sits below them in the
 /// package graph — and the two lowerings cannot drift because they read one

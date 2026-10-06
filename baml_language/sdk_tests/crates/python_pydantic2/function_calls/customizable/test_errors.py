@@ -27,20 +27,22 @@ import re
 import subprocess
 import sys
 import textwrap
+import threading
 import traceback
+import typing
 
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-from baml_bridge import BamlCancelledError, call_function, get_runtime
+from baml_bridge import BamlCancelledError, BamlTypeError, call_function, call_function_sync, get_runtime
 from baml_sdk.baml.spawn import CancelToken
-from baml_sdk import hello_world
+from baml_sdk import hello_world, round_trip_int
 from baml_sdk.baml import BamlError, BamlPanic
-from baml_sdk.baml.errors import InvalidArgument
+from baml_sdk.baml.errors import InvalidArgument, TypeMismatch
 from baml_sdk.baml import json as baml_json
 from baml_sdk.baml.panics import UserPanic
 from baml_sdk.raises_test import LoadDoc, ParseError, Reparse
-from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
+from baml_sdk.throws_test import DoPanic, MyError, ParseJson, SleepMs, ThrowMyError
 
 # stdlib native builtins (`baml.json.parse`, `baml.sys.*`) can't be called as
 # top-level entry points, so the fixture wraps each in a bytecode function
@@ -101,8 +103,6 @@ def test_errors_user_panic_surfaces_as_baml_panic():
     """A user-initiated panic via `baml.sys.panic` → `BamlPanic` whose
     `.value` is a `baml.panics.UserPanic` (routed by the namespace check,
     distinct from a host-synthesized `SdkPanic`)."""
-    from baml_sdk.throws_test import DoPanic
-
     with pytest.raises(BamlPanic) as exc_info:
         DoPanic("user-initiated boom")
     assert isinstance(exc_info.value.value, UserPanic)
@@ -231,3 +231,80 @@ def test_errors_clean_exit_terminates_process_with_code_0():
 
 def test_errors_clean_exit_terminates_process_with_code_7():
     _assert_clean_exit_terminates_process_with_code(7)
+
+
+# ---------------------------------------------------------------------------
+# One class catches everything that comes from BAML.
+#
+# `except BamlError` is the one handler a host needs: a thrown value, a panic,
+# a cancelled sync call and a rejected argument are all `BamlError`s. The
+# narrower classes still say which it was.
+# ---------------------------------------------------------------------------
+
+
+# SDK_PARITY_LINT(skip): Python exception class hierarchy
+def test_errors_every_baml_exception_class_is_a_baml_error():
+    assert issubclass(BamlError, Exception)
+    assert issubclass(BamlPanic, BamlError)
+    assert issubclass(BamlCancelledError, BamlPanic)
+    assert issubclass(BamlTypeError, BamlError)
+    # A rejected argument stays a `TypeError` for code that catches that.
+    assert issubclass(BamlTypeError, TypeError)
+
+
+# SDK_PARITY_LINT(skip): Python exception class hierarchy
+def test_errors_panic_is_caught_as_baml_error():
+    with pytest.raises(BamlError) as exc_info:
+        DoPanic("user-initiated boom")
+    assert type(exc_info.value) is BamlPanic
+    assert isinstance(exc_info.value.value, UserPanic)
+
+
+# SDK_PARITY_LINT(skip): Python exception class hierarchy
+def test_errors_sdk_panic_is_caught_as_baml_error():
+    """A call of a function that the program does not have."""
+    with pytest.raises(BamlError, match="no_such_function") as exc_info:
+        call_function_sync(get_runtime(), "user.no_such_function", {})
+    assert type(exc_info.value) is BamlPanic
+    assert exc_info.value.class_name == "baml.panics.SdkPanic"
+
+
+# SDK_PARITY_LINT(skip): Python exception class hierarchy
+def test_errors_cancelled_sync_call_is_caught_as_baml_error():
+    token = CancelToken.new()
+    timer = threading.Timer(0.05, token.cancel)
+    timer.start()
+    try:
+        with pytest.raises(BamlError) as exc_info:
+            SleepMs(2000, _baml={"cancel": token})
+    finally:
+        timer.cancel()
+    assert type(exc_info.value) is BamlCancelledError
+
+
+# SDK_PARITY_LINT(skip): Python exception class hierarchy
+def test_errors_rejected_argument_is_caught_as_baml_error_and_as_type_error():
+    for expected in (BamlError, TypeError):
+        with pytest.raises(expected) as exc_info:
+            round_trip_int(typing.cast(int, "7"))
+        error = exc_info.value
+        assert type(error) is BamlTypeError
+        assert error.class_name == "baml.errors.TypeMismatch"
+        assert isinstance(error.value, TypeMismatch)
+        # The text of a `TypeError`: the message alone, with no class name.
+        assert str(error) == (
+            "`round_trip_int` was called with a value that doesn't match its type: "
+            "argument 1: Value of type 'string' does not match the declared type `int`"
+        )
+
+
+# SDK_PARITY_LINT(skip): Python exception class hierarchy
+async def test_errors_cancelled_async_call_stays_an_asyncio_cancellation():
+    """`asyncio` needs its own `CancelledError`, which `except Exception` must
+    not catch. The BAML cancellation is its `reason`."""
+    task = asyncio.ensure_future(call_function(get_runtime(), "user.throws_test.SleepMs", {"ms": 2000}))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError) as exc_info:
+        await task
+    assert not isinstance(exc_info.value, Exception)

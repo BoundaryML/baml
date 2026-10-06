@@ -129,7 +129,6 @@ macro_rules! test_partial_none_deserializer {
 }
 
 /// Tests partial deserialization that is expected to fail.
-#[allow(unused_macros)]
 macro_rules! test_partial_failing_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr) => {
         #[test]

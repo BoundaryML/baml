@@ -399,9 +399,10 @@ test_failing_deserializer!(
     }
 );
 
-// original values are not allowed in lists
-// so we should return an empty list
-test_deserializer!(
+// Original values are not allowed in lists either. "MEDIUM" alone would match
+// (its alias "médium" differs by an accent only), but "HIGH" and "LOW" name no
+// variant, and an item that does not fit fails the list.
+test_failing_deserializer!(
     test_multiple_original_enum_values_fail,
     r#"["HIGH", "MEDIUM", "LOW"]"#,
     baml_ty!([Priority]),
@@ -413,8 +414,23 @@ test_deserializer!(
             URGENT @alias("紧急"),
             NORMAL @alias("عادي")
         }
+    }
+);
+
+// The one original value that an alias matches still parses in a list.
+test_deserializer!(
+    test_original_enum_value_matching_an_alias_in_a_list,
+    r#"["MEDIUM"]"#,
+    baml_ty!([Priority]),
+    baml_db! {
+        enum Priority {
+            HIGH @alias("élevé"),
+            MEDIUM @alias("médium"),
+            LOW @alias("baixo"),
+            URGENT @alias("紧急"),
+            NORMAL @alias("عادي")
+        }
     },
-    // since "médium" -> "MEDIUM"
     ["MEDIUM"]
 );
 

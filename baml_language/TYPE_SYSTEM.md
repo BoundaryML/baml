@@ -36,6 +36,19 @@ The stdlib declares _companion carrier classes_ for the builtins: `baml.Int`, `b
 
 Two companions are the opposite case — the class name IS the builtin type's canonical spelling: `reflect.Type` (the metatype) and `baml.future.Future<V, E>`. Each denotes its dedicated type kind; the class declaration exists to carry members and documentation. Their long-term shape is undecided (perhaps a magic-builtin-backed alias with an inherent `implement` block), but the invariant holds either way: the spelling denotes the builtin kind, and the declaration only attaches members.
 
+#### Values from a host
+
+A host language has its own types, so a value that a host passes to a BAML function is checked against the declared type when it crosses the boundary. This is where the golden rule is enforced for arguments: a value that does not inhabit the declared type is rejected with a type mismatch, and the function does not run. It is never passed on as it is.
+
+The boundary is also the one place where a value is converted without an explicit conversion, and only where the host cannot say what it means:
+
+- an `int` where a `float` or a `bigint` is declared (hosts write `7` for both, and many have one number type);
+- a `bigint` that fits where an `int` is declared, and a JavaScript number in the numeric type that the declaration names;
+- a string that names a variant where an enum is declared;
+- a map with the shape of a class where that class is declared.
+
+Nothing else is converted: `"7"` is not an `int`, `1.5` is not an `int`, `true` is not an `int`, and `null` inhabits only a type that has `null`. Inside BAML none of these conversions exist; `let c: Color = "Red"` is an error.
+
 ### Abstract Types
 
 Abstract types can generally be viewed as set unions of different groups of concrete (and literal) types:
@@ -176,6 +189,79 @@ Pattern matching ([BEP-015](https://beps.boundaryml.com/beps/15)) on types falls
 
 To check pattern fallibility/infallibility/exhaustiveness, BAML ensures that the union of the matched patterns represent a superset of the scrutinee's type, or defines a diverging path for fallible patterns if not.
 `match` also rejects arms that can provably never be reached. While these do not necessarily violate the type system, they are dead code that could be misleading. A `match` arm `A(N)` is unreachable if and only if `SCRUTINEE ∩ (A(0) ∪ A(1) ∪ ... ∪ A(N-1)) = SCRUTINEE ∩ (A(0) ∪ A(1) ∪ ... ∪ A(N-1) ∪ A(N))`. If we cannot prove either way, we err towards saying it is reachable (for example, we exclude all arms with an `if` expression-guard from consideration in reachability and say they do not contribute to exhaustiveness as we can make no guarantees about the evaluated expression).
+
+The same order gives a catch-all binding its type. A value reaches an arm only if no earlier arm took it, so a pattern that writes no type of its own (`let rest`, a chain of such bindings, and `_`) has the type `SCRUTINEE \ (A(0) ∪ A(1) ∪ ... ∪ A(N-1))`, where only the earlier arms that _consume_ their type count: an arm with no guard whose pattern accepts every value of the type it names (a type, `null`, a literal). An arm with a guard, or with a field or length constraint, takes nothing away, because a value of its type can still fall through to a later arm. A binding that writes a type (`let x: T`) keeps the type it wrote.
+
+```baml
+function describe(item: A | B | null) -> string {
+    match (item) {
+        null => "none",
+        let a: A => "a",
+        let rest => rest.b, // `rest` is a `B`
+    }
+}
+```
+
+A `match` evaluates its scrutinee exactly once, and every arm tests and binds that one value. This holds for any scrutinee expression, including a field path, which is why `match` (and `if let`) may give a binding a narrower type where [flow narrowing](#flow-narrowing) of the scrutinee itself is not permitted.
+
+## Flow Narrowing
+
+A test can prove that a binding holds a value of a narrower type than the binding declares. The compiler then gives the binding that narrower type wherever the test is known to have held. Narrowing is static only: it converts nothing and it checks nothing a second time. By the golden rule, it is therefore permitted only where the tested value provably cannot be replaced between the test and the use.
+
+### Tests and where their facts hold
+
+These expressions are tests of a binding `x`:
+
+- `x is P`, for any pattern `P`. When it is true, `x` has the type `P` matches. When it is false and `P` consumes its type (see [Pattern Matching](#pattern-matching)), `x` has its type minus that type.
+- `x == null` and `x != null`.
+- `x` itself where a condition is expected (truthiness): when it is true, `x` loses the members that are always falsy (`null`, `false`, the zero and empty literals), and when it is false, the members that are always truthy.
+- `!` swaps the facts of its operand, and `&&` / `||` combine the facts of their operands (De Morgan).
+
+The facts of a test hold:
+
+- in the branch of an `if`, the body of a `while`, and the arm of a `match` guard that the test guards, and with the opposite facts in the `else` branch;
+- after an early exit: if one branch of an `if` cannot complete (it returns, throws, breaks or continues), the code after the `if` has the facts of the other branch;
+- in the right operand of `&&` and `||`. These operators short-circuit, so the right operand is evaluated only after the left operand was true (`&&`) or false (`||`), and it is typed with the left operand's facts for that outcome. The facts are for the right operand alone: after the operator, the binding has the type it had before it.
+
+```baml
+function f(x: A | B | null, s: string?) -> bool {
+    let a = x is A && x.a == 1;            // right operand: `x` is an `A`
+    let b = s == null || s.length() == 0;  // right operand: `s` is a `string`
+    let c = x != null && (x is B || x.a == 1);
+    x.a                                    // error: `x` is `A | B | null` again
+}
+```
+
+An assignment to the binding ends every fact about it. The assigned value is checked against the binding's declared type, never against the narrowed one, and the binding then has the type of the assigned value. A loop drops the facts about every binding that its body assigns before it types its condition and body. A right operand of `&&` / `||` that assigns the binding leaves no fact about it for the code that follows: `x is A && { x = b; true }` proves nothing about `x`.
+
+A test that the facts already decide is dead code, and in a condition it is an error just as an unreachable `match` arm is: in `if (x is A && x is B)` with unrelated classes `A` and `B`, the second test can never be true.
+
+### What may be narrowed
+
+Only a **local binding** (a `let` or a parameter) that **no closure captures**. Nothing else is narrowed:
+
+- a local that a closure or a `spawn` body uses, wherever that closure is written;
+- a field path (`h.v is A`), an index path (`xs[0] is A`), or a path through `?.`;
+- any other expression that would have to be evaluated a second time to be used.
+
+BAML tasks can interleave between statements. A field or an element belongs to an object that another task, or another name for the same object, can write between the test and the use, and a captured local can be assigned by the closure that captured it. A second read of any of these may see a value that the test never saw, and narrowing it would let a run-time value violate its compile-time type. A local that no closure captures belongs to one call: only an assignment in its own body can replace its value, and the compiler sees every one of those. The value it holds cannot stop being a member of the tested type either, because a value's concrete type is fixed when the value is created (see [Values and membership](#values-and-membership)).
+
+For the same reason a test never narrows anything _inside_ the value. `u is Box { v: int }` tests the field's content, and narrows `u` to `Box` only: the field can be written again.
+
+To use a field as a narrower type, read it once and test the value that was read. Each of these forms does that:
+
+```baml
+match (h.v) { let a: A => a.a, _ => 0 }
+if let a: A = h.v { a.a } else { 0 }
+let v = h.v;
+if (v is A) { v.a } else { 0 }
+```
+
+A type parameter narrows as any other type does: `v is T` tests membership in the realized type at run time, and `v` is then a `T`.
+
+### What does not narrow
+
+`is`, the null and truthiness tests, and patterns are the only constructs that narrow. A function call never narrows its arguments, whatever the function does. In particular `assert.is_type<T>(x)` only checks: it panics when `x` is not a `T`, it returns `void`, and `x` keeps its type. `assert.is_true(x is T)` does not narrow `x` either.
 
 ## Type Variables
 

@@ -413,6 +413,104 @@ async fn cancelled_session_eval_releases_lease_and_preserves_committed_prefix() 
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
+/// A submission reaches the Session's own bindings without a qualifier, so a
+/// client it can name by identifier (`Slow.id()`) also resolves by that name as
+/// a string (`ai.clients.resolve("Slow")`). The Session keeps each binding
+/// under a hygienic name; the lookup goes through the name the source wrote.
+const SESSION_CLIENT_NAMES: &str = r#####"
+client Host = openai.ResponsesClient.new(model = "host", api_key = "unused");
+
+function HostClient() -> string {
+  ai.clients.resolve("Host").id()
+}
+
+/// The id `source` evaluates to, or how the evaluation failed.
+function eval_id(s: reflect.Session, source: string) -> string {
+  s.eval<string>(source) catch (e) {
+    let failed: reflect.errors.EvaluationError => match (failed.cause) {
+      let rejected: ai.errors.InvalidRequest => "InvalidRequest",
+      _ => `EvaluationError: ${failed.message}`,
+    },
+    let failed: reflect.errors.CompilationError => `CompilationError: ${failed.message}`,
+    _ => "other error",
+  }
+}
+
+function session_bindings_resolve_by_name() -> string {
+  let s = reflect.Session.new()
+  s.eval(`let Slow = openai.ResponsesClient.new(model = "slow", api_key = "unused")`)
+  s.eval(`client Declared = openai.ResponsesClient.new(model = "declared", api_key = "unused");`)
+  let by_identifier = eval_id(s, `Slow.id()`);
+  let by_name = eval_id(s, `ai.clients.resolve("Slow").id()`);
+  let declared = eval_id(s, `ai.clients.resolve("Declared").id()`);
+  // Bound and resolved by one submission.
+  let same_submission = eval_id(
+    s,
+    `let Late = openai.ResponsesClient.new(model = "late", api_key = "unused"); ai.clients.resolve("Late").id()`,
+  );
+  // A function of the Session resolves a name it receives as a value.
+  s.eval(`function pick(name: string) -> string { ai.clients.resolve(name).id() }`)
+  let through_function = eval_id(s, `pick("Declared")`);
+  [by_identifier, by_name, declared, same_submission, through_function].join("|")
+}
+
+function session_rebinding_resolves_to_the_latest() -> string {
+  let s = reflect.Session.new()
+  s.eval(`let Slow = openai.ResponsesClient.new(model = "first", api_key = "unused")`)
+  let first = eval_id(s, `ai.clients.resolve("Slow").id()`);
+  s.eval(`let Slow = openai.ResponsesClient.new(model = "second", api_key = "unused")`)
+  let second = eval_id(s, `ai.clients.resolve("Slow").id()`);
+  [first, second].join("|")
+}
+
+function session_rejects_names_it_cannot_reach() -> string {
+  let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  s.eval(`let Slow = openai.ResponsesClient.new(model = "slow", api_key = "unused")`)
+  s.eval(`let count = 2`)
+  // Nothing binds this name.
+  let undeclared = eval_id(s, `ai.clients.resolve("Missing").id()`);
+  // A binding that is not a client.
+  let not_a_client = eval_id(s, `ai.clients.resolve("count").id()`);
+  // The package that opened the Session: a submission cannot write `Host`.
+  let host_bare = eval_id(s, `ai.clients.resolve("Host").id()`);
+  // The hygienic name the Session keeps `Slow` under is not a name of the source.
+  let internal = eval_id(s, `ai.clients.resolve("__baml_session_0_Slow").id()`);
+  // A function of the mounted package resolves against its own package.
+  let mounted_function = eval_id(s, `app.HostClient()`);
+  // Another Session does not see this one's bindings.
+  let other = eval_id(reflect.Session.new(), `ai.clients.resolve("Slow").id()`);
+  [undeclared, not_a_client, host_bare, internal, mounted_function, other].join("|")
+}
+"#####;
+
+async fn session_client_names(entry: &str) -> String {
+    let output = baml_test!(baml: SESSION_CLIENT_NAMES, entry: entry);
+    match output.result {
+        Ok(BexExternalValue::String(value)) => value.to_string(),
+        other => panic!("expected a string, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn session_resolves_a_client_by_the_name_a_submission_can_write() {
+    assert_eq!(
+        session_client_names("session_bindings_resolve_by_name").await,
+        "openai/slow|openai/slow|openai/declared|openai/late|openai/declared"
+    );
+    assert_eq!(
+        session_client_names("session_rebinding_resolves_to_the_latest").await,
+        "openai/first|openai/second"
+    );
+}
+
+#[tokio::test]
+async fn session_rejects_a_client_name_a_submission_cannot_write() {
+    assert_eq!(
+        session_client_names("session_rejects_names_it_cannot_reach").await,
+        "InvalidRequest|InvalidRequest|InvalidRequest|InvalidRequest|openai/host|InvalidRequest"
+    );
+}
+
 /// Two sessions and a submission compiled on one of them, finished on the
 /// other: the assignment commits into a cell only the first owns, so the
 /// second refuses the submission. `refused` returns that second session;

@@ -32,6 +32,7 @@ from .errors import (
     BamlCancelledError,
     BamlError,
     BamlPanic,
+    BamlTypeError,
     attach_baml_traceback,
     make_sdk_panic,
 )
@@ -56,17 +57,80 @@ from .typemap import (
 atexit.register(shutdown_runtime)
 
 
+UnhandledSpawnErrorHandler = Callable[[BaseException, bool], None]
+"""What `set_unhandled_spawn_error_handler` takes: `(error, cancelled)`.
+
+`error` is the exception a call would have raised for the same failure (a
+`BamlError`, a `BamlPanic`, or the exception a host callback raised), with the
+BAML frames in its traceback. `cancelled` is true when the task was cancelled
+before it failed, for example by an error in its cleanup."""
+
+
+def default_unhandled_spawn_error_handler(error: BaseException, cancelled: bool) -> None:
+    """Print the error of a spawned task that nothing observed, and end the
+    process with exit status 1 unless the task was cancelled.
+
+    A failure that no code awaited is a defect of the program, as an uncaught
+    exception is, so the default does not let the program run on. The exit is
+    immediate (`os._exit`): no `atexit` handler and no `finally` block runs,
+    and buffered output is lost."""
+    traceback.print_exception(error)
+    if not cancelled:
+        sys.stderr.flush()
+        if os.name == "nt":
+            os.kill(os.getpid(), signal.SIGTERM)
+        else:
+            os._exit(1)
+
+
+_unhandled_spawn_error_handler: UnhandledSpawnErrorHandler = default_unhandled_spawn_error_handler
+
+
+def set_unhandled_spawn_error_handler(
+    handler: Optional[UnhandledSpawnErrorHandler],
+) -> UnhandledSpawnErrorHandler:
+    """Choose what the process does when a BAML `spawn { ... }` task ends with
+    an error that nothing observed. Returns the handler it replaces; `None`
+    restores `default_unhandled_spawn_error_handler`, which ends the process.
+
+    A server sets a handler that reports the error and returns, so one stray
+    task does not end every request in the process:
+
+        def report(error: BaseException, cancelled: bool) -> None:
+            logger.error("unobserved BAML spawn error", exc_info=error)
+
+        set_unhandled_spawn_error_handler(report)
+
+    The handler runs on a thread of the BAML runtime, not on the thread or the
+    event loop of the call that spawned the task, and no event loop is running
+    there. It must return soon and must not call BAML: pass the error to the
+    application with `loop.call_soon_threadsafe` or a queue. If the handler
+    raises, the error it was given is printed, its own exception goes to
+    `sys.unraisablehook`, and the process continues. A handler that wants the
+    default for some errors calls `default_unhandled_spawn_error_handler`."""
+    global _unhandled_spawn_error_handler
+    previous = _unhandled_spawn_error_handler
+    _unhandled_spawn_error_handler = (
+        default_unhandled_spawn_error_handler if handler is None else handler
+    )
+    return previous
+
+
 def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
+    """The one callback the native runtime holds (its registration is
+    first-wins): decode the error and hand it to the current handler."""
     try:
         decode_call_result(error_bytes)
     except BaseException as error:
-        traceback.print_exception(error)
-        if not cancelled:
-            sys.stderr.flush()
-            if os.name == "nt":
-                os.kill(os.getpid(), signal.SIGTERM)
-            else:
-                os._exit(1)
+        try:
+            _unhandled_spawn_error_handler(error, cancelled)
+        except BaseException:
+            # The handler failed before it reported: do not lose the error of
+            # the spawned task. The native caller hands the handler's own
+            # exception to `sys.unraisablehook`, which does not show the
+            # exception it was raised from.
+            traceback.print_exception(error)
+            raise
 
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
@@ -91,7 +155,7 @@ _CANCELLED_PANIC_CLASS = "baml.panics.Cancelled"
 def _decode_call_result_async(result_bytes: bytes) -> Any:
     try:
         return decode_call_result(result_bytes)
-    except (BamlError, BamlPanic) as exc:
+    except BamlError as exc:
         if getattr(exc, "class_name", None) != _CANCELLED_PANIC_CLASS:
             raise
         reason = BamlCancelledError(
@@ -495,8 +559,12 @@ __all__ = [
     "BamlCancelledError",
     "BamlError",
     "BamlPanic",
+    "BamlTypeError",
     "make_sdk_panic",
     "shutdown_runtime",
+    "UnhandledSpawnErrorHandler",
+    "default_unhandled_spawn_error_handler",
+    "set_unhandled_spawn_error_handler",
     "get_runtime",
     "get_version",
     "new_function_call",

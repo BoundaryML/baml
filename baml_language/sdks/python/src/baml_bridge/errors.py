@@ -4,6 +4,7 @@
 # the decoded value via `.value` (a plain pydantic model / enum / alias,
 # codegen'd by the normal rules) — see 31a-spec. The wrappers are raised by
 # `decode_call_result` (proto.py) from the `BamlOutboundResult` envelope.
+# `BamlError` is the base of all of them.
 #
 # They are deliberately plain Python classes: a BAML error type cannot itself
 # subclass `BaseException` (it is a `pydantic.BaseModel`, and the two layouts
@@ -102,11 +103,18 @@ def _format_message(class_name: Optional[str], value: Any) -> str:
 
 
 class BamlError(Exception):
-    """Raised when a BAML function surfaces a thrown error value.
+    """Raised for every failure that comes from BAML.
+
+    `except BamlError` catches a thrown error value, a panic (`BamlPanic`), a
+    cancelled sync call (`BamlCancelledError`) and a rejected argument
+    (`BamlTypeError`). Two exceptions of a call are not a `BamlError`: the
+    exception that a Python callback raised, which comes back as the same
+    object, and the `asyncio.CancelledError` of a cancelled async call.
 
     `.value` is the decoded thrown value; `.baml_trace` is the list of
     pre-rendered ``File "...", line N, in fn`` strings from the BAML stack
-    (turned into a real Python traceback in 31g-phase6).
+    (turned into a real Python traceback in 31g-phase6); `.class_name` is the
+    name of the BAML class of the value, when it is an instance of a class.
     """
 
     def __init__(
@@ -118,7 +126,10 @@ class BamlError(Exception):
         self._value = value
         self._baml_trace: List[str] = list(baml_trace) if baml_trace else []
         self._class_name = class_name
-        super().__init__(_format_message(class_name, value))
+        super().__init__(self._message())
+
+    def _message(self) -> str:
+        return _format_message(self._class_name, self._value)
 
     @property
     def value(self) -> Any:
@@ -133,40 +144,34 @@ class BamlError(Exception):
         return self._class_name
 
 
-class BamlPanic(BaseException):
-    """Raised for a BAML panic (incl. cancellation).
+class BamlPanic(BamlError):
+    """Raised for a BAML panic (incl. cancellation): a failure that BAML code
+    cannot `catch`, such as a failed assertion or `baml.sys.panic`.
 
-    Subclasses `BaseException`, not `Exception` — like `asyncio.CancelledError`
-    and `SystemExit` — so a bare `except Exception` does not swallow it.
+    A `BamlError`, so the handler of a host for BAML failures also gets the
+    panics. Catch `BamlPanic` first to treat them in another way.
     """
-
-    def __init__(
-        self,
-        value: Any,
-        baml_trace: Optional[List[str]] = None,
-        class_name: Optional[str] = None,
-    ) -> None:
-        self._value = value
-        self._baml_trace: List[str] = list(baml_trace) if baml_trace else []
-        self._class_name = class_name
-        super().__init__(_format_message(class_name, value))
-
-    @property
-    def value(self) -> Any:
-        return self._value
-
-    @property
-    def baml_trace(self) -> List[str]:
-        return self._baml_trace
-
-    @property
-    def class_name(self) -> Optional[str]:
-        return self._class_name
 
 
 class BamlCancelledError(BamlPanic):
     """Structured BAML cancellation surfaced by sync calls and carried as the
     ``reason`` on native ``asyncio.CancelledError`` for async calls."""
+
+
+class BamlTypeError(BamlError, TypeError):
+    """Raised for a value that does not inhabit the type that BAML declares
+    for it (`baml.errors.TypeMismatch`): an argument of another kind, a string
+    that names no variant of an enum, a `TypeVar` that no argument binds.
+
+    Also a `TypeError`, which is what Python raises for an argument of a wrong
+    type. `str()` is the message alone.
+    """
+
+    def _message(self) -> str:
+        message = getattr(self._value, "message", None)
+        if message is None and isinstance(self._value, dict):
+            message = self._value.get("message")
+        return message if message is not None else str(self._value)
 
 
 def make_sdk_panic(message: str) -> BamlPanic:
@@ -191,5 +196,6 @@ __all__ = [
     "BamlError",
     "BamlCancelledError",
     "BamlPanic",
+    "BamlTypeError",
     "make_sdk_panic",
 ]

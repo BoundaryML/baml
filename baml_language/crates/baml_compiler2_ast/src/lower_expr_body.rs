@@ -732,14 +732,16 @@ pub(crate) fn synthesize_llm_spec_body(
     //     lower_cst.rs). Static, so an unknown prefix is a compile error.
     //     Provider construction is pure — it never touches env.
     //   * anything else — an arbitrary expression, wrapped in
-    //     `ai.clients.resolve(selector, providers)` so every dynamic selector
-    //     shape works: an `ai.Client` value (identity), a runtime
-    //     `"provider/model"` string, or a `baml.env.Ref` (read at call time,
-    //     then the string path). Unknown prefixes / unset vars become typed
+    //     `ai.clients.resolve(selector, providers, prefixes, package)` so
+    //     every dynamic selector shape works: an `ai.Client` value
+    //     (identity), a runtime `"provider/model"` string, the name of a
+    //     declared client, or a `baml.env.Ref` (read at call time, then the
+    //     string path). Unknown prefixes / names / unset vars become typed
     //     runtime `ai` errors rather than an opaque `InitFailed`. The call is
     //     compiler-assisted like every `ai.clients.resolve` call
     //     (`complete_client_resolve_call`): the provider table rides along
-    //     as a lambda synthesized from `SHORTHAND_PROVIDERS`.
+    //     as a lambda synthesized from `SHORTHAND_PROVIDERS`, and the calling
+    //     package as `reflect.Package.current()`.
     let default_client = match client_spec {
         crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
             let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
@@ -818,6 +820,27 @@ fn synthesize_shorthand_prefixes(ctx: &mut LoweringContext, span: TextRange) -> 
         })
         .collect();
     ctx.alloc_expr(Expr::Array { elements }, span)
+}
+
+/// `reflect.Package.current()`: the package of the call site, whose declared
+/// clients `ai.clients.resolve` looks a name up in.
+fn synthesize_current_package(ctx: &mut LoweringContext, span: TextRange) -> ExprId {
+    let callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("reflect"),
+            Name::new("Package"),
+            Name::new("current"),
+        ]),
+        span,
+    );
+    ctx.alloc_expr(
+        Expr::Call {
+            callee,
+            type_args: vec![],
+            args: vec![],
+        },
+        span,
+    )
 }
 
 /// The runtime half of the `"provider/model"` shorthand, as a lambda:
@@ -3504,8 +3527,11 @@ impl LoweringContext {
     /// the prelude. So at each call site the compiler appends the provider
     /// table — a constructor lambda and the list of prefixes it knows, both
     /// synthesized from `SHORTHAND_PROVIDERS`, the one table the literal
-    /// `client "provider/model"` lowering reads too. A call that already
-    /// passes them is left alone.
+    /// `client "provider/model"` lowering reads too — and then the calling
+    /// package (`reflect.Package.current()`), whose `client Name = ...`
+    /// declarations a selector may name. A call that passes its own provider
+    /// table still gets the package, and a call that passes all four is left
+    /// alone.
     fn complete_client_resolve_call(
         &mut self,
         callee: ExprId,
@@ -3520,11 +3546,21 @@ impl LoweringContext {
                     && segments[1].as_str() == "clients"
                     && segments[2].as_str() == "resolve"
         );
-        if is_resolve && args.len() == 1 {
+        if !is_resolve {
+            return args;
+        }
+        if args.len() == 1 {
             let providers = synthesize_shorthand_providers(self, span);
             args.push(CallArg::positional(providers));
             let prefixes = synthesize_shorthand_prefixes(self, span);
             args.push(CallArg::positional(prefixes));
+        }
+        // By name: a call that wrote `providers` and `prefixes` itself may
+        // have written them by name, and no positional argument follows a
+        // named one.
+        if args.len() == 3 {
+            let package = synthesize_current_package(self, span);
+            args.push(CallArg::named("package", package));
         }
         args
     }

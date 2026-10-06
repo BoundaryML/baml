@@ -427,7 +427,144 @@ function resolve_without_a_slash_is_typed() -> string {
 }
 
 test "resolve_without_a_slash_is_typed" {
-    assert.contains(resolve_without_a_slash_is_typed(), `is not a "provider/model" string`)
+    assert.contains(resolve_without_a_slash_is_typed(), `is not a "provider/model" string`);
+    assert.contains(resolve_without_a_slash_is_typed(), "no `client gpt-4o-mini = ...` is declared")
+}
+
+// A string without a "/" names a client the calling package declares, spelled
+// as the package spells it: this file's namespace, then the client's name. A
+// host or a feature flag selects one of the project's clients this way.
+client EnvRefNamedFast = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+client EnvRefNamedSmart = ai.clients.Retry.new(
+    inner = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key"),
+    max_attempts = 2,
+);
+
+function resolve_of_a_declared_name() -> string {
+    [
+        ai.clients.resolve("env_ref_clients.EnvRefNamedFast").id(),
+        ai.clients.resolve("root.env_ref_clients.EnvRefNamedSmart").id(),
+        `${ai.clients.resolve("env_ref_clients.EnvRefNamedSmart") is ai.clients.Retry}`,
+    ].join("|")
+}
+
+test "resolve_of_a_declared_name" {
+    assert.equal(
+        resolve_of_a_declared_name(),
+        `${EnvRefNamedFast.id()}|${EnvRefNamedSmart.id()}|true`,
+    )
+}
+
+// The name is a runtime value: one function reaches every declared client.
+function resolve_named(name: string) -> string {
+    ai.clients.resolve(name).id() catch (e) {
+        ai.errors.InvalidRequest => e.detail,
+    }
+}
+
+test "resolve_of_a_name_chosen_at_run_time" {
+    assert.equal(resolve_named("env_ref_clients.EnvRefNamedFast"), EnvRefNamedFast.id());
+    assert.equal(resolve_named("env_ref_clients.EnvRefNamedSmart"), EnvRefNamedSmart.id())
+}
+
+// A call that passes its own provider table, by position or by name, still
+// resolves a name against the calling package.
+function resolve_with_an_explicit_provider_table() -> string {
+    let providers = (prefix: string, model: string) -> ai.Client? { null };
+    let by_position = ai.clients.resolve("env_ref_clients.EnvRefNamedFast", providers, ["none"]);
+    let by_name = ai.clients.resolve("env_ref_clients.EnvRefNamedSmart", providers = providers, prefixes = ["none"]);
+    `${by_position.id()}|${by_name.id()}`
+}
+
+test "resolve_with_an_explicit_provider_table" {
+    assert.equal(
+        resolve_with_an_explicit_provider_table(),
+        `${EnvRefNamedFast.id()}|${EnvRefNamedSmart.id()}`,
+    )
+}
+
+// A name that is declared, but not as a client, is not a client either.
+test "resolve_of_an_undeclared_name_is_typed" {
+    assert.contains(resolve_named("EnvRefNamedFast"), "no `client EnvRefNamedFast = ...` is declared");
+    assert.contains(resolve_named("env_ref_clients.resolve_named"), "is declared");
+    assert.contains(resolve_named("env_ref_clients.Missing"), "valid prefixes are openai, openai-chat")
+}
+
+// `reflect.Package.get_let` is the lookup underneath: the value of a
+// top-level binding, or null for a name the package binds no value to.
+function package_get_let() -> string {
+    let package = reflect.Package.current();
+    let id = match (package.get_let("env_ref_clients.EnvRefNamedFast")) {
+        let found: ai.Client => found.id(),
+        _ => "not a client",
+    };
+    `${id}|${package.get_let("env_ref_clients.Missing") == null}|${package.get_let("env_ref_clients.package_get_let") == null}`
+}
+
+test "package_get_let" {
+    assert.equal(package_get_let(), `${EnvRefNamedFast.id()}|true|true`)
+}
+
+// A package compiled at run time resolves a name against its own
+// declarations, not against the package that compiled it.
+function resolve_inside_a_compiled_package() -> string {
+    let package = reflect.Package.compile(
+        {
+            "main.baml": `
+                client Compiled = openai.ResponsesClient.new(model = "gpt-4.1-nano", api_key = "test-key");
+
+                function main(name: string) -> string {
+                    ai.clients.resolve(name).id() catch (e) {
+                        ai.errors.InvalidRequest => "undeclared",
+                    }
+                }
+            `,
+        },
+    );
+    let main = package.get_function<(string) -> string>("root.main") ?? baml.sys.panic("missing main");
+    `${main("Compiled")}|${main("env_ref_clients.EnvRefNamedFast")}`
+}
+
+test "resolve_inside_a_compiled_package" {
+    assert.equal(resolve_inside_a_compiled_package(), "openai/gpt-4.1-nano|undeclared")
+}
+
+// Code that a Session evaluates resolves a name against the Session's own
+// bindings, under the names its submissions wrote: what `Bound.id()` reaches by
+// identifier, `resolve("Bound")` reaches by name. The package that opened the
+// Session is not in reach, as for a compiled package.
+function resolve_inside_a_session() -> string {
+    let session = reflect.Session.new();
+    session.eval(
+        `client Bound = openai.ResponsesClient.new(model = "gpt-4.1-mini", api_key = "test-key");`,
+    );
+    let by_identifier = session.eval<string>(`Bound.id()`);
+    let by_name = session.eval<string>(`ai.clients.resolve("Bound").id()`);
+    let of_the_opener = session.eval<string>(
+        `ai.clients.resolve("env_ref_clients.EnvRefNamedFast").id() catch (e) { ai.errors.InvalidRequest => "undeclared" }`,
+    );
+    `${by_identifier}|${by_name}|${of_the_opener}`
+}
+
+test "resolve_inside_a_session" {
+    assert.equal(resolve_inside_a_session(), "openai/gpt-4.1-mini|openai/gpt-4.1-mini|undeclared")
+}
+
+// The `client:` position takes the same names.
+function EnvRefNamedEcho(question: string, client_name: string) -> string {
+    client: client_name
+    prompt: `
+        Reply with exactly one word.
+        ${question}
+    `
+}
+
+function spec_default_client_from_a_name() -> string {
+    EnvRefNamedEcho@spec("ping", "env_ref_clients.EnvRefNamedSmart").default_client.id()
+}
+
+test "spec_default_client_from_a_name" {
+    assert.equal(spec_default_client_from_a_name(), EnvRefNamedSmart.id())
 }
 
 // A ref in a selector position is read at CALL time, and an unset one is a

@@ -23,15 +23,15 @@ class Tool {
     ///
     /// A raw tool (`raw_tool`) hands the argument map straight to its
     /// `raw_handler` and returns that string as-is. A schema-derived tool
-    /// validates, dispatches through reflection, and JSON-serializes the
-    /// result; that reflection boundary widens exactly representable integral
-    /// arguments into float parameters (see reflect.call_any).
+    /// decodes each argument into its parameter's type
+    /// (`_typed_arguments`), dispatches through reflection, which validates
+    /// them, and JSON-serializes the result.
     function call(self, args: map<string, unknown>) -> string {
         if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler {
             return rh(args);
         }
         if let h: reflect.AnyFunction = self.handler {
-            let value = reflect.call_any(h, args) catch (e) {
+            let value = reflect.call_any(h, _typed_arguments(self.name, h, args)) catch (e) {
                 let bad: reflect.InvalidArgumentError => {
                     throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
                 },
@@ -41,6 +41,65 @@ class Tool {
             throw baml.errors.InvalidArgument { message: `tool ${self.name} has no handler` }
         }
     }
+}
+
+/// (internal) A tool call's arguments, each decoded into the type of the
+/// parameter it names.
+///
+/// A model's arguments are JSON: a class arrives as a map, an enum as a
+/// string, a list as a list of json. `reflect.call_any` takes typed values and
+/// rejects those. Schema-aligned parsing decodes them, because it reads the
+/// names the tool's schema advertises (`@alias` included), where
+/// `baml.json.to` reads declared names only.
+///
+/// An argument that does not decode is an `InvalidArgument` that names its
+/// parameter. A list decodes as a whole: an element that does not fit the
+/// element type fails the argument, and the handler never receives the list
+/// without it.
+///
+/// An argument passes through as it arrived in three cases: it names no
+/// parameter; the parser cannot model the parameter's type (`unknown`); or it
+/// is already a value of the parameter's type, which is what BAML code passes
+/// when it calls a tool itself. Decoding that one would write it as JSON under
+/// its declared names and then fail to read an `@alias` field back.
+/// `reflect.call_any` judges every argument that passed through.
+function _typed_arguments(
+    tool: string,
+    handler: reflect.AnyFunction,
+    args: map<string, unknown>,
+) -> map<string, unknown> throws baml.errors.InvalidArgument {
+    let sig = reflect.signature(handler);
+    let params = sig.args.concat(sig.opts.values());
+    let typed: map<string, unknown> = {};
+    for (let name in args.keys()) {
+        let _ = typed.set(name, args.get(name));
+    }
+    for (let param in params) {
+        if (
+            args.has(param.name)
+                && baml.sap.can_parse(param.type)
+                && !_is_value_of(param.type, args.get(param.name))
+        ) {
+            let written = baml.json.to_string(args.get(param.name)) catch_all (e) {
+                _ => {
+                    throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${param.name}: ${e.to_string()}` }
+                },
+            };
+            let value = baml.sap.parse_type(param.type, written) catch (e) {
+                baml.errors.ParseError => {
+                    throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${param.name}: ${e.message}` }
+                },
+            };
+            let _ = typed.set(param.name, value);
+        }
+    }
+    typed
+}
+
+/// (internal) Whether `value` is already a value of the runtime type `t`.
+function _is_value_of(t: reflect.Type, value: unknown) -> bool throws never {
+    type T = unreflect(t);
+    value is T
 }
 
 /// The explicit constructor. `tools: [f]` normalizes through this.

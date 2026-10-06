@@ -17,6 +17,7 @@ from baml_bridge import BamlError
 from baml_bridge.typemap import BamlTypeMap
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_from_lazy_entries_resolves_class_via_importlib():
     """Lazy entries point at a (module, attr) pair that gets resolved on
     first `get_class(fqn)` lookup, then cached."""
@@ -33,24 +34,28 @@ def test_from_lazy_entries_resolves_class_via_importlib():
     assert tm.get_class("std.collections.OrderedDict") is collections.OrderedDict
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_get_class_unknown_fqn_raises():
     tm = BamlTypeMap()
     with pytest.raises(BamlError, match="Unknown class FQN"):
         tm.get_class("user.lorem.Nope")
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_get_enum_unknown_fqn_raises():
     tm = BamlTypeMap()
     with pytest.raises(BamlError, match="Unknown enum FQN"):
         tm.get_enum("user.lorem.Nope")
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_get_type_alias_unknown_fqn_raises():
     tm = BamlTypeMap()
     with pytest.raises(BamlError, match="Unknown type alias FQN"):
         tm.get_type_alias("user.lorem.Nope")
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_get_class_unresolvable_module_raises():
     """A lazy entry that points at a missing module bubbles up as a
     descriptive `BamlError` with the failing `module.attr` path."""
@@ -63,6 +68,7 @@ def test_get_class_unresolvable_module_raises():
         tm.get_class("user.lorem.Mystery")
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_py_type_to_baml_type_walks_mro():
     """The reverse map keys on `(__module__, __qualname__)` and walks
     `cls.__mro__` so user subclasses of generated classes resolve to
@@ -80,6 +86,7 @@ def test_py_type_to_baml_type_walks_mro():
     assert tm.py_type_to_baml_type(MyOrderedDict) == "std.collections.OrderedDict"
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_py_type_to_baml_type_returns_empty_for_unknown():
     """Reverse lookup is informational-only on the wire; unknown
     classes return the empty string, never raise."""
@@ -91,6 +98,7 @@ def test_py_type_to_baml_type_returns_empty_for_unknown():
     assert tm.py_type_to_baml_type(Unrelated) == ""
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's type map
 def test_stdlib_reverse_overrides_seeded():
     """Every typemap seeds the PyO3-identity → `baml.media.*` /
     `ai.stream.Stream` reverse-map overrides at construction time."""

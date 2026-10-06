@@ -72,8 +72,8 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[stream.baml:721:9]
- 721 │         baml.sys.panic("unreachable")
+     ╭─[stream.baml:723:9]
+ 723 │         baml.sys.panic("unreachable")
      ·         ─────────────────────────────
      ╰────
 

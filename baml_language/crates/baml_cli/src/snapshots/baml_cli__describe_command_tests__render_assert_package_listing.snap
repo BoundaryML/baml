@@ -7,4 +7,4 @@ function         assert.not_null                  <builtin>/assert/assert.baml:3
 function         assert.equal                     <builtin>/assert/assert.baml:53
 function         assert.approx_equal              <builtin>/assert/assert.baml:83
 function         assert.contains                  <builtin>/assert/assert.baml:107
-function         assert.is_type                   <builtin>/assert/assert.baml:124
+function         assert.is_type                   <builtin>/assert/assert.baml:135

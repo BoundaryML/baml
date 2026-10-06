@@ -38,7 +38,32 @@ function _new_parse_cache<T>() -> _ParseCache<T> throws never {
     $rust_function
 }
 
+//baml:mut_vm
+//baml:fallible
+/// (internal) Whether schema-aligned parsing can model `T`.
+function _can_parse<T>() -> bool throws never {
+    $rust_function
+}
+
+/// Whether schema-aligned parsing can model the runtime type `t`.
+///
+/// `parse` and `parse_type` panic for a type they cannot model: `unknown`,
+/// `uint8array`, a function, or a type that holds one of those. They also
+/// panic when they build a class with a `@skip` field whose type has no empty
+/// value to fill in (media, a function). Code that receives its types as data
+/// asks here first: `false` covers both.
+function can_parse(t: reflect.Type) -> bool throws never {
+    type T = unreflect(t);
+    _can_parse<T>()
+}
+
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
+///
+/// A list in the text must hold only values of its element type. An item that
+/// does not fit fails the parse, and the error names the item's position and
+/// the reason: the result is never the list without that item. One value where
+/// a list is expected is a list of that value when it fits, and fails the
+/// parse when it does not. `null` and a missing field read as an empty list.
 ///
 /// # Throws
 /// - `baml.errors.ParseError` if parsing fails.

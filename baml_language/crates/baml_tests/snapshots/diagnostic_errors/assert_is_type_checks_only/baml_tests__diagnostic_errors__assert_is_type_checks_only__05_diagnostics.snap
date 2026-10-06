@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × type `void` has no member `a`
+    ╭─[assert_is_type_checks_only.baml:14:5]
+ 14 │     assert.is_type<A>(x).a
+    ·     ──────────────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot use return value of a void function
+    ╭─[assert_is_type_checks_only.baml:19:13]
+ 19 │     let y = assert.is_type<A>(x);
+    ·             ────────────────────
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[assert_is_type_checks_only.baml:26:5]
+ 26 │     x.a
+    ·     ───
+    ╰────
+
+  [type] E0007
+
+  × type `A | B` has no member `a`: its members implement no common interface that declares `a`
+    ╭─[assert_is_type_checks_only.baml:37:5]
+ 37 │     x.a
+    ·     ───
+    ╰────

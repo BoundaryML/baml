@@ -301,6 +301,29 @@ fn find_export<T>(
         })
 }
 
+/// The name under which `package` keeps the top-level binding that its
+/// source writes as `written`.
+///
+/// A package keeps a binding under the name it was written with. A Session
+/// does not: each submission's bindings are stored under hygienic names, and
+/// the Session maps the name a submission writes to the newest of them. A
+/// lookup by name answers for the written name only, so a Session's binding
+/// is found under the name an identifier in a submission reaches it by, and
+/// its hygienic name finds nothing. A Session's bindings sit at its root.
+fn stored_binding_name(package: &Package, written: &LocalName) -> Option<LocalName> {
+    let Some(session) = package.session.as_deref() else {
+        return Some(written.clone());
+    };
+    if !written.namespace.is_empty() {
+        return None;
+    }
+    let symbol = session.visible.get(written.name.as_str())?;
+    Some(LocalName {
+        namespace: Vec::new(),
+        name: baml_type::Name::new(&symbol.internal),
+    })
+}
+
 /// What a package exports under `name`, if anything: a declaration by its
 /// pointer, or a cell (a function or a `let`).
 fn exported_under(package: &Package, name: &LocalName) -> Option<Export> {
@@ -1304,6 +1327,21 @@ impl BamlClassPackage for PackageReflectImpl {
         Ok(Some(function_value))
     }
 
+    fn get_let(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Value {
+        let Ok(package_ptr) = package_ptr(vm, *package) else {
+            return Value::NULL;
+        };
+        let Some(written) = local_name(name.as_str()) else {
+            return Value::NULL;
+        };
+        find_export(vm, package_ptr, |vm, _, package| {
+            let path = DeclPath::Let(stored_binding_name(package, &written)?);
+            let cell = *package.globals.get(&path)?;
+            super::graft::cell_value(vm, package, cell)
+        })
+        .unwrap_or(Value::NULL)
+    }
+
     fn classes(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
         let Ok(ptr) = package_ptr(vm, *package) else {
             return IndexMap::new();
@@ -1906,13 +1944,15 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
 }
 
 /// Whether `value` fits the parameter type `expected`, by the canonical
-/// algebra over the runtime context. Fails OPEN when the value's type cannot
-/// be reconstructed — an opaque native handle (see `value_concrete_ty`) has no
-/// BAML type to compare against, and refusing what we cannot check would
-/// reject working calls; the callee remains dynamically safe either way
-/// (values stay tagged).
+/// algebra over the runtime context. The value is compared at its most precise
+/// type (`value_singleton_ty`), so the string `"auto"` fits a parameter typed
+/// `"auto" | "manual"`: reconstructed as `string` it would fit no literal type.
+/// Fails OPEN when the value's type cannot be reconstructed — an opaque native
+/// handle (see `value_concrete_ty`) has no BAML type to compare against, and
+/// refusing what we cannot check would reject working calls; the callee
+/// remains dynamically safe either way (values stay tagged).
 fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
-    let Some(actual) = vm.value_concrete_ty(value) else {
+    let Some(actual) = vm.value_singleton_ty(value) else {
         return true;
     };
     // No convention patching is needed on the way in: a reconstructed

@@ -274,26 +274,10 @@ function mr_variant() -> Status throws never {
     );
 }
 
-#[test]
-fn records_path_ladders() {
-    let source = r#"
-class City {
-    name string
-}
-class Address {
-    city City
-}
-class Person {
-    address Address
-    function home(self) -> City throws never {
-        self.address.city
-    }
-}
-function mr_chain(p: Person) -> string throws never {
-    let city_name = p.address.city.name;
-    p.address.city.name
-}
-"#;
+/// Every recorded path ladder in `source`, as sorted
+/// `(snippet, root_len, entries)` triples: one `type` or `type/Kind` entry per
+/// written segment, joined by ` -> `.
+fn path_ladders(source: &str) -> Vec<(String, usize, String)> {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut ladders = Vec::new();
@@ -316,25 +300,138 @@ function mr_chain(p: Person) -> string throws never {
                     }
                 })
                 .collect();
-            ladders.push((snippet, rendered.join(" -> ")));
+            ladders.push((snippet, path.root_len, rendered.join(" -> ")));
         }
     }
     ladders.sort();
     ladders.dedup();
+    ladders
+}
+
+#[test]
+fn records_path_ladders() {
+    let ladders = path_ladders(
+        r#"
+class City {
+    name string
+}
+class Address {
+    city City
+}
+class Person {
+    address Address
+    function home(self) -> City throws never {
+        self.address.city
+    }
+}
+function mr_chain(p: Person) -> string throws never {
+    let city_name = p.address.city.name;
+    p.address.city.name
+}
+"#,
+    );
     assert_eq!(
         ladders,
         vec![
             (
                 "p.address.city.name".to_string(),
+                1,
                 "user.Person -> user.Address/Field -> user.City/Field -> string/Field".to_string()
             ),
             (
                 "self.address.city".to_string(),
+                1,
                 "user.Person -> user.Address/Field -> user.City/Field".to_string()
             ),
         ],
         "value-rooted chains record per-segment ladders"
     );
+}
+
+/// `Status.Active.to_string()` is one flat path: the variant is the ROOT of
+/// a value ladder (two written segments, or more behind a namespace), and
+/// the call reads its last segment off that value, exactly as it would off a
+/// `let` binding of the variant.
+#[test]
+fn records_variant_rooted_ladders() {
+    let ladders = path_ladders(
+        r#"
+enum Status {
+    Active
+    Done
+}
+function mr_variant_method() -> string throws never {
+    Status.Active.to_string()
+}
+function mr_variant_method_qualified() -> string throws never {
+    root.Status.Done.to_string()
+}
+function mr_variant_method_let() -> string throws never {
+    let status = Status.Active;
+    status.to_string()
+}
+"#,
+    );
+    // The callee is the `to_string` method of the implicit `ToString`
+    // implementation, dispatched on the receiver's type.
+    let callee = |receiver: &str| {
+        format!("(self: {receiver}) -> string throws never/InterfaceVirtualMethod")
+    };
+    assert_eq!(
+        ladders,
+        vec![
+            (
+                "Status.Active.to_string".to_string(),
+                2,
+                format!(
+                    "!error -> user.Status.Active/Variant -> {}",
+                    callee("user.Status.Active")
+                )
+            ),
+            (
+                "root.Status.Done.to_string".to_string(),
+                3,
+                format!(
+                    "!error -> !error -> user.Status.Done/Variant -> {}",
+                    callee("user.Status.Done")
+                )
+            ),
+            (
+                "status.to_string".to_string(),
+                1,
+                format!("user.Status.Active -> {}", callee("user.Status.Active"))
+            ),
+        ],
+        "a variant path roots a ladder like a local of the variant's type"
+    );
+}
+
+/// A path that names an item through its last segment is not a member read
+/// off a variant: a static of the enum's sibling class, a namespaced
+/// function, and the `from_json` static of the variant TYPE record no
+/// ladder.
+#[test]
+fn variant_rooted_ladder_leaves_item_paths_alone() {
+    let ladders = path_ladders(
+        r#"
+enum Status {
+    Active
+    Done
+}
+class Factory {
+    function build() -> Status throws never {
+        Status.Active
+    }
+}
+function mr_static() -> Status throws never {
+    root.Factory.build()
+}
+function mr_decode(j: json) -> Status throws baml.errors.SerializationError {
+    Status.Active.from_json(j)
+}
+"#,
+    );
+    assert_eq!(ladders, vec![], "no item path records a value ladder");
 }
 
 #[test]

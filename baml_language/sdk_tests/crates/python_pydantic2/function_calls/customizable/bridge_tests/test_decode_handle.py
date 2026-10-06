@@ -46,12 +46,14 @@ def _make_handle(key: int, handle_type: int) -> "baml_handle_pb2.BamlHandle":
     return h
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_function_ref_decodes_to_callable():
     key, ht = _seed_function_ref_handle(123)
     result = _decode_handle(_make_handle(key, ht), BamlTypeMap())
     assert callable(result)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_returned_callable_parameter_aliases_preserve_controls():
     aliases = baml_bridge.proto._returned_param_aliases(
         ["_baml", "_baml_", "_types", "self", "class", "class_"]
@@ -64,12 +66,14 @@ def test_returned_callable_parameter_aliases_preserve_controls():
     }
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_adt_media_generic_decodes_to_pyhandle():
     key, ht = _seed_generic_media_handle()
     result = _decode_handle(_make_handle(key, ht), BamlTypeMap())
     assert isinstance(result, BamlPyHandle)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_decoded_pyhandle_releases_on_drop():
     """Dropping a `BamlPyHandle` removes its row from `HANDLE_TABLE` —
     a subsequent wrapper can still be created from the wire payload, but
@@ -85,6 +89,7 @@ def test_decoded_pyhandle_releases_on_drop():
         copy.copy(stale._handle)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_encode_failure_releases_every_cloned_capability_handle():
     """A later nested encode error explicitly releases every HANDLE_TABLE
     clone while leaving each original Python-owned capability live."""
@@ -115,6 +120,7 @@ def test_encode_failure_releases_every_cloned_capability_handle():
         _release_wire_handle(clone_key)
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_successful_encode_retains_clone_until_wire_owner_consumes_it():
     key, handle_type = _seed_function_ref_handle(17)
     original = BamlPyHandle(key, handle_type)
@@ -131,6 +137,7 @@ def test_successful_encode_retains_clone_until_wire_owner_consumes_it():
     assert _live_handle_count() == before
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_stream_handle_kind_ignores_misleading_type_metadata():
     key, _ = _seed_function_ref_handle(9)
     handle = baml_outbound_pb2.BamlOutboundHandle()
@@ -147,6 +154,7 @@ def test_stream_handle_kind_ignores_misleading_type_metadata():
         (baml_handle_pb2.ADT_RUNTIME_VALUE, BamlRuntimeValue),
     ],
 )
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_live_handle_kinds_select_trusted_wrappers(handle_type, expected_type):
     key, _ = _seed_function_ref_handle(10)
     handle = baml_outbound_pb2.BamlOutboundHandle(
@@ -158,6 +166,7 @@ def test_live_handle_kinds_select_trusted_wrappers(handle_type, expected_type):
 
 
 @pytest.mark.asyncio
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 async def test_function_spec_uses_canonical_method_fqns_and_wire_argument_names(
     monkeypatch,
 ):
@@ -196,6 +205,7 @@ async def test_function_spec_uses_canonical_method_fqns_and_wire_argument_names(
 
 
 @pytest.mark.asyncio
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 async def test_stream_uses_canonical_method_fqns(monkeypatch):
     stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
     monkeypatch.setattr(BamlStream, "_call_sync", lambda _self, fqn, *, _baml=None: fqn)
@@ -212,6 +222,7 @@ async def test_stream_uses_canonical_method_fqns(monkeypatch):
 
 
 @pytest.mark.asyncio
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
     entered = asyncio.Event()
     encoded_call_ids: list[int] = []
@@ -248,6 +259,7 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
 
 
 @pytest.mark.asyncio
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
     monkeypatch,
 ):
@@ -285,6 +297,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
 
 
 @pytest.mark.asyncio
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatch):
     class CompletedRuntime:
         async def call_function(self, _args):
@@ -318,6 +331,7 @@ async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatc
     assert decoded == [b"cancelled-result"] * 3
 
 
+# SDK_PARITY_LINT(skip): unit test of the Python bridge's handle wrappers
 def test_heap_handles_dedup_to_one_refcounted_key():
     # The identity-bearing arm: one heap object owns ONE table key however many
     # times it crosses; every crossing is one more ownership of that key, and
