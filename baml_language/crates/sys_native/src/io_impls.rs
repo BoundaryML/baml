@@ -1300,13 +1300,12 @@ impl io::IoClassGlobGlob for NativeSysOps {
 // System
 // ============================================================================
 
-type NativeProcessResult = Result<owned::sys::ProcessExit, String>;
+type NativeProcessResult = Result<owned::sys::ProcessExit, VmBamlError>;
+type ProcessKillRequest = tokio::sync::oneshot::Sender<Result<(), VmBamlError>>;
 
 struct LiveProcessHandle {
-    kill_tx: tokio::sync::watch::Sender<bool>,
+    kill_tx: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<ProcessKillRequest>>>,
     exit_rx: tokio::sync::watch::Receiver<Option<NativeProcessResult>>,
-    deadline: Option<tokio::time::Instant>,
-    timeout_ms: Option<i64>,
     label: String,
 }
 
@@ -1329,6 +1328,7 @@ impl BexRustData for ReadPipeHandle {
 }
 
 struct WritePipeHandle {
+    close_tx: tokio::sync::watch::Sender<bool>,
     writer: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>,
     label: String,
 }
@@ -1339,36 +1339,85 @@ impl BexRustData for WritePipeHandle {
     }
 }
 
-fn stderr_stdio(
-    mode: Option<&BexExternalValue>,
-) -> Result<(std::process::Stdio, bool), VmInternalError> {
-    use std::process::Stdio;
-
-    let Some(mode) = mode else {
-        return Ok((Stdio::inherit(), false));
+fn process_stdio(mode: &BexExternalValue) -> Result<std::process::Stdio, VmRustFnError> {
+    let value = match mode {
+        BexExternalValue::String(value) => value.as_str(),
+        BexExternalValue::Union { value, .. } => return process_stdio(value),
+        _ => {
+            return Err(VmBamlError::InvalidArgument {
+                message: "Invalid process stream mode".into(),
+            }
+            .into());
+        }
     };
-    // `mode` is the `baml.sys.StderrMode` enum, so neither a non-variant value
-    // nor an unrecognized variant is reachable from well-typed BAML: the first
-    // means the wire value disagrees with the declared type, the second that
-    // the enum grew a variant this match was never taught.
-    let BexExternalValue::Variant { variant_name, .. } = mode else {
-        return Err(VmInternalError::BridgeFailure {
-            message: format!(
-                "stderr mode is not a StderrMode variant: {}",
-                mode.type_name()
-            ),
-        });
-    };
-    match variant_name.as_str() {
-        "Inherit" => Ok((Stdio::inherit(), false)),
-        "Pipe" => Ok((Stdio::piped(), true)),
-        "Discard" => Ok((Stdio::null(), false)),
-        other => Err(VmInternalError::BridgeFailure {
-            message: format!(
-                "unrecognized StderrMode variant '{other}': expected Inherit, Pipe, or Discard"
-            ),
-        }),
+    match value {
+        "inherit" => Ok(std::process::Stdio::inherit()),
+        "pipe" => Ok(std::process::Stdio::piped()),
+        "ignore" => Ok(std::process::Stdio::null()),
+        _ => Err(VmBamlError::InvalidArgument {
+            message: format!("Invalid process stream mode '{value}'"),
+        }
+        .into()),
     }
+}
+
+#[cfg_attr(
+    unix,
+    expect(
+        unsafe_code,
+        reason = "setsid runs in an async-signal-safe pre-exec hook"
+    )
+)]
+fn configure_process(
+    cmd: &mut tokio::process::Command,
+    options: &owned::sys::ProcessOptions,
+    working_dir: &WorkingDir,
+) -> Result<(), VmRustFnError> {
+    if let Some(dir) = working_dir.for_child(options.cwd.as_deref()) {
+        cmd.current_dir(dir);
+    }
+    if !options.inherit_env {
+        cmd.env_clear();
+    }
+    if let Some(env) = &options.env {
+        for (name, value) in env {
+            match value {
+                Some(value) => {
+                    cmd.env(name, value);
+                }
+                None => {
+                    cmd.env_remove(name);
+                }
+            }
+        }
+    }
+    cmd.stdin(process_stdio(&options.stdin)?)
+        .stdout(process_stdio(&options.stdout)?)
+        .stderr(process_stdio(&options.stderr)?)
+        .kill_on_drop(false);
+    if options.input.is_some() {
+        cmd.stdin(std::process::Stdio::piped());
+    }
+    if options.detached {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            // SAFETY: this hook only performs the async-signal-safe setsid syscall
+            // and reads errno. It does not allocate, acquire locks or touch the VM.
+            unsafe {
+                cmd.as_std_mut().pre_exec(|| {
+                    if libc::setsid() == -1 {
+                        Err(std::io::Error::last_os_error())
+                    } else {
+                        Ok(())
+                    }
+                });
+            }
+        }
+        #[cfg(windows)]
+        cmd.creation_flags(0x0000_0008 | 0x0000_0200);
+    }
+    Ok(())
 }
 
 fn downcast_read_pipe(pipe: &owned::sys::ReadPipe) -> Result<Arc<ReadPipeHandle>, VmInternalError> {
@@ -1422,8 +1471,10 @@ fn write_pipe(
     writer: impl tokio::io::AsyncWrite + Send + Unpin + 'static,
     label: String,
 ) -> owned::sys::WritePipe {
+    let (close_tx, _) = tokio::sync::watch::channel(false);
     owned::sys::WritePipe {
         _pipe: Arc::new(WritePipeHandle {
+            close_tx,
             writer: tokio::sync::Mutex::new(Some(Box::new(writer))),
             label,
         }),
@@ -1431,7 +1482,7 @@ fn write_pipe(
 }
 
 fn downcast_process_handle(
-    process: &owned::sys::Process,
+    process: &owned::sys::Subprocess,
 ) -> Result<Arc<LiveProcessHandle>, VmInternalError> {
     process
         ._handle
@@ -1447,24 +1498,61 @@ fn process_exit_from_status(status: std::process::ExitStatus) -> owned::sys::Pro
     #[cfg(unix)]
     let signal = {
         use std::os::unix::process::ExitStatusExt as _;
-        status.signal().map(|signal| signal.to_string())
+        status.signal()
     };
     #[cfg(not(unix))]
-    let signal = None;
+    let signal: Option<i32> = None;
 
     owned::sys::ProcessExit {
-        exit_code: i64::from(status.code().unwrap_or(-1)),
-        signal,
+        exit_code: i64::from(status.code().unwrap_or(128 + signal.unwrap_or(0))),
+        signal: signal.map(i64::from),
     }
 }
 
-fn process_timeout_error(label: &str, timeout_ms: Option<i64>) -> VmBamlError {
-    let duration_ms = timeout_ms.unwrap_or(0);
+fn process_input(options: &owned::sys::ProcessOptions) -> Result<Option<Vec<u8>>, VmRustFnError> {
+    fn bytes(input: &BexExternalValue) -> Result<Vec<u8>, VmRustFnError> {
+        match input {
+            BexExternalValue::String(text) => Ok(text.as_bytes().to_vec()),
+            BexExternalValue::Uint8Array(data) => Ok(data.clone()),
+            BexExternalValue::Union { value, .. } => bytes(value),
+            _ => Err(VmBamlError::InvalidArgument {
+                message: "Process stdin must be text or bytes".into(),
+            }
+            .into()),
+        }
+    }
+    options.input.as_ref().map(bytes).transpose()
+}
+
+fn process_timeout(
+    duration: Option<&BexExternalValue>,
+) -> Result<Option<std::time::Duration>, VmRustFnError> {
+    fn nanos(value: &BexExternalValue) -> Result<u64, VmRustFnError> {
+        let invalid = || VmBamlError::InvalidArgument {
+            message: "Process timeout must be a nonnegative duration representable in nanoseconds"
+                .into(),
+        };
+        match value {
+            BexExternalValue::Instance { fields, .. } => match fields.get("_nanoseconds") {
+                Some(BexExternalValue::Bigint(n)) => u64::try_from(n).map_err(|_| invalid().into()),
+                _ => Err(invalid().into()),
+            },
+            BexExternalValue::Union { value, .. } => nanos(value),
+            _ => Err(invalid().into()),
+        }
+    }
+    duration
+        .map(|duration| nanos(duration).map(std::time::Duration::from_nanos))
+        .transpose()
+}
+
+fn process_timeout_error(label: &str, timeout: Option<std::time::Duration>) -> VmBamlError {
     VmBamlError::Timeout {
-        message: format!("Command '{label}' timed out after {duration_ms}ms"),
-        duration: Some(std::time::Duration::from_millis(
-            u64::try_from(duration_ms).unwrap_or(0),
-        )),
+        message: format!(
+            "Command '{label}' timed out after {}ms",
+            timeout.unwrap_or_default().as_millis()
+        ),
+        duration: timeout,
         timeout_type: "timeout".to_string(),
     }
 }
@@ -1474,7 +1562,7 @@ async fn receive_process_exit(
 ) -> Result<owned::sys::ProcessExit, VmRustFnError> {
     loop {
         if let Some(result) = exit_rx.borrow().clone() {
-            return result.map_err(|message| VmBamlError::Io { message }.into());
+            return result.map_err(Into::into);
         }
         exit_rx.changed().await.map_err(|_| VmBamlError::Io {
             message: "Process monitor stopped before reporting an exit status".into(),
@@ -1516,6 +1604,7 @@ impl io::IoClassSysReadPipe for NativeSysOps {
             let read = tokio::select! {
                 biased;
                 _ = close_rx.changed() => {
+                    guard.take();
                     return Err(read_pipe_closed_error(&handle.label).into());
                 }
                 result = reader.read(&mut buffer) => result.map_err(|error| VmBamlError::Io {
@@ -1562,9 +1651,19 @@ impl io::IoClassSysWritePipe for NativeSysOps {
             let writer = guard.as_mut().ok_or_else(|| VmBamlError::Io {
                 message: format!("Write pipe for '{}' is closed", handle.label),
             })?;
-            let written = writer.write(&data).await.map_err(|error| VmBamlError::Io {
-                message: format!("Failed to write to '{}': {error}", handle.label),
-            })?;
+            let mut closed = handle.close_tx.subscribe();
+            if *closed.borrow() {
+                return Err(VmBamlError::Io {
+                    message: "Write pipe closed".into(),
+                }
+                .into());
+            }
+            let written = tokio::select! {
+                _ = closed.changed() => { guard.take(); return Err(VmBamlError::Io { message: "Write pipe closed".into() }.into()); },
+                result = writer.write(&data) => result.map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to write to '{}': {error}", handle.label),
+                })?,
+            };
             i64::try_from(written).map_err(|_| {
                 VmRustFnError::from(VmBamlError::Io {
                     message: "pipe write count exceeds int range".to_string(),
@@ -1588,9 +1687,19 @@ impl io::IoClassSysWritePipe for NativeSysOps {
             let writer = guard.as_mut().ok_or_else(|| VmBamlError::Io {
                 message: format!("Write pipe for '{}' is closed", handle.label),
             })?;
-            writer.flush().await.map_err(|error| VmBamlError::Io {
-                message: format!("Failed to flush '{}': {error}", handle.label),
-            })?;
+            let mut closed = handle.close_tx.subscribe();
+            if *closed.borrow() {
+                return Err(VmBamlError::Io {
+                    message: "Write pipe closed".into(),
+                }
+                .into());
+            }
+            tokio::select! {
+                _ = closed.changed() => { guard.take(); return Err(VmBamlError::Io { message: "Write pipe closed".into() }.into()); },
+                result = writer.flush() => result.map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to flush '{}': {error}", handle.label),
+                })?,
+            };
             Ok(())
         })
     }
@@ -1602,45 +1711,34 @@ impl io::IoClassSysWritePipe for NativeSysOps {
         writepipe: owned::sys::WritePipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        use tokio::io::AsyncWriteExt as _;
-
         SysOpOutput::async_op(async move {
             let handle = downcast_write_pipe(&writepipe)?;
-            let mut writer = handle.writer.lock().await;
-            if let Some(writer) = writer.as_mut() {
-                writer.flush().await.map_err(|error| VmBamlError::Io {
-                    message: format!("Failed to flush '{}' before close: {error}", handle.label),
-                })?;
-            }
-            writer.take();
+            handle.close_tx.send_replace(true);
+            handle.writer.lock().await.take();
             Ok(())
         })
     }
 }
 
-impl io::IoClassSysProcess for NativeSysOps {
+impl io::IoClassSysSubprocess for NativeSysOps {
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        process: owned::sys::Process,
+        process: owned::sys::Subprocess,
+        timeout: Option<BexExternalValue>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ProcessExit> {
         SysOpOutput::async_op(async move {
             let handle = downcast_process_handle(&process)?;
-            if let Some(deadline) = handle.deadline {
-                match tokio::time::timeout_at(
-                    deadline,
-                    receive_process_exit(handle.exit_rx.clone()),
-                )
-                .await
-                {
-                    Ok(result) => result,
-                    Err(_) => {
-                        let _ = handle.kill_tx.send(true);
-                        Err(process_timeout_error(&handle.label, handle.timeout_ms).into())
-                    }
-                }
+            let timeout = process_timeout(timeout.as_ref())?;
+            if let Some(result) = handle.exit_rx.borrow().clone() {
+                return result.map_err(Into::into);
+            }
+            if let Some(timeout) = timeout {
+                tokio::time::timeout(timeout, receive_process_exit(handle.exit_rx.clone()))
+                    .await
+                    .map_err(|_| process_timeout_error(&handle.label, Some(timeout)))?
             } else {
                 receive_process_exit(handle.exit_rx.clone()).await
             }
@@ -1651,128 +1749,171 @@ impl io::IoClassSysProcess for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        process: owned::sys::Process,
+        process: owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        match downcast_process_handle(&process) {
-            Ok(handle) => {
-                let _ = handle.kill_tx.send(true);
-                SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            let handle = downcast_process_handle(&process)?;
+            if handle.exit_rx.borrow().is_some() {
+                return Ok(());
             }
-            Err(error) => SysOpOutput::err(error),
-        }
+            let tx = handle
+                .kill_tx
+                .lock()
+                .expect("process control lock poisoned")
+                .clone();
+            if let Some(tx) = tx {
+                let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+                if tx.send(ack_tx).is_ok() {
+                    // Acknowledge the OS termination request, without waiting for
+                    // exit. This also prevents VM shutdown from losing the request.
+                    if let Ok(result) = ack_rx.await {
+                        result?;
+                    }
+                }
+                Ok(())
+            } else {
+                Err(VmBamlError::Io {
+                    message: "Subprocess handle is closed".into(),
+                }
+                .into())
+            }
+        })
     }
 
     fn close(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        process: owned::sys::Process,
+        process: owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            if let Ok(handle) = downcast_process_handle(&process) {
-                let _ = handle.kill_tx.send(true);
-            }
-            if let Ok(handle) = downcast_write_pipe(&process.stdin) {
-                handle.writer.lock().await.take();
-            }
-            for pipe in [Some(&process.stdout), process.stderr.as_ref()]
-                .into_iter()
-                .flatten()
-            {
-                if let Ok(handle) = downcast_read_pipe(pipe) {
-                    close_read_pipe(&handle).await;
-                }
-            }
-            Ok(())
-        })
+        if let Ok(handle) = downcast_process_handle(&process) {
+            // Closing a control handle must never signal termination. The reaper
+            // continues independently until the OS process exits.
+            handle
+                .kill_tx
+                .lock()
+                .expect("process control lock poisoned")
+                .take();
+        }
+        // Stream objects own their pipe handles independently. Releasing this
+        // process handle must not close a stream another BAML value still owns.
+        SysOpOutput::ok(())
     }
 }
 
-/// Shared helper: apply `ProcessOptions` to a `tokio::process::Command`, run
-/// it, and collect its output. Both `exec()` and `shell()` use this.
+/// Run a command while writing input and draining both outputs concurrently.
+/// The reaper owns the OS child independently of the caller's VM handle.
 async fn run_process(
     cmd: &mut tokio::process::Command,
-    options: Option<owned::sys::ProcessOptions>,
+    options: owned::sys::ProcessOptions,
     working_dir: &WorkingDir,
     label: &str,
-) -> Result<owned::sys::ShellOutput, VmRustFnError> {
-    use std::process::Stdio;
-
-    use tokio::io::AsyncWriteExt as _;
-
-    if let Some(dir) = working_dir.for_child(options.as_ref().and_then(|opts| opts.cwd.as_deref()))
-    {
-        cmd.current_dir(dir);
-    }
-    if let Some(ref opts) = options {
-        if let Some(ref env) = opts.env {
-            cmd.env_clear();
-            cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-        }
-        if opts.stdin.is_some() {
-            cmd.stdin(Stdio::piped());
-        }
-    }
-
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    cmd.kill_on_drop(true);
-
-    let mut child = cmd.spawn().map_err(|e| VmBamlError::Io {
-        message: format!("Failed to spawn '{label}': {e}"),
+) -> Result<owned::sys::ProcessOutput, VmRustFnError> {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    let timeout = process_timeout(options.timeout.as_ref())?;
+    configure_process(cmd, &options, working_dir)?;
+    let input = process_input(&options)?;
+    let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
+        message: format!("Failed to spawn '{label}': {error}"),
     })?;
-
-    // Write stdin if provided
-    if let Some(ref opts) = options {
-        if let Some(ref stdin_data) = opts.stdin {
-            if let Some(mut stdin_pipe) = child.stdin.take() {
-                let _ = stdin_pipe.write_all(stdin_data.as_bytes()).await;
-                // Drop stdin_pipe to close the pipe (child gets EOF)
+    let stdin = child.stdin.take();
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let (kill_tx, mut kill_rx) = tokio::sync::mpsc::unbounded_channel::<ProcessKillRequest>();
+    let (status_tx, status_rx) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let status = loop {
+            tokio::select! {
+                status = child.wait() => break status,
+                request = kill_rx.recv() => {
+                    match request {
+                        Some(ack) => {
+                            let result = child.start_kill().map_err(|error| VmBamlError::Io { message: format!("Failed to terminate process: {error}") });
+                            let _ = ack.send(result);
+                        }
+                        None => break child.wait().await,
+                    }
+                }
             }
-        }
-    }
-
-    // Apply timeout if specified
-    let timeout_ms = options.as_ref().and_then(|o| o.timeout_ms);
-    let output = if let Some(ms) = timeout_ms {
-        let duration = std::time::Duration::from_millis(ms.max(0).cast_unsigned());
-        // Spawn the wait in a separate task so we can kill regardless of ownership
-        let task_child = child;
-        let mut wait_task = tokio::spawn(async move { task_child.wait_with_output().await });
-        match tokio::time::timeout(duration, &mut wait_task).await {
-            Ok(Ok(result)) => result.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to wait on '{label}': {e}"),
-            })?,
-            Ok(Err(join_err)) => {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: format!("Task join error waiting on '{label}': {join_err}"),
-                }));
-            }
-            Err(_elapsed) => {
-                // Abort the task so task_child is dropped, triggering kill_on_drop
-                wait_task.abort();
-                return Err(VmRustFnError::from(VmBamlError::Timeout {
-                    message: format!("Command '{label}' timed out after {ms}ms"),
-                    duration: Some(duration),
-                    timeout_type: "timeout".to_string(),
-                }));
-            }
-        }
-    } else {
-        child
-            .wait_with_output()
-            .await
-            .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to wait on '{label}': {e}"),
-            })?
-    };
-
-    let exit_code = i64::from(output.status.code().unwrap_or(-1));
-    Ok(owned::sys::ShellOutput {
-        stdout: output.stdout,
-        stderr: output.stderr,
-        exit_code,
+        };
+        let _ = status_tx.send(status);
+    });
+    let (result_tx, result_rx) = tokio::sync::oneshot::channel();
+    let label = label.to_owned();
+    // Caller cancellation drops only its receiver. This task and the reaper
+    // continue without making cancellation an implicit termination request.
+    tokio::spawn(async move {
+        let operation = async move {
+            let write = async move {
+                if let (Some(mut stdin), Some(input)) = (stdin, input) {
+                    // A command can finish without consuming all supplied input.
+                    // Still return its output/status when it closes stdin early.
+                    if let Err(error) = stdin.write_all(&input).await
+                        && !matches!(
+                            error.kind(),
+                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
+                        )
+                    {
+                        return Err(error);
+                    }
+                }
+                Ok::<_, std::io::Error>(())
+            };
+            let out = async move {
+                let mut bytes = Vec::new();
+                if let Some(mut pipe) = stdout {
+                    pipe.read_to_end(&mut bytes).await?;
+                }
+                Ok::<_, std::io::Error>(bytes)
+            };
+            let err = async move {
+                let mut bytes = Vec::new();
+                if let Some(mut pipe) = stderr {
+                    pipe.read_to_end(&mut bytes).await?;
+                }
+                Ok::<_, std::io::Error>(bytes)
+            };
+            let (write, stdout, stderr, status) = tokio::join!(write, out, err, status_rx);
+            let io_error = |error: std::io::Error| VmBamlError::Io {
+                message: error.to_string(),
+            };
+            write.map_err(io_error)?;
+            let status = status
+                .map_err(|_| VmBamlError::Io {
+                    message: "Process reaper stopped before reporting completion".into(),
+                })?
+                .map_err(io_error)?;
+            Ok::<_, VmRustFnError>((stdout.map_err(io_error)?, stderr.map_err(io_error)?, status))
+        };
+        let result = match timeout {
+            Some(timeout) => match tokio::time::timeout(timeout, operation).await {
+                Ok(result) => result,
+                Err(_) => {
+                    // An explicitly configured run timeout requests termination.
+                    // Reaping continues independently; pipe draining cannot extend
+                    // the deadline when descendants still hold their ends open.
+                    let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+                    if kill_tx.send(ack_tx).is_ok() {
+                        let _ = ack_rx.await;
+                    }
+                    Err(process_timeout_error(&label, Some(timeout)).into())
+                }
+            },
+            None => operation.await,
+        };
+        let _ = result_tx.send(result);
+    });
+    let (stdout, stderr, status) = result_rx.await.map_err(|_| VmBamlError::Io {
+        message: "Process recording stopped before reporting completion".into(),
+    })??;
+    let status = process_exit_from_status(status);
+    Ok(owned::sys::ProcessOutput {
+        stdout,
+        stderr,
+        exit_code: status.exit_code,
+        signal: status.signal,
     })
 }
 
@@ -1790,159 +1931,145 @@ impl io::IoNamespaceSys for NativeSysOps {
         SysOpOutput::ok(())
     }
 
-    fn exec(
+    fn _run(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
-        args: Option<Vec<String>>,
-        options: Option<owned::sys::ProcessOptions>,
+        args: Vec<String>,
+        options: owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::sys::ShellOutput> {
+    ) -> SysOpOutput<owned::sys::ProcessOutput> {
         let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
-            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
-            if let Some(ref a) = args {
-                cmd.args(a);
-            }
+            let executable = working_dir
+                .resolve_program(&program, options.cwd.as_deref())
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to resolve '{program}': {error}"),
+                })?;
+            let mut cmd = tokio::process::Command::new(executable);
+            cmd.args(&args);
             run_process(&mut cmd, options, &working_dir, &program).await
         })
     }
 
-    fn start_process(
+    fn _subprocess(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
-        args: Option<Vec<String>>,
-        options: Option<owned::sys::ProcessOptions>,
+        args: Vec<String>,
+        options: owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::sys::Process> {
+    ) -> SysOpOutput<owned::sys::Subprocess> {
         let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
-            use std::process::Stdio;
-
             use tokio::io::AsyncWriteExt as _;
-
-            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
-            if let Some(ref args) = args {
-                cmd.args(args);
-            }
-            if let Some(dir) =
-                working_dir.for_child(options.as_ref().and_then(|options| options.cwd.as_deref()))
-            {
-                cmd.current_dir(dir);
-            }
-            if let Some(ref options) = options {
-                if let Some(ref env) = options.env {
-                    cmd.env_clear();
-                    cmd.envs(
-                        env.iter()
-                            .map(|(key, value)| (key.as_str(), value.as_str())),
-                    );
-                }
-            }
-
-            let (stderr_stdio, stderr_piped) =
-                stderr_stdio(options.as_ref().and_then(|options| options.stderr.as_ref()))?;
-            cmd.stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(stderr_stdio)
-                .kill_on_drop(true);
-
+            let executable = working_dir
+                .resolve_program(&program, options.cwd.as_deref())
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to resolve '{program}': {error}"),
+                })?;
+            let mut cmd = tokio::process::Command::new(executable);
+            cmd.args(&args);
+            configure_process(&mut cmd, &options, &working_dir)?;
+            let input = process_input(&options)?;
             let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
                 message: format!("Failed to spawn '{program}': {error}"),
             })?;
-            let missing_pipe = |stream: &str| VmBamlError::Io {
-                message: format!("Failed to capture {stream} from '{program}'"),
-            };
-            let child_stdin = child.stdin.take().ok_or_else(|| missing_pipe("stdin"))?;
-            let child_stdout = child.stdout.take().ok_or_else(|| missing_pipe("stdout"))?;
-            let child_stderr = if stderr_piped {
-                Some(child.stderr.take().ok_or_else(|| missing_pipe("stderr"))?)
-            } else {
-                None
-            };
-
-            let timeout_ms = options
-                .as_ref()
-                .and_then(|options| options.timeout_ms)
-                .map(|milliseconds| milliseconds.max(0));
-            let deadline = timeout_ms.and_then(|milliseconds| {
-                tokio::time::Instant::now().checked_add(std::time::Duration::from_millis(
-                    milliseconds.cast_unsigned(),
-                ))
-            });
-            let stdin = write_pipe(child_stdin, format!("{program} stdin"));
-            let stdout = read_pipe(child_stdout, format!("{program} stdout"));
-            let stderr = child_stderr
-                .map(|child_stderr| read_pipe(child_stderr, format!("{program} stderr")));
-
-            let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
+            let pid = i64::from(child.id().ok_or_else(|| VmBamlError::Io {
+                message: "Missing child PID".into(),
+            })?);
+            let stdin = child
+                .stdin
+                .take()
+                .map(|pipe| write_pipe(pipe, format!("{program} stdin")));
+            let stdout = child
+                .stdout
+                .take()
+                .map(|pipe| read_pipe(pipe, format!("{program} stdout")));
+            let stderr = child
+                .stderr
+                .take()
+                .map(|pipe| read_pipe(pipe, format!("{program} stderr")));
+            let (kill_tx, mut kill_rx) =
+                tokio::sync::mpsc::unbounded_channel::<ProcessKillRequest>();
             let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
-            let monitor_label = program.clone();
-            tokio::spawn(async move {
-                let exit = tokio::select! {
-                    biased;
-                    _ = kill_rx.changed() => {
-                        let _ = child.start_kill();
-                        child.wait().await
+            // Input delivery is independent of waiting for the OS process. A
+            // descendant may inherit stdin after the direct child has exited.
+            if let (Some(data), Some(pipe)) = (input, stdin.as_ref()) {
+                let pipe = downcast_write_pipe(pipe)?;
+                tokio::spawn(async move {
+                    let mut closed = pipe.close_tx.subscribe();
+                    let mut guard = pipe.writer.lock().await;
+                    if *closed.borrow() {
+                        guard.take();
+                        return;
                     }
-                    result = child.wait() => result,
-                }
-                .map(process_exit_from_status)
-                .map_err(|error| format!("Failed to wait on '{monitor_label}': {error}"));
-                let _ = exit_tx.send(Some(exit));
+                    if let Some(mut writer) = guard.take() {
+                        tokio::select! {
+                            _ = closed.changed() => {},
+                            result = writer.write_all(&data) => {
+                                if let Err(error) = result
+                                    && !matches!(error.kind(), std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset)
+                                {
+                                    tracing::warn!(%error, "Failed to deliver subprocess input");
+                                }
+                            },
+                        }
+                    }
+                });
+            }
+            tokio::spawn(async move {
+                let result = {
+                    let status = loop {
+                        tokio::select! {
+                            status = child.wait() => break status,
+                            request = kill_rx.recv() => {
+                                match request {
+                                    Some(ack) => {
+                                        let result = child.start_kill().map_err(|error| VmBamlError::Io { message: format!("Failed to terminate process: {error}") });
+                                        let _ = ack.send(result);
+                                    }
+                                    None => {
+                                        // Handle release only: keep reaping independently.
+                                        break child.wait().await;
+                                    }
+                                }
+                            },
+                        }
+                    };
+                    status
+                        .map(process_exit_from_status)
+                        .map_err(|error| VmBamlError::Io {
+                            message: format!("Failed to wait on process: {error}"),
+                        })
+                };
+                let _ = exit_tx.send(Some(result));
             });
 
-            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
-                let handle = downcast_write_pipe(&stdin)?;
-                let mut writer = handle.writer.lock().await;
-                let write_result = if let Some(writer) = writer.as_mut() {
-                    let write = writer.write_all(stdin_data.as_bytes());
-                    let result =
-                        match deadline {
-                            Some(deadline) => tokio::time::timeout_at(deadline, write)
-                                .await
-                                .map_err(|_| {
-                                    let _ = kill_tx.send(true);
-                                    process_timeout_error(&program, timeout_ms)
-                                })?,
-                            None => write.await,
-                        };
-                    result.map_err(|error| VmBamlError::Io {
-                        message: format!("Failed to write stdin to '{program}': {error}"),
-                    })
-                } else {
-                    Ok(())
-                };
-                writer.take();
-                write_result?;
-            }
-
-            Ok(owned::sys::Process {
+            Ok(owned::sys::Subprocess {
+                pid,
                 stdin,
                 stdout,
                 stderr,
                 _handle: Arc::new(LiveProcessHandle {
-                    kill_tx,
+                    kill_tx: std::sync::Mutex::new(Some(kill_tx)),
                     exit_rx,
-                    deadline,
-                    timeout_ms,
                     label: program,
                 }),
             })
         })
     }
 
-    fn shell(
+    fn _shell(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         command: String,
-        options: Option<owned::sys::ProcessOptions>,
+        options: owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::sys::ShellOutput> {
+    ) -> SysOpOutput<owned::sys::ProcessOutput> {
         let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             let resolved = crate::shell::default_shell();

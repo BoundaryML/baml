@@ -32,8 +32,8 @@ impl WasmSys {
 }
 
 /// Unpack a JS result object `{ exit_code, stdout_bytes, stderr_bytes }`
-/// into an `owned::sys::ShellOutput`.
-fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, VmBamlError> {
+/// into an `owned::sys::ProcessOutput`.
+fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ProcessOutput, VmBamlError> {
     let exit_code_f64 = Reflect::get(obj, &"exit_code".into())
         .map_err(|e| VmBamlError::Io {
             message: format!("missing exit_code: {e:?}"),
@@ -60,44 +60,60 @@ fn unpack_shell_result(obj: &JsValue) -> Result<io::owned::sys::ShellOutput, VmB
         .map(|a| a.to_vec())
         .unwrap_or_default();
 
-    Ok(io::owned::sys::ShellOutput {
+    Ok(io::owned::sys::ProcessOutput {
         stdout,
         stderr,
         exit_code,
+        signal: None,
     })
 }
 
-/// Serialize `ProcessOptions` to a JSON string for the JS callback.
-fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
-    match options {
-        None => JsValue::NULL,
-        Some(opts) => {
-            let obj = js_sys::Object::new();
-            if let Some(ref cwd) = opts.cwd {
-                let _ = Reflect::set(&obj, &"cwd".into(), &cwd.into());
-            }
-            if let Some(ref env) = opts.env {
-                let env_obj = js_sys::Object::new();
-                for (k, v) in env {
-                    let _ = Reflect::set(&env_obj, &k.into(), &v.into());
-                }
-                let _ = Reflect::set(&obj, &"env".into(), &env_obj.into());
-            }
-            if let Some(ms) = opts.timeout_ms {
-                #[allow(clippy::cast_precision_loss)]
-                let _ = Reflect::set(&obj, &"timeout_ms".into(), &JsValue::from_f64(ms as f64));
-            }
-            if let Some(ref stdin) = opts.stdin {
-                let _ = Reflect::set(&obj, &"stdin".into(), &stdin.into());
-            }
-            if let Some(BexExternalValue::Variant { variant_name, .. }) = opts.stderr.as_ref() {
-                let _ = Reflect::set(&obj, &"stderr".into(), &variant_name.into());
-            }
-            js_sys::JSON::stringify(&obj)
-                .map(JsValue::from)
-                .unwrap_or(JsValue::NULL)
-        }
+/// Serialize `_ProcessOptions` to a JSON string for the JS callback.
+fn options_to_js(options: &io::owned::sys::ProcessOptions) -> Result<JsValue, VmRustFnError> {
+    let obj = js_sys::Object::new();
+    if let Some(ref cwd) = options.cwd {
+        let _ = Reflect::set(&obj, &"cwd".into(), &cwd.into());
     }
+    let _ = Reflect::set(
+        &obj,
+        &"inherit_env".into(),
+        &JsValue::from_bool(options.inherit_env),
+    );
+    if let Some(ref env) = options.env {
+        let env_obj = js_sys::Object::new();
+        for (name, value) in env {
+            let value = value.as_ref().map_or(JsValue::NULL, Into::into);
+            let _ = Reflect::set(&env_obj, &name.into(), &value);
+        }
+        let _ = Reflect::set(&obj, &"env".into(), &env_obj.into());
+    }
+    if let Some(timeout) = &options.timeout {
+        let _ = Reflect::set(
+            &obj,
+            &"timeout_ms".into(),
+            &JsValue::from_f64(process_timeout_millis(timeout)?),
+        );
+    }
+    if let Some(input) = &options.input {
+        let _ = Reflect::set(&obj, &"input".into(), &process_input_js(input));
+    }
+    for (name, value) in [
+        ("stdin", &options.stdin),
+        ("stdout", &options.stdout),
+        ("stderr", &options.stderr),
+    ] {
+        fn mode(value: &BexExternalValue) -> &str {
+            match value {
+                BexExternalValue::String(value) => value.as_str(),
+                BexExternalValue::Union { value, .. } => mode(value),
+                _ => "inherit",
+            }
+        }
+        let _ = Reflect::set(&obj, &name.into(), &mode(value).into());
+    }
+    Ok(js_sys::JSON::stringify(&obj)
+        .map(JsValue::from)
+        .unwrap_or(JsValue::NULL))
 }
 
 impl io::IoClassSysReadPipe for WasmSys {
@@ -171,12 +187,13 @@ impl io::IoClassSysWritePipe for WasmSys {
     }
 }
 
-impl io::IoClassSysProcess for WasmSys {
+impl io::IoClassSysSubprocess for WasmSys {
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
+        _timeout: Option<BexExternalValue>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -189,7 +206,7 @@ impl io::IoClassSysProcess for WasmSys {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -202,7 +219,7 @@ impl io::IoClassSysProcess for WasmSys {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _process: io::owned::sys::Process,
+        _process: io::owned::sys::Subprocess,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())
@@ -223,29 +240,24 @@ impl IoNamespaceSys for WasmSys {
         SysOpOutput::ok(())
     }
 
-    fn exec(
+    fn _run(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         program: String,
-        args: Option<Vec<String>>,
-        options: Option<io::owned::sys::ProcessOptions>,
+        args: Vec<String>,
+        options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+    ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         let exec_fn = self.exec_fn.clone();
         SysOpOutput::async_op(SendFuture(async move {
             let program_js: JsValue = program.into();
-            let args_js: JsValue = match args {
-                Some(a) => {
-                    let arr = js_sys::Array::new();
-                    for s in a {
-                        arr.push(&s.into());
-                    }
-                    arr.into()
-                }
-                None => JsValue::UNDEFINED,
-            };
-            let options_js = options_to_js(options.as_ref());
+            let arr = js_sys::Array::new();
+            for arg in args {
+                arr.push(&arg.into());
+            }
+            let args_js: JsValue = arr.into();
+            let options_js = options_to_js(&options)?;
 
             let result = exec_fn
                 .call3(&JsValue::NULL, &program_js, &args_js, &options_js)
@@ -264,33 +276,33 @@ impl IoNamespaceSys for WasmSys {
         }))
     }
 
-    fn start_process(
+    fn _subprocess(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _program: String,
-        _args: Option<Vec<String>>,
-        _options: Option<io::owned::sys::ProcessOptions>,
+        _args: Vec<String>,
+        _options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::Process> {
+    ) -> SysOpOutput<io::owned::sys::Subprocess> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
 
-    fn shell(
+    fn _shell(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         command: String,
-        options: Option<io::owned::sys::ProcessOptions>,
+        options: io::owned::sys::ProcessOptions,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+    ) -> SysOpOutput<io::owned::sys::ProcessOutput> {
         let shell_fn = self.shell_fn.clone();
         SysOpOutput::async_op(SendFuture(async move {
             let command_js: JsValue = command.into();
-            let options_js = options_to_js(options.as_ref());
+            let options_js = options_to_js(&options)?;
 
             let result = shell_fn
                 .call2(&JsValue::NULL, &command_js, &options_js)
@@ -391,4 +403,39 @@ fn sleep_millis_from_delay(delay: BexExternalValue) -> Result<i32, VmRustFnError
             ),
         })),
     }
+}
+
+fn process_input_js(input: &BexExternalValue) -> JsValue {
+    match input {
+        BexExternalValue::String(text) => text.as_str().into(),
+        BexExternalValue::Uint8Array(bytes) => {
+            let array = js_sys::Array::new();
+            for byte in bytes {
+                array.push(&JsValue::from_f64(f64::from(*byte)));
+            }
+            array.into()
+        }
+        BexExternalValue::Union { value, .. } => process_input_js(value),
+        _ => JsValue::NULL,
+    }
+}
+
+fn process_timeout_millis(value: &BexExternalValue) -> Result<f64, VmRustFnError> {
+    if let BexExternalValue::Union { value, .. } = value {
+        return process_timeout_millis(value);
+    }
+    if let BexExternalValue::Instance { fields, .. } = value {
+        if let Some(BexExternalValue::Bigint(nanos)) = fields.get("_nanoseconds") {
+            let nanos = u64::try_from(nanos).map_err(|_| VmBamlError::InvalidArgument {
+                message: "Process timeout must be nonnegative and fit in 64-bit nanoseconds".into(),
+            })?;
+            // u64 nanoseconds produce at most 2^45 milliseconds: exactly representable in JS.
+            return Ok(num_traits::ToPrimitive::to_f64(&nanos.div_ceil(1_000_000))
+                .expect("milliseconds fit in f64"));
+        }
+    }
+    Err(VmBamlError::InvalidArgument {
+        message: "Expected a Duration process timeout".into(),
+    }
+    .into())
 }

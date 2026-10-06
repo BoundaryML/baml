@@ -303,24 +303,28 @@ namespace baml.spawn:
   class Root { methods: [new] }
   function __spawn<T, E>
 namespace baml.sys:
-  class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }
-  class ProcessOptions { methods: [] }
+  type ProcessInput
+  class ProcessOutput { methods: [ok] }
   class ReadPipe { methods: [close, lines] }
   class ReadPipeLines { methods: [] }
-  class ShellOutput { methods: [ok] }
-  enum StderrMode
+  type Stdio
+  class Subprocess { methods: [wait, kill, close, cleanup] }
   class WritePipe { methods: [close] }
+  class _ProcessOptions { methods: [] }
+  function _run
+  function _shell
   function _strip_carriage_return
+  function _subprocess
   function argv
   function collect_garbage
-  function exec
   function exit
   function panic
   function pid
+  function run
   function shell
   function sleep
-  function start_process
+  function subprocess
 namespace baml.time:
   class AmbiguousTimeError { methods: [] }
   type Disambiguation
