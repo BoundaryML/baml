@@ -16,6 +16,8 @@ pub mod diagnostics;
 pub mod error;
 #[cfg(feature = "auth")]
 pub mod query;
+#[cfg(feature = "auth")]
+mod store;
 pub mod telemetry;
 pub mod wire;
 

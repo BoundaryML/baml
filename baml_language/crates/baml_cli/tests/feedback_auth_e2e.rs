@@ -296,10 +296,6 @@ fn dead_posthog() -> String {
 }
 
 #[test]
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "Requires an unlocked OS credential store; headless Linux has no Secret Service"
-)]
 fn anonymous_by_default_then_identified_feedback_backfills() {
     let state = Arc::new(MockState::default());
     let base = spawn_mock(state.clone());
@@ -375,6 +371,32 @@ Endpoint: {base}
     let (ok, out) = run_baml(home.path(), &base, &["auth", "login", "--no-open"], None);
     assert!(ok, "{out}");
     assert!(out.contains("logged in as user@example.com"), "{out}");
+    let mut login_files: Vec<_> = std::fs::read_dir(home.path().join("login").join("cache"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    let login_file = login_files
+        .iter()
+        .find(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .expect("login must persist a JSON credential file")
+        .clone();
+    let mut expected_files = vec![login_file.clone()];
+    #[cfg(windows)]
+    expected_files.push(login_file.with_extension("lock"));
+    login_files.sort();
+    expected_files.sort();
+    assert_eq!(login_files, expected_files);
+    let login: Value = serde_json::from_slice(&std::fs::read(&login_file).unwrap()).unwrap();
+    assert_eq!(
+        login,
+        serde_json::json!({
+            "refreshToken": session()["refreshToken"],
+            "caller": session()["caller"],
+        })
+    );
     assert!(
         !state
             .captures
@@ -428,6 +450,7 @@ Endpoint: {base}
     // 6. Logout keeps the distinct id; status reports no login.
     let (ok, out) = run_baml(home.path(), &base, &["auth", "logout"], None);
     assert!(ok, "{out}");
+    assert!(!login_file.exists());
     let json = std::fs::read_to_string(&creds).unwrap();
     assert!(
         json.contains(&anon_id),
@@ -493,10 +516,6 @@ fn json_stdin_payload() {
 }
 
 #[test]
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "Requires an unlocked OS credential store; headless Linux has no Secret Service"
-)]
 fn anonymous_after_login_uses_one_shot_id() {
     let state = Arc::new(MockState::default());
     let base = spawn_mock(state.clone());
@@ -584,10 +603,6 @@ fn offline_send_saves_open_then_syncs() {
 }
 
 #[test]
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "Requires an unlocked OS credential store; headless Linux has no Secret Service"
-)]
 fn sync_honors_forced_anonymity_after_login() {
     let state = Arc::new(MockState::default());
     let base = spawn_mock(state.clone());

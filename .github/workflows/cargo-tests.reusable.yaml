@@ -228,9 +228,6 @@ jobs:
         run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      - name: "Setup test credential store"
-        uses: ./.github/actions/setup-test-keyring
-
       - name: "Run tests with nextest"
         # The runtime corpus and type quiz moved from the excluded baml_tests
         # package into baml_cli; keep their ownership in the snapshot job.

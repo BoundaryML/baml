@@ -2,11 +2,14 @@
 
 Cloud wire contracts and native clients shared by the CLI, bridges, packed programs, and telemetry delivery.
 
-- `auth`: device login, endpoint selection, and protected storage of the persistent session credential.
+- `auth`: device login and endpoint selection.
+- `store` (exposed through `auth::Store`): an AWS-style JSON login cache under `$BAML_HOME/login/cache/` (default `~/.baml/login/cache/`), with one owner-only file per canonical Boundary API endpoint. CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
 - `credentials`: redacted credentials, optional request targets, and shared process-local access-token state.
 - `query`: blocking NDJSON queries and cancellation.
 - `telemetry`: asynchronous upload preparation and heartbeat, plus protobuf uploads authorized by the upload plan.
 - `wire` and `proto`: telemetry control contracts and the existing `cloud.proto` envelope.
+
+Windows cache operations use an owner-only empty `<endpoint-hash>.lock` file to coordinate readers, atomic replacement and logout across hosts. The lock file stays after logout and contains no credentials. Locks cover only local file operations, never HTTP requests. A blocked cache-directory path is a storage error, not an absent login.
 
 Create `Authentication::shared` with the canonical endpoint and original credential, then put it in a `RequestAuthorization` with the operation's optional `Target`. Authentication is shared by endpoint and original credential; targets remain specific to each operation.
 

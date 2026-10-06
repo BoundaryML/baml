@@ -62,7 +62,7 @@ fn assert_api_key_rejection(
 
   Execution cancelled."#
     };
-    // OS storage may be available or unavailable on the host. Every accepted variant
+    // Saved login storage may be available or unavailable on the host. Every accepted variant
     // is compared in full; unit tests independently pin each specific saved-login state.
     let expected = [
         "Unset BOUNDARY_API_KEY to use your saved Boundary login.",
@@ -802,5 +802,84 @@ fn invalid_boundary_url_cancels_with_or_without_credentials_unless_local_is_sele
                 );
             }
         }
+    }
+}
+
+#[test]
+fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recording_works() {
+    use sha2::Digest as _;
+
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    let home = temp.path().join("home");
+    let endpoint = "https://example.com";
+    let file = home.join("login").join("cache").join(format!(
+        "{}.json",
+        hex::encode(sha2::Sha256::digest(endpoint.as_bytes()))
+    ));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "{bdry_session_never_print_this").unwrap();
+    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
+
+    for (args, outcome, recovery) in [
+        (
+            ["run", "main"],
+            "Execution cancelled.",
+            r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with BAML_TELEMETRY=off."#,
+        ),
+        (
+            ["query", "SELECT 7"],
+            "Query failed.",
+            "    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.",
+        ),
+    ] {
+        let output = Command::new(common::baml_cli())
+            .args(["--agent-skill-check", "off"])
+            .args(args)
+            .current_dir(temp.path())
+            .env("BAML_HOME", &home)
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("BOUNDARY_API_URL", endpoint)
+            .env("BAML_TELEMETRY", "medium")
+            .env("DO_NOT_TRACK", "1")
+            .env_remove("BOUNDARY_PROJECT")
+            .env_remove("BOUNDARY_API_KEY")
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{output:?}");
+        assert_eq!(
+            diagnostic(&output),
+            format!(
+                r#"error: The saved Boundary login in the local credential file at {} is invalid.
+  Endpoint: {endpoint}
+
+  To continue, choose one:
+    • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`.
+    • Set BOUNDARY_API_KEY to a valid API key.
+{recovery}
+
+  {outcome}"#,
+                file.display()
+            )
+        );
+    }
+
+    for (variable, value) in [("BOUNDARY_API_KEY", "local"), ("BAML_TELEMETRY", "off")] {
+        let output = Command::new(common::baml_cli())
+            .args(["--agent-skill-check", "off", "run", "main"])
+            .current_dir(temp.path())
+            .env("BAML_HOME", &home)
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("BOUNDARY_API_URL", endpoint)
+            .env("BAML_TELEMETRY", "medium")
+            .env("DO_NOT_TRACK", "1")
+            .env_remove("BOUNDARY_PROJECT")
+            .env_remove("BOUNDARY_API_KEY")
+            .env(variable, value)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
     }
 }
