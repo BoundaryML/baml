@@ -120,6 +120,18 @@ function assigned_inside_then_after(x: A | B) -> bool throws never {
       // ^ user.A | user.B
 }
 
+// A test is judged in the flow that holds where it runs. The nested right
+// operand assigns `x` before it tests it again, so that test reads the
+// assigned type, not the fact of the outer left operand, and it is not dead.
+function assigned_then_tested_in_a_nested_operand(x: A | B, other: A | B) -> bool throws never {
+    if (x is A && ({ x = other; true } && x is B)) {
+        same(x)
+          // ^ user.B
+    } else {
+        false
+    }
+}
+
 function captured(x: A | B) -> bool throws never {
     let read = () -> bool throws never {
         x is A

@@ -2,6 +2,8 @@ This doc is primarily written for use in development work on the BAML programmin
 
 At the time of this document's writing, not all BAML type system features work as specified here. This document is thus prescriptive, not descriptive: this is how the type system _should_ work. Any features or implementations that rely on preexisting incomplete behavior should be considered liable to change.
 
+This document should not include implementation details or information outside the BAML type system semantics. It should only be edited by human maintainers, not by agents. If an agent makes changes to the codebase that would require a change in documented type system semantics, they should first critique if it is correct and necessary, and if it is they may prompt their user to document the semantics here.
+
 # The BAML Type System
 
 The BAML programming language has a strong, statically checked, dynamically monomorphized type system. While it uses TypeScript-like syntax, it provides stronger guarantees and identity which also permit safe runtime validation (e.g. `match` over union types).
@@ -177,7 +179,7 @@ Pattern matching ([BEP-015](https://beps.boundaryml.com/beps/15)) on types falls
 To check pattern fallibility/infallibility/exhaustiveness, BAML ensures that the union of the matched patterns represent a superset of the scrutinee's type, or defines a diverging path for fallible patterns if not.
 `match` also rejects arms that can provably never be reached. While these do not necessarily violate the type system, they are dead code that could be misleading. A `match` arm `A(N)` is unreachable if and only if `SCRUTINEE ∩ (A(0) ∪ A(1) ∪ ... ∪ A(N-1)) = SCRUTINEE ∩ (A(0) ∪ A(1) ∪ ... ∪ A(N-1) ∪ A(N))`. If we cannot prove either way, we err towards saying it is reachable (for example, we exclude all arms with an `if` expression-guard from consideration in reachability and say they do not contribute to exhaustiveness as we can make no guarantees about the evaluated expression).
 
-The same order gives a catch-all binding its type. A value reaches an arm only if no earlier arm took it, so a pattern that writes no type of its own (`let rest`, a chain of such bindings, and `_`) has the type `SCRUTINEE \ (A(0) ∪ A(1) ∪ ... ∪ A(N-1))`, where only the earlier arms that _consume_ their type count: an arm with no guard whose pattern accepts every value of the type it names (a type, `null`, a literal). An arm with a guard, or with a field or length constraint, takes nothing away, because a value of its type can still fall through to a later arm. A binding that writes a type (`let x: T`) keeps the type it wrote.
+The same order gives a catch-all binding its type. A value reaches an arm only if no earlier arm took it, so a pattern that writes no type of its own (`let rest`, a chain of such bindings, `_`, and any of these as an alternative of an or-pattern) has the type `SCRUTINEE \ (A(0) ∪ A(1) ∪ ... ∪ A(N-1))`, where only the earlier arms that _consume_ their type count: an arm with no guard whose pattern accepts every value of the type it names (a type, `null`, a literal). An arm with a guard, or with a field or length constraint, takes nothing away, because a value of its type can still fall through to a later arm. A binding that writes a type (`let x: T`) keeps the type it wrote.
 
 ```baml
 function describe(item: A | B | null) -> string {
@@ -221,7 +223,7 @@ function f(x: A | B | null, s: string?) -> bool {
 
 An assignment to the binding ends every fact about it. The assigned value is checked against the binding's declared type, never against the narrowed one, and the binding then has the type of the assigned value. A loop drops the facts about every binding that its body assigns before it types its condition and body. A right operand of `&&` / `||` that assigns the binding leaves no fact about it for the code that follows: `x is A && { x = b; true }` proves nothing about `x`.
 
-A test that the facts already decide is dead code, and in a condition it is an error just as an unreachable `match` arm is: in `if (x is A && x is B)` with unrelated classes `A` and `B`, the second test can never be true.
+An `is` test that can never hold, given the facts in force where it is evaluated, is dead code. In the condition of an `if`, a `while` or a `match` guard it is rejected, as an unreachable `match` arm is: in `if (x is A && x is B)` with unrelated classes `A` and `B`, the second test can never be true. Written as a value (`let b = x is B;`), the same test is permitted and is `false`.
 
 ### What may be narrowed
 
@@ -233,22 +235,7 @@ Only a **local binding** (a `let` or a parameter) that **no closure captures**. 
 
 BAML tasks can interleave between statements. A field or an element belongs to an object that another task, or another name for the same object, can write between the test and the use, and a captured local can be assigned by the closure that captured it. A second read of any of these may see a value that the test never saw, and narrowing it would let a run-time value violate its compile-time type. A local that no closure captures belongs to one call: only an assignment in its own body can replace its value, and the compiler sees every one of those. The value it holds cannot stop being a member of the tested type either, because a value's concrete type is fixed when the value is created (see [Values and membership](#values-and-membership)).
 
-For the same reason a test never narrows anything _inside_ the value. `u is Box { v: int }` tests the field's content, and narrows `u` to `Box` only: the field can be written again.
-
-To use a field as a narrower type, read it once and test the value that was read. Each of these forms does that:
-
-```baml
-match (h.v) { let a: A => a.a, _ => 0 }
-if let a: A = h.v { a.a } else { 0 }
-let v = h.v;
-if (v is A) { v.a } else { 0 }
-```
-
-A type parameter narrows as any other type does: `v is T` tests membership in the realized type at run time, and `v` is then a `T`.
-
-### What does not narrow
-
-`is`, the null and truthiness tests, and patterns are the only constructs that narrow. A function call never narrows its arguments, whatever the function does. In particular `assert.is_type<T>(x)` only checks: it panics when `x` is not a `T`, it returns `void`, and `x` keeps its type. `assert.is_true(x is T)` does not narrow `x` either.
+For the same reason, a test never narrows anything _inside_ the value. `u is Box { v: int }` tests the field's content, and narrows `u` to `Box` only: the field can be written again.
 
 ## Type Variables
 

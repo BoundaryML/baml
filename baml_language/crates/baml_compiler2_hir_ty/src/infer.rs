@@ -51,6 +51,7 @@ use baml_type::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use self::flow::{CondFacts, ShortCircuit, TestPosition};
 use crate::{
     callable::{
         callable_builtin_kind, callable_display_name, callable_generic_frame, callable_owner_type,
@@ -2296,8 +2297,7 @@ impl<'db> InferenceContext<'db> {
                 then_branch,
                 else_branch,
             } => {
-                self.check_condition(body, *condition);
-                let facts = self.condition_facts(body, *condition);
+                let (_, facts) = self.check_condition(body, *condition);
                 let condition_diverges = self.diverges;
                 let branch_expectation = expected.adjust_for_branches(&mut self.table);
                 let base_flow = self.flow.clone();
@@ -2735,7 +2735,10 @@ impl<'db> InferenceContext<'db> {
                 let arms = arms.clone();
                 self.infer_match(body, expr, *scrutinee, &arms, expected)
             }
-            Expr::Is { scrutinee, pattern } => self.infer_is(body, *scrutinee, *pattern),
+            Expr::Is { scrutinee, pattern } => {
+                self.infer_is(body, *scrutinee, *pattern, TestPosition::Value)
+                    .0
+            }
             Expr::Catch { base, clauses } => {
                 let clauses = clauses.clone();
                 self.infer_catch(body, *base, &clauses, expected)
@@ -2846,8 +2849,7 @@ impl<'db> InferenceContext<'db> {
                 for binding in self.assigned_bindings(body, *loop_body) {
                     self.flow.remove(&binding);
                 }
-                let condition_ty = self.check_condition(body, *condition);
-                let facts = self.condition_facts(body, *condition);
+                let (condition_ty, facts) = self.check_condition(body, *condition);
                 let entry_flow = self.flow.clone();
                 self.apply_facts(&facts.when_true);
                 let saved = self.diverges;
@@ -4420,12 +4422,13 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         use baml_compiler2_ast::BinaryOp;
         match op {
-            BinaryOp::And | BinaryOp::Or => {
-                let lhs_ty = self.check_condition(body, lhs);
-                let rhs_ty = self.check_short_circuit_operand(body, op, lhs, rhs);
-                let lhs_ty = self.table.resolve_completely(&lhs_ty);
-                let rhs_ty = self.table.resolve_completely(&rhs_ty);
-                const_fold_binary(op, &lhs_ty, &rhs_ty).unwrap_or_else(Ty::bool)
+            BinaryOp::And => {
+                self.infer_short_circuit(body, ShortCircuit::And, lhs, rhs, TestPosition::Value)
+                    .0
+            }
+            BinaryOp::Or => {
+                self.infer_short_circuit(body, ShortCircuit::Or, lhs, rhs, TestPosition::Value)
+                    .0
             }
             BinaryOp::Eq | BinaryOp::Ne => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
@@ -4774,6 +4777,32 @@ impl<'db> InferenceContext<'db> {
         element
     }
 
+    /// `!operand`: its type, and the operand's facts with the outcomes
+    /// swapped.
+    fn infer_not(
+        &mut self,
+        body: &ExprBody,
+        operand: ExprId,
+        position: TestPosition,
+    ) -> (Ty, CondFacts) {
+        let (ty, facts) = self.check_truthy_operand(body, operand, false, position);
+        let facts = facts.swapped();
+        // `!` on a LITERAL constant-FOLDS through its truthiness
+        // (TIR's `try_fold_unary`, extended to the non-bool
+        // literals truthiness admits), freshness preserved.
+        let resolved = self.table.resolve_completely(&ty);
+        if let InferTy::Literal(_, freshness) = resolved.kind() {
+            let negated = match crate::infer::truthy::truthiness(&resolved) {
+                crate::infer::truthy::Truthiness::AlwaysTruthy => false,
+                crate::infer::truthy::Truthiness::AlwaysFalsy => true,
+                crate::infer::truthy::Truthiness::Runtime => return (Ty::bool(), facts),
+            };
+            let folded = Ty::intern(InferTy::Literal(Literal::Bool(negated), *freshness));
+            return (folded, facts);
+        }
+        (Ty::bool(), facts)
+    }
+
     fn infer_unary(
         &mut self,
         body: &ExprBody,
@@ -4782,20 +4811,7 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         match op {
             baml_compiler2_ast::UnaryOp::Not => {
-                let ty = self.check_not_operand(body, operand);
-                // `!` on a LITERAL constant-FOLDS through its truthiness
-                // (TIR's `try_fold_unary`, extended to the non-bool
-                // literals truthiness admits), freshness preserved.
-                let resolved = self.table.resolve_completely(&ty);
-                if let InferTy::Literal(_, freshness) = resolved.kind() {
-                    let negated = match crate::infer::truthy::truthiness(&resolved) {
-                        crate::infer::truthy::Truthiness::AlwaysTruthy => false,
-                        crate::infer::truthy::Truthiness::AlwaysFalsy => true,
-                        crate::infer::truthy::Truthiness::Runtime => return Ty::bool(),
-                    };
-                    return Ty::intern(InferTy::Literal(Literal::Bool(negated), *freshness));
-                }
-                Ty::bool()
+                self.infer_not(body, operand, TestPosition::Value).0
             }
             baml_compiler2_ast::UnaryOp::Neg => {
                 let ty = self.infer_expr(body, operand, &Expectation::None);

@@ -28,7 +28,10 @@ use baml_type::{
     normalize::{TypeContext as _, normalize_interned},
 };
 
-use super::{Expectation, InferenceContext};
+use super::{
+    Expectation, InferenceContext,
+    flow::{CondFacts, TestPosition},
+};
 use crate::exhaustiveness::{Ctor, DPat, PatCtx, compute_match_usefulness};
 
 /// One lowered pattern: the matrix row piece, the refined scrutinee type
@@ -134,8 +137,7 @@ impl<'db> InferenceContext<'db> {
             }
             self.diverges = super::Diverges::Maybe;
             if let Some(guard) = arm.guard {
-                self.check_condition(body, guard);
-                let guard_facts = self.condition_facts(body, guard);
+                let (_, guard_facts) = self.check_condition(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }
             // A hard branch expectation CHECKS each arm (rustc coerces
@@ -235,18 +237,48 @@ impl<'db> InferenceContext<'db> {
 
     /// `expr is pattern`: the pattern lowers against the operand (no
     /// subtype gate - a never-matching test is legal and just false); the
-    /// result is always bool. S10b reads the outcome for narrowing.
-    pub(super) fn infer_is(&mut self, body: &ExprBody, scrutinee: ExprId, pattern: PatId) -> Ty {
+    /// result is always bool. A narrowable operand also yields the facts
+    /// of the test: the matched type when it holds and, for a pattern that
+    /// is refutable by type alone, the rest when it does not.
+    pub(super) fn infer_is(
+        &mut self,
+        body: &ExprBody,
+        scrutinee: ExprId,
+        pattern: PatId,
+        position: TestPosition,
+    ) -> (Ty, CondFacts) {
         let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
-        let scrut_resolved = self.scrutinee_demand(&scrut_ty);
+        let binding = self.narrowable_binding(body, scrutinee);
+        let scrut = match binding {
+            Some(binding) => self.binding_flow_ty(binding),
+            None => scrut_ty,
+        };
+        let scrut = self.scrutinee_demand(&scrut);
         // `is` is a runtime TYPE TEST: a pattern provably disjoint from
         // the scrutinee is a legal test that answers `false` (the corpus
         // pins `42 is string`), not the dead-pattern error a match arm
-        // gets - probe silently.
-        self.or_probe_depth += 1;
-        self.lower_pattern(body, pattern, &scrut_resolved);
-        self.or_probe_depth -= 1;
-        Ty::bool()
+        // gets - probe silently. A branch condition on a narrowable local
+        // is the exception: there the test is dead code, and it reports.
+        let silent = binding.is_none() || position == TestPosition::Value;
+        if silent {
+            self.or_probe_depth += 1;
+        }
+        let outcome = self.lower_pattern(body, pattern, &scrut);
+        if silent {
+            self.or_probe_depth -= 1;
+        }
+        let mut facts = CondFacts::default();
+        if let Some(binding) = binding {
+            // Subtraction only when the pattern is refutable by type
+            // alone (B-1069): a field- or length-constrained pattern
+            // failing tells us nothing type-shaped about the scrutinee.
+            if outcome.consumes_matched {
+                let complement = self.subtract_narrow(&scrut, &outcome.matched_ty);
+                facts.when_false.insert(binding, complement);
+            }
+            facts.when_true.insert(binding, outcome.matched_ty);
+        }
+        (Ty::bool(), facts)
     }
 
     /// Destructuring `let`: the initializer synthesizes (widened at the
