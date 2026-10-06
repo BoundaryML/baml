@@ -2099,18 +2099,13 @@ impl BexEngine {
         let _ = host_enum_variants;
 
         let bex_work = bex_work::BexWork::new(&heap);
-        let heap_permit_manager = Arc::new(HeapPermitManager::new());
-        // We just created the permit manager so `new_permit` will not block:
-        // the only synchronization inside is the `holders` mutex which is
-        // uncontended at this point. `futures::executor::block_on` (rather
-        // than `tokio::runtime::Handle::block_on`) is used so that this
-        // constructor stays callable from inside a tokio runtime.
-        //
-        // If `new_permit` ever takes a real lock or schedules async work,
-        // this assumption breaks and the constructor would deadlock — at
-        // which point we'd have to make `BexEngine::new` async (TODO).
-        let futures_permit = futures::executor::block_on(heap_permit_manager.new_permit(
-            FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)), Arc::clone(&bex_work)),
+        let mut heap_permit_manager = HeapPermitManager::new();
+        // Register initial roots before sharing the manager. Even an
+        // uncontended async mutex can yield when Tokio's cooperative budget
+        // is exhausted; blocking on it here would stall the caller's task.
+        let futures_permit = heap_permit_manager.new_permit_mut(FutureManagerInner::new(
+            Tlab::new_empty(Arc::clone(&heap)),
+            Arc::clone(&bex_work),
         ));
 
         // Register the frozen globals pool as its own permit holder so the
@@ -2120,14 +2115,13 @@ impl BexEngine {
         // `HeapGuard::collect_roots` / `forward_roots` walks. The
         // `SharedGlobals` is `Clone` (Arc bump), so the holder and the
         // engine's own field point at the same `UnsafeCell<Box<[Value]>>`.
-        let globals_permit =
-            futures::executor::block_on(heap_permit_manager.new_permit(globals.clone()));
-        let dynamic_dispatch_permit = futures::executor::block_on(heap_permit_manager.new_permit(
-            bex_vm::package_load::DynDispatchRoot::new(
+        let globals_permit = heap_permit_manager.new_permit_mut(globals.clone());
+        let dynamic_dispatch_permit =
+            heap_permit_manager.new_permit_mut(bex_vm::package_load::DynDispatchRoot::new(
                 Arc::clone(&dynamic_dispatch),
                 Arc::clone(&heap),
-            ),
-        ));
+            ));
+        let heap_permit_manager = Arc::new(heap_permit_manager);
 
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
