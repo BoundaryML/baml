@@ -227,6 +227,62 @@ impl io::IoClassSysSubprocess for WasmSys {
 }
 
 impl IoNamespaceSys for WasmSys {
+    fn current_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "native-host".into(),
+            message: "Native host information is not supported by this host".into(),
+        })
+    }
+    fn current_exe(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "native-host".into(),
+            message: "Native host information is not supported by this host".into(),
+        })
+    }
+    fn home_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "native-host".into(),
+            message: "Native host information is not supported by this host".into(),
+        })
+    }
+    fn platform(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "native-host".into(),
+            message: "Native host information is not supported by this host".into(),
+        })
+    }
+    fn host_target(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "native-host".into(),
+            message: "Native host information is not supported by this host".into(),
+        })
+    }
+
     fn collect_garbage(
         &self,
         _heap: &Arc<BexHeap>,
