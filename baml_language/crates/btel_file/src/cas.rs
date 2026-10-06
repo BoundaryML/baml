@@ -18,14 +18,17 @@ use crate::{LocalDeliveryError, io_error};
 /// byte. All of them exist after about 1,600 blobs on average, and from then
 /// on publishing a blob creates a file and no directory.
 pub fn cas_path(root: &Path, id: CasId) -> PathBuf {
+    cas_path_versioned(root, id, btel_snapshot::BLOB_VERSION)
+}
+
+/// Resolve a blob in a specific format's namespace.
+pub fn cas_path_versioned(root: &Path, id: CasId, version: u32) -> PathBuf {
     use std::fmt::Write as _;
     let mut name = String::with_capacity(32);
     for byte in id.as_bytes() {
         write!(&mut name, "{byte:02x}").expect("write string");
     }
-    root.join(format!("v{}", btel_snapshot::BLOB_VERSION))
-        .join(&name[..2])
-        .join(name)
+    root.join(format!("v{version}")).join(&name[..2]).join(name)
 }
 
 /// Publishes captures beneath one CAS root. Blobs it published or found in
@@ -174,7 +177,11 @@ mod tests {
         let first = snapshot(1);
         writer.write(&first).unwrap();
         // Removed behind the writer: the next blob makes what it needs.
-        fs::remove_dir_all(root.path().join("v3")).unwrap();
+        fs::remove_dir_all(
+            root.path()
+                .join(format!("v{}", btel_snapshot::BLOB_VERSION)),
+        )
+        .unwrap();
         let second = snapshot(2);
         writer.write(&second).unwrap();
         let path = cas_path(root.path(), second.root_id());

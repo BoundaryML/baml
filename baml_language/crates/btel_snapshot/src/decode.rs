@@ -317,7 +317,7 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
         return Err(BlobError::Magic);
     }
     let version = r.u32()?;
-    if version != 3 && version != crate::BLOB_VERSION {
+    if !btel_settings::snapshot::READABLE_BLOB_VERSIONS.contains(&version) {
         return Err(BlobError::Version(version));
     }
     r.version = version;
