@@ -1969,6 +1969,8 @@ impl BexEngine {
                     delivery,
                     #[cfg(not(target_arch = "wasm32"))]
                     process_exit,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    gc_function: std::sync::OnceLock::new(),
                 })
             })
             .transpose()?;
@@ -2996,6 +2998,8 @@ impl BexEngine {
         mut heap_guard: HeapGuard<'_>,
         mut cycle: bex_heap::GcCycleProfiler,
     ) -> bex_heap::GcStats {
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut gc_telemetry = telemetry_state::GcTelemetry::start(self.telemetry.as_ref());
         let cleanup_version = self.bex_work.cleanup_version();
         cycle.parked();
 
@@ -3098,6 +3102,8 @@ impl BexEngine {
         }
         drop(heap_guard);
         cycle.released();
+        #[cfg(not(target_arch = "wasm32"))]
+        gc_telemetry.finish(self.telemetry.as_ref(), &self.heap, &stats, reason);
 
         // Flush deferred host-value releases now that the stop-the-world window
         // has closed. Collecting a dead `Object::HostClosure` runs
