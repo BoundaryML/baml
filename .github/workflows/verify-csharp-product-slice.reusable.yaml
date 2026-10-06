@@ -73,9 +73,8 @@ jobs:
             sdks/csharp/bridge_csharp/tests/Baml.Bridge.ProtocolProbe/Baml.Bridge.ProtocolProbe.csproj \
             -- "$BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS"
 
-      - name: Prepare ABI bytecode and generated consumer sources
+      - name: Prepare generated consumer sources
         env:
-          BAML_CSHARP_ABI_PROBE_BYTECODE: ${{ runner.temp }}/csharp-neutral/function-calls.bytecode
           RUSTC_WRAPPER: ""
         run: |
           set -euo pipefail
@@ -84,13 +83,9 @@ jobs:
           mkdir -p "$generated_output"
           (
             cd baml_language
-            cargo run --quiet -p sdk_test_codegen -- \
-              emit-bytecode --fixture function_calls \
-              --out "$BAML_CSHARP_ABI_PROBE_BYTECODE"
             cargo run --quiet -p baml_cli -- \
               generate --from sdk_tests/crates/csharp/basic_calls
           )
-          test -s "$BAML_CSHARP_ABI_PROBE_BYTECODE"
           fixture=baml_language/sdk_tests/crates/csharp/basic_calls
           while IFS= read -r source; do
             relative="${source#"$fixture/baml_sdk/"}"
@@ -117,63 +112,6 @@ jobs:
           path: ${{ runner.temp }}/csharp-neutral
           if-no-files-found: error
           overwrite: true
-
-  abi-probe:
-    needs: [prepare]
-    name: Verify packaged C# ABI prefix and ownership lifetimes
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.source_sha }}
-          persist-credentials: false
-
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.301
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: csharp-verification-fixtures
-          path: verification-fixtures
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: csharp-product-package
-          path: product-package
-
-      - name: Extract the packaged native libraries and stamp the release plan
-        env:
-          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
-          scripts/baml-language-version stamp --plan release-plan.json
-          package="$(find product-package -maxdepth 1 -type f -name 'baml-bridge.*.nupkg' -print)"
-          test -n "$package"
-          test "$(printf '%s\n' "$package" | wc -l)" -eq 1
-          unzip -q "$package" 'runtimes/*' -d staging
-
-      - name: Verify the C# ABI prefix and ownership lifetimes
-        env:
-          BAML_CSHARP_ABI_PROBE_BYTECODE: ${{ github.workspace }}/verification-fixtures/function-calls.bytecode
-        run: |
-          set -euo pipefail
-          test -s "$BAML_CSHARP_ABI_PROBE_BYTECODE"
-          native="$(jq -er '
-            .targets[]
-            | select(.artifacts.csharp.rid == "linux-x64")
-            | "staging/runtimes/\(.artifacts.csharp.rid)/native/\(.artifacts.csharp.native_asset)"
-          ' release/platforms.json)"
-          test -f "$native"
-          dotnet run --project \
-            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj \
-            -p:BamlNativeProbeMode=Direct \
-            -p:NuGetAudit=false \
-            -- "$PWD/$native" \
-            "$(jq -r .canonical_version release-plan.json)" \
-            "$BAML_CSHARP_ABI_PROBE_BYTECODE"
 
   native-consumer:
     needs: [prepare]

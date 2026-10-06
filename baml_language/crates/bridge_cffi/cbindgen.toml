@@ -48,7 +48,7 @@ trailer = """/* ABI revision 3 requires every invocation operation below. */
   (offsetof(BamlApiV1, invocation_context) + sizeof(((BamlApiV1 *)0)->invocation_context))
 
 /*
- * Validate the complete revision-3 table while permitting appended fields.
+ * Reject a native library built for a different ABI revision.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&

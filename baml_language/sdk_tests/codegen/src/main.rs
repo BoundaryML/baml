@@ -47,7 +47,7 @@ commands:
 
   emit-bytecode --fixture <name> --out <path>
       Compile `sdk_tests/fixtures/<name>` and write its encoded program to
-      <path>, which must be absolute. Feeds the C# and Ruby bridge ABI probes.
+      <path>, which must be absolute. Feeds the Ruby bridge tests.
 ";
 
 fn main() -> ExitCode {

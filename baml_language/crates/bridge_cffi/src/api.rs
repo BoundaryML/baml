@@ -166,11 +166,13 @@ pub type BamlInvocationContextFn =
 /// An otherwise unexpected panic aborts the process rather than crossing into
 /// foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
 ///
-/// V1 is append-only: existing fields may never be reordered, removed, or
-/// change type or semantics. New fields may only be appended. Before reading a
-/// field, consumers must verify that `struct_size` reaches the end of that
-/// field. `baml_api_v1_is_compatible` performs the check for the original V1
-/// prefix. A larger unknown size is compatible; a truncated prefix is not.
+/// The ABI is not stable across releases. An SDK always ships with the native
+/// library from the same BAML release, and `register_bridge` rejects any other
+/// pairing. Any release may add, remove, reorder or change fields. Only
+/// `abi_version` and `struct_size` keep their place, so a host can reject a
+/// mismatched library before it reads anything else. Bump
+/// `BAML_API_V1_ABI_VERSION` whenever the layout changes. Don't add
+/// compatibility shims, or tests and probes for older or newer tables.
 #[repr(C)]
 pub struct BamlApiV1 {
     /// Function-table ABI version. Always `BAML_API_V1_ABI_VERSION`.
