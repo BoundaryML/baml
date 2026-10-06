@@ -3,11 +3,7 @@
 // still read `["a", "b"]`.
 
 function bad_slow() -> int throws string {
-    // sleep's own `throws baml.errors.Io` is swallowed so the declared
-    // surface stays exactly `string`.
-    baml.sys.sleep(baml.time.Duration.from_milliseconds(120n)) catch (e) {
-        let e => null
-    };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(120n));
     throw "a"
 }
 

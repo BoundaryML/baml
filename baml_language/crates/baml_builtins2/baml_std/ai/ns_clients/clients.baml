@@ -301,13 +301,11 @@ class Retry {
             let turn: root.ModelTurn => turn,
             let retry: RetryCause => {
                 failed.push(_failed_leg_call(self.inner.id(), retry.cause));
-                let _ = baml.sys.sleep(
+                baml.sys.sleep(
                     baml.time.Duration.from_milliseconds(
                         self.backoff.delay_ms(attempt, retry.cause),
                     ),
-                ) catch_all (se) {
-                    _ => null,
-                };
+                );
                 self._attempt(input, remaining - 1, failed)
             },
         }
@@ -376,12 +374,9 @@ class Retry {
                     false
                 } else if (remaining > 1 && self._wants_retry(cause)) {
                     let attempt = self.max_attempts - remaining + 1;
-                    let _ = baml.sys.sleep(
+                    baml.sys.sleep(
                         baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, cause)),
-                    ) catch_all (e) {
-                        let cancelled: baml.panics.Cancelled => throw cancelled,
-                        _ => null,
-                    };
+                    );
                     remaining -= 1;
                     true
                 } else {

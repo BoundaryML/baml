@@ -10,7 +10,7 @@ test "cancelling a completed success preserves its result" {
 // the limit waits until the holder is cancelled.
 class Gate {
     limit: baml.spawn.Limit,
-    holder: baml.future.Future<null, baml.errors.Io>,
+    holder: baml.future.Future<null, never>,
 }
 
 function gate() -> Gate {
@@ -151,7 +151,6 @@ test "cancelling a pool's token cancels its running and waiting tasks" {
     let outcomes = [running, waiting].map((f) -> {
         (await f) catch (e) {
             baml.panics.Cancelled => "cancelled",
-            baml.errors.Io => "sleep failed",
         }
     });
     assert.equal(outcomes, ["cancelled", "cancelled"]);

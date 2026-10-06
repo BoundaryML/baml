@@ -311,6 +311,7 @@ namespace baml.sys:
   class ShellOutput { methods: [ok] }
   enum StderrMode
   class WritePipe { methods: [close] }
+  function _sleep
   function _strip_carriage_return
   function argv
   function collect_garbage

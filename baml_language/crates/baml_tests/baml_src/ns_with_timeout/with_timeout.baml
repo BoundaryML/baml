@@ -71,7 +71,7 @@ function with_timeout_body_fails() -> string throws WithTimeoutBodyError {
     throw WithTimeoutBodyError { code: 7 }
 }
 
-function with_timeout_body_sleeps() -> string throws baml.errors.Io {
+function with_timeout_body_sleeps() -> string throws never {
     baml.sys.sleep(baml.time.Duration.from_seconds(60));
     "finished"
 }

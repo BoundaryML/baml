@@ -506,9 +506,7 @@ class _TestPool {
             // dispatchers poll, and there is at most one dispatcher per
             // currently-expanding testset, so the wakeup load is bounded by
             // testset nesting, not by test count.
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(10)) catch (e) {
-                _ => null
-            };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10));
         }
     }
 
@@ -608,9 +606,7 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
         let racers: baml.future.Future<RunReport, never>[] = [work];
         if (timeout_ms > 0) {
             let timer: baml.future.Future<RunReport, never> = spawn {
-                baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) {
-                    _ => null
-                };
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms));
                 RunReport {
                     outcome: "fail",
                     duration_ms: 0,

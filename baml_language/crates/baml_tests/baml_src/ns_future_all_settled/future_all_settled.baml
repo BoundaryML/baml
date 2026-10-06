@@ -35,7 +35,7 @@ function fas_label(
 // spawned with the limit starts only once the holder is done (or cancelled).
 class FasGate {
     limit: baml.spawn.Limit,
-    holder: baml.future.Future<null, baml.errors.Io>,
+    holder: baml.future.Future<null, never>,
 }
 
 function fas_gate(hold_ms: int) -> FasGate {
