@@ -293,6 +293,14 @@ impl<T: PartialEq> PartialEq for Declaration<T> {
 /// Returns each member's definition, in the order given.
 pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
     assert!(!members.is_empty(), "a group has a member");
+    // One member starts its group, at position 0: nothing to choose.
+    if let [member] = members {
+        let mut content = Vec::new();
+        let mut children = Vec::new();
+        put(&mut content, &1_u32);
+        encode(member, Some(&[0]), &mut content, &mut children);
+        return seal(&content, children, [0].into_iter());
+    }
     let digests: Vec<[u8; 16]> = members
         .iter()
         .map(|member| {
@@ -351,10 +359,19 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
             .min()
             .unwrap_or_else(|| unreachable!("a start"))
     });
+    seal(&content, children, positions)
+}
 
+/// The blob of a group whose content is `content` and which names
+/// `children`, and each member's definition at `positions`.
+fn seal(
+    content: &[u8],
+    children: Vec<Arc<DefinitionBlob>>,
+    positions: impl Iterator<Item = u32>,
+) -> Vec<Definition> {
     let mut h = Hasher::new(HashDomain::Blob);
     h.byte(RootTag::Definitions as u8);
-    h.absorb(&content);
+    h.absorb(content);
     h.size(children.len());
     for child in &children {
         h.absorb(&child.id());
@@ -374,7 +391,7 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
     }
     bytes.extend_from_slice(&0_u32.to_le_bytes());
     bytes.push(RootTag::Definitions as u8);
-    bytes.extend_from_slice(&content);
+    bytes.extend_from_slice(content);
     let blob = Arc::new(DefinitionBlob::new(
         id,
         bytes.into_boxed_slice(),

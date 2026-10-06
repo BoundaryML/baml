@@ -69,6 +69,37 @@ unsafe fn make(ptr: HeapPtr, cell: &DefinitionCell) -> &Definition {
     if let Some(definition) = cell.get() {
         return definition;
     }
+    // Most declarations name none without a definition, themselves
+    // included: a group of their own, without a search.
+    // SAFETY: inherited, here and for the heads read.
+    let declaration = match unsafe { ptr.get() } {
+        Object::Class(class)
+            if class.fields.iter().all(|field| {
+                let mut defined = true;
+                field.field_template.visit_heads(&mut |head| {
+                    defined &= !head.is_resolved()
+                        || unsafe { self::cell(head.ptr()) }
+                            .is_none_or(|cell| cell.get().is_some());
+                });
+                defined
+            }) =>
+        {
+            Some(Declaration::Class(class_definition(
+                class,
+                &FxHashMap::default(),
+            )))
+        }
+        Object::Enum(enm) => Some(Declaration::Enum(enum_definition(enm))),
+        _ => None,
+    };
+    if let Some(declaration) = declaration {
+        let made = definition::group(std::slice::from_ref(&declaration));
+        let made = made
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| unreachable!("a member"));
+        return cell.set(made);
+    }
     // SAFETY: inherited.
     unsafe { Search::default().run(ptr) };
     cell.get()
