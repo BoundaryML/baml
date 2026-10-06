@@ -8,6 +8,8 @@ const handlers = new Map<Function, CaptureHandler>();
 let capturing = false;
 const nativeDateTime = Date.prototype.getTime;
 const nativeDateISO = Date.prototype.toISOString;
+// Paired surrogates form one code point, so this matches only lone ones.
+const loneSurrogate = /\p{Surrogate}/u;
 
 export function registerCapture<T>(valueType: new (...args: any[]) => T, handler: CaptureHandler<T>): CaptureHandler<T> {
     if (typeof valueType !== 'function' || util.types.isProxy(valueType)
@@ -53,19 +55,27 @@ export function capture(value: unknown): string {
     let remaining = 512;
     let bytes = 64 * 1024;
     const active = new Set<object>();
-    const text = (value: string): boolean => {
+    // Charges `value`'s UTF-8 size; undefined when it has no UTF-8 form, which
+    // would make the whole observation undecodable by the native bridge.
+    const text = (value: string): boolean | undefined => {
+        if (loneSurrogate.test(value)) return undefined;
         const size = Buffer.byteLength(value);
         if (size > bytes) return false;
         bytes -= size;
         return true;
     };
+    // Markers count too: the native decoder charges every node it reads.
+    const opaque = (): Observation => (remaining-- <= 0 ? ['values'] : ['unavailable']);
     const copy = (value: unknown, depth: number): Observation => {
-        if (depth > 8) return ['depth'];
         if (remaining-- <= 0) return ['values'];
+        if (depth > 8) return ['depth'];
         if (value === null) return ['null'];
         if (typeof value === 'boolean') return ['bool', value];
         if (typeof value === 'number') return Number.isFinite(value) ? ['number', value] : ['unavailable'];
-        if (typeof value === 'string') return text(value) ? ['string', value] : ['bytes'];
+        if (typeof value === 'string') {
+            const fits = text(value);
+            return fits ? ['string', value] : fits === false ? ['bytes'] : ['unavailable'];
+        }
         if (typeof value !== 'object' || util.types.isProxy(value) || active.has(value)) return ['unavailable'];
         const prototype = Object.getPrototypeOf(value);
         active.add(value);
@@ -77,7 +87,7 @@ export function capture(value: unknown): string {
                 for (let index = 0; index < length; index++) {
                     if (remaining <= 0) return ['values'];
                     const field = Object.getOwnPropertyDescriptor(value, String(index));
-                    values.push(field && 'value' in field ? copy(field.value, depth + 1) : ['unavailable']);
+                    values.push(field && 'value' in field ? copy(field.value, depth + 1) : opaque());
                 }
                 return ['list', values];
             }
@@ -125,8 +135,10 @@ export function capture(value: unknown): string {
                 if (!field) continue;
                 if (native && key === '$types') continue;
                 if (remaining <= 0) return ['values'];
-                if (!text(key)) return ['bytes'];
-                entries.push([key, 'value' in field ? copy(field.value, depth + 1) : ['unavailable']]);
+                const fits = text(key);
+                if (fits === undefined) return ['unavailable'];
+                if (!fits) return ['bytes'];
+                entries.push([key, 'value' in field ? copy(field.value, depth + 1) : opaque()]);
             }
             if (native) {
                 if (!text(native)) return ['bytes'];

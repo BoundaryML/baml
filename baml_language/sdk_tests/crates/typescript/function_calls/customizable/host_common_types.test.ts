@@ -67,3 +67,20 @@ it.runIf(isTestRuntime('node'))('host_common_types_typescript_only', async () =>
     await shutdownRuntime();
   }
 });
+
+// SDK_PARITY_LINT(skip): checks the Node capture adapter's wire output directly.
+it.runIf(isTestRuntime('node'))('host_capture_wire_stays_decodable_typescript_only', async () => {
+  const captureUrl = new URL('./host_capture.js', import.meta.resolve('@boundaryml/baml-bridge')).href;
+  const { capture } = await import(/* @vite-ignore */ captureUrl);
+  // A lone surrogate drops only its own string, not the whole observation.
+  expect(JSON.parse(capture({ ok: 1, path: '\u{1F600}'.slice(0, 1) })))
+    .toEqual(['map', [['ok', ['number', 1]], ['path', ['unavailable']]]]);
+  // Depth markers and array holes count against the value budget.
+  let nested: unknown = Array(256).fill(Array(255).fill(0));
+  for (let i = 0; i < 7; i++) nested = [nested];
+  for (const value of [nested, Array(256).fill(new Array(255))]) {
+    const wire: string = capture(value);
+    expect(wire.length).toBeLessThan(16 * 1024);
+    expect(wire).toContain('["values"]');
+  }
+});

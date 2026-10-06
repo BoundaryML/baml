@@ -68,6 +68,11 @@ def _mro(cls):
     return type.__dict__["__mro__"].__get__(cls)
 
 
+def _inherits(mro, cls):
+    # Identity only: `cls in mro` would call an application metaclass's __eq__.
+    return any(base is cls for base in mro)
+
+
 def _class_value(cls, name):
     for base in _mro(cls):
         attributes = _attributes(base)
@@ -96,10 +101,16 @@ def capture(value):
     active = set()
 
     def text(value):
+        """Charge `value`'s UTF-8 size; None when it has no UTF-8 form."""
         nonlocal bytes_left
         if type(value) is not str or len(value) > bytes_left:
             return False
-        size = len(value.encode("utf-8", errors="replace"))
+        try:
+            size = len(value.encode("utf-8"))
+        except UnicodeEncodeError:
+            # A lone surrogate (e.g. a surrogateescape file name) would make the
+            # whole observation undecodable by the native bridge.
+            return None
         if size > bytes_left:
             return False
         bytes_left -= size
@@ -174,18 +185,26 @@ def capture(value):
                     key,
                     copy(dict.get(stored, name), depth + 1)
                     if name in stored
-                    else ["unavailable"],
+                    else opaque(),
                 ]
             )
         return result
 
-    def copy(value, depth):
+    def opaque():
         nonlocal remaining
-        if depth > 8:
-            return ["depth"]
         if remaining <= 0:
             return ["values"]
         remaining -= 1
+        return ["unavailable"]
+
+    def copy(value, depth):
+        nonlocal remaining
+        # Markers count too: the native decoder charges every node it reads.
+        if remaining <= 0:
+            return ["values"]
+        remaining -= 1
+        if depth > 8:
+            return ["depth"]
         cls = type(value)
         if value is None:
             return ["null"]
@@ -200,7 +219,10 @@ def capture(value):
         if cls is float:
             return ["number", value] if math.isfinite(value) else ["unavailable"]
         if cls is str:
-            return ["string", value] if text(value) else ["bytes"]
+            fits = text(value)
+            if fits is None:
+                return ["unavailable"]
+            return ["string", value] if fits else ["bytes"]
         identity = id(value)
         if identity in active:
             return ["unavailable"]
@@ -217,7 +239,10 @@ def capture(value):
                 for key, item in dict.items(value):
                     if type(key) is not str:
                         return ["unavailable"]
-                    if not text(key):
+                    fits = text(key)
+                    if fits is None:
+                        return ["unavailable"]
+                    if not fits:
                         return ["bytes"]
                     entries.append([key, copy(item, depth + 1)])
                 return ["map", entries]
@@ -227,11 +252,13 @@ def capture(value):
                 name, is_enum, declared = native
                 if not text(name):
                     return ["bytes"]
-                if is_enum and Enum in mro:
+                if is_enum and _inherits(mro, Enum):
                     stored = Enum.__dict__["__dict__"].__get__(value)
-                    variant = dict.get(stored, "_name_")
+                    # The value is the BAML variant; the member name can be
+                    # renamed, e.g. `None_` for BAML's `None`.
+                    variant = dict.get(stored, "_value_")
                     return ["enum", name, variant] if text(variant) else ["unavailable"]
-                if BaseModel is not None and BaseModel in mro:
+                if BaseModel is not None and _inherits(mro, BaseModel):
                     fields = model_fields(value, declared, depth)
                     metadata = _class_value(cls, "__pydantic_generic_metadata__")
                     args = metadata.get("args", ()) if type(metadata) is dict else ()
@@ -249,10 +276,10 @@ def capture(value):
                 entry = handlers.get(id(base))
                 if entry is not None and entry[0]() is base:
                     return copy(entry[1](value), depth + 1)
-            if BaseModel is not None and BaseModel in mro:
+            if BaseModel is not None and _inherits(mro, BaseModel):
                 fields = model_fields(value, cls, depth)
                 return ["map", fields] if fields is not None else ["values"]
-            if datetime in mro:
+            if _inherits(mro, datetime):
                 zone = datetime.__dict__["tzinfo"].__get__(value)
                 if (
                     zone is not None
@@ -261,9 +288,9 @@ def capture(value):
                 ):
                     return ["unavailable"]
                 return copy(datetime.isoformat(value), depth)
-            if date in mro:
+            if _inherits(mro, date):
                 return copy(date.isoformat(value), depth)
-            if BaseException in mro:
+            if _inherits(mro, BaseException):
                 name = type.__dict__["__qualname__"].__get__(cls)
                 args = BaseException.__dict__["args"].__get__(value)
                 return copy({"type": name, "args": args}, depth)
