@@ -1,0 +1,322 @@
+diff --git a/baml_language/Cargo.lock b/baml_language/Cargo.lock
+index a32cf386c0..16b33744c8 100644
+--- a/baml_language/Cargo.lock
++++ b/baml_language/Cargo.lock
+@@ -935,6 +935,7 @@ dependencies = [
+  "baml_tests",
+  "baml_type",
+  "bex_engine",
++ "bex_vm",
+  "bex_vm_types",
+  "borsh",
+  "clap",
+diff --git a/baml_language/crates/baml/Cargo.toml b/baml_language/crates/baml/Cargo.toml
+index 1f890e08fe..37c641c626 100644
+--- a/baml_language/crates/baml/Cargo.toml
++++ b/baml_language/crates/baml/Cargo.toml
+@@ -24,6 +24,7 @@ workspace = true
+ default = [ "self-update" ]
+ self-update = [  ]
+ no-self-update = [  ]
++startup-experiment = [ "baml_artifact/startup-experiment", "baml_pack_host/startup-experiment", "baml_exec/startup-experiment" ]
+
+ [dependencies]
+ baml_artifact = { workspace = true }
+diff --git a/baml_language/crates/baml/build.rs b/baml_language/crates/baml/build.rs
+index 2a3d1f18ce..2936fe252a 100644
+--- a/baml_language/crates/baml/build.rs
++++ b/baml_language/crates/baml/build.rs
+@@ -45,6 +45,12 @@ fn main() {
+         .find(|name| name.as_str() == target || name.ends_with(&format!(".{target}")))
+         .unwrap_or_else(|| panic!("missing wrapper entry point {target}"))
+         .clone();
++    #[cfg(feature = "startup-experiment")]
++    let program = {
++        let mut program = program;
++        baml_exec::prepare_startup_experiment(&mut program);
++        program
++    };
+     let envelope = baml_exec::PackEnvelope {
+         program,
+         mode: baml_exec::PackMode::Single,
+diff --git a/baml_language/crates/baml_artifact/Cargo.toml b/baml_language/crates/baml_artifact/Cargo.toml
+index 5b0faf8d35..a9839d77be 100644
+--- a/baml_language/crates/baml_artifact/Cargo.toml
++++ b/baml_language/crates/baml_artifact/Cargo.toml
+@@ -17,6 +17,7 @@ doctest = false
+
+ [features]
+ test-support = [  ]
++startup-experiment = [  ]
+
+ [lints]
+ workspace = true
+diff --git a/baml_language/crates/baml_artifact/src/lib.rs b/baml_language/crates/baml_artifact/src/lib.rs
+index c51303a9b1..fe3105f537 100644
+--- a/baml_language/crates/baml_artifact/src/lib.rs
++++ b/baml_language/crates/baml_artifact/src/lib.rs
+@@ -71,7 +71,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
+ /// the executable is its position; its name is display metadata), so every
+ /// serialized program changed shape. The identity-keyed unit format that
+ /// produces them (`baml_linker_types`) rides the same version.
++#[cfg(not(feature = "startup-experiment"))]
+ pub const FORMAT_VERSION: u32 = 12;
++// Keep prototype artifacts out of the release format, including stable builds.
++#[cfg(feature = "startup-experiment")]
++pub const FORMAT_VERSION: u32 = 0x8000_000C;
+
+ /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
+ /// HEAD), or empty when neither was available.
+diff --git a/baml_language/crates/baml_cli/Cargo.toml b/baml_language/crates/baml_cli/Cargo.toml
+index 70fa92a5ca..6ceda99971 100644
+--- a/baml_language/crates/baml_cli/Cargo.toml
++++ b/baml_language/crates/baml_cli/Cargo.toml
+@@ -73,6 +73,7 @@ uuid = { workspace = true }
+ webbrowser = { workspace = true }
+
+ [features]
++startup-experiment = [ "baml_exec/startup-experiment", "baml_artifact/startup-experiment" ]
+ default = [ "aws-crypto" ]
+ aws-crypto = [ "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
+ ring-crypto = [ "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
+diff --git a/baml_language/crates/baml_cli/src/pack_command.rs b/baml_language/crates/baml_cli/src/pack_command.rs
+index 405d285d2d..aa236caff2 100644
+--- a/baml_language/crates/baml_cli/src/pack_command.rs
++++ b/baml_language/crates/baml_cli/src/pack_command.rs
+@@ -174,6 +174,12 @@ impl PackArgs {
+         let label = label_for(&targets);
+         reporter.spin("Packaging", &label);
+
++        #[cfg(feature = "startup-experiment")]
++        let program = {
++            let mut program = program;
++            baml_exec::prepare_startup_experiment(&mut program);
++            program
++        };
+         let envelope = PackEnvelope {
+             program,
+             mode: mode.clone(),
+diff --git a/baml_language/crates/baml_exec/Cargo.toml b/baml_language/crates/baml_exec/Cargo.toml
+index 389e114e30..94bb0cee02 100644
+--- a/baml_language/crates/baml_exec/Cargo.toml
++++ b/baml_language/crates/baml_exec/Cargo.toml
+@@ -21,6 +21,7 @@ workspace = true
+ baml_type = { workspace = true }
+ bex_engine = { workspace = true }
+ bex_vm_types = { workspace = true }
++bex_vm = { workspace = true, optional = true }
+ anyhow = { workspace = true }
+ borsh = { workspace = true }
+ clap = { workspace = true }
+@@ -33,3 +34,6 @@ baml_tests = { workspace = true }
+ sys_native = { workspace = true }
+ tempfile = { workspace = true }
+ tokio = { workspace = true, features = [ "rt", "macros" ] }
++
++[features]
++startup-experiment = [ "dep:bex_vm", "bex_vm/startup-experiment", "bex_engine/startup-experiment", "bex_vm_types/startup-experiment" ]
+diff --git a/baml_language/crates/baml_exec/src/lib.rs b/baml_language/crates/baml_exec/src/lib.rs
+index e13ea1efea..84e49ec11f 100644
+--- a/baml_language/crates/baml_exec/src/lib.rs
++++ b/baml_language/crates/baml_exec/src/lib.rs
+@@ -40,3 +40,40 @@ pub use dispatch::{
+ pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
+ pub use json_coerce::load_json_source;
+ pub use output::{OutputFormat, format_value, write_output, write_output_with_context};
++
++/// Measurement-only prototype of an execution-ready artifact. Not a supported
++/// artifact format: loading serialized compact code still needs a verifier,
++/// and original disassembly metadata needs a separate deferred section.
++#[cfg(feature = "startup-experiment")]
++pub fn prepare_startup_experiment(program: &mut bex_vm_types::Program) {
++    use bex_vm_types::{ConstValue, Object, ObjectIndex};
++    program.validate().expect("compiler-produced program");
++    let floats =
++        bex_vm_types::types::box_compile_time_floats(&mut program.objects, &program.globals);
++    for global in &mut program.globals {
++        if let ConstValue::Float(value) = global {
++            *global = ConstValue::Object(ObjectIndex::from_raw(floats[&value.to_bits()]));
++        }
++    }
++    bex_vm::prepare_compact_code(&mut program.objects, &program.globals);
++    for object in &mut program.objects {
++        if let Object::Function(function) = object {
++            function
++                .bytecode
++                .compact
++                .as_mut()
++                .unwrap()
++                .defer_source_map();
++            // The executable image carries final PCs and code, so these
++            // compiler representations are unnecessary for this measurement.
++            function.bytecode.instructions.clear();
++            function.bytecode.meta.clear();
++            function.bytecode.line_table.clear();
++            function.bytecode.call_layouts.clear();
++            function.bytecode.jump_tables.clear();
++            function.bytecode.exception_table.clear();
++            function.bytecode.handler_context_table.clear();
++            function.bytecode.shield_table.clear();
++        }
++    }
++}
+diff --git a/baml_language/crates/baml_pack_host/Cargo.toml b/baml_language/crates/baml_pack_host/Cargo.toml
+index e4440f48f5..eca5108c23 100644
+--- a/baml_language/crates/baml_pack_host/Cargo.toml
++++ b/baml_language/crates/baml_pack_host/Cargo.toml
+@@ -27,6 +27,7 @@ tokio = { workspace = true, features = [ "rt" ] }
+
+ [features]
+ default = [  ]
++startup-experiment = [ "baml_artifact/startup-experiment", "baml_exec/startup-experiment", "bex_engine/startup-experiment" ]
+ native-tls = [ "sys_native/native-tls" ]
+
+ [[bin]]
+diff --git a/baml_language/crates/bex_engine/Cargo.toml b/baml_language/crates/bex_engine/Cargo.toml
+index abf0b712a3..9e26e5e631 100644
+--- a/baml_language/crates/bex_engine/Cargo.toml
++++ b/baml_language/crates/bex_engine/Cargo.toml
+@@ -75,6 +75,7 @@ workspace = true
+
+ [features]
+ default = [ "aws-crypto" ]
++startup-experiment = [ "bex_vm/startup-experiment", "bex_vm_types/startup-experiment" ]
+ gc_profiling = [ "bex_heap/gc_profiling" ]
+ # `sys_native` is a dev-dependency only, so feature propagation here would
+ # be a no-op for downstream consumers; its crypto feature is set directly
+diff --git a/baml_language/crates/bex_engine/src/lib.rs b/baml_language/crates/bex_engine/src/lib.rs
+index 9160af2e0f..8e52460b89 100644
+--- a/baml_language/crates/bex_engine/src/lib.rs
++++ b/baml_language/crates/bex_engine/src/lib.rs
+@@ -1773,7 +1773,15 @@ impl BexEngine {
+
+         // Boxing changes constant kinds, so rebuild compact code and select
+         // exact calls together. Plain lowering here would erase specialization.
+-        bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
++        #[cfg(feature = "startup-experiment")]
++        let prepared = float_indices.is_empty() && compile_time_objects.iter().all(|object| {
++            !matches!(object, Object::Function(function) if function.bytecode.compact.is_none())
++        });
++        #[cfg(not(feature = "startup-experiment"))]
++        let prepared = false;
++        if !prepared {
++            bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
++        }
+
+         // Pre-compute class and enum indices before moving objects to heap.
+         // This is used for allocating instances/variants from sys-op results.
+diff --git a/baml_language/crates/bex_vm/Cargo.toml b/baml_language/crates/bex_vm/Cargo.toml
+index 0c2d10ff84..10f3937722 100644
+--- a/baml_language/crates/bex_vm/Cargo.toml
++++ b/baml_language/crates/bex_vm/Cargo.toml
+@@ -83,6 +83,7 @@ indexmap = { workspace = true }
+
+ [features]
+ default = [  ]
++startup-experiment = [ "bex_vm_types/startup-experiment", "baml_artifact/startup-experiment" ]
+ heap_debug = [ "bex_heap/heap_debug", "bex_vm_types/heap_debug" ]
+ # Enables the per-op VM counter for the `kperf` profiler's instructions/op
+ # breakdown. Off by default — pure measurement scaffolding on the hot path.
+diff --git a/baml_language/crates/bex_vm/src/vm.rs b/baml_language/crates/bex_vm/src/vm.rs
+index 54f760c588..ef8c6b55cd 100644
+--- a/baml_language/crates/bex_vm/src/vm.rs
++++ b/baml_language/crates/bex_vm/src/vm.rs
+@@ -1822,7 +1822,15 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
+         .map(crate::package_baml::attach_builtins)
+         .collect::<Result<Vec<_>, _>>()?;
+
+-    prepare_compact_code(&mut objects, &program.globals);
++    #[cfg(feature = "startup-experiment")]
++    let prepared = objects.iter().all(|object| {
++        !matches!(object, Object::Function(function) if function.bytecode.compact.is_none())
++    });
++    #[cfg(not(feature = "startup-experiment"))]
++    let prepared = false;
++    if !prepared {
++        prepare_compact_code(&mut objects, &program.globals);
++    }
+
+     // The by-name view of the executable's callables, from the package
+     // tables: declared functions and class methods only. Lambdas, helpers,
+diff --git a/baml_language/crates/bex_vm_types/Cargo.toml b/baml_language/crates/bex_vm_types/Cargo.toml
+index 918d206864..124071aa82 100644
+--- a/baml_language/crates/bex_vm_types/Cargo.toml
++++ b/baml_language/crates/bex_vm_types/Cargo.toml
+@@ -43,4 +43,5 @@ indexmap = { workspace = true }
+
+ [features]
+ default = [  ]
++startup-experiment = [  ]
+ heap_debug = [  ]
+diff --git a/baml_language/crates/bex_vm_types/src/bytecode.rs b/baml_language/crates/bex_vm_types/src/bytecode.rs
+index 72de0f0b95..08637954e7 100644
+--- a/baml_language/crates/bex_vm_types/src/bytecode.rs
++++ b/baml_language/crates/bex_vm_types/src/bytecode.rs
+@@ -2160,7 +2160,13 @@ pub struct CompactCode {
+     /// `Bytecode::call_layouts` keyed by byte-offset PC.
+     pub call_layouts: BTreeMap<usize, baml_type::CallLayout>,
+     /// Line table with PCs translated to byte offsets.
++    #[cfg_attr(feature = "startup-experiment", borsh(skip))]
+     pub line_table: Vec<LineTableEntry>,
++    #[cfg(feature = "startup-experiment")]
++    pub encoded_line_table: Vec<u8>,
++    #[cfg(feature = "startup-experiment")]
++    #[borsh(skip)]
++    pub decoded_line_table: std::sync::OnceLock<Vec<LineTableEntry>>,
+     /// Exception table with PCs translated to byte offsets.
+     pub exception_table: Vec<ExceptionTableEntry>,
+     /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
+@@ -2175,13 +2181,30 @@ pub struct CompactCode {
+ }
+
+ impl CompactCode {
++    #[cfg(feature = "startup-experiment")]
++    pub fn defer_source_map(&mut self) {
++        self.encoded_line_table = borsh::to_vec(&self.line_table).expect("source map encoding");
++        self.line_table.clear();
++    }
++
++    fn source_map(&self) -> &[LineTableEntry] {
++        #[cfg(feature = "startup-experiment")]
++        if !self.encoded_line_table.is_empty() {
++            return self.decoded_line_table.get_or_init(|| {
++                borsh::from_slice(&self.encoded_line_table).expect("prototype source map decoding")
++            });
++        }
++        &self.line_table
++    }
++
+     /// Get the source mapping entry for a byte-offset PC.
+     pub fn line_entry_for_pc(&self, pc: usize) -> Option<&LineTableEntry> {
+-        if self.line_table.is_empty() {
++        let source_map = self.source_map();
++        if source_map.is_empty() {
+             return None;
+         }
+-        let idx = self.line_table.partition_point(|entry| entry.pc <= pc);
+-        (idx > 0).then(|| &self.line_table[idx - 1])
++        let idx = source_map.partition_point(|entry| entry.pc <= pc);
++        (idx > 0).then(|| &source_map[idx - 1])
+     }
+
+     /// Get the 1-indexed source line for a byte-offset PC.
+@@ -2288,7 +2311,7 @@ pub struct Bytecode {
+
+     /// Compact bytecode encoding. Populated at engine load time by
+     /// `lower_to_compact()`. `None` until lowering runs.
+-    #[borsh(skip)]
++    #[cfg_attr(not(feature = "startup-experiment"), borsh(skip))]
+     pub compact: Option<CompactCode>,
+ }
+
+@@ -2789,6 +2812,10 @@ impl Bytecode {
+                 .map(|(index, layout)| (index_to_offset[*index], layout.clone()))
+                 .collect(),
+             line_table,
++            #[cfg(feature = "startup-experiment")]
++            encoded_line_table: Vec::new(),
++            #[cfg(feature = "startup-experiment")]
++            decoded_line_table: std::sync::OnceLock::new(),
+             exception_table,
+             handler_context_table,
+             shield_table,
