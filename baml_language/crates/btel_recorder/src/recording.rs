@@ -118,7 +118,7 @@ pub struct RecordingBuilder {
 }
 
 /// Definitions taken per poll while the recording runs.
-const TYPE_DEFINITIONS_PER_POLL: usize = 256;
+const TYPE_DEFINITIONS_PER_POLL: usize = 1_024;
 /// Polls `end_recording` makes for definitions still pending when input is
 /// exhausted. Each poll that finds heap access busy yields first; together
 /// they bound how long the end can wait on a collection.

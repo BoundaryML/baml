@@ -13,9 +13,6 @@ pub(crate) struct EngineTelemetry {
     /// whichever VM thread runs the next sys-op. Holds raw header values:
     /// never handed to anything but the IO side's `NetworkContext`.
     pub(super) network: Arc<sys_types::network::NetworkQueue>,
-    /// The heap's declaration lookup: where every thread's captures register
-    /// the classes and enums they name.
-    pub(super) declarations: Arc<dyn bex_vm::telemetry::DeclarationRegistry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) runtime: Arc<btel_processor::TelemetryRuntime>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -50,14 +47,12 @@ impl EngineTelemetry {
         Some(telemetry.new_state(telemetry.clock.start_run()))
     }
     fn new_state(&self, clock: Arc<btel_clock::ClockEpoch>) -> TelemetryState {
-        let mut state = TelemetryState::new_root(
+        TelemetryState::new_root(
             Arc::clone(&self.policies),
             clock,
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.runtime),
-        );
-        state.set_declaration_registry(Arc::clone(&self.declarations));
-        state
+        )
     }
     pub(super) fn new_child(
         telemetry: Option<&Self>,

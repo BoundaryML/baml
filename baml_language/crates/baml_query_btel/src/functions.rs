@@ -89,47 +89,92 @@ struct CacheState {
 }
 
 /// One query's value-resolution state.
-/// Recorded class and enum definitions, by recording (its index row) and
-/// type tag. A definition's id is `<recording id>:<type tag>`: tags are
-/// engine-scoped, so the recording scopes them.
-#[derive(Default)]
-pub struct TypeDefinitionIndex {
-    by_tag: HashMap<(i64, i64), btel_reader::value::DefinitionRef>,
+/// Recorded class and enum definitions, loaded lazily: a query reads only
+/// the recordings and tags it renders, through its own read-only connection
+/// to the index (the query's connection is busy running the statement that
+/// renders). Merge rules and ids are `btel_reader::types`'.
+pub struct TypeDefinitionStore {
+    path: Option<std::path::PathBuf>,
+    conn: Mutex<Option<rusqlite::Connection>>,
+    recordings: Mutex<HashMap<i64, Option<Arc<[u8]>>>>,
+    declarations: Mutex<HashMap<(i64, i64), Option<Declaration>>>,
 }
 
-impl TypeDefinitionIndex {
-    pub fn load(conn: &rusqlite::Connection) -> rusqlite::Result<Self> {
-        let mut statement = conn.prepare(
-            "SELECT d.rec, d.type_tag, d.state, d.declaration, r.recording_id
-             FROM type_def d JOIN recording r ON r.rec = d.rec",
-        )?;
-        let mut by_tag = HashMap::new();
-        let mut rows = statement.query([])?;
-        while let Some(row) = rows.next()? {
-            let rec: i64 = row.get(0)?;
-            let tag: i64 = row.get(1)?;
-            let state: i64 = row.get(2)?;
-            let declaration: Option<Vec<u8>> = row.get(3)?;
-            let recording: Vec<u8> = row.get(4)?;
-            let declaration = declaration
-                .filter(|_| state == 2)
-                .and_then(|bytes| {
-                    <btel_recorder::proto::TypeDeclaration as prost::Message>::decode(
-                        bytes.as_slice(),
-                    )
-                    .ok()
-                })
-                .and_then(|declaration| btel_recorder::decode_declaration(&declaration))
-                .map(Arc::new);
-            by_tag.insert(
-                (rec, tag),
-                btel_reader::value::DefinitionRef {
-                    id: format!("{}:{tag}", hex(&recording)).into(),
-                    declaration,
-                },
-            );
+type Declaration = Arc<btel_reader::types::TypeDeclaration>;
+
+impl TypeDefinitionStore {
+    /// `path` is the index database; `None` for an in-memory index, which
+    /// has no definitions to read.
+    pub fn new(path: Option<std::path::PathBuf>) -> Self {
+        Self {
+            path,
+            conn: Mutex::new(None),
+            recordings: Mutex::new(HashMap::new()),
+            declarations: Mutex::new(HashMap::new()),
         }
-        Ok(Self { by_tag })
+    }
+
+    fn with_conn<T>(
+        &self,
+        f: impl FnOnce(&rusqlite::Connection) -> rusqlite::Result<T>,
+    ) -> Option<T> {
+        let path = self.path.as_ref()?;
+        let mut conn = self
+            .conn
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if conn.is_none() {
+            *conn = rusqlite::Connection::open_with_flags(
+                path,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+                    | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            )
+            .ok();
+        }
+        f(conn.as_ref()?).ok()
+    }
+
+    fn recording_id(&self, rec: i64) -> Option<Arc<[u8]>> {
+        let mut recordings = self
+            .recordings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(id) = recordings.get(&rec) {
+            return id.clone();
+        }
+        let id = self
+            .with_conn(|conn| {
+                conn.query_row(
+                    "SELECT recording_id FROM recording WHERE rec = ?1",
+                    [rec],
+                    |row| row.get::<_, Vec<u8>>(0),
+                )
+            })
+            .map(Arc::from);
+        recordings.insert(rec, id.clone());
+        id
+    }
+
+    fn declaration(&self, rec: i64, tag: i64) -> Option<Arc<btel_reader::types::TypeDeclaration>> {
+        let mut declarations = self
+            .declarations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(found) = declarations.get(&(rec, tag)) {
+            return found.clone();
+        }
+        let found = self
+            .with_conn(|conn| {
+                conn.query_row(
+                    "SELECT declaration FROM type_def WHERE rec = ?1 AND type_tag = ?2 AND state = ?3",
+                    rusqlite::params![rec, tag, btel_reader::types::DefinitionState::Declared.code()],
+                    |row| row.get::<_, Vec<u8>>(0),
+                )
+            })
+            .and_then(|bytes| btel_reader::types::DefinitionRow::decode(&bytes))
+            .map(Arc::new);
+        declarations.insert((rec, tag), found.clone());
+        found
     }
 }
 
@@ -138,27 +183,35 @@ impl TypeDefinitionIndex {
 struct Scoped<'a> {
     context: &'a QueryContext,
     rec: i64,
+    recording: Option<Arc<[u8]>>,
 }
 
 impl BlobSource for Scoped<'_> {
     fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
         self.context.load(id)
     }
-    fn type_definition(
+    fn type_definitions(&self) -> Option<&dyn btel_reader::types::TypeDefinitions> {
+        self.recording
+            .as_ref()
+            .map(|_| self as &dyn btel_reader::types::TypeDefinitions)
+    }
+}
+
+impl btel_reader::types::TypeDefinitions for Scoped<'_> {
+    fn id(&self, tag: baml_type::typetag::TypeTag) -> Arc<str> {
+        btel_reader::types::definition_id(self.recording.as_deref().unwrap_or_default(), tag)
+    }
+    fn declaration(
         &self,
         tag: baml_type::typetag::TypeTag,
-    ) -> Option<btel_reader::value::DefinitionRef> {
-        self.context
-            .types
-            .by_tag
-            .get(&(self.rec, tag.as_i64()))
-            .cloned()
+    ) -> Option<Arc<btel_reader::types::TypeDeclaration>> {
+        self.context.types.declaration(self.rec, tag.as_i64())
     }
 }
 
 pub struct QueryContext {
     cas: CasStore,
-    types: Arc<TypeDefinitionIndex>,
+    types: Arc<TypeDefinitionStore>,
     limits: ValueLimits,
     deadline: Option<Instant>,
     state: Mutex<CacheState>,
@@ -167,7 +220,7 @@ pub struct QueryContext {
 impl QueryContext {
     pub fn new(
         cas: CasStore,
-        types: Arc<TypeDefinitionIndex>,
+        types: Arc<TypeDefinitionStore>,
         limits: ValueLimits,
         deadline: Option<Instant>,
     ) -> Self {
@@ -357,6 +410,9 @@ impl QueryContext {
                 let scoped = Scoped {
                     context: self,
                     rec: parsed.rec,
+                    recording: (parsed.rec != 0)
+                        .then(|| self.types.recording_id(parsed.rec))
+                        .flatten(),
                 };
                 let presented =
                     value::to_scalar(&scoped, &nav, parsed.names.as_ref(), &self.limits.render);

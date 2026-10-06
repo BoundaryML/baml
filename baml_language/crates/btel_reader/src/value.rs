@@ -25,7 +25,7 @@ use crate::evidence::ArgumentNames;
 pub mod equality;
 mod span;
 mod ty;
-pub use span::{BlobSource, DefinitionRef, Found, Located, media_content};
+pub use span::{BlobSource, Found, Located, media_content};
 use span::{Examine, Span, reach};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -691,8 +691,7 @@ pub fn render_arguments(
         limits.max_blobs,
         limits.max_blob_bytes,
     );
-    let lookup = |tag| source.type_definition(tag);
-    let mut renderer = Renderer::new(&span, limits, &lookup);
+    let mut renderer = Renderer::new(&span, limits, source.type_definitions());
     let json = match names.filter(|names| names.slots.len() == slots.len()) {
         Some(names) if names.slots.iter().all(|slot| slot.name.is_some()) => {
             let mut map = Map::new();
@@ -747,8 +746,7 @@ pub fn render_value(
         limits.max_blobs,
         limits.max_blob_bytes,
     );
-    let lookup = |tag| source.type_definition(tag);
-    let mut renderer = Renderer::new(&span, limits, &lookup);
+    let mut renderer = Renderer::new(&span, limits, source.type_definitions());
     let json = renderer.value(found.blob(), &value, 0);
     Rendered {
         json,
@@ -802,11 +800,15 @@ fn description_label(kind: Description) -> &'static str {
     }
 }
 
-/// The definitions one rendered cell refers to: each is written once, at its
-/// first reference.
+/// The definitions one rendered cell refers to: every reference carries an
+/// id, and each definition is written once, at its first reference, within
+/// the cell's text budget.
 struct RendererDefinitions<'a> {
-    lookup: &'a dyn Fn(baml_type::typetag::TypeTag) -> Option<DefinitionRef>,
-    defined: std::collections::HashSet<Arc<str>>,
+    source: Option<&'a dyn crate::types::TypeDefinitions>,
+    defined: std::collections::HashSet<baml_type::typetag::TypeTag>,
+    /// Text the cell has left, synced by the renderer around each use.
+    text_left: usize,
+    spent: usize,
 }
 
 impl ty::CellDefinitions for RendererDefinitions<'_> {
@@ -814,9 +816,18 @@ impl ty::CellDefinitions for RendererDefinitions<'_> {
         &mut self,
         tag: baml_type::typetag::TypeTag,
     ) -> Option<(Arc<str>, Option<Arc<btel_types::TypeDeclaration>>)> {
-        let found = (self.lookup)(tag)?;
-        let first = self.defined.insert(Arc::clone(&found.id));
-        Some((found.id, found.declaration.filter(|_| first)))
+        let source = self.source?;
+        let first = self.defined.insert(tag);
+        let declaration = if first { source.declaration(tag) } else { None };
+        Some((source.id(tag), declaration))
+    }
+    fn charge(&mut self, bytes: usize) -> bool {
+        if bytes > self.text_left {
+            return false;
+        }
+        self.text_left -= bytes;
+        self.spent += bytes;
+        true
     }
 }
 
@@ -837,14 +848,16 @@ impl<'a> Renderer<'a> {
     fn new(
         span: &'a Span,
         limits: &'a RenderLimits,
-        lookup: &'a dyn Fn(baml_type::typetag::TypeTag) -> Option<DefinitionRef>,
+        source: Option<&'a dyn crate::types::TypeDefinitions>,
     ) -> Self {
         Self {
             span,
             limits,
             defs: RendererDefinitions {
-                lookup,
+                source,
                 defined: std::collections::HashSet::new(),
+                text_left: 0,
+                spent: 0,
             },
             rendered: HashMap::new(),
             nodes: 0,
@@ -852,6 +865,18 @@ impl<'a> Renderer<'a> {
             incomplete: None,
             cut: false,
         }
+    }
+
+    /// Run `f` with the definitions, charging their text to the cell's.
+    fn with_defs<T>(&mut self, f: impl FnOnce(&mut RendererDefinitions<'a>) -> T) -> T {
+        self.defs.text_left = self.limits.max_text_bytes.saturating_sub(self.text_bytes);
+        self.defs.spent = 0;
+        let out = f(&mut self.defs);
+        self.text_bytes += self.defs.spent;
+        if self.defs.text_left == 0 && self.defs.spent > 0 {
+            self.cut = true;
+        }
+        out
     }
 
     fn unavailable(&mut self, reason: Unavailable) -> Json {
@@ -960,7 +985,7 @@ impl<'a> Renderer<'a> {
                 // stands in for the text the rendering spends.
                 let rendered = match &description.decoded {
                     Some(decoded) if self.take_text(description.encoded.len()) => {
-                        ty::json_with(decoded, &mut self.defs)
+                        self.with_defs(|defs| ty::json_with(decoded, defs))
                     }
                     Some(_) => self.truncated(RENDER_SIZE),
                     None => Json::Null,
@@ -974,7 +999,7 @@ impl<'a> Renderer<'a> {
                 map.insert("$enum".into(), self.declaration_name(blob, *declaration));
                 map.insert("$variant".into(), self.text(name));
                 let tag = declaration_tag(blob, *declaration);
-                ty::reference(&mut map, "$def", "$definition", tag, &mut self.defs);
+                self.with_defs(|defs| ty::reference(&mut map, "$def", "$definition", tag, defs));
                 Json::Object(map)
             }
             DecodedValue::Truncated(limit) => {
@@ -1109,7 +1134,7 @@ impl<'a> Renderer<'a> {
             } => {
                 map.insert("$class".into(), self.declaration_name(blob, *declaration));
                 let tag = declaration_tag(blob, *declaration);
-                ty::reference(&mut map, "$def", "$definition", tag, &mut self.defs);
+                self.with_defs(|defs| ty::reference(&mut map, "$def", "$definition", tag, defs));
                 let mut inner = Map::new();
                 let mut whole = true;
                 for (key, value) in fields {

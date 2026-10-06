@@ -199,14 +199,14 @@ impl DeclarationRegistry for bex_heap::BexHeap {
     }
 }
 
-/// Tags this thread registered already, kept to skip the shared lookup on
-/// repeat captures. Cleared when it reaches this size: a program minting
-/// classes must not grow it without bound, and re-registration is a no-op.
+/// Runtime-created tags this thread registered already, kept to skip the
+/// shared map's lock on repeat captures (compile-time declarations need no
+/// cache: their check is one atomic read). Cleared at this size: a program
+/// minting classes must not grow it, and re-registration is a no-op.
 const REGISTERED_DECLARATIONS_CACHE: usize = 4_096;
 
 pub struct TelemetryState {
     context: btel_types::context::Context,
-    declarations: Option<Arc<dyn DeclarationRegistry>>,
     registered: rustc_hash::FxHashSet<baml_type::typetag::TypeTag>,
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
     context_snapshot: Option<(btel_types::context::Context, btel_snapshot::CasId)>,
@@ -271,7 +271,6 @@ impl TelemetryState {
         let started_at = clock.read();
         Self {
             context: btel_types::context::Context::default(),
-            declarations: None,
             registered: rustc_hash::FxHashSet::default(),
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
             context_snapshot: None,
@@ -347,22 +346,21 @@ impl TelemetryState {
         assert!(builder.is_some(), "synchronous WASM capture consumption");
         // SAFETY: invocation entry/completion run with the VM heap permit held.
         // Scratch traversal never releases it or triggers VM allocation/GC.
+        self.capture_scratch.collect = self.policies.declaration_registry().is_some();
         let snapshot =
             builder.map(|builder| unsafe { self.capture_scratch.capture(builder, input) });
         self.register_declarations();
         snapshot
     }
 
-    /// Where this thread's captures register the classes and enums they name.
-    pub fn set_declaration_registry(&mut self, registry: Arc<dyn DeclarationRegistry>) {
-        self.declarations = Some(registry);
-    }
-
     /// Register the declarations the last capture named, before the capture
     /// is published. Repeats on this thread skip the shared lookup.
     fn register_declarations(&mut self) {
         let named = &mut self.capture_scratch.declarations;
-        let Some(registry) = &self.declarations else {
+        if named.is_empty() {
+            return;
+        }
+        let Some(registry) = self.policies.declaration_registry() else {
             named.clear();
             return;
         };
@@ -370,11 +368,12 @@ impl TelemetryState {
             self.registered.clear();
         }
         for (tag, ptr) in named.drain(..) {
-            if self.registered.insert(tag) {
-                // SAFETY: still under the capture's heap permit, and the
-                // capture read `ptr` as the declaration `tag` identifies.
-                unsafe { registry.register_declaration(tag, ptr) };
+            if tag.is_dynamic() && !self.registered.insert(tag) {
+                continue;
             }
+            // SAFETY: still under the capture's heap permit, and the
+            // capture read `ptr` as the declaration `tag` identifies.
+            unsafe { registry.register_declaration(tag, ptr) };
         }
     }
 

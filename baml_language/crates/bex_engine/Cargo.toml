@@ -52,6 +52,8 @@ gloo-timers = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 btel_reader = { workspace = true }
+bex_chunkedringbuffer = { workspace = true }
+btel_records = { workspace = true }
 btel_file = { workspace = true, features = [ "test-support" ] }
 btel_snapshot = { workspace = true }
 

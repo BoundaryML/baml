@@ -90,9 +90,9 @@ pub struct Index {
     slot: functions::ContextSlot,
     options: IndexOptions,
     views_ready: bool,
-    /// Recorded class and enum definitions, loaded by the first query after
-    /// a refresh.
-    types: Option<Arc<functions::TypeDefinitionIndex>>,
+    /// Recorded class and enum definitions, read lazily by queries; reset by
+    /// each refresh.
+    types: Option<Arc<functions::TypeDefinitionStore>>,
     /// No recordings directory: queries run against an empty in-memory index.
     source_missing: bool,
 }
@@ -178,7 +178,12 @@ impl Index {
         let types = match &self.types {
             Some(types) => Arc::clone(types),
             None => {
-                let types = Arc::new(functions::TypeDefinitionIndex::load(&self.conn)?);
+                let path = self
+                    .conn
+                    .path()
+                    .filter(|path| !path.is_empty())
+                    .map(std::path::PathBuf::from);
+                let types = Arc::new(functions::TypeDefinitionStore::new(path));
                 self.types = Some(Arc::clone(&types));
                 types
             }

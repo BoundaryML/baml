@@ -1952,14 +1952,21 @@ impl BexEngine {
                         None,
                     ),
                 };
+                let policies = Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
+                    auto_level,
+                ));
+                // Captures register the declarations they name only when a
+                // recording consumes their definitions.
+                #[cfg(not(target_arch = "wasm32"))]
+                if recording_id.is_some() {
+                    policies.set_declaration_registry(
+                        Arc::clone(&heap) as Arc<dyn bex_vm::telemetry::DeclarationRegistry>
+                    );
+                }
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
-                        auto_level,
-                    )),
+                    policies,
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
-                    declarations: Arc::clone(&heap)
-                        as Arc<dyn bex_vm::telemetry::DeclarationRegistry>,
                     #[cfg(not(target_arch = "wasm32"))]
                     recording_id,
                     #[cfg(not(target_arch = "wasm32"))]

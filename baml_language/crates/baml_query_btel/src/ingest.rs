@@ -1513,15 +1513,12 @@ impl<'t> Applier<'t> {
         Ok(())
     }
 
-    /// A class or enum definition. Unavailable observations never overwrite
-    /// a recorded declaration, and the first declaration is kept.
+    /// A class or enum definition, merged by `btel_reader::types`' rule: a
+    /// declaration supersedes an unavailable observation, and the first
+    /// declaration is kept.
     fn type_definition(&mut self, definition: &proto::TypeDefinition) -> Result<(), Error> {
-        let (state, declaration) = match &definition.resolution {
-            Some(proto::type_definition::Resolution::Declaration(declaration)) => {
-                (2_i64, Some(prost::Message::encode_to_vec(declaration)))
-            }
-            Some(proto::type_definition::Resolution::Unavailable(_)) => (1, None),
-            None => return Ok(()),
+        let Some(row) = btel_reader::types::DefinitionRow::from_wire(definition) else {
+            return Ok(());
         };
         self.tx
             .prepare_cached(
@@ -1530,7 +1527,12 @@ impl<'t> Applier<'t> {
                    state = excluded.state, declaration = excluded.declaration
                  WHERE type_def.state < excluded.state",
             )?
-            .execute(params![self.rec, definition.type_tag, state, declaration])?;
+            .execute(params![
+                self.rec,
+                definition.type_tag,
+                row.state.code(),
+                row.declaration
+            ])?;
         Ok(())
     }
 

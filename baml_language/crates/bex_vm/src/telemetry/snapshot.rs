@@ -33,6 +33,8 @@ pub(super) struct Scratch {
     /// Classes and enums the last capture named, by tag and object: what the
     /// runtime registers so their definitions get recorded.
     pub(super) declarations: Vec<(TypeTag, HeapPtr)>,
+    /// Whether to collect them: only when something consumes definitions.
+    pub(super) collect: bool,
     /// Text replaced wherever a captured string, map key or media URL quotes
     /// it, longest first. Empty except while a network span's error is
     /// captured: it must not quote the request's raw URL. The heap value is
@@ -71,9 +73,10 @@ impl Scratch {
             Object::Float(v) => return SnapshotValue::Float(*v),
             Object::String(s) => leaves.string_value(&rewritten(&self.rewrites, s)),
             Object::Bigint(n) => leaves.bigint(n),
-            Object::Type(value) => {
-                SnapshotValue::Type(leaves.ty(owned_type(&mut self.declarations, &value.ty)))
-            }
+            Object::Type(value) => SnapshotValue::Type(leaves.ty(owned_type(
+                self.collect.then_some(&mut self.declarations),
+                &value.ty,
+            ))),
             Object::Variant(v) => {
                 let declaration = match self.add(leaves, Value::object(v.enm), depth + 1) {
                     SnapshotValue::Object(id) => id,
@@ -138,30 +141,35 @@ impl Scratch {
             Input::Value(value) => SnapshotRoot::Value(self.add(&mut b.leaves(), value, 0)),
             // Built from Rust values: nothing is queued.
             Input::Network(payload) => SnapshotRoot::Value(network(&mut b, payload)),
-            Input::TypeArgs(args) => {
-                SnapshotRoot::Value(type_args(&mut b, &mut self.declarations, args))
-            }
+            Input::TypeArgs(args) => SnapshotRoot::Value(type_args(
+                &mut b,
+                self.collect.then_some(&mut self.declarations),
+                args,
+            )),
         };
         while let Some((slot, ptr, depth)) = self.work.pop() {
             // SAFETY: inherited heap permit, never relinquished during traversal.
             let object = match unsafe { ptr.get() } {
                 Object::Uint8Array(data) => b.bytes(&data.lock()),
                 Object::Array(data) => {
-                    let element_type = b
-                        .leaves()
-                        .ty(owned_type(&mut self.declarations, &data.element_ty));
+                    let element_type = b.leaves().ty(owned_type(
+                        self.collect.then_some(&mut self.declarations),
+                        &data.element_ty,
+                    ));
                     let data = data.lock();
                     b.list(element_type, data.iter(), |leaves, value| {
                         self.add(leaves, *value, depth + 1)
                     })
                 }
                 Object::Map(data) => {
-                    let key_type = b
-                        .leaves()
-                        .ty(owned_type(&mut self.declarations, &data.key_ty));
-                    let value_type = b
-                        .leaves()
-                        .ty(owned_type(&mut self.declarations, &data.value_ty));
+                    let key_type = b.leaves().ty(owned_type(
+                        self.collect.then_some(&mut self.declarations),
+                        &data.key_ty,
+                    ));
+                    let value_type = b.leaves().ty(owned_type(
+                        self.collect.then_some(&mut self.declarations),
+                        &data.value_ty,
+                    ));
                     let data = data.lock();
                     b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
                         (
@@ -181,7 +189,9 @@ impl Scratch {
                             let type_arguments: Vec<_> = instance
                                 .class_type_args
                                 .iter()
-                                .map(|ty| owned_type(&mut self.declarations, ty))
+                                .map(|ty| {
+                                    owned_type(self.collect.then_some(&mut self.declarations), ty)
+                                })
                                 .collect();
                             b.instance(
                                 declaration,
@@ -199,11 +209,15 @@ impl Scratch {
                     }
                 }
                 Object::Class(class) => {
-                    self.declarations.push((class.type_tag, ptr));
+                    if self.collect {
+                        self.declarations.push((class.type_tag, ptr));
+                    }
                     b.declaration(&class.name, class.type_tag, false)
                 }
                 Object::Enum(enm) => {
-                    self.declarations.push((enm.type_tag, ptr));
+                    if self.collect {
+                        self.declarations.push((enm.type_tag, ptr));
+                    }
                     b.declaration(&enm.name, enm.type_tag, true)
                 }
                 Object::Cell(cell) => {
@@ -305,16 +319,14 @@ fn network(b: &mut Builder, payload: &NetworkPayload<'_>) -> SnapshotValue {
 }
 fn type_args(
     b: &mut Builder,
-    named: &mut Vec<(TypeTag, HeapPtr)>,
+    mut named: Option<&mut Vec<(TypeTag, HeapPtr)>>,
     args: &[(&str, &bex_vm_types::RealizedTy)],
 ) -> SnapshotValue {
     let fields = args
         .iter()
         .map(|(name, ty)| {
-            (
-                *name,
-                SnapshotValue::Type(b.leaves().ty(owned_type(named, ty))),
-            )
+            let ty = owned_type(named.as_deref_mut(), ty);
+            (*name, SnapshotValue::Type(b.leaves().ty(ty)))
         })
         .collect::<Vec<_>>();
     map(b, OwnedType::Type, &fields)
@@ -368,13 +380,14 @@ fn object(b: &mut Builder, object: SnapshotObject) -> SnapshotValue {
 // identity. Every class and enum named goes to `named`, so its definition is
 // recorded too.
 fn owned_type(
-    named: &mut Vec<(TypeTag, HeapPtr)>,
+    mut named: Option<&mut Vec<(TypeTag, HeapPtr)>>,
     ty: &bex_vm_types::RealizedTy,
 ) -> btel_snapshot::OwnedType {
     ty.map_heads(&mut |head| {
         // SAFETY: capture holds the heap permit; a resolved head points at
         // the live declaration it names.
-        if head.is_resolved()
+        if let Some(named) = named.as_deref_mut()
+            && head.is_resolved()
             && matches!(
                 unsafe { head.ptr().get() },
                 Object::Class(_) | Object::Enum(_)

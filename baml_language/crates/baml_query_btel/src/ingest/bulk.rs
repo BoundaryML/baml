@@ -407,7 +407,7 @@ pub(super) struct Bulk {
     usage: BTreeMap<(u64, usize), proto::ModelUsage>,
     /// Type tag -> (state, encoded declaration), with the incremental path's
     /// rule: the first declaration wins over any unavailable observation.
-    types: BTreeMap<i64, (i64, Option<Vec<u8>>)>,
+    types: BTreeMap<i64, btel_reader::types::DefinitionRow>,
     network_spans: FxHashMap<u64, NetworkRow>,
     network_events: Vec<EventRow>,
     /// The first header that names the process, and how it ended.
@@ -881,16 +881,12 @@ impl Bulk {
     }
 
     fn type_definition(&mut self, definition: &proto::TypeDefinition) {
-        let (state, declaration) = match &definition.resolution {
-            Some(proto::type_definition::Resolution::Declaration(declaration)) => {
-                (2, Some(declaration.encode_to_vec()))
-            }
-            Some(proto::type_definition::Resolution::Unavailable(_)) => (1, None),
-            None => return,
+        let Some(row) = btel_reader::types::DefinitionRow::from_wire(definition) else {
+            return;
         };
-        let entry = self.types.entry(definition.type_tag).or_insert((0, None));
-        if entry.0 < state {
-            *entry = (state, declaration);
+        let existing = self.types.get(&definition.type_tag).map(|row| row.state);
+        if row.supersedes(existing) {
+            self.types.insert(definition.type_tag, row);
         }
     }
 
@@ -902,11 +898,11 @@ impl Bulk {
             4,
             &tags,
             |b, tag| {
-                let (state, declaration) = &self.types[&tag];
+                let row = &self.types[&tag];
                 b.bind(rec)?;
                 b.bind(tag)?;
-                b.bind(*state)?;
-                b.bind(declaration.as_deref())
+                b.bind(row.state.code())?;
+                b.bind(row.declaration.as_deref())
             },
         )
     }

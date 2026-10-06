@@ -15,6 +15,7 @@ pub mod file;
 pub mod layout;
 pub mod source_map;
 pub mod timing;
+pub mod types;
 pub mod value;
 
 pub use btel_recorder::{RecordingId, proto};

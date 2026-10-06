@@ -63,7 +63,6 @@ struct ConversionBuffer {
     aggregates: merge::PendingAggregates,
     sysops: merge::PendingSysOps,
     functions: functions::FunctionDefinitions,
-    types: types::TypeDefinitions,
     // Referenced epochs not yet observed settled, released once final. Bounded
     // by live runs plus runs settled since the last sealed file.
     unsettled_clocks: BTreeMap<u64, Arc<btel_clock::ClockEpoch>>,
@@ -161,14 +160,12 @@ impl ConversionBuffer {
     }
 
     fn define_type(&mut self, definition: btel_types::TypeDefinition) {
-        if let Some(message) = self.types.resolve(definition) {
-            push_message(
-                &mut self.pending.definitions.types,
-                &mut self.pending_encoded_bytes,
-                5,
-                message,
-            );
-        }
+        push_message(
+            &mut self.pending.definitions.types,
+            &mut self.pending_encoded_bytes,
+            5,
+            types::message(definition),
+        );
     }
 
     fn aggregate(&mut self, delta: AggregateDelta) {

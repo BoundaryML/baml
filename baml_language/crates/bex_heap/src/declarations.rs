@@ -6,35 +6,41 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_type::typetag::TypeTag;
+use baml_type::{DeclarationName, typetag::TypeTag};
 use bex_vm_types::{HeapPtr, Object, PermitProof, TypeHead};
 use btel_types::{DefinitionHead, TypeDeclaration, TypeDefinition, TypeField, TypeVariant};
 
 use crate::{BexHeap, CollectionLevel, Generation};
 
 /// Definitions one collection extracts at most; the rest of a dying group is
-/// settled as unavailable, so a safepoint's work stays bounded.
+/// dropped (its references keep their ids), so a safepoint's work stays
+/// bounded.
 const MAX_EXTRACTED_PER_COLLECTION: usize = 1_024;
 
 impl BexHeap {
     /// Register a class or enum a recorded capture names, before the capture
-    /// is published. Cheap after the first call for a declaration.
+    /// is published. After the first call for a declaration this is one
+    /// atomic read for a compile-time declaration, one shard read otherwise.
     ///
     /// # Safety
     /// The caller must exclude GC, and `ptr` must be the live class or enum
     /// object `tag` identifies.
     #[inline]
     pub unsafe fn register_telemetry_declaration(&self, tag: TypeTag, ptr: HeapPtr) {
-        self.declarations.register(tag, ptr);
+        let statics = self
+            .is_compile_time_ptr(ptr)
+            .then(|| self.compile_time_len());
+        self.declarations.register(tag, ptr, statics);
     }
 
     /// Whether definitions are waiting: pending resolution, or settled.
+    /// Lock-free.
     pub fn has_type_definition_work(&self) -> bool {
-        self.declarations.pending_len() > 0 || self.declarations.has_settled()
+        self.declarations.has_work()
     }
 
-    /// Definitions settled without heap access: extracted at collection, or
-    /// unavailable. Needs no permit.
+    /// Definitions settled without heap access: extracted at collection.
+    /// Needs no permit.
     pub fn take_settled_type_definitions(&self) -> Vec<TypeDefinition> {
         self.declarations.take_settled()
     }
@@ -58,10 +64,13 @@ impl BexHeap {
             for (tag, ptr) in batch {
                 let mut named = Vec::new();
                 // SAFETY: the permit excludes GC, and the lookup holds the
-                // current pointer of every registered, uncollected declaration.
-                let declaration = unsafe { copy_declaration(ptr, &mut named) };
+                // current pointer of every registered, uncollected
+                // declaration; under a permit every head points at a live,
+                // current object.
+                let declaration = unsafe { copy_declaration(ptr, &|head| head, &mut named) };
                 for (head, head_ptr) in named {
-                    self.declarations.register(head, head_ptr);
+                    // SAFETY: as above.
+                    unsafe { self.register_telemetry_declaration(head, head_ptr) };
                 }
                 self.declarations.mark_resolved(tag);
                 out.push(TypeDefinition { tag, declaration });
@@ -77,6 +86,9 @@ impl BexHeap {
         forwarding: &HashMap<HeapPtr, HeapPtr>,
         level: CollectionLevel,
     ) {
+        // Where an object is now, if it survives: compile-time objects never
+        // move, survivors moved to their forwarding address, and a minor
+        // collection leaves Gen2 in place.
         let survives = |ptr: HeapPtr| -> Option<HeapPtr> {
             if self.is_compile_time_ptr(ptr) {
                 return Some(ptr);
@@ -97,37 +109,31 @@ impl BexHeap {
         if dying.is_empty() {
             return;
         }
+        // A survivor's old slot is a tombstone; a dead object's is intact
+        // until this phase ends. Read every object where it is readable.
+        let readable = |ptr: HeapPtr| survives(ptr).unwrap_or(ptr);
         // Extract each dying definition, and the definitions it names that die
-        // with it; register the ones it names that survive.
+        // with it; register the ones it names that survive, where they are now.
         let mut seen = HashSet::new();
         let mut extracted = 0;
         while let Some((tag, ptr)) = dying.pop() {
-            if !seen.insert(tag) {
-                continue;
-            }
-            if extracted >= MAX_EXTRACTED_PER_COLLECTION {
-                self.declarations.settle(TypeDefinition {
-                    tag,
-                    declaration: None,
-                });
+            if !seen.insert(tag) || extracted >= MAX_EXTRACTED_PER_COLLECTION {
                 continue;
             }
             extracted += 1;
             let mut named = Vec::new();
-            // SAFETY: the safepoint excludes mutators, and from-space (where a
-            // dying object still lies) is intact until this phase ends.
-            let declaration = unsafe { copy_declaration(ptr, &mut named) };
+            // SAFETY: the safepoint excludes mutators, `ptr` is dead (so its
+            // from-space slot is intact), and `readable` maps every head to
+            // an intact slot.
+            let declaration = unsafe { copy_declaration(ptr, &readable, &mut named) };
             self.declarations
                 .settle(TypeDefinition { tag, declaration });
             for (head, head_ptr) in named {
-                if self.declarations.contains(head) {
-                    continue;
-                }
                 match survives(head_ptr) {
-                    Some(current) => {
-                        self.declarations.register(head, current);
-                    }
-                    None => dying.push((head, head_ptr)),
+                    // SAFETY: a surviving declaration at its current address.
+                    Some(current) => unsafe { self.register_telemetry_declaration(head, current) },
+                    None if !self.declarations.contains(head) => dying.push((head, head_ptr)),
+                    None => {}
                 }
             }
         }
@@ -135,16 +141,19 @@ impl BexHeap {
 }
 
 /// Copy the definition of the class or enum at `ptr`, pushing every class or
-/// enum its fields name to `named`. `None` for any other object.
+/// enum its fields name to `named` with the pointer `readable` maps its head
+/// to. `None` for any other object.
 ///
 /// # Safety
-/// GC must be excluded (or this must run at the safepoint, with `ptr` in an
-/// intact space), and `ptr` must be a declaration object.
+/// GC must be excluded (or this must run at the safepoint), `ptr` must point
+/// at an intact declaration object, and `readable` must map every head's
+/// pointer to an intact object.
 unsafe fn copy_declaration(
     ptr: HeapPtr,
+    readable: &dyn Fn(HeapPtr) -> HeapPtr,
     named: &mut Vec<(TypeTag, HeapPtr)>,
 ) -> Option<TypeDeclaration> {
-    // SAFETY: the caller excludes GC and keeps `ptr`'s space intact.
+    // SAFETY: the caller keeps `ptr`'s slot intact.
     match unsafe { ptr.get() } {
         Object::Class(class) => Some(TypeDeclaration {
             is_enum: false,
@@ -161,8 +170,8 @@ unsafe fn copy_declaration(
                 .map(|field| TypeField {
                     name: field.name.clone(),
                     schema: field.field_template.map_heads(&mut |head: &TypeHead| {
-                        // SAFETY: as above; a head names a live declaration.
-                        unsafe { definition_head(*head, named) }
+                        // SAFETY: as above; `readable` maps the head.
+                        unsafe { definition_head(*head, readable, named) }
                     }),
                     description: field.description.clone(),
                     alias: field.alias.clone(),
@@ -202,25 +211,40 @@ unsafe fn copy_declaration(
     }
 }
 
-/// A field type's head as a definition carries it. Classes and enums are
-/// reported to `named`, so their own definitions get recorded too.
+/// A field type's head as a definition carries it, read where `readable`
+/// says the head's object is. Classes and enums go to `named`, so their own
+/// definitions get recorded too.
 ///
 /// # Safety
 /// As [`copy_declaration`].
-unsafe fn definition_head(head: TypeHead, named: &mut Vec<(TypeTag, HeapPtr)>) -> DefinitionHead {
-    // SAFETY: the caller excludes GC and keeps the head's space intact; an
-    // unresolved head has no object to read.
-    if head.is_resolved()
-        && matches!(
-            unsafe { head.ptr().get() },
-            Object::Class(_) | Object::Enum(_)
-        )
-    {
-        named.push((head.tag(), head.ptr()));
+unsafe fn definition_head(
+    head: TypeHead,
+    readable: &dyn Fn(HeapPtr) -> HeapPtr,
+    named: &mut Vec<(TypeTag, HeapPtr)>,
+) -> DefinitionHead {
+    if !head.is_resolved() {
+        return DefinitionHead {
+            tag: head.tag(),
+            name: None,
+        };
     }
+    // SAFETY: `readable` maps the head to an intact object.
+    let name = match unsafe { readable(head.ptr()).get() } {
+        Object::Class(class) => {
+            named.push((head.tag(), head.ptr()));
+            Some(class.name.clone())
+        }
+        Object::Enum(enm) => {
+            named.push((head.tag(), head.ptr()));
+            Some(enm.name.clone())
+        }
+        Object::Interface(iface) => Some(DeclarationName::Declared(iface.name.clone())),
+        Object::TypeAlias(alias) => Some(DeclarationName::Declared(alias.name.clone())),
+        _ => None,
+    };
     DefinitionHead {
         tag: head.tag(),
-        name: head.tagged_name().map(|name| name.name().clone()),
+        name,
     }
 }
 

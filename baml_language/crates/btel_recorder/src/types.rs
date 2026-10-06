@@ -1,40 +1,20 @@
 //! Class and enum definitions for one recording. The runtime's resolver
-//! supplies owned definitions; this publishes each declaration's definition
-//! once per recording, across files. An unavailable observation is written
-//! once and superseded by a later definition; a definition is never
-//! overwritten.
+//! hands over each declaration's definition once (or an unavailable
+//! observation), so this keeps no per-recording state: it converts what
+//! arrives. Readers merge repeats (`btel_reader::types`), so a definition
+//! that arrives after an unavailable observation supersedes it.
 use btel_types::{FieldType, TypeDeclaration, TypeDefinition};
-use rustc_hash::FxHashSet;
 
 use crate::proto::{self, type_definition::Resolution};
 
-#[derive(Default)]
-pub(crate) struct TypeDefinitions {
-    published: FxHashSet<i64>,
-    unavailable: FxHashSet<i64>,
-}
-
-impl TypeDefinitions {
-    /// The message to publish for `definition`, if it says something new.
-    pub(crate) fn resolve(&mut self, definition: TypeDefinition) -> Option<proto::TypeDefinition> {
-        let tag = definition.tag.as_i64();
-        if self.published.contains(&tag) {
-            return None;
-        }
-        let resolution = match definition.declaration {
-            Some(declaration) => {
-                self.published.insert(tag);
-                Resolution::Declaration(convert(&declaration))
-            }
-            None if self.unavailable.insert(tag) => {
-                Resolution::Unavailable(proto::MetadataUnavailable {})
-            }
-            None => return None,
-        };
-        Some(proto::TypeDefinition {
-            type_tag: tag,
-            resolution: Some(resolution),
-        })
+/// The message published for `definition`.
+pub(crate) fn message(definition: TypeDefinition) -> proto::TypeDefinition {
+    proto::TypeDefinition {
+        type_tag: definition.tag.as_i64(),
+        resolution: Some(match definition.declaration {
+            Some(declaration) => Resolution::Declaration(convert(&declaration)),
+            None => Resolution::Unavailable(proto::MetadataUnavailable {}),
+        }),
     }
 }
 

@@ -1200,6 +1200,41 @@ function main(n: int) -> int {
 }
 "#;
 
+/// Every class or enum type node in `cell` has a `def` id, and each id has
+/// exactly one `definition` in the cell, at its first reference.
+fn check_definitions(cell: &Json) {
+    fn walk(value: &Json, seen: &mut std::collections::BTreeMap<String, usize>) {
+        match value {
+            Json::Object(map) => {
+                if matches!(
+                    map.get("type").and_then(Json::as_str),
+                    Some("class" | "enum")
+                ) {
+                    let id = map
+                        .get("def")
+                        .and_then(Json::as_str)
+                        .unwrap_or_else(|| panic!("class node without an id: {value}"));
+                    let first = !seen.contains_key(id);
+                    let defined = map.contains_key("definition");
+                    assert_eq!(
+                        defined, first,
+                        "a definition at, and only at, the first reference: {value}"
+                    );
+                    *seen.entry(id.to_owned()).or_default() += usize::from(defined);
+                }
+                for item in map.values() {
+                    walk(item, seen);
+                }
+            }
+            Json::Array(items) => items.iter().for_each(|item| walk(item, seen)),
+            _ => {}
+        }
+    }
+    let mut seen = std::collections::BTreeMap::new();
+    walk(cell, &mut seen);
+    assert!(seen.values().all(|&n| n == 1), "{cell}");
+}
+
 /// `value` without class and enum definition references (`def`,
 /// `definition`, `$def`, `$definition`).
 fn without_definitions(value: &Json) -> Json {
@@ -1297,8 +1332,14 @@ async fn generic_calls_record_their_type_args_by_name() {
                  WHERE span_type = 'function' ORDER BY span_name, start_time"
             ),
         );
-        // Class definitions are the type_definitions tests' subject; here
-        // only the type arguments' shape is.
+        // Definition contents are the type_definitions tests' subject; here,
+        // every class node carries an id, and each id in a cell has exactly
+        // one definition (no spurious or duplicated ones). Then the shape.
+        for row in &calls.rows {
+            for cell in &row[1..] {
+                check_definitions(cell);
+            }
+        }
         let rows: Vec<Vec<Json>> = calls
             .rows
             .iter()

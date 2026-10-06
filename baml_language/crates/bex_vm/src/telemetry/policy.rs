@@ -32,6 +32,10 @@ pub struct TelemetryPolicies {
     http_bodies: bool,
     pages: [OnceLock<Box<Page>>; PAGE_COUNT],
     interned: Mutex<FxHashMap<TelemetryPolicy, u16>>,
+    /// Where captures register the classes and enums they name. Installed
+    /// only when something consumes definitions (a recording); otherwise
+    /// captures register nothing.
+    declarations: OnceLock<std::sync::Arc<dyn super::DeclarationRegistry>>,
 }
 
 impl Default for TelemetryPolicies {
@@ -51,6 +55,7 @@ impl TelemetryPolicies {
             http_bodies: true,
             pages: [const { OnceLock::new() }; PAGE_COUNT],
             interned: Mutex::new(FxHashMap::default()),
+            declarations: OnceLock::new(),
         }
     }
 
@@ -67,6 +72,19 @@ impl TelemetryPolicies {
 
     pub fn http_bodies(&self) -> bool {
         self.http_bodies
+    }
+
+    /// Install the consumer-backed registry captures register declarations
+    /// in. Once per engine; later calls are ignored.
+    pub fn set_declaration_registry(
+        &self,
+        registry: std::sync::Arc<dyn super::DeclarationRegistry>,
+    ) {
+        let _ = self.declarations.set(registry);
+    }
+
+    pub(super) fn declaration_registry(&self) -> Option<&dyn super::DeclarationRegistry> {
+        self.declarations.get().map(std::convert::AsRef::as_ref)
     }
 
     #[inline(always)]

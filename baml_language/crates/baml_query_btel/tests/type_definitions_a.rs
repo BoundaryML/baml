@@ -116,3 +116,73 @@ async fn collections_with_pending_definitions_lose_none_across_files() {
     };
     assert_eq!((count(2), count(1)), (400, 0), "recorded, unavailable");
 }
+
+const NESTED: &str = r#"
+function Use<T>(x: T) -> int { 1 }
+function MakeAndUse(inner: reflect.class.Type, i: int) -> int {
+    let b = reflect.class.builder("Outer");
+    b.field("inner", inner.as_type());
+    b.field("i", reflect.Type.of<int>());
+    let t = b.build();
+    type Outer = unreflect(t.as_type())
+    Use<Outer[]>([])
+}
+function main(n: int) -> int {
+    let ib = reflect.class.builder("Inner");
+    ib.field("x", reflect.Type.of<int>());
+    let inner = ib.build();
+    let total = 0;
+    let i = 0;
+    while (i < n) {
+        total = total + MakeAndUse(inner, i);
+        baml.sys.collect_garbage();
+        i = i + 1;
+    }
+    total
+}
+"#;
+
+/// A runtime class collected right after its one capture names another
+/// runtime class that survives (and moves): the dying class's definition
+/// names the survivor by its real name, and the survivor's own definition is
+/// recorded too, in every cell.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_dying_class_names_a_surviving_runtime_class_correctly() {
+    let project = tempfile::tempdir().unwrap();
+    let results = tokio::time::timeout(
+        Duration::from_secs(120),
+        record_program_with(
+            project.path(),
+            NESTED,
+            &["Use"],
+            &[("main", 60)],
+            tiny_files(),
+        ),
+    )
+    .await
+    .expect("no deadlock");
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    let mut index = index(project.path());
+    let uses = sql(
+        &mut index,
+        "SELECT type_args FROM spans WHERE span_name = 'user.Use'",
+    );
+    assert_eq!(uses.rows.len(), 60);
+    let inner = json!({"kind": "class", "name": "Inner", "fields": [{"name": "x", "schema": {"type": "int"}}]});
+    let mut inner_ids = std::collections::HashSet::new();
+    for row in &uses.rows {
+        let outer = &row[0]["T"]["$type"]["item"];
+        assert_eq!(outer["name"], json!("Outer"), "{}", row[0]);
+        let field = &outer["definition"]["fields"][0];
+        assert_eq!(field["name"], json!("inner"));
+        let schema = &field["schema"];
+        assert_eq!(
+            schema["name"],
+            json!("Inner"),
+            "a stale head reads a tombstone: {schema}"
+        );
+        assert_eq!(schema["definition"], inner, "{schema}");
+        inner_ids.insert(schema["def"].as_str().unwrap().to_owned());
+    }
+    assert_eq!(inner_ids.len(), 1, "one Inner throughout");
+}

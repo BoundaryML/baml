@@ -1703,10 +1703,11 @@ fn a_busy_definition_source_never_stalls_sealing_or_the_end() {
     assert!(last.end.is_some(), "the recording still ends");
 }
 
-/// A definition arriving after its first observation lands in a later file,
-/// supersedes the earlier unavailable observation, and is published once.
+/// A definition arriving after an unavailable observation lands in a later
+/// file, so a reader's merge supersedes the observation; the recorder keeps
+/// no per-recording state and forwards each definition it receives.
 #[test]
-fn definitions_publish_once_across_files_and_supersede_unavailable() {
+fn late_definitions_land_in_later_files_after_unavailable() {
     let files = RefCell::new(Vec::new());
     let (_, _, path) = ids();
     let tag = baml_type::typetag::TypeTag::from_i64(900);
@@ -1724,7 +1725,7 @@ fn definitions_publish_once_across_files_and_supersede_unavailable() {
         },
         btel_types::TypeResolution::Busy,
         btel_types::TypeResolution::Ready {
-            definitions: vec![defined("Temp"), defined("Temp")],
+            definitions: vec![defined("Temp")],
             more: false,
         },
     ]);
@@ -1761,7 +1762,7 @@ fn definitions_publish_once_across_files_and_supersede_unavailable() {
         Some(proto::type_definition::Resolution::Unavailable(_))
     ));
     let (_, second) = &types[1];
-    assert_eq!(second.len(), 1, "the repeat is not published again");
+    assert_eq!(second.len(), 1);
     let Some(proto::type_definition::Resolution::Declaration(declaration)) = &second[0].resolution
     else {
         panic!("declaration");
