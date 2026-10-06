@@ -104,17 +104,170 @@ impl RuntimeCompileArtifactSlot {
 
 impl bex_vm_types::BexRustData for RuntimeCompileArtifactSlot {
     fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        // Only `_finish` locks the slot, for one call on the VM thread. The
-        // emitted package has no size of its own to report; the interface
-        // blob and diagnostics are what an artifact retains in bulk.
-        if let Ok(slot) = self.0.try_lock()
-            && let Some(pinned) = slot.as_ref()
+        // Only `_finish` locks the slot, for one call on the VM thread.
+        if let Ok(mut slot) = self.0.try_lock()
+            && let Some(pinned) = slot.as_mut()
         {
-            meter.bytes(pinned.artifact.interface_blob.capacity());
-            meter.bytes(
-                pinned.artifact.diagnostics.capacity() * size_of::<RuntimeCompileDiagnostic>(),
-            );
+            let artifact = &mut pinned.artifact;
+            meter.bytes(artifact.interface_blob.capacity());
+            measure_vec(meter, &artifact.diagnostics);
+            for diagnostic in &artifact.diagnostics {
+                measure_diagnostic(meter, diagnostic);
+            }
             meter.bytes(pinned.pins.capacity() * size_of::<(String, Handle, usize)>());
+            for key in pinned.pins.keys() {
+                meter.bytes(key.capacity());
+            }
+            let emitted = &mut artifact.emitted;
+            meter.bytes(emitted.record.interface_blob.capacity());
+            let unit = &mut emitted.unit;
+            for objects in [
+                &mut unit.classes,
+                &mut unit.enums,
+                &mut unit.interfaces,
+                &mut unit.type_alias_objects,
+                &mut unit.code,
+            ] {
+                measure_vec(meter, objects);
+                for object in objects {
+                    object.measure(meter);
+                }
+            }
+            // Declaration metadata is shallow, as in Object::measure; code
+            // and literal payloads above are measured through the same meter.
+            measure_vec(meter, &unit.dependencies);
+            measure_vec(meter, &unit.object_imports);
+            measure_vec(meter, &unit.global_imports);
+            measure_vec(meter, &unit.exports.objects);
+            measure_vec(meter, &unit.exports.globals);
+            measure_vec(meter, &unit.impl_rules);
+            for rule in &unit.impl_rules {
+                measure_vec(meter, &rule.generic_param_bounds);
+                for bounds in &rule.generic_param_bounds {
+                    measure_vec(meter, bounds);
+                }
+                measure_vec(meter, &rule.interface_args);
+                measure_vec(meter, &rule.interface_assoc);
+                measure_vec(meter, &rule.methods);
+                for (_, method) in &rule.methods {
+                    measure_vec(meter, &method.frame);
+                }
+                meter.bytes(size_of_val(&*rule.field_links));
+            }
+            if let Some(tail) = &mut emitted.tail {
+                measure_vec(meter, &tail.objects);
+                for object in &mut tail.objects {
+                    object.measure(meter);
+                }
+                measure_vec(meter, &tail.dependencies);
+                measure_vec(meter, &tail.object_imports);
+                measure_vec(meter, &tail.global_imports);
+                measure_vec(meter, &tail.slot_objects);
+            }
+            if let ArtifactKind::Session { meta, .. } = &artifact.kind {
+                meter.bytes(meta.submission_name.capacity());
+                meter.bytes(meta.declaration_source.capacity());
+                meter.bytes(
+                    meta.declarations.capacity()
+                        * size_of::<(String, SessionVisibleSymbol, usize)>(),
+                );
+                for (name, symbol) in &meta.declarations {
+                    meter.bytes(name.capacity());
+                    measure_session_symbol(meter, symbol);
+                }
+                measure_vec(meter, &meta.steps);
+                for step in &meta.steps {
+                    if let RuntimeSessionStepKind::Binding {
+                        name,
+                        replay_source,
+                        symbol,
+                    } = &step.kind
+                    {
+                        meter.bytes(name.capacity());
+                        meter.bytes(replay_source.capacity());
+                        measure_session_symbol(meter, symbol);
+                    }
+                }
+                measure_vec(meter, &meta.initializers);
+            }
         }
+    }
+}
+
+fn measure_session_symbol(meter: &mut bex_vm_types::Meter, symbol: &SessionVisibleSymbol) {
+    meter.bytes(symbol.internal.capacity());
+    if let bex_vm_types::SessionVisibleKind::TypeBinding { type_value } = &symbol.kind {
+        meter.bytes(type_value.capacity());
+    }
+}
+
+fn measure_vec<T>(meter: &mut bex_vm_types::Meter, values: &Vec<T>) {
+    meter.bytes(values.capacity() * size_of::<T>());
+}
+
+fn measure_diagnostic(meter: &mut bex_vm_types::Meter, diagnostic: &RuntimeCompileDiagnostic) {
+    meter.bytes(diagnostic.code.capacity());
+    meter.bytes(diagnostic.message.capacity());
+    if let Some(span) = &diagnostic.span {
+        meter.bytes(span.file.capacity());
+    }
+    if let Some(details) = &diagnostic.details {
+        meter.bytes(size_of_val(&**details));
+        meter.bytes(details.headline.capacity());
+        meter.bytes(details.primary_label.as_ref().map_or(0, String::capacity));
+        measure_vec(meter, &details.message_highlights);
+        measure_vec(meter, &details.annotations);
+        for annotation in &details.annotations {
+            meter.bytes(annotation.span.file.capacity());
+            meter.bytes(annotation.message.as_ref().map_or(0, String::capacity));
+            measure_vec(meter, &annotation.message_highlights);
+        }
+        measure_vec(meter, &details.related_info);
+        for related in &details.related_info {
+            meter.bytes(related.span.file.capacity());
+            meter.bytes(related.message.capacity());
+            meter.bytes(related.file_path.as_ref().map_or(0, String::capacity));
+            measure_vec(meter, &related.message_highlights);
+        }
+    }
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use bex_vm_types::{BexRustData, Meter, Object, RuntimeDiagnosticSeverity};
+
+    use super::*;
+
+    #[test]
+    fn artifact_counts_emitted_literals_and_diagnostic_text_until_taken() {
+        let mut unit = baml_linker_types::CompilationUnit::default();
+        unit.code
+            .push(Object::String(bex_str::BexStr::from("x".repeat(100_000))));
+        let slot = RuntimeCompileArtifactSlot::new(PinnedArtifact {
+            artifact: RuntimeCompileArtifact {
+                emitted: EmittedPackage {
+                    unit,
+                    record: baml_linker_types::PackageRecord::default(),
+                    tail: None,
+                },
+                interface_blob: Vec::new(),
+                diagnostics: vec![RuntimeCompileDiagnostic {
+                    code: "warning".into(),
+                    message: "y".repeat(50_000),
+                    severity: RuntimeDiagnosticSeverity::Warning,
+                    span: None,
+                    details: None,
+                }],
+                kind: ArtifactKind::Package,
+            },
+            pins: IndexMap::new(),
+        });
+        let mut meter = Meter::census();
+        slot.measure(&mut meter);
+        assert!(meter.total() >= 150_000);
+        let _artifact = slot.take().unwrap();
+        let mut meter = Meter::census();
+        slot.measure(&mut meter);
+        assert_eq!(meter.total(), 0);
     }
 }

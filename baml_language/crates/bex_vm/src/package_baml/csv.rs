@@ -581,6 +581,20 @@ struct Header {
 }
 
 impl Header {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.bytes(self.names.capacity() * size_of::<String>());
+        meter.bytes(self.index.capacity() * size_of::<(String, usize)>());
+        meter.bytes(self.dup.capacity() * size_of::<String>());
+        for name in self
+            .names
+            .iter()
+            .chain(self.index.keys())
+            .chain(self.dup.iter())
+        {
+            meter.bytes(name.capacity());
+        }
+    }
+
     fn new(names: Vec<String>) -> Self {
         let mut index = HashMap::new();
         let mut dup = HashSet::new();
@@ -613,10 +627,17 @@ struct RecordData {
 impl bex_vm_types::BexRustData for RecordData {
     fn measure(&self, meter: &mut bex_vm_types::Meter) {
         meter.bytes(self.cells.capacity() * size_of::<CellData>());
-        if let Some(header) = &self.header {
-            meter.shared(header, |_| {});
+        for cell in &self.cells {
+            meter.bytes(cell.text.capacity());
         }
-        meter.shared(&self.null_values, |_| {});
+        if let Some(header) = &self.header {
+            meter.shared(header, |meter| header.measure(meter));
+        }
+        meter.shared(&self.null_values, |meter| {
+            for value in self.null_values.iter() {
+                meter.bytes(value.capacity());
+            }
+        });
     }
 }
 
@@ -626,7 +647,28 @@ struct CsvReaderHandle(MeteredMutex<ReaderState>);
 
 impl RetainedFootprint for ReaderState {
     fn retained_bytes(&self) -> usize {
-        self.buf.capacity()
+        let mut meter = bex_vm_types::Meter::charge();
+        meter.bytes(self.buf.capacity());
+        meter.bytes(self.skipped.capacity() * size_of::<ErrInfo>());
+        for error in self.skipped.iter().chain(self.header_error.iter()) {
+            meter.bytes(error.message.capacity());
+            meter.bytes(error.column.as_ref().map_or(0, String::capacity));
+        }
+        if let Some(headers) = &self.opts.headers_override {
+            meter.bytes(headers.capacity() * size_of::<String>());
+            for header in headers {
+                meter.bytes(header.capacity());
+            }
+        }
+        if let Some(header) = &self.header {
+            meter.shared(header, |meter| header.measure(meter));
+        }
+        meter.shared(&self.opts.null_values, |meter| {
+            for value in self.opts.null_values.iter() {
+                meter.bytes(value.capacity());
+            }
+        });
+        meter.total()
     }
 }
 
@@ -2741,5 +2783,49 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             return bex_str::BexStr::from("");
         }
         bex_str::BexStr::from(render_markdown(&header_names, &rows, records.len()).as_str())
+    }
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use bex_vm_types::{BexRustData, Meter};
+
+    use super::*;
+
+    #[test]
+    fn record_counts_text_and_deduplicates_shared_header_and_null_values() {
+        let header = Arc::new(Header::new(vec!["h".repeat(10_000)]));
+        let null_values: Arc<[String]> = Arc::from(vec!["n".repeat(20_000)]);
+        let record = RecordData {
+            cells: vec![CellData {
+                text: "c".repeat(30_000),
+                quoted: false,
+            }],
+            header: Some(header),
+            null_values,
+            byte: 0,
+            line: 1,
+            record: 1,
+        };
+        let mut meter = Meter::census();
+        record.measure(&mut meter);
+        let first = meter.total();
+        assert!(first >= 70_000);
+        record.measure(&mut meter);
+        assert_eq!(
+            meter.total() - first,
+            record.cells.capacity() * size_of::<CellData>() + 30_000
+        );
+    }
+
+    #[test]
+    fn reader_publishes_retained_error_messages() {
+        let handle = MeteredMutex::new(ReaderState::new(ReaderOpts::default(), Vec::new(), true));
+        let before = handle.retained_bytes();
+        {
+            let mut state = handle.lock_uncharged();
+            state.register_skip(&ErrInfo::new(Kind::Decode, "e".repeat(50_000)));
+        }
+        assert!(handle.retained_bytes() >= before + 50_000);
     }
 }

@@ -28,13 +28,28 @@ impl RetainedBytes {
     }
 
     pub fn sub(&self, bytes: usize) {
-        self.0.fetch_sub(bytes, Ordering::Relaxed);
+        let _ = self
+            .0
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                Some(value.saturating_sub(bytes))
+            });
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subtraction_saturates_at_zero() {
+        let retained = RetainedBytes::new(10);
+        retained.sub(11);
+        assert_eq!(retained.get(), 0);
+        retained.sub(usize::MAX);
+        assert_eq!(retained.get(), 0);
+        retained.add(5);
+        assert_eq!(retained.get(), 5);
+    }
 
     #[test]
     fn set_reports_the_signed_change() {

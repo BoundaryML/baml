@@ -106,12 +106,68 @@ pub struct OutputFormatContent {
 
 impl bex_vm_types::BexRustData for OutputFormatContent {
     fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        // Bounded by the target type's declarations: table storage only.
         meter.bytes(self.enums.capacity() * size_of::<(String, Enum)>());
         meter.bytes(self.classes.capacity() * size_of::<(String, Class)>());
         meter.bytes(self.enum_reference_order.capacity() * size_of::<String>());
         meter.bytes(self.recursive_classes.capacity() * size_of::<String>());
         meter.bytes(self.recursive_type_aliases.capacity() * size_of::<(String, SapTy)>());
+        for (key, enm) in &self.enums {
+            meter.bytes(key.capacity() + enm.name.capacity());
+            measure_text(
+                meter,
+                enm.alias.as_ref(),
+                enm.description.as_ref(),
+                enm.docstring.as_ref(),
+            );
+            meter.bytes(enm.values.capacity() * size_of::<EnumValue>());
+            for value in &enm.values {
+                meter.bytes(value.name.capacity());
+                measure_text(
+                    meter,
+                    value.alias.as_ref(),
+                    value.description.as_ref(),
+                    value.docstring.as_ref(),
+                );
+            }
+        }
+        for (key, class) in &self.classes {
+            meter.bytes(key.capacity() + class.name.capacity());
+            measure_text(
+                meter,
+                class.alias.as_ref(),
+                class.description.as_ref(),
+                class.docstring.as_ref(),
+            );
+            meter.bytes(class.fields.capacity() * size_of::<ClassField>());
+            for field in &class.fields {
+                meter.bytes(field.name.capacity());
+                measure_text(
+                    meter,
+                    field.alias.as_ref(),
+                    field.description.as_ref(),
+                    field.docstring.as_ref(),
+                );
+            }
+        }
+        for name in self
+            .enum_reference_order
+            .iter()
+            .chain(self.recursive_classes.iter())
+            .chain(self.recursive_type_aliases.keys())
+        {
+            meter.bytes(name.capacity());
+        }
+    }
+}
+
+fn measure_text(
+    meter: &mut bex_vm_types::Meter,
+    alias: Option<&String>,
+    description: Option<&String>,
+    docstring: Option<&String>,
+) {
+    for text in [alias, description, docstring].into_iter().flatten() {
+        meter.bytes(text.capacity());
     }
 }
 
@@ -1403,6 +1459,27 @@ fn walk_ty(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn schema_measurement_includes_definition_and_variant_text() {
+        use bex_vm_types::{BexRustData, Meter};
+        let content =
+            super::OutputFormatContent::new(sys_types::SapTy::String).with_enum(super::Enum {
+                name: "Choice".into(),
+                alias: None,
+                description: Some("d".repeat(50_000)),
+                docstring: None,
+                values: vec![super::EnumValue {
+                    name: "v".repeat(10_000),
+                    alias: Some("a".repeat(20_000)),
+                    description: None,
+                    docstring: None,
+                }],
+            });
+        let mut meter = Meter::census();
+        content.measure(&mut meter);
+        assert!(meter.total() >= 80_000);
+    }
+
     use std::sync::Arc;
 
     use baml_type::{DeclarationName, Freshness, TypeName};

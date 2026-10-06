@@ -647,11 +647,12 @@ async fn sse_background_task(
                     }
                 };
                 for event in events {
-                    retained.add(event.retained_bytes());
+                    let bytes = event.retained_bytes();
                     if sender.unbounded_send(Ok(event)).is_err() {
                         // Receiver dropped — stream was closed.
                         return;
                     }
+                    retained.add(bytes);
                 }
             }
             Some(Err(e)) => {
@@ -668,10 +669,11 @@ async fn sse_background_task(
                     }
                 };
                 for event in final_events {
-                    retained.add(event.retained_bytes());
+                    let bytes = event.retained_bytes();
                     if sender.unbounded_send(Ok(event)).is_err() {
                         return;
                     }
+                    retained.add(bytes);
                 }
                 return;
             }
