@@ -8,12 +8,18 @@
 //! number kept is the number of declarations alive.
 //!
 //! The blob format is the snapshot crate's; nothing here reads it.
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    Arc, OnceLock,
+    atomic::{AtomicU64, Ordering},
+};
 
 /// A group of definitions encoded as one CAS blob: a declaration with every
 /// declaration it is mutually recursive with. Immutable once made.
 pub struct DefinitionBlob {
     id: [u8; 16],
+    /// The stream of captures that last carried it to its writers; zero for
+    /// none. A shortcut for that stream only: see [`Self::carried_by`].
+    carried_by: AtomicU64,
     bytes: Box<[u8]>,
     children: Box<[Arc<DefinitionBlob>]>,
 }
@@ -24,9 +30,21 @@ impl DefinitionBlob {
     pub fn new(id: [u8; 16], bytes: Box<[u8]>, children: Box<[Arc<DefinitionBlob>]>) -> Self {
         Self {
             id,
+            carried_by: AtomicU64::new(0),
             bytes,
             children,
         }
+    }
+    /// Whether `stream` is the last stream to have carried this group. Only
+    /// `stream` marks itself, after carrying it, so true means it did; false
+    /// says nothing.
+    #[inline]
+    pub fn carried_by(&self, stream: u64) -> bool {
+        self.carried_by.load(Ordering::Relaxed) == stream
+    }
+    /// `stream` has carried this group.
+    pub fn mark_carried(&self, stream: u64) {
+        self.carried_by.store(stream, Ordering::Relaxed);
     }
     pub fn id(&self) -> [u8; 16] {
         self.id

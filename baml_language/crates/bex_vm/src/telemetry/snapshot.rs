@@ -382,8 +382,13 @@ fn described(
     carried: &mut Carried,
     ty: &bex_vm_types::RealizedTy,
 ) -> btel_snapshot::TypeId {
-    let ty = owned_type(leaves, carried, ty);
-    leaves.ty(ty)
+    let mut defined = false;
+    let ty = ty.map_heads(&mut |head| {
+        let identity = identity(leaves, carried, head);
+        defined |= matches!(identity, TypeIdentity::Defined(_));
+        identity
+    });
+    leaves.described(ty, defined)
 }
 /// A class or enum head is its recorded definition, by group and position
 /// alone: the definition holds its name. Any other head is its tag and name.

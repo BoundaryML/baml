@@ -18,7 +18,10 @@
 //! or declaration holds, which names the definition's group by ID. The first
 //! capture of a stream to name a group also carries it to the writers (see
 //! [`Carried`]); limits do not apply to it.
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 use baml_type::{DeclarationName, typetag::TypeTag};
 use bex_str::BexStr;
@@ -69,18 +72,40 @@ pub struct Leaves<'b> {
 /// the order they are made. Keep one per such stream, and never share one
 /// between streams that go to different writers. Forgetting a group, as a
 /// full set does, only carries it again: the writers store it once.
-#[derive(Default)]
-pub struct Carried(FxHashSet<[u8; 16]>);
+pub struct Carried {
+    /// This stream's number, unique in the process.
+    stream: u64,
+    groups: FxHashSet<[u8; 16]>,
+}
+impl Default for Carried {
+    fn default() -> Self {
+        static STREAMS: AtomicU64 = AtomicU64::new(1);
+        Self {
+            stream: STREAMS.fetch_add(1, Ordering::Relaxed),
+            groups: FxHashSet::default(),
+        }
+    }
+}
 impl Carried {
     /// Whether `group` is carried already; otherwise mark it carried.
+    #[inline]
     fn carries(&mut self, group: &DefinitionBlob) -> bool {
-        if self.0.contains(&group.id()) {
+        // The group remembers its last carrier: one load when it is this
+        // stream, the usual case.
+        group.carried_by(self.stream) || self.carries_slow(group)
+    }
+    #[inline(never)]
+    fn carries_slow(&mut self, group: &DefinitionBlob) -> bool {
+        // Another stream carried it last; this one may have too. Not marking
+        // it back keeps streams that share groups from writing it in turn.
+        if self.groups.contains(&group.id()) {
             return true;
         }
-        if self.0.len() >= CARRIED_GROUPS {
-            self.0.clear();
+        if self.groups.len() >= CARRIED_GROUPS {
+            self.groups.clear();
         }
-        self.0.insert(group.id());
+        self.groups.insert(group.id());
+        group.mark_carried(self.stream);
         false
     }
 }
@@ -152,9 +177,19 @@ impl Leaves<'_> {
     /// A type description. A head that names a definition must name one
     /// [`Self::define`] added.
     pub fn ty(&mut self, ty: OwnedType) -> TypeId {
-        let id = TypeId(u32::try_from(self.types.len()).expect("type arena exhausted"));
         let mut defined = false;
         ty.visit_heads(&mut |head| defined |= matches!(head, TypeIdentity::Defined(_)));
+        self.described(ty, defined)
+    }
+    /// [`Self::ty`] for a caller that knows whether a head of `ty` names a
+    /// definition.
+    pub fn described(&mut self, ty: OwnedType, defined: bool) -> TypeId {
+        debug_assert_eq!(defined, {
+            let mut any = false;
+            ty.visit_heads(&mut |head| any |= matches!(head, TypeIdentity::Defined(_)));
+            any
+        });
+        let id = TypeId(u32::try_from(self.types.len()).expect("type arena exhausted"));
         self.types.push(
             Type {
                 leaf: hash::ty(&ty),
