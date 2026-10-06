@@ -82,8 +82,8 @@ function slack_api(method: string, body: json?, query: string) -> json {
     let text = res.text() catch (_) {
         _ => "{}",
     };
-    let out = baml.json.parse(text) catch (_) {
-        _ => baml.json.parse("{}"),
+    let out: json = baml.json.parse(text) catch (_) {
+        _ => ({}),
     };
     if (!baml.json.path_or<bool>(out, ".ok", false)) {
         throw SlackError { message: method + ": " + baml.json.path_or<string>(out, ".error", "not ok") };
@@ -579,9 +579,13 @@ testset "slack" {
     }
 
     test "a Slack message becomes a report; replies, bots and joins do not" {
-        let m = baml.json.parse(
-            `{"type":"message","user":"U1","ts":"1725000000.000100","text":"baml check panics on \`throws Nope\` with 0.17.0\\nstack: index out of bounds","files":[{"name":"main.baml","preview":"function f() -> int throws Nope { 1 }"}]}`,
-        );
+        let m: json = {
+            "type": "message",
+            "user": "U1",
+            "ts": "1725000000.000100",
+            "text": "baml check panics on `throws Nope` with 0.17.0\nstack: index out of bounds",
+            "files": [{ "name": "main.baml", "preview": "function f() -> int throws Nope { 1 }" }],
+        };
         let fb = feedback_from_slack(m, "C1") ?? baml.sys.panic("no feedback");
         assert.equal(fb.id, "SL-1725000000-000100");
         assert.equal(fb.source, FeedbackSource.Slack);
@@ -591,24 +595,32 @@ testset "slack" {
         assert.is_true(fb.title.starts_with("baml check panics"));
         assert.equal(
             feedback_from_slack(
-                baml.json.parse(
-                    `{"type":"message","user":"U1","ts":"2.0","thread_ts":"1.0","text":"reply"}`,
-                ),
+                {
+                    "type": "message",
+                    "user": "U1",
+                    "ts": "2.0",
+                    "thread_ts": "1.0",
+                    "text": "reply",
+                },
                 "C1",
             )
                 == null,
             true,
         );
         assert.equal(
-            feedback_from_slack(baml.json.parse(`{"type":"message","bot_id":"B1","ts":"3.0","text":"bot"}`), "C1")
+            feedback_from_slack({ "type": "message", "bot_id": "B1", "ts": "3.0", "text": "bot" }, "C1")
                 == null,
             true,
         );
         assert.equal(
             feedback_from_slack(
-                baml.json.parse(
-                    `{"type":"message","subtype":"channel_join","user":"U1","ts":"4.0","text":"joined"}`,
-                ),
+                {
+                    "type": "message",
+                    "subtype": "channel_join",
+                    "user": "U1",
+                    "ts": "4.0",
+                    "text": "joined",
+                },
                 "C1",
             )
                 == null,

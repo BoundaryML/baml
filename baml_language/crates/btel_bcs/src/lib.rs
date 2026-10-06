@@ -11,13 +11,9 @@ pub mod liveness;
 mod metadata;
 mod plan;
 pub mod publisher;
-pub mod wire;
-
+// Preserve the existing telemetry API while BCS owns the wire contracts.
+pub use bcs_api::{proto, wire};
 pub use publisher::{CloudPublisher, CloudPublisherConfig};
-
-pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/btel.cloud.v1.rs"));
-}
 
 #[cfg(test)]
 mod tests {

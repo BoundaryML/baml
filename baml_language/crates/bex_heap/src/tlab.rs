@@ -200,6 +200,11 @@ impl Tlab {
         value_ty: bex_vm_types::RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
+        let values =
+            bex_vm_types::MapData::from_hashed_entries(values.into_iter().map(|(key, value)| {
+                let hash = bex_vm_types::map_string_hash(&key);
+                (hash, Value::object(self.alloc_string(key)), value)
+            }));
         self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
     }
 
@@ -589,7 +594,12 @@ mod tests {
         unsafe {
             match ptr.get() {
                 Object::Map(m) => {
-                    assert_eq!(m.get("key"), Some(Value::int(42)));
+                    let entries = m.snapshot_entries();
+                    assert_eq!(entries.len(), 1);
+                    assert_eq!(entries[0].1, Value::int(42));
+                    assert!(
+                        matches!(entries[0].0.as_object_ptr().unwrap().get(), Object::String(key) if key == "key")
+                    );
                 }
                 _ => panic!("Expected Map"),
             }

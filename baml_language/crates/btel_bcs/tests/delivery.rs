@@ -92,6 +92,38 @@ fn proposed(id: u32, kind: UploadKind, members: &[u32]) -> ProposedUploadTarget 
 }
 
 #[tokio::test]
+async fn refused_ingestion_disables_delivery_without_repeated_requests() {
+    for status in [401, 403] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(status))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let disabled = Arc::new(AtomicBool::new(false));
+        let callback = disabled.clone();
+        let delivery = Arc::new(
+            BcsDelivery::new(config(&server), move |error| {
+                assert_eq!(error, DeliveryError::Unauthorized);
+                callback.store(true, Ordering::SeqCst);
+            })
+            .unwrap(),
+        );
+        let handle = delivery.handle();
+        handle
+            .try_submit(
+                files(1).pop().unwrap(),
+                vec![],
+                vec![proposed(0, UploadKind::Recording, &[])],
+            )
+            .unwrap();
+        assert_eq!(finish(delivery).await, Err(DeliveryError::Unauthorized));
+        assert!(handle.is_disabled());
+        assert!(disabled.load(Ordering::SeqCst));
+    }
+}
+
+#[tokio::test]
 async fn failed_payload_releases_capacity_and_later_payload_uploads() {
     for fail_prepare in [true, false] {
         let server = MockServer::start().await;
@@ -297,14 +329,14 @@ async fn canceled_submitters_do_not_count_as_payload_losses() {
         let server = MockServer::start().await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
         let handle = delivery.handle();
-        handle.disable(fatal);
+        handle.disable(fatal.clone());
         assert_eq!(
             handle.try_submit(
                 files(1).pop().unwrap(),
                 vec![],
                 vec![proposed(0, UploadKind::Recording, &[])],
             ),
-            Err(fatal)
+            Err(fatal.clone())
         );
         assert_eq!(handle.loss_count(), 0);
         assert_eq!(finish(delivery).await, Err(fatal));

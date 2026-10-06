@@ -18,9 +18,11 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_type = { workspace = true }
 bex_engine = { workspace = true }
 bex_vm_types = { workspace = true }
+btel_settings = { workspace = true }
 anyhow = { workspace = true }
 borsh = { workspace = true }
 clap = { workspace = true }

@@ -382,13 +382,13 @@
 153:8-9      "."                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml punctuation.accessor.baml
 153:9-13     "info"             source.baml meta.function.baml meta.block.function.baml meta.function-call.baml entity.name.function.baml
 153:13-14    "("                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
-153:14-15    "{"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.begin.baml
-153:16-17    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-153:17-24    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
-153:24-25    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
-153:25-26    ":"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
-153:27-34    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml meta.dotted-expression.baml variable.other.readwrite.baml
-153:35-36    "}"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.end.baml
+153:14-15    "{"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.braced.baml punctuation.definition.block.begin.baml
+153:16-17    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.braced.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+153:17-24    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.braced.baml string.quoted.double.baml
+153:24-25    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.braced.baml string.quoted.double.baml punctuation.definition.string.end.baml
+153:25-26    ":"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.braced.baml punctuation.separator.colon.baml
+153:27-34    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.braced.baml meta.dotted-expression.baml variable.other.readwrite.baml
+153:35-36    "}"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.braced.baml punctuation.definition.block.end.baml
 153:36-37    ")"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
 153:37-38    ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
 154:1-2      "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

@@ -345,7 +345,7 @@ test "chat_tools_and_journal_replay" {
 
 // `tool_calls` on the response become `ai.content.ToolUse` blocks with parsed
 // arguments — net-new behaviour, neither Rust implementation parsed them.
-function chat_parses_tool_calls() -> string {
+function chat_parses_tool_calls() -> json {
     let canned = "{\"id\":\"chatcmpl-2\",\"model\":\"gpt-4o-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_9\",\"type\":\"function\",\"function\":{\"name\":\"chat_get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}";
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(canned)],
@@ -354,14 +354,14 @@ function chat_parses_tool_calls() -> string {
             let turn = cl.invoke(_chat_input("weather?"));
             let uses = turn.tool_uses();
             let use = uses.at(0);
-            [
-                uses.length().to_string(),
-                use?.id ?? "-",
-                use?.name ?? "-",
-                baml.json.stringify(baml.json.to_json(use?.args)),
-                `${turn.stop_reason}`,
-                turn.terminal_text() ?? "no-text",
-            ].join("|")
+            {
+                "count": uses.length(),
+                "id": use?.id,
+                "name": use?.name,
+                "args": baml.json.to_json(use?.args),
+                "stop_reason": `${turn.stop_reason}`,
+                "text": turn.terminal_text(),
+            }
         },
     )
 }
@@ -369,7 +369,14 @@ function chat_parses_tool_calls() -> string {
 test "chat_parses_tool_calls" {
     assert.equal(
         chat_parses_tool_calls(),
-        "1|call_9|chat_get_weather|{\"city\":\"Paris\"}|ToolUse|no-text",
+        {
+            "count": 1,
+            "id": "call_9",
+            "name": "chat_get_weather",
+            "args": { "city": "Paris" },
+            "stop_reason": "ToolUse",
+            "text": null,
+        },
     )
 }
 
@@ -633,31 +640,32 @@ test "chat_azure_deployment_url" {
     )
 }
 
-// An Azure deployment is almost always named after the model it serves, so an
-// unset `deployment_id` falls back to `model`. Without that the `"azure/…"`
-// shorthand — which can only carry a model — could never name a deployment.
-function chat_azure_deployment_defaults_to_model() -> string {
+// `deployment_id` never defaults to `model`: a deployment is named whatever its
+// creator chose, so without base_url or deployment_id there is nothing to call.
+function chat_azure_requires_deployment() -> string {
     let cl = openai.AzureClient.new(model = "gpt-4o", resource_name = "my-resource");
-    cl.compat().base_url
+    cl.resolved_base_url() catch (e) {
+        ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
+    }
 }
 
-test "chat_azure_deployment_defaults_to_model" {
+test "chat_azure_requires_deployment" {
     assert.equal(
-        chat_azure_deployment_defaults_to_model(),
-        "https://my-resource.openai.azure.com/openai/deployments/gpt-4o",
+        chat_azure_requires_deployment(),
+        "azure|openai.AzureClient needs a deployment: set deployment_id to the deployment's name, or base_url to its full URL",
     )
 }
 
-// With no base_url, no resource_name and no `AZURE_OPENAI_ENDPOINT`, the client
-// cannot send — and the error has to name the endpoint variable, because that
-// is the one the `"azure/<model>"` shorthand expects the deployment to come
-// from. It is a TYPED `ai.errors.InvalidRequest`, so an `ai.Fallback` can skip
-// this member rather than abort (see `chat_fallback_skips_misconfigured_member`).
+// With a deployment_id but no resource_name and no `AZURE_OPENAI_ENDPOINT`, the
+// client cannot send — and the error names the endpoint variable, the one the
+// official Azure SDKs read. It is a TYPED `ai.errors.InvalidRequest`, so an
+// `ai.Fallback` can skip this member rather than abort (see
+// `chat_fallback_skips_misconfigured_member`).
 //
 // A corpus test cannot set environment variables, so the env rung itself is
 // covered by the message naming it plus the URL composition asserted above.
 function chat_azure_missing_endpoint_names_env() -> string {
-    let cl = openai.AzureClient.new(model = "gpt-4o");
+    let cl = openai.AzureClient.new(model = "gpt-4o", deployment_id = "gpt-4o");
     cl.resolved_base_url() catch (e) {
         ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
     }
@@ -712,7 +720,7 @@ test "chat_generic_config_error_survives_normalize" {
 }
 
 function chat_azure_config_error_survives_normalize() -> string {
-    openai.AzureClient.new(model = "gpt-4o").resolved_base_url() catch_all (e) {
+    openai.AzureClient.new(model = "gpt-4o", deployment_id = "gpt-4o").resolved_base_url() catch_all (e) {
         _ => _config_failure_class(e),
     }
 }
@@ -1188,7 +1196,7 @@ test "chat_generic_stream_ttft_allows_prompt_first_event" {
 // `ai.stream.Event` cannot carry them to the runner yet (PLAN §6), so they
 // are buffered in the decoder and readable when the turn ends — this drives the
 // decoder over a real SSE connection and asserts the assembled call.
-function chat_sse_assembles_tool_calls() -> string {
+function chat_sse_assembles_tool_calls() -> json {
     root.llm_mock.mock_sse_serve(
         [
             root.llm_mock.sse_data("{\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_7\",\"type\":\"function\",\"function\":{\"name\":\"chat_get_weather\",\"arguments\":\"\"}}]}}]}"),
@@ -1231,13 +1239,13 @@ function chat_sse_assembles_tool_calls() -> string {
             sse.close();
             let uses = decoder.tool_uses();
             let use = uses.at(0);
-            [
-                uses.length().to_string(),
-                use?.id ?? "-",
-                use?.name ?? "-",
-                baml.json.stringify(baml.json.to_json(use?.args)),
-                stops.join(","),
-            ].join("|")
+            {
+                "count": uses.length(),
+                "id": use?.id,
+                "name": use?.name,
+                "args": baml.json.to_json(use?.args),
+                "stops": baml.json.to_json(stops),
+            }
         },
     )
 }
@@ -1245,7 +1253,13 @@ function chat_sse_assembles_tool_calls() -> string {
 test "chat_sse_assembles_tool_calls" {
     assert.equal(
         chat_sse_assembles_tool_calls(),
-        "1|call_7|chat_get_weather|{\"city\":\"Paris\"}|ToolUse",
+        {
+            "count": 1,
+            "id": "call_7",
+            "name": "chat_get_weather",
+            "args": { "city": "Paris" },
+            "stops": ["ToolUse"],
+        },
     )
 }
 
@@ -1372,12 +1386,16 @@ test "chat_pdf_base64_and_unfetchable" {
 // DATA (`"default": null`, a nullable union member), not an unset option, and
 // pruning it changes the schema the model is shown and breaks strict-schema
 // servers. The null-pruning pass must not walk into it.
-function chat_tool_schema_keeps_nulls() -> string {
+function chat_tool_schema_keeps_nulls() -> json {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
-            let schema = baml.json.from_string<map<string, unknown>>(
-                `{"type":"object","properties":{"x":{"type":["string","null"],"default":null}},"required":[]}`,
+            let schema = baml.json.to<map<string, unknown>>(
+                {
+                    "type": "object",
+                    "properties": { "x": { "type": ["string", "null"], "default": null } },
+                    "required": [],
+                },
             );
             let spec = ChatEcho@spec("hi");
             let input = ai.ModelTurnInput {
@@ -1397,28 +1415,22 @@ function chat_tool_schema_keeps_nulls() -> string {
             };
             let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
             let _ = cl.invoke(input);
-            let params = baml.json.path<json>(
-                mock.last_request().json(),
-                ".tools[0].function.parameters",
-            );
-            match (params) {
-                let object: map<string, json> => {
-                    let properties = baml.json.path<json>(params, ".properties.x");
-                    match (properties) {
-                        let field: map<string, json> => {
-                            `${field.has("default")}|${baml.json.stringify(field.get("default"))}`
-                        },
-                        _ => "not-an-object",
-                    }
-                },
-                _ => "not-an-object",
-            }
+            baml.json.path<json>(mock.last_request().json(), ".tools[0].function.parameters")
         },
     )
 }
 
 test "chat_tool_schema_keeps_nulls" {
-    assert.equal(chat_tool_schema_keeps_nulls(), "true|null")
+    // Deep equality tells a `null`-valued key from an absent one, so this
+    // fails if `"default": null` was pruned.
+    assert.equal(
+        chat_tool_schema_keeps_nulls(),
+        {
+            "type": "object",
+            "properties": { "x": { "type": ["string", "null"], "default": null } },
+            "required": [],
+        },
+    )
 }
 
 // `data: [DONE]` is chat completions' explicit terminator. A connection that
@@ -1611,8 +1623,7 @@ test "chat_cache_delimiter_args_as_written" {
 // `prompt_cache_breakpoint` accepts, on GPT-5.6 and later. Every earlier model
 // answers 400 to the field, so those get no default and the delimiter sends
 // nothing. The list names the OLD families; a model it does not know is
-// treated as new. Azure's `model` is a deployment name, which says nothing
-// about the model behind it, so it has no default either.
+// treated as new. Azure judges its `model` the same way.
 function chat_cache_default_by_model() -> map<string, json> {
     let models = [
         "gpt-5.6-luna",
@@ -1640,8 +1651,10 @@ function chat_cache_default_by_model() -> map<string, json> {
     for (let model in models) {
         let chat: ai.Client = openai.ChatClient.new(model = model, api_key = "k");
         let responses: ai.Client = openai.ResponsesClient.new(model = model, api_key = "k");
-        // the two clients share one list
+        let azure: ai.Client = openai.AzureClient.new(model = model, api_key = "k");
+        // the three clients share one list
         assert.equal(chat.default_cache_args(), responses.default_cache_args());
+        assert.equal(chat.default_cache_args(), azure.default_cache_args());
         let _ = out.set(model, chat.default_cache_args());
     }
     out
@@ -1697,12 +1710,18 @@ test "chat_cache_default_args" {
     let unmarked: json = [{ "type": "text", "text": "Follow the rules." }];
     assert.equal(_chat_default_system(openai.ChatClient.new(model = "gpt-5.6-luna", api_key = "k")), marked);
     assert.equal(_chat_default_system(openai.ChatClient.new(model = "gpt-5.5", api_key = "k")), unmarked);
-    let azure = openai.AzureClient.new(
-        model = "gpt-56-deployment",
+    let azure_new = openai.AzureClient.new(
+        model = "gpt-5.6-luna",
         api_key = "k",
-        base_url = "http://localhost:1234/openai/deployments/gpt-56-deployment",
+        base_url = "http://localhost:1234/openai/deployments/gpt-5.6-luna",
     );
-    assert.equal(_chat_default_system(azure), unmarked)
+    assert.equal(_chat_default_system(azure_new), marked);
+    let azure_old = openai.AzureClient.new(
+        model = "gpt-5.5",
+        api_key = "k",
+        base_url = "http://localhost:1234/openai/deployments/gpt-5.5",
+    );
+    assert.equal(_chat_default_system(azure_old), unmarked)
 }
 
 // Role metadata is not forwarded onto a content part any more: a key there

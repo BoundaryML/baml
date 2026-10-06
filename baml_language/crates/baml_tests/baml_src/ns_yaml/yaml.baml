@@ -20,36 +20,30 @@ class YamlWrappedName {
 }
 
 test "yaml_parse_scalars" {
-    assert.equal(baml.json.stringify(baml.yaml.parse("null")), "null")
-    assert.equal(baml.json.stringify(baml.yaml.parse("true")), "true")
-    assert.equal(baml.json.stringify(baml.yaml.parse("42")), "42")
-    assert.equal(baml.json.stringify(baml.yaml.parse("1.5")), "1.5")
-    assert.equal(baml.json.stringify(baml.yaml.parse("\"hello\"")), "\"hello\"")
+    assert.equal(baml.yaml.parse("null"), null)
+    assert.equal(baml.yaml.parse("true"), true)
+    assert.equal(baml.yaml.parse("42"), 42)
+    assert.equal(baml.yaml.parse("1.5"), 1.5)
+    assert.equal(baml.yaml.parse("\"hello\""), "hello")
 }
 
 test "yaml_parse_sequence" {
-    assert.equal(
-        baml.json.stringify(baml.yaml.parse("- one\n- two\n- 3\n")),
-        "[\"one\",\"two\",3]",
-    )
+    assert.equal(baml.yaml.parse("- one\n- two\n- 3\n"), ["one", "two", 3])
 }
 
 test "yaml_parse_nested_mapping" {
     assert.equal(
-        baml.json.stringify(baml.yaml.parse("user:\n  name: Ada\n  age: 30\nok: true\n")),
-        "{\"user\":{\"name\":\"Ada\",\"age\":30},\"ok\":true}",
+        baml.yaml.parse("user:\n  name: Ada\n  age: 30\nok: true\n"),
+        { "user": { "name": "Ada", "age": 30 }, "ok": true },
     )
 }
 
 test "yaml_parse_empty_input_is_null" {
-    assert.equal(baml.json.stringify(baml.yaml.parse("")), "null")
+    assert.equal(baml.yaml.parse(""), null)
 }
 
 test "yaml_parse_resolves_anchors_and_aliases" {
-    assert.equal(
-        baml.json.stringify(baml.yaml.parse("a: &x 1\nb: *x\n")),
-        "{\"a\":1,\"b\":1}",
-    )
+    assert.equal(baml.yaml.parse("a: &x 1\nb: *x\n"), { "a": 1, "b": 1 })
 }
 
 test "yaml_deserialize_decodes_class" {

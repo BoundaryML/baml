@@ -19,9 +19,10 @@ function transcript_text(j: ai.Journal) -> string {
                             lines.push(`assistant: ${t.text}`);
                         },
                         let c: ai.content.ToolUse => {
-                            lines.push(
-                                `assistant tool_call: {"id": "${c.id}", "name": "${c.name}", "args": ${baml.json.stringify(baml.json.to_json(c.args))}}`,
+                            let call = baml.json.stringify(
+                                { "id": c.id, "name": c.name, "args": baml.json.to_json(c.args) },
                             );
+                            lines.push(`assistant tool_call: ${call}`);
                         },
                         _ => {
                             null
@@ -98,10 +99,14 @@ function _type_schema(t: string) -> map<string, unknown> {
 /// each invoke is a fresh CLI process, and the conversation text is the only
 /// memory it has.
 function tool_protocol(tb: ai.tools.Toolbox) -> string {
-    let catalog: string[] = [];
+    let catalog: json[] = [];
     for (let t in tb.list()) {
         catalog.push(
-            `{"name": "${t.name}", "description": "${t.description}", "parameters": ${baml.json.stringify(baml.json.to_json(t.input_schema))}}`,
+            {
+                "name": t.name,
+                "description": t.description,
+                "parameters": baml.json.to_json(t.input_schema),
+            },
         );
     }
     `
@@ -121,7 +126,7 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
         return the final result.
 
         Application tool catalog (request via outcome.calls only):
-        [${catalog.join(", ")}]
+        ${baml.json.stringify(catalog)}
     `
 }
 

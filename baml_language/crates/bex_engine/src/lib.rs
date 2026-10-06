@@ -87,6 +87,8 @@ pub use host_instrumentation::{
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]
 mod telemetry;
+#[cfg(not(target_arch = "wasm32"))]
+pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
@@ -691,6 +693,10 @@ impl Drop for RootCallWork {
 /// Errors that can occur during engine execution.
 #[derive(Debug, PartialEq, Error, Clone)]
 pub enum EngineError {
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("{0}")]
+    CloudAuthorization(Box<CloudAuthorizationFailure>),
+
     #[error("BAML engine is shutting down")]
     ShuttingDown,
 
@@ -865,6 +871,8 @@ pub struct EngineConfig {
     pub launch_context: btel_types::context::Context,
     pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     pub clock_mode: btel_clock::ClockMode,
+    /// Publisher-owned artifact settings; absent for ordinary source execution.
+    pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
 }
@@ -875,6 +883,7 @@ impl Default for EngineConfig {
             launch_context: btel_types::context::Context::default(),
             runtime_compiler: None,
             clock_mode: btel_settings::clock::DEFAULT_MODE,
+            artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
         }
@@ -1732,11 +1741,22 @@ impl BexEngine {
             launch_context,
             runtime_compiler,
             clock_mode,
+            artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
             recording,
         } = config;
-        let auto_telemetry_level = btel_settings::mode::from_env()
-            .map_err(|error| EngineError::Other(error.to_string()))?;
+        let auto_telemetry_level = match &artifact_telemetry {
+            Some(policy) => policy
+                .resolve_level()
+                .map_err(|error| EngineError::Other(error.to_string()))?,
+            None => btel_settings::mode::from_env()
+                .map_err(|error| EngineError::Other(error.to_string()))?,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let recording = recording.map(|recording| match artifact_telemetry {
+            Some(policy) => recording.with_artifact_telemetry(policy),
+            None => recording,
+        });
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
@@ -2734,6 +2754,7 @@ impl BexEngine {
                 .await
                 {
                     Ok(Ok(())) => {}
+                    Ok(Err(_)) if self.initial_telemetry_failure_handled() => {}
                     Ok(Err(error)) => tracing::error!(%error, "telemetry shutdown failed"),
                     Err(error) => tracing::error!(%error, "telemetry shutdown task failed"),
                 }
@@ -3098,8 +3119,18 @@ impl BexEngine {
     ) -> Result<BexCallResult, EngineError> {
         call_ctx.bind_timeout(self.engine_id, self.invocation_clock)?;
         let (function, kind) = self.lookup_function(function_name)?;
-        self.call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
-            .await
+        let result = self
+            .call_resolved_with_trace(function, kind, function_name, args, call_ctx, copy_objects)
+            .await;
+        #[cfg(not(target_arch = "wasm32"))]
+        if self
+            .initial_cloud_auth_cancel()
+            .is_some_and(CancellationToken::is_cancelled)
+            && let Some(error) = self.initial_cloud_authorization_error()
+        {
+            return Err(error);
+        }
+        result
     }
 
     /// Call a function resolved by identity — the name boundary is
@@ -4223,6 +4254,12 @@ impl BexEngine {
         let mut sources = vec![bex_vm_types::cancellation::CancellationSource::from(
             explicit,
         )];
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(token) = self.initial_cloud_auth_cancel() {
+            sources.push(bex_vm_types::cancellation::CancellationSource::from(
+                token.clone(),
+            ));
+        }
         for token in tokens {
             if let BexExternalValue::Handle(handle) = token
                 && self.resolve_handle(thread.proof(), handle).is_none()
@@ -5181,6 +5218,17 @@ impl BexEngine {
         // shield: cleanup that delegates must not hand its work a
         // cancellation that has already fired; the child stays cancellable
         // through its own handle and token.
+        #[cfg(not(target_arch = "wasm32"))]
+        let linked = {
+            let mut linked = linked;
+            if let Some(token) = self.initial_cloud_auth_cancel() {
+                // A rooted task remains subject to the execution's initial cloud authorization.
+                linked.push(bex_vm_types::cancellation::CancellationSource::from(
+                    token.clone(),
+                ));
+            }
+            linked
+        };
         let child_cancel = if root || thread.vm_thread_is_shielded() {
             TaskCancel::detached(linked)
         } else {
@@ -6846,17 +6894,10 @@ impl BexEngine {
             vm: &BexVm,
             value: Value,
         ) -> Result<IndexMap<bex_str::BexStr, Value>, EngineError> {
-            let Some(ptr) = value.as_object_ptr() else {
-                return Err(EngineError::TypeMismatch {
-                    message: "Package.compile expected a map".to_string(),
-                });
-            };
-            let Object::Map(map) = vm.get_object(ptr) else {
-                return Err(EngineError::TypeMismatch {
-                    message: "Package.compile expected a map".to_string(),
-                });
-            };
-            Ok(map.to_index_map())
+            vm.as_string_map(&value)
+                .map_err(|_| EngineError::TypeMismatch {
+                    message: "Package.compile expected a string-keyed map".to_string(),
+                })
         }
 
         let files_value = args

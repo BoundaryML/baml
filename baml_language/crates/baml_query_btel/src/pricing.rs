@@ -54,6 +54,16 @@ struct Price {
     output: Usd,
     /// Cache reads, when the provider publishes a rate; else 1/10 of input.
     cache_read: Option<Usd>,
+    /// Rates for the whole turn when its prompt is over a size.
+    long_context: Option<LongContext>,
+}
+
+/// Rates applied when fresh input, cache reads and cache writes exceed `above` tokens.
+struct LongContext {
+    above: i64,
+    input: Usd,
+    output: Usd,
+    cache_read: Usd,
 }
 
 /// Longer IDs first where one is a prefix of another (Opus 5.5 before Opus 5).
@@ -63,42 +73,55 @@ const PRICES: &[Price] = &[
         input: Usd::from_nano_usd(42),
         output: Usd::from_nano_usd(0),
         cache_read: Some(Usd::from_nano_usd(42)),
+        long_context: None,
     },
     Price {
         model: "claude-fable-5-1",
         input: Usd::from_nano_usd(10_000),
         output: Usd::from_nano_usd(50_000),
         cache_read: Some(Usd::from_nano_usd(250)),
+        long_context: None,
     },
     Price {
         model: "claude-opus-5-5",
         input: Usd::from_nano_usd(4_000),
         output: Usd::from_nano_usd(20_000),
         cache_read: Some(Usd::from_nano_usd(200)),
+        long_context: None,
     },
     Price {
         model: "claude-opus-5",
         input: Usd::from_nano_usd(5_000),
         output: Usd::from_nano_usd(25_000),
         cache_read: None,
+        long_context: None,
     },
     Price {
         model: "claude-sonnet-5",
         input: Usd::from_nano_usd(2_000),
         output: Usd::from_nano_usd(10_000),
         cache_read: None,
+        long_context: None,
     },
     Price {
         model: "claude-haiku-4-5",
         input: Usd::from_nano_usd(1_000),
         output: Usd::from_nano_usd(5_000),
         cache_read: None,
+        long_context: None,
     },
     Price {
         model: "gpt-6-sol",
         input: Usd::from_nano_usd(2_000),
         output: Usd::from_nano_usd(10_000),
         cache_read: Some(Usd::from_nano_usd(200)),
+        // Over 272K prompt tokens: 2x input and cache rates, 1.5x output.
+        long_context: Some(LongContext {
+            above: 272_000,
+            input: Usd::from_nano_usd(4_000),
+            output: Usd::from_nano_usd(15_000),
+            cache_read: Usd::from_nano_usd(400),
+        }),
     },
 ];
 
@@ -126,17 +149,28 @@ pub(crate) fn cost_nano_usd(
     cache_write: Option<i64>,
 ) -> Option<Usd> {
     let price = price(model?)?;
+    let cache_read = cache_read.unwrap_or(0).max(0);
+    let cache_write = cache_write.unwrap_or(0).max(0);
+    let prompt = i128::from(input.max(0)) + i128::from(cache_read) + i128::from(cache_write);
+    let (input_rate, output_rate, read, read_weight) = match &price.long_context {
+        Some(long) if prompt > i128::from(long.above) => {
+            (long.input, long.output, long.cache_read, RATE_SCALE)
+        }
+        _ => {
+            let (read, weight) = price
+                .cache_read
+                .map_or((price.input, CACHE_READ_WEIGHT), |read| (read, RATE_SCALE));
+            (price.input, price.output, read, weight)
+        }
+    };
     // i128 accommodates all i64 token counts at the table's rates, before rounding to i64.
     let charge = |rate: Usd, tokens: i64, weight: i64| {
         i128::from(rate.as_nano_usd()) * i128::from(tokens.max(0)) * i128::from(weight)
     };
-    let (read, read_weight) = price
-        .cache_read
-        .map_or((price.input, CACHE_READ_WEIGHT), |read| (read, RATE_SCALE));
-    let total = charge(price.input, input, RATE_SCALE)
-        + charge(price.input, cache_write.unwrap_or(0), CACHE_WRITE_WEIGHT)
-        + charge(read, cache_read.unwrap_or(0), read_weight)
-        + charge(price.output, output, RATE_SCALE);
+    let total = charge(input_rate, input, RATE_SCALE)
+        + charge(input_rate, cache_write, CACHE_WRITE_WEIGHT)
+        + charge(read, cache_read, read_weight)
+        + charge(output_rate, output, RATE_SCALE);
     Usd::from_scaled_nano_usd(total, i128::from(RATE_SCALE))
 }
 
@@ -185,6 +219,27 @@ mod tests {
         assert_eq!(
             cost_nano_usd(Some("claude-opus-5"), 0, 0, Some(1), Some(1)),
             Some(Usd(6_750))
+        );
+    }
+
+    #[test]
+    fn long_context_counts_all_prompt_tokens_and_switches_above_the_boundary() {
+        let model = Some("gpt-6-sol");
+        assert_eq!(
+            cost_nano_usd(model, 100_000, 100_000, Some(100_000), Some(100_000)),
+            Some(Usd(2_440_000_000))
+        );
+        assert_eq!(
+            cost_nano_usd(model, 72_000, 100_000, Some(100_000), Some(100_000)),
+            Some(Usd(1_414_000_000))
+        );
+        assert_eq!(
+            cost_nano_usd(model, 72_001, 100_000, Some(100_000), Some(100_000)),
+            Some(Usd(2_328_004_000))
+        );
+        assert_eq!(
+            cost_nano_usd(model, i64::MAX, 0, Some(i64::MAX), Some(i64::MAX)),
+            None
         );
     }
 

@@ -101,13 +101,13 @@
 29:9-10      "="                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml keyword.operator.assignment.baml
 29:11-12     "1"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml constant.numeric.integer.baml
 29:12-13     ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
-30:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.begin.baml
-31:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
-31:9-10      "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
-31:11-12     "="                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
-31:13-14     "2"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml constant.numeric.integer.baml
-31:14-15     ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.terminator.statement.baml
-32:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.end.baml
+30:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.begin.baml
+31:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+31:9-10      "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+31:11-12     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml keyword.operator.assignment.baml
+31:13-14     "2"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml constant.numeric.integer.baml
+31:14-15     ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+32:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.end.baml
 32:4-5       ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
 33:3-4       "x"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
 34:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
@@ -127,15 +127,15 @@
 37:20-25     "outer"            source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml string.quoted.double.baml
 37:25-26     "\""               source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml string.quoted.double.baml punctuation.definition.string.end.baml
 37:26-27     ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
-38:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.begin.baml
-39:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
-39:9-10      "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
-39:10-11     ":"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml punctuation.separator.colon.baml
-39:12-15     "int"              source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml support.type.primitive.baml
-39:16-17     "="                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
-39:18-19     "1"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml constant.numeric.integer.baml
-39:19-20     ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.terminator.statement.baml
-40:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.end.baml
+38:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.begin.baml
+39:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+39:9-10      "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+39:10-11     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+39:12-15     "int"              source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml support.type.primitive.baml
+39:16-17     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml keyword.operator.assignment.baml
+39:18-19     "1"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml constant.numeric.integer.baml
+39:19-20     ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+40:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.end.baml
 40:4-5       ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
 41:3-4       "x"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
 42:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
@@ -182,16 +182,16 @@
 53:15-16     "="                source.baml meta.function.baml meta.block.function.baml meta.statement.watch.baml keyword.operator.assignment.baml
 53:17-18     "1"                source.baml meta.function.baml meta.block.function.baml meta.statement.watch.baml constant.numeric.integer.baml
 53:18-19     ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
-54:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.begin.baml
-55:5-10      "watch"            source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.watch.baml keyword.control.watch.baml
-55:11-14     "let"              source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.watch.baml meta.pattern.watch.baml meta.pattern.binding.baml keyword.declaration.binding.baml
-55:15-16     "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.watch.baml meta.pattern.watch.baml meta.pattern.binding.baml variable.other.binding.baml
-55:17-18     "="                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.watch.baml keyword.operator.assignment.baml
-55:19-20     "2"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.watch.baml constant.numeric.integer.baml
-55:20-21     ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.terminator.statement.baml
-56:5-6       "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
-56:6-7       ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.terminator.statement.baml
-57:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.end.baml
+54:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.begin.baml
+55:5-10      "watch"            source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.watch.baml keyword.control.watch.baml
+55:11-14     "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.watch.baml meta.pattern.watch.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+55:15-16     "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.watch.baml meta.pattern.watch.baml meta.pattern.binding.baml variable.other.binding.baml
+55:17-18     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.watch.baml keyword.operator.assignment.baml
+55:19-20     "2"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.watch.baml constant.numeric.integer.baml
+55:20-21     ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+56:5-6       "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.dotted-expression.baml variable.other.readwrite.baml
+56:6-7       ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+57:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.end.baml
 57:4-5       ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
 58:3-4       "x"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
 59:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
@@ -207,25 +207,25 @@
 62:9-10      "="                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml keyword.operator.assignment.baml
 62:11-12     "1"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml constant.numeric.integer.baml
 62:12-13     ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
-63:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.begin.baml
-64:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
-64:9-10      "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
-64:11-12     "="                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
-64:13-14     "2"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.statement.let.baml constant.numeric.integer.baml
-64:14-15     ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.terminator.statement.baml
-65:5-6       "{"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml punctuation.definition.block.begin.baml
-66:7-10      "let"              source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
-66:11-12     "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
-66:13-14     "="                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
-66:15-16     "3"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml meta.statement.let.baml constant.numeric.integer.baml
-66:16-17     ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml punctuation.terminator.statement.baml
-67:7-8       "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
-67:8-9       ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml punctuation.terminator.statement.baml
-68:5-6       "}"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.block.code.baml punctuation.definition.block.end.baml
-68:6-7       ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.terminator.statement.baml
-69:5-6       "x"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
-69:6-7       ";"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.terminator.statement.baml
-70:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.block.code.baml punctuation.definition.block.end.baml
+63:3-4       "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.begin.baml
+64:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+64:9-10      "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+64:11-12     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml keyword.operator.assignment.baml
+64:13-14     "2"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.statement.let.baml constant.numeric.integer.baml
+64:14-15     ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+65:5-6       "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml punctuation.definition.block.begin.baml
+66:7-10      "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+66:11-12     "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+66:13-14     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml meta.statement.let.baml keyword.operator.assignment.baml
+66:15-16     "3"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml meta.statement.let.baml constant.numeric.integer.baml
+66:16-17     ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+67:7-8       "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml meta.dotted-expression.baml variable.other.readwrite.baml
+67:8-9       ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+68:5-6       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.expression.braced.baml punctuation.definition.block.end.baml
+68:6-7       ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+69:5-6       "x"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml meta.dotted-expression.baml variable.other.readwrite.baml
+69:6-7       ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.terminator.statement.baml
+70:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.braced.baml punctuation.definition.block.end.baml
 70:4-5       ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
 71:3-4       "x"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
 72:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

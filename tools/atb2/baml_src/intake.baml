@@ -136,7 +136,7 @@ function posthog_get(url: string, key: string, host: string) -> json {
         throw IntakeError { message: "posthog: " + res.status_code.to_string() + ": " + tail(text, 2) };
     };
     baml.json.parse(text) catch (_) {
-        _ => baml.json.parse("{}"),
+        _ => ({}),
     }
 }
 
@@ -201,16 +201,32 @@ function slack_origin(fb: Feedback, channel: string) -> json {
         "channel": channel,
         "ts": fb.id.slice(3, fb.id.length()).replace_all("-", "."),
     }
-        .to_json()
 }
 
 // ==================== Unit tests (token-free) ====================
 
 testset "intake" {
     test "a baml_feedback event becomes a report with its files decoded" {
-        let ev = baml.json.parse(
-            `{"id":"ev-1","timestamp":"2026-09-01T10:00:00Z","distinct_id":"anon-1","properties":{"title":"throws panics","description":"index out of bounds","report_id":"r-42","cli_version":"0.17.0","email":"a@b.c","files":[{"name":"main.baml","mime":"text/plain","size_bytes":5,"content_base64":"aGVsbG8="}]}}`,
-        );
+        let ev: json = {
+            "id": "ev-1",
+            "timestamp": "2026-09-01T10:00:00Z",
+            "distinct_id": "anon-1",
+            "properties": {
+                "title": "throws panics",
+                "description": "index out of bounds",
+                "report_id": "r-42",
+                "cli_version": "0.17.0",
+                "email": "a@b.c",
+                "files": [
+                    {
+                        "name": "main.baml",
+                        "mime": "text/plain",
+                        "size_bytes": 5,
+                        "content_base64": "aGVsbG8=",
+                    },
+                ],
+            },
+        };
         let fb = feedback_from_posthog(ev) ?? baml.sys.panic("no feedback");
         assert.equal(fb.id, "PH-r-42");
         assert.equal(fb.title, "throws panics");
@@ -221,9 +237,11 @@ testset "intake" {
     }
 
     test "an anonymous report is attributed to the CLI's distinct id" {
-        let ev = baml.json.parse(
-            `{"id":"ev-2","distinct_id":"anon-2","properties":{"description":"only a description\\nsecond line","report_id":"r-43"}}`,
-        );
+        let ev: json = {
+            "id": "ev-2",
+            "distinct_id": "anon-2",
+            "properties": { "description": "only a description\nsecond line", "report_id": "r-43" },
+        };
         let fb = feedback_from_posthog(ev) ?? baml.sys.panic("no feedback");
         assert.equal(fb.title, "only a description");
         assert.equal(fb.author.device_id ?? "", "anon-2");
@@ -231,17 +249,11 @@ testset "intake" {
     }
 
     test "an empty event is not a report" {
-        assert.equal(
-            feedback_from_posthog(baml.json.parse(`{"id":"ev-3","properties":{}}`)) == null,
-            true,
-        );
+        assert.equal(feedback_from_posthog({ "id": "ev-3", "properties": {} }) == null, true);
     }
 
     test "a Slack origin recovers the message ts" {
-        let fb = feedback_from_slack(
-            baml.json.parse(`{"type":"message","user":"U1","ts":"1725000000.000100","text":"x"}`),
-            "C1",
-        )
+        let fb = feedback_from_slack({ "type": "message", "user": "U1", "ts": "1725000000.000100", "text": "x" }, "C1")
             ?? baml.sys.panic("no feedback");
         assert.equal(
             baml.json.path_or<string>(slack_origin(fb, "C1"), ".ts", ""),

@@ -1,20 +1,22 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 813
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
 class            baml.Bool                        <builtin>/baml/bool.baml:2
 class            baml.Array                       <builtin>/baml/containers.baml:26
-class            baml.Map                         <builtin>/baml/containers.baml:713
-interface        baml.Summable                    <builtin>/baml/containers.baml:842
-interface        baml.FloatStats                  <builtin>/baml/containers.baml:911
-interface        baml.ToString                    <builtin>/baml/conversions.baml:25
-interface        baml.ToJson                      <builtin>/baml/conversions.baml:100
-interface        baml.FromJson                    <builtin>/baml/conversions.baml:163
+class            baml.Map                         <builtin>/baml/containers.baml:714
+interface        baml.Summable                    <builtin>/baml/containers.baml:858
+interface        baml.FloatStats                  <builtin>/baml/containers.baml:927
+interface        baml.ToString                    <builtin>/baml/conversions.baml:24
+interface        baml.ToJson                      <builtin>/baml/conversions.baml:98
+interface        baml.FromJson                    <builtin>/baml/conversions.baml:140
 function         baml.deep_copy                   <builtin>/baml/core.baml:11
 interface        baml.Concrete                    <builtin>/baml/core.baml:19
 class            baml.TaggedString                <builtin>/baml/core.baml:33
 class            baml.Float                       <builtin>/baml/float.baml:17
+interface        baml.Hash                        <builtin>/baml/hashing.baml:15
 class            baml.Int                         <builtin>/baml/int.baml:33
 class            baml.Null                        <builtin>/baml/null.baml:2
 interface        baml.Sortable                    <builtin>/baml/sortable.baml:22
@@ -105,6 +107,8 @@ function         baml.future.with_timeout         <builtin>/baml/ns_future/futur
 class            baml.glob.ScanOptions            <builtin>/baml/ns_glob/glob.baml:2
 class            baml.glob.Glob                   <builtin>/baml/ns_glob/glob.baml:18
 function         baml.glob.new                    <builtin>/baml/ns_glob/glob.baml:41
+interface        baml.hash.Hasher                 <builtin>/baml/ns_hash/hash.baml:5
+class            baml.hash.DefaultHasher          <builtin>/baml/ns_hash/hash.baml:32
 function         baml.host.call_host_value        <builtin>/baml/ns_host/host.baml:20
 class            baml.host.Value                  <builtin>/baml/ns_host/host.baml:26
 class            baml.http.Request                <builtin>/baml/ns_http/http.baml:14
@@ -156,14 +160,14 @@ function         baml.json.to_json                <builtin>/baml/ns_json/json.ba
 function         baml.json.from                   <builtin>/baml/ns_json/json.baml:147
 function         baml.json.from_string            <builtin>/baml/ns_json/json.baml:185
 function         baml.json.from_json              <builtin>/baml/ns_json/json.baml:208
-function         baml.json.to                     <builtin>/baml/ns_json/json.baml:245
-function         baml.json.field                  <builtin>/baml/ns_json/json.baml:258
-class            baml.json.PathError              <builtin>/baml/ns_json/json.baml:269
-function         baml.json.path                   <builtin>/baml/ns_json/json.baml:343
-function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:445
-function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:476
-function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:491
-function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:515
+function         baml.json.to                     <builtin>/baml/ns_json/json.baml:244
+function         baml.json.field                  <builtin>/baml/ns_json/json.baml:257
+class            baml.json.PathError              <builtin>/baml/ns_json/json.baml:268
+function         baml.json.path                   <builtin>/baml/ns_json/json.baml:342
+function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:444
+function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:475
+function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:490
+function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:514
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:4
 class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:50
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:96
@@ -178,9 +182,9 @@ interface        baml.ops.BitXor                  <builtin>/baml/ns_ops/bitwise.
 interface        baml.ops.ShiftLeft               <builtin>/baml/ns_ops/bitwise.baml:101
 interface        baml.ops.ShiftRight              <builtin>/baml/ns_ops/bitwise.baml:125
 interface        baml.ops.Equals                  <builtin>/baml/ns_ops/comparison.baml:43
-interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:83
-enum             baml.ops.Ordering                <builtin>/baml/ns_ops/comparison.baml:142
-function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:177
+interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:85
+enum             baml.ops.Ordering                <builtin>/baml/ns_ops/comparison.baml:144
+function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:179
 interface        baml.ops.Index                   <builtin>/baml/ns_ops/index.baml:32
 interface        baml.ops.Add                     <builtin>/baml/ns_ops/math.baml:47
 interface        baml.ops.Subtract                <builtin>/baml/ns_ops/math.baml:64

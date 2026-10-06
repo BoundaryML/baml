@@ -23,16 +23,28 @@ use crate::wire::{HeartbeatPolicy, Liveness, PrepareUploadsRequest, ProducerStat
 static SESSION: OnceLock<Uuid> = OnceLock::new();
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HeartbeatError {
     SequenceExhausted,
     InvalidPolicy,
     InvalidEndpoint,
     Http,
     Status(u16),
+    Api(bcs_api::HttpFailure),
     ResponseTooLarge,
     Timeout,
     Worker,
+}
+impl HeartbeatError {
+    pub(crate) fn http_failure(&self) -> Option<bcs_api::HttpFailure> {
+        match self {
+            Self::Api(failure) => Some(failure.clone()),
+            Self::Status(status) => reqwest::StatusCode::from_u16(*status)
+                .ok()
+                .map(bcs_api::HttpFailure::new),
+            _ => None,
+        }
+    }
 }
 
 struct Schedule {
@@ -139,7 +151,7 @@ impl Heartbeat {
     }
 
     pub fn last_error(&self) -> Option<HeartbeatError> {
-        self.0.state.lock().unwrap().last_error
+        self.0.state.lock().unwrap().last_error.clone()
     }
 
     pub fn failure_count(&self) -> u64 {
@@ -171,6 +183,18 @@ impl Heartbeat {
         client: reqwest::Client,
         endpoint: reqwest::Url,
         bearer_token: Option<String>,
+        request_timeout: Duration,
+    ) {
+        self.run_authorized(client, endpoint, bearer_token, None, request_timeout)
+            .await;
+    }
+
+    pub async fn run_authorized(
+        &self,
+        client: reqwest::Client,
+        endpoint: reqwest::Url,
+        bearer_token: Option<String>,
+        authorization: Option<bcs_api::credentials::RequestAuthorization>,
         request_timeout: Duration,
     ) {
         if !matches!(endpoint.scheme(), "http" | "https")
@@ -208,11 +232,17 @@ impl Heartbeat {
                 _ = stopped.changed() => return,
                 result = tokio::time::timeout(
                     request_timeout,
-                    post(&client, &endpoint, bearer_token.as_deref(), liveness),
+                    post(&client, &endpoint, bearer_token.as_deref(), authorization.as_ref(), liveness),
                 ) => result.unwrap_or(Err(HeartbeatError::Timeout)),
             };
             if let Err(error) = result {
+                let refused = error
+                    .http_failure()
+                    .is_some_and(|failure| matches!(failure.status.as_u16(), 401 | 403));
                 self.observe_error(error);
+                if refused {
+                    return;
+                }
             } else {
                 self.mark_control_success();
             }
@@ -224,24 +254,29 @@ impl Heartbeat {
     }
 }
 
-async fn post(
+pub(crate) async fn post(
     client: &reqwest::Client,
     endpoint: &reqwest::Url,
     bearer_token: Option<&str>,
+    authorization: Option<&bcs_api::credentials::RequestAuthorization>,
     body: Liveness,
 ) -> Result<(), HeartbeatError> {
     const MAX_RESPONSE_BYTES: usize = 4096;
-    let mut request = client
-        .post(endpoint.clone())
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .body(serde_json::to_vec(&body).map_err(|_| HeartbeatError::Http)?);
-    if let Some(token) = bearer_token {
-        request = request.bearer_auth(token);
-    }
-    let mut response = request.send().await.map_err(|_| HeartbeatError::Http)?;
-    if !response.status().is_success() {
-        return Err(HeartbeatError::Status(response.status().as_u16()));
-    }
+    let mut response =
+        bcs_api::telemetry::heartbeat(client, endpoint, bearer_token, authorization, &body)
+            .await
+            .map_err(|error| {
+                if let Some(failure) = error.http_failure() {
+                    return if failure.body.is_some() {
+                        HeartbeatError::Api(failure.clone())
+                    } else {
+                        HeartbeatError::Status(failure.status.as_u16())
+                    };
+                }
+                error.status().map_or(HeartbeatError::Http, |status| {
+                    HeartbeatError::Status(status.as_u16())
+                })
+            })?;
     if response
         .content_length()
         .is_some_and(|n| n > MAX_RESPONSE_BYTES as u64)
@@ -400,6 +435,7 @@ mod tests {
                 &client,
                 &endpoint,
                 Some("private"),
+                None,
                 Heartbeat::new().liveness().unwrap(),
             )
             .await;

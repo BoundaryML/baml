@@ -71,7 +71,14 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// the executable is its position; its name is display metadata), so every
 /// serialized program changed shape. The identity-keyed unit format that
 /// produces them (`baml_linker_types`) rides the same version.
-pub const FORMAT_VERSION: u32 = 12;
+///
+/// Version 13 adds a shared native implementation descriptor to each structural
+/// interface, used when no explicit implementation applies.
+///
+/// Version 14 adds publisher-owned telemetry policy to the packed dispatch envelope.
+///
+/// Version 15 carries embedded public ingestion registration and destination bindings.
+pub const FORMAT_VERSION: u32 = 15;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

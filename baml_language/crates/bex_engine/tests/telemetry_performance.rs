@@ -102,6 +102,11 @@ async fn telemetry_performance_child() {
         .disable_request_recording()
         .start()
         .await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
     let prepares = Arc::new(AtomicUsize::new(0));
     let candidates = Arc::new(AtomicUsize::new(0));
     let puts = Arc::new(AtomicUsize::new(0));
@@ -110,6 +115,7 @@ async fn telemetry_performance_child() {
     let candidate_count = Arc::clone(&candidates);
     let base = server.uri();
     Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
         .respond_with(move |request: &Request| {
             prepare_count.fetch_add(1, Ordering::Relaxed);
             let response = cloud_protocol::response(request, &base, &[]);

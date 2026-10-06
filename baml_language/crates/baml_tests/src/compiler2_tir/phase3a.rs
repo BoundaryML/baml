@@ -353,13 +353,14 @@ fn unresolved_variable_in_let() {
 }
 
 #[test]
-fn property_shorthand_suggests_explicit_mapping_for_nearby_variable() {
+fn class_property_shorthand_suggests_explicit_mapping_for_nearby_variable() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-function build(option: string) -> map<string, string> {
-  { options }
+class Config { options string }
+function build(option: string) -> Config {
+  Config { options }
 }
 "#,
     );
@@ -405,13 +406,14 @@ function build(v: string?) -> map<string, string> {
 /// Near-match candidates come from the EXPRESSION's scope, so a pattern
 /// binder is offered as the explicit-mapping suggestion.
 #[test]
-fn property_shorthand_suggests_a_pattern_binder() {
+fn class_property_shorthand_suggests_a_pattern_binder() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-function build(v: string?) -> map<string, string> {
-  if let option: string = v { { options } } else { {} }
+class Config { options string }
+function build(v: string?) -> Config {
+  if let option: string = v { Config { options } } else { Config { options: "" } }
 }
 "#,
     );
@@ -426,12 +428,13 @@ function build(v: string?) -> map<string, string> {
 }
 
 #[test]
-fn property_shorthand_in_parameter_default_uses_structural_syntax() {
+fn class_property_shorthand_in_parameter_default_uses_structural_syntax() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-function build(option: string, config: map<string, string> = { options }) -> map<string, string> {
+class Config { options string }
+function build(option: string, config: Config = Config { options }) -> Config {
   config
 }
 "#,
@@ -447,16 +450,17 @@ function build(option: string, config: map<string, string> = { options }) -> map
 }
 
 #[test]
-fn property_shorthand_uses_the_value_expression_scope() {
+fn class_property_shorthand_uses_the_value_expression_scope() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-function build(input: string?) -> map<string, string> {
+class Config { options string }
+function build(input: string?) -> Config {
   if let option: string = input {
-    { options }
+    Config { options }
   } else {
-    {}
+    Config { options: "" }
   }
 }
 "#,

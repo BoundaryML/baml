@@ -239,7 +239,7 @@ async fn storage_startup_failure_preserves_status_without_preventing_execution()
         TelemetryRecording::local_files_in(destination, RecordingConfig::default()),
     );
     let failure = engine.telemetry_result().unwrap().unwrap_err();
-    assert!(failure.to_string().contains("telemetry file startup"));
+    assert!(failure.to_string().contains("telemetry recording startup"));
     assert!(engine.telemetry_recording_directory().is_none());
     assert_eq!(
         engine

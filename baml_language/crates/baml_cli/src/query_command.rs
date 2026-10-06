@@ -44,6 +44,18 @@ pub struct QueryArgs {
     #[arg(long, value_enum, default_value_t = QueryFormat::Table)]
     pub format: QueryFormat,
 
+    /// Query this project's local recordings explicitly.
+    #[arg(long)]
+    pub local: bool,
+
+    /// Boundary cloud project in org_handle/project_name form.
+    #[arg(long, id = "boundary_project", conflicts_with = "local")]
+    pub project: Option<String>,
+
+    /// Boundary cloud environment; defaults to your personal environment.
+    #[arg(long, conflicts_with = "local")]
+    pub environment: Option<String>,
+
     /// Project directory (defaults to the current directory's project).
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
@@ -139,6 +151,17 @@ impl QueryArgs {
         Ok(crate::ExitCode::Success)
     }
 
+    fn run_cloud(
+        &self,
+        endpoint: bcs_api::Endpoint,
+        credential: bcs_api::Secret,
+        source: bcs_api::diagnostics::CredentialSource,
+        project: Option<String>,
+        sql: String,
+    ) -> anyhow::Result<crate::ExitCode> {
+        crate::cloud_query::run(self, endpoint, credential, source, project, sql)
+    }
+
     pub fn run(&self) -> anyhow::Result<crate::ExitCode> {
         if self.schema {
             return self.print_schema();
@@ -159,6 +182,68 @@ impl QueryArgs {
                 None => std::env::current_dir()?,
             },
         };
+        let api_key = if self.local {
+            None
+        } else {
+            baml_env::string_var("BOUNDARY_API_KEY")?
+        };
+        let local_from_env = api_key.as_deref() == Some(bcs_api::credentials::LOCAL_API_KEY);
+        anyhow::ensure!(
+            !local_from_env || (self.project.is_none() && self.environment.is_none()),
+            "BOUNDARY_API_KEY=local selects local recordings; unset BOUNDARY_API_KEY to use --project or --environment for a cloud query"
+        );
+        if !self.local && !local_from_env {
+            let settings = crate::cloud_config::Boundary::read(&root)?;
+            let endpoint = settings.endpoint().map_err(|error| {
+                bcs_api::diagnostics::Context {
+                    endpoint: None,
+                    source: bcs_api::diagnostics::CredentialSource::Configured,
+                    operation: bcs_api::diagnostics::Operation::Query,
+                }
+                .report(error, bcs_api::diagnostics::Outcome::QueryFailed)
+            })?;
+            let source = if api_key.is_some() {
+                bcs_api::diagnostics::CredentialSource::ApiKey
+            } else {
+                bcs_api::diagnostics::CredentialSource::SavedLogin
+            };
+            // TOML is trusted endpoint configuration: API keys authenticate
+            // against it without requiring a separate environment override.
+            let credential = match api_key {
+                Some(key) => Some(bcs_api::Secret::new(key)),
+                // Only confirmed absence may select local recordings. An unreadable
+                // credential store must not silently change the query's data source.
+                None => bcs_api::Store::new(&endpoint)
+                    .and_then(|store| store.read())
+                    .map_err(|error| {
+                        bcs_api::diagnostics::Context {
+                            endpoint: Some(endpoint.clone()),
+                            source,
+                            operation: bcs_api::diagnostics::Operation::Query,
+                        }
+                        .report(error, bcs_api::diagnostics::Outcome::QueryFailed)
+                    })?
+                    .map(|session| session.refresh_token),
+            };
+            if credential.is_some() || self.project.is_some() || self.environment.is_some() {
+                let credential = credential.ok_or_else(|| {
+                    bcs_api::diagnostics::Context {
+                        endpoint: Some(endpoint.clone()),
+                        source,
+                        operation: bcs_api::diagnostics::Operation::Query,
+                    }
+                    .report(
+                        bcs_api::Error::MissingCredentials,
+                        bcs_api::diagnostics::Outcome::QueryFailed,
+                    )
+                })?;
+                let project = match self.project.clone() {
+                    Some(project) => Some(project),
+                    None => baml_env::string_var("BOUNDARY_PROJECT")?.or(settings.project),
+                };
+                return self.run_cloud(endpoint, credential, source, project, sql);
+            }
+        }
         let mut options = IndexOptions::default();
         options.refresh.verify_contents = self.verify;
         let request = QueryRequest {

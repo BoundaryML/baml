@@ -127,7 +127,7 @@ test "google previews use deterministic secret-free markers" {
         api_key = env.BAML_PREVIEW_GOOGLE_KEY_THAT_IS_NEVER_SET,
         headers = { "x-user": "gemini" },
         query_params = { "trace": "kept" },
-        request_body = baml.json.parse(`{"preview_config":"kept"}`),
+        request_body = { "preview_config": "kept" },
     );
     let gemini_request = gemini.render(_preview_input());
     assert.equal(gemini_request.headers.get("x-goog-api-key") ?? "none", "<PREVIEW>");
@@ -148,7 +148,7 @@ test "google previews use deterministic secret-free markers" {
         api_key = "vertex-secret",
         headers = { "x-user": "vertex" },
         query_params = { "trace": "kept" },
-        request_body = baml.json.parse(`{"preview_config":"kept"}`),
+        request_body = { "preview_config": "kept" },
     );
     let vertex_request = vertex.render(_preview_input());
     assert.is_true(vertex_request.url.includes("key=%3CPREVIEW%3E"));
@@ -182,7 +182,7 @@ test "bedrock preview uses deterministic region without profile resolution" {
         profile = "baml-preview-profile-that-does-not-exist",
         headers = { "x-user": "bedrock" },
         query_params = { "trace": "kept" },
-        request_body = baml.json.parse(`{"preview_config":"kept"}`),
+        request_body = { "preview_config": "kept" },
     );
     let explicit: ai.Client = aws.BedrockClient.new(model = "amazon.preview", region = "us-west-2");
     let inferred_request = inferred.render(_preview_input());

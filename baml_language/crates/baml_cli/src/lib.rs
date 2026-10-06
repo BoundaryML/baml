@@ -17,6 +17,8 @@ pub(crate) mod bytecode_cache;
 mod cache_test_support;
 pub(crate) mod check_command;
 pub(crate) mod clean_command;
+mod cloud_config;
+mod cloud_query;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
@@ -24,6 +26,7 @@ mod describe_command_tests;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
+mod embed_telemetry;
 pub(crate) mod feedback_command;
 pub(crate) mod format;
 pub(crate) mod generate;

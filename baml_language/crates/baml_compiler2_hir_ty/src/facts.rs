@@ -156,6 +156,13 @@ impl TypeContext for Facts<'_> {
     fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
         let concrete = crate::impls::interned_ty(concrete);
         let target = InferInterface::from_constraint(interface);
+        if crate::impls::structural_interface(self.db, &target.name)
+            == Some(baml_type::StructuralInterface::Hash)
+            && target.generics.is_empty()
+            && target.associated_types.is_empty()
+        {
+            return crate::impls::hash_eligible(self.db, self, &concrete, &target);
+        }
         crate::impls::implements_interface(self.db, &concrete, &target)
     }
 

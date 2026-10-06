@@ -36,8 +36,13 @@ fn extract_envelope() -> Result<PackEnvelope, String> {
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
         .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
 
-    baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, section)
-        .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
+    let envelope: PackEnvelope =
+        baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, section)
+            .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))?;
+    envelope
+        .verify_telemetry()
+        .map_err(|error| error.to_string())?;
+    Ok(envelope)
 }
 
 /// Build `baml.argv` per BEP-027 §"baml.argv in packaged binaries".
@@ -79,6 +84,25 @@ fn main() -> ExitCode {
     }
 }
 
+fn new_engine(
+    program: bex_vm_types::Program,
+    argv: Vec<String>,
+    telemetry: btel_settings::artifact::ArtifactTelemetry,
+) -> Result<BexEngine, bex_engine::EngineError> {
+    let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
+    BexEngine::new_with_config(
+        program,
+        Arc::new(sys_native::SysOps::native()),
+        argv,
+        bex_engine::EngineConfig {
+            runtime_compiler: Some(bex_project::runtime_compiler()),
+            artifact_telemetry: Some(telemetry),
+            recording: Some(recording),
+            ..Default::default()
+        },
+    )
+}
+
 /// Single-target dispatch: the binary acts like a one-shot CLI; flags on
 /// the binary bind directly to the target's parameters.
 fn run_single(envelope: PackEnvelope) -> ExitCode {
@@ -91,20 +115,7 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
 
     let argv = build_argv(&target.subcommand_name);
 
-    let engine = match BexEngine::new_with_telemetry_recording(
-        envelope.program,
-        Arc::new(sys_native::SysOps::native()),
-        argv.clone(),
-        Some(bex_project::runtime_compiler()),
-        btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::from_boundary_env()
-            .unwrap_or_else(|| {
-                bex_engine::TelemetryRecording::user_files(
-                    btel_settings::publisher::RecordingConfig::default(),
-                )
-            })
-            .with_host("pack"),
-    ) {
+    let engine = match new_engine(envelope.program, argv.clone(), envelope.telemetry) {
         Ok(e) => Arc::new(e),
         Err(e) => {
             print_error(format_args!("failed to initialize engine: {e}"));
@@ -173,20 +184,7 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
     bootstrap_argv.push(String::new());
     bootstrap_argv.extend(trailing.iter().cloned());
 
-    let mut engine = match BexEngine::new_with_telemetry_recording(
-        envelope.program,
-        Arc::new(sys_native::SysOps::native()),
-        bootstrap_argv,
-        Some(bex_project::runtime_compiler()),
-        btel_settings::clock::DEFAULT_MODE,
-        bex_engine::TelemetryRecording::from_boundary_env()
-            .unwrap_or_else(|| {
-                bex_engine::TelemetryRecording::user_files(
-                    btel_settings::publisher::RecordingConfig::default(),
-                )
-            })
-            .with_host("pack"),
-    ) {
+    let mut engine = match new_engine(envelope.program, bootstrap_argv, envelope.telemetry) {
         Ok(e) => e,
         Err(e) => {
             print_error(format_args!("failed to initialize engine: {e}"));
@@ -286,7 +284,13 @@ fn finalize_dispatch(
         _ => bex_engine::ProcessStatus::Error,
     });
     rt.block_on(engine.shutdown());
-    if let Some(Err(error)) = engine.telemetry_result() {
+    if let Some(error) = engine.initial_cloud_authorization_error() {
+        print_error(format_args!("{error}"));
+        return ExitCode::FAILURE;
+    }
+    if !engine.initial_telemetry_failure_handled()
+        && let Some(Err(error)) = engine.telemetry_result()
+    {
         eprintln!("Warning: telemetry recording failed: {error}");
     }
     let mut unhandled_spawn_failed = false;

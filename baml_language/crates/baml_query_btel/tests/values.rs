@@ -166,7 +166,7 @@ async fn omitted_arguments_and_cycles_have_defined_results() {
          FROM spans WHERE span_name = 'user.Link'",
     );
     let output_value = &link.rows[0][0];
-    assert_eq!(output_value["$class"], json!("Node"));
+    assert_eq!(output_value["$class"], json!("user.Node"));
     assert!(
         output_value["$id"].is_u64(),
         "a cyclic object is labelled: {output_value}"

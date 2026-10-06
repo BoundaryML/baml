@@ -292,7 +292,7 @@ test "runtime schema compiles parses and encodes" {
     let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing class";
     type Record = unreflect(record_t.as_type())
     let record = rpc_extract@parse<Record>(`{"account":"AC-1","amount":42}`);
-    assert.equal(json.to_string(record), `{"account":"AC-1","amount":42}`)
+    assert.equal(baml.json.from(record), { "account": "AC-1", "amount": 42 })
 }
 
 function rpc_compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {

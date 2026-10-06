@@ -47,6 +47,6 @@ function ja_optional() -> baml.json.json? throws never {
 // type. The map literal adopts `map<string, json>`, but `a` is already
 // `int[]`, and invariance keeps `int[]` out of `json[]` (spec: Variance).
 function wrap_int_array_in_json(a: int[]) -> baml.json.json throws never {
-    {int_array: a}
-//              ^ mismatch: expected baml.json.json, got int[]
+    {"int_array": a}
+//                ^ mismatch: expected baml.json.json, got int[]
 }

@@ -286,7 +286,7 @@ impl BexHeap {
             }
             Object::Map(values) => {
                 let data = unsafe { values.data_unchecked() };
-                for value in data.values() {
+                for value in data.keys().chain(data.values()) {
                     self.debug_assert_valid_value(value);
                 }
             }

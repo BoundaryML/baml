@@ -52,37 +52,118 @@ function CachedReference(nonce: string, reference: string, question: string) -> 
     `
 }
 
-// Two calls sharing the prefix: the first writes it to the cache and the
-// second reads it back. Claude Haiku 4.5 caches nothing under 4,096 tokens;
-// 600 lines is about three times that.
-function check_BedrockHaiku45Cache() -> void {
-    let bedrock = aws.BedrockClient.new(
-        model = "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-        region = baml.env.get_or_panic("BEDROCK_AWS_REGION"),
-        access_key_id = baml.env.get_or_panic("BEDROCK_AWS_ACCESS_KEY_ID"),
-        secret_access_key = baml.env.get_or_panic("BEDROCK_AWS_SECRET_ACCESS_KEY"),
-        max_tokens = 256,
-        temperature = 0.0,
-    );
-    let nonce = baml.time.Instant.now().to_string();
+// About 12,000 tokens of filler for a cached prefix: three times Claude Haiku
+// 4.5's 4,096-token minimum, and well over OpenAI's 1,024.
+function cache_reference() -> string {
     let lines: string[] = [];
     let i = 0;
     while (i < 600) {
         lines.push(`Entry ${i}: the quick brown fox jumps over the lazy dog, item ${i * 7}.`);
         i += 1;
     }
-    let reference = lines.join("\n");
-    let agent = ai.Agent.new(client = bedrock);
+    lines.join("\n")
+}
+
+// Two calls sharing a fresh prefix, the first answering "one" and the second
+// "two". Returns the two calls' usage, logged under `name`.
+function cache_round_trip(name: string, client: ai.Client) -> ai.events.Usage[] {
+    let nonce = baml.time.Instant.now().to_string();
+    let reference = cache_reference();
+    let agent = ai.Agent.new(client = client);
 
     let first = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: one"));
-    log.info(`BedrockHaiku45Cache first call: ${baml.json.stringify(baml.json.to_json(first.usage))}`);
+    log.info(`${name} first call: ${baml.json.stringify(baml.json.to_json(first.usage))}`);
     assert.equal(first.value, "one");
-    assert.is_true((first.usage.cache_write_input_tokens ?? 0) > 4096);
 
     let second = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: two"));
-    log.info(`BedrockHaiku45Cache second call: ${baml.json.stringify(baml.json.to_json(second.usage))}`);
+    log.info(`${name} second call: ${baml.json.stringify(baml.json.to_json(second.usage))}`);
     assert.equal(second.value, "two");
-    assert.equal(second.usage.cached_input_tokens, first.usage.cache_write_input_tokens);
+    [first.usage, second.usage]
+}
+
+// Claude caches only where it is marked, so the default marker is what makes
+// the first call write the prefix and the second read the same count back.
+function check_claude_cache(name: string, client: ai.Client) -> void {
+    let usage = cache_round_trip(name, client);
+    assert.is_true((usage[0].cache_write_input_tokens ?? 0) > 4096);
+    assert.equal(usage[1].cached_input_tokens, usage[0].cache_write_input_tokens);
+}
+
+// OpenAI also caches a prefix it was not told about, so a read on the second
+// call does not by itself show the marker worked. What this checks is that
+// the endpoint accepts the request `${cache()}` produces for this model (on
+// GPT-5.5 and earlier, a marker would be a 400) and that the prefix is read
+// back.
+function check_openai_cache(name: string, client: ai.Client) -> void {
+    let usage = cache_round_trip(name, client);
+    assert.is_true((usage[1].cached_input_tokens ?? 0) > 1024);
+}
+
+function check_BedrockHaiku45Cache() -> void {
+    check_claude_cache(
+        "BedrockHaiku45Cache",
+        aws.BedrockClient.new(
+            model = "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            region = baml.env.get_or_panic("BEDROCK_AWS_REGION"),
+            access_key_id = baml.env.get_or_panic("BEDROCK_AWS_ACCESS_KEY_ID"),
+            secret_access_key = baml.env.get_or_panic("BEDROCK_AWS_SECRET_ACCESS_KEY"),
+            max_tokens = 256,
+            temperature = 0.0,
+        ),
+    )
+}
+
+function check_AnthropicHaiku45Cache() -> void {
+    check_claude_cache(
+        "AnthropicHaiku45Cache",
+        anthropic.Client.new(
+            model = "claude-haiku-4-5",
+            api_key = env.ANTHROPIC_API_KEY,
+            max_tokens = 256,
+            temperature = 0.0,
+        ),
+    )
+}
+
+function check_OpenAIChatGpt56Cache() -> void {
+    let cl = openai.ChatClient.new(model = "gpt-5.6-luna", api_key = env.OPENAI_API_KEY);
+    assert.equal(cl.default_cache_args(), { "mode": "explicit" });
+    check_openai_cache("OpenAIChatGpt56Cache", cl)
+}
+
+function check_OpenAIResponsesGpt56Cache() -> void {
+    let cl = openai.ResponsesClient.new(model = "gpt-5.6-luna", api_key = env.OPENAI_API_KEY, store = false);
+    assert.equal(cl.default_cache_args(), { "mode": "explicit" });
+    check_openai_cache("OpenAIResponsesGpt56Cache", cl)
+}
+
+// A deployment on the resource behind AZURE_OPENAI_RESPONSES_BASE_URL, through
+// the chat completions client. Each deployment is named after its model.
+function azure_chat(deployment: string) -> openai.AzureClient {
+    let resource = baml.env.get_or_panic("AZURE_OPENAI_RESPONSES_BASE_URL").replace("/openai/v1", "");
+    openai.AzureClient.new(
+        model = deployment,
+        base_url = `${resource}/openai/deployments/${deployment}`,
+        api_key = env.AZURE_OPENAI_API_KEY,
+        // GPT-5 models reject the `max_tokens` Azure would otherwise default to.
+        max_completion_tokens = 1024,
+    )
+}
+
+function check_AzureChatGpt56Cache() -> void {
+    let cl = azure_chat("gpt-5.6-luna");
+    assert.equal(cl.default_cache_args(), { "mode": "explicit" });
+    check_openai_cache("AzureChatGpt56Cache", cl)
+}
+
+// gpt-5-mini rejects `prompt_cache_breakpoint`, so `${cache()}` sends no marker
+// and both calls go through. Nothing is asserted about the cache: with no
+// marker, Azure's implicit cache is all there is, and it misses often enough
+// on the second call to flake.
+function check_AzureChatGpt5MiniCache() -> void {
+    let cl = azure_chat("gpt-5-mini");
+    assert.equal(cl.default_cache_args(), null);
+    let _ = cache_round_trip("AzureChatGpt5MiniCache", cl);
 }
 
 function check_BedrockGptOss20b() -> void {
@@ -117,7 +198,7 @@ function check_Gemini31FlashLiteMinimal() -> void {
         google.GeminiClient.new(
             model = "gemini-3.1-flash-lite",
             api_key = env.GOOGLE_API_KEY,
-            request_body = baml.json.parse(`{"generationConfig":{"thinkingConfig":{"thinkingLevel":"minimal"}}}`),
+            request_body = { "generationConfig": { "thinkingConfig": { "thinkingLevel": "minimal" } } },
         ),
     )
 }
@@ -128,7 +209,7 @@ function check_VertexGeminiFlashLiteLow() -> void {
             model = "gemini-3.5-flash-lite",
             location = "global",
             temperature = 0.0,
-            request_body = baml.json.parse(`{"generationConfig":{"thinkingConfig":{"thinkingLevel":"low"}}}`),
+            request_body = { "generationConfig": { "thinkingConfig": { "thinkingLevel": "low" } } },
         ),
     )
 }
@@ -157,6 +238,21 @@ testset "live" with testing.Sequential() {
     }
     test "BedrockHaiku45Cache" {
         check_BedrockHaiku45Cache()
+    }
+    test "AnthropicHaiku45Cache" {
+        check_AnthropicHaiku45Cache()
+    }
+    test "OpenAIChatGpt56Cache" {
+        check_OpenAIChatGpt56Cache()
+    }
+    test "OpenAIResponsesGpt56Cache" {
+        check_OpenAIResponsesGpt56Cache()
+    }
+    test "AzureChatGpt56Cache" {
+        check_AzureChatGpt56Cache()
+    }
+    test "AzureChatGpt5MiniCache" {
+        check_AzureChatGpt5MiniCache()
     }
     test "BedrockGptOss20b" {
         check_BedrockGptOss20b()

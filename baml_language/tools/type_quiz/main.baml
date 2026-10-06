@@ -206,7 +206,7 @@ function compiler_report(seed: int, length: int, index: int) -> root.engine.Repo
 /// exactly this.
 function sitting_json(seed: int, length: int, full: bool, answers: Given[]) -> string throws never {
     baml.json.to_string(sitting_of(seed, length, full, answers)) catch_all (e) {
-        baml.json.SerializationError => `{"error":"${e}"}`,
+        baml.json.SerializationError => baml.json.stringify({ "error": `${e}` }),
     }
 }
 
@@ -558,7 +558,7 @@ function adaptive_json(
     built: string?,
 ) -> string throws never {
     baml.json.to_string(adaptive_sitting(session, full, knobs, taken, built)) catch_all (e) {
-        baml.json.SerializationError => `{"error":"${e}"}`,
+        baml.json.SerializationError => baml.json.stringify({ "error": `${e}` }),
     }
 }
 
@@ -775,7 +775,7 @@ function adaptive_step(session: int, answers: string) -> string throws never {
         },
     };
     baml.json.to_string(step) catch_all (e) {
-        baml.json.SerializationError => `{"error":"${e}"}`,
+        baml.json.SerializationError => baml.json.stringify({ "error": `${e}` }),
     }
 }
 

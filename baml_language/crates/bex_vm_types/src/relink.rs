@@ -251,6 +251,9 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         // operand relocated exactly like a code object's.
         Object::Interface(interface) => {
             let mut visit = visit;
+            if let Some(default) = &mut interface.structural_default {
+                visit(IndexOperand::Object(&mut default.function));
+            }
             for method in &mut interface.methods {
                 if let Some(default) = &mut method.default {
                     visit(IndexOperand::Object(default));

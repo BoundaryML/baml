@@ -37,9 +37,9 @@ function isolatedLambda() -> void throws int[] {
 }
 
 function wrongExplicitMapValue() -> void throws map<string, int> {
-    throw map {value: "wrong"};
+    throw map {"value": "wrong"};
 }
 
 function wrongImplicitMapValue() -> void throws map<string, int> {
-    throw {value: "wrong"};
+    throw {"value": "wrong"};
 }

@@ -77,7 +77,7 @@ class OptionalJsonField {
 
 function nested_map_in_optional_json_field() -> bool {
     let value = OptionalJsonField {
-        data: { chat_template_kwargs: { enable_thinking: false } },
+        data: { "chat_template_kwargs": { "enable_thinking": false } },
     };
     baml.json.path<bool>(value.data, ".chat_template_kwargs.enable_thinking")
 }

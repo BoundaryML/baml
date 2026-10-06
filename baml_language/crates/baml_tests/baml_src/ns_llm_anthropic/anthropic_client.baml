@@ -169,6 +169,24 @@ function anth_batch(payloads: string[]) -> string {
 }
 
 // Render one request without any server: the client below the runner.
+// Whether any map entry anywhere in `j` satisfies `pred(key, value)` — a
+// structural stand-in for searching the serialized body text.
+function _anth_json_any(j: json, pred: (string, json) -> bool) -> bool {
+    match (j) {
+        let m: map<string, json> => {
+            for (let k in m.keys()) {
+                let v = m.get(k);
+                if (pred(k, v) || _anth_json_any(v, pred)) {
+                    return true;
+                }
+            }
+            false
+        },
+        let arr: json[] => arr.some((item) -> { _anth_json_any(item, pred) }),
+        _ => false,
+    }
+}
+
 function anth_render_body(
     cl: anthropic.Client,
     spec: ai.FunctionSpec<string>,
@@ -243,9 +261,9 @@ function anthropic_request_shape() -> string {
                 `system_text=${baml.json.path_or<string>(body, ".system[0].text", "-")}`,
                 `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
                 `text0=${baml.json.path_or<string>(body, ".messages[0].content[0].text", "-")}`,
-                `has_stream=${sent.body.includes("\"stream\"")}`,
-                `has_tools=${sent.body.includes("\"tools\"")}`,
-                `has_null=${sent.body.includes("null")}`,
+                `has_stream=${baml.json.to<map<string, json>>(body).has("stream")}`,
+                `has_tools=${baml.json.to<map<string, json>>(body).has("tools")}`,
+                `has_null=${_anth_json_any(body, (k, v) -> { v == null })}`,
                 `cached=${result.usage.cached_input_tokens ?? -1}`,
                 `input=${result.usage.input_tokens}`,
             ].join("|")
@@ -349,7 +367,7 @@ function anthropic_params_and_passthrough() -> string {
                 `thinking=${baml.json.path_or<string>(body, ".thinking.type", "-")}`,
                 `budget=${baml.json.path_or<int>(body, ".thinking.budget_tokens", -1)}`,
                 `user_id=${baml.json.path_or<string>(body, ".metadata.user_id", "-")}`,
-                `has_max_tokens=${sent.body.includes("max_tokens")}`,
+                `has_max_tokens=${baml.json.to<map<string, json>>(body).has("max_tokens")}`,
             ].join("|")
         },
     )
@@ -510,15 +528,8 @@ function anthropic_role_metadata_is_not_a_cache_channel() -> bool {
             ai.events.UserMessage.of(["more"], metadata = { "cache_control": { "type": "ephemeral" } }),
         ],
     };
-    anthropic.internal.render(
-        cl,
-        ai.ModelTurnInput {
-            prompt: spec.prompt_template,
-            journal: journal,
-            toolbox: spec.tools(),
-            output_type: spec.output_type(),
-        },
-    ).body.includes("cache_control")
+    let body = anth_render_body(cl, spec, journal);
+    _anth_json_any(body, (k, v) -> { k == "cache_control" })
 }
 
 test "anthropic_role_metadata_is_not_a_cache_channel" {
@@ -549,7 +560,7 @@ test "anthropic_assistant_first_gets_leading_user" {
 // FOREIGN client is removed by ai.wire.sanitize_for_client; reasoning from THIS
 // client survives sanitization and is dropped by the client's own lowering —
 // either way no empty message reaches the wire.
-function anthropic_reasoning_only_turn_is_dropped() -> string {
+function anthropic_reasoning_only_turn_is_dropped() -> json {
     let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let journal = ai.Journal {
         log: [
@@ -559,20 +570,15 @@ function anthropic_reasoning_only_turn_is_dropped() -> string {
             },
         ],
     };
-    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
-    [
-        `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
-        `role1=${baml.json.path_or<string>(body, ".messages[1].role", "-")}`,
-        `empty=${baml.json.stringify(body).includes("\"content\":[]")}`,
-    ].join("|")
+    anth_render_body(cl, AnthMockPlain@spec(), journal)
 }
 
 test "anthropic_reasoning_only_turn_is_dropped" {
-    let got = anthropic_reasoning_only_turn_is_dropped();
-    // the prompt's user message is the ONLY message left
-    assert.contains(got, "role0=user|");
-    assert.contains(got, "role1=-|");
-    assert.contains(got, "empty=false")
+    let messages = baml.json.path<json[]>(anthropic_reasoning_only_turn_is_dropped(), ".messages");
+    // the prompt's user message is the ONLY message left, and it is not empty
+    assert.equal(messages.length(), 1);
+    assert.equal(baml.json.path<string>(messages[0], ".role"), "user");
+    assert.is_true(baml.json.path<json[]>(messages[0], ".content").length() > 0)
 }
 
 // Dropping that turn MID-conversation left the user turns that bracketed it
@@ -829,7 +835,7 @@ function anthropic_stream_text() -> string {
             );
             let value = anth_stream_value(cl);
             let sent = mock.last_request();
-            [`value=${value}`, `stream=${sent.body.includes("\"stream\":true")}`].join("|")
+            [`value=${value}`, `stream=${baml.json.path<bool>(sent.json(), ".stream")}`].join("|")
         },
     )
 }
@@ -1058,7 +1064,7 @@ test "anthropic_stream_http_error_500" {
 // out of the answer text, and cache tokens survive to the end of the turn.
 // ai.stream.Event cannot carry tool calls or thinking yet (PLAN §6), so the
 // decoder folds them into AnthStreamState; token counts ride on TurnMeta.
-function anthropic_decode_tool_stream() -> string {
+function anthropic_decode_tool_stream() -> json {
     let state = anthropic.internal.AnthStreamState.new();
     let batch = anth_batch(
         [
@@ -1097,33 +1103,40 @@ function anthropic_decode_tool_stream() -> string {
             let c: ai.stream.ContentSeen => null,
         };
     }
-    let calls: string[] = [];
+    let calls: json[] = [];
     for (let u in state.tool_uses()) {
-        calls.push(`${u.id}/${u.name}/${baml.json.stringify(baml.json.to_json(u.args))}`);
+        calls.push({ "id": u.id, "name": u.name, "args": baml.json.to_json(u.args) });
     }
-    [
-        `events=${seen.join(",")}`,
-        `thinking=${state.thinking}`,
-        `signature=${state.signature}`,
-        `calls=${calls.join(";")}`,
-        `raw_stop=${state.stop_reason_raw ?? "-"}`,
-        `model=${state.model ?? "-"}`,
-    ].join("|")
+    {
+        "events": baml.json.to_json(seen),
+        "thinking": state.thinking,
+        "signature": state.signature,
+        "calls": calls,
+        "raw_stop": state.stop_reason_raw,
+        "model": state.model,
+    }
 }
 
 test "anthropic_decode_tool_stream" {
-    let got = anthropic_decode_tool_stream();
-    // stop/input/output/cached/cache writes/uncached/reasoning, per event
-    assert.contains(
-        got,
-        "events=meta:-/21/-1/7/3/11/-1,text:Hel,text:lo,meta:ToolUse/-1/42/9/-1/-1/13,done|",
-    );
-    // thinking never becomes answer text
-    assert.contains(got, "thinking=hmm|");
-    assert.contains(got, "signature=sig1|");
-    assert.contains(got, "calls=toolu_1/anth_weather/{\"city\":\"SF\"}|");
-    assert.contains(got, "raw_stop=tool_use|");
-    assert.contains(got, "model=claude-haiku-4-5")
+    assert.equal(
+        anthropic_decode_tool_stream(),
+        {
+            // stop/input/output/cached/cache writes/uncached/reasoning, per event
+            "events": [
+                "meta:-/21/-1/7/3/11/-1",
+                "text:Hel",
+                "text:lo",
+                "meta:ToolUse/-1/42/9/-1/-1/13",
+                "done",
+            ],
+            // thinking never becomes answer text
+            "thinking": "hmm",
+            "signature": "sig1",
+            "calls": [{ "id": "toolu_1", "name": "anth_weather", "args": { "city": "SF" } }],
+            "raw_stop": "tool_use",
+            "model": "claude-haiku-4-5",
+        },
+    )
 }
 
 // A malformed nonempty `data:` payload is an invalid provider response.
@@ -1282,7 +1295,7 @@ test "anthropic_missing_key_invoke" {
 // `input_schema`. A null argument is the schema-conformant answer for an
 // optional parameter (the generated schema types it `["string","null"]` and
 // marks it required), so dropping it rewrote conversation history.
-function anthropic_replayed_tool_args_keep_nulls() -> string {
+function anthropic_replayed_tool_args_keep_nulls() -> json {
     let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
     let args: map<string, unknown> = { "city": "SF", "unit": null };
     let journal = ai.Journal {
@@ -1294,20 +1307,15 @@ function anthropic_replayed_tool_args_keep_nulls() -> string {
             ai.events.ToolCompleted.new("t1", "sunny in SF"),
         ],
     };
-    let body = anth_render_body(cl, AnthMockTools@spec("weather?"), journal);
-    [
-        `city=${baml.json.path_or<string>(body, ".messages[1].content[0].input.city", "-")}`,
-        `unit_present=${baml.json.stringify(body).includes("\"unit\":null")}`,
-        // the request's OWN unset optionals are still pruned
-        `has_top_null=${baml.json.stringify(body).includes("\"temperature\":null")}`,
-    ].join("|")
+    anth_render_body(cl, AnthMockTools@spec("weather?"), journal)
 }
 
 test "anthropic_replayed_tool_args_keep_nulls" {
-    let got = anthropic_replayed_tool_args_keep_nulls();
-    assert.contains(got, "city=SF|");
-    assert.contains(got, "unit_present=true|");
-    assert.contains(got, "has_top_null=false")
+    let body = anthropic_replayed_tool_args_keep_nulls();
+    let input: json = { "city": "SF", "unit": null };
+    assert.equal(baml.json.path<json>(body, ".messages[1].content[0].input"), input);
+    // the request's OWN unset optionals are still pruned
+    assert.equal(baml.json.to<map<string, json>>(body).has("temperature"), false)
 }
 
 // ─── extended-thinking usage ─────────────────────────────────────────────────
