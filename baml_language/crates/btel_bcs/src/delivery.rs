@@ -1454,14 +1454,21 @@ async fn authorize_initial(
 ) -> Result<(), DeliveryError> {
     let config = &shared.config;
     let endpoint = config.endpoint(id, "heartbeat")?;
+    let started = tokio::time::Instant::now();
+    let window = config.retry_window()?;
     let mut last_failure = None;
     for attempt in 0..config.max_attempts {
+        let remaining = window.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            break;
+        }
+        let mut retry_delay = config.retry_delay;
         let body = shared
             .heartbeat
             .liveness()
             .map_err(|_| DeliveryError::Http)?;
         let result = tokio::time::timeout(
-            config.request_timeout,
+            config.request_timeout.min(remaining),
             crate::liveness::post(
                 client,
                 &endpoint,
@@ -1492,11 +1499,24 @@ async fn authorize_initial(
                     .http_failure()
                     .map_or(DeliveryError::Http, DeliveryError::Api));
             }
-            Ok(Err(error)) => last_failure = error.http_failure(),
+            Ok(Err(error)) => {
+                last_failure = error.http_failure();
+                if let Some(after) = last_failure
+                    .as_ref()
+                    .and_then(|failure| failure.retry_after)
+                {
+                    retry_delay = retry_delay.max(after);
+                }
+            }
             _ => {}
         }
         if attempt + 1 < config.max_attempts {
-            tokio::time::sleep(config.retry_delay).await;
+            // A server delay is a minimum, not permission to exceed the existing window.
+            // If no retry fits, retain the failure instead of sending another request early.
+            if retry_delay >= window.saturating_sub(started.elapsed()) {
+                break;
+            }
+            tokio::time::sleep(retry_delay).await;
         }
     }
     Err(last_failure.map_or(DeliveryError::Http, DeliveryError::Api))
@@ -1725,6 +1745,154 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    async fn initial_authorization_after_pending(status: u16) {
+        use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        let first = Arc::new(Mutex::new(None::<std::time::Instant>));
+        let requested = first.clone();
+        Mock::given(method("POST"))
+            .respond_with(move |_: &Request| {
+                let mut first = requested.lock().unwrap();
+                let first = first.get_or_insert_with(std::time::Instant::now);
+                if first.elapsed() < Duration::from_secs(5) {
+                    let pending = ResponseTemplate::new(503).insert_header("Retry-After", "5");
+                    if status == 204 {
+                        pending.set_body_json(serde_json::json!({
+                            "code": "AUTHORIZATION_STATE_PENDING", "retryable": true,
+                        }))
+                    } else {
+                        // Proxies may return no structured body: the header still applies.
+                        pending
+                    }
+                } else {
+                    ResponseTemplate::new(status)
+                }
+            })
+            .expect(2)
+            .mount(&server)
+            .await;
+        let failures = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let failed = failures.clone();
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
+            },
+            move |_| {
+                failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            },
+        )
+        .unwrap();
+        let (authorization, result, losses) = tokio::task::spawn_blocking(move || {
+            let result = delivery.finish();
+            (
+                delivery.initial_authorization(),
+                result,
+                delivery.handle().loss_count(),
+            )
+        })
+        .await
+        .unwrap();
+        assert!(first.lock().unwrap().unwrap().elapsed() >= Duration::from_secs(5));
+        assert_eq!(losses, 0);
+        if status == 204 {
+            assert_eq!(authorization, InitialAuthorization::Authorized);
+            assert_eq!(result, Ok(()));
+            assert_eq!(failures.load(std::sync::atomic::Ordering::Relaxed), 0);
+        } else {
+            let failure = bcs_api::HttpFailure::new(StatusCode::from_u16(status).unwrap());
+            assert_eq!(
+                authorization,
+                InitialAuthorization::Rejected(failure.clone())
+            );
+            assert_eq!(result, Err(DeliveryError::InitialAuthorization(failure)));
+            assert_eq!(failures.load(std::sync::atomic::Ordering::Relaxed), 1);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn initial_retry_after_waits_out_authorization_pending() {
+        initial_authorization_after_pending(204).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn initial_retry_after_eventually_refuses_the_key() {
+        initial_authorization_after_pending(401).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn initial_retry_after_cannot_exceed_the_existing_retry_window() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(
+                ResponseTemplate::new(503).insert_header("Retry-After", "18446744073709551615"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
+            },
+            |_| panic!("ordinary connection failure must retain its loss policy"),
+        )
+        .unwrap();
+        let (result, losses) = tokio::time::timeout(
+            Duration::from_secs(5),
+            tokio::task::spawn_blocking(move || {
+                (delivery.finish(), delivery.handle().loss_count())
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let Err(DeliveryError::Api(failure)) = result else {
+            panic!("expected the HTTP failure: {result:?}");
+        };
+        assert_eq!(failure.status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(failure.retry_after, Some(Duration::from_secs(u64::MAX)));
+        assert_eq!(losses, 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn fatal_cancellation_interrupts_initial_retry_after() {
+        use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        let requested = Arc::new(tokio::sync::Notify::new());
+        let seen = requested.clone();
+        Mock::given(method("POST"))
+            .respond_with(move |_: &Request| {
+                seen.notify_one();
+                ResponseTemplate::new(503).insert_header("Retry-After", "5")
+            })
+            .expect(1)
+            .mount(&server)
+            .await;
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                ..DeliveryConfig::new(server.uri().parse().unwrap())
+            },
+            |_| {},
+        )
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), requested.notified())
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        delivery.handle().disable(DeliveryError::Worker);
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            tokio::task::spawn_blocking(move || delivery.finish()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(result, Err(DeliveryError::Worker));
     }
 
     #[test]

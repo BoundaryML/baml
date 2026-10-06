@@ -1437,6 +1437,7 @@ dependencies = [
  "dirs",
  "futures",
  "hex",
+ "httpdate",
  "keyring",
  "prost",
  "prost-build",
