@@ -144,6 +144,8 @@ impl fmt::Display for ShadowedParamOwner {
 /// Each error is paired with a primary `ExprId` in `TirDiagnostic`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TirTypeError {
+    /// A declaration trace hook is invalid.
+    InvalidTraceHook { message: String },
     /// Type mismatch: expected vs actual.
     TypeMismatch { expected: Ty, got: Ty },
     /// Member not found on a known type.
@@ -1025,6 +1027,7 @@ impl TirTypeError {
         let f = &mut out;
         let written: fmt::Result = (|| -> fmt::Result {
             match self {
+                TirTypeError::InvalidTraceHook { message } => f.write_str(message),
                 TirTypeError::TypeMismatch { expected, got } => {
                     write!(
                         f,
@@ -2631,6 +2634,10 @@ fn resolve_related_location<'db>(
                 .copied()?;
             Some((class_loc.file(db).file_id(db), range))
         }
+        RelatedLocation::Item(Definition::Function(function)) => Some((
+            function.file(db).file_id(db),
+            baml_compiler2_hir::item_data::function_source_map(db, *function).name_span,
+        )),
         RelatedLocation::Item(def) => {
             let file = def.file(db);
             let contributions = baml_compiler2_hir::file_symbol_contributions(db, file);

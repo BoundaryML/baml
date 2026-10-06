@@ -1602,6 +1602,13 @@ pub enum DeclarativeMeta {
     Llm(LlmBodyDef),
 }
 
+/// A trace hook attached with `/// baml:$trace=path.to.hook`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraceHookDirective {
+    pub path: Vec<Name>,
+    pub span: TextRange,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionDef {
     pub name: Name,
@@ -1622,6 +1629,8 @@ pub struct FunctionDef {
     /// tags (a tag name immediately followed by a backtick literal), and
     /// their first parameter must be `body: (...) -> TaggedString`.
     pub is_tagged_template_tag: bool,
+    /// Declaration-only trace policy; resolved in the declaration scope.
+    pub trace_hook: Option<TraceHookDirective>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

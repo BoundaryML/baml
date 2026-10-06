@@ -26,6 +26,8 @@ pub enum TypeExprOwner {
 /// rather than semantic ones ("duplicate definition", "type mismatch").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoweringDiagnostic {
+    /// A declaration trace hook directive is malformed or misplaced.
+    InvalidTraceHook { message: String, span: TextRange },
     /// Builtin aliases have a fixed arity and no associated bindings. Report
     /// these before AST lowering erases their written type arguments.
     InvalidBuiltinTypeArguments {
@@ -323,6 +325,10 @@ impl LoweringDiagnostic {
     /// construct `Span` values from the stored `TextRange`s.
     pub fn to_diagnostic(&self, file_id: FileId) -> Diagnostic {
         let (id, severity, message, range, label) = match self {
+            Self::InvalidTraceHook { message, span } => (
+                DiagnosticId::MalformedAttribute, Severity::Error, message.clone(),
+                *span, "invalid trace hook",
+            ),
             LoweringDiagnostic::InvalidBuiltinTypeArguments {
                 name,
                 expected,

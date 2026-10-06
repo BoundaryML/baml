@@ -9,6 +9,11 @@ test "defaults preserve automatic capture" {
     assert.equal(trace.hidden().inspect().mode, trace.Mode.Hidden);
     assert.equal(trace.timing().inspect().mode, trace.Mode.Timing);
     assert.equal(trace.span().inspect().mode, trace.Mode.Span);
+    let rich = trace.rich().inspect();
+    assert.equal(rich.mode, trace.Mode.Span);
+    assert.equal(rich.capture.inputs, true);
+    assert.equal(rich.capture.output, true);
+    assert.equal(rich.capture.error, true);
 }
 
 test "builders are immutable and mode preserves capture" {

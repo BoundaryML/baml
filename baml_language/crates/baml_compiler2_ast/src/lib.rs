@@ -2105,6 +2105,25 @@ interface Named {
         );
     }
 
+    #[test]
+    fn trace_hook_is_attached_but_not_documentation() {
+        let function = first_function(parse_and_lower(
+            r#"
+/// Useful documentation.
+/// baml:$trace=trace.hidden
+function helper() -> int { 1 }
+"#,
+        ));
+        assert_eq!(function.docstring.as_deref(), Some("Useful documentation."));
+        assert_eq!(
+            function.trace_hook.unwrap().path,
+            [
+                baml_base::Name::new("trace"),
+                baml_base::Name::new("hidden")
+            ]
+        );
+    }
+
     // ─── BEP-049: backtick string literal lowering ────────────────────────────
 
     fn extract_first_string_literal(items: Vec<Item>) -> String {

@@ -108,6 +108,7 @@ fn lower_file_with_path_and_test_owner_impl(
     is_session_submission: bool,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
+    crate::docstring::reject_unsupported_trace_hooks(root, &mut diags);
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
     let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
@@ -508,6 +509,7 @@ fn lower_function(
     let attributes = lower_attributes_from_node(node);
     let docstring = crate::docstring::extract_docstring(node);
     let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
+    let trace_hook = crate::docstring::trace_hook(node, name.as_str(), diags);
 
     Some(FunctionDef {
         name,
@@ -524,6 +526,7 @@ fn lower_function(
         attributes,
         docstring,
         is_tagged_template_tag,
+        trace_hook,
         span: node.span_range(),
         name_span,
     })
@@ -2029,6 +2032,7 @@ fn synthesize_init_test_function(
         attributes: vec![],
         docstring: None,
         is_tagged_template_tag: false,
+        trace_hook: None,
         span,
         name_span: span,
     }
