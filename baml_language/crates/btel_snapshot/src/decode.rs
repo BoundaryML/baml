@@ -1,9 +1,9 @@
-//! Bounded reader for CAS blob format 3 with identity verification.
+//! Bounded reader for CAS blob formats 3 and 4 with identity verification.
 //!
 //! Decoding produces an owned graph: object references stay numbered, so
 //! shared objects and cycles are preserved rather than expanded. Every length
 //! is checked against the remaining input and the decode budget before any
-//! allocation. The blob ID is recomputed with hash format 3 while reading and
+//! allocation. The blob ID is recomputed with its hash format while reading and
 //! must equal the header's ID; the header alone proves nothing. Objects and
 //! child blobs must be numbered in first-reference order, and every one of
 //! them must be referenced, so a blob's numbering has exactly one accepted
@@ -146,8 +146,10 @@ pub enum DecodedValue {
     },
 }
 
-/// Map entries or instance fields, in captured order.
-pub type Entries = Vec<(Box<str>, DecodedValue)>;
+/// Map keys and values, in captured order.
+pub type Entries = Vec<(DecodedValue, DecodedValue)>;
+/// String-named instance fields, in captured order.
+pub type Fields = Vec<(Box<str>, DecodedValue)>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum DecodedObject {
@@ -169,7 +171,7 @@ pub enum DecodedObject {
     Instance {
         type_arguments: Vec<TypeDescription>,
         declaration: NodeId,
-        fields: Entries,
+        fields: Fields,
         original_len: u64,
     },
     Declaration {
@@ -290,6 +292,7 @@ pub fn decode_blob(bytes: &[u8], limits: &DecodeLimits) -> Result<DecodedSnapsho
     std::thread::scope(|scope| {
         let mut r = Reader {
             input: bytes,
+            version: 0,
             limits,
             values: 0,
             decoded: 0,
@@ -314,9 +317,10 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
         return Err(BlobError::Magic);
     }
     let version = r.u32()?;
-    if version != crate::BLOB_VERSION {
+    if version != 3 && version != crate::BLOB_VERSION {
         return Err(BlobError::Version(version));
     }
+    r.version = version;
     let declared = CasId::from_bytes(r.take(16)?.try_into().expect("16 bytes"));
     let child_count = r.u32()?;
     if child_count as usize > r.input.len() / 16 {
@@ -346,9 +350,9 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
     r.objects = object_count;
     r.charge(object_count as usize * std::mem::size_of::<DecodedObject>())?;
 
-    // One stream, fed in byte order as hash format 3 defines it: the root,
+    // One stream, fed in byte order as the hash format defines it: the root,
     // the objects, then the child table and object count.
-    let mut blob_hash = Hasher::new(HashDomain::Blob);
+    let mut blob_hash = Hasher::versioned(HashDomain::Blob, version);
     let root = match r.u8()? {
         0 => {
             blob_hash.byte(0);
@@ -417,6 +421,7 @@ fn invalid(reason: String) -> BlobError {
 
 struct Reader<'a, 'scope> {
     input: &'a [u8],
+    version: u32,
     limits: &'a DecodeLimits,
     values: usize,
     decoded: usize,
@@ -631,7 +636,7 @@ impl<'a> Reader<'a, '_> {
             ))),
         }
     }
-    /// One inline value, hashed into `h` exactly as hash format 3 does.
+    /// One inline value, hashed into `h` in encoding order.
     fn value(&mut self, h: &mut Hasher) -> Result<DecodedValue, BlobError> {
         let tag = self.u8()?;
         h.byte(tag);
@@ -724,8 +729,30 @@ impl<'a> Reader<'a, '_> {
         }
         Ok(values)
     }
-    /// Keyed entries; keys are hashed in place.
     fn entries(&mut self, h: &mut Hasher) -> Result<Entries, BlobError> {
+        let n = self.count(if self.version == 3 { 5 } else { 2 })?;
+        self.values = self.values.saturating_add(n);
+        if self.values > self.limits.max_values {
+            return Err(BlobError::Limit("values"));
+        }
+        self.charge(n * std::mem::size_of::<(DecodedValue, DecodedValue)>())?;
+        h.size(n);
+        let mut entries = Vec::with_capacity(n);
+        for _ in 0..n {
+            let key = if self.version == 3 {
+                let key = self.text()?;
+                h.size(key.len());
+                h.absorb(key.as_bytes());
+                DecodedValue::String(key.into())
+            } else {
+                self.value(h)?
+            };
+            entries.push((key, self.value(h)?));
+        }
+        Ok(entries)
+    }
+    /// String-named fields; names are hashed in place.
+    fn fields(&mut self, h: &mut Hasher) -> Result<Fields, BlobError> {
         // Key length (4) plus a value tag (1).
         let n = self.count(5)?;
         self.charge(n * std::mem::size_of::<(Box<str>, DecodedValue)>())?;
@@ -782,7 +809,7 @@ impl<'a> Reader<'a, '_> {
         }
         Ok(types)
     }
-    /// One object definition, hashed into `h` exactly as hash format 3 does.
+    /// One object definition, hashed into `h` in encoding order.
     fn object(&mut self, h: &mut Hasher) -> Result<DecodedObject, BlobError> {
         let tag = self.u8()?;
         h.byte(tag);
@@ -835,7 +862,7 @@ impl<'a> Reader<'a, '_> {
                 h.number(u64::from(declaration.0));
                 let original_len = self.u64()?;
                 h.number(original_len);
-                let fields = self.entries(h)?;
+                let fields = self.fields(h)?;
                 DecodedObject::Instance {
                     type_arguments,
                     declaration,
@@ -1083,7 +1110,10 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
         match object {
             DecodedObject::List { items, .. } => items.iter().try_for_each(check_value)?,
             DecodedObject::Map { entries, .. } => {
-                entries.iter().try_for_each(|(_, v)| check_value(v))?;
+                entries.iter().try_for_each(|(k, v)| {
+                    check_value(k)?;
+                    check_value(v)
+                })?;
             }
             DecodedObject::Instance {
                 declaration: d,

@@ -102,7 +102,7 @@ fn add(
                 key_type,
                 value_type,
                 values.into_iter(),
-                |_, (key, value)| (key.as_str().into(), value),
+                |leaves, (key, value)| (leaves.string_value(&key.as_str().into()), value),
             );
             object(builder, map)
         }

@@ -1,4 +1,4 @@
-//! Snapshot hash format 3: XXH3-128, seed zero, little-endian digest bytes.
+//! Snapshot hash format 4: XXH3-128, seed zero, little-endian digest bytes.
 //!
 //! Leaf digests depend only on their content and are computed once, at
 //! capture: a string's is its content hash, which the string caches; bigints,
@@ -6,7 +6,7 @@
 //! hash over its content in encoding order (see `walk`): the root, then each
 //! object definition in blob-local order, then the child table and the object
 //! count. Strings, including enum variant and descriptive names, bigints and
-//! types are replaced by their digests; map keys and declaration names are
+//! types are replaced by their digests; field and declaration names are
 //! hashed in place; a reference is its blob-local number, or the slot of the
 //! child blob it names. A blob's identity therefore depends on its reachable
 //! content and never on capture discovery order, heap addresses, arena
@@ -14,7 +14,7 @@
 //! need no recursive Merkle dependencies. Every hashed input is either a byte
 //! of the blob or a digest recomputed from its bytes, so a blob verifies
 //! without its children. Borsh's attribute-free type encoding is part of
-//! version 3: changes to it require a hash-format version change. Hash
+//! version 4: changes to it require a hash-format version change. Hash
 //! equality is not proof of delivery.
 use std::io::{self, Write};
 
@@ -59,8 +59,16 @@ pub(crate) trait Absorb {
 pub(crate) struct Hasher(Xxh3);
 impl Hasher {
     pub(crate) fn new(domain: HashDomain) -> Self {
+        Self::versioned(domain, crate::BLOB_VERSION)
+    }
+    pub(crate) fn versioned(domain: HashDomain, version: u32) -> Self {
         let mut h = Self(Xxh3::new());
-        h.absorb(b"baml.snapshot.xxh3-128.v3\0");
+        // Leaf encodings are unchanged; only blob identities change in v4.
+        if matches!(domain, HashDomain::Blob) && version >= 4 {
+            h.absorb(b"baml.snapshot.xxh3-128.v4\0");
+        } else {
+            h.absorb(b"baml.snapshot.xxh3-128.v3\0");
+        }
         h.byte(domain as u8);
         h
     }

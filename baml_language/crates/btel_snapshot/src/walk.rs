@@ -6,7 +6,7 @@
 //! becomes (hash input, bytes, a length); a resolver decides how a reference
 //! is written (a local number, or a position in another blob).
 //!
-//! Only values may name another blob. Map keys, enum variant names,
+//! Only values (including map keys) may name another blob. Enum variant names,
 //! descriptive names, media MIME types, URLs and paths, types and
 //! declarations are always written in place, and a blob's own root value is
 //! never a reference to another blob. Media content is written as a value.
@@ -16,7 +16,7 @@ use num_bigint::BigInt;
 
 use crate::{
     graph::{
-        BigintId, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType, Range,
+        BigintId, FieldEntry, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType, Range,
         SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
     },
     hash::{self, Absorb, Counter, Digest, Hasher, TypeLeaf},
@@ -258,6 +258,20 @@ fn entries<V: Visitor, R: Resolver>(
 ) -> Result<(), V::Error> {
     v.begin_range(range.len())?;
     for entry in &s.entries[range.indexes()] {
+        value(v, r, s, entry.key, Place::Nested)?;
+        value(v, r, s, entry.value, Place::Nested)?;
+    }
+    Ok(())
+}
+
+fn fields<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Graph,
+    range: Range<FieldEntry>,
+) -> Result<(), V::Error> {
+    v.begin_range(range.len())?;
+    for entry in &s.fields[range.indexes()] {
         v.key(&entry.key)?;
         value(v, r, s, entry.value, Place::Nested)?;
     }
@@ -307,7 +321,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
         SnapshotObject::Instance {
             type_arguments,
             declaration,
-            fields,
+            fields: range,
             original_len,
         } => {
             v.byte(ObjectTag::Instance as u8)?;
@@ -317,7 +331,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             }
             v.index(r.member(*declaration))?;
             v.length(*original_len)?;
-            entries(v, r, s, *fields)
+            fields(v, r, s, *range)
         }
         SnapshotObject::Declaration { name, tag, is_enum } => {
             v.byte(ObjectTag::Declaration as u8)?;
@@ -373,7 +387,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
     }
 }
 
-/// Hash format 3 input: each piece as the encoding writes it, with a leaf's
+/// Hash format 4 input: each piece as the encoding writes it, with a leaf's
 /// content replaced by its digest. One stream hashes a whole blob.
 impl Visitor for Hasher {
     type Error = std::convert::Infallible;

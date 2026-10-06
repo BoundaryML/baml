@@ -116,7 +116,7 @@ fn build(b: &mut btel_snapshot::Builder, value: &Json) -> SnapshotValue {
                 key_type,
                 value_type,
                 entries.keys().zip(values),
-                |_, (key, value)| (BexStr::from(key.as_str()), value),
+                |leaves, (key, value)| (leaves.string_value(&BexStr::from(key.as_str())), value),
             );
             SnapshotValue::Object(b.leaves().object(map).unwrap())
         }

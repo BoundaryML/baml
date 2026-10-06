@@ -564,7 +564,10 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
             (body.upload_id == "1-0").then_some(&recording_bytes)
         );
         for object in body.cas_objects {
-            assert_eq!(object.snapshot_format_version, 3);
+            assert_eq!(
+                object.snapshot_format_version,
+                btel_settings::snapshot::BLOB_VERSION
+            );
             assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
             uploaded.push((object.snapshot_id, object.blob));
         }

@@ -3,14 +3,14 @@
     "recording_id": "07070707070707070707070707070707",
     "recording_file_sequence": 1,
     "encoded_length": 304,
-    "sha256": "bfd3a51d54fda7dd2053eb70165add862c5dcef1bc4d4a8891a00535c2f31b2a"
+    "sha256": "9d54dcbdfc2ec3c55046e4c75d9643daab94a1ec0b56a0c760d5d51d694217db"
   },
   "candidates": [
-    {"snapshot_id": "c258ff7c701ace84bf92cbda5a554e66", "snapshot_format_version": 3},
-    {"snapshot_id": "41125dc68b7aa0bf8d99d38a4b5f859b", "snapshot_format_version": 3},
-    {"snapshot_id": "84a7db68a004edc2f8e95ec3431c8f05", "snapshot_format_version": 3},
-    {"snapshot_id": "9feb0a481a28b3a585d4be20bc955db7", "snapshot_format_version": 3, "size_class": "LARGE"},
-    {"snapshot_id": "a85fa07218b3f4c3c8d7bc2be701b544", "snapshot_format_version": 3}
+    {"snapshot_id": "be2d82ec2aaff51339924ff94ac8c98d", "snapshot_format_version": 4},
+    {"snapshot_id": "a5765c7666ebb687c426e37f73a17597", "snapshot_format_version": 4},
+    {"snapshot_id": "d6226f2f4fccd1510518e809b104f226", "snapshot_format_version": 4},
+    {"snapshot_id": "a0946f568e35e913e55eac367e18836c", "snapshot_format_version": 4, "size_class": "LARGE"},
+    {"snapshot_id": "0b125e1ff791a452ece1463d9c87a0dd", "snapshot_format_version": 4}
   ],
   "proposed_uploads": [
     {"client_target_id": 0, "kind": "recording", "candidate_indices": [0]},
