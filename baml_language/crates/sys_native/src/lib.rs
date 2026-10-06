@@ -107,15 +107,24 @@ impl WorkingDir {
 
     /// The program a child process runs, the way a shell reads it: a name
     /// with a directory component (`./build.sh`, `tools/gen`) is a path and
-    /// resolves like one; a bare name (`git`) is left to the `PATH` lookup.
-    pub fn resolve_program(&self, program: &str) -> PathBuf {
+    /// resolves against the child's requested directory; a bare name (`git`)
+    /// is left to the `PATH` lookup.
+    pub fn resolve_program(
+        &self,
+        program: &str,
+        requested: Option<&str>,
+    ) -> std::io::Result<PathBuf> {
         let has_directory = Path::new(program)
             .parent()
             .is_some_and(|dir| !dir.as_os_str().is_empty());
-        if has_directory {
-            self.resolve(program)
+        if has_directory && !Path::new(program).is_absolute() {
+            let base = match self.for_child(requested) {
+                Some(base) => base,
+                None => std::env::current_dir()?,
+            };
+            std::path::absolute(base.join(program))
         } else {
-            PathBuf::from(program)
+            Ok(PathBuf::from(program))
         }
     }
 }
