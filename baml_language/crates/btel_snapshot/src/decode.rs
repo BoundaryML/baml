@@ -30,16 +30,19 @@
 //! per nesting level (measured with attribute-free types: at most 4 KiB of
 //! stack per level in debug builds, ~1 KiB in release). Every level consumes
 //! at least one byte, so a byte budget bounds depth. Descriptions of at most `SHALLOW_TYPE_BYTES` decode in
-//! place and stay available; larger ones (up to `max_type_bytes`) are only
-//! measured, on a helper thread with a large stack, and kept as verified bytes.
-//! A blob starts that thread at its first large description and reuses it.
+//! place and stay available; larger ones (up to `max_type_bytes`) are decoded
+//! on a helper thread with a large stack and kept as verified bytes, and as
+//! the decoded type too when it nests at most `SHALLOW_TYPE_BYTES` levels:
+//! a long type, such as a union of classes named with their definitions, is
+//! usually shallow. A blob starts that thread at its first large description
+//! and reuses it.
 use std::{
     io,
     sync::{Arc, mpsc},
     thread::{Scope, ScopedJoinHandle},
 };
 
-use baml_type::{DeclarationName, MediaKind, TaggedTypeName, typetag::TypeTag};
+use baml_type::{DeclarationName, MediaKind, TaggedTypeName, TyTemplate, typetag::TypeTag};
 use borsh::BorshDeserialize;
 use num_bigint::{BigInt, BigUint, Sign};
 
@@ -515,6 +518,70 @@ struct Measured {
     groups: Vec<CasId>,
     /// The highest group member position its heads name.
     position: Option<u32>,
+    /// A long description's decoded type, when it is shallow enough to use
+    /// and drop on any stack.
+    shallow: Option<Shallow>,
+}
+
+/// A type the helper decoded that nests at most `SHALLOW_TYPE_BYTES` levels.
+#[derive(Debug)]
+enum Shallow {
+    Value(Box<OwnedType>),
+    Field(Box<DefinitionType>),
+}
+
+/// How deeply a type nests: one for a leaf.
+fn depth<N: Clone>(ty: &TyTemplate<N>) -> usize {
+    let deepest =
+        |types: &mut dyn Iterator<Item = &TyTemplate<N>>| types.map(depth).max().unwrap_or(0);
+    1 + match ty {
+        TyTemplate::Class(_, args) | TyTemplate::Union(args) => deepest(&mut args.iter()),
+        TyTemplate::Interface(_, args, associated) => {
+            deepest(&mut args.iter().chain(associated.iter().map(|(_, ty)| ty)))
+        }
+        TyTemplate::List(item) => depth(item),
+        TyTemplate::Map { key, value } | TyTemplate::Future(key, value) => {
+            depth(key).max(depth(value))
+        }
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+        } => deepest(
+            &mut params
+                .iter()
+                .map(|param| &param.ty)
+                .chain([&**ret, &**throws]),
+        ),
+        TyTemplate::AssociatedTypeProjection {
+            base, interface, ..
+        } => depth(base).max(deepest(
+            &mut interface
+                .generics
+                .iter()
+                .chain(interface.associated_types.iter().map(|(_, ty)| ty)),
+        )),
+        TyTemplate::Int
+        | TyTemplate::Bigint
+        | TyTemplate::Float
+        | TyTemplate::String
+        | TyTemplate::Bool
+        | TyTemplate::Null
+        | TyTemplate::Uint8Array
+        | TyTemplate::Media(_)
+        | TyTemplate::Literal(..)
+        | TyTemplate::Enum(_)
+        | TyTemplate::EnumVariant(..)
+        | TyTemplate::RustType
+        | TyTemplate::Type
+        | TyTemplate::Resource
+        | TyTemplate::PromptAst
+        | TyTemplate::Void
+        | TyTemplate::TypeAlias(_)
+        | TyTemplate::Unknown
+        | TyTemplate::Never
+        | TyTemplate::TypeArgRef(_) => 0,
+    }
 }
 
 fn value_heads(ty: &OwnedType, found: &mut Measured) {
@@ -598,12 +665,18 @@ fn measure_type(bytes: &[u8], limited: bool, described: Described) -> Result<Mea
     let mut window = Window::new(bytes);
     let mut found = Measured::default();
     let decoded = match described {
-        Described::Value => {
-            OwnedType::deserialize_reader(&mut window).map(|ty| value_heads(&ty, &mut found))
-        }
-        Described::Field => {
-            DefinitionType::deserialize_reader(&mut window).map(|ty| field_heads(&ty, &mut found))
-        }
+        Described::Value => OwnedType::deserialize_reader(&mut window).map(|ty| {
+            value_heads(&ty, &mut found);
+            if depth(&TyTemplate::from(ty.clone())) <= SHALLOW_TYPE_BYTES {
+                found.shallow = Some(Shallow::Value(Box::new(ty)));
+            }
+        }),
+        Described::Field => DefinitionType::deserialize_reader(&mut window).map(|ty| {
+            field_heads(&ty, &mut found);
+            if depth(&ty) <= SHALLOW_TYPE_BYTES {
+                found.shallow = Some(Shallow::Field(Box::new(ty)));
+            }
+        }),
     };
     match decoded {
         Ok(()) => {
@@ -675,7 +748,11 @@ impl<'a> Reader<'a, '_> {
     }
     /// One Borsh type description and its digest (hash of the raw bytes).
     fn ty(&mut self) -> Result<(TypeDescription, Digest), BlobError> {
-        let (raw, decoded) = self.described::<OwnedType>(Described::Value, value_heads)?;
+        let (raw, decoded) =
+            self.described::<OwnedType>(Described::Value, value_heads, |shallow| match shallow {
+                Shallow::Value(ty) => Some(ty),
+                Shallow::Field(_) => None,
+            })?;
         let mut h = Hasher::new(HashDomain::Type);
         h.absorb(raw);
         Ok((
@@ -688,7 +765,14 @@ impl<'a> Reader<'a, '_> {
     }
     /// One recorded field type, which the group's hash covers as written.
     fn field_type(&mut self) -> Result<FieldType, BlobError> {
-        let (raw, decoded) = self.described::<DefinitionType>(Described::Field, field_heads)?;
+        let (raw, decoded) = self.described::<DefinitionType>(
+            Described::Field,
+            field_heads,
+            |shallow| match shallow {
+                Shallow::Field(ty) => Some(ty),
+                Shallow::Value(_) => None,
+            },
+        )?;
         Ok(FieldType {
             encoded: raw.into(),
             decoded,
@@ -701,6 +785,7 @@ impl<'a> Reader<'a, '_> {
         &mut self,
         described: Described,
         heads: fn(&T, &mut Measured),
+        from_helper: fn(Shallow) -> Option<Box<T>>,
     ) -> Result<(&'a [u8], Option<Box<T>>), BlobError> {
         let mut shallow = Window::new(&self.input[..self.input.len().min(SHALLOW_TYPE_BYTES)]);
         let (found, decoded) = match T::deserialize_reader(&mut shallow) {
@@ -711,7 +796,9 @@ impl<'a> Reader<'a, '_> {
                 (found, Some(Box::new(ty)))
             }
             Err(_) if shallow.exhausted && SHALLOW_TYPE_BYTES < self.input.len() => {
-                (self.measure_type(described)?, None)
+                let mut found = self.measure_type(described)?;
+                let decoded = found.shallow.take().and_then(from_helper);
+                (found, decoded)
             }
             Err(error) => return Err(type_error(&error, shallow.exhausted)),
         };

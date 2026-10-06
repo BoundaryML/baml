@@ -311,3 +311,196 @@ fn group_head(head: &TypeHead, positions: &FxHashMap<HeapPtr, u32>) -> Head {
         None => Head::Named(name),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Barrier, Weak};
+
+    use baml_type::{Name, RuntimeTy, TyTemplate as Template, typetag::TypeTag};
+    use bex_vm_types::{ClassField, types::Owner};
+    use btel_types::DefinitionBlob;
+    use indexmap::IndexMap;
+
+    use super::*;
+
+    fn class(name: &str, tag: i64) -> Object {
+        Object::Class(Box::new(Class {
+            name: DeclarationName::Anonymous(Name::new(name)),
+            fields: Vec::new(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            stream_done: false,
+            type_tag: TypeTag::from_i64(tag),
+            has_cleanup: false,
+            generic_param_count: 0,
+            owner: Owner::anonymous(),
+            methods: IndexMap::new(),
+            telemetry_definition: DefinitionCell::default(),
+        }))
+    }
+
+    /// Add `name: target?` to the class at `ptr`.
+    fn add_optional_field(ptr: HeapPtr, name: &str, target: HeapPtr, tag: i64) {
+        let head = TypeHead::new(target, TypeTag::from_i64(tag));
+        // SAFETY: test heap, no collection running.
+        let Object::Class(class) = (unsafe { ptr.get_mut() }) else {
+            unreachable!()
+        };
+        class.fields.push(ClassField {
+            name: name.into(),
+            field_type: RuntimeTy::Null,
+            field_template: Template::Union(Box::new([
+                Template::Class(head, Box::new([])),
+                Template::Null,
+            ])),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            skip: false,
+            stream_done: false,
+            must_exist: false,
+            runtime_type: None,
+        });
+    }
+
+    /// `Left { right: Right? }` and `Right { left: Left? }`, with tags from
+    /// `tag`.
+    fn left_right(vm: &mut crate::BexVm, tag: i64) -> (HeapPtr, HeapPtr) {
+        let left = vm.tlab.alloc(class("Left", tag));
+        let right = vm.tlab.alloc(class("Right", tag + 1));
+        add_optional_field(left, "right", right, tag + 1);
+        add_optional_field(right, "left", left, tag);
+        (left, right)
+    }
+
+    fn definition(ptr: HeapPtr) -> Definition {
+        // SAFETY: test heap, no collection running.
+        unsafe { of(ptr) }.unwrap().clone()
+    }
+
+    #[test]
+    fn a_definition_is_made_once_and_kept_on_its_declaration() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let person = vm.tlab.alloc(class("Person", 1000));
+        let first = definition(person);
+        let again = definition(person);
+        assert!(Arc::ptr_eq(&first.group, &again.group));
+        // SAFETY: test heap.
+        let cell = unsafe { cell(person) }.unwrap();
+        assert!(Arc::ptr_eq(&cell.get().unwrap().group, &first.group));
+        let text = vm.tlab.alloc_string("not a declaration");
+        // SAFETY: test heap.
+        assert!(unsafe { of(text) }.is_none());
+    }
+
+    /// Whichever member a capture names first, a group is one blob and
+    /// each member keeps its place in it; making one member's definition
+    /// makes the whole group's.
+    #[test]
+    fn mutually_recursive_declarations_share_one_group_from_either_start() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let (left, right) = left_right(&mut vm, 2000);
+        let (other_left, other_right) = left_right(&mut vm, 3000);
+        let from_left = definition(left);
+        // SAFETY: test heap.
+        assert!(unsafe { cell(right) }.unwrap().get().is_some());
+        let from_right = definition(other_right);
+        // SAFETY: test heap.
+        assert!(unsafe { cell(other_left) }.unwrap().get().is_some());
+        assert_eq!(from_left.group.id(), from_right.group.id());
+        assert_eq!(from_left.member, definition(other_left).member);
+        assert_eq!(definition(right).member, from_right.member);
+        assert_ne!(from_left.member, from_right.member);
+        assert!(from_left.group.children().is_empty());
+    }
+
+    /// A declaration that names another group's member names that group,
+    /// which becomes its blob's child.
+    #[test]
+    fn a_group_names_the_groups_its_fields_use() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let (left, _) = left_right(&mut vm, 4000);
+        let holder = vm.tlab.alloc(class("Holder", 4100));
+        add_optional_field(holder, "left", left, 4000);
+        let holder = definition(holder);
+        let children: Vec<_> = holder.group.children().iter().map(|c| c.id()).collect();
+        assert_eq!(children, vec![definition(left).group.id()]);
+    }
+
+    fn collect(vm: &mut crate::BexVm, roots: &[HeapPtr]) -> Vec<HeapPtr> {
+        // SAFETY: test heap; nothing else holds a pointer across it.
+        let (_, roots, _) = unsafe {
+            vm.heap
+                .collect_garbage_generational(roots, bex_heap::CollectionLevel::Major)
+        };
+        roots
+    }
+
+    /// The cache is the declarations: a collected class drops its
+    /// definition, and one that survives keeps it.
+    #[test]
+    fn a_collected_declaration_drops_its_definition() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let kept = vm.tlab.alloc(class("Kept", 5000));
+        let kept_group = Arc::downgrade(&definition(kept).group);
+        let mut dropped: Vec<Weak<DefinitionBlob>> = Vec::new();
+        for n in 0..200 {
+            let temporary = vm.tlab.alloc(class(&format!("Temp{n}"), 5100 + n));
+            dropped.push(Arc::downgrade(&definition(temporary).group));
+        }
+        let mut roots = vec![kept];
+        // Twice: what one collection leaves behind, the next frees.
+        for _ in 0..2 {
+            roots = collect(&mut vm, &roots);
+        }
+        assert!(dropped.iter().all(|group| group.upgrade().is_none()));
+        let kept_group = kept_group
+            .upgrade()
+            .expect("a live class keeps its definition");
+        assert!(Arc::ptr_eq(&definition(roots[0]).group, &kept_group));
+    }
+
+    /// Threads that first see members of the same group at once publish one
+    /// whole group: every member has exactly one definition.
+    #[test]
+    fn concurrent_first_sightings_publish_whole_groups() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        for round in 0..20 {
+            let (left, right) = left_right(&mut vm, 6000 + round * 2);
+            let barrier = Barrier::new(8);
+            let seen: Vec<(Definition, Definition)> = std::thread::scope(|scope| {
+                let threads: Vec<_> = (0..8)
+                    .map(|thread| {
+                        let barrier = &barrier;
+                        scope.spawn(move || {
+                            barrier.wait();
+                            let (first, second) = if thread % 2 == 0 {
+                                (left, right)
+                            } else {
+                                (right, left)
+                            };
+                            let first = definition(first);
+                            let second = definition(second);
+                            if thread % 2 == 0 {
+                                (first, second)
+                            } else {
+                                (second, first)
+                            }
+                        })
+                    })
+                    .collect();
+                threads.into_iter().map(|t| t.join().unwrap()).collect()
+            });
+            let (left, right) = &seen[0];
+            assert!(Arc::ptr_eq(&left.group, &right.group));
+            assert_ne!(left.member, right.member);
+            for (l, r) in &seen {
+                assert!(Arc::ptr_eq(&l.group, &left.group) && l.member == left.member);
+                assert!(Arc::ptr_eq(&r.group, &right.group) && r.member == right.member);
+            }
+        }
+    }
+}

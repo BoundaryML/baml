@@ -403,6 +403,70 @@ fn type_descriptions_are_bounded_and_large_ones_never_recurse_on_the_caller() {
     assert_eq!(too_deep, Err(BlobError::Limit("type description bytes")));
 }
 
+/// A long but shallow type, such as a union of classes named by their
+/// definitions, decodes whole, on a 2 MiB stack too; the groups it names
+/// are the blob's children, in order.
+#[test]
+fn long_shallow_types_decode_whole() {
+    use crate::{DefinedHead, TypeIdentity, definition};
+    let definitions: Vec<_> = (0..8)
+        .map(|n| {
+            let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.C{n}")));
+            definition::group(&[definition::Declaration::Class(definition::Class {
+                name,
+                type_params: 0,
+                meta: definition::Meta::default(),
+                stream_done: false,
+                fields: vec![],
+            })])
+            .remove(0)
+        })
+        .collect();
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let members: Box<[OwnedType]> = definitions
+        .iter()
+        .enumerate()
+        .map(|(n, defined)| {
+            let definition = b.leaves().define(defined);
+            RealizedTy::Class(
+                TypeIdentity::Defined(DefinedHead {
+                    name: DeclarationName::Declared(TypeName::from_dotted_path(&format!(
+                        "user.C{n}"
+                    ))),
+                    definition,
+                }),
+                Box::new([]),
+            )
+        })
+        .collect();
+    let ty = RealizedTy::Union(members);
+    assert!(borsh::to_vec(&ty).unwrap().len() > SHALLOW_TYPE_BYTES);
+    let id = b.leaves().ty(ty.clone());
+    let snapshot = b.finish(V::Type(id), &mut Shaper::default());
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut BlobScratch::default(), &mut bytes)
+        .unwrap();
+    let decoded = std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(move || decode(&bytes))
+        .unwrap()
+        .join()
+        .unwrap()
+        .unwrap();
+    let DecodedRoot::Value(DecodedValue::Type(description)) = &decoded.root else {
+        panic!("type root: {:?}", decoded.root);
+    };
+    assert_eq!(description.decoded.as_deref(), Some(&ty));
+    let groups: Vec<_> = definitions
+        .iter()
+        .map(|defined| CasId::from_bytes(defined.group.id()))
+        .collect();
+    assert_eq!(decoded.children, groups);
+}
+
 #[test]
 fn one_helper_thread_measures_every_large_description_in_a_blob() {
     let blob = on_large_stack(|| {
