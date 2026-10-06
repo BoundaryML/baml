@@ -234,10 +234,10 @@ fn take_compile_artifact(
         .map_err(|_| VmBamlError::InvalidArgument {
             message: invalid_message.to_string(),
         })?;
-    let mut slot = slot.lock().map_err(|_| VmBamlError::InvalidArgument {
+    let taken = slot.take().map_err(|_| VmBamlError::InvalidArgument {
         message: format!("{invalid_message}: artifact state is unavailable"),
     })?;
-    slot.take().ok_or_else(|| {
+    taken.ok_or_else(|| {
         VmRustFnError::from(VmBamlError::InvalidArgument {
             message: consumed_message.to_string(),
         })
@@ -884,7 +884,8 @@ struct FinishPackage {
 
 impl Continuation for FinishPackage {
     fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
-        let Object::Package(package) = vm.get_object_mut(self.package) else {
+        let mut metered = vm.get_object_mut(self.package);
+        let Object::Package(package) = &mut *metered else {
             unreachable!("finish continuation retained a Package")
         };
         let Slots::Own { initialized, .. } = &mut package.slots else {
@@ -1078,7 +1079,8 @@ impl BamlClassPackage for PackageReflectImpl {
                 }),
             }
         } else {
-            let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+            let mut metered = vm.get_object_mut(package_ptr);
+            let Object::Package(package) = &mut *metered else {
                 unreachable!()
             };
             let Slots::Own { initialized, .. } = &mut package.slots else {
@@ -1234,7 +1236,8 @@ impl BamlClassPackage for PackageReflectImpl {
                 owner: view_ptr,
             })));
             vm.tlab.heap().write_barrier(view_ptr, Value::object(alias));
-            let Object::Package(view) = vm.get_object_mut(view_ptr) else {
+            let mut metered = vm.get_object_mut(view_ptr);
+            let Object::Package(view) = &mut *metered else {
                 unreachable!("the view was just allocated")
             };
             view.type_aliases.insert(local, alias);
@@ -1505,7 +1508,8 @@ impl Continuation for SessionExecution {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         let action = self.actions[self.current];
         {
-            let Object::Package(package) = vm.get_object_mut(self.package) else {
+            let mut metered = vm.get_object_mut(self.package);
+            let Object::Package(package) = &mut *metered else {
                 unreachable!("Session continuation retained its package")
             };
             let bex_vm_types::types::Slots::Own { cells, .. } = &package.slots else {
@@ -1622,7 +1626,8 @@ fn graft_session_submission(
         })
         .collect();
     // The load published the image; what follows holds no heap pointers.
-    let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+    let mut metered = vm.get_object_mut(package_ptr);
+    let Object::Package(package) = &mut *metered else {
         unreachable!("Session payload is a Package")
     };
     package.surface = ExportSurface::Compiled(artifact.interface_blob.clone());

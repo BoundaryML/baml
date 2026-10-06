@@ -53,6 +53,25 @@ def main():
         ('payload', 'full32', dict(GC_WORKLOAD='payload')),
         ('long_call', 'full32', dict(GC_WORKLOAD='churn', GC_CALLS=4, GC_N=1048576, GC_WARMUP=1)),
         ('concurrent', 'full32', dict(GC_WORKERS=8, GC_CALLS=100, GC_N=512)),
+        # Engine-policy cases. Under `current` the harness never collects, so these
+        # measure the engine's own trigger. Each call makes few objects and many bytes;
+        # settings are spelled out so harness defaults cannot silently change the matrix.
+        ('bytes_loop', 'current', dict(GC_WORKLOAD='bytes_loop', GC_CALLS=16, GC_N=4194304,
+                                       GC_ITERATIONS=64, GC_WARMUP=2)),
+        ('push_scalar', 'current', dict(GC_WORKLOAD='push_scalar', GC_CALLS=32, GC_N=1048576, GC_WARMUP=2)),
+        ('rope_append', 'current', dict(GC_WORKLOAD='rope_append', GC_CALLS=64, GC_N=10000,
+                                        GC_CHUNK=100, GC_WARMUP=2)),
+        ('rope_read', 'current', dict(GC_WORKLOAD='rope_read', GC_CALLS=64, GC_N=1000,
+                                      GC_CHUNK=100, GC_WARMUP=2)),
+        ('slices', 'current', dict(GC_WORKLOAD='slices', GC_CALLS=256, GC_N=4194304,
+                                   GC_CHUNK=100, GC_WARMUP=2)),
+        ('payload_sparse', 'current', dict(GC_WORKLOAD='payload', GC_CALLS=128, GC_N=4194304,
+                                           GC_RETAIN=4, GC_WARMUP=4)),
+        ('payload_1m', 'current', dict(GC_WORKLOAD='payload', GC_CALLS=256, GC_N=1048576,
+                                       GC_RETAIN=2, GC_WARMUP=4)),
+        # Object-heavy workloads under the engine's trigger, for comparison with the above.
+        ('churn_auto', 'current', dict(GC_WORKLOAD='churn')),
+        ('retained_auto', 'current', dict(GC_WORKLOAD='retained')),
     ]
     extended = [
         ('continuous_100k', 'full32', dict(GC_WORKLOAD='tiny', GC_CALLS=100000, GC_WARMUP=512)),

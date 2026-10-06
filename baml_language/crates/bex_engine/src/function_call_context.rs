@@ -73,6 +73,12 @@ pub struct InvocationCapture {
     pub host: Option<std::sync::Arc<crate::host_instrumentation::CallbackHostInvocation>>,
 }
 
+impl bex_vm_types::BexRustData for InvocationCapture {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {
+        // Everything here is the engine's own.
+    }
+}
+
 impl InvocationCapture {
     pub fn host_environment(&self) -> u64 {
         self.state.host_environment

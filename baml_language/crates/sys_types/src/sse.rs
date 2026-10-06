@@ -16,6 +16,13 @@ pub struct SseEvent {
     pub id: Option<String>,
 }
 
+impl SseEvent {
+    /// Bytes the event holds beyond its own size.
+    pub fn retained_bytes(&self) -> usize {
+        self.event.capacity() + self.data.capacity() + self.id.as_ref().map_or(0, String::capacity)
+    }
+}
+
 /// Incremental SSE parser that buffers incomplete lines.
 pub struct SseParser {
     /// Buffered bytes from incomplete lines.

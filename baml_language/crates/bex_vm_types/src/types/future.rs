@@ -86,8 +86,8 @@ pub struct Future {
     /// Set once when the future is created; the GC repoints the heads inside
     /// through [`Future::visit_heads_mut`] when their declarations move.
     /// `Box`, not `Arc`: a shared allocation cannot be soundly head-walked
-    /// (repointing would either fork it or mutate every holder), and the GC's
-    /// relocation `Clone` must produce an independently-fixable copy.
+    /// (repointing would either fork it or mutate every holder), so each
+    /// future owns the types the GC fixes up in place.
     types: Box<FutureOutputTypes>,
     /// Written at most once by whichever writer wins the `state` CAS.
     /// Valid only when `state` indicates `Ready` or `Error`. For
@@ -323,6 +323,19 @@ impl Future {
     /// Mark this future's terminal error as delivered to an awaiter.
     pub fn mark_observed(&self) {
         self.flags.fetch_or(FUTURE_FLAG_OBSERVED, Ordering::AcqRel);
+    }
+
+    /// Report what this future keeps alive outside its slot: its output
+    /// types, the settlement shared with whoever resolves it, and an error
+    /// trace once one has been recorded.
+    pub(crate) fn measure(&self, meter: &mut crate::Meter) {
+        meter.bytes(size_of::<FutureOutputTypes>());
+        meter.shared(&self.settlement, |_| {});
+        meter.shared(&self.error_trace, |meter| {
+            if let Some(trace) = self.error_trace.get() {
+                meter.shared(trace, |_| {});
+            }
+        });
     }
 
     pub fn is_observed(&self) -> bool {
@@ -561,17 +574,14 @@ impl Future {
 impl Clone for Future {
     fn clone(&self) -> Self {
         // Snapshot the current state and clone the corresponding payload.
-        // The only legitimate caller is the GC's heap-relocation copy
-        // (`gc.rs` `copy_object_to_inactive`), which clones the heap object
-        // into the inactive space.
+        // This exists so `Object` can derive `Clone`; the GC relocates a
+        // future by moving it, not by calling this.
         //
         // The `cancel` token and `ready` SetOnce are reference-counted
         // (CancellationToken has internal `Arc`, `ready` is wrapped in an
-        // explicit `Arc`), so the clone shares the same underlying sync
-        // primitives. Producers that hold a clone of `ready` from before
-        // the GC move continue to wake the same set of waiters, and the
-        // moved heap copy observes the same `ready.set(...)` because both
-        // copies share the same settlement allocation.
+        // explicit `Arc`), so a clone shares the same underlying sync
+        // primitives: both copies wake the same set of waiters and observe
+        // the same `ready.set(...)` through the shared settlement allocation.
         //
         // Futures are conceptually *handles*, not values: there is no
         // "the same future, but a copy" at the user level. User-side

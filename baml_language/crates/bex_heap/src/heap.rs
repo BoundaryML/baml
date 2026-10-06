@@ -242,7 +242,10 @@ pub struct BexHeap {
     /// lock-free within a TLAB.
     growth_lock: Mutex<()>,
 
-    /// Actual object allocations since last GC (profiling only).
+    /// Actual object allocations since last GC (profiling only). A shared
+    /// counter every allocation would write, so it exists only in builds
+    /// that read it.
+    #[cfg(feature = "gc_profiling")]
     allocs_since_gc: AtomicUsize,
 
     /// Debug instrumentation state and config.
@@ -368,6 +371,7 @@ impl BexHeap {
             root_release_epoch: AtomicUsize::new(0),
             gc_activity: Arc::new(tokio::sync::Notify::new()),
             growth_lock: Mutex::new(()),
+            #[cfg(feature = "gc_profiling")]
             allocs_since_gc: AtomicUsize::new(0),
             debug_state: HeapDebuggerState::new(debug),
         }
@@ -839,7 +843,7 @@ impl BexHeap {
     /// Used by the engine's post-`forward_roots` integrity sweep to detect
     /// stale references the GC failed to forward. The inactive space's
     /// chunks still exist (their slots have been overwritten with
-    /// `Sentinel::FromSpacePoison` in heap_debug builds), so checking
+    /// `Object::Tombstone` in heap_debug builds), so checking
     /// `ptr_in_chunked_vec` against `inactive` is safe even after
     /// `finalize_inactive_space` has run.
     #[cfg(feature = "heap_debug")]
@@ -951,7 +955,7 @@ impl BexHeap {
     /// - **Safepoint GC**: Collection only runs when no VMs are executing
     /// - **ChunkedVec**: Growing never moves existing elements
     #[inline]
-    pub unsafe fn write_runtime_object(&self, runtime_idx: usize, obj: Object) {
+    pub(crate) unsafe fn write_runtime_object(&self, runtime_idx: usize, obj: Object) {
         // SAFETY: Caller ensures exclusive access to this index.
         // ChunkedVec's set() is internally safe for concurrent access to different indices.
         // All TLAB allocations target Gen0.
@@ -992,13 +996,16 @@ impl BexHeap {
     /// Returns a `TlabChunk` describing the exclusive region for the VM.
     /// The VM can then allocate objects within this region without locks.
     pub fn alloc_tlab_chunk(&self) -> TlabChunk {
-        self.alloc_tlab_chunk_sized(self.tlab_size)
+        self.alloc_tlab_chunk_sized(self.tlab_size, 0).0
     }
 
-    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize) -> TlabChunk {
+    /// Reserve `size` slots and settle `payload` bytes of the caller's
+    /// balance with them. Returns the chunk and whether the settlement
+    /// crossed the budget.
+    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize, payload: isize) -> (TlabChunk, bool) {
         assert!(size > 0);
-        self.gc_policy
-            .charge(size.saturating_mul(size_of::<Object>()));
+        let slots = isize::try_from(size.saturating_mul(size_of::<Object>())).unwrap_or(isize::MAX);
+        let crossed = self.gc_policy.adjust(slots.saturating_add(payload));
         self.debug_verify_tlab_canaries();
 
         let use_canary = self.debug_config().enabled;
@@ -1047,10 +1054,13 @@ impl BexHeap {
             let canary_idx = ct_len + runtime_end;
             self.record_tlab_canary(canary_idx);
         }
-        TlabChunk {
-            start: ct_len + runtime_start,
-            end: ct_len + runtime_end,
-        }
+        (
+            TlabChunk {
+                start: ct_len + runtime_start,
+                end: ct_len + runtime_end,
+            },
+            crossed,
+        )
     }
 
     /// Read an object by HeapPtr (direct pointer dereference).
@@ -1105,11 +1115,13 @@ impl BexHeap {
     }
 
     /// Reset the allocation counter after GC.
-    pub fn reset_gc_counter(&self) {
+    #[cfg(feature = "gc_profiling")]
+    pub(crate) fn reset_gc_counter(&self) {
         self.allocs_since_gc.store(0, Ordering::Relaxed);
     }
 
     /// Increment allocation counter (called by TLAB on alloc).
+    #[cfg(feature = "gc_profiling")]
     pub(crate) fn record_alloc(&self) {
         self.allocs_since_gc.fetch_add(1, Ordering::Relaxed);
     }

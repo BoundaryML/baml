@@ -38,6 +38,24 @@ function SpawnTexts(texts: string[]) -> baml.future.Future<int, never> {
     spawn { texts.length() + texts[0].length() + texts[texts.length() - 1].length() }
 }
 function JoinText(job: baml.future.Future<int, never>) -> int { await job }
+function Bytes(seed: uint8array, n: int) -> int {
+    let i = 0;
+    let total = 0;
+    while (i < n) { let copy = seed.reverse(); total = total + copy.length(); i = i + 1; }
+    total
+}
+function Concat(chunk: string, n: int) -> int {
+    let text = "";
+    let i = 0;
+    while (i < n) { text = text + chunk; i = i + 1; }
+    text.length()
+}
+function CsvGrow(cell: string, n: int) -> int {
+    let w = baml.csv.buffer();
+    let i = 0;
+    while (i < n) { w.write_record([cell, cell]); i = i + 1; }
+    w.records_written()
+}
 function Async(n: int) -> int {
     let values = Empty();
     Grow(values, n);
@@ -118,8 +136,11 @@ async fn long_compute_collects_before_returning() {
     engine.shutdown().await;
 }
 
+/// Growing an array that already survived a collection spends the budget by
+/// the capacity it gains: 2.1 million pushes reach a 4 Mi-element buffer, which
+/// is 32 MiB, the whole initial allowance.
 #[tokio::test(start_paused = true)]
-async fn existing_old_array_growth_does_not_spend_slot_budget() {
+async fn existing_old_array_growth_spends_the_budget() {
     let engine = engine();
     let values = call(&engine, "Empty", vec![], false).await;
     engine.collect_garbage(CollectionLevel::Major).await;
@@ -135,8 +156,10 @@ async fn existing_old_array_growth_does_not_spend_slot_budget() {
         Ext::Int(2_100_000)
     );
     let after = engine.heap().gc_budget();
-    assert_eq!(after.full_collections, before.full_collections);
-    assert!(!engine.heap().should_gc());
+    assert!(
+        after.full_collections > before.full_collections || engine.heap().should_gc(),
+        "the growth was neither collected during the call nor left due: {after:?}"
+    );
     engine.collect_garbage(CollectionLevel::Major).await;
     assert_eq!(
         call(&engine, "Size", vec![values.clone()], true).await,
@@ -151,8 +174,11 @@ async fn existing_old_array_growth_does_not_spend_slot_budget() {
     engine.shutdown().await;
 }
 
+/// Twenty 4 MiB strings, keeping two, is 80 MiB of payload behind a few dozen
+/// objects: the payload alone must bring the heap to collect, and the kept
+/// strings must survive those collections intact.
 #[tokio::test(start_paused = true)]
-async fn large_payloads_do_not_trigger_gc_with_few_objects() {
+async fn large_payloads_trigger_gc_with_few_objects() {
     let engine = engine();
     let mut kept = std::collections::VecDeque::new();
     for _ in 0..20 {
@@ -169,8 +195,11 @@ async fn large_payloads_do_not_trigger_gc_with_few_objects() {
             kept.pop_front();
         }
     }
-    assert_eq!(engine.heap().gc_budget().full_collections, 0);
-    assert!(!engine.heap().should_gc());
+    let collections = engine.heap().gc_budget().full_collections;
+    assert!(
+        collections >= 2,
+        "{collections} collections for 80 MiB of payload against a 32 MiB budget"
+    );
     engine.collect_garbage(CollectionLevel::Major).await;
     for value in kept {
         assert_eq!(
@@ -178,6 +207,92 @@ async fn large_payloads_do_not_trigger_gc_with_few_objects() {
             Ext::Int(4 * 1024 * 1024)
         );
     }
+    engine.shutdown().await;
+}
+
+/// A loop that makes and drops one large buffer per iteration collects
+/// during the call rather than waiting for it to end. The first collection
+/// comes after four 8 MiB iterations spend the 32 MiB budget; it finds the
+/// seed and the current copy live, 16 MiB, so the budget becomes 64 MiB and
+/// the remaining 224 MiB of churn brings at least two more.
+#[tokio::test(start_paused = true)]
+async fn large_buffers_collect_during_the_call() {
+    let engine = engine();
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let before = engine.heap().gc_budget().full_collections;
+    let size = 8 * 1024 * 1024;
+    assert_eq!(
+        call(
+            &engine,
+            "Bytes",
+            vec![Ext::Uint8Array(vec![1; size]), Ext::Int(32)],
+            true
+        )
+        .await,
+        Ext::Int(32 * i64::try_from(size).unwrap())
+    );
+    let collections = engine.heap().gc_budget().full_collections - before;
+    assert!(
+        collections >= 3,
+        "{collections} collections while 256 MiB of buffers came and went"
+    );
+    engine.shutdown().await;
+}
+
+/// String concatenation is a single instruction that can allocate any amount,
+/// so a loop of it must also collect during the call.
+#[tokio::test(start_paused = true)]
+async fn string_concatenation_collects_during_the_call() {
+    let engine = engine();
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let before = engine.heap().gc_budget().full_collections;
+    let chunk = 1024 * 1024;
+    assert_eq!(
+        call(
+            &engine,
+            "Concat",
+            vec![Ext::String("x".repeat(chunk).into()), Ext::Int(64)],
+            true
+        )
+        .await,
+        Ext::Int(64 * i64::try_from(chunk).unwrap())
+    );
+    let collections = engine.heap().gc_budget().full_collections - before;
+    assert!(
+        collections >= 4,
+        "{collections} collections while 64 growing strings were built"
+    );
+    engine.shutdown().await;
+}
+
+/// A `$rust_type` payload that grows behind its lock spends the budget as it
+/// grows: a CSV buffer writer accumulating 256 MiB of text in one call must
+/// bring collections during the call, though the call allocates almost no
+/// heap objects (one two-element record per iteration) and never reads the
+/// text back. The first collection comes at 32 MiB; it finds the buffer live
+/// and sets the budget to four times that, so the rest brings at least one
+/// more.
+#[tokio::test(start_paused = true)]
+async fn payload_growth_behind_a_lock_collects_during_the_call() {
+    let engine = engine();
+    engine.collect_garbage(CollectionLevel::Major).await;
+    let before = engine.heap().gc_budget().full_collections;
+    let cell = 1024 * 1024;
+    assert_eq!(
+        call(
+            &engine,
+            "CsvGrow",
+            vec![Ext::String("x".repeat(cell).into()), Ext::Int(128)],
+            true,
+        )
+        .await,
+        Ext::Int(128)
+    );
+    let collections = engine.heap().gc_budget().full_collections - before;
+    assert!(
+        collections >= 2,
+        "{collections} collections while a buffer writer grew to 256 MiB"
+    );
     engine.shutdown().await;
 }
 

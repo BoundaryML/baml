@@ -1502,13 +1502,16 @@ mod renderability_tests {
         let (second_shared, _) =
             alloc_test_class(&mut vm, "Shared", Some("second definition"), second_package);
 
-        let Object::Package(package) = vm.get_object_mut(first_package) else {
+        let mut metered = vm.get_object_mut(first_package);
+
+        let Object::Package(package) = &mut *metered else {
             unreachable!("test package pointer")
         };
         package
             .classes
             .insert(package_member_name("Shared"), first_shared);
-        let Object::Package(package) = vm.get_object_mut(second_package) else {
+        let mut metered = vm.get_object_mut(second_package);
+        let Object::Package(package) = &mut *metered else {
             unreachable!("test package pointer")
         };
         package

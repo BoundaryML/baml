@@ -465,6 +465,7 @@ impl TraceSnapshotBuilder {
                     unsupported_object_message(object),
                 ),
             },
+            Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => self.omitted(
                 TraceOmissionReason::InvalidRuntimeValue,
@@ -551,6 +552,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::Future(_) => "future",
         Object::RustData(_) => "host-owned rust data",
         Object::Type(_) => "type descriptor",
+        Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => "heap sentinel",
         Object::String(_)
@@ -726,7 +728,9 @@ mod tests {
             .await;
         let host_owned = permit
             .tlab_mut()
-            .alloc(Object::RustData(std::sync::Arc::new(1_u64)));
+            .alloc(Object::RustData(std::sync::Arc::new(
+                bex_vm_types::TestRustData(1),
+            )));
         let trace_heap = TraceHeap::new();
 
         let handle = trace_heap.copy_values_from_bex_heap(

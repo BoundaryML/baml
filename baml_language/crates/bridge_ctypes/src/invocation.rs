@@ -83,14 +83,17 @@ impl Drop for OwnedHostInvocation {
 }
 
 pub fn build_host_invocation(
-    capture: Arc<dyn std::any::Any + Send + Sync>,
+    capture: Arc<dyn bex_project::BexRustData>,
     host_value_key: u64,
     callback_id: u32,
     application_args: Vec<u8>,
 ) -> Result<HostInvocation, CtypesError> {
-    let capture = capture.downcast::<InvocationCapture>().map_err(|_| {
-        CtypesError::InternalError("host dispatch has no engine invocation frame".into())
-    })?;
+    use bex_project::RustDataArc as _;
+    let capture = capture
+        .downcast_payload::<InvocationCapture>()
+        .map_err(|_| {
+            CtypesError::InternalError("host dispatch has no engine invocation frame".into())
+        })?;
     let cancel = capture.cancel.as_ref().ok_or_else(|| {
         CtypesError::InternalError("host dispatch has no effective CancelToken".into())
     })?;

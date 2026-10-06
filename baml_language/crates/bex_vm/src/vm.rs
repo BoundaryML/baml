@@ -102,7 +102,8 @@ use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value, Variant,
+    VmGlobals,
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
@@ -117,6 +118,53 @@ use crate::{
     package_baml::{NativeCallResult, NativeFunction},
     types::ObjectTrait,
 };
+
+/// Mutable access to a heap object through [`BexVm::get_object_mut`], with
+/// the mutation metered.
+///
+/// Measures what the object keeps alive outside its slot when taken and again
+/// when dropped, and charges the difference to the VM's allocation account.
+/// It adds nothing to the access itself: that the object is not reachable from
+/// anywhere else meanwhile is `get_object_mut`'s contract, not this guard's.
+pub struct ObjectMut<'a> {
+    object: &'a mut Object,
+    debt: &'a bex_vm_types::AllocDebt,
+    before: usize,
+}
+
+impl ObjectMut<'_> {
+    fn footprint(object: &mut Object) -> usize {
+        let mut meter = bex_vm_types::Meter::charge();
+        object.measure(&mut meter);
+        meter.total()
+    }
+}
+
+impl std::ops::Deref for ObjectMut<'_> {
+    type Target = Object;
+    fn deref(&self) -> &Object {
+        self.object
+    }
+}
+
+impl std::ops::DerefMut for ObjectMut<'_> {
+    fn deref_mut(&mut self) -> &mut Object {
+        self.object
+    }
+}
+
+impl Drop for ObjectMut<'_> {
+    fn drop(&mut self) {
+        let after = Self::footprint(self.object);
+        let before = self.before;
+        let delta = if after >= before {
+            isize::try_from(after - before).unwrap_or(isize::MAX)
+        } else {
+            isize::try_from(before - after).map_or(isize::MIN, |shrink| -shrink)
+        };
+        self.debt.add(delta);
+    }
+}
 
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
@@ -2065,6 +2113,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Interface(_) => type_tags::UNKNOWN,
                 Object::Package(_) => type_tags::UNKNOWN,
                 Object::ImplRule(_) => type_tags::UNKNOWN,
+                Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
                 Object::Instance(instance) => {
@@ -2905,20 +2954,79 @@ impl BexVm {
 
     /// Get mutable access to an object via `HeapPtr`.
     ///
+    /// Whatever the object comes to keep alive outside its slot while the
+    /// returned guard is held — or stops keeping alive — is charged to this
+    /// VM's allocation account when the guard drops. Replacing the object
+    /// wholesale is charged the same way, so an object built in place costs
+    /// what one built before allocation would.
+    ///
     /// # Safety
     ///
-    /// Caller must ensure exclusive access to the heap object itself. `&mut
-    /// self` only proves exclusive access to this VM, not to objects shared with
-    /// spawned VMs. Mutator paths for shared state should use [`Self::get_object`]
-    /// plus the object's interior synchronization instead.
+    /// Caller must ensure exclusive access to the heap object itself: nothing
+    /// else may reach it while the guard is held, including through another
+    /// guard from this VM. A borrow of the VM proves nothing about the object,
+    /// which is why this takes `&self`. Mutator paths for shared state should
+    /// use [`Self::get_object`] plus the object's interior synchronization
+    /// instead.
+    ///
+    // BUG: this fabricates `&mut Object` from a heap every VM shares, and the
+    // exclusivity above is upheld by convention at each caller rather than by
+    // construction: deep-copy placeholders are not yet published, graft
+    // relocates unit objects before their package is published, the class
+    // builder owns the declarations it fills in, and session state is guarded
+    // by the session's `busy` flag. The shape the rest of the heap already
+    // uses is `&Object` plus interior synchronization (locked containers,
+    // atomic value slots); giving declaration and session objects the same
+    // would remove this API.
     #[inline]
-    pub fn get_object_mut(&mut self, ptr: HeapPtr) -> &mut Object {
+    pub fn get_object_mut(&self, ptr: HeapPtr) -> ObjectMut<'_> {
         debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"
         );
         // SAFETY: caller upholds the object-exclusivity contract documented above.
-        unsafe { ptr.get_mut() }
+        let object = unsafe { ptr.get_mut() };
+        ObjectMut {
+            before: ObjectMut::footprint(object),
+            object,
+            debt: self.tlab.alloc_debt(),
+        }
+    }
+
+    /// Settle payload spending with the heap when enough has accumulated, and
+    /// if any settlement took spending over the GC budget, poll for a
+    /// collection at the next control-flow check rather than up to an
+    /// interval later. Runs wherever a lot can have been spent since the last
+    /// check: after a native call, after a continuation resumes, at the start
+    /// and end of a run, and after an operation that allocates in bulk.
+    #[inline]
+    fn settle(&mut self) {
+        if self.tlab.alloc_debt().balance().unsigned_abs()
+            >= bex_heap::SETTLE_QUANTUM.unsigned_abs()
+        {
+            self.tlab.flush_alloc_debt();
+        }
+        if self.tlab.take_budget_crossed() {
+            self.early_yield.poll_soon();
+        }
+    }
+
+    /// One control-flow check: cheap until the poll interval elapses, when
+    /// the VM settles everything it has spent before reading the flags, so a
+    /// loop that only grows containers still has its spending seen.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn should_early_yield(&mut self) -> bool {
+        self.early_yield.tick() && self.poll_for_yield()
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn poll_for_yield(&mut self) -> bool {
+        self.tlab.flush_alloc_debt();
+        // The poll reads the pressure flag the settlement may have raised.
+        self.tlab.take_budget_crossed();
+        self.early_yield.poll()
     }
 
     /// Collect all `HeapPtr`s stored in call frames.
@@ -3120,7 +3228,7 @@ impl BexVm {
     ) -> Result<bex_vm_types::Uint8ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Uint8Array)?;
         match self.get_object(ptr) {
-            Object::Uint8Array(bytes) => Ok(bytes.lock_mut()),
+            Object::Uint8Array(bytes) => Ok(bytes.lock_mut(self.tlab.alloc_debt())),
             other => Err(VmInternalError::TypeError {
                 expected: ObjectType::Uint8Array.into(),
                 got: ObjectType::of(other).into(),
@@ -3694,6 +3802,8 @@ impl BexVm {
             // Opaque native handles are not BAML data types at all.
             Object::RustData(_) => return None,
 
+            Object::Tombstone => Object::tombstone_reached(),
+
             // A GC-debug sentinel is never a live value.
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => return None,
@@ -3888,7 +3998,7 @@ impl BexVm {
             });
         }
         match self.get_object(ptr) {
-            Object::Array(arr) => Ok(arr.lock_mut()),
+            Object::Array(arr) => Ok(arr.lock_mut(self.tlab.alloc_debt())),
             _ => unreachable!("type was just checked"),
         }
     }
@@ -3935,7 +4045,7 @@ impl BexVm {
             });
         }
         match self.get_object(index) {
-            Object::Map(map) => Ok(map.lock_mut()),
+            Object::Map(map) => Ok(map.lock_mut(self.tlab.alloc_debt())),
             _ => unreachable!("type was just checked"),
         }
     }
@@ -4927,7 +5037,10 @@ impl BexVm {
     /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
     ///
     /// Used by generated `view::` struct accessors for `$rust_type` fields.
-    pub fn as_rust_data<T: 'static>(&self, value: &Value) -> Result<&T, VmInternalError> {
+    pub fn as_rust_data<T: bex_vm_types::BexRustData>(
+        &self,
+        value: &Value,
+    ) -> Result<&T, VmInternalError> {
         let Some(ptr) = value.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::RustData),
@@ -4940,7 +5053,7 @@ impl BexVm {
                 arc.downcast_ref::<T>()
                     .ok_or_else(|| VmInternalError::RustTypeError {
                         expected: TypeId::of::<T>(),
-                        got: arc.as_ref().type_id(),
+                        got: arc.payload_type_id(),
                     })
             }
             _ => Err(VmInternalError::TypeError {
@@ -4953,7 +5066,7 @@ impl BexVm {
     /// Clone the `Arc` out of the `$rust_type` field `field` of the instance
     /// `holder`, so a native can keep using the payload while it borrows
     /// `&mut BexVm` to allocate.
-    pub fn rust_data_field<T: Send + Sync + 'static>(
+    pub fn rust_data_field<T: bex_vm_types::BexRustData>(
         &self,
         holder: &Value,
         field: usize,
@@ -4967,9 +5080,9 @@ impl BexVm {
         };
         match self.get_object(ptr) {
             Object::RustData(arc) => {
-                let got = arc.as_ref().type_id();
+                let got = arc.payload_type_id();
                 arc.clone()
-                    .downcast::<T>()
+                    .downcast_payload::<T>()
                     .map_err(|_| VmInternalError::RustTypeError {
                         expected: TypeId::of::<T>(),
                         got,
@@ -5185,7 +5298,7 @@ impl BexVm {
                 // it as `Object::RustData(Arc<HostValueArc>)` so the BAML
                 // class's `_handle` slot can be downcast back to the
                 // original host-value reference on round-trip.
-                let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = handle;
+                let dyn_arc: std::sync::Arc<dyn bex_vm_types::BexRustData> = handle;
                 let handle_val = Value::object(self.tlab.alloc(Object::RustData(dyn_arc)));
                 (
                     ErrorClass::HostCallable,
@@ -6460,6 +6573,7 @@ impl BexVm {
                 if let Some(prev) = restore_pending {
                     self.pending_call_type_args = prev;
                 }
+                self.settle();
 
                 // Run Rust native function, converting NativeCallResult → VmError.
                 match native_result {
@@ -6676,7 +6790,7 @@ impl BexVm {
             }
         }
 
-        if self.early_yield.should_early_yield() {
+        if self.should_early_yield() {
             return Ok(Some(VmExecState::EarlyYield));
         }
         Ok(None)
@@ -7417,6 +7531,10 @@ impl BexVm {
             (None, 0)
         };
 
+        // The engine may have allocated on this VM's behalf while it was not
+        // running (converting arguments or a sys-op result).
+        self.settle();
+
         let result = match self.exec_inner() {
             Err(VmError::InternalError(err)) => {
                 let trace = self.capture_stack_trace();
@@ -7424,6 +7542,10 @@ impl BexVm {
             }
             other => other,
         };
+
+        // The VM may now park for a long time: leave nothing unsettled.
+        self.tlab.flush_alloc_debt();
+        self.settle();
 
         if kp {
             crate::kperf::exec_end(kp_start, self.op_count - ops_start);
@@ -7743,7 +7865,10 @@ impl BexVm {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
             let result = bex_str::BexStr::concat(ls.clone(), rs.clone());
-            Value::object(self.alloc_string(result))
+            let value = Value::object(self.alloc_string(result));
+            // One instruction can build a string of any size.
+            self.settle();
+            value
         } else {
             return Err(VmInternalError::CannotApplyBinOp {
                 left: self.type_of(&left),
@@ -7785,7 +7910,9 @@ impl BexVm {
                 };
                 let native_fn_ptr = nf.function;
 
-                match nf.continuation.call(self, v) {
+                let resumed = nf.continuation.call(self, v);
+                self.settle();
+                match resumed {
                     NativeCallResult::Done(val) => {
                         self.stack.push(val);
                     }
@@ -8645,7 +8772,7 @@ impl BexVm {
                                 }
                                 *frame_idx = self.frames.len() - 1;
                                 *function = callee;
-                                if self.early_yield.should_early_yield() {
+                                if self.should_early_yield() {
                                     return Ok(Some(VmExecState::EarlyYield));
                                 }
                                 // No engine handoff: enter the known bytecode
@@ -9026,7 +9153,7 @@ impl BexVm {
                                 return Ok(Some(state));
                             }
                         }
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                         // Return before fetching from potentially changed frame code.
@@ -9077,7 +9204,7 @@ impl BexVm {
                             return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                         }
 
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                         if let Frame::Bytecode(caller) = &self.frames[*frame_idx] {
@@ -9155,7 +9282,7 @@ impl BexVm {
                         };
                         // SAFETY: the future operand remains on top until ready.
                         self.stack.replace_top_n::<1>(ready_value);
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                     }
@@ -9205,7 +9332,7 @@ impl BexVm {
                             Some(i) => {
                                 // SAFETY: the input array remains on top until ready.
                                 self.stack.replace_top_n::<1>(Value::int(i as i64));
-                                if self.early_yield.should_early_yield() {
+                                if self.should_early_yield() {
                                     return Ok(Some(VmExecState::EarlyYield));
                                 }
                             }
@@ -9242,7 +9369,7 @@ impl BexVm {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
                             *pc = bf.instruction_ptr;
                         }
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                         // Return before fetching from potentially changed frame code.
@@ -9254,7 +9381,7 @@ impl BexVm {
                         let offset = read_i32_unchecked(code, pc);
                         // offset is relative to instruction end (current pc)
                         *pc = (*pc as i64 + offset as i64) as usize;
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                     }
@@ -9265,7 +9392,7 @@ impl BexVm {
                         if cond == Value::bool(op == OpCode::PopJumpIfTrue) {
                             *pc = (*pc as i64 + offset as i64) as usize;
                         }
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                     }
@@ -9295,7 +9422,7 @@ impl BexVm {
                         } else {
                             self.stack.ensure_pop();
                         }
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                     }
@@ -9317,7 +9444,7 @@ impl BexVm {
                         let compact_table = &compact.jump_tables[table_idx];
                         let offset = compact_table.lookup(value).unwrap_or(default_offset);
                         *pc = (*pc as i64 + offset as i64) as usize;
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                     }
@@ -9439,7 +9566,7 @@ impl BexVm {
                                 *pc = bf.instruction_ptr;
                             }
                         }
-                        if self.early_yield.should_early_yield() {
+                        if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                         // Return before fetching from potentially changed frame code.
@@ -10022,7 +10149,7 @@ impl BexVm {
                         let store_result: Result<(), (i64, usize)> = {
                             match self.get_object(array_object_index) {
                                 Object::Array(arr) => {
-                                    let mut guard = arr.lock_mut();
+                                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {
@@ -10040,7 +10167,7 @@ impl BexVm {
                                         }
                                         .into());
                                     };
-                                    let mut guard = bytes.lock_mut();
+                                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {

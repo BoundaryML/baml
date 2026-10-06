@@ -7,7 +7,7 @@
 //! directly on the heap, so no definition table is copied and no value tree is
 //! landed by name.
 
-use std::{any::Any, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use baml_type::{DeclarationName, Literal, typetag::TypeTag};
 use bex_heap::TlabHolder;
@@ -43,6 +43,13 @@ struct ParseCache {
     model: CompiledSapModel,
 }
 
+impl bex_vm_types::BexRustData for ParseCache {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {
+        // The model is bounded by the target type's declaration, not by data,
+        // and the parser crate does not expose its size.
+    }
+}
+
 impl BamlNamespaceSap for PackageBamlImpl {
     fn _new_parse_cache(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
         let target = parse_target(vm)?;
@@ -53,7 +60,7 @@ impl BamlNamespaceSap for PackageBamlImpl {
                 message: format!("schema-aligned parsing cannot model this type: {e}"),
             }
         })?;
-        let data: Arc<dyn Any + Send + Sync> = Arc::new(ParseCache { model });
+        let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model });
         let data = Value::object(vm.alloc_rust_data(data));
         let class = vm.resolve_class("baml.sap._ParseCache");
         let cache = vm.tlab.alloc(Object::Instance(Instance::new(

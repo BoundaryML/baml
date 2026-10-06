@@ -85,4 +85,4 @@ pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
 };
-pub use tlab::{Tlab, TlabHolder};
+pub use tlab::{SETTLE_QUANTUM, Tlab, TlabHolder};

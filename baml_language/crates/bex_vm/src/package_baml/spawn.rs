@@ -11,7 +11,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, LimitInner, LimitSet, Object, ObjectType, RealizedTy,
+    HeapPtr, LimitInner, LimitSet, Object, ObjectType, RealizedTy, RustDataArc as _,
     cancellation::CancellationSource,
     types::{CancellationToken, Value},
 };
@@ -39,6 +39,13 @@ struct CancelTokenState {
     own: CancellationToken,
     /// Flattened: an input that is itself a composite contributes its tokens.
     inputs: Box<[CancellationSource]>,
+}
+
+impl bex_vm_types::BexRustData for CancelTokenState {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        // The tokens themselves are shared with the tasks they cancel.
+        meter.bytes(size_of_val(&*self.inputs));
+    }
 }
 
 impl CancelTokenState {
@@ -79,7 +86,7 @@ pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<Cancellation
 pub fn projected_cancel_token_data(
     own: CancellationToken,
     inputs: Vec<CancellationSource>,
-) -> Arc<dyn std::any::Any + Send + Sync> {
+) -> Arc<dyn bex_vm_types::BexRustData> {
     Arc::new(CancelTokenState {
         own,
         inputs: inputs.into_boxed_slice(),
@@ -242,7 +249,7 @@ fn limit_inner(vm: &BexVm, limit: Value) -> Result<Arc<LimitInner>, VmInternalEr
     };
     match handle.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
         Some(Object::RustData(data)) => Arc::clone(data)
-            .downcast::<LimitInner>()
+            .downcast_payload::<LimitInner>()
             .map_err(|_| mismatch()),
         _ => Err(mismatch()),
     }

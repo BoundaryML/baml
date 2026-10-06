@@ -145,6 +145,20 @@ impl std::fmt::Debug for Program {
 }
 
 impl Program {
+    /// Bytes the program's pattern text and capture names occupy. The
+    /// compiled automata are not sized: the regex engines do not report
+    /// what they allocate.
+    pub fn retained_bytes(&self) -> usize {
+        self.pattern.capacity()
+            + self.names.capacity() * size_of::<Option<String>>()
+            + self
+                .names
+                .iter()
+                .flatten()
+                .map(String::capacity)
+                .sum::<usize>()
+    }
+
     /// Compile `pattern`. `backtracking` selects the dialect.
     ///
     /// # Errors

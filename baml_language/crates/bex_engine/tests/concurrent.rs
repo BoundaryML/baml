@@ -12,6 +12,7 @@ use std::sync::{
 };
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, RuntimeTy};
+use bex_vm_types::RustDataArc as _;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -476,7 +477,7 @@ async fn runtime_io_preserves_concurrent_invocation_contexts() {
                 .spawner
                 .capture_invocation()
                 .expect("nested IO must retain the invoking call")
-                .downcast::<bex_engine::InvocationCapture>()
+                .downcast_payload::<bex_engine::InvocationCapture>()
                 .unwrap_or_else(|_| panic!("expected engine invocation capture"));
             let environment = capture.host_environment();
             assert_eq!(

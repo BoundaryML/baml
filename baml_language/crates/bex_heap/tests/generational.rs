@@ -1621,3 +1621,185 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     };
     assert_eq!(class.type_tag, type_tag, "identity survives the move");
 }
+
+// ============================================================================
+// Evacuation Moves Survivors
+// ============================================================================
+
+/// The addresses and capacities of everything `roots` owns outside its slots,
+/// for an array, a byte array and a map, in that order.
+fn backing_storage(roots: &[bex_vm_types::HeapPtr]) -> [(usize, usize); 3] {
+    // SAFETY: single-threaded tests; the roots are live and nothing mutates them.
+    unsafe {
+        let Object::Array(array) = roots[0].get() else {
+            panic!("roots[0] is not an array")
+        };
+        let Object::Uint8Array(bytes) = roots[1].get() else {
+            panic!("roots[1] is not a byte array")
+        };
+        let Object::Map(map) = roots[2].get() else {
+            panic!("roots[2] is not a map")
+        };
+        let array = array.data_unchecked();
+        let bytes = bytes.data_unchecked();
+        let map = map.data_unchecked();
+        [
+            (array.as_ptr().addr(), array.capacity()),
+            (bytes.as_ptr().addr(), bytes.capacity()),
+            (std::ptr::from_ref(map).addr(), map.len()),
+        ]
+    }
+}
+
+/// A collection moves a survivor rather than copying it: whatever the object
+/// owns outside its slot is the same allocation, with the same spare capacity,
+/// in every generation it passes through.
+#[test]
+fn test_survivor_backing_storage_is_moved_not_copied() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    let mut elements = Vec::with_capacity(100);
+    elements.extend([1, 2, 3].map(bex_vm_types::Value::int));
+    let array = tlab.alloc_array(RealizedTy::int(), elements);
+
+    let mut bytes = Vec::with_capacity(4096);
+    bytes.extend_from_slice(b"abc");
+    let bytes = tlab.alloc_uint8array(bytes);
+
+    let map = tlab.alloc_map(
+        RealizedTy::string(),
+        RealizedTy::int(),
+        IndexMap::from([(bex_str::BexStr::from("key"), bex_vm_types::Value::int(1))]),
+    );
+
+    let mut roots = vec![array, bytes, map];
+    let before = backing_storage(&roots);
+    assert_eq!(before[0].1, 100, "the array starts with spare capacity");
+
+    // Gen0 → Gen1, Gen1 → Gen2, then Gen2 → Gen2.
+    for level in [
+        CollectionLevel::Minor,
+        CollectionLevel::Minor,
+        CollectionLevel::Major,
+    ] {
+        let (_, new_roots, _) = unsafe { heap.collect_garbage_generational(&roots, level) };
+        tlab.invalidate();
+        assert_ne!(new_roots, roots, "a {level:?} collection relocates slots");
+        roots = new_roots;
+        assert_eq!(
+            backing_storage(&roots),
+            before,
+            "a {level:?} collection must not reallocate what a survivor owns"
+        );
+    }
+    assert_eq!(heap.generation_of(roots[0]), Generation::Gen2);
+}
+
+/// Counts how many times it has been dropped.
+struct CountsDrops(Arc<std::sync::atomic::AtomicUsize>);
+
+impl Drop for CountsDrops {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl bex_vm_types::BexRustData for CountsDrops {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
+}
+
+/// Moving a survivor neither duplicates nor leaks what it owns: a payload is
+/// untouched for as long as its object lives, and dropped once when it dies.
+#[test]
+fn test_survivor_payload_is_dropped_exactly_once() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    let drops = Arc::new(AtomicUsize::new(0));
+    let payload = Arc::new(CountsDrops(Arc::clone(&drops)));
+    let mut roots = vec![tlab.alloc_rust_data(payload.clone())];
+
+    for level in [
+        CollectionLevel::Minor,
+        CollectionLevel::Minor,
+        CollectionLevel::Major,
+        CollectionLevel::Major,
+    ] {
+        let (_, new_roots, _) = unsafe { heap.collect_garbage_generational(&roots, level) };
+        tlab.invalidate();
+        roots = new_roots;
+        assert_eq!(
+            Arc::strong_count(&payload),
+            2,
+            "a {level:?} collection must leave exactly the heap's reference"
+        );
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+    }
+
+    // Unrooted, the object dies and releases its reference.
+    let _ = unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+    assert_eq!(Arc::strong_count(&payload), 1);
+    drop(payload);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+fn class_with_cleanup(name: &str) -> Class {
+    Class {
+        name: bex_vm_types::DeclarationName::Declared(QualifiedTypeName::local(Name::new(name))),
+        fields: Vec::new(),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        stream_done: false,
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
+        has_cleanup: true,
+        methods: IndexMap::new(),
+        generic_param_count: 0,
+        owner: bex_vm_types::types::Owner::anonymous(),
+    }
+}
+
+/// A dead instance is still queued for `cleanup` when its class is a runtime
+/// class that the same collection has already moved out of the slot the
+/// instance points at.
+#[test]
+fn test_finalizer_is_queued_when_its_runtime_class_was_evacuated() {
+    for level in [CollectionLevel::Minor, CollectionLevel::Major] {
+        // A compile-time class with `cleanup` is what turns the finalizer scan on.
+        let heap = BexHeap::new(vec![Object::Class(Box::new(class_with_cleanup("Static")))]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let class = tlab.alloc(Object::Class(Box::new(class_with_cleanup("Runtime"))));
+        let dead_instance = tlab.alloc_instance(class, Vec::new());
+
+        // Root only the class: it is evacuated by the trace, before the scan
+        // that discovers the unreachable instance.
+        let (_, roots, _) = unsafe { heap.collect_garbage_generational(&[class], level) };
+        tlab.invalidate();
+        assert_ne!(roots[0], class, "a {level:?} collection moves the class");
+
+        let pending = heap.take_pending_finalizers();
+        assert_eq!(
+            pending.len(),
+            1,
+            "a {level:?} collection must queue the dead instance"
+        );
+        let (kept_alive, cleanup_fn) = &pending[0];
+        assert_ne!(*kept_alive, dead_instance);
+        assert!(
+            cleanup_fn.ends_with("Runtime.cleanup"),
+            "unexpected finalizer {cleanup_fn}"
+        );
+        let Object::Instance(instance) = (unsafe { kept_alive.get() }) else {
+            panic!("the queued pointer is not an instance")
+        };
+        assert_eq!(
+            instance.class, roots[0],
+            "the kept-alive instance points at its relocated class"
+        );
+    }
+}

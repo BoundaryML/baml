@@ -313,7 +313,8 @@ fn publish(
     init: Option<HeapPtr>,
     test_init: Option<HeapPtr>,
 ) {
-    let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+    let mut metered = vm.get_object_mut(package_ptr);
+    let Object::Package(package) = &mut *metered else {
         unreachable!("a graft target is a package")
     };
     let initialized = matches!(
@@ -1100,7 +1101,8 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
         | Object::Map(_)
         | Object::Float(_)
         | Object::Future(_)
-        | Object::RustData(_) => {}
+        | Object::RustData(_)
+        | Object::Tombstone => {}
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => {}
     }
@@ -1144,7 +1146,8 @@ fn relocate(
     image: &Image,
 ) -> Result<Vec<HeapPtr>, VmRustFnError> {
     let mut failure = None;
-    let object = vm.get_object_mut(ptr);
+    let mut metered = vm.get_object_mut(ptr);
+    let object = &mut *metered;
     visit_object_operands(object, |operand| {
         if failure.is_some() {
             return;
@@ -1204,6 +1207,9 @@ fn relocate(
                 });
             }
             let constants = function.bytecode.constants.clone();
+            // Allocating the boxed floats needs the VM; the function is
+            // fetched again once they exist.
+            drop(metered);
             let mut resolved = Vec::with_capacity(constants.len());
             for constant in constants {
                 resolved.push(match constant {
@@ -1219,7 +1225,8 @@ fn relocate(
                     other => other.to_value(|index| image.objects[index.raw()]),
                 });
             }
-            let Object::Function(function) = vm.get_object_mut(ptr) else {
+            let mut metered = vm.get_object_mut(ptr);
+            let Object::Function(function) = &mut *metered else {
                 unreachable!("the object at `ptr` was a function above")
             };
             function.bytecode.resolved_constants = resolved;
@@ -1260,7 +1267,8 @@ fn relocate(
         | Object::Map(_)
         | Object::Float(_)
         | Object::Future(_)
-        | Object::RustData(_) => {}
+        | Object::RustData(_)
+        | Object::Tombstone => {}
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => {}
     }

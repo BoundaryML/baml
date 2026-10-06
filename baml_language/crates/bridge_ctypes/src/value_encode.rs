@@ -10,7 +10,7 @@ use crate::{
         baml_outbound_value::Value as BamlValueVariant,
     },
     error::CtypesError,
-    handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
+    handle_table::{CffiHandleTableEntry, CffiHandleTableOptions},
 };
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
@@ -140,7 +140,7 @@ pub fn external_to_outbound(
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
                 return external_to_outbound(&converted, options);
             }
-            let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
+            let table_value = CffiHandleTableEntry::RustData(arc.clone());
             let ht = table_value.handle_type();
             let key = options.table.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
@@ -760,7 +760,7 @@ mod tests {
 
     #[test]
     fn rust_data_unknown_type_inserts_handle() {
-        let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
+        let unknown: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
         let value = BexExternalValue::RustData(unknown);
         let options = CffiHandleTableOptions::for_in_process();
         let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
@@ -827,7 +827,7 @@ mod tests {
 
     #[test]
     fn artifact_safe_unknown_rust_data_omits_without_inserting_handle() {
-        let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
+        let unknown: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
         let value = BexExternalValue::RustData(unknown);
         let encoded =
             artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");

@@ -18,7 +18,7 @@
 //! [`HttpBody`] used by both client (`fetch`/`send`) and server responses.
 
 use std::{
-    any::{Any, TypeId},
+    any::TypeId,
     convert::Infallible,
     pin::Pin,
     sync::{
@@ -45,8 +45,8 @@ use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use indexmap::IndexMap;
 use sys_ops::io::{SysOpOutput, VmBamlError, owned};
 use sys_types::{
-    AsBexExternalValue, BexExternalValue, CancellationToken, Handle, VmInternalError,
-    VmRustFnError, VmSpawner,
+    AsBexExternalValue, BexExternalValue, BexRustData, CancellationToken, Handle, RustDataArc as _,
+    VmInternalError, VmRustFnError, VmSpawner,
     network::{NetworkContext, NetworkEventKind, NetworkTraced},
 };
 use tokio::{
@@ -104,12 +104,23 @@ pub(crate) struct StreamingBody {
     receiver: tokio::sync::Mutex<Option<tokio::sync::mpsc::Receiver<Bytes>>>,
 }
 
+impl BexRustData for HttpBody {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        match self {
+            // The response lock is shared with the reader task, and an unread
+            // body lives in the socket's buffers, not here.
+            HttpBody::Client(..) | HttpBody::Streaming(_) => {}
+            HttpBody::Bytes(bytes) => meter.bytes(bytes.len()),
+        }
+    }
+}
+
 impl HttpBody {
     /// Wrap a freshly received client response.
     pub(crate) fn client(
         response: reqwest::Response,
         timeout_options: crate::io_impls::HttpTimeoutOptions,
-    ) -> Arc<dyn Any + Send + Sync> {
+    ) -> Arc<dyn BexRustData> {
         Arc::new(HttpBody::Client(
             tokio::sync::Mutex::new(Some(response)),
             timeout_options,
@@ -226,19 +237,17 @@ impl HttpBody {
 }
 
 /// Downcast a `$rust_type` body field to [`HttpBody`], traced or not.
-pub(crate) fn downcast_body(
-    body: &Arc<dyn Any + Send + Sync>,
-) -> Result<Arc<HttpBody>, VmInternalError> {
+pub(crate) fn downcast_body(body: &Arc<dyn BexRustData>) -> Result<Arc<HttpBody>, VmInternalError> {
     NetworkTraced::inner(Arc::clone(body))
-        .downcast::<HttpBody>()
+        .downcast_payload::<HttpBody>()
         .map_err(|body| VmInternalError::RustTypeError {
             expected: TypeId::of::<HttpBody>(),
-            got: body.as_ref().type_id(),
+            got: body.payload_type_id(),
         })
 }
 
 /// The span of the request a `$rust_type` body or stream handle came from.
-pub(crate) fn network_of(data: &Arc<dyn Any + Send + Sync>) -> Option<NetworkContext> {
+pub(crate) fn network_of(data: &Arc<dyn BexRustData>) -> Option<NetworkContext> {
     NetworkTraced::of(data.as_ref()).map(|traced| traced.network().clone())
 }
 
@@ -310,18 +319,18 @@ fn build_acceptor(
     let certs = cfg
         ._certificate
         .clone()
-        .downcast::<Vec<CertificateDer<'static>>>()
+        .downcast_payload::<TlsCertificates>()
         .map_err(|certificate| VmInternalError::RustTypeError {
-            expected: TypeId::of::<Vec<CertificateDer<'static>>>(),
-            got: certificate.type_id(),
+            expected: TypeId::of::<TlsCertificates>(),
+            got: certificate.payload_type_id(),
         })?;
     let key = cfg
         ._private_key
         .clone()
-        .downcast::<PrivateKeyDer<'static>>()
+        .downcast_payload::<TlsPrivateKey>()
         .map_err(|private_key| VmInternalError::RustTypeError {
-            expected: TypeId::of::<PrivateKeyDer<'static>>(),
-            got: private_key.type_id(),
+            expected: TypeId::of::<TlsPrivateKey>(),
+            got: private_key.payload_type_id(),
         })?;
 
     let tls13_only: [&'static rustls::SupportedProtocolVersion; 1] = [&rustls::version::TLS13];
@@ -333,7 +342,7 @@ fn build_acceptor(
 
     let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(versions)
         .with_no_client_auth()
-        .with_single_cert(certs.as_ref().clone(), key.clone_key())
+        .with_single_cert(certs.0.clone(), key.0.clone_key())
         .map_err(|e| VmBamlError::Io {
             message: format!("invalid TLS configuration: {e}"),
         })?;
@@ -361,16 +370,40 @@ struct ServerState {
     serving: AtomicBool,
 }
 
+impl BexRustData for ServerState {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+/// A certificate chain as `$rust_type` data.
+struct TlsCertificates(Vec<CertificateDer<'static>>);
+
+impl BexRustData for TlsCertificates {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.0.iter().map(|cert| cert.len()).sum());
+    }
+}
+
+/// A private key as `$rust_type` data.
+struct TlsPrivateKey(PrivateKeyDer<'static>);
+
+impl BexRustData for TlsPrivateKey {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        // A bound that covers any key in use (an RSA-8192 PKCS#8 blob is
+        // under 5 KiB), so nothing about the key is derived from the secret.
+        meter.bytes(8 * 1024);
+    }
+}
+
 fn downcast_server_state(
     server: &owned::http::Server,
 ) -> Result<Arc<ServerState>, VmInternalError> {
     server
         ._state
         .clone()
-        .downcast::<ServerState>()
+        .downcast_payload::<ServerState>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<ServerState>(),
-            got: server._state.type_id(),
+            got: server._state.payload_type_id(),
         })
 }
 
@@ -398,7 +431,7 @@ pub(crate) fn bind(addr: String) -> SysOpOutput<owned::http::Server> {
         let bound = listener.local_addr().map_err(|e| VmBamlError::Io {
             message: format!("failed to read bound address for '{addr}': {e}"),
         })?;
-        let state: Arc<dyn Any + Send + Sync> = Arc::new(ServerState {
+        let state: Arc<dyn BexRustData> = Arc::new(ServerState {
             listener,
             serving: AtomicBool::new(false),
         });
@@ -1074,8 +1107,8 @@ pub(crate) fn tls_config_new(
 
     SysOpOutput::ok(owned::http::TlsConfig {
         allow_tls1_2,
-        _certificate: Arc::new(certs) as Arc<dyn Any + Send + Sync>,
-        _private_key: Arc::new(key) as Arc<dyn Any + Send + Sync>,
+        _certificate: Arc::new(TlsCertificates(certs)) as Arc<dyn BexRustData>,
+        _private_key: Arc::new(TlsPrivateKey(key)) as Arc<dyn BexRustData>,
         _handshake_timeout_nanos: handshake_timeout_nanos,
     })
 }
@@ -1090,7 +1123,7 @@ pub(crate) fn build_response(
         status_code,
         headers,
         url: String::new(),
-        _body: Arc::new(HttpBody::Bytes(Bytes::from(body))) as Arc<dyn Any + Send + Sync>,
+        _body: Arc::new(HttpBody::Bytes(Bytes::from(body))) as Arc<dyn BexRustData>,
     }
 }
 
@@ -1109,6 +1142,6 @@ pub(crate) fn build_streaming_response(
         _body: Arc::new(HttpBody::Streaming(StreamingBody {
             sender: tokio::sync::Mutex::new(Some(tx)),
             receiver: tokio::sync::Mutex::new(Some(rx)),
-        })) as Arc<dyn Any + Send + Sync>,
+        })) as Arc<dyn BexRustData>,
     }
 }

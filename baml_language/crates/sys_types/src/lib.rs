@@ -18,7 +18,10 @@ use async_trait::async_trait;
 pub use bex_external_types::{AsBexExternalValue, BexExternalValue, Handle};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
-pub use bex_vm_types::SysOp;
+pub use bex_vm_types::{
+    BexRustData, Meter, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc, SysOp,
+    TestRustData,
+};
 pub use tokio_util::sync::CancellationToken;
 
 pub mod network;
@@ -570,7 +573,7 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
 {
     /// Engine-owned callback frame. Transport layers may downcast it through
     /// the runtime facade; application SDK packages never participate here.
-    fn capture_invocation(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+    fn capture_invocation(&self) -> Option<Arc<dyn BexRustData>> {
         None
     }
     /// Spawn a a new VM with the given function name and arguments.

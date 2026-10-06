@@ -907,6 +907,7 @@ impl BexEngine {
             Object::Cell(_) => Err(EngineError::CannotConvert {
                 type_name: "cell".to_string(),
             }),
+            Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -1394,7 +1395,7 @@ impl BexEngine {
         // `GenericBox(value=5)` stays != a bound `GenericBox[int]`, G4). `HostValue`
         // keeps its dedicated arm below (it carries a release-keyed handle).
         if expected_ty.and_then(peel_to_rust_type).is_some() && is_structural_host_only(&external) {
-            let arc: std::sync::Arc<dyn std::any::Any + Send + Sync> =
+            let arc: std::sync::Arc<dyn bex_vm_types::BexRustData> =
                 std::sync::Arc::new(bex_external_types::OpaqueExternalValue(external));
             return Ok(Value::object(
                 holder.holder_mut().tlab_mut().alloc_rust_data(arc),
@@ -1919,7 +1920,7 @@ impl BexEngine {
                                     .to_string(),
                         });
                     }
-                    let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
+                    let dyn_arc: std::sync::Arc<dyn bex_vm_types::BexRustData> = arc;
                     return Ok(Value::object(
                         holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
                     ));
@@ -4152,6 +4153,7 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 | Object::Future(_)
                 | Object::RustData(_)
                 | Object::Type(_) => None,
+                Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => None,
             }

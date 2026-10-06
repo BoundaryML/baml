@@ -203,6 +203,22 @@ impl Drop for ParkRequestGuard {
     }
 }
 
+/// Aborts the process if a collection unwinds.
+///
+/// A collection moves survivors out of from-space, so from its first move until
+/// every root has been forwarded, parked VMs hold pointers to vacated slots.
+/// Unwinding out of that window would release the [`HeapGuard`] and resume
+/// those VMs on a heap they can no longer read, so a panic there is fatal.
+struct AbortOnCollectionUnwind;
+
+impl Drop for AbortOnCollectionUnwind {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            std::process::abort();
+        }
+    }
+}
+
 use crate::logger::{TraceLogMetadata, TraceLogger};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
@@ -2913,8 +2929,10 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
 
-        self.collect_garbage_parked(level, reason, heap_guard, cycle)
-            .await
+        // Boxed so a collection's state (roots, forwarding map, statistics) is
+        // not laid out inside every call's future: this is awaited from the VM
+        // event loop, and a collection is rare and already allocates.
+        Box::pin(self.collect_garbage_parked(level, reason, heap_guard, cycle)).await
     }
 
     async fn collect_garbage_parked(
@@ -2940,6 +2958,10 @@ impl BexEngine {
         );
 
         cycle.roots_scanned();
+
+        // From the first evacuated object until every root is forwarded and
+        // verified, the heap is unusable by anyone but this collection.
+        let abort_on_unwind = AbortOnCollectionUnwind;
 
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (mut stats, _remapped_roots, forwarding) =
@@ -2986,6 +3008,9 @@ impl BexEngine {
         }
 
         self.heap.verify_quick();
+
+        // Roots are forwarded; a panic past this point leaves a readable heap.
+        drop(abort_on_unwind);
 
         // Root object-valued errors into handles before releasing the GC
         // guard. The raw queue values are post-copy pointers and must survive
@@ -7058,7 +7083,8 @@ impl BexEngine {
             ));
         };
         let (history, visible, mounts, sequence) = {
-            let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+            let mut metered = vm.get_object_mut(package_ptr);
+            let Object::Package(package) = &mut *metered else {
                 return Err(invalid(
                     "Session has an invalid runtime payload".to_string(),
                 ));
@@ -7313,9 +7339,9 @@ impl BexEngine {
                     class_name: "reflect.CompileArtifact".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(
-                            bex_vm::PinnedArtifact { artifact, pins },
-                        )))),
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(
+                            bex_vm::RuntimeCompileArtifactSlot::new(bex_vm::PinnedArtifact { artifact, pins }),
+                        )),
                     },
                 }),
                 Err(diagnostics) => {
@@ -7395,7 +7421,7 @@ struct InvocationSpawner {
 
 #[async_trait]
 impl sys_types::VmSpawner for InvocationSpawner {
-    fn capture_invocation(&self) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+    fn capture_invocation(&self) -> Option<Arc<dyn bex_vm_types::BexRustData>> {
         Some(Arc::new(self.capture.clone()))
     }
     async fn spawn_with_function(
