@@ -223,7 +223,6 @@ impl PackArgs {
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
                 .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
-
         let basename = self.resolve_output_basename()?;
         let output_path = self
             .output
