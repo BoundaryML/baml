@@ -162,7 +162,7 @@ export function capture(value: unknown): string {
         finally { active.delete(value); }
     };
     const typeObservation = (token: unknown, depth: number): unknown[] => {
-        if (depth > 8 || remaining-- <= 0) return ['unknown'];
+        if (remaining-- <= 0 || depth > 8) return ['unknown'];
         if (typeof token === 'string' && ['int', 'float', 'string', 'bool', 'null'].includes(token)) return [token];
         if (typeof token === 'function' && !util.types.isProxy(token)) {
             if (token === String) return ['string'];

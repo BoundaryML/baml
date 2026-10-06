@@ -111,11 +111,15 @@ fn copy(value: &Value, depth: usize, remaining: &mut usize) -> HostValue {
 }
 
 fn copy_type(value: &Value, depth: usize, remaining: &mut usize) -> Option<HostType> {
-    if depth > MAX_DEPTH || *remaining == 0 {
+    if *remaining == 0 {
+        return None;
+    }
+    let (tag, payload) = parts(value)?;
+    // Adapters end a type nested past MAX_DEPTH with one `unknown` marker.
+    if depth > MAX_DEPTH && (depth > MAX_DEPTH + 1 || tag != "unknown") {
         return None;
     }
     *remaining -= 1;
-    let (tag, payload) = parts(value)?;
     Some(match tag {
         "int" => HostType::Int,
         "float" => HostType::Float,
@@ -173,6 +177,32 @@ mod tests {
         assert!(
             matches!(&fields[0].1, HostValue::Enum { name, variant } if name == "user.Mood" && variant == "HAPPY")
         );
+    }
+
+    #[test]
+    fn type_arguments_nested_past_the_depth_limit_end_in_unknown() {
+        let nested = |leaf: &str| {
+            (0..MAX_DEPTH).fold(leaf.to_string(), |inner, _| format!("[\"list\",{inner}]"))
+        };
+        let HostValue::Instance { type_args, .. } = decode(&format!(
+            "[\"class\",\"user.Box\",[],[{}]]",
+            nested("[\"unknown\"]")
+        )) else {
+            panic!("class")
+        };
+        let mut expected = HostType::Unknown;
+        for _ in 0..MAX_DEPTH {
+            expected = HostType::List(Box::new(expected));
+        }
+        assert_eq!(type_args, vec![expected]);
+        // Only the adapters' terminal marker may sit past the limit.
+        assert!(matches!(
+            decode(&format!(
+                "[\"class\",\"user.Box\",[],[{}]]",
+                nested("[\"int\"]")
+            )),
+            HostValue::Truncated(Limit::Values)
+        ));
     }
 
     #[test]

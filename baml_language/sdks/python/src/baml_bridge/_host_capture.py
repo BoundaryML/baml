@@ -118,9 +118,11 @@ def capture(value):
 
     def native_type(annotation, depth):
         nonlocal remaining
-        if depth > 8 or remaining <= 0:
+        if remaining <= 0:
             return ["unknown"]
         remaining -= 1
+        if depth > 8:
+            return ["unknown"]
         for cls, label in (
             (int, "int"),
             (float, "float"),

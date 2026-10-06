@@ -227,7 +227,8 @@ fn resolve_type<'a>(
     bytes: &mut usize,
     resolve: &impl Fn(&str) -> Option<&'a HostDeclaration>,
 ) -> Result<OwnedType, Option<Limit>> {
-    if depth > MAX_DEPTH {
+    // Adapters end a type nested past MAX_DEPTH with one `Unknown`.
+    if depth > MAX_DEPTH && (depth > MAX_DEPTH + 1 || !matches!(ty, HostType::Unknown)) {
         return Err(Some(Limit::Depth));
     }
     if *remaining == 0 {
@@ -363,6 +364,28 @@ mod tests {
         assert!(matches!(
             snapshot.root(),
             SnapshotRoot::Value(SnapshotValue::Truncated(Limit::Depth))
+        ));
+        drop(snapshot);
+        // Adapters end a type nested past the limit with one Unknown.
+        let mut deep = HostType::Unknown;
+        for _ in 0..MAX_DEPTH {
+            deep = HostType::List(Box::new(deep));
+        }
+        let snapshot = capture_with(
+            pool.try_acquire().unwrap(),
+            &HostValue::Instance {
+                name: "user.Box".into(),
+                type_args: vec![deep],
+                fields: vec![],
+            },
+            |_| Some(&class),
+        );
+        let SnapshotRoot::Value(SnapshotValue::Object(id)) = snapshot.root() else {
+            panic!("instance")
+        };
+        assert!(matches!(
+            snapshot.object(id),
+            SnapshotObject::Instance { .. }
         ));
     }
 
