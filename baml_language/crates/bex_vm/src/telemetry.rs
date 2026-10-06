@@ -1208,8 +1208,15 @@ impl TelemetryState {
             return;
         }
         self.start_thread();
+        self.complete_thread_at(outcome, self.clock.read());
+    }
+
+    fn complete_thread_at(&mut self, outcome: InvocationOutcome, completed_at: ClockInstant) {
+        if self.thread.completed {
+            return;
+        }
+        self.start_thread();
         self.thread.completed = true;
-        let completed_at = self.clock.read();
         if self.is_waiting() {
             // Cancelled before it ran: it starts and ends at the same instant.
             self.thread.running = true;

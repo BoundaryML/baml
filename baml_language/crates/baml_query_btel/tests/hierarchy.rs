@@ -45,7 +45,7 @@ async fn spans_profiler_and_recursion_from_a_real_recording() {
     let root = sql(
         &mut index,
         "SELECT span_id, span_name, status, future_id FROM spans
-         WHERE span_type = 'future' AND parent_span_id IS NULL",
+         WHERE span_type = 'future' AND parent_span_id IS NULL AND span_name = 'user.main'",
     );
     assert_eq!(root.rows.len(), 1);
     let root_id = root.rows[0][0].as_str().unwrap().to_owned();
@@ -120,9 +120,10 @@ async fn spans_profiler_and_recursion_from_a_real_recording() {
     // Each span's profiler node is in the process's profiler.
     let noded = sql(
         &mut index,
-        "SELECT COUNT(*) FROM spans s JOIN profiler p ON p.profiler_node_id = s.profiler_node_id",
+        "SELECT SUM(s.span_name != 'baml.gc'), COUNT(*) = (SELECT COUNT(*) FROM spans)
+         FROM spans s JOIN profiler p ON p.profiler_node_id = s.profiler_node_id",
     );
-    assert_eq!(noded.rows, vec![vec![json!(5)]]);
+    assert_eq!(noded.rows, vec![vec![json!(5), json!(1)]]);
 
     // Recursion: Fib(6) is 25 invocations of one node.
     let fib = sql(

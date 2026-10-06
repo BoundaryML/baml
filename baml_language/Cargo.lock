@@ -1146,6 +1146,7 @@ dependencies = [
  "btel_clock",
  "btel_reader",
  "btel_recorder",
+ "btel_settings",
  "btel_snapshot",
  "btel_types",
  "fs2",
