@@ -413,6 +413,7 @@ mod crafted {
                 call_paths: vec![path(2, 1, Some(CALLER), 12, CALLEE, 1)],
                 threads: vec![thread(T2, Some(T1), 3, 12)],
                 clock_epochs: vec![epoch(1)],
+                clock_anchors: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![
@@ -461,6 +462,7 @@ mod crafted {
                 call_paths: vec![path(2, 1, Some(CALLER), 13, CALLEE, 1)],
                 threads: vec![thread(T2, Some(T1), 3, 99)],
                 clock_epochs: vec![epoch(2)],
+                clock_anchors: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![
@@ -529,6 +531,7 @@ mod crafted {
                     },
                 ],
                 clock_epochs: vec![],
+                clock_anchors: Vec::new(),
             }),
             spans: Some(proto::SpanBatch {
                 sections: vec![section(
@@ -556,6 +559,7 @@ mod crafted {
                     epoch_id: EPOCH,
                     status: 1,
                     r#final: true,
+                    ..Default::default()
                 }],
             }),
             ..Default::default()

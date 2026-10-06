@@ -423,7 +423,7 @@ async fn child_internal_error_settles_and_finishes_both_threads() {
 }
 
 #[tokio::test]
-async fn clock_restore_invalidates_inflight_timing_without_changing_execution() {
+async fn clock_restore_preserves_continuous_inflight_timing_and_execution() {
     use btel_clock::{ClockMode, TimingStatus};
 
     let engine = Arc::new(
@@ -439,9 +439,12 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
     let cancel = CancellationToken::new();
     let thread = entry(&engine, &cancel, &[]).await;
     let old = Arc::clone(thread.vm.telemetry_clock().unwrap());
+    let mapping = *old.mapping().unwrap();
     let id = thread.vm.thread_id;
     let replacement = engine.reset_telemetry_clock_after_restore().unwrap();
-    assert_eq!(old.status(), TimingStatus::Restored);
+    assert_eq!(old.status(), TimingStatus::Valid);
+    assert_eq!(old.mapping().unwrap().multiplier, mapping.multiplier);
+    assert_eq!(old.mapping().unwrap().shift, mapping.shift);
     assert_ne!(replacement.metadata().epoch, old.metadata().epoch);
     let result = engine
         .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)

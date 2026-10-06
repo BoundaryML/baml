@@ -103,9 +103,11 @@ async fn shutdown_finalizes_telemetry_once_without_guessing_the_host_outcome() {
                 btel_recorder::proto::ProcessStatus::Unknown as i32
             );
             assert!(end.at_unix_ns > 0);
-            assert_eq!(
-                terminal.header.as_ref().unwrap().format_minor,
-                btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
+            // UNKNOWN requires at least this minor; other additive features
+            // (such as clock mappings) can require a newer one.
+            assert!(
+                terminal.header.as_ref().unwrap().format_minor
+                    >= btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
             );
         }
     }

@@ -43,3 +43,6 @@ pub const PROCESS_CONTEXT_FORMAT_MINOR: u32 = 9;
 /// A terminal recording can report SDK lifetime completion with an unknown
 /// OS process outcome (`ProcessStatus.UNKNOWN`).
 pub const UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR: u32 = 10;
+
+/// Independent clock anchors, delayed mappings, precision and final elapsed bounds.
+pub const CLOCK_MAPPING_FORMAT_MINOR: u32 = 11;

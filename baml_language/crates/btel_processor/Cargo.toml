@@ -16,6 +16,7 @@ workspace = true
 
 [dependencies]
 bex_chunkedringbuffer = { workspace = true }
+btel_clock = { workspace = true }
 btel_records = { workspace = true }
 btel_settings = { workspace = true }
 btel_snapshot = { workspace = true }
@@ -24,4 +25,4 @@ rustc-hash = { workspace = true }
 web-time = { workspace = true }
 
 [dev-dependencies]
-btel_clock = { workspace = true }
+btel_clock = { workspace = true, features = [ "test-support" ] }

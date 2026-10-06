@@ -123,6 +123,7 @@ fn state(status: proto::TimingStatus) -> proto::ClockStateBatch {
             epoch_id: EPOCH,
             status: status as i32,
             r#final: false,
+            ..Default::default()
         }],
     }
 }
@@ -207,6 +208,7 @@ fn tree(
             ],
             threads: vec![thread(ROOT, None, 0, 0), thread(CHILD, Some(ROOT), 5, 20)],
             clock_epochs: vec![epoch()],
+            clock_anchors: Vec::new(),
         }),
         clock_states: Some(valid()),
         aggregates: Some(proto::AggregateBatch {
@@ -848,5 +850,131 @@ fn model_usage_is_priced_on_the_span_that_made_the_call() {
             ],
         ],
         "an unpriced model has no cost, not a zero one"
+    );
+}
+
+#[test]
+fn anchors_pending_then_estimated_mappings_reconcile_in_both_ingesters() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 81, None);
+    let mut first = tree(vec![delta(1, false, 4, 40, ok())], vec![]);
+    let anchor = btel_reader::timing::epoch_anchor(&epoch());
+    let defs = first.definitions.as_mut().unwrap();
+    defs.clock_epochs.clear();
+    defs.clock_anchors.push(anchor);
+    first.spans = Some(proto::SpanBatch {
+        sections: vec![proto::ThreadSection {
+            thread_id: ROOT,
+            events: vec![proto::SpanEvent {
+                event: Some(thread_done(100, proto::InvocationOutcome::Ok, false)),
+            }],
+            ..Default::default()
+        }],
+    });
+    recording.write(1, first);
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    assert_eq!(
+        rows(&mut index, "SELECT duration, timing_status FROM spans"),
+        vec![vec![Json::Null, json!("pending")]]
+    );
+    assert!(
+        rows(
+            &mut index,
+            "SELECT invocation_count, total_time FROM profiler"
+        )
+        .is_empty(),
+        "the profiler is materialized when a recording ends"
+    );
+    let mut mapping = epoch();
+    mapping.precision = proto::ClockPrecision::Estimated as i32;
+    recording.write(
+        2,
+        proto::RecordingFile {
+            definitions: Some(proto::Definitions {
+                clock_epochs: vec![mapping, mapping],
+                clock_anchors: vec![anchor],
+                ..Default::default()
+            }),
+            clock_states: Some(proto::ClockStateBatch {
+                states: vec![proto::ClockEpochState {
+                    epoch_id: EPOCH,
+                    status: proto::TimingStatus::Valid as i32,
+                    r#final: true,
+                    elapsed_reference_ns: Some(100),
+                    elapsed_uncertainty_ns: Some(5),
+                }],
+            }),
+            end: Some(process_end(proto::ProcessStatus::Success)),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        rows(&mut index, "SELECT duration, timing_status FROM spans"),
+        vec![vec![json!(100), json!("estimated")]]
+    );
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT invocation_count, total_time FROM profiler"
+        ),
+        vec![vec![json!(4), json!(40)]]
+    );
+    let fresh_dir = tempfile::tempdir().unwrap();
+    let copy = Recording::new(fresh_dir.path(), 81, None);
+    for file in std::fs::read_dir(&recording.dir).unwrap() {
+        let file = file.unwrap();
+        std::fs::copy(file.path(), copy.dir.join(file.file_name())).unwrap();
+    }
+    let mut fresh = Index::for_project(fresh_dir.path(), IndexOptions::default()).unwrap();
+    assert_eq!(
+        rows(&mut fresh, "SELECT duration, timing_status FROM spans"),
+        rows(&mut index, "SELECT duration, timing_status FROM spans")
+    );
+    assert_eq!(
+        rows(
+            &mut fresh,
+            "SELECT invocation_count, total_time FROM profiler"
+        ),
+        rows(
+            &mut index,
+            "SELECT invocation_count, total_time FROM profiler"
+        )
+    );
+}
+
+#[test]
+fn final_recording_without_scale_retains_counts_and_reports_below_precision() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 82, None);
+    let mut first = tree(vec![delta(1, false, 4, 40, ok())], vec![]);
+    let defs = first.definitions.as_mut().unwrap();
+    defs.clock_epochs.clear();
+    defs.clock_anchors
+        .push(btel_reader::timing::epoch_anchor(&epoch()));
+    first.spans = Some(proto::SpanBatch {
+        sections: vec![proto::ThreadSection {
+            thread_id: ROOT,
+            events: vec![proto::SpanEvent {
+                event: Some(thread_done(100, proto::InvocationOutcome::Ok, false)),
+            }],
+            ..Default::default()
+        }],
+    });
+    first.clock_states.as_mut().unwrap().states[0].r#final = true;
+    first.clock_states.as_mut().unwrap().states[0].elapsed_reference_ns = Some(100);
+    first.clock_states.as_mut().unwrap().states[0].elapsed_uncertainty_ns = Some(500);
+    first.end = Some(process_end(proto::ProcessStatus::Success));
+    recording.write(1, first);
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    assert_eq!(
+        rows(&mut index, "SELECT duration, timing_status FROM spans"),
+        vec![vec![Json::Null, json!("below_precision")]]
+    );
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT invocation_count, total_time FROM profiler"
+        ),
+        vec![vec![json!(4), Json::Null]]
     );
 }

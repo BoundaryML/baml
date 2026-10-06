@@ -84,7 +84,9 @@ fn from_boundary_env() {
             return;
         }
         if matches!(recording.destination, Destination::InvalidConfiguration(_)) {
-            let Err(error) = recording.start(None, Arc::default(), &Context::default()) else {
+            let clock = Arc::new(btel_clock::ClockRuntime::new(btel_clock::ClockMode::Auto));
+            let Err(error) = recording.start(None, Arc::default(), &Context::default(), clock)
+            else {
                 panic!("invalid Boundary configuration must stop execution");
             };
             let crate::EngineError::CloudAuthorization(diagnostic) = error else {

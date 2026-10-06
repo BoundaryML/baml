@@ -151,11 +151,18 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
                 .iter()
                 .any(|section| section.context.is_some())
         });
-        let required = if has_context {
+        let mut required = if has_context {
             btel_settings::encoding::CONTEXT_FORMAT_MINOR
         } else {
             0
         };
+        if file
+            .definitions
+            .as_ref()
+            .is_some_and(|defs| !defs.clock_anchors.is_empty())
+        {
+            required = required.max(btel_settings::encoding::CLOCK_MAPPING_FORMAT_MINOR);
+        }
         file.header.as_ref().unwrap().format_minor
             == btel_settings::encoding::FORMAT_MINOR.max(required)
     }));
