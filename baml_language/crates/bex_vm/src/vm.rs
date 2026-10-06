@@ -3735,6 +3735,19 @@ impl BexVm {
                 Object::Bigint(n) => {
                     return Some(literal(baml_type::Literal::Bigint((**n).clone())));
                 }
+                // A variant is the one value of its own variant type.
+                Object::Variant(variant) => match self.get_object(variant.enm) {
+                    Object::Enum(enm) => {
+                        return Some(RealizedTy::EnumVariant(
+                            bex_vm_types::TypeHead::new(variant.enm, enm.type_tag),
+                            baml_type::Name::new(&enm.variants[variant.index].name),
+                        ));
+                    }
+                    other => unreachable!(
+                        "Variant.enm must point to an Enum, found {:?}",
+                        ObjectType::of(other)
+                    ),
+                },
                 // A float has no literal type to be precise about, and every
                 // other object's precise type is already its concrete one.
                 _ => {}
