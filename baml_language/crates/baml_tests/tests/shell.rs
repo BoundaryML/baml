@@ -791,7 +791,9 @@ async fn subprocess_cleanup_and_gc_preserve_running_child() {
         };
         assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
         tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            while !marker.exists() {
+            // Opening the marker creates it before printf writes the contents.
+            // Wait for the observable effect, not merely the file's existence.
+            while std::fs::read_to_string(&marker).ok().as_deref() != Some("completed") {
                 tokio::time::sleep(std::time::Duration::from_millis(20)).await;
             }
         })
