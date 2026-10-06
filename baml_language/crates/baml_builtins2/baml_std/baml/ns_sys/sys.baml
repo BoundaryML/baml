@@ -368,3 +368,28 @@ function argv() -> string[] throws never {
 function pid() -> int throws never {
     $rust_io_function
 }
+
+/// The program's working directory (the project directory for an embedded host).
+function current_dir() -> string throws root.errors.Io {
+    $rust_io_function
+}
+
+/// The running host executable's absolute path.
+function current_exe() -> string throws root.errors.Io {
+    $rust_io_function
+}
+
+/// The current user's home directory, when available.
+function home_dir() -> string? throws root.errors.Io {
+    $rust_io_function
+}
+
+/// Host operating system: linux, macos, windows, or the platform's Rust OS name.
+function platform() -> string throws never {
+    $rust_io_function
+}
+
+/// Target triple for this native host, including its libc.
+function host_target() -> string throws root.errors.Io {
+    $rust_io_function
+}

@@ -223,6 +223,7 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.ServerRequest"
         | "baml.glob.ScanOptions"
         | "baml.fs.DirEntry"
+        | "baml.fs.Metadata"
         | "baml.fs.MkdirOptions"
         | "baml.net.Datagram"
         | "baml.time.Duration"
@@ -245,6 +246,7 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.TlsConfig"
         | "baml.glob.Glob"
         | "baml.fs.File"
+        | "baml.fs.Lock"
         | "baml.csv.Record"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
@@ -5986,6 +5988,7 @@ mod tests {
         for (namespace, name) in [
             ("glob", "ScanOptions"),
             ("fs", "DirEntry"),
+            ("fs", "Metadata"),
             ("fs", "MkdirOptions"),
             ("net", "Datagram"),
             ("csv", "Error"),
@@ -6002,6 +6005,10 @@ mod tests {
         assert_eq!(
             builtin_projection(&stdlib_name("csv", "ErrorKind")),
             Some(BuiltinProjection::StructuralEnum),
+        );
+        assert_eq!(
+            builtin_projection(&stdlib_name("fs", "Lock")),
+            Some(BuiltinProjection::Resource),
         );
 
         let mut symbols = HashMap::new();
