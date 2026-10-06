@@ -85,7 +85,7 @@ Both: the existing `cargo test` suites stay green, and `baml query`'s other colu
 
 ## Shared benchmark
 
-`baml_tests/benches/telemetry_overhead.rs`, run with `cargo bench -p baml_tests --bench telemetry_overhead`. Seven scenarios, each with telemetry off and on:
+`baml_tests/benches/telemetry_overhead.rs`, run with `cargo bench -p baml_tests --bench telemetry_overhead`. Nine scenarios, each with telemetry off and on:
 
 | Scenario | What it measures |
 |-|-|
@@ -96,6 +96,8 @@ Both: the existing `cargo test` suites stay green, and `baml query`'s other colu
 | `type_args_alternating` | four declared types in turn |
 | `new_runtime_class_each_call` | a new runtime class per call: every call a first sighting (B's worst case) |
 | `runtime_classes_under_collection` | runtime classes collected soon after use (A's worst case) |
+| `nested_type_args_repeated` | a captured type argument naming a nested schema (classes, enums, self-reference): cost that grows with the schema |
+| `nested_instance_inputs_repeated` | a captured instance of that nested schema |
 
 Results are compared per scenario as the median with telemetry on, against the same scenario on this base, on the same machine (rtxloco). Telemetry already costs something today, so "on minus off" alone would mix the existing cost into the comparison.
 
@@ -105,7 +107,7 @@ In order:
 
 1. **Correctness.** The shared tests pass unchanged, the design's own stress tests pass, and nothing else regresses.
 2. **Hot paths unchanged.** `timing_only` and `span_without_capture` within noise of the base (at most 2% or 2 ns per call, whichever is larger).
-3. **Steady state.** `type_args_repeated`, `instance_inputs_repeated`, `type_args_alternating`: the smaller overhead over the base wins. More than 10% over the base needs a reason.
+3. **Steady state.** `type_args_repeated`, `instance_inputs_repeated`, `type_args_alternating`, `nested_type_args_repeated`, `nested_instance_inputs_repeated`: the smaller overhead over the base wins. More than 10% over the base needs a reason.
 4. **First sightings and collection.** `new_runtime_class_each_call`, `runtime_classes_under_collection`: reported, and compared against the cost of building the class itself.
 5. **Complexity.** Lines changed, new concurrency (threads, locks, heap access off the VM thread), and new failure modes. With performance within noise, the simpler design wins.
 
