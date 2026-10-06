@@ -95,7 +95,7 @@ impl<'a> Start<'a> {
                 DecodedRoot::FunctionArgs { slots, .. } => {
                     slots.iter().map(|slot| (*snapshot, slot)).collect()
                 }
-                DecodedRoot::Value(_) => Vec::new(),
+                DecodedRoot::Value(_) | DecodedRoot::Definitions(_) => Vec::new(),
             },
         }
     }

@@ -2,14 +2,14 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use std::borrow::Cow;
 
-use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
+use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType, Reserved, Shaper,
-    Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
+    Builder, DefinedHead, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType, Reserved,
+    Shaper, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue, TypeIdentity,
 };
 use rustc_hash::FxHashMap;
 
-use super::network::NetworkPayload;
+use super::{definitions, network::NetworkPayload};
 
 #[derive(Clone, Copy)]
 pub(super) enum Input<'a> {
@@ -67,7 +67,10 @@ impl Scratch {
             Object::Float(v) => return SnapshotValue::Float(*v),
             Object::String(s) => leaves.string_value(&rewritten(&self.rewrites, s)),
             Object::Bigint(n) => leaves.bigint(n),
-            Object::Type(value) => SnapshotValue::Type(leaves.ty(owned_type(&value.ty))),
+            Object::Type(value) => {
+                let ty = owned_type(leaves, &value.ty);
+                SnapshotValue::Type(leaves.ty(ty))
+            }
             Object::Variant(v) => {
                 let declaration = match self.add(leaves, Value::object(v.enm), depth + 1) {
                     SnapshotValue::Object(id) => id,
@@ -138,15 +141,15 @@ impl Scratch {
             let object = match unsafe { ptr.get() } {
                 Object::Uint8Array(data) => b.bytes(&data.lock()),
                 Object::Array(data) => {
-                    let element_type = b.leaves().ty(owned_type(&data.element_ty));
+                    let element_type = described(&mut b.leaves(), &data.element_ty);
                     let data = data.lock();
                     b.list(element_type, data.iter(), |leaves, value| {
                         self.add(leaves, *value, depth + 1)
                     })
                 }
                 Object::Map(data) => {
-                    let key_type = b.leaves().ty(owned_type(&data.key_ty));
-                    let value_type = b.leaves().ty(owned_type(&data.value_ty));
+                    let key_type = described(&mut b.leaves(), &data.key_ty);
+                    let value_type = described(&mut b.leaves(), &data.value_ty);
                     let data = data.lock();
                     b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
                         (
@@ -163,9 +166,17 @@ impl Scratch {
                             let Object::Class(class) = (unsafe { instance.class.get() }) else {
                                 unreachable!("instance class")
                             };
+                            let type_arguments: Vec<_> = {
+                                let mut leaves = b.leaves();
+                                instance
+                                    .class_type_args
+                                    .iter()
+                                    .map(|ty| owned_type(&mut leaves, ty))
+                                    .collect()
+                            };
                             b.instance(
                                 declaration,
-                                instance.class_type_args.iter().map(owned_type),
+                                type_arguments,
                                 (0..instance.field_len()).zip(&class.fields),
                                 |leaves, (at, field)| {
                                     let value =
@@ -178,8 +189,14 @@ impl Scratch {
                         _ => unreachable!("class declaration is an object"),
                     }
                 }
-                Object::Class(class) => b.declaration(&class.name, class.type_tag, false),
-                Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true),
+                // SAFETY: inherited heap permit.
+                Object::Class(class) => b.declaration(&class.name, class.type_tag, false, unsafe {
+                    definitions::of(ptr)
+                }),
+                // SAFETY: inherited heap permit.
+                Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true, unsafe {
+                    definitions::of(ptr)
+                }),
                 Object::Cell(cell) => {
                     SnapshotObject::Cell(self.add(&mut b.leaves(), cell.load(), depth + 1))
                 }
@@ -280,7 +297,7 @@ fn network(b: &mut Builder, payload: &NetworkPayload<'_>) -> SnapshotValue {
 fn type_args(b: &mut Builder, args: &[(&str, &bex_vm_types::RealizedTy)]) -> SnapshotValue {
     let fields = args
         .iter()
-        .map(|(name, ty)| (*name, SnapshotValue::Type(b.leaves().ty(owned_type(ty)))))
+        .map(|(name, ty)| (*name, SnapshotValue::Type(described(&mut b.leaves(), ty))))
         .collect::<Vec<_>>();
     map(b, OwnedType::Type, &fields)
 }
@@ -329,12 +346,41 @@ fn object(b: &mut Builder, object: SnapshotObject) -> SnapshotValue {
         SnapshotValue::Object,
     )
 }
-// Preserve immutable type metadata; replace every VM type head with owned identity.
-fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
-    ty.map_heads(&mut |head| match head.tagged_name() {
-        Some(name) => btel_snapshot::TypeIdentity::Resolved(name),
-        None => btel_snapshot::TypeIdentity::Unresolved(head.tag()),
-    })
+/// Preserve immutable type metadata; replace every VM type head with owned
+/// identity. Must run under the capture's heap permit.
+fn owned_type(leaves: &mut Leaves<'_>, ty: &bex_vm_types::RealizedTy) -> OwnedType {
+    ty.map_heads(&mut |head| identity(leaves, head))
+}
+/// A type of the capture, as [`owned_type`] owns it.
+fn described(leaves: &mut Leaves<'_>, ty: &bex_vm_types::RealizedTy) -> btel_snapshot::TypeId {
+    let ty = owned_type(leaves, ty);
+    leaves.ty(ty)
+}
+/// A class or enum head is its recorded definition, which the capture
+/// carries; any other head is its tag and name.
+fn identity(leaves: &mut Leaves<'_>, head: &TypeHead) -> TypeIdentity {
+    if head.is_resolved() {
+        // SAFETY: capture holds the heap permit, and a resolved head points
+        // at its live declaration.
+        let declared = match unsafe { head.ptr().get() } {
+            Object::Class(class) => Some(&class.name),
+            Object::Enum(enm) => Some(&enm.name),
+            _ => None,
+        };
+        // SAFETY: as above.
+        if let Some(name) = declared
+            && let Some(definition) = unsafe { definitions::of(head.ptr()) }
+        {
+            return TypeIdentity::Defined(DefinedHead {
+                name: name.clone(),
+                definition: leaves.define(definition),
+            });
+        }
+    }
+    match head.tagged_name() {
+        Some(name) => TypeIdentity::Resolved(name),
+        None => TypeIdentity::Unresolved(head.tag()),
+    }
 }
 /// A media value as the runtime holds it: its kind, MIME type and source, and
 /// loaded content as base64 text shared by handle. Reads no file and fetches
@@ -868,7 +914,11 @@ mod tests {
         else {
             panic!("lost class type argument");
         };
-        assert!(matches!(head, btel_snapshot::TypeIdentity::Resolved(_)));
+        // A class names its recorded definition, which the capture carries:
+        // collecting the class loses neither.
+        let btel_snapshot::TypeIdentity::Defined(head) = head else {
+            panic!("a class type argument names its definition: {head:?}");
+        };
         let Obj::Declaration {
             name,
             tag,
@@ -879,6 +929,12 @@ mod tests {
         };
         assert_eq!(snapshot.name(*name).item_name().as_str(), "TestClass");
         assert_eq!(*tag, baml_type::typetag::TypeTag::from_i64(100));
+        assert_eq!(snapshot.definition(*name), Some(head.definition));
+        assert!(
+            snapshot
+                .blobs()
+                .any(|blob| blob.id() == head.definition.group)
+        );
         let fields = snapshot.fields(*fields);
         assert_eq!(fields[0].key.as_str(), "x");
         assert!(matches!(fields[0].value, Val::Int(10)));

@@ -11,11 +11,16 @@
 //! - truncated evidence, unknown argument names or a blob that cannot be
 //!   read are `Unavailable`: the recording cannot answer, and callers report
 //!   that separately.
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use btel_snapshot::{
-    CasId, DecodedMediaSource, DecodedObject, DecodedSnapshot, DecodedValue, Description, Limit,
-    NodeId,
+    CasId, DecodedMediaSource, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue,
+    DefinitionRef, Description, Limit, NodeId,
+    definition::{Declaration, Meta},
 };
 use num_bigint::BigInt;
 use serde_json::{Map, Value as Json};
@@ -126,7 +131,8 @@ pub fn navigate(
         }
         (Root::Value, btel_snapshot::DecodedRoot::Value(value)) => (value, path),
         (Root::Arguments, btel_snapshot::DecodedRoot::Value(_))
-        | (Root::Value, btel_snapshot::DecodedRoot::FunctionArgs { .. }) => {
+        | (Root::Value, btel_snapshot::DecodedRoot::FunctionArgs { .. })
+        | (_, btel_snapshot::DecodedRoot::Definitions(_)) => {
             return Nav::Unavailable(Unavailable::WrongRoot);
         }
     };
@@ -791,11 +797,22 @@ fn description_label(kind: Description) -> &'static str {
     }
 }
 
+/// A class or enum recorded with its definition names it by ID, after its
+/// name: `"def"` in a type node, `"$def"` in an instance (after `$class`)
+/// or enum value (after `$variant`). A cell includes each definition once,
+/// at its first reference in output order, under `"definition"` or
+/// `"$definition"`; later references carry the ID alone, so a recursive
+/// reference inside a definition is its ID. A definition whose group cannot
+/// be read is `$unavailable` there.
 struct Renderer<'a> {
     span: &'a Span,
     limits: &'a RenderLimits,
     /// Label of each shared object already printed with its `$id`.
     rendered: HashMap<(CasId, NodeId), u32>,
+    /// Definitions already included in this rendering.
+    defined: HashSet<DefinitionRef>,
+    /// Definitions being rendered, each inside the one before.
+    definition_depth: usize,
     nodes: usize,
     /// Bytes of text written, never past the limit.
     text_bytes: usize,
@@ -809,6 +826,8 @@ impl<'a> Renderer<'a> {
             span,
             limits,
             rendered: HashMap::new(),
+            defined: HashSet::new(),
+            definition_depth: 0,
             nodes: 0,
             text_bytes: 0,
             incomplete: None,
@@ -879,6 +898,142 @@ impl<'a> Renderer<'a> {
         (rendered, true)
     }
 
+    /// Add the definition of the declaration `id`, if it is recorded with
+    /// one, to an instance or enum value.
+    fn declaration_definition(
+        &mut self,
+        blob: &DecodedSnapshot,
+        id: NodeId,
+        map: &mut Map<String, Json>,
+    ) {
+        if let DecodedObject::Declaration {
+            definition: Some(definition),
+            ..
+        } = blob.object(id)
+        {
+            self.reference(map, *definition, "$def", "$definition");
+        }
+    }
+
+    /// `map` names `definition` under `id_key`, and includes it under
+    /// `body_key` the first time the rendering names it.
+    fn reference(
+        &mut self,
+        map: &mut Map<String, Json>,
+        definition: DefinitionRef,
+        id_key: &str,
+        body_key: &str,
+    ) {
+        map.insert(id_key.into(), Json::from(ty::definition_id(definition)));
+        if !self.defined.insert(definition) {
+            return;
+        }
+        let body = if self.definition_depth >= self.limits.max_depth {
+            self.truncated(RENDER_DEPTH)
+        } else {
+            self.definition_depth += 1;
+            let body = self.definition(definition);
+            self.definition_depth -= 1;
+            body
+        };
+        map.insert(body_key.into(), body);
+    }
+
+    /// A recorded definition's body.
+    fn definition(&mut self, definition: DefinitionRef) -> Json {
+        let group = match self.span.group(definition.group) {
+            Ok(group) => group,
+            Err(reason) => return self.unavailable(reason),
+        };
+        let DecodedRoot::Definitions(members) = &group.root else {
+            return self.unavailable(span::BROKEN_REFERENCE);
+        };
+        let Some(member) = members.get(definition.member as usize) else {
+            return self.unavailable(span::BROKEN_REFERENCE);
+        };
+        self.nodes += 1;
+        let mut map = Map::new();
+        match member {
+            Declaration::Class(class) => {
+                map.insert("kind".into(), Json::from("class"));
+                map.insert("name".into(), self.text(&class.name.to_string()));
+                if class.type_params != 0 {
+                    map.insert("type_params".into(), Json::from(class.type_params));
+                }
+                self.meta(&mut map, &class.meta);
+                if class.stream_done {
+                    map.insert("stream_done".into(), Json::Bool(true));
+                }
+                let mut fields = Vec::with_capacity(class.fields.len());
+                for field in &class.fields {
+                    self.nodes += 1;
+                    let mut part = Map::new();
+                    part.insert("name".into(), self.text(&field.name));
+                    let schema = match &field.ty.decoded {
+                        Some(ty) if self.take_text(field.ty.encoded.len()) => {
+                            ty::field_json(ty, group.id, members, self)
+                        }
+                        Some(_) => self.truncated(RENDER_SIZE),
+                        None => Json::Null,
+                    };
+                    part.insert("schema".into(), schema);
+                    self.meta(&mut part, &field.meta);
+                    for (key, set) in [
+                        ("skip", field.skip),
+                        ("stream_done", field.stream_done),
+                        ("must_exist", field.must_exist),
+                    ] {
+                        if set {
+                            part.insert(key.into(), Json::Bool(true));
+                        }
+                    }
+                    fields.push(Json::Object(part));
+                }
+                map.insert("fields".into(), Json::Array(fields));
+            }
+            Declaration::Enum(enm) => {
+                map.insert("kind".into(), Json::from("enum"));
+                map.insert("name".into(), self.text(&enm.name.to_string()));
+                self.meta(&mut map, &enm.meta);
+                let mut variants = Vec::with_capacity(enm.variants.len());
+                for variant in &enm.variants {
+                    self.nodes += 1;
+                    let mut part = Map::new();
+                    part.insert("name".into(), self.text(&variant.name));
+                    self.meta(&mut part, &variant.meta);
+                    if variant.skip {
+                        part.insert("skip".into(), Json::Bool(true));
+                    }
+                    variants.push(Json::Object(part));
+                }
+                map.insert("variants".into(), Json::Array(variants));
+            }
+        }
+        Json::Object(map)
+    }
+
+    /// A definition's description, alias, docstring and other attributes,
+    /// each left out when absent or empty.
+    fn meta(&mut self, map: &mut Map<String, Json>, meta: &Meta) {
+        for (key, text) in [
+            ("description", &meta.description),
+            ("alias", &meta.alias),
+            ("docstring", &meta.docstring),
+        ] {
+            if let Some(text) = text {
+                map.insert(key.into(), self.text(text));
+            }
+        }
+        if !meta.attributes.is_empty() {
+            let attributes = meta
+                .attributes
+                .iter()
+                .map(|(key, value)| (key.clone(), self.text(value)))
+                .collect();
+            map.insert("attributes".into(), Json::Object(attributes));
+        }
+    }
+
     fn declaration_name(&mut self, blob: &DecodedSnapshot, id: NodeId) -> Json {
         match blob.object(id) {
             DecodedObject::Declaration { name, .. } => self.text(&name.0.to_string()),
@@ -921,7 +1076,9 @@ impl<'a> Renderer<'a> {
                 // A decoded type is at most `max_type_bytes`; its encoding
                 // stands in for the text the rendering spends.
                 let rendered = match &description.decoded {
-                    Some(decoded) if self.take_text(description.encoded.len()) => ty::json(decoded),
+                    Some(decoded) if self.take_text(description.encoded.len()) => {
+                        ty::json_in(decoded, self)
+                    }
                     Some(_) => self.truncated(RENDER_SIZE),
                     None => Json::Null,
                 };
@@ -933,6 +1090,7 @@ impl<'a> Renderer<'a> {
                 let mut map = Map::new();
                 map.insert("$enum".into(), self.declaration_name(blob, *declaration));
                 map.insert("$variant".into(), self.text(name));
+                self.declaration_definition(blob, *declaration, &mut map);
                 Json::Object(map)
             }
             DecodedValue::Truncated(limit) => {
@@ -1066,6 +1224,7 @@ impl<'a> Renderer<'a> {
                 ..
             } => {
                 map.insert("$class".into(), self.declaration_name(blob, *declaration));
+                self.declaration_definition(blob, *declaration, &mut map);
                 let mut inner = Map::new();
                 let mut whole = true;
                 for (key, value) in fields {
@@ -1152,6 +1311,12 @@ impl<'a> Renderer<'a> {
             }
         }
         Json::Object(map)
+    }
+}
+
+impl ty::Definitions for Renderer<'_> {
+    fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef) {
+        self.reference(node, definition, "def", "definition");
     }
 }
 

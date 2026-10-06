@@ -160,6 +160,7 @@ impl FrameTelemetry {
 
 pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
+mod definitions;
 mod host;
 mod snapshot;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;

@@ -91,8 +91,9 @@ fn snapshot() -> Arc<DecodedSnapshot> {
             name: DecodedName(DeclarationName::Declared(TypeName::from_dotted_path(
                 "user.Customer",
             ))),
-            tag: TypeTag::from_i64(1),
+            tag: Some(TypeTag::from_i64(1)),
             is_enum: false,
+            definition: None,
         },
         // 1: customer instance
         O::Instance {
