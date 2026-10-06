@@ -20,6 +20,7 @@ pub(crate) mod flow;
 pub(crate) mod obligations;
 pub(crate) mod pat;
 mod reachability;
+pub mod trace_hooks;
 pub(crate) mod truthy;
 pub mod unify;
 

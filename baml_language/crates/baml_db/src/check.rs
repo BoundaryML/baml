@@ -516,6 +516,15 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 };
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
+            for diagnostic in
+                baml_compiler2_hir_ty::infer::trace_hooks::declaration_diagnostics(db, func_loc)
+            {
+                diagnostics.push(tir_rendered_to_diagnostic_for_file(
+                    db,
+                    file,
+                    diagnostic.render(db, file, None),
+                ));
+            }
         }
         // TOP-LEVEL DECLARATION effect diagnostics: io reachable from a
         // `client`/`let` initializer, which `$init` cannot run (E0158).
@@ -1875,6 +1884,7 @@ fn tir_type_error_to_diagnostic_id(
 ) -> DiagnosticId {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
     match error {
+        TirTypeError::InvalidTraceHook { .. } => DiagnosticId::MalformedAttribute,
         TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,

@@ -35,6 +35,7 @@ pub struct Function {
     /// Mirrors `ast::FunctionDef::is_tagged_template_tag` so TIR can validate
     /// tagged-template tags without re-reading the CST.
     pub is_tagged_template_tag: bool,
+    pub trace_hook: Option<ast::TraceHookDirective>,
     /// Full source span of the function.
     pub span: TextRange,
 }
