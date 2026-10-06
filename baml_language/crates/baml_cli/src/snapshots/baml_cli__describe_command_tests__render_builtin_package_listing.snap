@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 813
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
@@ -165,9 +164,9 @@ function         baml.json.field                  <builtin>/baml/ns_json/json.ba
 class            baml.json.PathError              <builtin>/baml/ns_json/json.baml:268
 function         baml.json.path                   <builtin>/baml/ns_json/json.baml:342
 function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:444
-function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:475
-function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:490
-function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:514
+function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:484
+function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:499
+function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:523
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:4
 class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:50
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:96
