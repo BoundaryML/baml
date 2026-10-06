@@ -56,16 +56,16 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_iter/iter.baml:786:13]
- 786 │             Done {}
+     ╭─[baml/ns_iter/iter.baml:800:13]
+ 800 │             Done {}
      ·             ───────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_iter/iter.baml:831:13]
- 831 │             Done {}
+     ╭─[baml/ns_iter/iter.baml:846:13]
+ 846 │             Done {}
      ·             ───────
      ╰────
 
@@ -80,15 +80,15 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_iter/iter.baml:891:13]
- 891 │             Done {}
+     ╭─[baml/ns_iter/iter.baml:907:13]
+ 907 │             Done {}
      ·             ───────
      ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[baml/ns_iter/iter.baml:947:13]
- 947 │             Done {}
+     ╭─[baml/ns_iter/iter.baml:964:13]
+ 964 │             Done {}
      ·             ───────
      ╰────

@@ -297,7 +297,11 @@ async fn linked_hooked_callee_cannot_enter_through_call_exact_args() {
     );
     let mut rewritten = 0;
     for object in &mut program.objects.0 {
-        if let bex_vm_types::Object::Function(function) = object {
+        // Reproduce only main's externally emitted call to target. Stdlib
+        // helpers also have declared hooks and must keep their own call sites.
+        if let bex_vm_types::Object::Function(function) = object
+            && function.name == "user.main"
+        {
             for instruction in &mut function.bytecode.instructions {
                 if let bex_vm_types::Instruction::CallHooked { callee, ntypeargs } = *instruction {
                     *instruction = bex_vm_types::Instruction::Call { callee, ntypeargs };
