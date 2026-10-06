@@ -111,7 +111,7 @@ fn identity_bytes(identity: &TypeIdentity) -> usize {
     match identity {
         TypeIdentity::Resolved(name) => declaration_bytes(name.name()),
         TypeIdentity::Unresolved(_) => 0,
-        TypeIdentity::Defined(head) => declaration_bytes(&head.name),
+        TypeIdentity::Defined(_) => 0,
     }
 }
 

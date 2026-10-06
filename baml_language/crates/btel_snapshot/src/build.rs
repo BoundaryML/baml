@@ -14,13 +14,15 @@
 //! could not be held is a truncation marker.
 //!
 //! A recorded class or enum definition is not captured content: it is a blob
-//! made once and shared. [`Leaves::define`] adds a definition's group to the
-//! capture's blobs and returns the reference a type head or declaration
-//! holds; limits do not apply to it.
+//! made once and shared. [`Leaves::define`] returns the reference a type head
+//! or declaration holds, which names the definition's group by ID. The first
+//! capture of a stream to name a group also carries it to the writers (see
+//! [`Carried`]); limits do not apply to it.
 use std::sync::Arc;
 
 use baml_type::{DeclarationName, typetag::TypeTag};
 use bex_str::BexStr;
+use btel_settings::snapshot::CARRIED_GROUPS;
 use btel_types::{Definition, DefinitionBlob};
 use num_bigint::BigInt;
 use rustc_hash::FxHashSet;
@@ -55,9 +57,32 @@ pub struct Leaves<'b> {
     bigints: &'b mut Arena<Bigint>,
     types: &'b mut Arena<Type>,
     definitions: &'b mut Arena<Arc<DefinitionBlob>>,
-    defined: &'b mut FxHashSet<[u8; 16]>,
     meter: &'b Meter,
     limits: Limits,
+}
+
+/// The definition groups one stream of captures has carried to its writers.
+///
+/// A capture names a group by ID and carries it only the first time its
+/// stream names it, so a group reaches the writers ahead of every later
+/// capture that names it, as long as the stream's captures are delivered in
+/// the order they are made. Keep one per such stream, and never share one
+/// between streams that go to different writers. Forgetting a group, as a
+/// full set does, only carries it again: the writers store it once.
+#[derive(Default)]
+pub struct Carried(FxHashSet<[u8; 16]>);
+impl Carried {
+    /// Whether `group` is carried already; otherwise mark it carried.
+    fn carries(&mut self, group: &DefinitionBlob) -> bool {
+        if self.0.contains(&group.id()) {
+            return true;
+        }
+        if self.0.len() >= CARRIED_GROUPS {
+            self.0.clear();
+        }
+        self.0.insert(group.id());
+        false
+    }
 }
 
 /// An object's identity, before its content. It is filled once, by
@@ -140,15 +165,14 @@ impl Leaves<'_> {
         );
         id
     }
-    /// Add `definition`'s group, and every group it names, to the capture's
-    /// blobs, and return how a type head or declaration names it.
-    pub fn define(&mut self, definition: &Definition) -> DefinitionRef {
-        add_group(
-            self.definitions,
-            self.defined,
-            self.meter,
-            &definition.group,
-        );
+    /// How a type head or declaration names `definition`. The capture
+    /// carries its group, and every group that names which `carried` lacks,
+    /// when `carried` lacks it.
+    #[inline]
+    pub fn define(&mut self, definition: &Definition, carried: &mut Carried) -> DefinitionRef {
+        if !carried.carries(&definition.group) {
+            carry(self.definitions, carried, self.meter, &definition.group);
+        }
         DefinitionRef::of(definition)
     }
     /// An object's identity, for what will hold it to name before its
@@ -176,33 +200,22 @@ impl Leaves<'_> {
     }
 }
 
-/// Add `group` after the groups it names, each once. Iterative: a chain of
-/// groups can be as long as a program's declarations.
-fn add_group(
+/// Carry `group`, newly marked carried, after the groups it names that
+/// `carried` lacks, marking each. Iterative: a chain of groups can be as long
+/// as a program's declarations.
+#[cold]
+fn carry(
     definitions: &mut Arena<Arc<DefinitionBlob>>,
-    defined: &mut FxHashSet<[u8; 16]>,
+    carried: &mut Carried,
     meter: &Meter,
     group: &Arc<DefinitionBlob>,
 ) {
-    if defined.contains(&group.id()) {
-        return;
-    }
-    // Most groups name no group the capture lacks: no walk.
-    if group
-        .children()
-        .iter()
-        .all(|child| defined.contains(&child.id()))
-    {
-        defined.insert(group.id());
-        definitions.push(Arc::clone(group), meter);
-        return;
-    }
-    // A group and the next of its children to add.
+    // A group and the next of its children to look at.
     let mut path = vec![(Arc::clone(group), 0)];
     while let Some((top, next)) = path.last_mut() {
         if let Some(child) = top.children().get(*next) {
             *next += 1;
-            if !defined.contains(&child.id()) {
+            if !carried.carries(child) {
                 let child = Arc::clone(child);
                 path.push((child, 0));
             }
@@ -211,10 +224,7 @@ fn add_group(
         let (done, _) = path
             .pop()
             .unwrap_or_else(|| unreachable!("a group on the path"));
-        // Groups form no cycle, but two paths can reach one group.
-        if defined.insert(done.id()) {
-            definitions.push(done, meter);
-        }
+        definitions.push(done, meter);
     }
 }
 
@@ -254,7 +264,6 @@ impl Builder {
             types,
             names: _,
             definitions,
-            defined,
         } = graph;
         Parts {
             leaves: Leaves {
@@ -264,7 +273,6 @@ impl Builder {
                 bigints,
                 types,
                 definitions,
-                defined,
                 meter,
                 limits: *limits,
             },
@@ -440,16 +448,15 @@ impl Builder {
         }
     }
     /// A class or enum declaration. Its name is held beside the objects.
-    /// With its recorded definition, the declaration is identified by it
-    /// rather than by its runtime tag.
+    /// With its recorded definition (from [`Leaves::define`]), the
+    /// declaration is identified by it rather than by its runtime tag.
     pub fn declaration(
         &mut self,
         name: &DeclarationName,
         tag: TypeTag,
         is_enum: bool,
-        definition: Option<&Definition>,
+        definition: Option<DefinitionRef>,
     ) -> SnapshotObject {
-        let definition = definition.map(|definition| self.leaves().define(definition));
         let Storage { graph, meter, .. } = &mut *self.0;
         let id = NameId(u32::try_from(graph.names.len()).expect("a name per object"));
         graph.names.push(

@@ -256,8 +256,8 @@ fn described<V: Visitor, R: Resolver>(
     v.ty(&ty.ty, ty.leaf)?;
     if ty.defined {
         ty.ty.visit_heads(&mut |head| {
-            if let TypeIdentity::Defined(head) = head {
-                r.definition(head.definition.group);
+            if let TypeIdentity::Defined(definition) = head {
+                r.definition(definition.group);
             }
         });
     }

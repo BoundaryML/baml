@@ -408,7 +408,7 @@ fn type_descriptions_are_bounded_and_large_ones_never_recurse_on_the_caller() {
 /// are the blob's children, in order.
 #[test]
 fn long_shallow_types_decode_whole() {
-    use crate::{DefinedHead, TypeIdentity, definition};
+    use crate::{Carried, TypeIdentity, definition};
     let definitions: Vec<_> = (0..8)
         .map(|n| {
             let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.C{n}")));
@@ -424,20 +424,12 @@ fn long_shallow_types_decode_whole() {
         .collect();
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
+    let mut carried = Carried::default();
     let members: Box<[OwnedType]> = definitions
         .iter()
-        .enumerate()
-        .map(|(n, defined)| {
-            let definition = b.leaves().define(defined);
-            RealizedTy::Class(
-                TypeIdentity::Defined(DefinedHead {
-                    name: DeclarationName::Declared(TypeName::from_dotted_path(&format!(
-                        "user.C{n}"
-                    ))),
-                    definition,
-                }),
-                Box::new([]),
-            )
+        .map(|defined| {
+            let definition = b.leaves().define(defined, &mut carried);
+            RealizedTy::Class(TypeIdentity::Defined(definition), Box::new([]))
         })
         .collect();
     let ty = RealizedTy::Union(members);

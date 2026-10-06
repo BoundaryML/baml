@@ -48,7 +48,7 @@ use num_bigint::{BigInt, BigUint, Sign};
 
 use crate::{
     CasId, Description, Limit, OwnedType, TypeIdentity,
-    definition::{self, DefinedHead, DefinitionHead, DefinitionRef, DefinitionType, Meta, Variant},
+    definition::{self, DefinitionHead, DefinitionRef, DefinitionType, Meta, Variant},
     hash::{Absorb, Digest, Hasher},
     tags::{self, HashDomain},
 };
@@ -586,8 +586,8 @@ fn depth<N: Clone>(ty: &TyTemplate<N>) -> usize {
 
 fn value_heads(ty: &OwnedType, found: &mut Measured) {
     ty.visit_heads(&mut |head| {
-        if let TypeIdentity::Defined(head) = head {
-            found.groups.push(head.definition.group);
+        if let TypeIdentity::Defined(definition) = head {
+            found.groups.push(definition.group);
         }
     });
 }
@@ -1512,11 +1512,7 @@ impl BorshDeserialize for TypeIdentity {
                 Ok(Self::Resolved(TaggedTypeName::new(tag, name)))
             }
             0 => Ok(Self::Unresolved(TypeTag::deserialize_reader(r)?)),
-            2 => {
-                let name = DeclarationName::deserialize_reader(r)?;
-                let definition = DefinitionRef::deserialize_reader(r)?;
-                Ok(Self::Defined(DefinedHead { name, definition }))
-            }
+            2 => Ok(Self::Defined(DefinitionRef::deserialize_reader(r)?)),
             other => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("type identity tag {other}"),
@@ -1532,7 +1528,19 @@ impl baml_type::HeadDisplay for TypeIdentity {
         match self {
             Self::Resolved(head) => head.head_display_name(),
             Self::Unresolved(tag) => format!("<unresolved {tag:?}>"),
-            Self::Defined(head) => head.name.to_string(),
+            Self::Defined(definition) => format!(
+                "<definition {}.{}>",
+                definition
+                    .group
+                    .as_bytes()
+                    .iter()
+                    .fold(String::new(), |mut out, byte| {
+                        use std::fmt::Write as _;
+                        let _ = write!(out, "{byte:02x}");
+                        out
+                    }),
+                definition.member
+            ),
         }
     }
 }

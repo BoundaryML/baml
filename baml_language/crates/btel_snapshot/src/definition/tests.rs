@@ -2,8 +2,8 @@ use baml_type::{Name, TypeName, typetag::TypeTag};
 
 use super::*;
 use crate::{
-    BlobError, DecodeLimits, DecodedObject, DecodedRoot, Limits, OwnedType, Shaper, SnapshotPool,
-    SnapshotValue, TypeIdentity, decode_blob,
+    BlobError, Carried, DecodeLimits, DecodedObject, DecodedRoot, Limits, OwnedType, Shaper,
+    SnapshotPool, SnapshotValue, TypeIdentity, decode_blob,
 };
 
 type Template = TyTemplate<Head>;
@@ -353,74 +353,76 @@ fn a_tampered_definition_is_rejected() {
     ));
 }
 
-/// A capture names a definition: the group is a blob of the capture,
-/// before the capture's own, and its root blob lists it as a child.
+/// A capture naming `person` as a declaration and a type head, with
+/// `carried` saying which groups its stream carried already, or naming a
+/// class by its runtime tag when `person` is `None`.
+fn person_capture(
+    pool: &SnapshotPool,
+    tag: i64,
+    person: Option<&Definition>,
+    carried: &mut Carried,
+) -> crate::Snapshot {
+    let mut b = pool.try_acquire().unwrap();
+    let definition = person.map(|person| b.leaves().define(person, carried));
+    let declaration = b.declaration(
+        &anonymous("Person"),
+        TypeTag::from_i64(tag),
+        false,
+        definition,
+    );
+    let declaration = b.leaves().object(declaration).unwrap();
+    let ty = match person {
+        Some(person) => OwnedType::Class(
+            TypeIdentity::Defined(b.leaves().define(person, carried)),
+            Box::new([]),
+        ),
+        None => OwnedType::Class(
+            TypeIdentity::Resolved(baml_type::TaggedTypeName::new(
+                TypeTag::from_i64(tag),
+                anonymous("Person"),
+            )),
+            Box::new([]),
+        ),
+    };
+    let ty = b.leaves().ty(ty);
+    let instance = b.instance(
+        declaration,
+        [],
+        [("name", "ann")].into_iter(),
+        |leaves, (key, value)| (key.into(), leaves.string_value(&value.into())),
+    );
+    let instance = b.leaves().object(instance).unwrap();
+    let args = b.arguments(
+        [SnapshotValue::Object(instance), SnapshotValue::Type(ty)].into_iter(),
+        |_, value| value,
+    );
+    b.finish(args, &mut Shaper::default())
+}
+
+fn root_bytes(snapshot: &crate::Snapshot) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut crate::BlobScratch::default(), &mut bytes)
+        .unwrap();
+    bytes
+}
+
+/// The first capture of a stream to name a group carries it, before the
+/// capture's own blob; later ones name it by ID alone, and their blobs are
+/// the same. A stream's carried set is its own.
 #[test]
-fn a_capture_carries_the_groups_it_names() {
+fn a_stream_carries_a_group_once_and_names_it_after() {
     let pool = SnapshotPool::new(4, Limits::default());
     let person = group(&[class(
         anonymous("Person"),
         vec![field("name", TyTemplate::String)],
     )]);
-    let capture = |tag: i64, defined: bool| {
-        let mut b = pool.try_acquire().unwrap();
-        let definition = defined.then(|| &person[0]);
-        let declaration = b.declaration(
-            &anonymous("Person"),
-            TypeTag::from_i64(tag),
-            false,
-            definition,
-        );
-        let declaration = b.leaves().object(declaration).unwrap();
-        let ty = match definition {
-            Some(definition) => {
-                let definition = b.leaves().define(definition);
-                OwnedType::Class(
-                    TypeIdentity::Defined(DefinedHead {
-                        name: anonymous("Person"),
-                        definition,
-                    }),
-                    Box::new([]),
-                )
-            }
-            None => OwnedType::Class(
-                TypeIdentity::Resolved(baml_type::TaggedTypeName::new(
-                    TypeTag::from_i64(tag),
-                    anonymous("Person"),
-                )),
-                Box::new([]),
-            ),
-        };
-        let ty = b.leaves().ty(ty);
-        let instance = b.instance(
-            declaration,
-            [],
-            [("name", "ann")].into_iter(),
-            |leaves, (key, value)| (key.into(), leaves.string_value(&value.into())),
-        );
-        let instance = b.leaves().object(instance).unwrap();
-        let args = b.arguments(
-            [SnapshotValue::Object(instance), SnapshotValue::Type(ty)].into_iter(),
-            |_, value| value,
-        );
-        b.finish(args, &mut Shaper::default())
-    };
-    let first = capture(1, true);
-    let ids: Vec<_> = first.blobs().map(|blob| blob.id()).collect();
     let group_id = crate::CasId::from_bytes(id(&person));
+    let mut stream = Carried::default();
+    let first = person_capture(&pool, 1, Some(&person[0]), &mut stream);
+    let ids: Vec<_> = first.blobs().map(|blob| blob.id()).collect();
     assert_eq!(ids, vec![group_id, first.root_id()]);
-    let mut bytes = Vec::new();
-    first
-        .root_blob()
-        .write(&mut crate::BlobScratch::default(), &mut bytes)
-        .unwrap();
-    let decoded = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
-    assert_eq!(decoded.children, vec![group_id]);
-    assert!(decoded.objects.iter().any(|object| matches!(
-        object,
-        DecodedObject::Declaration { tag: None, definition: Some(definition), .. }
-            if *definition == DefinitionRef::of(&person[0])
-    )));
     let mut group_bytes = Vec::new();
     first
         .blobs()
@@ -430,8 +432,186 @@ fn a_capture_carries_the_groups_it_names() {
         .unwrap();
     assert_eq!(group_bytes, person[0].group.bytes());
 
-    // Classes that differ only in their runtime tags capture identically
-    // once they are named by their definitions, and not before.
-    assert_eq!(capture(2, true).root_id(), first.root_id());
-    assert_ne!(capture(1, false).root_id(), capture(2, false).root_id());
+    let later = person_capture(&pool, 1, Some(&person[0]), &mut stream);
+    let ids: Vec<_> = later.blobs().map(|blob| blob.id()).collect();
+    assert_eq!(ids, vec![later.root_id()], "named by ID alone");
+    assert_eq!(later.root_id(), first.root_id());
+    assert_eq!(root_bytes(&later), root_bytes(&first));
+    assert_eq!(later.root_blob().named(), [group_id]);
+
+    let decoded = decode_blob(&root_bytes(&later), &DecodeLimits::default()).unwrap();
+    assert_eq!(decoded.children, vec![group_id]);
+    assert!(decoded.objects.iter().any(|object| matches!(
+        object,
+        DecodedObject::Declaration { tag: None, definition: Some(definition), .. }
+            if *definition == DefinitionRef::of(&person[0])
+    )));
+
+    let other_stream = person_capture(&pool, 1, Some(&person[0]), &mut Carried::default());
+    assert_eq!(
+        other_stream.blobs().len(),
+        2,
+        "another stream carries it too"
+    );
+}
+
+/// A group carried for the first time brings the groups it names that the
+/// stream has not carried, each before the groups that name it.
+#[test]
+fn carrying_a_group_carries_what_it_names_first() {
+    let pool = SnapshotPool::new(4, Limits::default());
+    let resume = group(&[class(
+        declared("user.Resume"),
+        vec![field("name", TyTemplate::String)],
+    )]);
+    let holder = group(&[class(
+        declared("user.Holder"),
+        vec![field(
+            "resume",
+            TyTemplate::Class(
+                Head::Defined(declared("user.Resume"), resume[0].clone()),
+                Box::new([]),
+            ),
+        )],
+    )]);
+    let capture = |carried: &mut Carried| {
+        let mut b = pool.try_acquire().unwrap();
+        let holder = b.leaves().define(&holder[0], carried);
+        let ty = b.leaves().ty(OwnedType::Class(
+            TypeIdentity::Defined(holder),
+            Box::new([]),
+        ));
+        b.finish(SnapshotValue::Type(ty), &mut Shaper::default())
+    };
+    let mut fresh = Carried::default();
+    let ids: Vec<_> = capture(&mut fresh)
+        .blobs()
+        .map(|blob| blob.id().as_bytes().to_owned())
+        .collect();
+    assert_eq!(&ids[..2], [id(&resume), id(&holder)]);
+    let mut knows_resume = Carried::default();
+    let _ = pool
+        .try_acquire()
+        .unwrap()
+        .leaves()
+        .define(&resume[0], &mut knows_resume);
+    let ids: Vec<_> = capture(&mut knows_resume)
+        .blobs()
+        .map(|blob| blob.id().as_bytes().to_owned())
+        .collect();
+    assert_eq!(&ids[..1], [id(&holder)]);
+    assert_eq!(ids.len(), 2);
+}
+
+/// Classes that differ only in their runtime tags capture identically
+/// once they are named by their definitions, and not before.
+#[test]
+fn identical_runtime_classes_capture_identically() {
+    let pool = SnapshotPool::new(4, Limits::default());
+    let person = group(&[class(
+        anonymous("Person"),
+        vec![field("name", TyTemplate::String)],
+    )]);
+    let mut carried = Carried::default();
+    assert_eq!(
+        person_capture(&pool, 1, Some(&person[0]), &mut carried).root_id(),
+        person_capture(&pool, 2, Some(&person[0]), &mut carried).root_id()
+    );
+    assert_ne!(
+        person_capture(&pool, 1, None, &mut carried).root_id(),
+        person_capture(&pool, 2, None, &mut carried).root_id()
+    );
+}
+
+/// Members a group cannot tell apart get the same position, whichever was
+/// handed over first, so a definition that names one of them is the same
+/// in every process.
+#[test]
+fn indistinguishable_members_get_one_position_in_any_order() {
+    // `Node { next: Node }` twice, pointing at each other: either can start.
+    let pair = || {
+        vec![
+            class(anonymous("Node"), vec![field("next", member(1))]),
+            class(anonymous("Node"), vec![field("next", member(0))]),
+        ]
+    };
+    let made = group(&pair());
+    assert_eq!((made[0].member, made[1].member), (0, 0));
+    // A ring of three identical nodes, handed over in each of the six
+    // orders: every member is at position 0, so a class that names any of
+    // them is the same definition.
+    let ring = |order: [u32; 3]| {
+        let mut members = vec![None, None, None];
+        for k in 0..3 {
+            let next = order[(k + 1) % 3];
+            members[order[k] as usize] =
+                Some(class(anonymous("Node"), vec![field("next", member(next))]));
+        }
+        members.into_iter().map(Option::unwrap).collect::<Vec<_>>()
+    };
+    let holder = |node: Definition| {
+        id(&group(&[class(
+            anonymous("Holder"),
+            vec![field(
+                "node",
+                TyTemplate::Class(Head::Defined(anonymous("Node"), node), Box::new([])),
+            )],
+        )]))
+    };
+    let mut holders = Vec::new();
+    for order in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        let made = group(&ring(order));
+        assert!(made.iter().all(|node| node.member == 0));
+        holders.extend(made.into_iter().map(holder));
+    }
+    assert!(
+        holders.windows(2).all(|pair| pair[0] == pair[1]),
+        "{holders:?}"
+    );
+    // Members that can be told apart keep distinct positions.
+    let made = group(&left_right(true));
+    assert_ne!(made[0].member, made[1].member);
+}
+
+/// A leaf hashed in one call has the digest of hashing it piece by piece,
+/// which is how a reader checks it.
+#[test]
+fn type_leaves_hash_as_a_reader_checks_them() {
+    let definition = group(&[class(anonymous("Person"), vec![])]).remove(0);
+    let types = [
+        OwnedType::String,
+        OwnedType::Type,
+        OwnedType::List(Box::new(OwnedType::Int)),
+        OwnedType::Union(Box::new([
+            OwnedType::Class(
+                TypeIdentity::Defined(DefinitionRef::of(&definition)),
+                Box::new([]),
+            ),
+            OwnedType::Null,
+        ])),
+        OwnedType::Class(
+            TypeIdentity::Resolved(baml_type::TaggedTypeName::new(
+                TypeTag::from_i64(7),
+                declared("user.Resume"),
+            )),
+            Box::new([]),
+        ),
+    ];
+    for ty in types {
+        let mut streamed = Hasher::new(HashDomain::Type);
+        let len = streamed.borsh(&ty);
+        // Twice: a type without parts is made once and remembered.
+        for _ in 0..2 {
+            let leaf = crate::hash::ty(&ty);
+            assert_eq!(leaf.digest, streamed.finish(), "{ty:?}");
+            assert_eq!(leaf.encoded_len as usize, len);
+        }
+    }
 }

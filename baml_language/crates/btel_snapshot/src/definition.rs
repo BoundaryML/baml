@@ -25,6 +25,13 @@
 //! the whole group. The blob therefore depends on the group's content alone,
 //! never on discovery order or runtime tags.
 //!
+//! Starts that make that same smallest encoding are members the group cannot
+//! tell apart (an automorphism maps one to the other), and each start places
+//! the members differently. A member's position, which is what a definition
+//! outside the group names it by, is the smallest it takes from any of
+//! those starts: the same for every member it cannot be told apart from,
+//! whichever the runtime found first.
+//!
 //! # Encoding (blob format 5, root tag 2)
 //!
 //! After the root tag: a u32 member count, then each member: its kind (0
@@ -301,6 +308,8 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
         .min()
         .unwrap_or_else(|| unreachable!("a member"));
     let mut best: Option<Encoding> = None;
+    // The placements of every start that makes the best encoding so far.
+    let mut tied: Vec<Vec<u32>> = Vec::new();
     for start in (0..members.len()).filter(|&at| digests[at] == least) {
         let (order, positions) = first_reference(members, start);
         let mut encoding = Encoding {
@@ -320,18 +329,28 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
                 &mut encoding.children,
             );
         }
-        if best
+        match best
             .as_ref()
-            .is_none_or(|least| encoding.content < least.content)
+            .map(|least| encoding.content.cmp(&least.content))
         {
-            best = Some(encoding);
+            None | Some(std::cmp::Ordering::Less) => {
+                tied.clear();
+                tied.push(encoding.positions.clone());
+                best = Some(encoding);
+            }
+            Some(std::cmp::Ordering::Equal) => tied.push(encoding.positions),
+            Some(std::cmp::Ordering::Greater) => {}
         }
     }
     let Encoding {
-        content,
-        children,
-        positions,
+        content, children, ..
     } = best.unwrap_or_else(|| unreachable!("a start"));
+    let positions = (0..members.len()).map(|member| {
+        tied.iter()
+            .map(|positions| positions[member])
+            .min()
+            .unwrap_or_else(|| unreachable!("a start"))
+    });
 
     let mut h = Hasher::new(HashDomain::Blob);
     h.byte(RootTag::Definitions as u8);
@@ -362,7 +381,6 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
         children.into_boxed_slice(),
     ));
     positions
-        .into_iter()
         .map(|member| Definition {
             group: Arc::clone(&blob),
             member,

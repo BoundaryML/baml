@@ -23,13 +23,20 @@
 //! identical runtime classes hash identically. A definition blob's ID is the
 //! hash of its root tag and its content bytes as written, which hold no
 //! leaves to replace, then its child table and an object count of zero.
-use std::io::{self, Write};
+use std::{
+    cell::RefCell,
+    io::{self, Write},
+    sync::OnceLock,
+};
 
 use borsh::BorshSerialize;
 use num_bigint::BigInt;
 use xxhash_rust::xxh3::Xxh3;
 
 use super::{BexStr, OwnedType, TypeIdentity, tags::HashDomain};
+
+/// What every leaf's hash input starts with, before its domain.
+const LEAF_PREFIX: &[u8] = b"baml.snapshot.xxh3-128.v3\0";
 
 /// Content identity of one blob. A zero digest is a valid hash, never absence.
 #[repr(transparent)]
@@ -77,7 +84,7 @@ impl Hasher {
         } else if matches!(domain, HashDomain::Blob) && version == 4 {
             h.absorb(b"baml.snapshot.xxh3-128.v4\0");
         } else {
-            h.absorb(b"baml.snapshot.xxh3-128.v3\0");
+            h.absorb(LEAF_PREFIX);
         }
         h.byte(domain as u8);
         h
@@ -140,10 +147,9 @@ impl BorshSerialize for TypeIdentity {
                 (TypeIdentityTag::Unresolved as u8).serialize(w)?;
                 tag.serialize(w)
             }
-            Self::Defined(head) => {
+            Self::Defined(definition) => {
                 (TypeIdentityTag::Defined as u8).serialize(w)?;
-                head.name.serialize(w)?;
-                head.definition.serialize(w)
+                definition.serialize(w)
             }
         }
     }
@@ -173,11 +179,59 @@ pub(crate) struct TypeLeaf {
     pub(crate) digest: Digest,
     pub(crate) encoded_len: u32,
 }
+///
+/// The description is encoded whole and hashed in one call, which is the
+/// same digest as hashing it piece by piece and much faster for the many
+/// small pieces a type has. A type without parts has its leaf made once.
 pub(crate) fn ty(ty: &OwnedType) -> TypeLeaf {
-    let mut h = Hasher::new(HashDomain::Type);
-    let encoded_len = u32::try_from(h.borsh(ty)).expect("type description exceeds u32");
-    TypeLeaf {
-        digest: h.finish(),
-        encoded_len,
-    }
+    use baml_type::RealizedTy as T;
+    let constant = match ty {
+        T::Int => 0,
+        T::Bigint => 1,
+        T::Float => 2,
+        T::String => 3,
+        T::Bool => 4,
+        T::Null => 5,
+        T::Uint8Array => 6,
+        T::RustType => 7,
+        T::Type => 8,
+        T::Resource => 9,
+        T::PromptAst => 10,
+        T::Void => 11,
+        T::Unknown => 12,
+        T::Never => 13,
+        T::Media(_)
+        | T::Literal(..)
+        | T::Class(..)
+        | T::Interface(..)
+        | T::Enum(_)
+        | T::EnumVariant(..)
+        | T::List(_)
+        | T::Map { .. }
+        | T::Union(_)
+        | T::Function { .. }
+        | T::Future(..)
+        | T::TypeAlias(_) => return encoded(ty),
+    };
+    static CONSTANT: [OnceLock<TypeLeaf>; 14] = [const { OnceLock::new() }; 14];
+    *CONSTANT[constant].get_or_init(|| encoded(ty))
+}
+
+thread_local! {
+    /// A type description being hashed: the hash input, prefix included.
+    static TYPE_INPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+}
+
+fn encoded(ty: &OwnedType) -> TypeLeaf {
+    TYPE_INPUT.with_borrow_mut(|input| {
+        input.clear();
+        input.extend_from_slice(LEAF_PREFIX);
+        input.push(HashDomain::Type as u8);
+        let start = input.len();
+        ty.serialize(input).expect("writing to memory");
+        TypeLeaf {
+            digest: Digest(xxhash_rust::xxh3::xxh3_128(input).to_le_bytes()),
+            encoded_len: u32::try_from(input.len() - start).expect("type description exceeds u32"),
+        }
+    })
 }

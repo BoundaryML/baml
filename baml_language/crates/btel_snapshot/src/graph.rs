@@ -7,13 +7,8 @@ use baml_type::{DeclarationName, MediaKind, typetag::TypeTag};
 use bex_str::BexStr;
 use btel_types::DefinitionBlob;
 use num_bigint::BigInt;
-use rustc_hash::FxHashSet;
 
-use crate::{
-    arena::Arena,
-    definition::{DefinedHead, DefinitionRef},
-    hash,
-};
+use crate::{arena::Arena, definition::DefinitionRef, hash};
 
 macro_rules! index {
     ($name:ident) => {
@@ -95,9 +90,10 @@ impl Uint8ArrayData {
 pub enum TypeIdentity {
     Resolved(baml_type::TaggedTypeName),
     Unresolved(TypeTag),
-    /// A class or enum named by its recorded definition, whose blob is a
-    /// child of every blob that holds this head (format 5).
-    Defined(DefinedHead),
+    /// A class or enum named by its recorded definition, whose group is a
+    /// child of every blob that holds this head (format 5). Its name is the
+    /// definition's.
+    Defined(DefinitionRef),
 }
 pub type OwnedType = baml_type::RealizedTy<TypeIdentity>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -321,11 +317,9 @@ pub(crate) struct Graph {
     pub(crate) types: Arena<Type>,
     /// The names of the declarations among the objects.
     pub(crate) names: Arena<Declared>,
-    /// The definition groups the capture names, each after the groups it
-    /// names.
+    /// The definition groups the capture carries to its writers, each after
+    /// the groups it names: those its stream had not carried yet.
     pub(crate) definitions: Arena<Arc<DefinitionBlob>>,
-    /// The IDs of `definitions`.
-    pub(crate) defined: FxHashSet<[u8; 16]>,
 }
 impl Graph {
     /// Drop the capture and keep the capacity. Every arena is named, so none
@@ -343,7 +337,6 @@ impl Graph {
             types,
             names,
             definitions,
-            defined,
         } = self;
         objects.clear();
         values.clear();
@@ -356,7 +349,6 @@ impl Graph {
         types.clear();
         names.clear();
         definitions.clear();
-        defined.clear();
     }
     pub(crate) fn capacity_bytes(&self) -> usize {
         let Self {
@@ -371,7 +363,6 @@ impl Graph {
             types,
             names,
             definitions,
-            defined,
         } = self;
         [
             objects.capacity_bytes(),
@@ -385,7 +376,6 @@ impl Graph {
             types.capacity_bytes(),
             names.capacity_bytes(),
             definitions.capacity_bytes(),
-            defined.capacity().saturating_mul(size_of::<[u8; 16]>()),
         ]
         .into_iter()
         .fold(0, usize::saturating_add)

@@ -30,7 +30,7 @@ mod split;
 mod tags;
 mod walk;
 
-pub use build::{Builder, Leaves, Reserved, string_map};
+pub use build::{Builder, Carried, Leaves, Reserved, string_map};
 pub use decode::{
     BlobError, ChildIndex, DecodeLimits, DecodedDefinition, DecodedMedia, DecodedMediaSource,
     DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, FieldType,

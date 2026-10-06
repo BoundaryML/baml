@@ -543,3 +543,166 @@ fn scalar_projection_keeps_leaf_kinds() {
     };
     assert!(json.contains("widget"));
 }
+
+mod definitions {
+    use std::sync::Arc;
+
+    use baml_type::{DeclarationName, Name, RealizedTy, TyTemplate};
+    use btel_snapshot::{
+        DecodeLimits, Limits, OwnedType, Shaper, SnapshotPool, SnapshotValue, TypeIdentity,
+        definition::{self, Class, Declaration, Field, Head, Meta},
+    };
+    use btel_types::Definition;
+
+    use super::*;
+
+    fn class(name: &str, fields: Vec<(&str, TyTemplate<Head>)>) -> Declaration<TyTemplate<Head>> {
+        Declaration::Class(Class {
+            name: DeclarationName::Anonymous(Name::new(name)),
+            type_params: 0,
+            meta: Meta::default(),
+            stream_done: false,
+            fields: fields
+                .into_iter()
+                .map(|(name, ty)| Field {
+                    name: name.into(),
+                    ty,
+                    meta: Meta::default(),
+                    skip: false,
+                    stream_done: false,
+                    must_exist: false,
+                })
+                .collect(),
+        })
+    }
+
+    fn lists<N: Clone>(levels: usize, inner: TyTemplate<N>) -> TyTemplate<N> {
+        (0..levels).fold(inner, |ty, _| TyTemplate::List(Box::new(ty)))
+    }
+
+    fn decode(bytes: &[u8]) -> Arc<DecodedSnapshot> {
+        Arc::new(btel_snapshot::decode_blob(bytes, &DecodeLimits::default()).unwrap())
+    }
+
+    /// Store each group of `definitions` in `blobs`.
+    fn store(blobs: &mut Blobs, definitions: &[&Definition]) {
+        for definition in definitions {
+            let group = decode(definition.group.bytes());
+            blobs.0.insert(group.id, Ok(group));
+        }
+    }
+
+    /// A capture whose value is `ty`, and its rendering.
+    fn render_type(blobs: &Blobs, ty: OwnedType) -> Rendered {
+        let pool = SnapshotPool::new(1, Limits::default());
+        let mut b = pool.try_acquire().unwrap();
+        let ty = b.leaves().ty(ty);
+        let snapshot = b.finish(SnapshotValue::Type(ty), &mut Shaper::default());
+        let mut bytes = Vec::new();
+        snapshot
+            .root_blob()
+            .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+            .unwrap();
+        let value = decode(&bytes);
+        let Nav::Value(found) = navigate(blobs, &value, Root::Value, None, &[], 0) else {
+            panic!("a type value")
+        };
+        render_value(blobs, &found, &RenderLimits::default())
+    }
+
+    fn defined(definition: &Definition) -> OwnedType {
+        RealizedTy::Class(
+            TypeIdentity::Defined(btel_snapshot::DefinitionRef::of(definition)),
+            Box::new([]),
+        )
+    }
+
+    /// A chain of definitions, each reached through a deep field type, nests
+    /// no deeper than one rendering allows: it renders on a 2 MiB stack,
+    /// cut where the bound is reached.
+    #[test]
+    fn nested_definitions_cannot_nest_past_the_bound() {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(|| {
+                let mut chain: Vec<Definition> = Vec::new();
+                let mut blobs = Blobs::default();
+                for n in 0..300 {
+                    let next = match chain.last() {
+                        Some(next) => lists(
+                            100,
+                            TyTemplate::Class(
+                                Head::Defined(
+                                    DeclarationName::Anonymous(Name::new("Link")),
+                                    next.clone(),
+                                ),
+                                Box::new([]),
+                            ),
+                        ),
+                        None => TyTemplate::Int,
+                    };
+                    let made =
+                        definition::group(&[class(&format!("Link{n}"), vec![("next", next)])]);
+                    store(&mut blobs, &[&made[0]]);
+                    chain.push(made.into_iter().next().unwrap());
+                }
+                let head = defined(chain.last().unwrap());
+                std::thread::Builder::new()
+                    .stack_size(2 << 20)
+                    .spawn(move || {
+                        let rendered = render_type(&blobs, head);
+                        assert!(rendered.cut);
+                        assert_eq!(rendered.incomplete, None);
+                        rendered.json.to_string().len()
+                    })
+                    .unwrap()
+                    .join()
+                    .expect("rendering nested definitions must not exhaust a 2 MiB stack")
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    /// A definition the bound cuts where it is first named is not taken as
+    /// included: a shallower reference in the same rendering includes it.
+    /// A field type too deep to decode is marked, not left null.
+    #[test]
+    fn a_cut_definition_is_included_where_it_fits() {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(|| {
+                let deep =
+                    definition::group(&[class("Deep", vec![("bad", lists(200, TyTemplate::Int))])]);
+                let mut blobs = Blobs::default();
+                store(&mut blobs, &[&deep[0]]);
+                // The first variant reaches the class at the bound; the second
+                // names it at the top.
+                let deep_list =
+                    (0..126).fold(defined(&deep[0]), |ty, _| RealizedTy::List(Box::new(ty)));
+                let ty = RealizedTy::Union(Box::new([deep_list, defined(&deep[0])]));
+                let rendered = render_type(&blobs, ty);
+                let variants = &rendered.json["$type"]["variants"];
+                let mut innermost = &variants[0];
+                while innermost["type"] == "list" {
+                    innermost = &innermost["item"];
+                }
+                assert_eq!(innermost["type"], "class");
+                assert_eq!(innermost["name"], "Deep");
+                assert_eq!(
+                    innermost["definition"],
+                    json!({"$truncated": "render_depth"})
+                );
+                let included = &variants[1]["definition"];
+                assert_eq!(included["name"], "Deep");
+                assert_eq!(
+                    included["fields"][0]["schema"],
+                    json!({"$truncated": "type_depth"})
+                );
+                assert!(rendered.cut);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+}

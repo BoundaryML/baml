@@ -37,6 +37,10 @@ pub const MAX_LEAF_BYTES: usize = 1 << 30;
 /// Bounded processor-local whole-snapshot combining window, not a delivery ledger.
 pub const RECENT_CAPTURE_IDS: usize = 4096;
 
+/// Definition groups one stream of captures remembers carrying. Past this the
+/// stream forgets them all and carries each again once.
+pub const CARRIED_GROUPS: usize = 4096;
+
 /// CAS blob envelope. Change with the binary codec, never as a tuning knob.
 pub const BLOB_MAGIC: [u8; 8] = *b"BTELCAS\0";
 pub const BLOB_VERSION: u32 = 5;

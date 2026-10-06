@@ -122,12 +122,16 @@ impl Blob<'_> {
         };
         let members = &shape.members[entry.members.indexes()];
         let children = &shape.children[entry.children.indexes()];
+        let named = &shape.named[entry.named.indexes()];
         w.write_all(&BLOB_MAGIC)?;
         BLOB_VERSION.serialize(w)?;
         w.write_all(entry.id.as_bytes())?;
-        size(w, children.len())?;
+        size(w, children.len() + named.len())?;
         for child in children {
             w.write_all(shape.blobs[child.0 as usize].id.as_bytes())?;
+        }
+        for group in named {
+            w.write_all(group.as_bytes())?;
         }
         size(w, members.len())?;
         let mut stored = Stored::new(scratch, s, shape, members, children);
@@ -147,7 +151,7 @@ impl Blob<'_> {
                 walk::infallible(walk::object(&mut length, &mut stored, s, object));
             }
             assert_eq!(
-                HEADER_BYTES + 4 + 16 * children.len() as u64 + 4 + length.0,
+                HEADER_BYTES + 4 + 16 * (children.len() + named.len()) as u64 + 4 + length.0,
                 entry.encoded_len,
                 "a blob is as long as shaping measured"
             );

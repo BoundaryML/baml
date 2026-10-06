@@ -10,9 +10,9 @@
 //!
 //! A class, enum or enum variant recorded with its definition names it with
 //! `def`, after its arguments, and the cell it is rendered in may include the
-//! definition there (see [`Definitions`]). A recorded definition's field
-//! types use the same vocabulary, with `{"type": "typeParam", "index": N}`
-//! for generic parameter `N`.
+//! definition there (see [`Definitions`]); its name is the definition's. A
+//! recorded definition's field types use the same vocabulary, with
+//! `{"type": "typeParam", "index": N}` for generic parameter `N`.
 
 use baml_type::{Literal, TyTemplate};
 use btel_snapshot::{
@@ -36,6 +36,14 @@ pub(super) trait Definitions {
     /// `node` names `definition`: add its `def`, and its `definition` when
     /// the cell includes it there.
     fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef);
+    /// The name a recorded definition gives its class or enum, if its group
+    /// was read.
+    fn name(&mut self, definition: DefinitionRef) -> Option<String>;
+    /// Go one type level deeper: false past the rendering's nesting bound,
+    /// where [`Self::cut`] stands in for the part.
+    fn enter(&mut self) -> bool;
+    fn leave(&mut self);
+    fn cut(&mut self) -> Json;
 }
 
 /// A definition's ID as rendered: its group's blob ID, and its position
@@ -52,13 +60,23 @@ pub(super) fn definition_id(definition: DefinitionRef) -> String {
     id
 }
 
-/// Names definitions by ID alone.
+/// Names definitions by ID alone, and nests without bound.
 #[cfg(test)]
 struct Ids;
 #[cfg(test)]
 impl Definitions for Ids {
     fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef) {
         node.insert("def".into(), Json::from(definition_id(definition)));
+    }
+    fn name(&mut self, _: DefinitionRef) -> Option<String> {
+        None
+    }
+    fn enter(&mut self) -> bool {
+        true
+    }
+    fn leave(&mut self) {}
+    fn cut(&mut self) -> Json {
+        Json::Null
     }
 }
 
@@ -79,9 +97,9 @@ pub(super) fn json_in(ty: &OwnedType, cx: &mut impl Definitions) -> Json {
             name: None,
             definition: None,
         },
-        TypeIdentity::Defined(head) => Head {
-            name: Some(head.name.to_string()),
-            definition: Some(head.definition),
+        TypeIdentity::Defined(definition) => Head {
+            name: None,
+            definition: Some(*definition),
         },
     }));
     template(&ty, cx)
@@ -118,6 +136,16 @@ pub(super) fn field_json(
 }
 
 fn template(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
+    if !cx.enter() {
+        return cx.cut();
+    }
+    let rendered = level(ty, cx);
+    cx.leave();
+    rendered
+}
+
+/// One level of a type, its parts one level deeper.
+fn level(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
     match ty {
         TyTemplate::Int => leaf("int"),
         TyTemplate::Bigint => leaf("bigint"),
@@ -129,14 +157,14 @@ fn template(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
         TyTemplate::Media(kind) => node("media", [("kind", Json::from(kind.tag_str()))]),
         TyTemplate::Literal(literal, _) => node("literal", [("value", literal_value(literal))]),
         TyTemplate::Class(head, args) => {
-            let mut class = named("class", head);
+            let mut class = named("class", head, cx);
             if !args.is_empty() {
                 class.insert("args".into(), list(args, cx));
             }
             defined(class, head, cx)
         }
         TyTemplate::Interface(head, args, associated) => {
-            let mut interface = named("interface", head);
+            let mut interface = named("interface", head, cx);
             if !args.is_empty() {
                 interface.insert("args".into(), list(args, cx));
             }
@@ -149,13 +177,13 @@ fn template(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
             }
             Json::Object(interface)
         }
-        TyTemplate::Enum(head) => defined(named("enum", head), head, cx),
+        TyTemplate::Enum(head) => defined(named("enum", head, cx), head, cx),
         TyTemplate::EnumVariant(head, variant) => {
-            let mut variant_ty = named("enumVariant", head);
+            let mut variant_ty = named("enumVariant", head, cx);
             variant_ty.insert("value".into(), Json::from(variant.as_str()));
             defined(variant_ty, head, cx)
         }
-        TyTemplate::TypeAlias(head) => Json::Object(named("alias", head)),
+        TyTemplate::TypeAlias(head) => Json::Object(named("alias", head, cx)),
         TyTemplate::List(item) => node("list", [("item", template(item, cx))]),
         TyTemplate::Map { key, value } => node(
             "map",
@@ -232,7 +260,7 @@ fn template(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
             interface,
             member,
         } => {
-            let mut declaring = named("interface", &interface.name);
+            let mut declaring = named("interface", &interface.name, cx);
             if !interface.generics.is_empty() {
                 declaring.insert("args".into(), list(&interface.generics, cx));
             }
@@ -274,12 +302,14 @@ fn node<const N: usize>(name: &str, parts: [(&str, Json); N]) -> Json {
     Json::Object(map)
 }
 
-fn named(name: &str, head: &Head) -> Map<String, Json> {
+fn named(name: &str, head: &Head, cx: &mut impl Definitions) -> Map<String, Json> {
     let mut map = kind(name);
-    map.insert(
-        "name".into(),
-        head.name.as_deref().map_or(Json::Null, Json::from),
-    );
+    let spelled = match (&head.name, head.definition) {
+        (Some(name), _) => Some(name.clone()),
+        (None, Some(definition)) => cx.name(definition),
+        (None, None) => None,
+    };
+    map.insert("name".into(), spelled.map_or(Json::Null, Json::from));
     map
 }
 

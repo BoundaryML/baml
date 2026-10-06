@@ -78,7 +78,14 @@ impl<'s> Blob<'s> {
     pub fn encoded_len(&self) -> u64 {
         self.entry().encoded_len
     }
-    /// The blobs this one names, in the order of its child table.
+    /// The definition groups this one names by ID, which follow its
+    /// [`Self::children`] in its child table. The capture carries a group
+    /// only when its stream names it first ([`crate::Carried`]).
+    pub fn named(&self) -> &'s [CasId] {
+        &self.snapshot.0.shape.named[self.entry().named.indexes()]
+    }
+    /// The blobs of this capture that this one's values continue in, in the
+    /// order of its child table.
     pub fn children(&self) -> impl ExactSizeIterator<Item = Blob<'s>> + use<'s> {
         let snapshot = self.snapshot;
         snapshot.0.shape.children[self.entry().children.indexes()]

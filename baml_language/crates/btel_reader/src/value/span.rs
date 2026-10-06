@@ -381,8 +381,8 @@ impl Span {
                 if let Some(ty) = &ty.decoded {
                     let mut groups = Vec::new();
                     ty.visit_heads(&mut |head| {
-                        if let TypeIdentity::Defined(head) = head {
-                            groups.push(head.definition.group);
+                        if let TypeIdentity::Defined(definition) = head {
+                            groups.push(definition.group);
                         }
                     });
                     for group in groups {

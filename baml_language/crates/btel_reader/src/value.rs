@@ -767,8 +767,16 @@ fn envelope(key: &str, value: Json) -> Json {
     Json::Object(map)
 }
 
+/// How deeply type levels, and the definitions in them, nest in one
+/// rendering: as deep as a decoded type can be. Each definition included
+/// inside a type counts as a level, so a chain of definitions in deep field
+/// types cannot nest further and exhaust the stack.
+const MAX_TYPE_NESTING: usize = 128;
+
 /// Why a render limit cut a part: its nesting, or the rendering's size.
 const RENDER_DEPTH: &str = "render_depth";
+/// A recorded type nested too deeply to decode safely.
+const TYPE_DEPTH: &str = "type_depth";
 const RENDER_SIZE: &str = "render_size";
 
 fn limit_label(limit: Limit) -> &'static str {
@@ -811,8 +819,9 @@ struct Renderer<'a> {
     rendered: HashMap<(CasId, NodeId), u32>,
     /// Definitions already included in this rendering.
     defined: HashSet<DefinitionRef>,
-    /// Definitions being rendered, each inside the one before.
-    definition_depth: usize,
+    /// Type levels and the definitions inside them being rendered, each
+    /// inside the one before; at most [`MAX_TYPE_NESTING`].
+    nesting: usize,
     nodes: usize,
     /// Bytes of text written, never past the limit.
     text_bytes: usize,
@@ -827,7 +836,7 @@ impl<'a> Renderer<'a> {
             limits,
             rendered: HashMap::new(),
             defined: HashSet::new(),
-            definition_depth: 0,
+            nesting: 0,
             nodes: 0,
             text_bytes: 0,
             incomplete: None,
@@ -925,17 +934,21 @@ impl<'a> Renderer<'a> {
         body_key: &str,
     ) {
         map.insert(id_key.into(), Json::from(ty::definition_id(definition)));
-        if !self.defined.insert(definition) {
+        if self.defined.contains(&definition) {
             return;
         }
-        let body = if self.definition_depth >= self.limits.max_depth {
-            self.truncated(RENDER_DEPTH)
-        } else {
-            self.definition_depth += 1;
-            let body = self.definition(definition);
-            self.definition_depth -= 1;
-            body
-        };
+        // Cut here, it is not included: a reference nested less deeply
+        // still includes it.
+        if self.nesting >= MAX_TYPE_NESTING {
+            let cut = self.truncated(RENDER_DEPTH);
+            map.insert(body_key.into(), cut);
+            return;
+        }
+        // Included before its body, which may name it again.
+        self.defined.insert(definition);
+        self.nesting += 1;
+        let body = self.definition(definition);
+        self.nesting -= 1;
         map.insert(body_key.into(), body);
     }
 
@@ -974,7 +987,8 @@ impl<'a> Renderer<'a> {
                             ty::field_json(ty, group.id, members, self)
                         }
                         Some(_) => self.truncated(RENDER_SIZE),
-                        None => Json::Null,
+                        // Nested too deeply to decode safely.
+                        None => self.truncated(TYPE_DEPTH),
                     };
                     part.insert("schema".into(), schema);
                     self.meta(&mut part, &field.meta);
@@ -1317,6 +1331,27 @@ impl<'a> Renderer<'a> {
 impl ty::Definitions for Renderer<'_> {
     fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef) {
         self.reference(node, definition, "def", "definition");
+    }
+    fn name(&mut self, definition: DefinitionRef) -> Option<String> {
+        let group = self.span.group(definition.group).ok()?;
+        let DecodedRoot::Definitions(members) = &group.root else {
+            return None;
+        };
+        let name = members.get(definition.member as usize)?.name().to_string();
+        self.take_text(name.len()).then_some(name)
+    }
+    fn enter(&mut self) -> bool {
+        if self.nesting >= MAX_TYPE_NESTING {
+            return false;
+        }
+        self.nesting += 1;
+        true
+    }
+    fn leave(&mut self) {
+        self.nesting -= 1;
+    }
+    fn cut(&mut self) -> Json {
+        self.truncated(RENDER_DEPTH)
     }
 }
 
