@@ -1606,6 +1606,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "wasm-bindgen-futures",
  "yaml_serde",
 ]
@@ -7484,6 +7485,8 @@ dependencies = [
  "bex_resource_types",
  "bridge_ctypes",
  "bytes",
+ "flate2",
+ "fs2",
  "futures",
  "getrandom 0.2.17",
  "http-body-util",
@@ -7499,15 +7502,19 @@ dependencies = [
  "rustls",
  "rustls-pemfile",
  "serde_json",
+ "sha2",
  "sys_auth",
  "sys_glob",
  "sys_ops",
  "sys_types",
+ "tar",
+ "tempfile",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
  "tracing",
  "walkdir",
+ "zip",
 ]
 
 [[package]]
