@@ -331,20 +331,17 @@ impl fmt::Display for Diagnostic {
                 if let Some(location) = &self.credential_store {
                     writeln!(
                         f,
-                        "Boundary could not access the local OS credential store at {location}."
+                        "Boundary could not access the local credential file at {location}."
                     )?;
                 } else {
-                    writeln!(
-                        f,
-                        "Boundary could not access the local OS credential store."
-                    )?;
+                    writeln!(f, "Boundary could not access the local credential file.")?;
                 }
             }
             FailureKind::InvalidStoredLogin => {
                 if let Some(location) = &self.credential_store {
                     writeln!(
                         f,
-                        "The saved Boundary login in the local OS credential store at {location} is invalid."
+                        "The saved Boundary login in the local credential file at {location} is invalid."
                     )?;
                 } else {
                     writeln!(f, "The saved Boundary login is invalid.")?;
@@ -485,7 +482,7 @@ impl fmt::Display for Diagnostic {
             FailureKind::CredentialStorage => {
                 writeln!(
                     f,
-                    "    • Unlock your OS credential store and allow BAML to access it."
+                    "    • Check permissions for this file and its parent directory."
                 )?;
                 if operation != Operation::Authentication {
                     if let Some(key) = self.api_key_name() {
@@ -955,16 +952,28 @@ mod tests {
                 Error::Storage {
                     operation: "read",
                     location: crate::auth::CredentialStoreLocation {
-                        backend: "Test credential store",
-                        service: "Boundary BAML login",
-                        account: "test-account".into(),
+                        path: "test-home/auth/endpoint.json".into(),
                     },
-                    source: keyring::Error::NoEntry,
+                    source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
                 },
-                r#"Boundary could not access the local OS credential store at Test credential store (service "Boundary BAML login", account "test-account").
+                r#"Boundary could not access the local credential file at test-home/auth/endpoint.json.
 
   To continue, choose one:
-    • Unlock your OS credential store and allow BAML to access it.
+    • Check permissions for this file and its parent directory.
+
+  Authentication command failed."#,
+            ),
+            (
+                Error::InvalidStoredLogin {
+                    location: crate::auth::CredentialStoreLocation {
+                        path: "test-home/auth/endpoint.json".into(),
+                    },
+                },
+                r#"The saved Boundary login in the local credential file at test-home/auth/endpoint.json is invalid.
+
+  To continue, choose one:
+    • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`.
+    • Set BOUNDARY_API_KEY to a valid API key.
 
   Authentication command failed."#,
             ),

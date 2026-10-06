@@ -1,9 +1,8 @@
 //! Native Boundary identity client shared by the CLI, SDK hosts and packed hosts.
-//! Only the refresh credential and caller profile persist, in the OS credential store.
-use std::{fmt, io::Read as _, time::Duration};
+//! Only the refresh credential and caller profile persist, in an owner-only local file.
+use std::{io::Read as _, time::Duration};
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use sha2::{Digest, Sha256};
 use url::Url;
 
 use crate::error::{Error, Result, require};
@@ -241,108 +240,7 @@ impl Client {
     }
 }
 
-/// A single OS-keyring entry makes replacing a refresh credential atomic. `BAML_HOME`
-/// contributes a namespace so isolated installations do not share credentials.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CredentialStoreLocation {
-    pub(crate) backend: &'static str,
-    pub(crate) service: &'static str,
-    pub(crate) account: String,
-}
-impl fmt::Display for CredentialStoreLocation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} (service {:?}, account {:?})",
-            self.backend, self.service, self.account
-        )
-    }
-}
-
-pub struct Store {
-    entry: keyring::Entry,
-    location: CredentialStoreLocation,
-}
-impl Store {
-    pub fn new(endpoint: &Endpoint) -> Result<Self> {
-        let namespace = baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir());
-        let account = hex::encode(Sha256::digest(
-            format!("{}\n{}", endpoint.0, namespace.display()).as_bytes(),
-        ));
-        let location = CredentialStoreLocation {
-            backend: if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
-                "Apple Keychain"
-            } else if cfg!(target_os = "windows") {
-                "Windows Credential Manager"
-            } else if cfg!(target_os = "linux") {
-                "Secret Service"
-            } else {
-                "platform credential store"
-            },
-            service: "Boundary BAML login",
-            account,
-        };
-        Ok(Self {
-            entry: keyring::Entry::new(location.service, &location.account).map_err(|source| {
-                Error::Storage {
-                    operation: "open",
-                    location: location.clone(),
-                    source,
-                }
-            })?,
-            location,
-        })
-    }
-    pub fn read(&self) -> Result<Option<StoredSession>> {
-        match self.entry.get_password() {
-            Ok(json) => {
-                // JSON errors can echo credential data. Retain only the local
-                // store location, never the stored contents or parser message.
-                let mut session: StoredSession =
-                    serde_json::from_str(&json).map_err(|_| Error::InvalidStoredLogin {
-                        location: self.location.clone(),
-                    })?;
-                if !session
-                    .refresh_token
-                    .expose()
-                    .starts_with(crate::credentials::SESSION_PREFIX)
-                {
-                    session.refresh_token = Secret::new(format!(
-                        "{}{}",
-                        crate::credentials::SESSION_PREFIX,
-                        session.refresh_token.expose()
-                    ));
-                }
-                Ok(Some(session))
-            }
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(error) => Err(Error::Storage {
-                operation: "read",
-                location: self.location.clone(),
-                source: error,
-            }),
-        }
-    }
-    pub fn write(&self, session: &StoredSession) -> Result<()> {
-        self.entry
-            .set_password(&serde_json::to_string(session)?)
-            .map_err(|source| Error::Storage {
-                operation: "save",
-                location: self.location.clone(),
-                source,
-            })
-    }
-    pub fn clear(&self) -> Result<()> {
-        match self.entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(error) => Err(Error::Storage {
-                operation: "remove",
-                location: self.location.clone(),
-                source: error,
-            }),
-        }
-    }
-}
+pub use crate::store::{CredentialStoreLocation, Store};
 
 #[cfg(test)]
 mod tests {

@@ -11,12 +11,15 @@
 
 ## Where state lives
 
-BAML files are under `BAML_HOME` (default `~/.baml`). Login credentials live in the OS credential store, scoped to the Boundary API endpoint and `BAML_HOME`.
+BAML files are under `BAML_HOME` (default `~/.baml`). Each Boundary API endpoint has a login file at `auth/<sha256-of-canonical-endpoint>.json`, shared by native CLI, SDK and packed hosts. It contains the persistent session credential and caller profile; temporary access tokens remain in process memory. Login writes atomically, and logout removes the file after attempting server revocation.
+
+Login files are plaintext and private to the OS user: directory `0700` and file `0600` on Unix, owner-only ACLs on Windows. Other processes running as the same OS user can read them. Missing files mean no saved login; unreadable or malformed files produce an error that identifies the path.
 
 ```
 ~/.baml/
 ├── config.toml, state.toml       wrapper
 ├── creds.json, feedback.json     anonymous feedback state (no login credentials)
+├── auth/<endpoint-hash>.json     saved Boundary login
 ├── telemetry.toml                CLI analytics opt-out
 ├── toolchains/<version>/         installed baml-cli
 ├── manifest-cache/

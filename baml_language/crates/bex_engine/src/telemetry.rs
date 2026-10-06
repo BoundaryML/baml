@@ -201,9 +201,6 @@ impl TelemetryRecording {
                         let saved =
                             match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
                                 Ok(saved) => saved,
-                                Err(_) if policy.embedded.is_none() => {
-                                    return Ok(Self::user_files(RecordingConfig::default()));
-                                }
                                 Err(error) => {
                                     return Err(artifact_configuration_error(
                                         policy,
@@ -321,13 +318,23 @@ impl TelemetryRecording {
         };
         let key = match api_key {
             Some(key) => key,
-            None => bcs_api::Store::new(&endpoint)
-                .ok()?
-                .read()
-                .ok()??
-                .refresh_token
-                .expose()
-                .to_owned(),
+            None => match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
+                Ok(Some(saved)) => saved.refresh_token.expose().to_owned(),
+                Ok(None) => return None,
+                Err(error) => {
+                    let mut recording = Self::user_files(RecordingConfig::default());
+                    recording.destination = Destination::InvalidConfiguration(Box::new(
+                        AuthorizationContext {
+                            endpoint: Some(endpoint),
+                            source: CredentialSource::SavedLogin,
+                            operation: Operation::Ingest,
+                        }
+                        .report(error, Outcome::ExecutionCancelled)
+                        .diagnostic,
+                    ));
+                    return Some(recording);
+                }
+            },
         };
         let target = bcs_api::credentials::Target {
             project: baml_env::string_var("BOUNDARY_PROJECT")
