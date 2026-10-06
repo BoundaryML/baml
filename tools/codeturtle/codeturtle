@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+codeturtle_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
+exec python3 "$codeturtle_dir/git_input.py" "$@"

@@ -1,0 +1,9 @@
+{
+  "title": "Add timeouts and a public API",
+  "changes": [
+    { "path": "src/timeout.rs", "added_code": "let timeout = std::env::var(\"BAML_REQUEST_TIMEOUT\");" },
+    { "path": "src/greeting.rs", "added_code": "let greeting = \"hello\";" },
+    { "path": "src/config.rs", "added_code": "let timeout = config.lookup(\"BAML_REQUEST_TIMEOUT\");" },
+    { "path": "src/api/client.rs", "added_code": "pub fn with_timeout(timeout: u64) -> Client { todo!() }" }
+  ]
+}

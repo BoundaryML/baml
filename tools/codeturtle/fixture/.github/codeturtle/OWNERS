@@ -1,0 +1,11 @@
+# All changed files have a baseline owner.
+* @repo-maintainers
+
+# Any positive or uncertain env match adds both owners.
+/src/ @hellovai @aaronvg # codeturtle: all, when=adds_environment_variable
+
+# Nested BAML namespace; the function examines multiple files together.
+* @sdk-team # codeturtle: when=checks.api.compatibility.undocumented_public_api_change
+
+# A PR-context function can inspect the title and changes outside its path rule.
+/src/ @release-team # codeturtle: when=checks.pr.docs_only_behavior_change

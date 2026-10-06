@@ -1,0 +1,10 @@
+# Local BAML preview policy, based on the repository's current CODEOWNERS.
+# No catch-all ownership is invented; unmatched files remain unowned.
+/baml_language/crates/baml_builtins2/baml_std/ @hellovai @aaronvg @2kai2kai2
+
+# Environment changes require both existing environment owners.
+/baml_language/ENV_VARS.md @hellovai @aaronvg # codeturtle: all
+/baml_language/crates/baml_env/ @hellovai @aaronvg # codeturtle: all
+
+# Flag newly added direct environment reads outside the approved entry point too.
+* @hellovai @aaronvg # codeturtle: all, when=checks.environment.adds_environment_read
