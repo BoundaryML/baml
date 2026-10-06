@@ -255,8 +255,9 @@ function answer_in(reply: string, allowed: string[]) -> string? throws never {
 ///
 /// On the plan, `ANTHROPIC_API_KEY` takes precedence over a claude.ai login,
 /// so leaving it in the environment would spend API credits without anyone
-/// choosing to — measured, not assumed. The default unsets it through `env -u`
-/// and runs on the plan; spending credits is something you have to ask for.
+/// choosing to — measured, not assumed. The default removes it from the child
+/// environment and runs on the plan; spending credits is something you have
+/// to ask for.
 function put(
     model: string,
     session_id: string?,
@@ -287,18 +288,18 @@ function put(
         null => args,
     };
     let full = resumed.concat(["--", message]);
-    let options = baml.sys.ProcessOptions {
-        cwd: null,
-        env: null,
-        timeout_ms: 600000,
-        stdin: null,
-        stderr: baml.sys.StderrMode.Inherit,
-    };
-    let out = if (settings.billing == "api") {
-        baml.sys.exec("claude", full, options)
-    } else {
-        baml.sys.exec("env", ["-u", "ANTHROPIC_API_KEY", "claude"].concat(full), options)
-    };
+    let env: map<string, string?> = map {};
+    if (settings.billing != "api") {
+        env["ANTHROPIC_API_KEY"] = null;
+    }
+    let out = baml.sys.run(
+        "claude",
+        args = full,
+        env = env,
+        timeout = baml.time.Duration.from_minutes(10),
+        stdin = "ignore",
+        stdout = "pipe",
+    );
     let printed = string.from_utf8(out.stdout);
     baml.json.from_string<Reply>(printed)
 }
