@@ -1,7 +1,7 @@
 //! Engine-owned immutable policies. Publication is cold; reads never lock.
 use std::sync::{Mutex, OnceLock};
 
-use btel_clock::{ClockDomainId, ClockThreshold};
+use btel_clock::{ClockEpoch, ClockThreshold};
 use btel_types::{ClockDuration, InvocationOutcome, TelemetryPolicyId};
 use rustc_hash::FxHashMap;
 
@@ -13,13 +13,13 @@ pub(super) fn promotes(
     policy: TelemetryPolicy,
     elapsed: ClockDuration,
     outcome: InvocationOutcome,
-    domain: ClockDomainId,
+    clock: &ClockEpoch,
 ) -> bool {
     policy.span_from_entry
         || policy.promote_errors && outcome.is_error()
         || policy
             .promotion_duration_threshold
-            .is_some_and(|threshold| threshold.reached(elapsed, domain))
+            .is_some_and(|threshold| threshold.reached(elapsed, clock))
 }
 
 type Page = [OnceLock<TelemetryPolicy>; PAGE_SIZE];

@@ -9,14 +9,14 @@
 use std::{
     num::NonZeroU64,
     sync::{
-        Arc, Mutex, Weak,
+        Arc, Mutex, OnceLock, Weak,
         atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
 use btel_types::{ClockDuration, ClockInstant};
-use quanta::{CalibrationMetadata, CalibrationQuality, CalibrationStatus, Clock, ClockSource};
+use quanta::{CalibrationQuality, CalibrationStatus, Clock, ClockSource, RawClock, RawScale};
 use web_time::{SystemTime, UNIX_EPOCH};
 
 mod calibration;
@@ -25,7 +25,7 @@ use btel_settings::clock::{
     ACCURACY_TARGET_NS, DISCONTINUITY_MARGIN_NS, MAX_DRIFT_PPB, MAX_SAMPLE_UNCERTAINTY_NS,
     VALIDATION_INTERVAL_DURATION,
 };
-use calibration::{Calibrated, Probe, probe};
+use calibration::{Probe, Sampling, SourceClock, probe};
 pub use quanta::{CalibrationStatus as CalibrationOutcome, ClockSource as Source};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -36,8 +36,8 @@ fn next_id() -> NonZeroU64 {
     NonZeroU64::new(raw).expect("clock identities start at one")
 }
 
-/// Process-local identity of a source and fixed tick scale. Thresholds are
-/// valid only in it; exported IDs must be scoped by their telemetry session.
+/// Process-local identity of a retained raw source generation.
+/// Exported IDs must be scoped by their telemetry session.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ClockDomainId(NonZeroU64);
@@ -96,16 +96,20 @@ pub struct Timestamp {
     ticks: ClockInstant,
 }
 
-/// A duration threshold resolved once, outside invocation instrumentation.
+/// A duration policy, portable across runs and source re-selection. Conversion
+/// is consulted only by explicitly configured duration policies, never raw reads.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ClockThreshold {
-    domain: ClockDomainId,
-    ticks: ClockDuration,
+    duration: Duration,
 }
 impl ClockThreshold {
     #[inline(always)]
-    pub fn reached(self, elapsed: ClockDuration, domain: ClockDomainId) -> bool {
-        self.domain == domain && elapsed >= self.ticks
+    pub fn reached(self, elapsed: ClockDuration, epoch: &ClockEpoch) -> bool {
+        epoch.status() != TimingStatus::Valid
+            || epoch.mapping().is_none_or(|m| {
+                ((u128::from(elapsed.get()) * u128::from(m.multiplier)) >> m.shift)
+                    >= self.duration.as_nanos()
+            })
     }
 }
 
@@ -134,11 +138,7 @@ pub struct EpochMetadata {
     pub source: ClockSource,
     pub reference_tick: ClockInstant,
     pub reference_time: MonotonicNanos,
-    pub multiplier: u64,
-    pub shift: u32,
     pub origin_uncertainty: Duration,
-    pub rate_error: RateErrorPpb,
-    pub calibration: CalibrationQuality,
     pub fallback: Option<FallbackReason>,
     pub utc: UtcAnchor,
 }
@@ -156,31 +156,68 @@ pub enum TimingStatus {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TimingError {
     WrongEpoch,
+    Pending,
     Invalid(TimingStatus),
 }
 
-/// One run's retained clock. `metadata` and `clock` never change. Validity is
-/// separate and can only become invalid, including for already-produced records
-/// from this run. Completed runs are not invalidated by later restore/reset.
+/// Precision describes interpretation, separately from counter validity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Precision {
+    Reported,
+    Calibrated,
+    Estimated,
+}
+
+/// Published exactly once. Estimated short-run rates are never cached for reuse.
+#[derive(Clone, Copy, Debug)]
+pub struct ClockMapping {
+    pub multiplier: u64,
+    pub shift: u32,
+    pub rate_error: RateErrorPpb,
+    pub calibration: CalibrationQuality,
+    pub precision: Precision,
+}
+impl ClockMapping {
+    fn reported(scale: RawScale) -> Self {
+        Self {
+            multiplier: scale.multiplier,
+            shift: scale.shift,
+            rate_error: RateErrorPpb(btel_settings::clock::RATE_ERROR_FLOOR_PPB),
+            calibration: CalibrationQuality {
+                status: CalibrationStatus::NotRequired,
+                samples: 0,
+                elapsed_ns: 0,
+                mean_residual_ns: 0.0,
+                mean_error_ns: 0.0,
+            },
+            precision: Precision::Reported,
+        }
+    }
+}
+
+/// A run retains its raw source and immutable anchor. Mapping is published once
+/// on a cold path; raw producer reads never consult it or calibration state.
 #[derive(Debug)]
 pub struct ClockEpoch {
-    clock: Clock,
+    clock: RawClock,
     reference: Clock,
     resolution: u64,
     metadata: EpochMetadata,
+    mapping: OnceLock<ClockMapping>,
+    shared_mapping: Arc<OnceLock<ClockMapping>>,
+    runtime: Weak<Mutex<RuntimeState>>,
     status: AtomicU8,
     active_threads: AtomicUsize,
     has_finished: AtomicBool,
     last_checked_tick: AtomicU64,
-    interval_ticks: u64,
-    validation: Mutex<()>,
+    sampling: Mutex<Sampling>,
 }
 
 impl ClockEpoch {
-    fn new(calibrated: &Calibrated) -> Arc<Self> {
-        let clock = calibrated.clock.clone();
+    fn new(source: &SourceClock, runtime: Weak<Mutex<RuntimeState>>) -> Arc<Self> {
+        let clock = source.clock.clone();
         let reference = Clock::monotonic();
-        let origin = probe(&clock, &reference, calibrated.resolution);
+        let origin = probe(&clock, &reference, source.resolution);
         let utc_before = reference.reference_nanos();
         let utc_tick = ClockInstant::from_ticks(clock.raw());
         let utc = SystemTime::now().duration_since(UNIX_EPOCH).map_or_else(
@@ -188,67 +225,57 @@ impl ClockEpoch {
             |duration| i128::try_from(duration.as_nanos()).unwrap_or(i128::MAX),
         );
         let utc_after = reference.reference_nanos();
-        let conversion = calibrated.clock.calibration_metadata();
+        let mapping = OnceLock::new();
+        if let Some(value) = source.mapping.get() {
+            let _ = mapping.set(*value);
+        }
         Arc::new(Self {
-            clock,
-            reference,
-            resolution: calibrated.resolution,
             metadata: EpochMetadata {
                 epoch: ClockEpochId(next_id()),
-                domain: calibrated.domain,
-                source: conversion.source,
+                domain: source.domain,
+                source: clock.source(),
                 reference_tick: origin.ticks,
                 reference_time: origin.reference,
-                multiplier: conversion.multiplier,
-                shift: conversion.shift,
                 origin_uncertainty: Duration::from_nanos(origin.uncertainty),
-                rate_error: calibrated.rate_error,
-                calibration: calibrated.quality,
-                fallback: calibrated.fallback,
+                fallback: source.fallback,
                 utc: UtcAnchor {
                     ticks: utc_tick,
                     unix_nanos: UnixNanos(utc),
                     uncertainty: Duration::from_nanos(
                         utc_after
                             .saturating_sub(utc_before)
-                            .saturating_add(calibrated.resolution.saturating_mul(2)),
+                            .saturating_add(source.resolution.saturating_mul(2)),
                     ),
                 },
             },
-            status: AtomicU8::new(if origin.uncertainty > MAX_SAMPLE_UNCERTAINTY_NS {
-                TimingStatus::Uncertain as u8
-            } else {
-                TimingStatus::Valid as u8
-            }),
+            clock,
+            reference,
+            resolution: source.resolution,
+            mapping,
+            shared_mapping: Arc::clone(&source.mapping),
+            runtime,
+            status: AtomicU8::new(TimingStatus::Valid as u8),
             active_threads: AtomicUsize::new(0),
             has_finished: AtomicBool::new(false),
             last_checked_tick: AtomicU64::new(origin.ticks.get()),
-            interval_ticks: to_ticks(
-                VALIDATION_INTERVAL_DURATION,
-                conversion.multiplier,
-                conversion.shift,
-            )
-            .get(),
-            validation: Mutex::new(()),
+            sampling: Mutex::new(Sampling::new(origin)),
         })
     }
 
-    /// Raw reading only. No conversion, locks, reference counting, validation,
-    /// calibration, or epoch selection. The backend branch is intentional.
+    /// No conversion, locks, reference counting, validation or calibration.
     #[inline(always)]
     pub fn read(&self) -> ClockInstant {
         ClockInstant::from_ticks(self.clock.raw())
     }
-
     pub fn metadata(&self) -> &EpochMetadata {
         &self.metadata
+    }
+    pub fn mapping(&self) -> Option<&ClockMapping> {
+        self.mapping.get()
     }
     pub fn domain(&self) -> ClockDomainId {
         self.metadata.domain
     }
-
-    /// Attach this run's context to a raw record from this epoch. Do not attach
-    /// another run's raw values: frames deliberately omit per-timestamp IDs.
     pub fn timestamp(&self, ticks: ClockInstant) -> Timestamp {
         Timestamp {
             epoch: self.metadata.epoch,
@@ -256,7 +283,6 @@ impl ClockEpoch {
         }
     }
 
-    /// Checked cold-path interpretation, including backward-delta clamping.
     pub fn duration(&self, start: Timestamp, end: Timestamp) -> Result<Duration, TimingError> {
         if start.epoch != self.metadata.epoch || end.epoch != self.metadata.epoch {
             return Err(TimingError::WrongEpoch);
@@ -265,20 +291,19 @@ impl ClockEpoch {
         if status != TimingStatus::Valid {
             return Err(TimingError::Invalid(status));
         }
+        let mapping = self.mapping().ok_or(TimingError::Pending)?;
         Ok(Duration::from_nanos(scale(
             start.ticks.elapsed_until(end.ticks),
-            self.metadata.multiplier,
-            self.metadata.shift,
+            mapping.multiplier,
+            mapping.shift,
         )))
     }
 
+    /// Pending or invalid timing conservatively captures eligible calls now;
+    /// values cannot be recovered after the call has finished.
     pub fn threshold(&self, duration: Duration) -> ClockThreshold {
-        ClockThreshold {
-            domain: self.domain(),
-            ticks: to_ticks(duration, self.metadata.multiplier, self.metadata.shift),
-        }
+        ClockThreshold { duration }
     }
-
     pub fn status(&self) -> TimingStatus {
         match self.status.load(Ordering::Acquire) {
             0 => TimingStatus::Valid,
@@ -288,39 +313,46 @@ impl ClockEpoch {
             _ => TimingStatus::ModeChanged,
         }
     }
-
-    /// Thread lifecycle bookkeeping, outside function instrumentation.
     pub fn attach_thread(&self) {
         self.active_threads.fetch_add(1, Ordering::Relaxed);
     }
     pub fn finish_thread(&self) {
         if self.active_threads.fetch_sub(1, Ordering::AcqRel) == 1 {
+            // No deadline wait: one bounded final reference sample, then publish
+            // an estimate if it is above the observation's precision.
+            let mut sampling = self
+                .sampling
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.observe(&mut sampling, true);
             self.has_finished.store(true, Ordering::Release);
+            drop(sampling);
+            self.recover();
         }
     }
-
-    /// Cold lifecycle query for recording finality, never called by producers.
-    /// `Some` once every attached thread has finished: children attach while
-    /// their parent is still attached, so a settled run cannot gain threads.
-    /// Restore, mode changes and faults skip settled runs under the same lock,
-    /// so the returned status cannot change afterwards.
     pub fn settled_status(&self) -> Option<TimingStatus> {
-        // Unsettled runs may be validating; never contend with their probes.
         if !self.is_settled() {
             return None;
         }
         let _guard = self
-            .validation
+            .sampling
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Some(self.status())
     }
-
+    pub fn elapsed_reference(&self) -> Option<(u64, u64)> {
+        if !self.is_settled() {
+            return None;
+        }
+        self.sampling
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .elapsed
+    }
     fn is_settled(&self) -> bool {
         self.active_threads.load(Ordering::Acquire) == 0
             && self.has_finished.load(Ordering::Acquire)
     }
-
     fn invalidate(&self, reason: TimingStatus) {
         let _ = self.status.compare_exchange(
             TimingStatus::Valid as u8,
@@ -330,47 +362,145 @@ impl ClockEpoch {
         );
     }
 
+    /// Existing processor and execution boundaries drive this bounded work.
+    /// No dedicated worker and no calibration on the producer timestamp path.
+    pub fn maintain(&self, force: bool) {
+        self.check(force);
+        self.recover();
+    }
+    fn recover(&self) {
+        if self.status() != TimingStatus::Discontinuity {
+            return;
+        }
+        if let Some(runtime) = self.runtime.upgrade() {
+            let mut state = runtime.lock().expect("clock lifecycle poisoned");
+            if state.source.domain == self.domain() {
+                ClockRuntime::invalidate_active(&state, TimingStatus::Discontinuity);
+                // A new generation retries the fast source automatically.
+                state.source = SourceClock::new(state.mode);
+                // Re-measure after a fault rather than trusting the same bad
+                // reported frequency again. Retain cheap raw counter reads.
+                state.source.mapping = Arc::new(OnceLock::new());
+                state.source.fallback = Some(FallbackReason::Discontinuity);
+            }
+        }
+    }
+    pub fn maintenance_interval(&self) -> Option<Duration> {
+        if self.is_settled() || self.status() != TimingStatus::Valid {
+            None
+        } else if self.mapping().is_none() {
+            Some(calibration::SAMPLE_INTERVAL)
+        } else {
+            Some(VALIDATION_INTERVAL_DURATION)
+        }
+    }
     fn check(&self, force: bool) -> TimingStatus {
-        if self.status() != TimingStatus::Valid {
+        if self.status() != TimingStatus::Valid || self.is_settled() {
             return self.status();
         }
         let raw = self.read();
         let previous = self.last_checked_tick.load(Ordering::Relaxed);
-        if !force && raw.get() >= previous && raw.get() - previous < self.interval_ticks {
-            return TimingStatus::Valid;
+        if !force && raw.get() >= previous {
+            if let Some(mapping) = self.mapping() {
+                if scale(
+                    ClockDuration::from_ticks(raw.get() - previous),
+                    mapping.multiplier,
+                    mapping.shift,
+                ) < narrow(VALIDATION_INTERVAL_DURATION.as_nanos())
+                {
+                    return self.status();
+                }
+            }
         }
-        let Ok(_guard) = self.validation.try_lock() else {
+        let Ok(mut sampling) = self.sampling.try_lock() else {
             return self.status();
         };
-        // A settled run's status was final when `settled_status` read it.
-        if self.is_settled() {
+        if !force
+            && self.mapping().is_none()
+            && raw.get() >= previous
+            && self
+                .reference
+                .reference_nanos()
+                .saturating_sub(sampling.last.reference.0)
+                < narrow(calibration::SAMPLE_INTERVAL.as_nanos())
+        {
             return self.status();
         }
+        if !self.is_settled() {
+            self.observe(&mut sampling, false);
+        }
+        self.status()
+    }
+    fn observe(&self, sampling: &mut Sampling, final_sample: bool) {
         let sample = probe(&self.clock, &self.reference, self.resolution);
-        let status = self.assess(sample, ClockInstant::from_ticks(previous));
+        let previous = ClockInstant::from_ticks(self.last_checked_tick.load(Ordering::Relaxed));
+        if self.status() == TimingStatus::Valid {
+            self.invalidate_if_fault(sample, previous);
+        }
+        if self.status() == TimingStatus::Valid && self.mapping().is_none() {
+            if let Some(mapping) = self.shared_mapping.get() {
+                let _ = self.mapping.set(*mapping);
+            } else if let Some(mapping) = sampling.observe(sample) {
+                let _ = self.shared_mapping.set(mapping);
+                let _ = self
+                    .mapping
+                    .set(*self.shared_mapping.get().expect("published mapping"));
+            } else if sampling.fault {
+                self.invalidate(TimingStatus::Discontinuity);
+            } else if final_sample {
+                if let Some(mapping) =
+                    calibration::estimate(sampling.start, sample, Precision::Estimated)
+                {
+                    let _ = self.mapping.set(mapping);
+                }
+            }
+        }
+        // A newly learned rate also checks the original anchor, including an
+        // interval crossing a restore while scale was still unknown.
+        if self.status() == TimingStatus::Valid && self.mapping().is_some() {
+            self.invalidate_if_fault(sample, previous);
+        }
+        if final_sample {
+            sampling.elapsed = Some((
+                sample
+                    .reference
+                    .0
+                    .saturating_sub(self.metadata.reference_time.0),
+                sample
+                    .uncertainty
+                    .saturating_add(narrow(self.metadata.origin_uncertainty.as_nanos())),
+            ));
+        }
+        sampling.last = sample;
+        self.last_checked_tick
+            .store(sample.ticks.get(), Ordering::Relaxed);
+    }
+    fn invalidate_if_fault(&self, sample: Probe, previous: ClockInstant) {
+        let status = self.assess(sample, previous);
         if status != TimingStatus::Valid {
             self.invalidate(status);
         }
-        self.last_checked_tick
-            .store(sample.ticks.get(), Ordering::Relaxed);
-        self.status()
     }
-
     fn assess(&self, sample: Probe, previous: ClockInstant) -> TimingStatus {
+        // A noisy reference sample says nothing about counter validity.
         if sample.uncertainty > MAX_SAMPLE_UNCERTAINTY_NS {
-            return TimingStatus::Uncertain;
+            return TimingStatus::Valid;
         }
         if sample.reference < self.metadata.reference_time {
             return TimingStatus::Discontinuity;
         }
-        // Small core-to-core skews are within the accuracy target. Individual
-        // backward intervals clamp to zero; do not abandon the fast clock for
-        // one sub-budget boundary observation.
+        let Some(mapping) = self.mapping() else {
+            return if sample.ticks < previous {
+                TimingStatus::Discontinuity
+            } else {
+                TimingStatus::Valid
+            };
+        };
         if sample.ticks < previous
             && scale(
                 sample.ticks.elapsed_until(previous),
-                self.metadata.multiplier,
-                self.metadata.shift,
+                mapping.multiplier,
+                mapping.shift,
             ) > DISCONTINUITY_MARGIN_NS.saturating_add(sample.uncertainty)
         {
             return TimingStatus::Discontinuity;
@@ -378,26 +508,21 @@ impl ClockEpoch {
         let elapsed = sample.reference.0 - self.metadata.reference_time.0;
         let predicted = scale(
             self.metadata.reference_tick.elapsed_until(sample.ticks),
-            self.metadata.multiplier,
-            self.metadata.shift,
+            mapping.multiplier,
+            mapping.shift,
         );
         let discrepancy = predicted.abs_diff(elapsed);
-        let sampling = sample.uncertainty.saturating_add(
-            u64::try_from(self.metadata.origin_uncertainty.as_nanos()).unwrap_or(u64::MAX),
-        );
+        let sampling = sample
+            .uncertainty
+            .saturating_add(narrow(self.metadata.origin_uncertainty.as_nanos()));
         let scale_error =
-            narrow(u128::from(elapsed) * u128::from(self.metadata.rate_error.0) / 1_000_000_000);
-        // NTP slews the reference, so an epoch's calibrated rate drifts from
-        // it by a few ppm: both tests allow MAX_DRIFT_PPB of the elapsed time.
+            narrow(u128::from(elapsed) * u128::from(mapping.rate_error.0) / 1_000_000_000);
         let drift = narrow(u128::from(elapsed) * u128::from(MAX_DRIFT_PPB) / 1_000_000_000);
-        let tolerance = DISCONTINUITY_MARGIN_NS
-            .saturating_add(sampling)
-            .saturating_add(scale_error)
-            .saturating_add(drift);
-        // A growing scale-error allowance must not silently accept an origin
-        // error beyond the accuracy target and that drift. Both tests subtract
-        // the measurement uncertainty.
-        if discrepancy > tolerance
+        if discrepancy
+            > DISCONTINUITY_MARGIN_NS
+                .saturating_add(sampling)
+                .saturating_add(scale_error)
+                .saturating_add(drift)
             || discrepancy
                 > ACCURACY_TARGET_NS
                     .saturating_add(sampling)
@@ -412,91 +537,120 @@ impl ClockEpoch {
 
 struct RuntimeState {
     mode: ClockMode,
-    calibrated: Calibrated,
+    source: SourceClock,
     epochs: Vec<Weak<ClockEpoch>>,
+    cursor: usize,
+}
+impl std::fmt::Debug for RuntimeState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeState")
+            .field("mode", &self.mode)
+            .finish_non_exhaustive()
+    }
 }
 
-/// Engine-owned lifecycle state. Only run creation, reset, and detected faults
-/// acquire this lock. No global Quanta calibration is used.
+/// Engine-owned source selection. Pending work belongs to a source generation;
+/// after restore/reselection it cannot publish calibration into the new one.
 pub struct ClockRuntime {
-    state: Mutex<RuntimeState>,
+    state: Arc<Mutex<RuntimeState>>,
 }
 impl ClockRuntime {
     pub fn new(mode: ClockMode) -> Self {
         Self {
-            state: Mutex::new(RuntimeState {
+            state: Arc::new(Mutex::new(RuntimeState {
                 mode,
-                calibrated: Calibrated::new(mode),
+                source: SourceClock::new(mode),
                 epochs: Vec::new(),
-            }),
+                cursor: 0,
+            })),
         }
     }
-
-    /// Each independent root gets a fresh origin and UTC anchor. Spawned work
-    /// must instead clone its parent's epoch.
+    /// Bounded cold work for the existing processor, including runs whose
+    /// producer chunks have not yet been published. No extra OS thread.
+    pub fn maintenance(&self) -> Duration {
+        let mut epochs: [Option<Arc<ClockEpoch>>; 16] = std::array::from_fn(|_| None);
+        {
+            let mut state = self.state.lock().expect("clock lifecycle poisoned");
+            let len = state.epochs.len();
+            for slot in epochs.iter_mut().take(len.min(16)) {
+                state.cursor %= len;
+                *slot = state.epochs[state.cursor].upgrade();
+                state.cursor += 1;
+            }
+        }
+        let mut interval = VALIDATION_INTERVAL_DURATION;
+        for epoch in epochs.into_iter().flatten() {
+            epoch.maintain(false);
+            if let Some(next) = epoch.maintenance_interval() {
+                interval = interval.min(next);
+            }
+        }
+        interval
+    }
+    /// Test the missing-frequency path on hosts that normally report scale.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn without_reported_scale(mode: ClockMode) -> Self {
+        let runtime = Self::new(mode);
+        runtime.state.lock().unwrap().source.mapping = Arc::new(OnceLock::new());
+        runtime
+    }
     pub fn start_run(&self) -> Arc<ClockEpoch> {
         let mut state = self.state.lock().expect("clock lifecycle poisoned");
-        Self::start_run_locked(&mut state)
+        self.start_run_locked(&mut state)
     }
-
-    fn start_run_locked(state: &mut RuntimeState) -> Arc<ClockEpoch> {
+    fn start_run_locked(&self, state: &mut RuntimeState) -> Arc<ClockEpoch> {
         state.epochs.retain(|epoch| epoch.strong_count() != 0);
-        let epoch = ClockEpoch::new(&state.calibrated);
+        let epoch = ClockEpoch::new(&state.source, Arc::downgrade(&self.state));
         state.epochs.push(Arc::downgrade(&epoch));
         epoch
     }
-
-    /// Generic after-restore hook; call before resuming execution. All active
-    /// old runs become invalid even if the counter looks unchanged. Fresh
-    /// Quanta calibration and scale validation bypass its process-global cache.
-    /// Completed records keep their original mapping and validity.
+    /// Migration alone is not a fault. Check retained mappings for continuity;
+    /// replace source generation to discard pending or cached calibration.
     pub fn reset_after_restore(&self) -> Arc<ClockEpoch> {
         let mut state = self.state.lock().expect("clock lifecycle poisoned");
-        Self::invalidate_active(&state, TimingStatus::Restored);
-        state.calibrated = Calibrated::new(state.mode);
-        Self::start_run_locked(&mut state)
+        for epoch in state.epochs.iter().filter_map(Weak::upgrade) {
+            if epoch.is_settled() {
+                continue;
+            }
+            if epoch.mapping().is_some() {
+                epoch.check(true);
+            } else {
+                let mut sampling = epoch
+                    .sampling
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !epoch.is_settled() {
+                    let sample = probe(&epoch.clock, &epoch.reference, epoch.resolution);
+                    epoch.invalidate_if_fault(
+                        sample,
+                        ClockInstant::from_ticks(epoch.last_checked_tick.load(Ordering::Relaxed)),
+                    );
+                    // Discard pending pre-restore fitting. Preserve the immutable
+                    // anchor; a new mapping must still agree with that anchor.
+                    *sampling = Sampling::new(sample);
+                    epoch
+                        .last_checked_tick
+                        .store(sample.ticks.get(), Ordering::Relaxed);
+                }
+            }
+        }
+        state.source = SourceClock::new(state.mode);
+        self.start_run_locked(&mut state)
     }
-
-    /// Deployment-level OS-clock option, also available at construction.
-    /// Changing mode invalidates active timings rather than mixing domains.
     pub fn set_mode(&self, mode: ClockMode) -> Arc<ClockEpoch> {
         let mut state = self.state.lock().expect("clock lifecycle poisoned");
         Self::invalidate_active(&state, TimingStatus::ModeChanged);
         state.mode = mode;
-        state.calibrated = Calibrated::new(mode);
-        Self::start_run_locked(&mut state)
+        state.source = SourceClock::new(mode);
+        self.start_run_locked(&mut state)
     }
-
-    /// Rate-limited execution-boundary check. Force a sample on root completion.
-    /// No background task is created; a busy uninterrupted VM region is checked
-    /// at its next boundary. Transient jumps between samples can escape detection.
     pub fn validate(&self, epoch: &ClockEpoch, force: bool) {
-        // Already-invalid runs keep their old clock; do not keep taking the
-        // lifecycle lock at every subsequent engine handoff.
-        if epoch.status() != TimingStatus::Valid {
-            return;
-        }
-        let status = epoch.check(force);
-        if !matches!(
-            status,
-            TimingStatus::Discontinuity | TimingStatus::Uncertain
-        ) {
-            return;
-        }
-        let mut state = self.state.lock().expect("clock lifecycle poisoned");
-        if state.calibrated.domain == epoch.domain() {
-            Self::invalidate_active(&state, status);
-            // Do not stall a running request for hardware recalibration. Use OS
-            // monotonic until an explicit reset/reselection retries hardware.
-            state.calibrated = Calibrated::monotonic(FallbackReason::Discontinuity, None);
-        }
+        epoch.maintain(force);
     }
-
     fn invalidate_active(state: &RuntimeState, reason: TimingStatus) {
         for epoch in state.epochs.iter().filter_map(Weak::upgrade) {
-            // Decide and invalidate atomically with respect to `settled_status`.
             let _guard = epoch
-                .validation
+                .sampling
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if !epoch.is_settled() {
@@ -512,10 +666,5 @@ fn narrow(value: u128) -> u64 {
 fn scale(ticks: ClockDuration, multiplier: u64, shift: u32) -> u64 {
     narrow((u128::from(ticks.get()) * u128::from(multiplier)) >> shift)
 }
-fn to_ticks(duration: Duration, multiplier: u64, shift: u32) -> ClockDuration {
-    let numerator = duration.as_nanos().saturating_mul(1_u128 << shift);
-    ClockDuration::from_ticks(narrow(numerator.div_ceil(u128::from(multiplier))))
-}
-
 #[cfg(test)]
 mod tests;

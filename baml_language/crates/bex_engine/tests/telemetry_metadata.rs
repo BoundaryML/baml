@@ -116,6 +116,20 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
         }) {
             expected_minor = expected_minor.max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
         }
+        if file
+            .definitions
+            .as_ref()
+            .is_some_and(|defs| !defs.clock_anchors.is_empty() || !defs.clock_epochs.is_empty())
+            || file.clock_states.as_ref().is_some_and(|batch| {
+                batch
+                    .states
+                    .iter()
+                    .any(|state| state.elapsed_reference_ns.is_some())
+            })
+        {
+            expected_minor =
+                expected_minor.max(btel_settings::encoding::CLOCK_MAPPING_FORMAT_MINOR);
+        }
         assert_eq!(header.format_minor, expected_minor);
         let definitions = file.definitions.as_ref().unwrap();
         for function in &definitions.functions {

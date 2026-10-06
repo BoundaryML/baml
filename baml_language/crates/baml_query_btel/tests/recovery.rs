@@ -102,6 +102,7 @@ fn definitions(fqn: &str) -> proto::Definitions {
             ..Default::default()
         }],
         clock_epochs: vec![epoch()],
+        clock_anchors: Vec::new(),
     }
 }
 
@@ -111,6 +112,7 @@ fn state(status: proto::TimingStatus) -> proto::ClockStateBatch {
             epoch_id: EPOCH,
             status: status as i32,
             r#final: false,
+            ..Default::default()
         }],
     }
 }

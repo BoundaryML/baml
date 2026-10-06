@@ -83,12 +83,24 @@ fn metadata_prefix_merges_before_newer_resolution_and_clock_observations() {
     builder
         .buffer
         .pending
+        .definitions
+        .clock_anchors
+        .push(proto::ClockEpochAnchor {
+            epoch_id: 1,
+            domain_id: 1,
+            source: proto::ClockSource::Mock as i32,
+            ..Default::default()
+        });
+    builder
+        .buffer
+        .pending
         .clock_states
         .states
         .push(proto::ClockEpochState {
             epoch_id: 1,
             status: proto::TimingStatus::Valid as i32,
             r#final: false,
+            ..Default::default()
         });
     builder.aggregate(AggregateDelta {
         count: 7,
@@ -122,6 +134,7 @@ fn metadata_prefix_merges_before_newer_resolution_and_clock_observations() {
             epoch_id: 1,
             status: proto::TimingStatus::Discontinuity as i32,
             r#final: true,
+            ..Default::default()
         });
     builder.aggregate(AggregateDelta {
         count: 2,
@@ -132,6 +145,11 @@ fn metadata_prefix_merges_before_newer_resolution_and_clock_observations() {
     second.prepend_metadata(std::iter::once(first.metadata_bytes()));
     assert_eq!(second.metadata_bytes(), fresh);
     let decoded = proto::RecordingFile::decode(second.bytes()).unwrap();
+    assert_eq!(
+        decoded.header.as_ref().unwrap().format_minor,
+        btel_settings::encoding::CLOCK_MAPPING_FORMAT_MINOR,
+        "replayed clock anchors require the new minor even without a new mapping"
+    );
     let definitions = decoded.definitions.unwrap().functions;
     assert!(matches!(
         definitions[0].resolution,
@@ -472,6 +490,10 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
         .expect("idle publisher deadline must wake the processor");
     let first = decode(&file);
     assert_eq!(first.sequence, 1);
+    assert_eq!(
+        first.header.as_ref().unwrap().format_minor,
+        btel_settings::encoding::CLOCK_MAPPING_FORMAT_MINOR
+    );
     assert!(first.end.is_none(), "a deadline seal is not the end");
     assert_eq!(pool.stats().free_chunks, 2);
     drop(producer);
@@ -482,6 +504,10 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
     // clock and the end.
     let last = decode(&recv.try_recv().expect("terminal file"));
     assert_eq!(last.sequence, 2);
+    assert_eq!(
+        last.header.as_ref().unwrap().format_minor,
+        btel_settings::encoding::CLOCK_MAPPING_FORMAT_MINOR
+    );
     assert!(last.end.is_some());
     assert!(last.spans.unwrap().sections.is_empty());
     let states = last.clock_states.unwrap().states;
@@ -534,7 +560,7 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
     let states = file.clock_states.unwrap().states;
     assert_eq!(states.len(), 2);
     assert_eq!(states[0].status, proto::TimingStatus::Valid as i32);
-    assert_eq!(states[1].status, proto::TimingStatus::Restored as i32);
+    assert_eq!(states[1].status, proto::TimingStatus::Valid as i32);
     assert!(states.iter().all(|s| !s.r#final));
     let events = file.spans.unwrap().sections.remove(0).events;
     assert!(matches!(
@@ -1503,10 +1529,10 @@ fn an_unsettled_clock_keeps_the_recording_unsealed_until_it_settles() {
     assert!(first.end.is_none());
     let status = clock_states(&first)[0].1;
     assert_eq!(clock_states(&first), [(epoch, status, false); 2]);
-    // The unsettled run is still exposed to invalidation, and each attempt
-    // reports its latest status.
+    // A continuous restore remains valid, and each attempt reports its
+    // latest status until the last attached thread finishes.
     runtime.reset_after_restore();
-    let restored = proto::TimingStatus::Restored as i32;
+    let restored = proto::TimingStatus::Valid as i32;
     let second = decode(&builder.end_recording().unwrap().unwrap());
     assert!(second.end.is_none());
     assert_eq!(clock_states(&second), [(epoch, restored, false)]);

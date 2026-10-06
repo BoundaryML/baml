@@ -78,6 +78,7 @@ baml_builtins2_codegen = { workspace = true }
 
 [dev-dependencies]
 baml_test_support = { workspace = true }
+btel_clock = { workspace = true, features = [ "test-support" ] }
 indexmap = { workspace = true }
 
 [features]

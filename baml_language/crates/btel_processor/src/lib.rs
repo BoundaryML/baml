@@ -445,6 +445,7 @@ pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
     detached_timing: Vec<TimingRecord>,
     next_flush: Instant,
     finished: bool,
+    clock: Option<(std::sync::Arc<btel_clock::ClockRuntime>, Instant)>,
 }
 
 impl<I, V> Processor<I, V> {
@@ -492,7 +493,14 @@ impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
             },
             next_flush: Instant::now() + CACHE_FLUSH_INTERVAL_DURATION,
             finished: false,
+            clock: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_clock_runtime(mut self, clock: std::sync::Arc<btel_clock::ClockRuntime>) -> Self {
+        self.clock = Some((clock, Instant::now()));
+        self
     }
 
     pub fn publisher(&self) -> &P {
@@ -512,6 +520,12 @@ impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
     /// panic fails the transport and prevents producers from silently proceeding.
     /// No partially accepted batch is retried after failure.
     pub fn process_available(&mut self) -> Progress {
+        if let Some((clock, deadline)) = &mut self.clock {
+            let now = Instant::now();
+            if now >= *deadline {
+                *deadline = now + clock.maintenance();
+            }
+        }
         if self.consumer.is_disabled() {
             // Abandon pending reductions/encoding; shutdown must not manufacture
             // successful completion after a storage failure.
@@ -619,6 +633,7 @@ impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
                     .publisher
                     .deadline()
                     .map_or(self.next_flush, |d| d.min(self.next_flush));
+                let wake = self.clock.as_ref().map_or(wake, |(_, d)| wake.min(*d));
                 self.consumer.wait_until(Some(wake));
             }
         }
