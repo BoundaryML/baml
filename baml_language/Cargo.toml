@@ -202,6 +202,7 @@ fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
+httpdate = "1.0.3"
 keyring = { version = "3.6.3", features = [ "apple-native", "windows-native", "sync-secret-service", "crypto-rust", "vendored" ] }
 hmac = "0.12"
 http-body-util = "0.1"

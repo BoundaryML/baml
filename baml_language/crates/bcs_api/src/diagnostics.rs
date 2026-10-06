@@ -743,6 +743,7 @@ mod tests {
             let report = context(Operation::Query, CredentialSource::ApiKey).report(
                 Error::Http(HttpFailure {
                     status: reqwest::StatusCode::BAD_REQUEST,
+                    retry_after: None,
                     body: Some(Arc::new(crate::ApiErrorBody {
                         code: "ENVIRONMENT_REQUIRED".into(),
                         retryable: false,
@@ -769,6 +770,7 @@ mod tests {
     fn telemetry_rejection_retains_the_public_explanation() {
         let failure = HttpFailure {
             status: reqwest::StatusCode::FORBIDDEN,
+            retry_after: None,
             body: Some(Arc::new(crate::ApiErrorBody {
                 code: "ACCESS_REQUIRED".into(),
                 retryable: false,

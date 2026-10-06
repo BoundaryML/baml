@@ -30,6 +30,7 @@ bytes.workspace = true
 dirs = { workspace = true, optional = true }
 futures.workspace = true
 hex = { workspace = true, optional = true }
+httpdate.workspace = true
 keyring = { workspace = true, optional = true }
 prost.workspace = true
 reqwest = { workspace = true, features = [ "json" ] }
