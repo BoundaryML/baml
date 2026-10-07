@@ -219,6 +219,7 @@ pub(crate) fn display_instruction(
         | Instruction::TraceHookTiming
         | Instruction::TraceHookSpan
         | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
         | Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
@@ -444,6 +445,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::TraceHookTiming
         | Instruction::TraceHookSpan
         | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
         | Instruction::CallIndirect
         | Instruction::SetCallTrace
         | Instruction::VirtualCall { .. } => Style::new().magenta(),
@@ -962,6 +964,7 @@ fn display_instruction_textual(
         Instruction::TraceHookTiming => "trace_hook_timing".into(),
         Instruction::TraceHookSpan => "trace_hook_span".into(),
         Instruction::TraceHookRich => "trace_hook_rich".into(),
+        Instruction::TraceHookEmptySpan => "trace_hook_empty_span".into(),
 
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::SetCallTrace => "set_call_trace".to_string(),
@@ -1228,6 +1231,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::TraceHookTiming
         | Instruction::TraceHookSpan
         | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
         | Instruction::SysOp(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
@@ -1330,6 +1334,7 @@ pub fn display_compact_bytecode(
             | OpCode::TraceHookTiming
             | OpCode::TraceHookSpan
             | OpCode::TraceHookRich
+            | OpCode::TraceHookEmptySpan
             | OpCode::SetCallTrace
             | OpCode::Discriminant
             | OpCode::TypeTag

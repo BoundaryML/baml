@@ -22,6 +22,7 @@ mod encoding;
 mod graph;
 mod hash;
 pub mod host;
+mod logical_bytes;
 mod memory;
 mod pool;
 mod shape;

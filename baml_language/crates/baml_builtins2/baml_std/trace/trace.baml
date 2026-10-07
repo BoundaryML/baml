@@ -61,13 +61,20 @@ class Options {
     }
 
     /// Select Span mode and replace all three capture requests.
+    /// Capture outputs and errors by default; inputs require an explicit request.
     function span(
         self,
         inputs: bool? = null,
-        output: bool? = null,
-        error: bool? = null,
+        output: bool? = true,
+        error: bool? = true,
     ) -> Options throws never {
         self._span(inputs, output, error)
+    }
+
+    /// Select Span mode without requesting value capture.
+    /// Applicable function-policy requests still capture values.
+    function empty_span(self) -> Options throws never {
+        self._span(false, false, false)
     }
 
     //baml:mut_vm
@@ -127,18 +134,20 @@ function timing() -> Options throws never {
     $rust_function
 }
 
-/// Record this invocation individually, with optional value capture overrides.
+/// Record this invocation individually, capturing outputs and errors by default.
+/// Inputs require an explicit request.
 function span(
     inputs: bool? = null,
-    output: bool? = null,
-    error: bool? = null,
+    output: bool? = true,
+    error: bool? = true,
 ) -> Options throws never {
     _span(inputs, output, error)
 }
 
-/// Record this invocation individually with inputs, output, and error capture.
-function rich() -> Options throws never {
-    span(inputs = true, output = true, error = true)
+/// Record this invocation individually without requesting value capture.
+/// Applicable function-policy requests still capture values.
+function empty_span() -> Options throws never {
+    _span(false, false, false)
 }
 
 //baml:mut_vm

@@ -637,6 +637,61 @@ async fn capture_flags(program: &Program) {
     }
 }
 
+async fn span_defaults(program: &Program) {
+    for empty in [false, true] {
+        for fail in [false, true] {
+            let value = text("hook defaults");
+            let (result, recording) = Recording::run(
+                program,
+                "matrix_hook_defaults",
+                vec![value.clone(), External::Bool(empty), External::Bool(fail)],
+            )
+            .await;
+            assert_eq!(result.is_err(), fail);
+            assert_eq!(recording.spans.len(), 1);
+            let (_, entry, done) = &recording.spans[0];
+            assert!(entry.inputs_cas_id.is_none());
+            let returned = snapshot(false, std::slice::from_ref(&value));
+            let expected = (!empty).then_some(&returned);
+            if fail {
+                recording.assert_error_capture(done.value_cas_id.as_ref(), expected);
+            } else {
+                recording.assert_capture(done.value_cas_id.as_ref(), expected);
+            }
+        }
+        for chained in [false, true] {
+            for reserved in [false, true] {
+                for fail in [false, true] {
+                    let value = text("span defaults");
+                    let (result, recording) = Recording::run(
+                        program,
+                        "matrix_span_defaults",
+                        vec![
+                            value.clone(),
+                            External::Bool(empty),
+                            External::Bool(chained),
+                            External::Bool(reserved),
+                            External::Bool(fail),
+                        ],
+                    )
+                    .await;
+                    assert_eq!(result.is_err(), fail);
+                    assert_eq!(recording.spans.len(), 1);
+                    let (_, entry, done) = &recording.spans[0];
+                    assert!(entry.inputs_cas_id.is_none());
+                    let returned = snapshot(false, std::slice::from_ref(&value));
+                    let expected = (!empty).then_some(&returned);
+                    if fail {
+                        recording.assert_error_capture(done.value_cas_id.as_ref(), expected);
+                    } else {
+                        recording.assert_capture(done.value_cas_id.as_ref(), expected);
+                    }
+                }
+            }
+        }
+    }
+}
+
 async fn scalar_values(program: &Program) {
     let values = [
         External::Null,
@@ -1507,6 +1562,7 @@ fn trace_contract_end_to_end() {
                 }
             }
             if mode == "medium" {
+                span_defaults(&program).await;
                 Box::pin(capture_flags(&program)).await;
                 Box::pin(scalar_values(&program)).await;
                 Box::pin(arguments_and_graphs(&program)).await;

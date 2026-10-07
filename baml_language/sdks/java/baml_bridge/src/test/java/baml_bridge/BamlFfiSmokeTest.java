@@ -117,7 +117,7 @@ class BamlFfiSmokeTest {
         Image img = Image.from_url("https://example.com/asset", "image/png");
         assertEquals("https://example.com/asset", img.url());
         assertEquals("image/png", img.mime_type());
-        assertNull(img.file()); // not file-backed
+        assertNull(img.name()); // not read from a file
         assertEquals("", img.base64()); // no base64 payload for a bare URL
     }
 
@@ -130,8 +130,8 @@ class BamlFfiSmokeTest {
         assertPortableMedia(img, 1, 3, "https://example.com/asset", "image/png");
         assertPortableMedia(Audio.from_base64("YXVkaW8=", "audio/mpeg"),
                 2, 4, "YXVkaW8=", "audio/mpeg");
-        assertPortableMedia(Pdf.from_file("document.pdf"),
-                3, 5, "document.pdf", null);
+        assertPortableMedia(Pdf.from_file_content("/reports/document.pdf", "JVBERi0xLjc="),
+                3, 4, "JVBERi0xLjc=", "application/pdf");
         assertPortableMedia(Video.from_url("https://example.com/video", "video/mp4"),
                 4, 3, "https://example.com/video", "video/mp4");
 
@@ -161,7 +161,7 @@ class BamlFfiSmokeTest {
             switch (field) {
                 case 1 -> kind = (int) media.readVarint();
                 case 2 -> mimeType = media.readString();
-                case 3, 4, 5 -> {
+                case 3, 4 -> {
                     source = field;
                     payload = media.readString();
                 }
@@ -189,9 +189,10 @@ class BamlFfiSmokeTest {
         assertEquals("audio/mpeg", audio.mime_type());
 
         Pdf pdf = assertInstanceOf(
-                Pdf.class, decodePortableMedia(3, 5, "document.pdf", null));
-        assertEquals("document.pdf", pdf.file());
-        assertNull(pdf.mime_type());
+                Pdf.class, decodePortableMedia(3, 6, "JVBERi0xLjc=", null, "document.pdf"));
+        // Content read from a file keeps the file's name.
+        assertEquals("document.pdf", pdf.name());
+        assertEquals("application/pdf", pdf.mime_type());
 
         Video video = assertInstanceOf(
                 Video.class,
@@ -202,12 +203,24 @@ class BamlFfiSmokeTest {
 
     private static Object decodePortableMedia(
             int kind, int sourceField, String value, String mimeType) {
+        return decodePortableMedia(kind, sourceField, value, mimeType, null);
+    }
+
+    private static Object decodePortableMedia(
+            int kind, int sourceField, String value, String mimeType, String name) {
         WireWriter media = new WireWriter();
         media.writeInt64(1, kind); // BamlValueMedia.media
         if (mimeType != null) {
             media.writeString(2, mimeType); // BamlValueMedia.mime_type
         }
-        media.writeString(sourceField, value); // BamlValueMedia.value oneof
+        if (name == null) {
+            media.writeString(sourceField, value); // BamlValueMedia.value oneof
+        } else {
+            WireWriter content = new WireWriter();
+            content.writeString(1, name); // BamlValueMediaFileContent.name
+            content.writeString(2, value); // BamlValueMediaFileContent.base64
+            media.writeMessage(sourceField, content.toByteArray()); // BamlValueMedia.file_content
+        }
 
         WireWriter outbound = new WireWriter();
         outbound.writeMessage(17, media.toByteArray()); // BamlOutboundValue.media_value

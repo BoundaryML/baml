@@ -20,7 +20,7 @@ def common_python(tmp_path_factory):
     }
     env.update(
         HOME=str(home),
-        BAML_HOME=str(home / "config"),
+        BAML_HOME=str(home / "config" / ".baml"),
         BAML_TELEMETRY="low",
         BOUNDARY_API_KEY="local",
         DO_NOT_TRACK="1",
@@ -41,7 +41,7 @@ def common_python(tmp_path_factory):
                 "query",
                 "--local",
                 "--from",
-                str(home),
+                str(home / "config"),
                 "--format",
                 "json",
                 sql,
@@ -80,7 +80,17 @@ def test_common_python_capture_values(common_python):
     by_case = {row[0]: row for row in rows}
     native = {"$class": "user.methods_on_classes.Greeter", "name": "hello"}
     model = {"value": 7, "when": "2026-10-06T12:30:45+00:00"}
-    exception = {"type": "ValueError", "args": ["problem"]}
+    exception = {
+        "type": "ValueError",
+        "module": "builtins",
+        "args": ["problem"],
+        "message": "problem",
+        "cause": None,
+        "context": None,
+        "suppress_context": False,
+        "attributes": {},
+        "traceback": [],
+    }
     expected = {
         "native": native,
         "native_enum": "HAPPY",
@@ -109,7 +119,11 @@ def test_common_python_capture_values(common_python):
     for case, value in expected.items():
         assert by_case[case][1] == value, case
         assert by_case[case][2] == value, case
-    assert by_case["raised"][3] == exception
+    raised = by_case["raised"][3]
+    assert {key: value for key, value in raised.items() if key != "traceback"} == {
+        key: value for key, value in exception.items() if key != "traceback"
+    }
+    assert raised["traceback"]
     assert by_case["custom_exception"][3] == {"code": 7}
     assert by_case["callback_enum"][2] == expected["native_enum"]
     assert by_case["callback_native"][2] == {
@@ -165,7 +179,7 @@ def common_typescript(tmp_path_factory):
     }
     env.update(
         HOME=str(home),
-        BAML_HOME=str(home / "config"),
+        BAML_HOME=str(home / "config" / ".baml"),
         BAML_TELEMETRY="low",
         BOUNDARY_API_KEY="local",
         DO_NOT_TRACK="1",
@@ -196,7 +210,7 @@ def common_typescript(tmp_path_factory):
                 "query",
                 "--local",
                 "--from",
-                str(home),
+                str(home / "config"),
                 "--format",
                 "json",
                 sql,
@@ -234,7 +248,15 @@ def test_common_typescript_capture_values(common_typescript):
     )
     by_case = {row[0]: row for row in rows}
     native = {"$class": "user.methods_on_classes.Greeter", "name": "hello"}
-    exception = {"type": "TypeError", "message": "problem"}
+    exception = by_case["exception_value"][2]
+    assert exception["type"] == "TypeError"
+    assert exception["name"] == "TypeError"
+    assert exception["message"] == "problem"
+    assert "stack" in exception
+    assert exception["attributes"] == {}
+    subclass = by_case["exception_subclass"][2]
+    assert subclass["type"] == "ValidationError"
+    assert subclass["message"] == "invalid"
     expected = {
         "native": native,
         "native_precedence": native,
@@ -243,11 +265,11 @@ def test_common_typescript_capture_values(common_typescript):
         "date": "2026-10-06T12:30:45.000Z",
         "hostile_date": "2026-10-06T12:30:45.000Z",
         "exception_value": exception,
-        "exception_subclass": {"type": "ValidationError", "message": "invalid"},
+        "exception_subclass": subclass,
         "nested": {"models": [native], "error": exception},
         "getter": {"safe": 7, "danger": {"$opaque": "host_value"}},
         "proxy": {"$opaque": "host_value"},
-        "invalid_date": {"$opaque": "host_value"},
+        "invalid_date": {"$date": "invalid"},
         "custom": {"custom": 7},
         "custom_subclass": {"custom": 7},
         "custom_failure": {"$opaque": "host_value"},

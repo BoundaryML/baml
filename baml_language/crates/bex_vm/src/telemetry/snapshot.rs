@@ -411,8 +411,8 @@ fn identity(leaves: &mut Leaves<'_>, carried: &mut Carried, head: &TypeHead) -> 
     }
 }
 /// A media value as the runtime holds it: its kind, MIME type and source, and
-/// loaded content as base64 text shared by handle. Reads no file and fetches
-/// nothing. A part past the byte limit truncates the whole object.
+/// loaded content as base64 text shared by handle. Fetches nothing. A part
+/// past the byte limit truncates the whole object.
 fn media(
     leaves: &mut Leaves<'_>,
     rewrites: &[(String, String)],
@@ -434,11 +434,19 @@ fn media(
                 url: leaves.label(&rewritten(rewrites, &url.as_str().into()))?,
                 data: loaded(leaves, base64_data.as_ref())?,
             },
-            MediaContent::File { file, base64_data } => MediaSource::File {
-                path: leaves.label(&file.as_str().into())?,
-                data: loaded(leaves, base64_data.as_ref())?,
+            // Content read from a file. Its name is all that is left of the
+            // path, and the content is always there.
+            MediaContent::Base64 {
+                base64_data,
+                name: Some(name),
+            } => MediaSource::File {
+                path: leaves.label(&name.as_str().into())?,
+                data: Some(leaves.string(base64_data)?),
             },
-            MediaContent::Base64 { base64_data } => MediaSource::Base64 {
+            MediaContent::Base64 {
+                base64_data,
+                name: None,
+            } => MediaSource::Base64 {
                 data: leaves.string(base64_data)?,
             },
         })
@@ -606,7 +614,7 @@ mod tests {
         ));
     }
     #[test]
-    fn media_is_captured_by_content_without_reading_files_or_retaining_sources() {
+    fn media_is_captured_by_content_without_retaining_sources() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         // Longer than the inline capacity, so the payload is heap-backed.
         let payload = bex_str::BexStr::from("iVBORw0K".repeat(64));
@@ -615,9 +623,11 @@ mod tests {
         };
         let stored = Arc::clone(stored);
         let sources: [Arc<dyn bex_vm_types::BexRustData>; 3] = [
-            MediaValue::from_file(
+            // Content that was read from a file: only its name is kept.
+            MediaValue::from_file_content(
                 baml_type::MediaKind::Image,
-                "/nonexistent/telemetry-must-not-read.png",
+                "/photos/2026/cat.png",
+                payload.clone(),
                 None,
             ),
             MediaValue::from_url(
@@ -625,7 +635,11 @@ mod tests {
                 "https://example.test/report.pdf",
                 Some("application/pdf"),
             ),
-            MediaValue::from_base64(baml_type::MediaKind::Audio, payload, Some("audio/wav")),
+            MediaValue::from_base64(
+                baml_type::MediaKind::Audio,
+                payload.clone(),
+                Some("audio/wav"),
+            ),
         ];
         let weak: Vec<_> = sources.iter().map(Arc::downgrade).collect();
         // Two host wrappers of one media value are one captured object.
@@ -656,14 +670,23 @@ mod tests {
             ),
             other => panic!("expected media, got {other:?}"),
         };
-        let (kind, mime_type, MediaSource::File { path, data: None }) = media(roots[0]) else {
-            panic!("expected a file without content")
+        let (
+            kind,
+            mime_type,
+            MediaSource::File {
+                path,
+                data: Some(content),
+            },
+        ) = media(roots[0])
+        else {
+            panic!("expected named content")
         };
-        assert_eq!((kind, mime_type), (baml_type::MediaKind::Image, None));
         assert_eq!(
-            snapshot.label(path).as_str(),
-            "/nonexistent/telemetry-must-not-read.png"
+            (kind, mime_type),
+            (baml_type::MediaKind::Image, Some("image/png"))
         );
+        assert_eq!(snapshot.label(path).as_str(), "cat.png");
+        assert_eq!(snapshot.string(content).as_str(), payload.as_str());
         let (kind, mime_type, MediaSource::Url { url, data: None }) = media(roots[1]) else {
             panic!("expected a URL without content")
         };

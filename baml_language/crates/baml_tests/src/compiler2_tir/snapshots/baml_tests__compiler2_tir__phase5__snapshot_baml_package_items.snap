@@ -220,10 +220,10 @@ namespace baml.json:
   function to_json
   function to_string
 namespace baml.media:
-  class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Pdf { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
-  class Video { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
+  class Audio { methods: [url, name, base64, mime_type, from_url, from_file, from_file_content, infer_mime_type, from_base64] }
+  class Image { methods: [url, name, base64, mime_type, from_url, from_file, from_file_content, infer_mime_type, from_base64] }
+  class Pdf { methods: [url, name, base64, mime_type, from_url, from_file, from_file_content, infer_mime_type, from_base64] }
+  class Video { methods: [url, name, base64, mime_type, from_url, from_file, from_file_content, infer_mime_type, from_base64] }
 namespace baml.net:
   class Datagram { methods: [] }
   class TcpListener { methods: [bind, accept, close] }
@@ -293,6 +293,7 @@ namespace baml.sap:
   class _NoYield { methods: [] }
   class _ParseCache<T> { methods: [_parse_final, _parse_partial] }
   function _new_parse_cache<T>
+  function coerce<T>
   function parse<T>
   function parse_type
 namespace baml.spawn:

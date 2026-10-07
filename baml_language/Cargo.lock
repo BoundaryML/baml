@@ -1856,6 +1856,7 @@ name = "bridge_typescript_web"
 version = "0.0.0-beta"
 dependencies = [
  "baml_version",
+ "base64",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
@@ -2064,6 +2065,7 @@ name = "btel_snapshot"
 version = "0.0.0-beta"
 dependencies = [
  "baml_type",
+ "base64",
  "bex_str",
  "borsh",
  "btel_settings",

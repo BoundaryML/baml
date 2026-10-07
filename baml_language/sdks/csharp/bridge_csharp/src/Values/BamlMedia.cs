@@ -6,11 +6,12 @@ internal sealed class MediaPayload : IEquatable<MediaPayload>
 {
     private readonly byte[]? bytes;
 
-    private MediaPayload(string? url, byte[]? bytes, string? mediaType)
+    private MediaPayload(string? url, byte[]? bytes, string? mediaType, string? name = null)
     {
         Url = url;
         this.bytes = bytes?.ToArray();
         MediaType = mediaType;
+        Name = name;
     }
 
     internal ReadOnlyMemory<byte> Bytes =>
@@ -21,6 +22,9 @@ internal sealed class MediaPayload : IEquatable<MediaPayload>
     internal string? MediaType { get; }
 
     internal string? Url { get; }
+
+    /// <summary>The base name of the file the content was read from, if any.</summary>
+    internal string? Name { get; }
 
     internal static MediaPayload FromUrl(string url, string? mediaType)
     {
@@ -33,11 +37,14 @@ internal sealed class MediaPayload : IEquatable<MediaPayload>
         return new MediaPayload(url, bytes: null, mediaType);
     }
 
-    internal static MediaPayload FromBytes(ReadOnlyMemory<byte> data, string mediaType)
+    internal static MediaPayload FromBytes(
+        ReadOnlyMemory<byte> data,
+        string mediaType,
+        string? name = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(mediaType);
         BamlValueLimits.RequireBytes(data.Length, "$.media", typeof(ReadOnlyMemory<byte>));
-        return new MediaPayload(url: null, data.Span.ToArray(), mediaType);
+        return new MediaPayload(url: null, data.Span.ToArray(), mediaType, name);
     }
 
     internal static MediaPayload FromBase64(string base64, string mediaType)
@@ -84,7 +91,8 @@ internal sealed class MediaPayload : IEquatable<MediaPayload>
             throw new IOException("The media file grew while it was being snapshotted.");
         }
 
-        return FromBytes(contents, mediaType);
+        // The value holds the content and the file's base name, never its path.
+        return FromBytes(contents, mediaType, Path.GetFileName(path));
     }
 
     internal bool TryGetUrl([NotNullWhen(true)] out string? url)
@@ -106,7 +114,8 @@ internal sealed class MediaPayload : IEquatable<MediaPayload>
     {
         if (other is null
             || IsUrl != other.IsUrl
-            || !StringComparer.Ordinal.Equals(MediaType, other.MediaType))
+            || !StringComparer.Ordinal.Equals(MediaType, other.MediaType)
+            || !StringComparer.Ordinal.Equals(Name, other.Name))
         {
             return false;
         }
@@ -123,6 +132,7 @@ internal sealed class MediaPayload : IEquatable<MediaPayload>
         var hash = new HashCode();
         hash.Add(IsUrl);
         hash.Add(MediaType, StringComparer.Ordinal);
+        hash.Add(Name, StringComparer.Ordinal);
         if (IsUrl)
         {
             hash.Add(Url, StringComparer.Ordinal);
@@ -142,7 +152,9 @@ internal sealed class MediaPayload : IEquatable<MediaPayload>
     {
         if (!IsUrl)
         {
-            return $"bytes(<redacted>, mediaType={MediaType})";
+            return Name is null
+                ? $"bytes(<redacted>, mediaType={MediaType})"
+                : $"bytes(<redacted>, mediaType={MediaType}, name={Name})";
         }
 
         string url = Url!;
@@ -159,6 +171,12 @@ public sealed class BamlImage : IEquatable<BamlImage>
     private BamlImage(MediaPayload payload) => this.payload = payload;
 
     public bool IsUrl => payload.IsUrl;
+
+    /// <summary>
+    /// The base name of the file the content was read from (by
+    /// <see cref="FromFileAsync"/>), or <see langword="null"/>.
+    /// </summary>
+    public string? Name => payload.Name;
 
     public static BamlImage FromUrl(string url, string? mediaType = null) =>
         new(MediaPayload.FromUrl(url, mediaType));
@@ -204,6 +222,12 @@ public sealed class BamlAudio : IEquatable<BamlAudio>
 
     public bool IsUrl => payload.IsUrl;
 
+    /// <summary>
+    /// The base name of the file the content was read from (by
+    /// <see cref="FromFileAsync"/>), or <see langword="null"/>.
+    /// </summary>
+    public string? Name => payload.Name;
+
     public static BamlAudio FromUrl(string url, string? mediaType = null) =>
         new(MediaPayload.FromUrl(url, mediaType));
 
@@ -248,6 +272,12 @@ public sealed class BamlVideo : IEquatable<BamlVideo>
 
     public bool IsUrl => payload.IsUrl;
 
+    /// <summary>
+    /// The base name of the file the content was read from (by
+    /// <see cref="FromFileAsync"/>), or <see langword="null"/>.
+    /// </summary>
+    public string? Name => payload.Name;
+
     public static BamlVideo FromUrl(string url, string? mediaType = null) =>
         new(MediaPayload.FromUrl(url, mediaType));
 
@@ -291,6 +321,12 @@ public sealed class BamlPdf : IEquatable<BamlPdf>
     private BamlPdf(MediaPayload payload) => this.payload = payload;
 
     public bool IsUrl => payload.IsUrl;
+
+    /// <summary>
+    /// The base name of the file the content was read from (by
+    /// <see cref="FromFileAsync"/>), or <see langword="null"/>.
+    /// </summary>
+    public string? Name => payload.Name;
 
     public static BamlPdf FromUrl(string url, string? mediaType = null) =>
         new(MediaPayload.FromUrl(url, mediaType));

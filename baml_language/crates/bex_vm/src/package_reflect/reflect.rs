@@ -1905,23 +1905,19 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
         .map_or_else(RealizedTy::unknown, RealizedTy::from)
 }
 
-/// Whether `value` fits the parameter type `expected`, by the canonical
-/// algebra over the runtime context. Fails OPEN when the value's type cannot
-/// be reconstructed — an opaque native handle (see `value_concrete_ty`) has no
-/// BAML type to compare against, and refusing what we cannot check would
-/// reject working calls; the callee remains dynamically safe either way
-/// (values stay tagged).
+/// Whether `value` fits the parameter type `expected`: the membership test
+/// `is` asks ([`crate::type_match::value_is_member`]), so the string `"auto"`
+/// fits a parameter typed `"auto" | "manual"`. Fails OPEN when the value has
+/// no BAML type to compare — an opaque native handle (see
+/// `value_concrete_ty`) — because refusing what we cannot check would reject
+/// working calls; the callee remains dynamically safe either way (values stay
+/// tagged).
 fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
-    let Some(actual) = vm.value_concrete_ty(value) else {
-        return true;
-    };
     // No convention patching is needed on the way in: a reconstructed
     // signature spells "cannot throw" as `never`, exactly as the static
     // algebra does.
-    let actual: Ty = actual.into();
     let expected: Ty = expected.clone().into();
-    // The VM itself is the runtime `TypeContext`.
-    normalize::is_subtype(&actual, &expected, vm)
+    crate::type_match::value_is_member(vm, value, &expected).unwrap_or(true)
 }
 
 /// `reflect.call_any` mirrors the ordinary call boundary's one numeric

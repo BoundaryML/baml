@@ -173,8 +173,17 @@ message BamlValueMedia {
   oneof value {
     string url = 3;
     string base64 = 4;
-    string file = 5;
+    BamlValueMediaFileContent file_content = 6;
   }
+  // A media value holds content, never a file path: field 5 named one.
+  reserved 5;
+  reserved "file";
+}
+
+// Base64 content that was read from a file, with the base name of that file.
+message BamlValueMediaFileContent {
+  string name = 1;
+  string base64 = 2;
 }
 
 message BamlValuePromptAst {

@@ -441,12 +441,12 @@ def _set_inbound_value(
             media.mime_type = mime_type
         if (url := value.url()) is not None:
             media.url = url
-        elif (base64 := value.base64()) is not None:
-            media.base64 = base64
-        elif (file := value.file()) is not None:
-            media.file = file
+        elif (name := value.name()) is not None:
+            # Content read from a file keeps the file's name.
+            media.file_content.name = name
+            media.file_content.base64 = value.base64()
         else:
-            raise TypeError(f"Cannot encode empty media argument {kwarg_name!r}")
+            media.base64 = value.base64()
         return
 
     # Python callables → register in the host-value table and emit a
@@ -788,6 +788,7 @@ def encode_call_args(
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
     _baml: Any = None,
+    _stream_step: bool = False,
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
@@ -808,6 +809,11 @@ def encode_call_args(
         from ._invocation import normalize
 
         controls, cancel, retained = normalize(_baml, call_id)
+        if _stream_step and controls.trace.WhichOneof("selection") != "reservation":
+            # Keep explicit context/capture patches while leaving pulls in
+            # timing mode. The retained stream function span records errors.
+            if controls.trace.options.mode != baml_inbound_pb2.TRACE_MODE_HIDDEN:
+                controls.trace.options.mode = baml_inbound_pb2.TRACE_MODE_TIMING
         args.invocation.CopyFrom(controls)
         if cancel is not None:
             _set_inbound_value(
@@ -990,6 +996,10 @@ def _decode_media(media) -> Any:
     if source is None:
         raise BamlError("BEX emitted a portable media value with no content")
     mime_type = media.mime_type if media.HasField("mime_type") else None
+    if source == "file_content":
+        # Content read from a file keeps the file's name.
+        content = media.file_content
+        return cls.from_file_content(content.name, content.base64, mime_type=mime_type)
     constructor = getattr(cls, f"from_{source}")
     return constructor(getattr(media, source), mime_type=mime_type)
 

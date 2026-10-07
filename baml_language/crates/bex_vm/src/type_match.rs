@@ -36,24 +36,6 @@ pub(crate) fn value_matches_template(
     template: &TyTemplate,
     frame_type_args: &[RealizedTy],
 ) -> Result<bool, VmInternalError> {
-    // A value with no reconstructible concrete BAML type (an opaque native
-    // handle, or a compile-time definition object — see `value_concrete_ty`) is
-    // a member of no structural type test. Every *data* value reconstructs
-    // faithfully, including the callables: a closure, generic function, or
-    // bound method materializes its stored signature templates against the
-    // realized frame the value carries (a bound method's drops the applied
-    // receiver), so one minted in a generic frame is as precise as any other;
-    // futures reconstruct at the `Future<T, E>` their spawn site was typed at.
-    //
-    // The reconstruction is the singleton-precise one: a literal type holds a
-    // single value, so nothing decides membership in it short of the value
-    // reporting the type of exactly itself.
-    let Some(value_ty) = vm.value_singleton_ty(value) else {
-        return Ok(false);
-    };
-    // The canonical algebra operates over `Ty`; a value's realized type widens
-    // into it.
-    let value_ty: Ty = value_ty.into();
     // Resolve frame references into a realized type, then let the canonical
     // algebra do the work.
     let expected = template.substitute(frame_type_args, vm).map_err(|e| {
@@ -61,7 +43,31 @@ pub(crate) fn value_matches_template(
             message: e.to_string(),
         }
     })?;
-    Ok(normalize::is_subtype(&value_ty, expected.as_ty(), vm))
+    // A value with no BAML type is a member of no structural type test.
+    Ok(value_is_member(vm, value, expected.as_ty()).unwrap_or(false))
+}
+
+/// Whether `value` is a member of `ty`: `TYPE_SYSTEM.md` "Values and
+/// membership", asked of the canonical algebra. `None` for a value with no
+/// reconstructible BAML type (an opaque native handle, or a compile-time
+/// definition object — see [`BexVm::value_concrete_ty`]); the caller decides
+/// what that means for it.
+///
+/// Every *data* value reconstructs faithfully, including the callables: a
+/// closure, generic function, or bound method materializes its stored
+/// signature templates against the realized frame the value carries (a bound
+/// method's drops the applied receiver), so one minted in a generic frame is
+/// as precise as any other; futures reconstruct at the `Future<T, E>` their
+/// spawn site was typed at.
+///
+/// The reconstruction is the singleton-precise one: a literal type holds a
+/// single value, so nothing decides membership in it short of the value
+/// reporting the type of exactly itself.
+pub(crate) fn value_is_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
+    // The canonical algebra operates over `Ty`; a value's realized type widens
+    // into it.
+    let value_ty: Ty = vm.value_singleton_ty(value)?.into();
+    Some(normalize::is_subtype(&value_ty, ty, vm))
 }
 
 /// Whether `actual` is *invariantly* the type denoted by `template` (resolved

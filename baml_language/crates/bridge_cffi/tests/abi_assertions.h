@@ -141,6 +141,8 @@ BAML_ASSERT_AFTER(release_function_call, register_host_dispatch_v2);
 BAML_ASSERT_AFTER(register_host_dispatch_v2, register_host_cancel_callback);
 BAML_ASSERT_AFTER(register_host_cancel_callback, trace_selection);
 BAML_ASSERT_AFTER(trace_selection, invocation_context);
+BAML_ASSERT_AFTER(invocation_context, media_name);
+BAML_ASSERT_AFTER(media_name, media_from_file_content);
 BAML_ASSERT_FIELD_TYPE(invocation_protocol_version, BamlInvocationProtocolVersionFn)
 BAML_ASSERT_FIELD_TYPE(invocation_clock_ns, BamlInvocationClockNsFn)
 BAML_ASSERT_FIELD_TYPE(release_function_call, BamlReleaseFunctionCallFn)
@@ -148,9 +150,11 @@ BAML_ASSERT_FIELD_TYPE(register_host_dispatch_v2, BamlRegisterHostDispatchV2Fn)
 BAML_ASSERT_FIELD_TYPE(register_host_cancel_callback, BamlRegisterHostCancelCallbackFn)
 BAML_ASSERT_FIELD_TYPE(trace_selection, BamlTraceSelectionFn)
 BAML_ASSERT_FIELD_TYPE(invocation_context, BamlInvocationContextFn)
+BAML_ASSERT_FIELD_TYPE(media_name, BamlMediaAccessorFn)
+BAML_ASSERT_FIELD_TYPE(media_from_file_content, BamlMediaFromFileContentFn)
 BAML_STATIC_ASSERT(
     BAML_API_V1_MIN_SIZE == sizeof(BamlApiV1),
-    "revision 3 requires the complete invocation ABI");
+    "revision 4 requires the complete table through media_from_file_content");
 
 BAML_ASSERT_FIELD_TYPE(version, BamlVersionFn)
 BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_blob, BamlInitializeRuntimeFromBlobFn)

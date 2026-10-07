@@ -5,7 +5,7 @@ export function isBamlMedia(value: unknown): value is BamlJsMedia {
   return getBamlType(value) === '$media';
 }
 
-export function mediaToSrc(media: BamlJsMedia): string | null {
+export function mediaToSrc(media: BamlJsMedia): string {
   switch (media.content_type) {
     case 'url':
       return media.url;
@@ -13,10 +13,6 @@ export function mediaToSrc(media: BamlJsMedia): string | null {
       const mime = media.mime_type ?? 'application/octet-stream';
       return `data:${mime};base64,${media.base64}`;
     }
-    case 'file':
-      return null;
-    default:
-      return null;
   }
 }
 

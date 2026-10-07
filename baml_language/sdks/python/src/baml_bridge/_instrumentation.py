@@ -112,6 +112,8 @@ def _exception_capture(error):
 def instrument(function_or_options=None, *, name=None):
     """Instrument an ordinary Python function or native coroutine function.
 
+    Without options, capture outputs and errors; inputs require an explicit request.
+    Pass trace.empty_span() to record a span without requesting values.
     Native generators and arbitrary callable objects are currently unsupported.
     Construction validates configuration but captures no execution context.
     Mode and capture requests default Python-to-BAML calls in the body; an

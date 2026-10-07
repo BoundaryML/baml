@@ -1231,13 +1231,18 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
     }
 }
 
-/// If this is a static constructor for a media class (no instance receiver, path has a media class segment),
-/// return the class name. Used to determine copy return type.
+/// If this is a static constructor for a media class (no instance receiver, path has a media class segment,
+/// and it returns media), return the class name. Used to determine copy return type.
 fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
     if b.receiver
         .as_ref()
         .is_some_and(|r| !r.receiver_type.is_static())
     {
+        return None;
+    }
+    // A static that returns something else, such as a MIME type, constructs
+    // nothing.
+    if !matches!(b.return_type, BamlType::Media(_)) {
         return None;
     }
     // Indexed from the end, so this needs no package knowledge: the class is

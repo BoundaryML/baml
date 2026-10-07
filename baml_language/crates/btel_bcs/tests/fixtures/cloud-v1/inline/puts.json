@@ -12,8 +12,8 @@
       "query": "capability=fixed-v1",
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording", "x-amz-content-sha256": "UNSIGNED-PAYLOAD"},
       "body_file": "recording.hex",
-      "length": 240,
-      "sha256": "fdf215de3f9c8dbd11b8f773da2edff84440a0d53f7b7c11150a078050f78eaf"
+      "length": 242,
+      "sha256": "347f63c2686bb50e8ed64c18f6378d1645b59a24cb625f670bf8875cd9f8acd2"
     }
   ]
 }

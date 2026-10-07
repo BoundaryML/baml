@@ -4723,7 +4723,7 @@ impl<'db> LoweringContext<'db> {
             "hidden" => Some(BuiltinTraceHook::Hidden),
             "timing" => Some(BuiltinTraceHook::Timing),
             "span" => Some(BuiltinTraceHook::Span),
-            "rich" => Some(BuiltinTraceHook::Rich),
+            "empty_span" => Some(BuiltinTraceHook::EmptySpan),
             _ => None,
         }
     }

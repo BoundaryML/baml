@@ -6,6 +6,45 @@ function matrix_fail(value: unknown) -> unknown throws unknown {
     throw value;
 }
 
+/// baml:$trace=trace.span
+function matrix_hook_span(value: unknown, fail: bool) -> unknown throws unknown {
+    if (fail) { throw value; } else { value }
+}
+
+/// baml:$trace=trace.empty_span
+function matrix_hook_empty_span(value: unknown, fail: bool) -> unknown throws unknown {
+    if (fail) { throw value; } else { value }
+}
+
+function matrix_hook_defaults(value: unknown, empty: bool, fail: bool) -> unknown throws unknown {
+    if (empty) {
+        matrix_hook_empty_span(value, fail)
+    } else {
+        matrix_hook_span(value, fail)
+    }
+}
+
+function matrix_span_defaults(
+    value: unknown,
+    empty: bool,
+    chained: bool,
+    reserved: bool,
+    fail: bool,
+) -> unknown throws unknown {
+    let options = if (chained) {
+        let base = trace.span(inputs = true);
+        if (empty) { base.empty_span() } else { base.span() }
+    } else {
+        if (empty) { trace.empty_span() } else { trace.span() }
+    };
+    let attachment = if (reserved) { options.reserve() } else { options };
+    if (fail) {
+        matrix_fail(value, $trace = attachment)
+    } else {
+        matrix_echo(value, $trace = attachment)
+    }
+}
+
 function matrix_case(
     value: unknown,
     inputs: bool?,
