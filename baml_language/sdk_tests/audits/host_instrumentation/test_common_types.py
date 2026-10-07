@@ -20,7 +20,7 @@ def common_python(tmp_path_factory):
     }
     env.update(
         HOME=str(home),
-        BAML_HOME=str(home / "config"),
+        BAML_HOME=str(home / "config" / ".baml"),
         BAML_TELEMETRY="low",
         BOUNDARY_API_KEY="local",
         DO_NOT_TRACK="1",
@@ -41,7 +41,7 @@ def common_python(tmp_path_factory):
                 "query",
                 "--local",
                 "--from",
-                str(home),
+                str(home / "config"),
                 "--format",
                 "json",
                 sql,
@@ -179,7 +179,7 @@ def common_typescript(tmp_path_factory):
     }
     env.update(
         HOME=str(home),
-        BAML_HOME=str(home / "config"),
+        BAML_HOME=str(home / "config" / ".baml"),
         BAML_TELEMETRY="low",
         BOUNDARY_API_KEY="local",
         DO_NOT_TRACK="1",
@@ -210,7 +210,7 @@ def common_typescript(tmp_path_factory):
                 "query",
                 "--local",
                 "--from",
-                str(home),
+                str(home / "config"),
                 "--format",
                 "json",
                 sql,

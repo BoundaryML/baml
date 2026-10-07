@@ -158,3 +158,10 @@ rerunning codegen. This follows the same isolated recording and shutdown
 workflow as the original catalog audit above.
 
 The shutdown audit runs actual Python and Node subprocesses to verify normal exit, repeated explicit shutdown and nonzero host exit. Each terminal recording reports SDK lifetime completion with an unknown host outcome, and `baml query` must expose all three completed BAML invocations in the profiler. This audit calls the bridges directly and needs no generated fixture.
+
+Bare Python `@trace.instrument` / `@trace.instrument()` and Node
+`trace.instrument(body)` capture outputs and errors by default, without inputs.
+Pass `trace.span(inputs=True)` (Python) or `trace.span({ inputs: true })` (Node)
+to also capture arguments; pass `trace.empty_span()` for no value capture.
+Audit processes write beneath their explicit `BAML_HOME`; query audits choose
+`<query-root>/.baml` as that root because local CLI queries are project-relative.
