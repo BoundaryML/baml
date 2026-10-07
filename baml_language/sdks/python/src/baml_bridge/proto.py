@@ -810,12 +810,10 @@ def encode_call_args(
 
         controls, cancel, retained = normalize(_baml, call_id)
         if _stream_step and controls.trace.WhichOneof("selection") != "reservation":
-            # Keep explicit context/capture patches but avoid one retained
-            # function span per partial. Failed steps are promoted by the VM.
+            # Keep explicit context/capture patches while leaving pulls in
+            # timing mode. The retained stream function span records errors.
             if controls.trace.options.mode != baml_inbound_pb2.TRACE_MODE_HIDDEN:
                 controls.trace.options.mode = baml_inbound_pb2.TRACE_MODE_TIMING
-                if not controls.trace.options.HasField("error"):
-                    controls.trace.options.error = True
         args.invocation.CopyFrom(controls)
         if cancel is not None:
             _set_inbound_value(

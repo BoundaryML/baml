@@ -338,19 +338,11 @@ def test_stream_recording_parent_chain(tmp_path):
         assert request["context_distinct_id"] == "u1"
     assert not str(origins["root"]["parent"]).startswith("python:")
     assert origins["escaped"]["parent"].startswith("python:")
-    for row in rows:
-        if row["span_type"] == "function" and row["span_name"] in (
-            "ai.stream.Stream.next",
-            "ai.stream.Stream.final",
-        ):
-            assert row["status"] in ("user_error", "cancel_error", "panic_error")
-            origin = origins[row["context_metadata"]["case"]]
-            ancestors = set()
-            parent_id = row["parent_span_id"]
-            while parent_id in by_id and parent_id not in ancestors:
-                ancestors.add(parent_id)
-                parent_id = by_id[parent_id]["parent_span_id"]
-            assert origin["span_id"] in ancestors
+    assert not any(
+        row["span_type"] == "function"
+        and row["span_name"] in ("ai.stream.Stream.next", "ai.stream.Stream.final")
+        for row in rows
+    ), "pulls stay timing-only even when final parsing fails"
     for case in ("concurrent-doc", "parse-error"):
         assert origins[case]["status"] == "user_error"
         error = origins[case]["error_value"]
