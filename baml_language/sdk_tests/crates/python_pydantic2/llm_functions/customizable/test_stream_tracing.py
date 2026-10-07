@@ -104,7 +104,6 @@ async def test_stream_final_parse_failure_is_preserved_after_eof():
         assert raised.value.value.raw_output
 
 
-# SDK_PARITY_LINT(skip): Python final caching must distinguish results from control flow
 @pytest.mark.parametrize(
     "kind,cache",
     [
@@ -116,6 +115,7 @@ async def test_stream_final_parse_failure_is_preserved_after_eof():
         ("panic", True),
     ],
 )
+# SDK_PARITY_LINT(skip): Python final caching must distinguish results from control flow
 def test_stream_final_caches_only_settled_errors(monkeypatch, kind, cache):
     from baml_bridge import BamlCancelledError, BamlError, BamlPanic
     from baml_bridge._stream import BamlStream
@@ -222,9 +222,9 @@ async def test_stream_precancelled_admission_preserves_reservation():
     assert isinstance(await stream.final_async(), str)
 
 
-# SDK_PARITY_LINT(skip): native Python recording ancestry, duration, values and step-count audit
 # The ordinary SDK CI does not build the query CLI. Run this audit wherever
 # baml-cli is built, or set BAML_AUDIT_CLI to a CLI from the same checkout.
+# SDK_PARITY_LINT(skip): native Python recording ancestry, duration, values and step-count audit
 def test_stream_recording_parent_chain(tmp_path):
     import json
     import os
