@@ -875,7 +875,13 @@ impl TelemetryState {
     ) {
         let call_path = self.thread.active_call_path;
         let policy_id = function.telemetry_policy_id.load();
-        if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
+        let step_error = telemetry.error_request
+            && outcome.is_error()
+            && matches!(
+                function.name.as_str(),
+                "ai.stream.Stream.next" | "ai.stream.Stream.final"
+            );
+        if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE && !step_error {
             self.write_timing(TimingRecord::FunctionTimingCompletion {
                 call_path,
                 entered_at: telemetry.entered_at,
@@ -1097,7 +1103,7 @@ impl TelemetryState {
                 ),
             }
             self.thread.active_id = telemetry.saved_parent_id;
-        } else if policy::promotes(policy, elapsed, outcome, self.clock.domain()) {
+        } else if step_error || policy::promotes(policy, elapsed, outcome, self.clock.domain()) {
             let captured_value =
                 capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
             match (outcome, telemetry.is_reentry()) {
@@ -1597,6 +1603,52 @@ mod tests {
                 CallTypeArgs::default(),
                 |_, _| (None, function.telemetry_function_id.unwrap()),
             )
+        }
+    }
+
+    #[test]
+    fn stream_steps_keep_only_requested_errors_in_timing_mode() {
+        for name in [
+            "ai.stream.Stream.next",
+            "ai.stream.Stream.final",
+            "user.next",
+        ] {
+            for error_request in [true, false] {
+                for outcome in [
+                    InvocationOutcome::Ok,
+                    InvocationOutcome::Errored,
+                    InvocationOutcome::Cancelled,
+                ] {
+                    let mut function = function(FunctionKind::Bytecode, None);
+                    function.name = name.into();
+                    let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                    let frame = trace_entry(
+                        &mut state,
+                        &function,
+                        Some(TraceConfig {
+                            mode: Some(InvocationMode::Timing),
+                            error: Some(error_request),
+                            ..Default::default()
+                        }),
+                    )
+                    .unwrap();
+                    assert!(!frame.is_span());
+                    unsafe {
+                        state.complete_invocation(frame, &function, outcome, Some(Value::int(9)));
+                    }
+                    let promoted = state.span_records.iter().any(|record| {
+                        matches!(
+                            record,
+                            SpanRecord::LateFunctionSpanCompletionErrored { .. }
+                                | SpanRecord::LateFunctionSpanCompletionCancelled { .. }
+                        )
+                    });
+                    assert_eq!(
+                        promoted,
+                        name != "user.next" && error_request && outcome.is_error()
+                    );
+                }
+            }
         }
     }
 

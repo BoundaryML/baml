@@ -788,6 +788,7 @@ def encode_call_args(
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
     _baml: Any = None,
+    _stream_step: bool = False,
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
@@ -808,6 +809,13 @@ def encode_call_args(
         from ._invocation import normalize
 
         controls, cancel, retained = normalize(_baml, call_id)
+        if _stream_step and controls.trace.WhichOneof("selection") != "reservation":
+            # Keep explicit context/capture patches but avoid one retained
+            # function span per partial. Failed steps are promoted by the VM.
+            if controls.trace.options.mode != baml_inbound_pb2.TRACE_MODE_HIDDEN:
+                controls.trace.options.mode = baml_inbound_pb2.TRACE_MODE_TIMING
+                if not controls.trace.options.HasField("error"):
+                    controls.trace.options.error = True
         args.invocation.CopyFrom(controls)
         if cancel is not None:
             _set_inbound_value(

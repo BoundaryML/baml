@@ -29,6 +29,19 @@ pub trait Bex: Send + Sync {
         ))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn begin_stream_invocation(
+        self: Arc<Self>,
+        function_name: &str,
+        context: &FunctionCallContext,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        let _ = (function_name, context, inputs);
+        Err(RuntimeError::Other(
+            "runtime does not support retained stream tracing".into(),
+        ))
+    }
+
     /// Nanoseconds in this runtime's fixed monotonic invocation clock domain.
     fn invocation_clock_ns(&self) -> Result<u64, RuntimeError>;
     /// Freeze relative controls before argument binding or adapter queueing.
@@ -111,6 +124,18 @@ impl Bex for BexEngine {
         inputs: Option<&crate::HostCapture>,
     ) -> Result<crate::HostInvocation, RuntimeError> {
         BexEngine::begin_host_invocation(&self, definition, inherited, options, caller, inputs)
+            .map_err(RuntimeError::from)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn begin_stream_invocation(
+        self: Arc<Self>,
+        function_name: &str,
+        context: &FunctionCallContext,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        BexEngine::begin_stream_invocation(&self, function_name, context, inputs)
+            .await
             .map_err(RuntimeError::from)
     }
 

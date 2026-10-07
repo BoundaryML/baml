@@ -128,6 +128,12 @@ def invoke(target, arguments, *, _types=None, _baml=None):
     from .proto import decode_call_result
 
     _, encoded = _dynamic_args(target, arguments, _types, _baml)
+    if isinstance(target, str) and target.endswith("@stream"):
+        from ._stream import _decode_stream_result
+
+        return _decode_stream_result(
+            get_runtime().call_function_sync(encoded, stream=True)
+        )
     return decode_call_result(get_runtime().call_function_sync(encoded))
 
 
@@ -138,8 +144,15 @@ async def invoke_async(target, arguments, *, _types=None, _baml=None):
 
     call_id, encoded = _dynamic_args(target, arguments, _types, _baml)
     try:
-        result = await get_runtime().call_function(encoded)
+        if isinstance(target, str) and target.endswith("@stream"):
+            result = await get_runtime().call_function(encoded, stream=True)
+        else:
+            result = await get_runtime().call_function(encoded)
     except asyncio.CancelledError:
         cancel_function_call(call_id)
         raise
+    if isinstance(target, str) and target.endswith("@stream"):
+        from ._stream import _decode_stream_result
+
+        return _decode_stream_result(result, asynchronous=True)
     return _decode_call_result_async(result)

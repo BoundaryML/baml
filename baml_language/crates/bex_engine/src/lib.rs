@@ -82,7 +82,7 @@ mod invocation;
 pub use btel_snapshot::host::HostValue as HostCapture;
 #[cfg(not(target_arch = "wasm32"))]
 pub use host_instrumentation::{
-    CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation,
+    CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation, capture_callback_inputs,
 };
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]

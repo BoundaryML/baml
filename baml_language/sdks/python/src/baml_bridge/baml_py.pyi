@@ -151,11 +151,11 @@ class BamlRuntime:
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, args_proto: bytes) -> typing.Any:
+    def call_function(self, args_proto: bytes, *, stream: bool = False) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, args_proto: bytes) -> bytes:
+    def call_function_sync(self, args_proto: bytes, *, stream: bool = False) -> typing.Any:
         r"""
         Call a BAML function synchronously (blocking).
         """
