@@ -132,23 +132,25 @@ async function postHogCardStates(
 async function waitForPostHogDashboard(page: Page): Promise<void> {
   const deadline = Date.now() + dashboardRenderTimeoutMs;
   let readySince: number | undefined;
-  let stableCardCount: number | undefined;
+  let stableCardState: string | undefined;
   let lastCards: PostHogCardRenderState[] = [];
 
   while (Date.now() < deadline) {
     lastCards = await postHogCardStates(page);
     if (postHogCardsAreReady(lastCards)) {
-      if (stableCardCount !== lastCards.length) {
-        stableCardCount = lastCards.length;
+      const cardState = JSON.stringify(lastCards);
+      if (stableCardState !== cardState) {
+        stableCardState = cardState;
         readySince = Date.now();
       } else if (
         readySince !== undefined &&
         Date.now() - readySince >= dashboardSettleTimeMs
       ) {
+        console.log(`PostHog dashboard settled with ${lastCards.length} cards`);
         return;
       }
     } else {
-      stableCardCount = undefined;
+      stableCardState = undefined;
       readySince = undefined;
     }
     await page.waitForTimeout(dashboardStatePollIntervalMs);
@@ -262,6 +264,7 @@ async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
     }));
     const renderedNativeChart = [];
     if (hasNativeChart) {
+      await indexPage.evaluate(() => document.fonts.ready);
       const bounds = await nativeChart.boundingBox();
       if (!bounds)
         throw new Error('Native weekly metrics chart was not visible');
@@ -296,15 +299,16 @@ async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
             );
           }
           await waitForPostHogDashboard(reportPage);
+          await reportPage.evaluate(() => document.fonts.ready);
           const screenshot = Buffer.from(
-            await reportPage.screenshot({ type: 'png' }),
+            await reportPage.screenshot({ fullPage: true, type: 'png' }),
           );
           if ((await sharp(screenshot).stats()).entropy < 1) {
             throw new Error(
               `PostHog dashboard ${index + 1} screenshot was visually empty`,
             );
           }
-          return { input: screenshot, left: frame.left, top: frame.top };
+          return { ...frame, input: screenshot };
         } catch (error) {
           const details = pageErrors.length
             ? ` Browser errors: ${pageErrors.join(' | ')}`
@@ -318,20 +322,55 @@ async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
         }
       }),
     );
-    return await sharp({
-      create: {
-        background: '#ffffff',
-        channels: 4,
-        height: pageDimensions.height,
-        width: pageDimensions.width,
-      },
-    })
-      .composite([...renderedNativeChart, ...renderedEmbeds])
-      .png()
-      .toBuffer();
+    return await composeDashboardCapture(
+      pageDimensions,
+      renderedNativeChart,
+      renderedEmbeds,
+    );
   } finally {
     await browser.close();
   }
+}
+
+interface DashboardCapture {
+  input: Buffer;
+  left: number;
+  top: number;
+}
+
+export async function composeDashboardCapture(
+  pageDimensions: { height: number; width: number },
+  nativeCharts: DashboardCapture[],
+  embeds: (DashboardCapture & { height: number })[],
+): Promise<Buffer> {
+  const captures = [...nativeCharts];
+  let height = pageDimensions.height;
+  let width = pageDimensions.width;
+  let addedHeight = 0;
+  for (const embed of [...embeds].sort((a, b) => a.top - b.top)) {
+    const dimensions = await sharp(embed.input).metadata();
+    if (!dimensions.height || !dimensions.width) {
+      throw new Error('Embedded dashboard screenshot has no dimensions');
+    }
+    const top = embed.top + addedHeight;
+    captures.push({ input: embed.input, left: embed.left, top });
+    addedHeight += Math.max(0, dimensions.height - embed.height);
+    height = Math.max(height, top + dimensions.height);
+    width = Math.max(width, embed.left + dimensions.width);
+  }
+  height = Math.max(height, pageDimensions.height + addedHeight);
+  console.log(`Composing dashboard screenshot: ${width}x${height}`);
+  return await sharp({
+    create: {
+      background: '#ffffff',
+      channels: 4,
+      height,
+      width,
+    },
+  })
+    .composite(captures)
+    .png()
+    .toBuffer();
 }
 
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
