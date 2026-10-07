@@ -43,7 +43,16 @@
 //! the first visited then starts it, and the blob can differ between
 //! captures. Other blobs name its other members by blob and local number. A
 //! capture's own root blob always starts at the captured value.
-use rustc_hash::FxHashMap;
+//!
+//! # Definitions
+//!
+//! A blob's child table lists the blobs its values continue in, in first-use
+//! order, then the definition groups its type heads and declarations name
+//! ([`crate::definition`]), in first-use order, by ID alone. The groups a
+//! capture carries ([`crate::Carried`]) are blobs of the capture too, made
+//! once and shared: they come first in the blob table, each after the groups
+//! it names.
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     CasId,
@@ -51,7 +60,7 @@ use crate::{
     graph::{
         BigintId, Graph, ObjectId, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId,
     },
-    hash::{Absorb, Digest, Hasher},
+    hash::{Absorb, BlobHasher, Digest, Hasher},
     pool::Storage,
     tags::HashDomain,
     walk::{self, Both, Length, Reference, Resolver, bigint_limb_bytes, infallible},
@@ -64,13 +73,36 @@ pub struct BlobIndex(pub(crate) u32);
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BlobEntry {
     pub(crate) id: CasId,
-    pub(crate) root: SnapshotRoot,
+    pub(crate) content: Content,
     pub(crate) members: Range<ObjectId>,
+    /// The blobs its values continue in.
     pub(crate) children: Range<BlobIndex>,
+    /// The definition groups it names, which follow `children` in its child
+    /// table.
+    pub(crate) named: Range<CasId>,
     pub(crate) encoded_len: u64,
     /// Unmeasured, or measured before delivery releases leaves. A measured
     /// None is an expanded total that cannot fit in u64.
     pub(crate) logical_bytes_approx_v1: LogicalBytesApproxV1,
+}
+impl BlobEntry {
+    /// The root of a blob of the capture's own content: never a definition
+    /// group, which a capture's root blob is not.
+    pub(crate) fn capture_root(&self) -> &SnapshotRoot {
+        match &self.content {
+            Content::Capture(root) => root,
+            Content::Definition(_) => unreachable!("a capture's root blob holds the capture"),
+        }
+    }
+}
+/// What a blob holds.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Content {
+    /// Part of the capture, from this root.
+    Capture(SnapshotRoot),
+    /// The definition group at this index of the capture's definitions,
+    /// encoded already.
+    Definition(u32),
 }
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum LogicalBytesApproxV1 {
@@ -95,6 +127,8 @@ pub(crate) struct Shape {
     pub(crate) members: Arena<ObjectId>,
     /// Each blob's children in first-use order, concatenated.
     pub(crate) children: Arena<BlobIndex>,
+    /// Each blob's named definition groups in first-use order, concatenated.
+    pub(crate) named: Arena<CasId>,
     /// Per-object strongly connected component, populated only for delivery.
     pub(crate) logical_units: Arena<u32>,
     /// Per object, string and bigint: the blob other blobs find it in. Empty
@@ -120,6 +154,7 @@ impl Shape {
             blobs,
             members,
             children,
+            named,
             logical_units,
             object_homes,
             string_homes,
@@ -128,6 +163,7 @@ impl Shape {
         blobs.clear();
         members.clear();
         children.clear();
+        named.clear();
         logical_units.clear();
         object_homes.clear();
         string_homes.clear();
@@ -139,6 +175,7 @@ impl Shape {
             blobs,
             members,
             children,
+            named,
             logical_units,
             object_homes,
             string_homes,
@@ -147,6 +184,7 @@ impl Shape {
         size_of_val(&**blobs)
             + size_of_val(&**members)
             + size_of_val(&**children)
+            + size_of_val(&**named)
             + size_of_val(&**logical_units)
             + size_of_val(&**object_homes)
             + size_of_val(&**string_homes)
@@ -157,6 +195,7 @@ impl Shape {
             blobs,
             members,
             children,
+            named,
             logical_units,
             object_homes,
             string_homes,
@@ -166,6 +205,7 @@ impl Shape {
             blobs.capacity_bytes(),
             members.capacity_bytes(),
             children.capacity_bytes(),
+            named.capacity_bytes(),
             logical_units.capacity_bytes(),
             object_homes.capacity_bytes(),
             string_homes.capacity_bytes(),
@@ -225,13 +265,21 @@ pub struct Shaper {
     /// Blob index to its slot in `children`, [`UNNUMBERED`] for every other
     /// blob and between blobs.
     slots: Vec<u32>,
+    /// Definition groups the blob being shaped names, in first-use order.
+    named: Vec<CasId>,
+    /// `named`, once it is too long to search.
+    named_set: FxHashSet<CasId>,
     /// This capture's blobs by ID: equal content is stored once.
     ids: FxHashMap<CasId, BlobIndex>,
     cuts: Cuts,
+    /// Hash input of the blob being shaped ([`BlobHasher`]).
+    hash_input: Vec<u8>,
 }
 
 /// Local number of an object outside the blob being shaped or written.
 pub(crate) const UNNUMBERED: u32 = u32::MAX;
+/// Named groups searched in place; past this a set is kept.
+const NAMED_SEARCH: usize = 32;
 
 impl Shaper {
     pub fn new(policy: ShapePolicy) -> Self {
@@ -259,6 +307,7 @@ impl Shaper {
         self.local.resize(graph.objects.len(), UNNUMBERED);
         self.slots.clear();
         self.ids.clear();
+        self.add_definitions(graph, shape, meter);
         match self.policy {
             ShapePolicy::Whole => {}
             ShapePolicy::Split {
@@ -281,6 +330,35 @@ impl Shaper {
         );
         #[cfg(debug_assertions)]
         check_nothing_copied(graph, shape);
+    }
+
+    /// Make a blob of each definition group the capture carries, encoded
+    /// already. Each comes after the groups it names.
+    fn add_definitions(&mut self, graph: &Graph, shape: &mut Shape, meter: &Meter) {
+        for (at, group) in graph.definitions.iter().enumerate() {
+            let id = CasId::from_bytes(group.id());
+            // A group carried twice in one capture (two classes with one
+            // definition, between which the stream's set forgot it) is one
+            // blob: an upload must not repeat an ID.
+            if self.ids.contains_key(&id) {
+                continue;
+            }
+            let index = BlobIndex(u32::try_from(shape.blobs.len()).expect("bounded blob count"));
+            shape.blobs.push(
+                BlobEntry {
+                    id,
+                    content: Content::Definition(u32::try_from(at).expect("bounded definitions")),
+                    members: Range::empty(),
+                    children: Range::empty(),
+                    named: Range::empty(),
+                    encoded_len: group.bytes().len() as u64,
+                    // Schema, not captured content.
+                    logical_bytes_approx_v1: LogicalBytesApproxV1::Measured(Some(0)),
+                },
+                meter,
+            );
+            self.ids.insert(id, index);
+        }
     }
 
     /// The pass a capture under both thresholds skips would have cut nothing.
@@ -388,13 +466,18 @@ impl Shaper {
             order,
             children,
             slots,
+            named,
+            named_set,
             ids,
             cuts,
+            hash_input,
             policy: _,
         } = self;
         slots.resize(shape.blobs.len(), UNNUMBERED);
         order.clear();
         children.clear();
+        named.clear();
+        named_set.clear();
         let (mut h, content_bytes) = {
             let mut numbering = Numbering {
                 shape,
@@ -402,8 +485,10 @@ impl Shaper {
                 order: &mut *order,
                 children: &mut *children,
                 slots: &mut *slots,
+                named: &mut *named,
+                named_set: &mut *named_set,
             };
-            let mut visitor = Both(Hasher::new(HashDomain::Blob), Length::default());
+            let mut visitor = Both(BlobHasher::new(hash_input), Length::default());
             infallible(walk::root(&mut visitor, &mut numbering, graph, root));
             // Hashing a definition numbers its new references, which extends
             // `order` with the objects to hash next.
@@ -416,17 +501,21 @@ impl Shaper {
             let Both(h, Length(content_bytes)) = visitor;
             (h, content_bytes)
         };
-        // The child table is complete only now; the ID covers it last.
-        h.size(children.len());
+        // The child table is complete only now; the ID covers it last. The
+        // groups the blob names follow the children its values use.
+        h.size(children.len() + named.len());
         for child in children.iter() {
             h.absorb(shape.blobs[child.0 as usize].id.as_bytes());
+        }
+        for group in named.iter() {
+            h.absorb(group.as_bytes());
         }
         h.size(order.len());
         let id = CasId::from_bytes(h.finish().0);
         // Header, child count and IDs, object count, then the content.
         let encoded_len = HEADER_BYTES
             .saturating_add(4)
-            .saturating_add((children.len() as u64).saturating_mul(16))
+            .saturating_add(((children.len() + named.len()) as u64).saturating_mul(16))
             .saturating_add(4)
             .saturating_add(content_bytes);
 
@@ -439,12 +528,15 @@ impl Shaper {
                 shape.members.extend_from_slice(order, meter);
                 let child_range = Range::new(shape.children.len(), children.len());
                 shape.children.extend_from_slice(children, meter);
+                let named_range = Range::new(shape.named.len(), named.len());
+                shape.named.extend_from_slice(named, meter);
                 shape.blobs.push(
                     BlobEntry {
                         id,
-                        root,
+                        content: Content::Capture(root),
                         members,
                         children: child_range,
+                        named: named_range,
                         encoded_len,
                         logical_bytes_approx_v1: LogicalBytesApproxV1::Unmeasured,
                     },
@@ -523,6 +615,8 @@ struct Numbering<'a> {
     order: &'a mut Vec<ObjectId>,
     children: &'a mut Vec<BlobIndex>,
     slots: &'a mut [u32],
+    named: &'a mut Vec<CasId>,
+    named_set: &'a mut FxHashSet<CasId>,
 }
 impl Numbering<'_> {
     fn slot(&mut self, blob: BlobIndex) -> u32 {
@@ -562,6 +656,20 @@ impl Resolver for Numbering<'_> {
     }
     fn bigint(&mut self, id: BigintId) -> Option<u32> {
         self.shape.bigint_home(id).map(|blob| self.slot(blob))
+    }
+    const DEFINITIONS: bool = true;
+    fn definition(&mut self, group: CasId) {
+        let new = if self.named.len() < NAMED_SEARCH {
+            !self.named.contains(&group)
+        } else {
+            if self.named_set.is_empty() {
+                self.named_set.extend(self.named.iter().copied());
+            }
+            self.named_set.insert(group)
+        };
+        if new {
+            self.named.push(group);
+        }
     }
 }
 

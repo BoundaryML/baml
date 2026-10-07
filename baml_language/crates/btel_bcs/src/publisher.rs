@@ -349,10 +349,13 @@ impl CloudPublisher {
             .into_iter()
             .filter(|leaf| !self.already_offered(leaf.id()))
             .collect();
+        // Whether it carries a definition group that no earlier offer holds.
+        let mut carried = false;
         let kept: Vec<_> = structure
             .iter()
             .flat_map(Structure::blobs)
             .filter(|blob| !self.already_offered(blob.id()))
+            .inspect(|blob| carried |= blob.is_definition())
             .map(|blob| (blob.index(), blob.id(), blob.encoded_len()))
             .collect();
         // A capture with nothing left to write is let go too.
@@ -367,8 +370,7 @@ impl CloudPublisher {
             .chain(structure.iter().map(|(_, size)| *size))
             .fold(0, usize::saturating_add);
         if !self.has_room(size, usize::from(structure.is_some())) {
-            self.delivery
-                .record_payload_loss(DeliveryError::Capacity, false);
+            self.delivery.record_capture_loss(carried);
             return;
         }
         for leaf in leaves {
@@ -530,7 +532,8 @@ impl CloudPublisher {
             || file.retained_bytes() > remaining_bytes
             || file.bytes().len() > limits.max_recording_body_bytes
         {
-            // The file is lost; queued blobs wait for the next one.
+            // The file is lost; queued blobs wait for the next one. It took
+            // no blob from the queue, so no definition group is lost with it.
             let evictions = self.metadata.retain(&file);
             self.delivery.record_metadata_replay_evictions(evictions);
             self.delivery
@@ -1630,6 +1633,128 @@ mod tests {
         assert_eq!(publisher.staged.len(), 2);
         assert!(publisher.staged[1].window.candidates.is_empty());
         assert!(!delivery.handle().is_disabled());
+    }
+
+    /// A capture of a type that names a class recorded with its definition,
+    /// in `lists` lists, carried by a fresh stream: its group is a blob of
+    /// the capture.
+    fn carrying(pool: &SnapshotPool, name: &str, lists: usize) -> Snapshot {
+        use btel_snapshot::{
+            Carried, OwnedType, TypeIdentity,
+            definition::{self, Class, Declaration, Meta},
+        };
+        let definition = definition::single(&Declaration::Class(Class {
+            name: baml_type::DeclarationName::Anonymous(baml_type::Name::new(name)),
+            type_params: 0,
+            meta: Meta::<String>::default(),
+            stream_done: false,
+            fields: vec![],
+        }));
+        let mut carried = Carried::default();
+        carried.begin();
+        let mut b = pool.try_acquire().unwrap();
+        let named = b.leaves().define(&definition, &mut carried);
+        let class = OwnedType::Class(TypeIdentity::Defined(named), Box::new([]));
+        let ty = (0..lists).fold(class, |ty, _| OwnedType::List(Box::new(ty)));
+        let ty = b.leaves().ty(ty);
+        let snapshot = b.finish(SnapshotValue::Type(ty), &mut Shaper::default());
+        assert!(snapshot.blobs().any(|blob| blob.is_definition()));
+        snapshot
+    }
+
+    /// A capture dropped for room makes every stream carry its definition
+    /// groups again only when it carried one: one that carried none drops
+    /// nothing a later capture names by ID alone.
+    #[test]
+    fn a_capacity_drop_resets_carried_groups_only_when_it_carried_one() {
+        for carries in [false, true] {
+            let (delivery, mut publisher) = publisher(CloudPublisherConfig {
+                candidate_target: 1,
+                max_pending_snapshots: 2,
+                ..CloudPublisherConfig::default()
+            });
+            let pool = SnapshotPool::new(4, Limits::default());
+            capture(&mut publisher, &pool, 0);
+            capture(&mut publisher, &pool, 1);
+            if carries {
+                offer(&mut publisher, carrying(&pool, "Dropped", 0));
+            } else {
+                capture(&mut publisher, &pool, 2);
+            }
+            assert_eq!(publisher.retained_snapshots, 2);
+            assert_eq!(delivery.handle().loss_count(), 1);
+            assert_eq!(delivery.handle().carried_resets(), u64::from(carries));
+            assert!(!delivery.handle().is_disabled());
+        }
+    }
+
+    /// A definition group a capture carried, already offered by an earlier
+    /// capture, is not lost when the capture is dropped for room.
+    #[test]
+    fn a_capacity_drop_of_a_group_offered_before_does_not_reset() {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig {
+            candidate_target: 1,
+            max_pending_snapshots: 2,
+            ..CloudPublisherConfig::default()
+        });
+        let pool = SnapshotPool::new(4, Limits::default());
+        offer(&mut publisher, carrying(&pool, "Shared", 0));
+        capture(&mut publisher, &pool, 1);
+        // Another stream's capture, of another type that names the class,
+        // carries the same group.
+        let again = carrying(&pool, "Shared", 1);
+        offer(&mut publisher, again);
+        assert_eq!(publisher.retained_snapshots, 2);
+        assert_eq!(delivery.handle().loss_count(), 1);
+        assert_eq!(delivery.handle().carried_resets(), 0);
+    }
+
+    /// A recording file lost for its size takes no blob from the queue: a
+    /// definition group queued with it is sent with the next file, so the
+    /// streams keep what they carried.
+    #[test]
+    fn a_lost_recording_file_keeps_the_groups_queued_with_it() {
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                max_recording_body_bytes: 128,
+                ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
+            },
+            |_| panic!("oversized payload must not disable delivery"),
+        )
+        .unwrap();
+        let mut publisher = CloudPublisher::new(
+            RecordingId::generate(),
+            RecordingConfig {
+                target_bytes: NonZeroUsize::new(128).unwrap(),
+                ..RecordingConfig::default()
+            },
+            CloudPublisherConfig::default(),
+            delivery.handle(),
+        )
+        .unwrap();
+        publisher.recording_target = usize::MAX;
+        let pool = SnapshotPool::new(20, Limits::default());
+        let snapshot = carrying(&pool, "Queued", 0);
+        let group = snapshot
+            .blobs()
+            .find(btel_snapshot::Blob::is_definition)
+            .map(|blob| blob.id())
+            .unwrap();
+        offer(&mut publisher, snapshot);
+        for value in 0..15 {
+            capture(&mut publisher, &pool, value);
+        }
+        assert_eq!(publisher.failure, None);
+        assert_eq!(delivery.handle().loss_count(), 1);
+        assert_eq!(delivery.handle().carried_resets(), 0);
+        let sent: Vec<_> = publisher
+            .staged
+            .iter()
+            .flat_map(|staged| &staged.window.candidates)
+            .map(|candidate| candidate.id)
+            .chain(publisher.queue.iter().map(|queued| queued.id))
+            .collect();
+        assert!(sent.contains(&group), "the group is still to be sent");
     }
 
     #[test]

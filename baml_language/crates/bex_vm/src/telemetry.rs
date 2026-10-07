@@ -160,6 +160,7 @@ impl FrameTelemetry {
 
 pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
+mod definitions;
 mod host;
 mod snapshot;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
@@ -318,8 +319,8 @@ impl TelemetryState {
         function: &Function,
         type_args: CallTypeArgs<'_>,
     ) -> Option<btel_snapshot::Snapshot> {
-        let mut named: Vec<(&str, &bex_vm_types::RealizedTy)> =
-            Vec::with_capacity(function.type_param_names.len());
+        let mut named: smallvec::SmallVec<[(&str, &bex_vm_types::RealizedTy); 4]> =
+            smallvec::SmallVec::with_capacity(function.type_param_names.len());
         for (name, ty) in function.type_param_names.iter().zip(type_args.iter()) {
             // A frame can bind a name twice (a lambda inside a block that
             // rebinds it); the later slot is the one its body sees.

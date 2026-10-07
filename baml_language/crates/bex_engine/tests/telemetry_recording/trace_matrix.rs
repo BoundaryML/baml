@@ -4,7 +4,7 @@ use bex_engine::{BexEngine, BexExternalValue as External, EngineError, Telemetry
 use bex_vm_types::Program;
 use btel_recorder::{CompletionFlags, RecordingConfig, proto};
 use btel_snapshot::{
-    Builder, Limits, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue as Value,
+    Builder, Carried, Limits, Snapshot, SnapshotObject, SnapshotPool, SnapshotValue as Value,
 };
 use sys_native::SysOpsExt;
 
@@ -768,7 +768,9 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
     let root = match scenario {
         "cycle" | "node" => {
             let class = class("MatrixNode");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let definition = recorded(program, class.type_tag);
+            let definition = b.leaves().define(&definition, &mut Carried::default());
+            let named = b.declaration(&class.name, class.type_tag, false, Some(definition));
             let declaration = b.leaves().object(named).unwrap();
             let slot = b.leaves().reserve().unwrap();
             let object = Value::Object(slot.id());
@@ -794,7 +796,9 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
                     _ => None,
                 })
                 .unwrap();
-            let named = b.declaration(&enm.name, enm.type_tag, true);
+            let definition = recorded(program, enm.type_tag);
+            let definition = b.leaves().define(&definition, &mut Carried::default());
+            let named = b.declaration(&enm.name, enm.type_tag, true, Some(definition));
             Value::Enum {
                 declaration: b.leaves().object(named).unwrap(),
                 variant: 1,
@@ -816,7 +820,9 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
         }
         "generic" => {
             let class = class("MatrixBox");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let definition = recorded(program, class.type_tag);
+            let definition = b.leaves().define(&definition, &mut Carried::default());
+            let named = b.declaration(&class.name, class.type_tag, false, Some(definition));
             let declaration = b.leaves().object(named).unwrap();
             let fields = [("value", Value::Int(7))];
             let instance = b.instance(declaration, [RealizedTy::Int], fields.into_iter(), field);
@@ -1079,6 +1085,113 @@ async fn call_structure(program: &Program) {
     }
 }
 
+/// The definition the engine records for the declaration `tag` names in
+/// `program`, which a capture naming it carries: the declaration as the
+/// engine copies it. A field names the declaration itself, as member 0, or
+/// one that does not name it back.
+fn recorded(program: &Program, tag: baml_type::typetag::TypeTag) -> btel_types::Definition {
+    use bex_vm_types::Object;
+    use btel_snapshot::definition::{self, Declaration, Field, Head, Meta, Variant};
+
+    let meta = |description: &Option<String>,
+                alias: &Option<String>,
+                docstring: &Option<String>,
+                other: &indexmap::IndexMap<String, String>| Meta {
+        description: description.clone(),
+        alias: alias.clone(),
+        docstring: docstring.clone(),
+        attributes: other
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect(),
+    };
+    let declaration = |tag| {
+        program
+            .objects
+            .0
+            .iter()
+            .find(|object| match object {
+                Object::Class(class) => class.type_tag == tag,
+                Object::Enum(enm) => enm.type_tag == tag,
+                _ => false,
+            })
+            .unwrap_or_else(|| panic!("no declaration with tag {tag:?}"))
+    };
+    // The definitions its fields name, other than its own, made first.
+    let mut named: Vec<(baml_type::typetag::TypeTag, btel_types::Definition)> = Vec::new();
+    if let Object::Class(class) = declaration(tag) {
+        for field in &class.fields {
+            field.field_template.visit_heads(&mut |head| {
+                if head.tag() != tag && !named.iter().any(|(seen, _)| *seen == head.tag()) {
+                    named.push((head.tag(), recorded(program, head.tag())));
+                }
+            });
+        }
+    }
+    let declared = match declaration(tag) {
+        Object::Class(class) => Declaration::Class(definition::Class {
+            name: class.name.clone(),
+            type_params: u32::try_from(class.generic_param_count).unwrap(),
+            meta: meta(
+                &class.description,
+                &class.alias,
+                &class.docstring,
+                &class.other,
+            ),
+            stream_done: class.stream_done,
+            fields: class
+                .fields
+                .iter()
+                .map(|field| Field {
+                    name: field.name.clone(),
+                    ty: field.field_template.map_heads(&mut |head| {
+                        if head.tag() == tag {
+                            return Head::Member(0);
+                        }
+                        let name = match declaration(head.tag()) {
+                            Object::Class(class) => &class.name,
+                            Object::Enum(enm) => &enm.name,
+                            _ => unreachable!(),
+                        };
+                        let (_, definition) =
+                            named.iter().find(|(seen, _)| *seen == head.tag()).unwrap();
+                        Head::Defined(name, definition)
+                    }),
+                    meta: meta(
+                        &field.description,
+                        &field.alias,
+                        &field.docstring,
+                        &field.other,
+                    ),
+                    skip: field.skip,
+                    stream_done: field.stream_done,
+                    must_exist: field.must_exist,
+                })
+                .collect(),
+        }),
+        Object::Enum(enm) => Declaration::Enum(definition::Enum {
+            name: enm.name.clone(),
+            meta: meta(&enm.description, &enm.alias, &enm.docstring, &enm.other),
+            variants: enm
+                .variants
+                .iter()
+                .map(|variant| Variant {
+                    name: variant.name.clone(),
+                    meta: meta(
+                        &variant.description,
+                        &variant.alias,
+                        &variant.docstring,
+                        &variant.other,
+                    ),
+                    skip: variant.skip,
+                })
+                .collect(),
+        }),
+        _ => unreachable!(),
+    };
+    definition::group(&[declared]).remove(0)
+}
+
 fn one_field_instance(
     program: &Program,
     name: &str,
@@ -1100,7 +1213,9 @@ fn one_field_instance(
     assert_eq!(class.fields.len(), 1);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let named = b.declaration(&class.name, class.type_tag, false);
+    let definition = recorded(program, class.type_tag);
+    let definition = b.leaves().define(&definition, &mut Carried::default());
+    let named = b.declaration(&class.name, class.type_tag, false, Some(definition));
     let declaration = b.leaves().object(named).unwrap();
     let value = scalar(&mut b, field);
     let instance = b.instance(declaration, [], std::iter::once(value), |_, value| {

@@ -235,8 +235,10 @@ async fn missing_and_corrupt_blobs_are_reported_not_answered() {
 }
 
 /// The size of every blob in the project's CAS, smallest first.
-fn blob_sizes(project: &std::path::Path) -> Vec<u64> {
-    let mut sizes = Vec::new();
+/// Every CAS blob of the project: its size, and the names of its members
+/// when it is a group of recorded definitions.
+fn blobs(project: &std::path::Path) -> Vec<(u64, Option<Vec<String>>)> {
+    let mut blobs = Vec::new();
     let mut pending = vec![btel_reader::layout::SourceLayout::for_project(project).cas];
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(directory).unwrap() {
@@ -245,10 +247,32 @@ fn blob_sizes(project: &std::path::Path) -> Vec<u64> {
             if metadata.is_dir() {
                 pending.push(entry.path());
             } else {
-                sizes.push(metadata.len());
+                let bytes = std::fs::read(entry.path()).unwrap();
+                let decoded =
+                    btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                        .unwrap();
+                let members = match decoded.root {
+                    btel_snapshot::DecodedRoot::Definitions(members) => Some(
+                        members
+                            .iter()
+                            .map(|member| member.name().to_string())
+                            .collect(),
+                    ),
+                    _ => None,
+                };
+                blobs.push((metadata.len(), members));
             }
         }
     }
+    blobs
+}
+
+/// The sizes of the blobs that hold captured values, not definitions.
+fn blob_sizes(project: &std::path::Path) -> Vec<u64> {
+    let mut sizes: Vec<_> = blobs(project)
+        .into_iter()
+        .filter_map(|(size, members)| members.is_none().then_some(size))
+        .collect();
     sizes.sort_unstable();
     sizes
 }
@@ -357,6 +381,12 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
     assert_eq!(large.len(), 4, "{sizes:?}");
     assert_eq!(small.len(), 5, "{sizes:?}");
+    // The list names its element class, whose definition is stored once.
+    let definitions: Vec<_> = blobs(project.path())
+        .into_iter()
+        .filter_map(|(_, members)| members)
+        .collect();
+    assert_eq!(definitions, vec![vec!["baml.media.Image".to_owned()]]);
     assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
 
     let mut index = index(project.path());

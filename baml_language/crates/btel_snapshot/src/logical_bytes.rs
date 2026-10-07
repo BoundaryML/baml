@@ -41,6 +41,9 @@ impl Blob<'_> {
     /// return and throws types, excluding parameter names/modes. Literal types add
     /// their scalar payload (no extra type prefix); enum-variant types add eight
     /// for the variant ID. Nominal/alias leaves do not expand unavailable schemas.
+    /// A blob of class and enum definitions holds schema, not captured
+    /// content: it counts zero, and a type that names a definition counts as
+    /// it would without one.
     /// Declaration names/source, pure omission/truncation markers and internal
     /// wrappers add no bytes. Partially truncated containers still count their
     /// type information and retained values: a `List<int>` retaining two integers
@@ -131,15 +134,19 @@ impl Blob<'_> {
         if let LogicalBytesApproxV1::Measured(size) = self.entry().logical_bytes_approx_v1 {
             return size;
         }
+        let root = match &self.entry().content {
+            crate::shape::Content::Capture(root) => *root,
+            crate::shape::Content::Definition(_) => return Some(0),
+        };
         let snapshot = self.snapshot;
         let local_units;
         let units = if snapshot.0.shape.logical_units.is_empty() && snapshot.object_count() > 0 {
-            local_units = crate::shape::logical_units(&snapshot.0.graph, self.entry().root);
+            local_units = crate::shape::logical_units(&snapshot.0.graph, root);
             &local_units[..]
         } else {
             &snapshot.0.shape.logical_units[..]
         };
-        let mut pending = match self.entry().root {
+        let mut pending = match root {
             SnapshotRoot::Value(value) => vec![Task::Value(value)],
             SnapshotRoot::FunctionArgs(args) => snapshot
                 .values(args.slots)
@@ -322,6 +329,7 @@ mod tests {
             )),
             baml_type::typetag::TypeTag::of_static_index(0),
             true,
+            None,
         );
         let declaration = b.leaves().object(declaration).unwrap();
         let name = b.leaves().label(&"LongVariantName".into()).unwrap();
@@ -336,6 +344,7 @@ mod tests {
             )),
             baml_type::typetag::TypeTag::of_static_index(1),
             false,
+            None,
         );
         let class = b.leaves().object(class).unwrap();
         let instance = b.instance(
@@ -423,6 +432,7 @@ mod tests {
                     )),
                     baml_type::typetag::TypeTag::of_static_index(0),
                     false,
+                    None,
                 );
                 let class = b.leaves().object(class).unwrap();
                 let instance = b.instance(class, [], [()].into_iter(), |_, ()| {

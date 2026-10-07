@@ -574,7 +574,7 @@ fn keys_split_as_values_while_names_and_declarations_stay_inline() {
     let long = "k".repeat(200);
     let snapshot = capture(&mut split(1 << 20, 64), |b| {
         let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.{long}")));
-        let declaration = b.declaration(&name, TypeTag::from_i64(7), true);
+        let declaration = b.declaration(&name, TypeTag::from_i64(7), true, None);
         let declaration = b.leaves().object(declaration).unwrap();
         let name = b.leaves().label(&long.as_str().into()).unwrap();
         let function = object(
@@ -771,4 +771,28 @@ fn media_content_past_the_leaf_size_is_one_blob_its_media_objects_name() {
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert_eq!(media.source, expected);
     }
+}
+
+/// A blob whose hash input passes what shaping gathers before it streams
+/// (a field name longer than the bound, then many small pieces) has the ID
+/// that the reader's streaming hash recomputes.
+#[test]
+fn a_blob_hashed_past_the_gathered_bound_reads_back_with_its_id() {
+    let long = "k".repeat(btel_settings::snapshot::GATHERED_HASH_BYTES + 100);
+    let keys: Vec<String> = std::iter::once(long.clone())
+        .chain((0..20_000).map(|at| format!("f{at}")))
+        .collect();
+    let snapshot = capture(&mut Shaper::new(ShapePolicy::Whole), |b| {
+        let name = DeclarationName::Anonymous(baml_type::Name::new("Wide"));
+        let declaration = b.declaration(&name, TypeTag::from_i64(1), false, None);
+        let declaration = b.leaves().object(declaration).unwrap();
+        let instance = b.instance(declaration, [], keys.iter().enumerate(), |_, (at, key)| {
+            (key.as_str().into(), V::Int(i64::try_from(at).unwrap()))
+        });
+        object(b, instance)
+    });
+    let blobs: Vec<_> = snapshot.blobs().collect();
+    assert_eq!(blobs.len(), 1);
+    assert!(blobs[0].encoded_len() > 2 * long.len() as u64);
+    written(&snapshot);
 }

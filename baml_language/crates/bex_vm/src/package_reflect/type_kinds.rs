@@ -73,6 +73,7 @@ impl BexVm {
                 methods: IndexMap::new(),
                 generic_param_count: class.generic_param_count,
                 owner: bex_vm_types::types::Owner::anonymous(),
+                telemetry_definition: bex_vm_types::DefinitionCell::default(),
             })));
             declared.insert(
                 class.name.clone(),
@@ -101,6 +102,7 @@ impl BexVm {
                 other: enm.metadata.other.clone(),
                 type_tag,
                 owner: bex_vm_types::types::Owner::anonymous(),
+                telemetry_definition: bex_vm_types::DefinitionCell::default(),
             })));
             declared.insert(enm.name.clone(), bex_vm_types::TypeHead::new(ptr, type_tag));
         }
@@ -532,6 +534,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         // The head is built off the declaration that was just allocated, so the
         // type reaches it directly — there is no table to consult and no name
@@ -731,6 +734,7 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             other: IndexMap::new(),
             type_tag,
             owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let ty = bex_vm_types::RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, type_tag));
         Ok({

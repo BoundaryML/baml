@@ -18,7 +18,7 @@ fn hex(bytes: &[u8]) -> String {
 fn graph(pool: &SnapshotPool, arguments: bool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
     let name = DeclarationName::Declared(TypeName::local("Golden".into()));
-    let declaration = b.declaration(&name, TypeTag::from_i64(42), true);
+    let declaration = b.declaration(&name, TypeTag::from_i64(42), true, None);
     let declaration = b.leaves().object(declaration).unwrap();
     let ty = b.leaves().ty(RealizedTy::Int);
     let text = b.leaves().string(&"value".into()).unwrap();
@@ -326,6 +326,17 @@ fn print_current_media_encodings() {
     }
 }
 
+fn fixture_blobs(fixture: &str) -> impl Iterator<Item = Vec<u8>> + '_ {
+    fixture.lines().map(|line| {
+        line.as_bytes()
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+            .collect()
+    })
+}
+
 #[test]
 fn frozen_v3_blobs_remain_readable_with_verified_content_ids() {
     for fixture in [
@@ -334,14 +345,7 @@ fn frozen_v3_blobs_remain_readable_with_verified_content_ids() {
         include_str!("fixtures/format_v3_external.hex"),
         include_str!("fixtures/format_v3_media.hex"),
     ] {
-        for line in fixture.lines() {
-            let bytes: Vec<_> = line
-                .as_bytes()
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
-                .collect();
+        for bytes in fixture_blobs(fixture) {
             let decoded =
                 btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
                     .unwrap();
@@ -357,4 +361,39 @@ fn frozen_v3_blobs_remain_readable_with_verified_content_ids() {
             }
         }
     }
+}
+
+/// Format 4 blobs, as canary wrote them before definitions were recorded:
+/// their declarations are identified by tag and name no definition.
+#[test]
+fn frozen_v4_blobs_remain_readable_with_verified_content_ids() {
+    let mut declarations = 0;
+    for fixture in [
+        include_str!("fixtures/format_v4_args.hex"),
+        include_str!("fixtures/format_v4_value.hex"),
+        include_str!("fixtures/format_v4_external.hex"),
+        include_str!("fixtures/format_v4_media.hex"),
+    ] {
+        for bytes in fixture_blobs(fixture) {
+            assert_eq!(bytes[8..12], 4_u32.to_le_bytes());
+            let decoded =
+                btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                    .unwrap();
+            assert_eq!(decoded.id.as_bytes(), &bytes[12..28]);
+            for object in decoded.objects {
+                if let btel_snapshot::DecodedObject::Declaration {
+                    tag, definition, ..
+                } = object
+                {
+                    assert_eq!(tag, Some(TypeTag::from_i64(42)));
+                    assert_eq!(definition, None);
+                    declarations += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(
+        declarations, 2,
+        "the argument and value graphs each name one"
+    );
 }

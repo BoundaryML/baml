@@ -1,4 +1,4 @@
-//! Bounded reader for CAS blob formats 3 and 4 with identity verification.
+//! Bounded reader for CAS blob formats 3, 4 and 5 with identity verification.
 //!
 //! Decoding produces an owned graph: object references stay numbered, so
 //! shared objects and cycles are preserved rather than expanded. Every length
@@ -14,7 +14,13 @@
 //! to that child, and nothing here reads the child. Leaf contents are shared
 //! handles, so a decoded value is cheap to copy out of its blob.
 //!
-//! Only the current format is read. Earlier formats are rejected by version:
+//! In format 5 a type head or declaration may name a recorded definition by
+//! its group's blob ID. The groups a blob names, in the order they are first
+//! named, must be exactly what its child table lists after the children its
+//! values use. A definition group's blob (root tag 2) holds no objects, and
+//! its child table is exactly the groups its field types name.
+//!
+//! Formats 3 to 5 are read. Earlier formats are rejected by version:
 //! format 1 types carry attributes that no longer exist, and format 2 numbers
 //! objects in capture discovery order and hashes a whole capture as one graph.
 //! Their blobs live under separate `cas/v1` and `cas/v2` directories that the
@@ -24,21 +30,25 @@
 //! per nesting level (measured with attribute-free types: at most 4 KiB of
 //! stack per level in debug builds, ~1 KiB in release). Every level consumes
 //! at least one byte, so a byte budget bounds depth. Descriptions of at most `SHALLOW_TYPE_BYTES` decode in
-//! place and stay available; larger ones (up to `max_type_bytes`) are only
-//! measured, on a helper thread with a large stack, and kept as verified bytes.
-//! A blob starts that thread at its first large description and reuses it.
+//! place and stay available; larger ones (up to `max_type_bytes`) are decoded
+//! on a helper thread with a large stack and kept as verified bytes, and as
+//! the decoded type too when it nests at most `SHALLOW_TYPE_BYTES` levels:
+//! a long type, such as a union of classes named with their definitions, is
+//! usually shallow. A blob starts that thread at its first large description
+//! and reuses it.
 use std::{
     io,
     sync::{Arc, mpsc},
     thread::{Scope, ScopedJoinHandle},
 };
 
-use baml_type::{DeclarationName, MediaKind, TaggedTypeName, typetag::TypeTag};
+use baml_type::{DeclarationName, MediaKind, TaggedTypeName, TyTemplate, typetag::TypeTag};
 use borsh::BorshDeserialize;
 use num_bigint::{BigInt, BigUint, Sign};
 
 use crate::{
     CasId, Description, Limit, OwnedType, TypeIdentity,
+    definition::{self, DefinitionHead, DefinitionRef, DefinitionType, Meta, Variant},
     hash::{Absorb, Digest, Hasher},
     tags::{self, HashDomain},
 };
@@ -174,10 +184,13 @@ pub enum DecodedObject {
         fields: Fields,
         original_len: u64,
     },
+    /// A class or enum, identified by its recorded definition (format 5) or
+    /// by its runtime tag.
     Declaration {
         name: DecodedName,
-        tag: TypeTag,
+        tag: Option<TypeTag>,
         is_enum: bool,
+        definition: Option<DefinitionRef>,
     },
     Cell(DecodedValue),
     NonSnapshotable,
@@ -265,7 +278,20 @@ pub enum DecodedRoot {
         parameter_count: u64,
         slots: Vec<DecodedValue>,
     },
+    /// A group of recorded definitions, by position (format 5).
+    Definitions(Vec<DecodedDefinition>),
 }
+
+/// A recorded field type: always its verified encoding, plus the decoded
+/// type when it is shallow enough to use safely.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FieldType {
+    pub encoded: Box<[u8]>,
+    pub decoded: Option<Box<DefinitionType>>,
+}
+
+/// One recorded class or enum definition.
+pub type DecodedDefinition = definition::Declaration<FieldType>;
 
 /// One owned, verified blob. `children` lists the blobs its values
 /// reference, in first-use order.
@@ -300,6 +326,8 @@ pub fn decode_blob(bytes: &[u8], limits: &DecodeLimits) -> Result<DecodedSnapsho
             referenced: 0,
             children: 0,
             children_referenced: 0,
+            named: Vec::new(),
+            positions: None,
             deep: DeepTypes {
                 scope,
                 helper: None,
@@ -375,6 +403,17 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
                 slots,
             }
         }
+        2 if version >= 5 => {
+            blob_hash.byte(2);
+            if object_count != 0 {
+                return Err(invalid("a definition group holds no objects".into()));
+            }
+            // Its content holds no leaves to replace: it is hashed as written.
+            let content = r.input;
+            let definitions = r.definitions()?;
+            blob_hash.absorb(&content[..content.len() - r.input.len()]);
+            DecodedRoot::Definitions(definitions)
+        }
         tag => return Err(invalid(format!("root tag {tag}"))),
     };
     let mut objects = Vec::with_capacity(object_count as usize);
@@ -392,8 +431,18 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
     if !r.input.is_empty() {
         return Err(invalid("trailing bytes".into()));
     }
-    if r.children_referenced != r.children {
-        return Err(invalid("unreferenced child blob".into()));
+    // The children values use come first; the groups the blob names follow,
+    // in the order they were first named.
+    let mut seen = rustc_hash::FxHashSet::default();
+    r.named.retain(|group| seen.insert(*group));
+    if children[r.children_referenced as usize..] != r.named[..] {
+        return Err(
+            if r.named.len() < children.len() - r.children_referenced as usize {
+                invalid("unreferenced child blob".into())
+            } else {
+                invalid("a named definition group is not a child".into())
+            },
+        );
     }
     blob_hash.size(children.len());
     for child in &children {
@@ -431,6 +480,11 @@ struct Reader<'a, 'scope> {
     children: u32,
     /// Child blobs referenced so far, in the same first-use discipline.
     children_referenced: u32,
+    /// Definition groups named so far, in encoding order, with repeats.
+    named: Vec<CasId>,
+    /// While a definition group is read: its member count, which positions
+    /// must be under.
+    positions: Option<u32>,
     deep: DeepTypes<'scope, 'a>,
 }
 
@@ -442,24 +496,131 @@ struct DeepTypes<'scope, 'a> {
 }
 
 struct TypeHelper<'scope, 'a> {
-    jobs: mpsc::Sender<(&'a [u8], bool)>,
-    results: mpsc::Receiver<Result<usize, BlobError>>,
+    jobs: mpsc::Sender<(&'a [u8], bool, Described)>,
+    results: mpsc::Receiver<Result<Measured, BlobError>>,
     thread: ScopedJoinHandle<'scope, ()>,
 }
 
+/// Which kind of type description is read.
+#[derive(Clone, Copy, Debug)]
+enum Described {
+    /// A captured type: [`OwnedType`].
+    Value,
+    /// A recorded definition's field type: [`DefinitionType`].
+    Field,
+}
+
+/// What reading a type description finds besides the type itself.
+#[derive(Debug, Default)]
+struct Measured {
+    len: usize,
+    /// Definition groups its heads name, in order.
+    groups: Vec<CasId>,
+    /// The highest group member position its heads name.
+    position: Option<u32>,
+    /// A long description's decoded type, when it is shallow enough to use
+    /// and drop on any stack.
+    shallow: Option<Shallow>,
+}
+
+/// A type the helper decoded that nests at most `SHALLOW_TYPE_BYTES` levels.
+#[derive(Debug)]
+enum Shallow {
+    Value(Box<OwnedType>),
+    Field(Box<DefinitionType>),
+}
+
+/// How deeply a type nests: one for a leaf.
+fn depth<N: Clone>(ty: &TyTemplate<N>) -> usize {
+    let deepest =
+        |types: &mut dyn Iterator<Item = &TyTemplate<N>>| types.map(depth).max().unwrap_or(0);
+    1 + match ty {
+        TyTemplate::Class(_, args) | TyTemplate::Union(args) => deepest(&mut args.iter()),
+        TyTemplate::Interface(_, args, associated) => {
+            deepest(&mut args.iter().chain(associated.iter().map(|(_, ty)| ty)))
+        }
+        TyTemplate::List(item) => depth(item),
+        TyTemplate::Map { key, value } | TyTemplate::Future(key, value) => {
+            depth(key).max(depth(value))
+        }
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+        } => deepest(
+            &mut params
+                .iter()
+                .map(|param| &param.ty)
+                .chain([&**ret, &**throws]),
+        ),
+        TyTemplate::AssociatedTypeProjection {
+            base, interface, ..
+        } => depth(base).max(deepest(
+            &mut interface
+                .generics
+                .iter()
+                .chain(interface.associated_types.iter().map(|(_, ty)| ty)),
+        )),
+        TyTemplate::Int
+        | TyTemplate::Bigint
+        | TyTemplate::Float
+        | TyTemplate::String
+        | TyTemplate::Bool
+        | TyTemplate::Null
+        | TyTemplate::Uint8Array
+        | TyTemplate::Media(_)
+        | TyTemplate::Literal(..)
+        | TyTemplate::Enum(_)
+        | TyTemplate::EnumVariant(..)
+        | TyTemplate::RustType
+        | TyTemplate::Type
+        | TyTemplate::Resource
+        | TyTemplate::PromptAst
+        | TyTemplate::Void
+        | TyTemplate::TypeAlias(_)
+        | TyTemplate::Unknown
+        | TyTemplate::Never
+        | TyTemplate::TypeArgRef(_) => 0,
+    }
+}
+
+fn value_heads(ty: &OwnedType, found: &mut Measured) {
+    ty.visit_heads(&mut |head| {
+        if let TypeIdentity::Defined(definition) = head {
+            found.groups.push(definition.group);
+        }
+    });
+}
+
+fn field_heads(ty: &DefinitionType, found: &mut Measured) {
+    ty.visit_heads(&mut |head| match head {
+        DefinitionHead::Defined(head) => found.groups.push(head.definition.group),
+        DefinitionHead::Member(position) => {
+            found.position = found.position.max(Some(*position));
+        }
+        DefinitionHead::Named(_) => {}
+    });
+}
+
 impl<'a> DeepTypes<'_, 'a> {
-    fn measure(&mut self, bytes: &'a [u8], limited: bool) -> Result<usize, BlobError> {
+    fn measure(
+        &mut self,
+        bytes: &'a [u8],
+        limited: bool,
+        described: Described,
+    ) -> Result<Measured, BlobError> {
         let helper = match &mut self.helper {
             Some(helper) => helper,
             None => {
-                let (jobs, job_queue) = mpsc::channel::<(&'a [u8], bool)>();
+                let (jobs, job_queue) = mpsc::channel::<(&'a [u8], bool, Described)>();
                 let (answers, results) = mpsc::channel();
                 let thread = std::thread::Builder::new()
                     .name("btel-type-decode".into())
                     .stack_size(TYPE_HELPER_STACK)
                     .spawn_scoped(self.scope, move || {
-                        for (bytes, limited) in job_queue {
-                            if answers.send(measure_type(bytes, limited)).is_err() {
+                        for (bytes, limited, described) in job_queue {
+                            let measured = measure_type(bytes, limited, described);
+                            if answers.send(measured).is_err() {
                                 break;
                             }
                         }
@@ -475,7 +636,10 @@ impl<'a> DeepTypes<'_, 'a> {
             }
         };
         let panicked = || invalid("type description decoder panicked".into());
-        helper.jobs.send((bytes, limited)).map_err(|_| panicked())?;
+        helper
+            .jobs
+            .send((bytes, limited, described))
+            .map_err(|_| panicked())?;
         helper.results.recv().map_err(|_| panicked())?
     }
 
@@ -494,12 +658,31 @@ thread_local! {
     static TYPE_HELPERS_STARTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Encoded length of one description, found by decoding it. Runs on the
-/// helper's large stack; the deep value is dropped there too.
-fn measure_type(bytes: &[u8], limited: bool) -> Result<usize, BlobError> {
+/// Encoded length of one description, and the heads it names, found by
+/// decoding it. Runs on the helper's large stack; the deep value is dropped
+/// there too.
+fn measure_type(bytes: &[u8], limited: bool, described: Described) -> Result<Measured, BlobError> {
     let mut window = Window::new(bytes);
-    match OwnedType::deserialize_reader(&mut window) {
-        Ok(_) => Ok(window.used()),
+    let mut found = Measured::default();
+    let decoded = match described {
+        Described::Value => OwnedType::deserialize_reader(&mut window).map(|ty| {
+            value_heads(&ty, &mut found);
+            if depth(&TyTemplate::from(ty.clone())) <= SHALLOW_TYPE_BYTES {
+                found.shallow = Some(Shallow::Value(Box::new(ty)));
+            }
+        }),
+        Described::Field => DefinitionType::deserialize_reader(&mut window).map(|ty| {
+            field_heads(&ty, &mut found);
+            if depth(&ty) <= SHALLOW_TYPE_BYTES {
+                found.shallow = Some(Shallow::Field(Box::new(ty)));
+            }
+        }),
+    };
+    match decoded {
+        Ok(()) => {
+            found.len = window.used();
+            Ok(found)
+        }
         Err(_) if window.exhausted && limited => Err(BlobError::Limit("type description bytes")),
         Err(error) => Err(type_error(&error, window.exhausted)),
     }
@@ -565,16 +748,11 @@ impl<'a> Reader<'a, '_> {
     }
     /// One Borsh type description and its digest (hash of the raw bytes).
     fn ty(&mut self) -> Result<(TypeDescription, Digest), BlobError> {
-        let mut shallow = Window::new(&self.input[..self.input.len().min(SHALLOW_TYPE_BYTES)]);
-        let (used, decoded) = match OwnedType::deserialize_reader(&mut shallow) {
-            Ok(ty) => (shallow.used(), Some(Box::new(ty))),
-            Err(_) if shallow.exhausted && SHALLOW_TYPE_BYTES < self.input.len() => {
-                (self.measure_type()?, None)
-            }
-            Err(error) => return Err(type_error(&error, shallow.exhausted)),
-        };
-        let raw = self.take(used)?;
-        self.charge(used.saturating_mul(4))?;
+        let (raw, decoded) =
+            self.described::<OwnedType>(Described::Value, value_heads, |shallow| match shallow {
+                Shallow::Value(ty) => Some(ty),
+                Shallow::Field(_) => None,
+            })?;
         let mut h = Hasher::new(HashDomain::Type);
         h.absorb(raw);
         Ok((
@@ -585,11 +763,66 @@ impl<'a> Reader<'a, '_> {
             h.finish(),
         ))
     }
-    /// Encoded length of a description larger than the shallow bound.
-    fn measure_type(&mut self) -> Result<usize, BlobError> {
+    /// One recorded field type, which the group's hash covers as written.
+    fn field_type(&mut self) -> Result<FieldType, BlobError> {
+        let (raw, decoded) = self.described::<DefinitionType>(
+            Described::Field,
+            field_heads,
+            |shallow| match shallow {
+                Shallow::Field(ty) => Some(ty),
+                Shallow::Value(_) => None,
+            },
+        )?;
+        Ok(FieldType {
+            encoded: raw.into(),
+            decoded,
+        })
+    }
+    /// One Borsh description: its bytes, and the decoded value when it is
+    /// shallow. The groups its heads name are added to those this blob
+    /// names; a member position past the group being read is invalid.
+    fn described<T: BorshDeserialize>(
+        &mut self,
+        described: Described,
+        heads: fn(&T, &mut Measured),
+        from_helper: fn(Shallow) -> Option<Box<T>>,
+    ) -> Result<(&'a [u8], Option<Box<T>>), BlobError> {
+        let mut shallow = Window::new(&self.input[..self.input.len().min(SHALLOW_TYPE_BYTES)]);
+        let (found, decoded) = match T::deserialize_reader(&mut shallow) {
+            Ok(ty) => {
+                let mut found = Measured::default();
+                heads(&ty, &mut found);
+                found.len = shallow.used();
+                (found, Some(Box::new(ty)))
+            }
+            Err(_) if shallow.exhausted && SHALLOW_TYPE_BYTES < self.input.len() => {
+                let mut found = self.measure_type(described)?;
+                let decoded = found.shallow.take().and_then(from_helper);
+                (found, decoded)
+            }
+            Err(error) => return Err(type_error(&error, shallow.exhausted)),
+        };
+        if let Some(position) = found.position
+            && self.positions.is_none_or(|members| position >= members)
+        {
+            return Err(invalid(format!(
+                "definition member {position} out of range"
+            )));
+        }
+        if self.version < 5 && !found.groups.is_empty() {
+            return Err(invalid("a definition named before format 5".into()));
+        }
+        self.named.extend(found.groups);
+        let raw = self.take(found.len)?;
+        self.charge(found.len.saturating_mul(4))?;
+        Ok((raw, decoded))
+    }
+    /// Encoded length and heads of a description larger than the shallow
+    /// bound.
+    fn measure_type(&mut self, described: Described) -> Result<Measured, BlobError> {
         let bytes = &self.input[..self.input.len().min(self.limits.max_type_bytes)];
         let limited = bytes.len() == self.limits.max_type_bytes;
-        self.deep.measure(bytes, limited)
+        self.deep.measure(bytes, limited, described)
     }
     fn limit(&mut self) -> Result<Limit, BlobError> {
         Ok(match self.u8()? {
@@ -872,9 +1105,30 @@ impl<'a> Reader<'a, '_> {
             }
             4 => {
                 let mut window = Window::new(self.input);
-                let decoded = TypeTag::deserialize_reader(&mut window)
-                    .and_then(|tag| Ok((tag, DeclarationName::deserialize_reader(&mut window)?)));
-                let (tag, name) = decoded.map_err(|error| {
+                let decoded = (|| {
+                    let form = if self.version >= 5 {
+                        u8::deserialize_reader(&mut window)?
+                    } else {
+                        tags::DeclarationTag::Tagged as u8
+                    };
+                    match form {
+                        0 => {
+                            let tag = TypeTag::deserialize_reader(&mut window)?;
+                            let name = DeclarationName::deserialize_reader(&mut window)?;
+                            Ok((name, Some(tag), None))
+                        }
+                        1 => {
+                            let name = DeclarationName::deserialize_reader(&mut window)?;
+                            let definition = DefinitionRef::deserialize_reader(&mut window)?;
+                            Ok((name, None, Some(definition)))
+                        }
+                        other => Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("declaration form {other}"),
+                        )),
+                    }
+                })();
+                let (name, tag, definition) = decoded.map_err(|error| {
                     if window.exhausted {
                         BlobError::Truncated
                     } else {
@@ -883,6 +1137,9 @@ impl<'a> Reader<'a, '_> {
                 })?;
                 let used = window.used();
                 h.absorb(self.take(used)?);
+                if let Some(definition) = &definition {
+                    self.named.push(definition.group);
+                }
                 let is_enum = self.bool()?;
                 h.byte(u8::from(is_enum));
                 self.charge(used * 4)?;
@@ -890,6 +1147,7 @@ impl<'a> Reader<'a, '_> {
                     name: DecodedName(name),
                     tag,
                     is_enum,
+                    definition,
                 }
             }
             5 => DecodedObject::Cell(self.value(h)?),
@@ -915,6 +1173,113 @@ impl<'a> Reader<'a, '_> {
             }
             9 => DecodedObject::Media(self.media(h)?),
             other => return Err(invalid(format!("object tag {other}"))),
+        })
+    }
+    /// A definition group's members, after its root tag.
+    fn definitions(&mut self) -> Result<Vec<DecodedDefinition>, BlobError> {
+        // A kind, a name and four metadata lengths at least.
+        let n = self.count(1 + 1 + 4 + 3 + 4)?;
+        self.charge(n.saturating_mul(std::mem::size_of::<DecodedDefinition>()))?;
+        self.positions = Some(u32::try_from(n).expect("a u32 count"));
+        let mut members = Vec::with_capacity(n);
+        for _ in 0..n {
+            let kind = self.u8()?;
+            let name = self.declaration_name()?;
+            let meta = self.meta()?;
+            members.push(match kind {
+                0 => {
+                    let type_params = self.u32()?;
+                    let stream_done = self.bool()?;
+                    // A name, a type and the metadata and flags at least.
+                    let count = self.count(4 + 1 + 3 + 4 + 3)?;
+                    self.charge(
+                        count.saturating_mul(std::mem::size_of::<definition::Field<FieldType>>()),
+                    )?;
+                    let mut fields = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        let name = self.text()?.to_owned();
+                        let ty = self.field_type()?;
+                        let meta = self.meta()?;
+                        fields.push(definition::Field {
+                            name,
+                            ty,
+                            meta,
+                            skip: self.bool()?,
+                            stream_done: self.bool()?,
+                            must_exist: self.bool()?,
+                        });
+                    }
+                    definition::Declaration::Class(definition::Class {
+                        name,
+                        type_params,
+                        meta,
+                        stream_done,
+                        fields,
+                    })
+                }
+                1 => {
+                    let count = self.count(4 + 3 + 4 + 1)?;
+                    self.charge(count.saturating_mul(std::mem::size_of::<Variant>()))?;
+                    let mut variants = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        let name = self.text()?.to_owned();
+                        let meta = self.meta()?;
+                        variants.push(Variant {
+                            name,
+                            meta,
+                            skip: self.bool()?,
+                        });
+                    }
+                    definition::Declaration::Enum(definition::Enum {
+                        name,
+                        meta,
+                        variants,
+                    })
+                }
+                other => return Err(invalid(format!("definition kind {other}"))),
+            });
+        }
+        self.positions = None;
+        Ok(members)
+    }
+    fn declaration_name(&mut self) -> Result<DeclarationName, BlobError> {
+        let mut window = Window::new(self.input);
+        let name = DeclarationName::deserialize_reader(&mut window).map_err(|error| {
+            if window.exhausted {
+                BlobError::Truncated
+            } else {
+                invalid(format!("declaration name: {error}"))
+            }
+        })?;
+        let used = window.used();
+        self.take(used)?;
+        self.charge(used.saturating_mul(4))?;
+        Ok(name)
+    }
+    fn optional_text(&mut self) -> Result<Option<String>, BlobError> {
+        Ok(if self.bool()? {
+            Some(self.text()?.to_owned())
+        } else {
+            None
+        })
+    }
+    fn meta(&mut self) -> Result<Meta, BlobError> {
+        let description = self.optional_text()?;
+        let alias = self.optional_text()?;
+        let docstring = self.optional_text()?;
+        let count = self.count(8)?;
+        self.charge(count.saturating_mul(std::mem::size_of::<(String, String)>()))?;
+        let mut attributes = Vec::with_capacity(count);
+        for _ in 0..count {
+            let key = self.text()?.to_owned();
+            let value = self.text()?.to_owned();
+            attributes.push((key, value));
+        }
+        Ok(Meta {
+            description,
+            alias,
+            docstring,
+            attributes,
         })
     }
     /// A media object after its tag.
@@ -1105,6 +1470,7 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
     match &snapshot.root {
         DecodedRoot::Value(value) => check_value(value)?,
         DecodedRoot::FunctionArgs { slots, .. } => slots.iter().try_for_each(check_value)?,
+        DecodedRoot::Definitions(_) => {}
     }
     for object in &snapshot.objects {
         match object {
@@ -1146,6 +1512,7 @@ impl BorshDeserialize for TypeIdentity {
                 Ok(Self::Resolved(TaggedTypeName::new(tag, name)))
             }
             0 => Ok(Self::Unresolved(TypeTag::deserialize_reader(r)?)),
+            2 => Ok(Self::Defined(DefinitionRef::deserialize_reader(r)?)),
             other => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("type identity tag {other}"),
@@ -1161,6 +1528,19 @@ impl baml_type::HeadDisplay for TypeIdentity {
         match self {
             Self::Resolved(head) => head.head_display_name(),
             Self::Unresolved(tag) => format!("<unresolved {tag:?}>"),
+            Self::Defined(definition) => format!(
+                "<definition {}.{}>",
+                definition
+                    .group
+                    .as_bytes()
+                    .iter()
+                    .fold(String::new(), |mut out, byte| {
+                        use std::fmt::Write as _;
+                        let _ = write!(out, "{byte:02x}");
+                        out
+                    }),
+                definition.member
+            ),
         }
     }
 }

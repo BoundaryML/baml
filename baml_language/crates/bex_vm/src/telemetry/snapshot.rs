@@ -2,14 +2,15 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use std::borrow::Cow;
 
-use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
+use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType, Reserved, Shaper,
-    Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
+    Builder, Carried, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType, Reserved,
+    Shaper, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue, TypeIdentity,
 };
 use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 
-use super::network::NetworkPayload;
+use super::{definitions, network::NetworkPayload};
 
 #[derive(Clone, Copy)]
 pub(super) enum Input<'a> {
@@ -29,6 +30,12 @@ pub(super) struct Scratch {
     /// Objects named already, whose content is still to be captured.
     work: Vec<(Reserved, HeapPtr, usize)>,
     shaper: Shaper,
+    /// The definition groups this VM thread's captures have carried. Its
+    /// records reach the processor in the order it writes them, across OS
+    /// threads too (a producer seals before the thread suspends), so a group
+    /// it carried is stored before any later capture of its names it. A
+    /// writer that loses a capture makes it carry its groups again.
+    carried: Carried,
     /// Text replaced wherever a captured string, map key or media URL quotes
     /// it, longest first. Empty except while a network span's error is
     /// captured: it must not quote the request's raw URL. The heap value is
@@ -67,7 +74,9 @@ impl Scratch {
             Object::Float(v) => return SnapshotValue::Float(*v),
             Object::String(s) => leaves.string_value(&rewritten(&self.rewrites, s)),
             Object::Bigint(n) => leaves.bigint(n),
-            Object::Type(value) => SnapshotValue::Type(leaves.ty(owned_type(&value.ty))),
+            Object::Type(value) => {
+                SnapshotValue::Type(described(leaves, &mut self.carried, &value.ty))
+            }
             Object::Variant(v) => {
                 let declaration = match self.add(leaves, Value::object(v.enm), depth + 1) {
                     SnapshotValue::Object(id) => id,
@@ -124,6 +133,7 @@ impl Scratch {
         self.seen.clear();
         self.rust_seen.clear();
         self.work.clear();
+        self.carried.begin();
         let root = match input {
             Input::FunctionArgs(args) => {
                 b.arguments(args.iter(), |leaves, value| self.add(leaves, *value, 0))
@@ -131,22 +141,25 @@ impl Scratch {
             Input::Value(value) => SnapshotRoot::Value(self.add(&mut b.leaves(), value, 0)),
             // Built from Rust values: nothing is queued.
             Input::Network(payload) => SnapshotRoot::Value(network(&mut b, payload)),
-            Input::TypeArgs(args) => SnapshotRoot::Value(type_args(&mut b, args)),
+            Input::TypeArgs(args) => {
+                SnapshotRoot::Value(type_args(&mut b, &mut self.carried, args))
+            }
         };
         while let Some((slot, ptr, depth)) = self.work.pop() {
             // SAFETY: inherited heap permit, never relinquished during traversal.
             let object = match unsafe { ptr.get() } {
                 Object::Uint8Array(data) => b.bytes(&data.lock()),
                 Object::Array(data) => {
-                    let element_type = b.leaves().ty(owned_type(&data.element_ty));
+                    let element_type =
+                        described(&mut b.leaves(), &mut self.carried, &data.element_ty);
                     let data = data.lock();
                     b.list(element_type, data.iter(), |leaves, value| {
                         self.add(leaves, *value, depth + 1)
                     })
                 }
                 Object::Map(data) => {
-                    let key_type = b.leaves().ty(owned_type(&data.key_ty));
-                    let value_type = b.leaves().ty(owned_type(&data.value_ty));
+                    let key_type = described(&mut b.leaves(), &mut self.carried, &data.key_ty);
+                    let value_type = described(&mut b.leaves(), &mut self.carried, &data.value_ty);
                     let data = data.lock();
                     b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
                         (
@@ -163,9 +176,21 @@ impl Scratch {
                             let Object::Class(class) = (unsafe { instance.class.get() }) else {
                                 unreachable!("instance class")
                             };
-                            b.instance(
+                            // A generic instance's type arguments; most have none.
+                            let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
+                                if instance.class_type_args.is_empty() {
+                                    SmallVec::new()
+                                } else {
+                                    let mut leaves = b.leaves();
+                                    instance
+                                        .class_type_args
+                                        .iter()
+                                        .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
+                                        .collect()
+                                };
+                            b.described_instance(
                                 declaration,
-                                instance.class_type_args.iter().map(owned_type),
+                                type_arguments,
                                 (0..instance.field_len()).zip(&class.fields),
                                 |leaves, (at, field)| {
                                     let value =
@@ -178,8 +203,20 @@ impl Scratch {
                         _ => unreachable!("class declaration is an object"),
                     }
                 }
-                Object::Class(class) => b.declaration(&class.name, class.type_tag, false),
-                Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true),
+                Object::Class(class) => {
+                    // SAFETY: inherited heap permit; the cell is the class's.
+                    let definition =
+                        unsafe { definitions::in_cell(ptr, &class.telemetry_definition) };
+                    let definition = b.define(definition, &mut self.carried);
+                    b.declaration(&class.name, class.type_tag, false, Some(definition))
+                }
+                Object::Enum(enm) => {
+                    // SAFETY: inherited heap permit; the cell is the enum's.
+                    let definition =
+                        unsafe { definitions::in_cell(ptr, &enm.telemetry_definition) };
+                    let definition = b.define(definition, &mut self.carried);
+                    b.declaration(&enm.name, enm.type_tag, true, Some(definition))
+                }
                 Object::Cell(cell) => {
                     SnapshotObject::Cell(self.add(&mut b.leaves(), cell.load(), depth + 1))
                 }
@@ -277,11 +314,20 @@ fn network(b: &mut Builder, payload: &NetworkPayload<'_>) -> SnapshotValue {
         }
     }
 }
-fn type_args(b: &mut Builder, args: &[(&str, &bex_vm_types::RealizedTy)]) -> SnapshotValue {
+fn type_args(
+    b: &mut Builder,
+    carried: &mut Carried,
+    args: &[(&str, &bex_vm_types::RealizedTy)],
+) -> SnapshotValue {
     let fields = args
         .iter()
-        .map(|(name, ty)| (*name, SnapshotValue::Type(b.leaves().ty(owned_type(ty)))))
-        .collect::<Vec<_>>();
+        .map(|(name, ty)| {
+            (
+                *name,
+                SnapshotValue::Type(described(&mut b.leaves(), carried, ty)),
+            )
+        })
+        .collect::<SmallVec<[_; 4]>>();
     map(b, OwnedType::Type, &fields)
 }
 fn text(leaves: &mut Leaves<'_>, text: &str) -> SnapshotValue {
@@ -329,12 +375,45 @@ fn object(b: &mut Builder, object: SnapshotObject) -> SnapshotValue {
         SnapshotValue::Object,
     )
 }
-// Preserve immutable type metadata; replace every VM type head with owned identity.
-fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
-    ty.map_heads(&mut |head| match head.tagged_name() {
-        Some(name) => btel_snapshot::TypeIdentity::Resolved(name),
-        None => btel_snapshot::TypeIdentity::Unresolved(head.tag()),
-    })
+/// Preserve immutable type metadata; replace every VM type head with owned
+/// identity. Must run under the capture's heap permit. Also whether a head
+/// names a recorded definition.
+fn owned_type(
+    leaves: &mut Leaves<'_>,
+    carried: &mut Carried,
+    ty: &bex_vm_types::RealizedTy,
+) -> (OwnedType, bool) {
+    let mut defined = false;
+    let ty = ty.map_heads(&mut |head| {
+        let identity = identity(leaves, carried, head);
+        defined |= matches!(identity, TypeIdentity::Defined(_));
+        identity
+    });
+    (ty, defined)
+}
+/// A type of the capture, as [`owned_type`] owns it.
+fn described(
+    leaves: &mut Leaves<'_>,
+    carried: &mut Carried,
+    ty: &bex_vm_types::RealizedTy,
+) -> btel_snapshot::TypeId {
+    let (ty, defined) = owned_type(leaves, carried, ty);
+    leaves.described(ty, defined)
+}
+/// A class or enum head is its recorded definition, by group and position
+/// alone: the definition holds its name. Any other head is its tag and name.
+fn identity(leaves: &mut Leaves<'_>, carried: &mut Carried, head: &TypeHead) -> TypeIdentity {
+    if head.is_resolved() {
+        // SAFETY: capture holds the heap permit, and a resolved head points
+        // at its live declaration.
+        if let Some(definition) = unsafe { definitions::of(head.ptr()) } {
+            return TypeIdentity::Defined(leaves.define(definition, carried));
+        }
+    }
+    match head.tagged_name() {
+        Some(name) => TypeIdentity::Resolved(name),
+        None => TypeIdentity::Unresolved(head.tag()),
+    }
 }
 /// A media value as the runtime holds it: its kind, MIME type and source, and
 /// loaded content as base64 text shared by handle. Fetches nothing. A part
@@ -800,6 +879,7 @@ mod tests {
             methods: indexmap::IndexMap::new(),
             generic_param_count: 1,
             owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
@@ -837,6 +917,7 @@ mod tests {
             docstring: None,
             other: indexmap::IndexMap::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let instance = vm.tlab.alloc_instance_with_type_args(
             class_ptr,
@@ -889,7 +970,11 @@ mod tests {
         else {
             panic!("lost class type argument");
         };
-        assert!(matches!(head, btel_snapshot::TypeIdentity::Resolved(_)));
+        // A class names its recorded definition, which the capture carries:
+        // collecting the class loses neither.
+        let btel_snapshot::TypeIdentity::Defined(definition) = head else {
+            panic!("a class type argument names its definition: {head:?}");
+        };
         let Obj::Declaration {
             name,
             tag,
@@ -900,6 +985,10 @@ mod tests {
         };
         assert_eq!(snapshot.name(*name).item_name().as_str(), "TestClass");
         assert_eq!(*tag, baml_type::typetag::TypeTag::from_i64(100));
+        assert_eq!(snapshot.definition(*name), Some(*definition));
+        // The capture is its thread's first to name the class: it carries
+        // the group.
+        assert!(snapshot.blobs().any(|blob| blob.id() == definition.group));
         let fields = snapshot.fields(*fields);
         assert_eq!(fields[0].key.as_str(), "x");
         assert!(matches!(fields[0].value, Val::Int(10)));

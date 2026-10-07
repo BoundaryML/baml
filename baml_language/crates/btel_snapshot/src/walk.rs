@@ -6,22 +6,52 @@
 //! becomes (hash input, bytes, a length); a resolver decides how a reference
 //! is written (a local number, or a position in another blob).
 //!
-//! Only values (including map keys) may name another blob. Enum variant names,
-//! descriptive names, media MIME types, URLs and paths, types and
-//! declarations are always written in place, and a blob's own root value is
-//! never a reference to another blob. Media content is written as a value.
-use baml_type::{DeclarationName, typetag::TypeTag};
+//! Only values (including map keys) may name another blob by its slot. Enum
+//! variant names, descriptive names, media MIME types, URLs and paths, types
+//! and declarations are always written in place, and a blob's own root value
+//! is never a reference to another blob. Media content is written as a value.
+//! A type head or declaration that names a recorded definition holds its
+//! group's ID in place; the walk reports it where it is written, so the
+//! groups a blob names are found in encoding order.
+use std::io::{self, Write};
+
+use baml_type::typetag::TypeTag;
 use bex_str::BexStr;
+use borsh::BorshSerialize;
 use num_bigint::BigInt;
 
 use crate::{
+    CasId, TypeIdentity,
     graph::{
-        BigintId, FieldEntry, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType, Range,
-        SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
+        BigintId, Declared, FieldEntry, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType,
+        Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
     },
-    hash::{self, Absorb, Counter, Digest, Hasher, TypeLeaf},
-    tags::{self, MediaSourceTag, ObjectTag, RootTag, ValueTag},
+    hash::{self, Absorb, Counter, Digest, HashSink, TypeLeaf},
+    tags::{self, DeclarationTag, MediaSourceTag, ObjectTag, RootTag, ValueTag},
 };
+
+/// How a declaration identifies itself, written in place: by its recorded
+/// definition, or by its runtime tag.
+pub(crate) struct DeclarationIdentity<'a> {
+    pub(crate) tag: TypeTag,
+    pub(crate) declared: &'a Declared,
+}
+impl BorshSerialize for DeclarationIdentity<'_> {
+    fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        match &self.declared.definition {
+            Some(definition) => {
+                (DeclarationTag::Defined as u8).serialize(w)?;
+                self.declared.name.serialize(w)?;
+                definition.serialize(w)
+            }
+            None => {
+                (DeclarationTag::Tagged as u8).serialize(w)?;
+                self.tag.serialize(w)?;
+                self.declared.name.serialize(w)
+            }
+        }
+    }
+}
 
 /// How a reference to an object is written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +76,13 @@ pub(crate) trait Resolver {
     fn string(&mut self, id: StringId) -> Option<u32>;
     /// As [`Self::string`], for a bigint.
     fn bigint(&mut self, id: BigintId) -> Option<u32>;
+    /// Whether [`Self::definition`] does anything. A walk that ignores
+    /// definitions skips finding the groups a type names.
+    const DEFINITIONS: bool = false;
+    /// A type head or declaration names the definition group `group`.
+    fn definition(&mut self, group: CasId) {
+        let _ = group;
+    }
     /// The length of the text a media object holds as content. A resolver
     /// that knows the blob a string was stored in answers from that blob, so
     /// the object can be written after its capture gave the string up.
@@ -73,7 +110,7 @@ pub(crate) trait Visitor {
     fn bigint(&mut self, value: &BigInt, digest: Digest) -> Result<(), Self::Error>;
     fn ty(&mut self, ty: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error>;
     fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error>;
-    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error>;
+    fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error>;
     /// A sequence of `len` items follows.
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error>;
 }
@@ -181,7 +218,7 @@ fn value<V: Visitor, R: Resolver>(
         }
         SnapshotValue::Type(id) => {
             v.byte(ValueTag::Type as u8)?;
-            ty(v, s, id)
+            ty(v, r, s, id)
         }
         SnapshotValue::Enum {
             declaration,
@@ -205,9 +242,29 @@ fn text<V: Visitor>(v: &mut V, s: &Graph, id: LabelId) -> Result<(), V::Error> {
     v.string(&s.labels[id.0 as usize])
 }
 
-fn ty<V: Visitor>(v: &mut V, s: &Graph, id: TypeId) -> Result<(), V::Error> {
-    let ty = &s.types[id.0 as usize];
-    v.ty(&ty.ty, ty.leaf)
+fn ty<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    s: &Graph,
+    id: TypeId,
+) -> Result<(), V::Error> {
+    described(v, r, &s.types[id.0 as usize])
+}
+
+fn described<V: Visitor, R: Resolver>(
+    v: &mut V,
+    r: &mut R,
+    ty: &crate::graph::Type,
+) -> Result<(), V::Error> {
+    v.ty(&ty.ty, ty.leaf)?;
+    if R::DEFINITIONS && ty.defined {
+        ty.ty.visit_heads(&mut |head| {
+            if let TypeIdentity::Defined(definition) = head {
+                r.definition(definition.group);
+            }
+        });
+    }
+    Ok(())
 }
 
 /// Media content: its length, then its base64 text as a value, which a large
@@ -302,7 +359,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             original_len,
         } => {
             v.byte(ObjectTag::List as u8)?;
-            ty(v, s, *element_type)?;
+            ty(v, r, s, *element_type)?;
             v.length(*original_len)?;
             values(v, r, s, *items)
         }
@@ -313,8 +370,8 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             original_len,
         } => {
             v.byte(ObjectTag::Map as u8)?;
-            ty(v, s, *key_type)?;
-            ty(v, s, *value_type)?;
+            ty(v, r, s, *key_type)?;
+            ty(v, r, s, *value_type)?;
             v.length(*original_len)?;
             entries(v, r, s, *range)
         }
@@ -327,7 +384,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             v.byte(ObjectTag::Instance as u8)?;
             v.begin_range(type_arguments.len())?;
             for ty in &s.types[type_arguments.indexes()] {
-                v.ty(&ty.ty, ty.leaf)?;
+                described(v, r, ty)?;
             }
             v.index(r.member(*declaration))?;
             v.length(*original_len)?;
@@ -335,7 +392,16 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
         }
         SnapshotObject::Declaration { name, tag, is_enum } => {
             v.byte(ObjectTag::Declaration as u8)?;
-            v.declaration(*tag, &s.names[name.0 as usize])?;
+            let declared = &s.names[name.0 as usize];
+            v.declaration(&DeclarationIdentity {
+                tag: *tag,
+                declared,
+            })?;
+            if R::DEFINITIONS
+                && let Some(definition) = &declared.definition
+            {
+                r.definition(definition.group);
+            }
             v.byte(u8::from(*is_enum))
         }
         SnapshotObject::Cell(inner) => {
@@ -387,57 +453,69 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
     }
 }
 
-/// Hash format 4 input: each piece as the encoding writes it, with a leaf's
-/// content replaced by its digest. One stream hashes a whole blob.
-impl Visitor for Hasher {
+/// Hash format 5 input: each piece as the encoding writes it, with a leaf's
+/// content replaced by its digest. One stream hashes a whole blob, whether a
+/// [`hash::Hasher`] streams it or a [`hash::BlobHasher`] gathers it.
+impl<H: HashSink> Visitor for H {
     type Error = std::convert::Infallible;
+    #[inline]
     fn byte(&mut self, byte: u8) -> Result<(), Self::Error> {
         Absorb::byte(self, byte);
         Ok(())
     }
+    #[inline]
     fn int(&mut self, value: i64) -> Result<(), Self::Error> {
         self.absorb(&value.to_le_bytes());
         Ok(())
     }
+    #[inline]
     fn bits(&mut self, bits: u64) -> Result<(), Self::Error> {
         self.number(bits);
         Ok(())
     }
+    #[inline]
     fn index(&mut self, index: u32) -> Result<(), Self::Error> {
         self.number(u64::from(index));
         Ok(())
     }
+    #[inline]
     fn length(&mut self, length: usize) -> Result<(), Self::Error> {
         self.size(length);
         Ok(())
     }
+    #[inline]
     fn string(&mut self, text: &BexStr) -> Result<(), Self::Error> {
         self.digest(hash::string(text));
         Ok(())
     }
+    #[inline]
     fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
         self.size(text.len());
         self.absorb(text.as_bytes());
         Ok(())
     }
+    #[inline]
     fn bigint(&mut self, _: &BigInt, digest: Digest) -> Result<(), Self::Error> {
         self.digest(digest);
         Ok(())
     }
+    #[inline]
     fn ty(&mut self, _: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error> {
         self.digest(leaf.digest);
         Ok(())
     }
+    #[inline]
     fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error> {
         self.size(bytes.len());
         self.digest(digest);
         Ok(())
     }
-    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error> {
-        self.borsh(&tag);
-        self.borsh(name);
+    #[inline]
+    fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error> {
+        HashSink::borsh(self, identity);
         Ok(())
     }
+    #[inline]
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {
         self.size(len);
         Ok(())
@@ -533,10 +611,11 @@ impl Visitor for Length {
         Ok(())
     }
     #[inline(always)]
-    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error> {
+    fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error> {
         let mut counter = Counter(0);
-        borsh::BorshSerialize::serialize(&tag, &mut counter).expect("counting cannot fail");
-        borsh::BorshSerialize::serialize(name, &mut counter).expect("counting cannot fail");
+        identity
+            .serialize(&mut counter)
+            .expect("counting cannot fail");
         self.add(counter.0);
         Ok(())
     }
@@ -611,9 +690,9 @@ where
         self.0.bytes(bytes, digest)
     }
     #[inline(always)]
-    fn declaration(&mut self, tag: TypeTag, name: &DeclarationName) -> Result<(), Self::Error> {
-        infallible(self.1.declaration(tag, name));
-        self.0.declaration(tag, name)
+    fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error> {
+        infallible(self.1.declaration(identity));
+        self.0.declaration(identity)
     }
     #[inline(always)]
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {

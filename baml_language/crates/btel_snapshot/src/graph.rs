@@ -5,9 +5,10 @@ use std::{marker::PhantomData, sync::Arc};
 
 use baml_type::{DeclarationName, MediaKind, typetag::TypeTag};
 use bex_str::BexStr;
+use btel_types::DefinitionBlob;
 use num_bigint::BigInt;
 
-use crate::{arena::Arena, hash};
+use crate::{arena::Arena, definition::DefinitionRef, hash};
 
 macro_rules! index {
     ($name:ident) => {
@@ -83,11 +84,16 @@ impl Uint8ArrayData {
         self.range.is_empty()
     }
 }
-/// Owned nominal identity, including its tag; names alone are not identity.
+/// Owned nominal identity: a tag, or a recorded definition; names alone are
+/// not identity.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TypeIdentity {
     Resolved(baml_type::TaggedTypeName),
     Unresolved(TypeTag),
+    /// A class or enum named by its recorded definition, whose group is a
+    /// child of every blob that holds this head (format 5). Its name is the
+    /// definition's.
+    Defined(DefinitionRef),
 }
 pub type OwnedType = baml_type::RealizedTy<TypeIdentity>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -279,6 +285,15 @@ pub(crate) struct Bigint {
 pub(crate) struct Type {
     pub(crate) ty: OwnedType,
     pub(crate) leaf: hash::TypeLeaf,
+    /// Whether a head names a recorded definition.
+    pub(crate) defined: bool,
+}
+
+/// A declaration's name, and the definition it is recorded by, if any.
+#[derive(Debug)]
+pub(crate) struct Declared {
+    pub(crate) name: DeclarationName,
+    pub(crate) definition: Option<DefinitionRef>,
 }
 
 /// Everything a capture holds. A string's digest is not kept beside it: the
@@ -301,7 +316,10 @@ pub(crate) struct Graph {
     pub(crate) bigints: Arena<Bigint>,
     pub(crate) types: Arena<Type>,
     /// The names of the declarations among the objects.
-    pub(crate) names: Arena<DeclarationName>,
+    pub(crate) names: Arena<Declared>,
+    /// The definition groups the capture carries to its writers, each after
+    /// the groups it names: those its stream had not carried yet.
+    pub(crate) definitions: Arena<Arc<DefinitionBlob>>,
 }
 impl Graph {
     /// Drop the capture and keep the capacity. Every arena is named, so none
@@ -318,6 +336,7 @@ impl Graph {
             bigints,
             types,
             names,
+            definitions,
         } = self;
         objects.clear();
         values.clear();
@@ -329,6 +348,7 @@ impl Graph {
         bigints.clear();
         types.clear();
         names.clear();
+        definitions.clear();
     }
     pub(crate) fn capacity_bytes(&self) -> usize {
         let Self {
@@ -342,6 +362,7 @@ impl Graph {
             bigints,
             types,
             names,
+            definitions,
         } = self;
         [
             objects.capacity_bytes(),
@@ -354,6 +375,7 @@ impl Graph {
             bigints.capacity_bytes(),
             types.capacity_bytes(),
             names.capacity_bytes(),
+            definitions.capacity_bytes(),
         ]
         .into_iter()
         .fold(0, usize::saturating_add)
