@@ -2,10 +2,17 @@
 
 The typemap is codegen-emitted: each SDK ships a `baml_sdk/_typemap.py`
 that constructs a `BamlTypeMap` from three literal dicts of
-`FQN → (module_path, attr_name)` lazy entries, and the SDK's root
-`__init__.py` installs it via `set_type_map(_TYPE_MAP)`. Resolution
-happens on first `get_class(fqn)` call via `importlib.import_module +
-getattr`, then memoizes.
+`FQN → (module_path, attr_name)` lazy entries plus the program descriptor,
+and the SDK's root `__init__.py` installs it via `set_type_map(_TYPE_MAP)`.
+Resolution happens on first `get_class(fqn)` call via
+`importlib.import_module + getattr`, then memoizes.
+
+The descriptor is the program's declared surface (every callable's
+signature and the declarations those reach) as the generator encoded it.
+Python never reads it: the bridge decodes it natively and encodes
+arguments against the types it declares. A typemap built without one
+(bridge tests, call-by-name without a generated SDK) declares no types,
+and the bridge then takes each argument as the type its Python value has.
 """
 
 from __future__ import annotations
@@ -81,6 +88,9 @@ class BamlTypeMap:
         # PyO3-identity overrides. `py_type_to_baml_type` walks
         # `cls.__mro__` against this dict.
         "_reverse",
+        # The embedded program descriptor, or `None` for a typemap that
+        # declares no types.
+        "_descriptor",
     )
 
     def __init__(self) -> None:
@@ -95,6 +105,7 @@ class BamlTypeMap:
         # Forward entries added by `from_lazy_entries` populate more
         # keys on top.
         self._reverse: Dict[Tuple[str, str], str] = dict(_STDLIB_REVERSE_OVERRIDES)
+        self._descriptor: Optional[bytes] = None
 
     @classmethod
     def from_lazy_entries(
@@ -102,11 +113,13 @@ class BamlTypeMap:
         classes: Dict[str, _LazyEntry],
         enums: Dict[str, _LazyEntry],
         type_aliases: Dict[str, _LazyEntry],
+        descriptor: Optional[bytes] = None,
     ) -> "BamlTypeMap":
         m = cls()
         m._class_lazy = dict(classes)
         m._enum_lazy = dict(enums)
         m._alias_lazy = dict(type_aliases)
+        m._descriptor = descriptor
         # Derive (module, attr) → FQN from forward entries.
         # `setdefault` lets stdlib seeds (populated in __init__) win
         # on collision — for stdlib classes both the user-facing
@@ -118,6 +131,12 @@ class BamlTypeMap:
             m._reverse.setdefault((mp, attr), fqn)
         # Type aliases generally don't appear as `type(value)`; skip.
         return m
+
+    @property
+    def descriptor(self) -> Optional[bytes]:
+        """The embedded program descriptor, or `None` when this typemap
+        declares no types."""
+        return self._descriptor
 
     # — lookup (lazy fallback) —
 

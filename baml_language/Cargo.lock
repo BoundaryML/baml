@@ -1187,12 +1187,14 @@ dependencies = [
  "baml_artifact",
  "baml_base",
  "baml_type",
+ "borsh",
  "fs2",
  "serde",
  "serde_json",
  "sha2",
  "strum",
  "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
