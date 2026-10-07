@@ -58,6 +58,7 @@ const delay = async (delayMs: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, delayMs));
 };
 
+/** Retry a failed capture with exponential backoff, propagating the final failure. */
 export async function withRetries<T>(
   operation: (attempt: number) => Promise<T>,
   options: RetryOptions,
@@ -78,6 +79,7 @@ export async function withRetries<T>(
   throw new Error('unreachable');
 }
 
+/** Reject missing, loading, errored, empty, or hidden cards before starting the settle timer. */
 export function postHogCardsAreReady(cards: PostHogCardRenderState[]): boolean {
   return (
     cards.length > 0 &&
@@ -102,6 +104,7 @@ export function postHogCardsAreReady(cards: PostHogCardRenderState[]): boolean {
   );
 }
 
+/** Read the visible content and layout used to detect unfinished or changing insight cards. */
 async function postHogCardStates(
   page: Page,
 ): Promise<PostHogCardRenderState[]> {
@@ -340,28 +343,49 @@ interface DashboardCapture {
   top: number;
 }
 
-/** Expand the canvas and shift subsequent embeds when full-page captures outgrow their iframes. */
+/** Expand the canvas and shift captures below growing embeds while preserving shared rows. */
 export async function composeDashboardCapture(
   pageDimensions: { height: number; width: number },
   nativeCharts: DashboardCapture[],
   embeds: (DashboardCapture & { height: number })[],
 ): Promise<Buffer> {
-  const captures = [...nativeCharts];
+  const captures: DashboardCapture[] = [];
   let height = pageDimensions.height;
   let width = pageDimensions.width;
-  let addedHeight = 0;
+  const growth: { bottom: number; offset: number }[] = [];
+  // Take the largest displacement above this point: parallel embeds grow their row once.
+  const offsetFor = (top: number) =>
+    growth.reduce(
+      (offset, item) =>
+        item.bottom <= top ? Math.max(offset, item.offset) : offset,
+      0,
+    );
   for (const embed of [...embeds].sort((a, b) => a.top - b.top)) {
     const dimensions = await sharp(embed.input).metadata();
     if (!dimensions.height || !dimensions.width) {
       throw new Error('Embedded dashboard screenshot has no dimensions');
     }
-    const top = embed.top + addedHeight;
+    const top = embed.top + offsetFor(embed.top);
     captures.push({ input: embed.input, left: embed.left, top });
-    addedHeight += Math.max(0, dimensions.height - embed.height);
+    const bottom = embed.top + embed.height;
+    growth.push({ bottom, offset: top + dimensions.height - bottom });
     height = Math.max(height, top + dimensions.height);
     width = Math.max(width, embed.left + dimensions.width);
   }
-  height = Math.max(height, pageDimensions.height + addedHeight);
+  for (const chart of nativeCharts) {
+    const dimensions = await sharp(chart.input).metadata();
+    if (!dimensions.height || !dimensions.width) {
+      throw new Error('Native chart screenshot has no dimensions');
+    }
+    const top = chart.top + offsetFor(chart.top);
+    captures.push({ input: chart.input, left: chart.left, top });
+    height = Math.max(height, top + dimensions.height);
+    width = Math.max(width, chart.left + dimensions.width);
+  }
+  height = Math.max(
+    height,
+    pageDimensions.height + offsetFor(pageDimensions.height),
+  );
   console.log(`Composing dashboard screenshot: ${width}x${height}`);
   return await sharp({
     create: {
@@ -376,6 +400,7 @@ export async function composeDashboardCapture(
     .toBuffer();
 }
 
+/** Retry the entire browser capture so failed renders cannot be uploaded to Slack. */
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
   return await withRetries(() => captureDashboardOnce(dashboardUrl), {
     attempts: captureAttempts,
@@ -389,6 +414,7 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
   });
 }
 
+/** Capture the live dashboard, save its artifact, and deliver the short report with the PNG. */
 export async function sendSlackDashboardReport(
   config: SlackDashboardReportConfig,
   now = new Date(),
