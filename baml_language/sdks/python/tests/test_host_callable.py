@@ -386,7 +386,7 @@ def test_encode_success_does_not_release(monkeypatch):
     # `encode_call_args` registers `cb`, but the bytes are discarded (never sent
     # to the engine) and `release_host_callable` above is a no-op recorder, so
     # nothing would ever release it.
-    monkeypatch.setattr(_proto, "register_host_callable", lambda _value: 999)
+    monkeypatch.setattr(_proto, "register_host_callable", lambda _value, _marker: 999)
 
     def cb(x: int) -> str:
         return str(x)

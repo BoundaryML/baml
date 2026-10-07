@@ -11,7 +11,6 @@ Before running these tests, build and install the native module:
 import http.server
 import json
 
-import pytest
 
 
 # ============================================================================

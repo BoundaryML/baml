@@ -392,7 +392,6 @@ def test_decode_class_nested_generic():
 import pytest  # noqa: E402
 
 from baml_bridge import _resolve_types_kwarg  # noqa: E402
-from baml_bridge.cffi.v1 import baml_type_pb2  # noqa: E402
 
 
 def test_generic_instance_carries_sparse_value_type():
@@ -423,20 +422,22 @@ def test_non_generic_instance_value_type_has_no_type_args():
     assert len(inbound.value_type.class_ty.type_args) == 0
 
 
-def test_resolve_types_requires_dict_for_generic():
-    with pytest.raises(TypeError):
-        _resolve_types_kwarg(None, ["T"])  # required
-    with pytest.raises(TypeError):
+def test_resolve_types_accepts_only_a_dict_for_generic():
+    with pytest.raises(TypeError, match="must be a dict"):
         _resolve_types_kwarg(int, ["T"])  # single-type form gone
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="must be a dict"):
         _resolve_types_kwarg((int, str), ["A", "B"])  # positional form gone
 
 
-def test_resolve_types_missing_and_extra_keys():
-    with pytest.raises(TypeError):
-        _resolve_types_kwarg({"A": int}, ["A", "B"])  # missing B
-    with pytest.raises(TypeError):
-        _resolve_types_kwarg({"A": int, "Z": str}, ["A"])  # unknown Z
+def test_resolve_types_leaves_unnamed_params_for_the_engine_to_infer():
+    # `None` in a slot: the engine infers that TypeVar from the argument values.
+    assert _resolve_types_kwarg(None, ["T"]) == [None]
+    assert _resolve_types_kwarg({"A": int}, ["A", "B"]) == [int, None]
+
+
+def test_resolve_types_rejects_unknown_keys():
+    with pytest.raises(TypeError, match=r"unknown type parameter\(s\) \['Z'\]"):
+        _resolve_types_kwarg({"A": int, "Z": str}, ["A"])
 
 
 def test_resolve_types_dict_maps_by_name_in_declaration_order():

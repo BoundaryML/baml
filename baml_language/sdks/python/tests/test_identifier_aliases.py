@@ -6,7 +6,6 @@ import asyncio
 import enum
 
 import pydantic
-import pytest
 
 import baml_bridge
 from baml_bridge.cffi.v1 import baml_inbound_pb2
@@ -119,8 +118,8 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
             assert args == b"encoded"
             return b"stream"
 
-    def fake_encode(kwargs, call_id, type_args, *, function_name):
-        encoded_calls.append((kwargs, call_id, type_args, function_name))
+    def fake_encode(kwargs, call_id, type_args, *, function_name, _baml):
+        encoded_calls.append((kwargs, call_id, type_args, function_name, _baml))
         return b"encoded"
 
     monkeypatch.setattr(baml_bridge, "new_function_call", lambda: 42)
@@ -145,11 +144,12 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
         ["on_event"],
     )
 
+    options = object()
     assert sync_stream("hello", on_event=listener) == "stream"
-    assert asyncio.run(async_stream("world", on_event=listener)) == "stream"
+    assert asyncio.run(async_stream("world", on_event=listener, _baml=options)) == "stream"
     assert encoded_calls == [
-        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan@stream"),
-        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan@stream"),
+        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan@stream", None),
+        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan@stream", options),
     ]
 
 
