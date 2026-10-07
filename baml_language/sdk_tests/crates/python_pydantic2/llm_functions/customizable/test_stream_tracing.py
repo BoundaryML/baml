@@ -95,18 +95,100 @@ async def test_stream_final_parse_failure_is_preserved_after_eof():
     from baml_sdk.lorem import trace_stream_doc_stream_async
 
     stream = await trace_stream_doc_stream_async("Ada")
-    try:
-        while not isinstance(await stream.next_async(), Done):
-            pass
-    except BamlError as error:
-        assert isinstance(error.value, ParseFailed)
-        assert error.value.raw_output
-        return
+    while not isinstance(await stream.next_async(), Done):
+        pass
     for _ in range(2):
         with pytest.raises(BamlError) as raised:
             await stream.final_async()
         assert isinstance(raised.value.value, ParseFailed)
         assert raised.value.value.raw_output
+
+
+# SDK_PARITY_LINT(skip): Python final caching must distinguish results from control flow
+@pytest.mark.parametrize(
+    "kind,cache",
+    [
+        ("interrupt", False),
+        ("exit", False),
+        ("task_cancel", False),
+        ("baml_cancel", False),
+        ("error", True),
+        ("panic", True),
+    ],
+)
+def test_stream_final_caches_only_settled_errors(monkeypatch, kind, cache):
+    from baml_bridge import BamlCancelledError, BamlError, BamlPanic
+    from baml_bridge._stream import BamlStream
+
+    errors = {
+        "interrupt": KeyboardInterrupt(),
+        "exit": SystemExit(),
+        "task_cancel": asyncio.CancelledError(),
+        "baml_cancel": BamlCancelledError("cancelled"),
+        "error": BamlError("parse failed"),
+        "panic": BamlPanic("panic"),
+    }
+    error = errors[kind]
+    stream = BamlStream(None)
+    calls = []
+    finishes = []
+
+    class Execution:
+        def finish(self, outcome, value):
+            finishes.append((outcome, value))
+
+    stream._execution = Execution()
+
+    def call(_self, _fqn, *, _baml):
+        calls.append(_fqn)
+        if len(calls) == 1:
+            raise error
+        return "finished"
+
+    monkeypatch.setattr(BamlStream, "_call_sync", call)
+    with pytest.raises(type(error)) as raised:
+        stream.final()
+    assert raised.value is error
+    assert len(finishes) == 1
+    assert stream._settled is cache
+    if cache:
+        with pytest.raises(type(error)) as raised:
+            stream.final()
+        assert raised.value is error
+        assert len(calls) == 1
+    else:
+        assert stream.final() == "finished"
+        assert len(calls) == 2
+
+
+# SDK_PARITY_LINT(skip): Python task cancellation must not poison later final awaits
+async def test_stream_final_timeout_is_not_cached(monkeypatch):
+    from baml_bridge._stream import BamlStream
+
+    stream = BamlStream(None)
+    calls = []
+    finishes = []
+
+    class Execution:
+        def finish(self, outcome, value):
+            finishes.append(outcome)
+
+    stream._execution = Execution()
+
+    async def call(_self, _fqn, *, _baml):
+        calls.append(_fqn)
+        if len(calls) == 1:
+            await asyncio.Event().wait()
+        return "finished"
+
+    monkeypatch.setattr(BamlStream, "_call_async", call)
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(stream.final_async(), timeout=0.01)
+    assert finishes == ["cancelled"]
+    assert not stream._settled
+    assert stream._final_error is None
+    assert await stream.final_async() == "finished"
+    assert len(calls) == 2
 
 
 # SDK_PARITY_LINT(skip): Python stream cancellation survives constructor return

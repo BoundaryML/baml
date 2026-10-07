@@ -167,6 +167,17 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
             raise self._final_error
         return self._final_value
 
+    def _cache_final_error(self, error):
+        """Retain terminal errors, allowing cancellation and interrupts through."""
+        from .errors import BamlCancelledError, BamlPanic
+
+        # Task cancellation and Python interrupts are control flow, rather
+        # than a settled stream result to replay on subsequent final calls.
+        if isinstance(error, (Exception, BamlPanic)) and not isinstance(
+            error, (asyncio.CancelledError, BamlCancelledError)
+        ):
+            self._final_error, self._settled = error, True
+
     def final(self, *, _baml: Any = None) -> TFinal:
         if self._settled:
             return self._cached_final()
@@ -177,7 +188,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
                 self._finish("ok", result)
                 return result
             except BaseException as error:
-                self._final_error, self._settled = error, True
+                self._cache_final_error(error)
                 self._failed(error)
                 raise
 
@@ -191,7 +202,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
                 self._finish("ok", result)
                 return result
             except BaseException as error:
-                self._final_error, self._settled = error, True
+                self._cache_final_error(error)
                 self._failed(error)
                 raise
 
