@@ -26,7 +26,7 @@ use crate::{
         BigintId, Declared, FieldEntry, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType,
         Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
     },
-    hash::{self, Absorb, Counter, Digest, Hasher, TypeLeaf},
+    hash::{self, Absorb, Counter, Digest, HashSink, TypeLeaf},
     tags::{self, DeclarationTag, MediaSourceTag, ObjectTag, RootTag, ValueTag},
 };
 
@@ -76,6 +76,9 @@ pub(crate) trait Resolver {
     fn string(&mut self, id: StringId) -> Option<u32>;
     /// As [`Self::string`], for a bigint.
     fn bigint(&mut self, id: BigintId) -> Option<u32>;
+    /// Whether [`Self::definition`] does anything. A walk that ignores
+    /// definitions skips finding the groups a type names.
+    const DEFINITIONS: bool = false;
     /// A type head or declaration names the definition group `group`.
     fn definition(&mut self, group: CasId) {
         let _ = group;
@@ -254,7 +257,7 @@ fn described<V: Visitor, R: Resolver>(
     ty: &crate::graph::Type,
 ) -> Result<(), V::Error> {
     v.ty(&ty.ty, ty.leaf)?;
-    if ty.defined {
+    if R::DEFINITIONS && ty.defined {
         ty.ty.visit_heads(&mut |head| {
             if let TypeIdentity::Defined(definition) = head {
                 r.definition(definition.group);
@@ -394,7 +397,9 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
                 tag: *tag,
                 declared,
             })?;
-            if let Some(definition) = &declared.definition {
+            if R::DEFINITIONS
+                && let Some(definition) = &declared.definition
+            {
                 r.definition(definition.group);
             }
             v.byte(u8::from(*is_enum))
@@ -449,55 +454,68 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
 }
 
 /// Hash format 5 input: each piece as the encoding writes it, with a leaf's
-/// content replaced by its digest. One stream hashes a whole blob.
-impl Visitor for Hasher {
+/// content replaced by its digest. One stream hashes a whole blob, whether a
+/// [`hash::Hasher`] streams it or a [`hash::BlobHasher`] gathers it.
+impl<H: HashSink> Visitor for H {
     type Error = std::convert::Infallible;
+    #[inline]
     fn byte(&mut self, byte: u8) -> Result<(), Self::Error> {
         Absorb::byte(self, byte);
         Ok(())
     }
+    #[inline]
     fn int(&mut self, value: i64) -> Result<(), Self::Error> {
         self.absorb(&value.to_le_bytes());
         Ok(())
     }
+    #[inline]
     fn bits(&mut self, bits: u64) -> Result<(), Self::Error> {
         self.number(bits);
         Ok(())
     }
+    #[inline]
     fn index(&mut self, index: u32) -> Result<(), Self::Error> {
         self.number(u64::from(index));
         Ok(())
     }
+    #[inline]
     fn length(&mut self, length: usize) -> Result<(), Self::Error> {
         self.size(length);
         Ok(())
     }
+    #[inline]
     fn string(&mut self, text: &BexStr) -> Result<(), Self::Error> {
         self.digest(hash::string(text));
         Ok(())
     }
+    #[inline]
     fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
         self.size(text.len());
         self.absorb(text.as_bytes());
         Ok(())
     }
+    #[inline]
     fn bigint(&mut self, _: &BigInt, digest: Digest) -> Result<(), Self::Error> {
         self.digest(digest);
         Ok(())
     }
+    #[inline]
     fn ty(&mut self, _: &OwnedType, leaf: TypeLeaf) -> Result<(), Self::Error> {
         self.digest(leaf.digest);
         Ok(())
     }
+    #[inline]
     fn bytes(&mut self, bytes: &[u8], digest: Digest) -> Result<(), Self::Error> {
         self.size(bytes.len());
         self.digest(digest);
         Ok(())
     }
+    #[inline]
     fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error> {
-        self.borsh(identity);
+        HashSink::borsh(self, identity);
         Ok(())
     }
+    #[inline]
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {
         self.size(len);
         Ok(())

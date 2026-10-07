@@ -14,6 +14,9 @@ pub const MIN_SNAPSHOT_SLOTS: usize = 128;
 
 /// Hash and copy mutable bytes in cache-sized batches during capture.
 pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;
+/// Hash input a blob ID gathers before it streams the rest: a small blob is
+/// hashed in one call. Speed and scratch memory only; the ID is the same.
+pub const GATHERED_HASH_BYTES: usize = 64 * 1024;
 
 /// Where captures are cut into CAS blobs. These decide blob IDs, never whether
 /// a blob can be read: changing them costs dedup against blobs cut the old

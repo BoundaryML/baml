@@ -102,6 +102,10 @@ impl Kept<'_> {
     pub fn logical_bytes_approx_v1(&self) -> Option<u64> {
         self.0.logical_bytes_approx_v1()
     }
+    /// As [`Blob::is_definition`].
+    pub fn is_definition(&self) -> bool {
+        self.0.is_definition()
+    }
     /// As [`Blob::write`].
     pub fn write(&self, scratch: &mut BlobScratch, w: &mut impl Write) -> io::Result<()> {
         self.0.write(scratch, w)

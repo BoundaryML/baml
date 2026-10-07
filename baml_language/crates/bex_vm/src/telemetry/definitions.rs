@@ -52,10 +52,20 @@ unsafe fn cell<'a>(ptr: HeapPtr) -> Option<&'a DefinitionCell> {
 pub(super) unsafe fn of<'a>(ptr: HeapPtr) -> Option<&'a Definition> {
     // SAFETY: inherited.
     let cell = unsafe { cell(ptr) }?;
+    // SAFETY: inherited; the cell is the declaration's.
+    Some(unsafe { in_cell(ptr, cell) })
+}
+
+/// [`of`] for the class or enum at `ptr` when the caller holds its cell.
+///
+/// # Safety
+/// As [`of`]; `cell` is the declaration's at `ptr`.
+#[inline]
+pub(super) unsafe fn in_cell(ptr: HeapPtr, cell: &DefinitionCell) -> &Definition {
     match cell.get() {
-        Some(definition) => Some(definition),
+        Some(definition) => definition,
         // SAFETY: inherited.
-        None => Some(unsafe { make(ptr, cell) }),
+        None => unsafe { make(ptr, cell) },
     }
 }
 
@@ -64,46 +74,54 @@ pub(super) unsafe fn of<'a>(ptr: HeapPtr) -> Option<&'a Definition> {
 #[cold]
 #[inline(never)]
 unsafe fn make(ptr: HeapPtr, cell: &DefinitionCell) -> &Definition {
-    let _making = MAKING.lock().unwrap_or_else(PoisonError::into_inner);
-    // Another thread may have made it while this one waited.
-    if let Some(definition) = cell.get() {
-        return definition;
-    }
-    // Most declarations name none without a definition, themselves
-    // included: a group of their own, without a search.
-    // SAFETY: inherited, here and for the heads read.
-    let declaration = match unsafe { ptr.get() } {
-        Object::Class(class)
-            if class.fields.iter().all(|field| {
-                let mut defined = true;
-                field.field_template.visit_heads(&mut |head| {
-                    defined &= !head.is_resolved()
-                        || unsafe { self::cell(head.ptr()) }
-                            .is_none_or(|cell| cell.get().is_some());
-                });
-                defined
-            }) =>
-        {
-            Some(Declaration::Class(class_definition(
-                class,
-                &FxHashMap::default(),
-            )))
+    {
+        let _making = MAKING.lock().unwrap_or_else(PoisonError::into_inner);
+        // Another thread may have made it while this one waited.
+        if let Some(definition) = cell.get() {
+            return definition;
         }
-        Object::Enum(enm) => Some(Declaration::Enum(enum_definition(enm))),
-        _ => None,
-    };
-    if let Some(declaration) = declaration {
-        let made = definition::group(std::slice::from_ref(&declaration));
-        let made = made
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| unreachable!("a member"));
-        return cell.set(made);
+        // SAFETY: inherited.
+        if !unsafe { alone(ptr) } {
+            // SAFETY: inherited.
+            unsafe { Search::default().run(ptr) };
+            return cell
+                .get()
+                .unwrap_or_else(|| unreachable!("the search makes the group of its start"));
+        }
     }
+    // Decided under the lock, while no group was half made: a declaration
+    // that names only declarations with a definition is a group of its own,
+    // and stays one. Encoding it needs no lock: a thread that makes it too,
+    // alone or in a search, makes the same blob, and the cell keeps the
+    // first.
     // SAFETY: inherited.
-    unsafe { Search::default().run(ptr) };
-    cell.get()
-        .unwrap_or_else(|| unreachable!("the search makes the group of its start"))
+    let declaration = match unsafe { ptr.get() } {
+        Object::Class(class) => Declaration::Class(class_definition(class, &|_| None)),
+        Object::Enum(enm) => Declaration::Enum(enum_definition(enm)),
+        _ => unreachable!("only a class or enum has a definition"),
+    };
+    cell.set(definition::single(&declaration))
+}
+
+/// Whether the class or enum at `ptr` names no declaration without a
+/// definition, itself included: most do, and are a group of their own.
+///
+/// # Safety
+/// As [`of`].
+unsafe fn alone(ptr: HeapPtr) -> bool {
+    // SAFETY: inherited, here and for the heads read.
+    match unsafe { ptr.get() } {
+        Object::Class(class) => class.fields.iter().all(|field| {
+            let mut defined = true;
+            field.field_template.visit_heads(&mut |head| {
+                defined &= !head.is_resolved()
+                    || unsafe { self::cell(head.ptr()) }.is_none_or(|cell| cell.get().is_some());
+            });
+            defined
+        }),
+        Object::Enum(_) => true,
+        _ => false,
+    }
 }
 
 /// One declaration during the search.
@@ -112,6 +130,8 @@ struct Node {
     index: u32,
     lowlink: u32,
     on_stack: bool,
+    /// Its position in the group being made, while it is made.
+    position: Option<u32>,
 }
 
 #[derive(Default)]
@@ -120,9 +140,14 @@ struct Search {
     by_ptr: FxHashMap<HeapPtr, usize>,
     /// Visited declarations whose group is incomplete.
     stack: Vec<usize>,
-    /// The path being explored: a node, the declarations it names without
-    /// a definition, and the next of them to visit.
-    path: Vec<(usize, Vec<HeapPtr>, usize)>,
+    /// The path being explored: a node, then the next and the end of the
+    /// declarations it names without a definition, in `successors`.
+    path: Vec<(usize, usize, usize)>,
+    /// What the visited nodes name without a definition, each node's in one
+    /// run.
+    successors: Vec<HeapPtr>,
+    /// The members of the group being made.
+    members: Vec<HeapPtr>,
 }
 
 impl Search {
@@ -134,10 +159,10 @@ impl Search {
     unsafe fn run(&mut self, start: HeapPtr) {
         // SAFETY: inherited, here and for every pointer reached below.
         unsafe { self.enter(start) };
-        while let Some((node, successors, next)) = self.path.last_mut() {
+        while let Some((node, next, end)) = self.path.last_mut() {
             let node = *node;
-            let target = successors.get(*next).copied();
-            if let Some(target) = target {
+            if *next < *end {
+                let target = self.successors[*next];
                 *next += 1;
                 match self.by_ptr.get(&target) {
                     None => unsafe { self.enter(target) },
@@ -173,10 +198,11 @@ impl Search {
             index,
             lowlink: index,
             on_stack: true,
+            position: None,
         });
         self.by_ptr.insert(ptr, at);
         self.stack.push(at);
-        let mut successors = Vec::new();
+        let start = self.successors.len();
         // SAFETY: inherited.
         if let Object::Class(class) = unsafe { ptr.get() } {
             for field in &class.fields {
@@ -186,12 +212,19 @@ impl Search {
                     if head.is_resolved()
                         && unsafe { cell(head.ptr()) }.is_some_and(|cell| cell.get().is_none())
                     {
-                        successors.push(head.ptr());
+                        self.successors.push(head.ptr());
                     }
                 });
             }
         }
-        self.path.push((at, successors, 0));
+        self.path.push((at, start, self.successors.len()));
+    }
+
+    /// The position of the declaration at `ptr` in the group being made.
+    fn position(&self, ptr: HeapPtr) -> Option<u32> {
+        self.by_ptr
+            .get(&ptr)
+            .and_then(|&node| self.nodes[node].position)
     }
 
     /// `first` was the first of its group to be visited, and the group's
@@ -200,66 +233,74 @@ impl Search {
     /// # Safety
     /// As [`of`].
     unsafe fn complete(&mut self, first: usize) {
-        let mut members = Vec::new();
+        self.members.clear();
         loop {
             let member = self
                 .stack
                 .pop()
                 .unwrap_or_else(|| unreachable!("a group's first member is on the stack"));
-            self.nodes[member].on_stack = false;
-            members.push(self.nodes[member].ptr);
+            let node = &mut self.nodes[member];
+            node.on_stack = false;
+            node.position = Some(u32::try_from(self.members.len()).expect("bounded group"));
+            self.members.push(node.ptr);
             if member == first {
                 break;
             }
         }
-        let positions: FxHashMap<HeapPtr, u32> = members
-            .iter()
-            .enumerate()
-            .map(|(at, ptr)| (*ptr, u32::try_from(at).expect("bounded group")))
-            .collect();
-        let declarations: Vec<_> = members
+        let declarations: Vec<_> = self
+            .members
             .iter()
             // SAFETY: inherited.
             .map(|ptr| match unsafe { ptr.get() } {
-                Object::Class(class) => Declaration::Class(class_definition(class, &positions)),
+                Object::Class(class) => {
+                    Declaration::Class(class_definition(class, &|ptr| self.position(ptr)))
+                }
                 Object::Enum(enm) => Declaration::Enum(enum_definition(enm)),
                 _ => unreachable!("only declarations are searched"),
             })
             .collect();
-        for (ptr, definition) in members.iter().zip(definition::group(&declarations)) {
+        for (ptr, definition) in self.members.iter().zip(definition::group(&declarations)) {
             // SAFETY: inherited.
             if let Some(cell) = unsafe { cell(*ptr) } {
                 cell.set(definition);
             }
         }
+        // The next group names these by their definitions.
+        for ptr in &self.members {
+            let node = self.by_ptr[ptr];
+            self.nodes[node].position = None;
+        }
     }
 }
 
-fn meta(
-    description: Option<&String>,
-    alias: Option<&String>,
-    docstring: Option<&String>,
-    other: &indexmap::IndexMap<String, String>,
-) -> Meta {
+/// Description, alias, docstring and other attributes, borrowed from the
+/// declaration.
+fn meta<'a>(
+    description: Option<&'a String>,
+    alias: Option<&'a String>,
+    docstring: Option<&'a String>,
+    other: &'a indexmap::IndexMap<String, String>,
+) -> Meta<&'a str> {
     Meta {
-        description: description.cloned(),
-        alias: alias.cloned(),
-        docstring: docstring.cloned(),
+        description: description.map(String::as_str),
+        alias: alias.map(String::as_str),
+        docstring: docstring.map(String::as_str),
         attributes: other
             .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
+            .map(|(key, value)| (key.as_str(), value.as_str()))
             .collect(),
     }
 }
 
 /// `class` with its field types' heads as the group sees them: a member by
-/// its position, any other declaration by the definition it already has.
-fn class_definition(
-    class: &Class,
-    positions: &FxHashMap<HeapPtr, u32>,
-) -> definition::Class<baml_type::TyTemplate<Head>> {
+/// its `position` in the group, any other declaration by the definition it
+/// already has. Borrows from the heap: the caller holds the heap permit.
+fn class_definition<'a>(
+    class: &'a Class,
+    position: &impl Fn(HeapPtr) -> Option<u32>,
+) -> definition::Class<baml_type::TyTemplate<Head<'a>>, &'a str, &'a DeclarationName> {
     definition::Class {
-        name: class.name.clone(),
+        name: &class.name,
         type_params: u32::try_from(class.generic_param_count).expect("bounded generics"),
         meta: meta(
             class.description.as_ref(),
@@ -272,10 +313,10 @@ fn class_definition(
             .fields
             .iter()
             .map(|field| Field {
-                name: field.name.clone(),
+                name: field.name.as_str(),
                 ty: field
                     .field_template
-                    .map_heads(&mut |head: &TypeHead| group_head(head, positions)),
+                    .map_heads(&mut |head: &TypeHead| group_head(head, position)),
                 meta: meta(
                     field.description.as_ref(),
                     field.alias.as_ref(),
@@ -290,9 +331,9 @@ fn class_definition(
     }
 }
 
-fn enum_definition(enm: &Enum) -> definition::Enum {
+fn enum_definition(enm: &Enum) -> definition::Enum<&str, &DeclarationName> {
     definition::Enum {
-        name: enm.name.clone(),
+        name: &enm.name,
         meta: meta(
             enm.description.as_ref(),
             enm.alias.as_ref(),
@@ -303,7 +344,7 @@ fn enum_definition(enm: &Enum) -> definition::Enum {
             .variants
             .iter()
             .map(|variant| Variant {
-                name: variant.name.clone(),
+                name: variant.name.as_str(),
                 meta: meta(
                     variant.description.as_ref(),
                     variant.alias.as_ref(),
@@ -319,27 +360,27 @@ fn enum_definition(enm: &Enum) -> definition::Enum {
 /// Total by invariant: a live declaration's field heads are resolved
 /// pointers to declarations, and the search makes every group a group uses
 /// before it.
-fn group_head(head: &TypeHead, positions: &FxHashMap<HeapPtr, u32>) -> Head {
-    // `None` for an unresolved head, before anything reads its pointer.
-    let name: DeclarationName = head
-        .tagged_name()
-        .unwrap_or_else(|| unreachable!("a live declaration's field names a declaration"))
-        .name()
-        .clone();
-    if let Some(position) = positions.get(&head.ptr()) {
-        return Head::Member(*position);
+fn group_head<'a>(head: &TypeHead, position: &impl Fn(HeapPtr) -> Option<u32>) -> Head<'a> {
+    // Checked before anything reads its pointer.
+    if !head.is_resolved() {
+        unreachable!("a live declaration's field names a declaration");
     }
+    if let Some(position) = position(head.ptr()) {
+        return Head::Member(position);
+    }
+    let defined = |cell: &'a DefinitionCell| {
+        cell.get()
+            .unwrap_or_else(|| unreachable!("a group's dependencies are made before it"))
+    };
     // SAFETY: the caller of the search holds the heap permit, and the head
     // is resolved.
-    match unsafe { cell(head.ptr()) } {
-        Some(cell) => {
-            let definition = cell
-                .get()
-                .unwrap_or_else(|| unreachable!("a group's dependencies are made before it"));
-            Head::Defined(name, definition.clone())
-        }
-        // An interface or a type alias.
-        None => Head::Named(name),
+    match unsafe { head.ptr().get() } {
+        Object::Class(class) => Head::Defined(&class.name, defined(&class.telemetry_definition)),
+        Object::Enum(enm) => Head::Defined(&enm.name, defined(&enm.telemetry_definition)),
+        // An interface or a type alias: no recorded definition.
+        Object::Interface(iface) => Head::Named(DeclarationName::Declared(iface.name.clone())),
+        Object::TypeAlias(alias) => Head::Named(DeclarationName::Declared(alias.name.clone())),
+        _ => unreachable!("a live declaration's field names a declaration"),
     }
 }
 

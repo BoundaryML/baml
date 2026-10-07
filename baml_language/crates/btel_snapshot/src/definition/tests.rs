@@ -6,7 +6,7 @@ use crate::{
     SnapshotPool, SnapshotValue, TypeIdentity, decode_blob,
 };
 
-type Template = TyTemplate<Head>;
+type Template<'a> = TyTemplate<Head<'a>>;
 
 fn declared(path: &str) -> DeclarationName {
     DeclarationName::Declared(TypeName::from_dotted_path(path))
@@ -16,7 +16,7 @@ fn anonymous(name: &str) -> DeclarationName {
     DeclarationName::Anonymous(Name::new(name))
 }
 
-fn field(name: &str, ty: Template) -> Field<Template> {
+fn field<'a>(name: &str, ty: Template<'a>) -> Field<Template<'a>> {
     Field {
         name: name.into(),
         ty,
@@ -27,7 +27,7 @@ fn field(name: &str, ty: Template) -> Field<Template> {
     }
 }
 
-fn class(name: DeclarationName, fields: Vec<Field<Template>>) -> Declaration<Template> {
+fn class(name: DeclarationName, fields: Vec<Field<Template<'_>>>) -> Declaration<Template<'_>> {
     Declaration::Class(Class {
         name,
         type_params: 0,
@@ -37,11 +37,11 @@ fn class(name: DeclarationName, fields: Vec<Field<Template>>) -> Declaration<Tem
     })
 }
 
-fn optional(ty: Template) -> Template {
+fn optional(ty: Template<'_>) -> Template<'_> {
     TyTemplate::Union(Box::new([ty, TyTemplate::Null]))
 }
 
-fn member(position: u32) -> Template {
+fn member(position: u32) -> Template<'static> {
     TyTemplate::Class(Head::Member(position), Box::new([]))
 }
 
@@ -62,7 +62,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 /// `Left { right: Right? }` and `Right { left: Left? }`, in the given order.
-fn left_right(left_first: bool) -> Vec<Declaration<Template>> {
+fn left_right(left_first: bool) -> Vec<Declaration<Template<'static>>> {
     let (left, right) = if left_first { (0, 1) } else { (1, 0) };
     let mut members = vec![
         class(
@@ -168,20 +168,18 @@ fn a_group_names_the_groups_it_uses_as_children() {
         declared("user.Resume"),
         vec![field("name", TyTemplate::String)],
     )]);
+    let resume_name = declared("user.Resume");
     let holder = group(&[class(
         declared("user.Holder"),
         vec![
             field(
                 "resume",
-                TyTemplate::Class(
-                    Head::Defined(declared("user.Resume"), resume[0].clone()),
-                    Box::new([]),
-                ),
+                TyTemplate::Class(Head::Defined(&resume_name, &resume[0]), Box::new([])),
             ),
             field(
                 "again",
                 TyTemplate::List(Box::new(TyTemplate::Class(
-                    Head::Defined(declared("user.Resume"), resume[0].clone()),
+                    Head::Defined(&resume_name, &resume[0]),
                     Box::new([]),
                 ))),
             ),
@@ -578,14 +576,12 @@ fn carrying_a_group_carries_what_it_names_first() {
         declared("user.Resume"),
         vec![field("name", TyTemplate::String)],
     )]);
+    let resume_name = declared("user.Resume");
     let holder = group(&[class(
         declared("user.Holder"),
         vec![field(
             "resume",
-            TyTemplate::Class(
-                Head::Defined(declared("user.Resume"), resume[0].clone()),
-                Box::new([]),
-            ),
+            TyTemplate::Class(Head::Defined(&resume_name, &resume[0]), Box::new([])),
         )],
     )]);
     let capture = |carried: &mut Carried| {
@@ -664,11 +660,12 @@ fn indistinguishable_members_get_one_position_in_any_order() {
         members.into_iter().map(Option::unwrap).collect::<Vec<_>>()
     };
     let holder = |node: Definition| {
+        let name = anonymous("Node");
         id(&group(&[class(
             anonymous("Holder"),
             vec![field(
                 "node",
-                TyTemplate::Class(Head::Defined(anonymous("Node"), node), Box::new([])),
+                TyTemplate::Class(Head::Defined(&name, &node), Box::new([])),
             )],
         )]))
     };

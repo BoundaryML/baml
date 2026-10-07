@@ -177,7 +177,7 @@ impl Scratch {
                                 unreachable!("instance class")
                             };
                             // A generic instance's type arguments; most have none.
-                            let type_arguments: SmallVec<[OwnedType; 2]> =
+                            let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
                                 if instance.class_type_args.is_empty() {
                                     SmallVec::new()
                                 } else {
@@ -188,7 +188,7 @@ impl Scratch {
                                         .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
                                         .collect()
                                 };
-                            b.instance(
+                            b.described_instance(
                                 declaration,
                                 type_arguments,
                                 (0..instance.field_len()).zip(&class.fields),
@@ -204,16 +204,18 @@ impl Scratch {
                     }
                 }
                 Object::Class(class) => {
-                    // SAFETY: inherited heap permit.
-                    let definition = unsafe { definitions::of(ptr) }
-                        .map(|definition| b.define(definition, &mut self.carried));
-                    b.declaration(&class.name, class.type_tag, false, definition)
+                    // SAFETY: inherited heap permit; the cell is the class's.
+                    let definition =
+                        unsafe { definitions::in_cell(ptr, &class.telemetry_definition) };
+                    let definition = b.define(definition, &mut self.carried);
+                    b.declaration(&class.name, class.type_tag, false, Some(definition))
                 }
                 Object::Enum(enm) => {
-                    // SAFETY: inherited heap permit.
-                    let definition = unsafe { definitions::of(ptr) }
-                        .map(|definition| b.define(definition, &mut self.carried));
-                    b.declaration(&enm.name, enm.type_tag, true, definition)
+                    // SAFETY: inherited heap permit; the cell is the enum's.
+                    let definition =
+                        unsafe { definitions::in_cell(ptr, &enm.telemetry_definition) };
+                    let definition = b.define(definition, &mut self.carried);
+                    b.declaration(&enm.name, enm.type_tag, true, Some(definition))
                 }
                 Object::Cell(cell) => {
                     SnapshotObject::Cell(self.add(&mut b.leaves(), cell.load(), depth + 1))
@@ -374,13 +376,20 @@ fn object(b: &mut Builder, object: SnapshotObject) -> SnapshotValue {
     )
 }
 /// Preserve immutable type metadata; replace every VM type head with owned
-/// identity. Must run under the capture's heap permit.
+/// identity. Must run under the capture's heap permit. Also whether a head
+/// names a recorded definition.
 fn owned_type(
     leaves: &mut Leaves<'_>,
     carried: &mut Carried,
     ty: &bex_vm_types::RealizedTy,
-) -> OwnedType {
-    ty.map_heads(&mut |head| identity(leaves, carried, head))
+) -> (OwnedType, bool) {
+    let mut defined = false;
+    let ty = ty.map_heads(&mut |head| {
+        let identity = identity(leaves, carried, head);
+        defined |= matches!(identity, TypeIdentity::Defined(_));
+        identity
+    });
+    (ty, defined)
 }
 /// A type of the capture, as [`owned_type`] owns it.
 fn described(
@@ -388,12 +397,7 @@ fn described(
     carried: &mut Carried,
     ty: &bex_vm_types::RealizedTy,
 ) -> btel_snapshot::TypeId {
-    let mut defined = false;
-    let ty = ty.map_heads(&mut |head| {
-        let identity = identity(leaves, carried, head);
-        defined |= matches!(identity, TypeIdentity::Defined(_));
-        identity
-    });
+    let (ty, defined) = owned_type(leaves, carried, ty);
     leaves.described(ty, defined)
 }
 /// A class or enum head is its recorded definition, by group and position

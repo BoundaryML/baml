@@ -73,8 +73,11 @@ pub struct Leaves<'b> {
 /// between streams that go to different writers. Forgetting a group, as a
 /// full set does, only carries it again: the writers store it once.
 ///
-/// A writer that may have lost a capture calls [`forget_carried`], and every
-/// stream carries its groups again from its next capture ([`Self::begin`]).
+/// A writer that may have lost a group a capture carried (a capture whose
+/// blobs include one: [`crate::Blob::is_definition`]) calls
+/// [`forget_carried`], and every stream carries its groups again from its
+/// next capture ([`Self::begin`]). Losing a capture that carried none needs
+/// nothing.
 /// Captures that named a lost group in the meantime read it once a later
 /// capture carries it again.
 pub struct Carried {
@@ -92,8 +95,8 @@ static STREAMS: AtomicU64 = AtomicU64::new(1);
 static LOSSES: AtomicU64 = AtomicU64::new(0);
 
 /// Make every stream carry its groups again, because a writer may have lost
-/// a capture that carried one. Each stream notices on its next capture that
-/// names a group.
+/// a capture that carried one. Each stream notices when its next capture
+/// begins.
 pub fn forget_carried() {
     LOSSES.fetch_add(1, Ordering::Relaxed);
 }
@@ -213,19 +216,17 @@ impl Leaves<'_> {
     /// A type description. A head that names a definition must name one
     /// [`Self::define`] added.
     pub fn ty(&mut self, ty: OwnedType) -> TypeId {
-        let mut defined = false;
-        ty.visit_heads(&mut |head| defined |= matches!(head, TypeIdentity::Defined(_)));
+        let defined = names_definition(&ty);
         self.described(ty, defined)
     }
     /// [`Self::ty`] for a caller that knows whether a head of `ty` names a
     /// definition.
     pub fn described(&mut self, ty: OwnedType, defined: bool) -> TypeId {
-        #[cfg(debug_assertions)]
-        {
-            let mut any = false;
-            ty.visit_heads(&mut |head| any |= matches!(head, TypeIdentity::Defined(_)));
-            assert_eq!(defined, any, "the caller knows whether a head is defined");
-        }
+        debug_assert_eq!(
+            defined,
+            names_definition(&ty),
+            "the caller knows whether a head is defined"
+        );
         let id = TypeId(u32::try_from(self.types.len()).expect("type arena exhausted"));
         self.types.push(
             Type {
@@ -270,6 +271,13 @@ impl Leaves<'_> {
         self.objects.push(object, self.meter);
         Some(id)
     }
+}
+
+/// Whether a head of `ty` names a recorded definition.
+fn names_definition(ty: &OwnedType) -> bool {
+    let mut defined = false;
+    ty.visit_heads(&mut |head| defined |= matches!(head, TypeIdentity::Defined(_)));
+    defined
 }
 
 /// Carry `group`, newly marked carried, after the groups it names that
@@ -474,10 +482,25 @@ impl Builder {
         source: impl ExactSizeIterator<Item = T>,
         convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
     ) -> SnapshotObject {
+        let type_arguments = type_arguments.into_iter().map(|ty| {
+            let defined = names_definition(&ty);
+            (ty, defined)
+        });
+        self.described_instance(declaration, type_arguments, source, convert)
+    }
+    /// [`Self::instance`] for a caller that knows, of each type argument,
+    /// whether a head names a definition (as [`Leaves::described`]).
+    pub fn described_instance<T>(
+        &mut self,
+        declaration: ObjectId,
+        type_arguments: impl IntoIterator<Item = (OwnedType, bool)>,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
+    ) -> SnapshotObject {
         let mut leaves = self.leaves();
         let start = leaves.types.len();
-        for ty in type_arguments {
-            leaves.ty(ty);
+        for (ty, defined) in type_arguments {
+            leaves.described(ty, defined);
         }
         let type_arguments = Range::new(start, leaves.types.len() - start);
         let original_len = source.len();

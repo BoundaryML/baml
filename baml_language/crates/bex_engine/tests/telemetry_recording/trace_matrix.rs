@@ -1117,6 +1117,17 @@ fn recorded(program: &Program, tag: baml_type::typetag::TypeTag) -> btel_types::
             })
             .unwrap_or_else(|| panic!("no declaration with tag {tag:?}"))
     };
+    // The definitions its fields name, other than its own, made first.
+    let mut named: Vec<(baml_type::typetag::TypeTag, btel_types::Definition)> = Vec::new();
+    if let Object::Class(class) = declaration(tag) {
+        for field in &class.fields {
+            field.field_template.visit_heads(&mut |head| {
+                if head.tag() != tag && !named.iter().any(|(seen, _)| *seen == head.tag()) {
+                    named.push((head.tag(), recorded(program, head.tag())));
+                }
+            });
+        }
+    }
     let declared = match declaration(tag) {
         Object::Class(class) => Declaration::Class(definition::Class {
             name: class.name.clone(),
@@ -1138,11 +1149,13 @@ fn recorded(program: &Program, tag: baml_type::typetag::TypeTag) -> btel_types::
                             return Head::Member(0);
                         }
                         let name = match declaration(head.tag()) {
-                            Object::Class(class) => class.name.clone(),
-                            Object::Enum(enm) => enm.name.clone(),
+                            Object::Class(class) => &class.name,
+                            Object::Enum(enm) => &enm.name,
                             _ => unreachable!(),
                         };
-                        Head::Defined(name, recorded(program, head.tag()))
+                        let (_, definition) =
+                            named.iter().find(|(seen, _)| *seen == head.tag()).unwrap();
+                        Head::Defined(name, definition)
                     }),
                     meta: meta(
                         &field.description,

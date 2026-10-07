@@ -78,6 +78,11 @@ impl<'s> Blob<'s> {
     pub fn encoded_len(&self) -> u64 {
         self.entry().encoded_len
     }
+    /// Whether this is a definition group the capture carries
+    /// ([`crate::Carried`]) rather than part of the capture.
+    pub fn is_definition(&self) -> bool {
+        matches!(self.entry().content, crate::shape::Content::Definition(_))
+    }
     /// The definition groups this one names by ID, which follow its
     /// [`Self::children`] in its child table. The capture carries a group
     /// only when its stream names it first ([`crate::Carried`]).

@@ -556,7 +556,10 @@ mod definitions {
 
     use super::*;
 
-    fn class(name: &str, fields: Vec<(&str, TyTemplate<Head>)>) -> Declaration<TyTemplate<Head>> {
+    fn class<'a>(
+        name: &str,
+        fields: Vec<(&str, TyTemplate<Head<'a>>)>,
+    ) -> Declaration<TyTemplate<Head<'a>>> {
         Declaration::Class(Class {
             name: DeclarationName::Anonymous(Name::new(name)),
             type_params: 0,
@@ -627,17 +630,12 @@ mod definitions {
             .spawn(|| {
                 let mut chain: Vec<Definition> = Vec::new();
                 let mut blobs = Blobs::default();
+                let link = DeclarationName::Anonymous(Name::new("Link"));
                 for n in 0..300 {
                     let next = match chain.last() {
                         Some(next) => lists(
                             100,
-                            TyTemplate::Class(
-                                Head::Defined(
-                                    DeclarationName::Anonymous(Name::new("Link")),
-                                    next.clone(),
-                                ),
-                                Box::new([]),
-                            ),
+                            TyTemplate::Class(Head::Defined(&link, next), Box::new([])),
                         ),
                         None => TyTemplate::Int,
                     };

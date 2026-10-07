@@ -188,44 +188,71 @@ impl BorshDeserialize for DefinitionHead {
 /// A field type as recorded.
 pub type DefinitionType = TyTemplate<DefinitionHead>;
 
-/// A head in a field type, as the runtime hands a group over.
+/// A head in a field type, as the runtime hands a group over, borrowed from
+/// the declarations it names.
 #[derive(Clone, Debug)]
-pub enum Head {
+pub enum Head<'a> {
     /// Another member of the group, by its position among the members
     /// handed over.
     Member(u32),
-    /// A class or enum of a group made before.
-    Defined(DeclarationName, Definition),
+    /// A class or enum of a group made before, and its name.
+    Defined(&'a DeclarationName, &'a Definition),
     /// A head with no recorded definition: an interface or a type alias.
     Named(DeclarationName),
 }
 
-/// Description, alias, docstring and other attributes, as declared.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Meta {
-    pub description: Option<String>,
-    pub alias: Option<String>,
-    pub docstring: Option<String>,
-    pub attributes: Vec<(String, String)>,
+/// A head as its group's blob holds it, the [`DefinitionHead`] it decodes
+/// to. A member is written as the position it holds, which must be the
+/// member's place in the blob.
+impl BorshSerialize for Head<'_> {
+    fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        match self {
+            Self::Member(position) => {
+                (DefinitionHeadTag::Member as u8).serialize(w)?;
+                position.serialize(w)
+            }
+            Self::Defined(name, definition) => {
+                (DefinitionHeadTag::Defined as u8).serialize(w)?;
+                name.serialize(w)?;
+                DefinitionRef::of(definition).serialize(w)
+            }
+            Self::Named(name) => {
+                (DefinitionHeadTag::Named as u8).serialize(w)?;
+                name.serialize(w)
+            }
+        }
+    }
 }
 
-/// A class's definition. `T` is how its field types are held.
+/// Description, alias, docstring and other attributes, as declared. `S` is
+/// how its text is held: owned once decoded, borrowed from the declaration
+/// while the runtime hands a group over. Either encodes the same.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Meta<S = String> {
+    pub description: Option<S>,
+    pub alias: Option<S>,
+    pub docstring: Option<S>,
+    pub attributes: Vec<(S, S)>,
+}
+
+/// A class's definition. `T` is how its field types are held, `S` its text
+/// (see [`Meta`]) and `N` its name.
 #[derive(Clone, Debug)]
-pub struct Class<T> {
-    pub name: DeclarationName,
+pub struct Class<T, S = String, N = DeclarationName> {
+    pub name: N,
     pub type_params: u32,
-    pub meta: Meta,
+    pub meta: Meta<S>,
     /// `@@stream.done`.
     pub stream_done: bool,
-    pub fields: Vec<Field<T>>,
+    pub fields: Vec<Field<T, S>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Field<T> {
-    pub name: String,
+pub struct Field<T, S = String> {
+    pub name: S,
     /// Generic parameter `N` is `TypeArgRef(N)`.
     pub ty: T,
-    pub meta: Meta,
+    pub meta: Meta<S>,
     pub skip: bool,
     /// `@stream.done`.
     pub stream_done: bool,
@@ -234,33 +261,33 @@ pub struct Field<T> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Enum {
-    pub name: DeclarationName,
-    pub meta: Meta,
-    pub variants: Vec<Variant>,
+pub struct Enum<S = String, N = DeclarationName> {
+    pub name: N,
+    pub meta: Meta<S>,
+    pub variants: Vec<Variant<S>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Variant {
-    pub name: String,
-    pub meta: Meta,
+pub struct Variant<S = String> {
+    pub name: S,
+    pub meta: Meta<S>,
     pub skip: bool,
 }
 
 #[derive(Clone, Debug)]
-pub enum Declaration<T> {
-    Class(Class<T>),
-    Enum(Enum),
+pub enum Declaration<T, S = String, N = DeclarationName> {
+    Class(Class<T, S, N>),
+    Enum(Enum<S, N>),
 }
 
-impl<T> Declaration<T> {
-    pub fn name(&self) -> &DeclarationName {
+impl<T, S, N> Declaration<T, S, N> {
+    pub fn name(&self) -> &N {
         match self {
             Self::Class(class) => &class.name,
             Self::Enum(enm) => &enm.name,
         }
     }
-    fn fields(&self) -> &[Field<T>] {
+    fn fields(&self) -> &[Field<T, S>] {
         match self {
             Self::Class(class) => &class.fields,
             Self::Enum(_) => &[],
@@ -288,24 +315,33 @@ impl<T: PartialEq> PartialEq for Declaration<T> {
     }
 }
 
+/// A group member as the runtime hands it over.
+pub type Member<'a, S, N> = Declaration<TyTemplate<Head<'a>>, S, N>;
+
+/// What a group's content starts out holding: room for a small one.
+const CONTENT_CAPACITY: usize = 256;
+
 /// Make the blob of one group: `members` reach each other through their
 /// field types, and name any other declaration by a definition made before.
 /// Returns each member's definition, in the order given.
-pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
+pub fn group<S, N>(members: &[Member<'_, S, N>]) -> Vec<Definition>
+where
+    S: BorshSerialize,
+    N: BorshSerialize,
+{
     assert!(!members.is_empty(), "a group has a member");
     // One member starts its group, at position 0: nothing to choose.
     if let [member] = members {
-        let mut content = Vec::new();
-        let mut children = Vec::new();
-        put(&mut content, &1_u32);
-        encode(member, Some(&[0]), &mut content, &mut children);
-        return seal(&content, children, [0].into_iter());
+        return vec![single(member)];
     }
+    let mut content = Vec::with_capacity(CONTENT_CAPACITY);
+    let mut children = Vec::new();
     let digests: Vec<[u8; 16]> = members
         .iter()
         .map(|member| {
-            let mut content = Vec::new();
-            encode(member, None, &mut content, &mut Vec::new());
+            content.clear();
+            children.clear();
+            encode(member, Placement::Unplaced, &mut content, &mut children);
             let mut h = Hasher::new(HashDomain::CycleRoot);
             h.absorb(&content);
             h.finish().0
@@ -320,8 +356,11 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
     let mut tied: Vec<Vec<u32>> = Vec::new();
     for start in (0..members.len()).filter(|&at| digests[at] == least) {
         let (order, positions) = first_reference(members, start);
+        let capacity = best
+            .as_ref()
+            .map_or(CONTENT_CAPACITY, |best| best.content.len());
         let mut encoding = Encoding {
-            content: Vec::new(),
+            content: Vec::with_capacity(capacity),
             children: Vec::new(),
             positions,
         };
@@ -332,7 +371,7 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
         for &at in &order {
             encode(
                 &members[at],
-                Some(&encoding.positions),
+                Placement::At(&encoding.positions),
                 &mut encoding.content,
                 &mut encoding.children,
             );
@@ -353,22 +392,39 @@ pub fn group(members: &[Declaration<TyTemplate<Head>>]) -> Vec<Definition> {
     let Encoding {
         content, children, ..
     } = best.unwrap_or_else(|| unreachable!("a start"));
-    let positions = (0..members.len()).map(|member| {
-        tied.iter()
-            .map(|positions| positions[member])
-            .min()
-            .unwrap_or_else(|| unreachable!("a start"))
-    });
-    seal(&content, children, positions)
+    let blob = seal(&content, children);
+    (0..members.len())
+        .map(|member| Definition {
+            group: Arc::clone(&blob),
+            member: tied
+                .iter()
+                .map(|positions| positions[member])
+                .min()
+                .unwrap_or_else(|| unreachable!("a start")),
+        })
+        .collect()
+}
+
+/// [`group`] of one member: a declaration that names no declaration naming
+/// it back, so that a reference to a member is to itself, at position 0.
+pub fn single<S, N>(member: &Member<'_, S, N>) -> Definition
+where
+    S: BorshSerialize,
+    N: BorshSerialize,
+{
+    let mut content = Vec::with_capacity(CONTENT_CAPACITY);
+    let mut children = Vec::new();
+    put(&mut content, &1_u32);
+    encode(member, Placement::At(&[0]), &mut content, &mut children);
+    Definition {
+        group: seal(&content, children),
+        member: 0,
+    }
 }
 
 /// The blob of a group whose content is `content` and which names
-/// `children`, and each member's definition at `positions`.
-fn seal(
-    content: &[u8],
-    children: Vec<Arc<DefinitionBlob>>,
-    positions: impl Iterator<Item = u32>,
-) -> Vec<Definition> {
+/// `children`.
+fn seal(content: &[u8], children: Vec<Arc<DefinitionBlob>>) -> Arc<DefinitionBlob> {
     let mut h = Hasher::new(HashDomain::Blob);
     h.byte(RootTag::Definitions as u8);
     h.absorb(content);
@@ -392,17 +448,11 @@ fn seal(
     bytes.extend_from_slice(&0_u32.to_le_bytes());
     bytes.push(RootTag::Definitions as u8);
     bytes.extend_from_slice(content);
-    let blob = Arc::new(DefinitionBlob::new(
+    Arc::new(DefinitionBlob::new(
         id,
         bytes.into_boxed_slice(),
         children.into_boxed_slice(),
-    ));
-    positions
-        .map(|member| Definition {
-            group: Arc::clone(&blob),
-            member,
-        })
-        .collect()
+    ))
 }
 
 /// A group's content from one starting member: the groups it names, and
@@ -416,10 +466,7 @@ struct Encoding {
 /// Members in first-reference order from `start`, and each member's place
 /// in it. A member nothing reaches, which a group never has, comes after
 /// the rest, in the order given.
-fn first_reference(
-    members: &[Declaration<TyTemplate<Head>>],
-    start: usize,
-) -> (Vec<usize>, Vec<u32>) {
+fn first_reference<S, N>(members: &[Member<'_, S, N>], start: usize) -> (Vec<usize>, Vec<u32>) {
     let unplaced = u32::MAX;
     let mut positions = vec![unplaced; members.len()];
     let mut order = vec![start];
@@ -455,17 +502,27 @@ fn put(out: &mut Vec<u8>, value: &impl BorshSerialize) {
     value.serialize(out).expect("writing to memory");
 }
 
-/// One member's encoding. With `positions`, a member reference is written
-/// as its place; without, references to members are left out, as the
-/// starting member is chosen. Groups named for the first time are added to
+/// How an encoding writes a reference to a member.
+#[derive(Clone, Copy)]
+enum Placement<'p> {
+    /// Left out, as the starting member is chosen: every one is the same.
+    Unplaced,
+    /// At the member's place in the blob: `positions[member]`.
+    At(&'p [u32]),
+}
+
+/// One member's encoding. Groups named for the first time are added to
 /// `children`.
-fn encode(
-    member: &Declaration<TyTemplate<Head>>,
-    positions: Option<&[u32]>,
+fn encode<S, N>(
+    member: &Member<'_, S, N>,
+    placement: Placement<'_>,
     out: &mut Vec<u8>,
     children: &mut Vec<Arc<DefinitionBlob>>,
-) {
-    let meta = |out: &mut Vec<u8>, meta: &Meta| {
+) where
+    S: BorshSerialize,
+    N: BorshSerialize,
+{
+    let meta = |out: &mut Vec<u8>, meta: &Meta<S>| {
         put(out, &meta.description);
         put(out, &meta.alias);
         put(out, &meta.docstring);
@@ -481,6 +538,15 @@ fn encode(
     let count = |out: &mut Vec<u8>, n: usize| put(out, &u32::try_from(n).expect("bounded"));
     match member {
         Declaration::Class(class) => {
+            // Members placed in the order handed over, as a group of one is,
+            // are written as they are held.
+            let in_place = match placement {
+                Placement::At(positions) => positions
+                    .iter()
+                    .enumerate()
+                    .all(|(at, position)| *position as usize == at),
+                Placement::Unplaced => false,
+            };
             out.push(DefinitionKind::Class as u8);
             put(out, &class.name);
             meta(out, &class.meta);
@@ -489,17 +555,18 @@ fn encode(
             count(out, class.fields.len());
             for field in &class.fields {
                 put(out, &field.name);
-                let ty = field.ty.map_heads(&mut |head| match head {
-                    Head::Member(member) => DefinitionHead::Member(
-                        positions.map_or(u32::MAX, |positions| positions[*member as usize]),
-                    ),
-                    Head::Defined(name, definition) => DefinitionHead::Defined(DefinedHead {
-                        name: name.clone(),
-                        definition: DefinitionRef::of(definition),
-                    }),
-                    Head::Named(name) => DefinitionHead::Named(name.clone()),
-                });
-                put(out, &ty);
+                if in_place {
+                    put(out, &field.ty);
+                } else {
+                    let placed = field.ty.map_heads(&mut |head| match head {
+                        Head::Member(member) => Head::Member(match placement {
+                            Placement::At(positions) => positions[*member as usize],
+                            Placement::Unplaced => u32::MAX,
+                        }),
+                        other => other.clone(),
+                    });
+                    put(out, &placed);
+                }
                 // The same walk as decoding's, so the child table's order is
                 // the one a reader checks.
                 field.ty.visit_heads(&mut |head| {

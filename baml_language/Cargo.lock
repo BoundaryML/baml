@@ -1926,6 +1926,7 @@ dependencies = [
 name = "btel_bcs"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_type",
  "bcs_api",
  "btel_clock",
  "btel_processor",

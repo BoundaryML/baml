@@ -60,7 +60,7 @@ use crate::{
     graph::{
         BigintId, Graph, ObjectId, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId,
     },
-    hash::{Absorb, Digest, Hasher},
+    hash::{Absorb, BlobHasher, Digest, Hasher},
     pool::Storage,
     tags::HashDomain,
     walk::{self, Both, Length, Reference, Resolver, bigint_limb_bytes, infallible},
@@ -272,6 +272,8 @@ pub struct Shaper {
     /// This capture's blobs by ID: equal content is stored once.
     ids: FxHashMap<CasId, BlobIndex>,
     cuts: Cuts,
+    /// Hash input of the blob being shaped ([`BlobHasher`]).
+    hash_input: Vec<u8>,
 }
 
 /// Local number of an object outside the blob being shaped or written.
@@ -468,6 +470,7 @@ impl Shaper {
             named_set,
             ids,
             cuts,
+            hash_input,
             policy: _,
         } = self;
         slots.resize(shape.blobs.len(), UNNUMBERED);
@@ -485,7 +488,7 @@ impl Shaper {
                 named: &mut *named,
                 named_set: &mut *named_set,
             };
-            let mut visitor = Both(Hasher::new(HashDomain::Blob), Length::default());
+            let mut visitor = Both(BlobHasher::new(hash_input), Length::default());
             infallible(walk::root(&mut visitor, &mut numbering, graph, root));
             // Hashing a definition numbers its new references, which extends
             // `order` with the objects to hash next.
@@ -654,6 +657,7 @@ impl Resolver for Numbering<'_> {
     fn bigint(&mut self, id: BigintId) -> Option<u32> {
         self.shape.bigint_home(id).map(|blob| self.slot(blob))
     }
+    const DEFINITIONS: bool = true;
     fn definition(&mut self, group: CasId) {
         let new = if self.named.len() < NAMED_SEARCH {
             !self.named.contains(&group)

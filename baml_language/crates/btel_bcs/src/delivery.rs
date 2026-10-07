@@ -215,6 +215,8 @@ struct State {
     failure: Option<DeliveryError>,
     last_error: Option<DeliveryError>,
     loss_count: u64,
+    /// Losses that may have dropped a definition group a capture carried.
+    carried_resets: u64,
     metadata_replay_evictions: u64,
     progress: DeliveryProgress,
     recording_bytes: usize,
@@ -324,7 +326,20 @@ impl Shared {
         }
     }
 
+    /// A payload is lost. With `reset_cas` it may have held blobs offered
+    /// with it: the publisher offers them again, and every stream carries
+    /// its definition groups again, since one of those blobs may have been a
+    /// group that later captures name by ID only.
     fn lose(&self, error: DeliveryError, reset_cas: bool) {
+        self.lose_carrying(error, reset_cas, reset_cas);
+    }
+
+    /// [`Self::lose`], where `carried` says whether the payload may have
+    /// carried a definition group: only then does every stream carry its
+    /// groups again. A loss that cannot drop one (records alone, or blobs
+    /// that stay queued) leaves the streams as they are, so that it does not
+    /// make every following capture carry, and grow, again.
+    fn lose_carrying(&self, error: DeliveryError, reset_cas: bool, carried: bool) {
         let mut state = self.state.lock().unwrap();
         if state.failure.is_some() {
             return;
@@ -332,9 +347,10 @@ impl Shared {
         state.last_error = Some(error);
         state.loss_count = state.loss_count.saturating_add(1);
         state.progress.reset_cas |= reset_cas;
-        // The lost payload may have carried a definition group that later
-        // captures name by ID only.
-        btel_snapshot::forget_carried();
+        if carried {
+            state.carried_resets = state.carried_resets.saturating_add(1);
+            btel_snapshot::forget_carried();
+        }
     }
 
     fn initial_connection_failed(&self, error: DeliveryError) -> DeliveryError {
@@ -548,6 +564,12 @@ impl BcsDeliveryHandle {
         self.shared.state.lock().unwrap().loss_count
     }
 
+    /// Saturating count of losses that may have dropped a definition group,
+    /// each of which made every stream carry its groups again.
+    pub fn carried_resets(&self) -> u64 {
+        self.shared.state.lock().unwrap().carried_resets
+    }
+
     /// Saturating count of definition segments evicted from bounded replay retention.
     pub fn metadata_replay_evictions(&self) -> u64 {
         self.shared.state.lock().unwrap().metadata_replay_evictions
@@ -563,6 +585,16 @@ impl BcsDeliveryHandle {
 
     pub(crate) fn record_payload_loss(&self, error: DeliveryError, reset_cas: bool) {
         self.shared.lose(error, reset_cas);
+    }
+
+    /// A capture dropped for room before any of its blobs was offered. A
+    /// later capture offers what it shared with this one, so nothing needs
+    /// offering again; but with `carried`, it carried a definition group no
+    /// other offer holds, which its stream will not carry again unless every
+    /// stream forgets what it carried.
+    pub(crate) fn record_capture_loss(&self, carried: bool) {
+        self.shared
+            .lose_carrying(DeliveryError::Capacity, false, carried);
     }
 
     /// Most recent loss, or the fatal lifecycle error if delivery was disabled.
@@ -2021,6 +2053,13 @@ mod tests {
         assert_eq!(handle.last_error(), None);
         handle.record_payload_loss(DeliveryError::Encoding, true);
         handle.record_payload_loss(DeliveryError::Capacity, false);
+        // Only the loss that may have dropped offered blobs makes the
+        // streams carry their definition groups again.
+        assert_eq!(handle.carried_resets(), 1);
+        handle.record_capture_loss(false);
+        assert_eq!(handle.carried_resets(), 1);
+        handle.record_capture_loss(true);
+        assert_eq!(handle.carried_resets(), 2);
         assert_eq!(handle.loss_count(), u64::MAX);
         assert_eq!(handle.last_error(), Some(DeliveryError::Capacity));
         assert!(!handle.is_disabled());

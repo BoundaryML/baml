@@ -415,7 +415,7 @@ fn long_shallow_types_decode_whole() {
             definition::group(&[definition::Declaration::Class(definition::Class {
                 name,
                 type_params: 0,
-                meta: definition::Meta::default(),
+                meta: definition::Meta::<String>::default(),
                 stream_done: false,
                 fields: vec![],
             })])
