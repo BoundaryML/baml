@@ -10,7 +10,8 @@ getattr`, then memoizes.
 
 from __future__ import annotations
 import importlib
-from typing import Dict, Tuple, Type
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Protocol, Tuple, Type
 
 from .errors import BamlError
 
@@ -32,6 +33,37 @@ _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {
     ("baml_bridge._stream", "BamlStream"): "ai.stream.Stream",
     ("baml_bridge._function_spec", "BamlFunctionSpec"): "ai.FunctionSpec",
 }
+
+
+@dataclass(frozen=True)
+class BamlClassInstance:
+    """An instance of a BAML class that has no Python class.
+
+    A thrown value has no declared Python type, and its class may be one that
+    no generated SDK covers: a process that uses `baml_bridge` alone has no
+    generated classes at all, and a program can make a class at run time. The
+    instance then reaches the caller as this, with the name of its BAML class
+    and its fields under their BAML names.
+    """
+
+    class_name: str
+    fields: Dict[str, Any]
+
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{name}={value!r}" for name, value in self.fields.items())
+        return f"{self.class_name}({fields})"
+
+
+class TypeLookup(Protocol):
+    """How a decode finds the Python type of a BAML name. `None` says that the
+    name has no Python type, and the decoder then stands in a value that needs
+    none (`BamlClassInstance` for an instance)."""
+
+    def get_class(self, fqn: str) -> Optional[Type]: ...
+
+    def get_enum(self, fqn: str) -> Optional[Type]: ...
+
+    def get_type_alias(self, fqn: str) -> Optional[object]: ...
 
 
 class BamlTypeMap:
@@ -146,6 +178,12 @@ class BamlTypeMap:
         self._alias_cache[fqn] = alias
         return alias
 
+    def where_generated(self) -> "_GeneratedTypes":
+        """This map for a value with no declared Python type: a name that
+        codegen emitted no entry for has no Python type, where the lookups of
+        the map itself raise."""
+        return _GeneratedTypes(self)
+
     # — reverse lookup (replaces _baml_type_name ClassVar pathway) —
 
     def py_type_to_baml_type(self, cls: type) -> str:
@@ -183,6 +221,33 @@ class BamlTypeMap:
             if fqn in self._enum_lazy and self.get_enum(fqn) is base:
                 return fqn, True, base
         return None
+
+
+class _GeneratedTypes:
+    """`BamlTypeMap.where_generated`."""
+
+    __slots__ = ("_type_map",)
+
+    def __init__(self, type_map: BamlTypeMap) -> None:
+        self._type_map = type_map
+
+    def get_class(self, fqn: str) -> Optional[Type]:
+        type_map = self._type_map
+        if fqn not in type_map._class_cache and fqn not in type_map._class_lazy:
+            return None
+        return type_map.get_class(fqn)
+
+    def get_enum(self, fqn: str) -> Optional[Type]:
+        type_map = self._type_map
+        if fqn not in type_map._enum_cache and fqn not in type_map._enum_lazy:
+            return None
+        return type_map.get_enum(fqn)
+
+    def get_type_alias(self, fqn: str) -> Optional[object]:
+        type_map = self._type_map
+        if fqn not in type_map._alias_cache and fqn not in type_map._alias_lazy:
+            return None
+        return type_map.get_type_alias(fqn)
 
 
 _TYPE_MAP = BamlTypeMap()

@@ -19,6 +19,9 @@ import sys
 import pytest
 
 from baml_bridge import (
+    BamlClassInstance,
+    BamlError,
+    BamlPanic,
     BamlRuntime,
     FunctionResult,
     default_unhandled_spawn_error_handler,
@@ -574,21 +577,26 @@ class TestCallFunctionSync:
         assert next_value() == 42
 
     def test_missing_argument_raises(self):
-        """Missing required argument raises an error.
-
-        The engine reports this as ``Invalid argument: <name>`` rather than
-        ``Missing argument``; the test only asserts that *an* argument-
-        related error surfaces so it survives that phrasing tweak.
-        """
+        """A missing required argument is the error the engine threw. This
+        process has no generated SDK, so the thrown value is of a class with
+        no Python class."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        with pytest.raises(Exception, match="argument"):
+        with pytest.raises(BamlError, match="argument") as exc_info:
             call_function_sync(rt,"ReturnNumber", {})
+        assert exc_info.value.class_name == "baml.errors.InvalidArgument"
+        thrown = exc_info.value.value
+        assert isinstance(thrown, BamlClassInstance)
+        assert thrown.class_name == "baml.errors.InvalidArgument"
+        assert "argument" in thrown.fields["message"]
 
-    def test_function_not_found_raises(self):
-        """Calling a nonexistent function raises an error."""
+    def test_function_not_found_is_a_panic(self):
+        """The program has no such function: no BAML code ran that could catch
+        it."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        with pytest.raises(Exception, match="not found"):
+        with pytest.raises(BamlPanic, match="not found") as exc_info:
             call_function_sync(rt,"NoSuchFunction", {})
+        assert exc_info.value.class_name == "baml.panics.SdkPanic"
+        assert isinstance(exc_info.value.value, BamlClassInstance)
 
 
 # ============================================================================

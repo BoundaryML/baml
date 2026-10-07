@@ -30,7 +30,7 @@ from baml_bridge.baml_py import (
     _live_handle_count,
     _seed_generic_media_handle,
 )
-from baml_bridge.errors import BamlError
+from baml_bridge.errors import BamlError, BamlPanic
 
 
 CALLBACK_BAML = """\
@@ -224,16 +224,17 @@ def test_callable_raising_during_result_property_still_completes():
 def test_host_result_successful_encode_transfers_capability_clone_to_engine():
     """The handle itself encodes successfully, so the engine receives and
     drains its cloned key before rejecting this synthetic generic-media handle
-    against the callback contract. The original Python handle remains live."""
+    against the `string` that the callback declares. The original Python
+    handle remains live."""
     rt = _make_runtime()
     key, handle_type = _seed_generic_media_handle()
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
-    with pytest.raises(Exception, match="TypeMismatch"):
+    with pytest.raises(BamlPanic, match="string"):
         call_function_sync(
             rt,
-            "ConsumeUnknownCb",
+            "CallCb",
             {"callback": lambda _x: handle, "x": 7},
         )
 
@@ -316,33 +317,25 @@ def test_encode_error_releases_registered_callables(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_normal_user_exception_routes_to_BamlError_not_BamlPanic():
-    """Regression guard for the BamlError vs BamlPanic dichotomy. A
-    *normal* user exception raised by the lambda is a user-level error
-    (catchable), not a bridge-layer fault — it must surface as
-    `BamlError`, never `BamlPanic`. If a future change accidentally
-    routed every host throw through `send_dispatch_bridge_failure`, the
-    test fails because `BamlPanic` subclasses `BaseException` (not
-    `Exception`), so the `pytest.raises(Exception)` check below would
-    miss it.
+def test_normal_user_exception_is_reraised_and_is_not_a_BamlPanic():
+    """Regression guard for the error vs panic dichotomy. A *normal* user
+    exception raised by the lambda is a user-level error (catchable), not a
+    bridge-layer fault: the caller gets the exception object the callback
+    raised, never a `BamlPanic`. If a future change accidentally routed every
+    host throw through `send_dispatch_bridge_failure`, the test fails because
+    `BamlPanic` subclasses `BaseException` (not `Exception`), so the
+    `pytest.raises(Exception)` check below would miss it.
     """
-    from baml_bridge.errors import BamlError, BamlPanic
-
     rt = _make_runtime()
+    raised = ValueError("ordinary user error")
 
     def cb(_x: int) -> str:
-        raise ValueError("ordinary user error")
+        raise raised
 
     with pytest.raises(Exception) as exc_info:
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
 
-    assert isinstance(exc_info.value, BamlError), (
-        f"expected BamlError, got {type(exc_info.value).__name__}"
-    )
-    assert not isinstance(exc_info.value, BamlPanic), (
-        "user exceptions must NOT route as BamlPanic — that's reserved "
-        "for bridge-layer faults like missing-callable-for-key"
-    )
+    assert exc_info.value is raised
 
 
 def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():

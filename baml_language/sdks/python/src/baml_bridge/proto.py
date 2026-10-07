@@ -41,7 +41,7 @@ from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlRuntimeValue
 from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
-from .typemap import BamlTypeMap, get_type_map
+from .typemap import BamlClassInstance, TypeLookup, get_type_map
 
 
 def _is_pydantic_model(value: Any) -> bool:
@@ -877,16 +877,16 @@ _TY_MEDIA_FQN = {
 }
 
 
-def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any:
+def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: TypeLookup) -> Any:
     """Walk a wire `BamlTy` (`baml_type.proto`) and return the corresponding Python
     type, used for `cls[args]` parameterization on decode.
 
     The runtime inverse of `python_type_to_wire_ty` / `_fill_wire_ty` in the
     same module (the inbound writer) and the mirror of the engine's
     `ty_encode::runtime_ty_to_proto_ty`. A position with no concrete Python
-    binding (a structural union, a type variable, an opaque/runtime-only type)
-    widens to `typing.Any` — an unbound wildcard for parameterization purposes
-    (02a §5).
+    binding (a structural union, a type variable, an opaque/runtime-only type,
+    a name that `type_map` has no Python type for) widens to `typing.Any` — an
+    unbound wildcard for parameterization purposes (02a §5).
     """
     which = ty.WhichOneof("ty")
     # Absent variant or the unknown/top type → wildcard.
@@ -896,11 +896,16 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any
         return _TY_PRIMITIVE_PY.get(ty.primitive.kind, typing.Any)
     if which == "class_ty":
         cls = type_map.get_class(ty.class_ty.name)
+        if cls is None:
+            return typing.Any
         return _parameterize_tys(cls, ty.class_ty.type_args, type_map)
     if which == "enum":
-        return type_map.get_enum(ty.enum.name)
+        enum_cls = type_map.get_enum(ty.enum.name)
+        return typing.Any if enum_cls is None else enum_cls
     if which == "type_alias":
         alias = type_map.get_type_alias(ty.type_alias.name)
+        if alias is None:
+            return typing.Any
         return _parameterize_tys(alias, ty.type_alias.type_args, type_map)
     if which == "list":
         return List[_ty_to_python_type(ty.list.item, type_map)]  # type: ignore[valid-type]
@@ -932,9 +937,10 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any
         if fqn is None:
             return typing.Any
         try:
-            return type_map.get_class(fqn)
+            media_cls = type_map.get_class(fqn)
         except BamlError:
             return typing.Any
+        return typing.Any if media_cls is None else media_cls
     # enum_variant / interface / function / future / rust_type / meta_type /
     # resource / prompt_ast / void / type_var /
     # associated_type_projection / never — no concrete Python binding in a
@@ -961,7 +967,7 @@ def _decode_ty_literal(literal) -> Any:
     return None
 
 
-def _parameterize_tys(cls, type_args, type_map: BamlTypeMap):
+def _parameterize_tys(cls, type_args, type_map: TypeLookup):
     """Apply a list of wire `BamlTy` generic args to a symbol via `cls[arg_types…]`.
 
     Works for any subscriptable symbol — Pydantic generics, generic type
@@ -994,13 +1000,15 @@ def _decode_media(media) -> Any:
     return constructor(getattr(media, source), mime_type=mime_type)
 
 
-def _decode_prompt_ast(prompt_ast, type_map: BamlTypeMap) -> Any:
+def _decode_prompt_ast(prompt_ast, type_map: TypeLookup) -> Any:
     """Reconstruct the generated ``ai.Prompt`` wrapper around owned data."""
     cls = type_map.get_class("ai.Prompt")
+    portable = _PortablePromptAst(prompt_ast)
+    if cls is None:
+        return BamlClassInstance("ai.Prompt", {"_data": portable})
     if not _is_pydantic_model_class(cls):
         raise BamlError("The generated ai.Prompt host type is not a Pydantic model")
 
-    portable = _PortablePromptAst(prompt_ast)
     if any(
         (field.serialization_alias or field.alias or name) == "_data"
         for name, field in cls.model_fields.items()
@@ -1020,7 +1028,7 @@ def _decode_prompt_ast(prompt_ast, type_map: BamlTypeMap) -> Any:
 
 
 def _decode_class(
-    class_value, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+    class_value, type_map: TypeLookup, ownership: Optional[Counter[int]] = None
 ) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
@@ -1029,6 +1037,9 @@ def _decode_class(
     Generic classes parameterize before validation so static-checker
     annotations (`Box[int]`) line up with the runtime instance —
     `13b` §3.4.
+
+    A class that `type_map` has no Python class for decodes to a
+    `BamlClassInstance`.
     """
     field_dict = {
         entry.key: decode_value(entry.value, type_map, ownership)
@@ -1037,6 +1048,8 @@ def _decode_class(
     # Emit always fully qualifies, so the engine FQN already matches
     # what the typemap consumes (`12a-namespace-rules.md §5`).
     cls = type_map.get_class(class_value.name)
+    if cls is None:
+        return BamlClassInstance(class_value.name, field_dict)
 
     # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
     # `BamlPyHandle`. The engine emits them as
@@ -1084,13 +1097,15 @@ def _decode_class(
     return instance
 
 
-def _decode_enum(enum_value, type_map: BamlTypeMap) -> Any:
+def _decode_enum(enum_value, type_map: TypeLookup) -> Any:
     """Resolve a `BamlValueEnum` to a member of the generated enum class."""
     variant = enum_value.value
     fqn = enum_value.name
     try:
         cls = type_map.get_enum(fqn)
     except BamlError:
+        cls = None
+    if cls is None:
         # Runtime-created enums have no generated Python class. The loose host
         # representation is their post-alias variant name (H-5).
         return variant
@@ -1103,7 +1118,7 @@ def _decode_enum(enum_value, type_map: BamlTypeMap) -> Any:
 
 
 def _decode_handle(
-    handle, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+    handle, type_map: TypeLookup, ownership: Optional[Counter[int]] = None
 ) -> Any:
     """Wrap `HANDLE_TABLE[handle.key]` in a `BamlPyHandle` and dispatch
     on the wire `handle.handle_type` field. The `BamlPyHandle` itself
@@ -1356,14 +1371,20 @@ def _decode_host_call_args(data: bytes) -> Tuple[Tuple[Any, ...], Dict[str, Any]
 
 
 def decode_value(
-    holder, type_map: BamlTypeMap, ownership: Optional[Counter[int]] = None
+    holder, type_map: TypeLookup, ownership: Optional[Counter[int]] = None
 ) -> Any:
     """Convert a `BamlOutboundValue` message to a typed Python value.
 
-    Every recursive call threads the same `BamlTypeMap` — the only seam
+    Every recursive call threads the same `type_map` — the only seam
     where the dispatcher consults the process-global registry is the
     outer `decode_call_result` callsite, which passes `get_type_map()`.
     Tests build a fresh `BamlTypeMap` and call this directly.
+
+    `type_map` also decides what a class with no Python class is. A
+    `BamlTypeMap` raises for it: the caller of a typed function must not get
+    a stand-in for the model it declares. `BamlTypeMap.where_generated`
+    decodes its instances to `BamlClassInstance`, for a value that has no
+    declared Python type.
     """
     which = holder.WhichOneof("value")
     if which is None or which == "null_value":
@@ -1417,26 +1438,30 @@ def decode_value(
 
 
 def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
-    """If `decoded` is a `baml.errors.HostCallable` pydantic instance
+    """If `decoded` is a `baml.errors.HostCallable` instance (of the
+    generated class, or a `BamlClassInstance` where there is none)
     whose `_handle` points at a still-live entry in this runtime's
     host-value registry, return the *original* Python exception object.
     Otherwise return `None` (foreign runtime, released key, or
     unexpected shape) so the caller falls back to the metadata-bearing
     `BamlError` wrapper.
     """
-    private = getattr(decoded, "__pydantic_private__", None)
-    handle = private.get("_handle") if isinstance(private, dict) else None
-    if handle is None and _is_pydantic_model_class(type(decoded)):
-        values = vars(decoded)
-        for name, field in type(decoded).model_fields.items():
-            aliases = (
-                field.validation_alias,
-                field.alias,
-                field.serialization_alias,
-            )
-            if "_handle" in aliases:
-                handle = values.get(name)
-                break
+    if isinstance(decoded, BamlClassInstance):
+        handle = decoded.fields.get("_handle")
+    else:
+        private = getattr(decoded, "__pydantic_private__", None)
+        handle = private.get("_handle") if isinstance(private, dict) else None
+        if handle is None and _is_pydantic_model_class(type(decoded)):
+            values = vars(decoded)
+            for name, field in type(decoded).model_fields.items():
+                aliases = (
+                    field.validation_alias,
+                    field.alias,
+                    field.serialization_alias,
+                )
+                if "_handle" in aliases:
+                    handle = values.get(name)
+                    break
     if handle is None:
         return None
     from .baml_py import lookup_host_value
@@ -1472,9 +1497,14 @@ def decode_call_result(data: bytes) -> Any:
     """Decode a `BamlOutboundResult` envelope to a Python value, raising
     `BamlError` / `BamlPanic` for the thrown arms (31c / 31f).
 
-    - `ok` → the decoded return value.
+    - `ok` → the decoded return value. A class with no Python class is an
+      error: the return value has a declared type that a typed caller relies
+      on.
     - `error` → `raise BamlError` with `.value` = decoded value,
-      `.baml_trace` = the pre-rendered frame lines.
+      `.baml_trace` = the pre-rendered frame lines. A thrown value has no
+      declared Python type and must reach the caller, so an instance of a
+      class with no Python class is a `BamlClassInstance` here and in a
+      panic: an error of the decode would replace the error that was thrown.
     - `panic` → if `is_exit_panic`, `os._exit(exit_code)`
       (a clean `baml.sys.exit` — terminate the whole process from any
       thread/task, *not* a catchable `SystemExit`); otherwise
@@ -1484,10 +1514,11 @@ def decode_call_result(data: bytes) -> Any:
     result.ParseFromString(data)
     which = result.WhichOneof("result")
     type_map = get_type_map()
+    thrown_types = type_map.where_generated()
 
     if which == "error":
         msg = result.error
-        decoded = decode_value(msg.value, type_map)
+        decoded = decode_value(msg.value, thrown_types)
         # A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
         # synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
         # type error — surface it as Python's native `TypeError` rather than a
@@ -1495,9 +1526,12 @@ def decode_call_result(data: bytes) -> Any:
         # `TypeVar` that can't be inferred and must be specified, conflicting
         # variance occurrences) and ordinary argument-type mismatches.
         if _outbound_class_fqn(msg.value) == "baml.errors.TypeMismatch":
-            message = getattr(decoded, "message", None)
-            if message is None and isinstance(decoded, dict):
-                message = decoded.get("message")
+            if isinstance(decoded, BamlClassInstance):
+                message = decoded.fields.get("message")
+            else:
+                message = getattr(decoded, "message", None)
+                if message is None and isinstance(decoded, dict):
+                    message = decoded.get("message")
             err = TypeError(message if message is not None else str(decoded))
             # Let `attach_baml_traceback` splice the BAML frames onto the
             # native exception (exception instances accept ad-hoc attributes).
@@ -1535,7 +1569,7 @@ def decode_call_result(data: bytes) -> Any:
         )
         raise attach_baml_traceback(
             panic_type(
-                decode_value(msg.value, type_map),
+                decode_value(msg.value, thrown_types),
                 baml_trace=list(msg.trace),
                 class_name=_outbound_class_fqn(msg.value),
             )

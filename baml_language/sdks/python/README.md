@@ -90,6 +90,26 @@ baml_bridge.set_unhandled_spawn_error_handler(report)
   `None` restores `default_unhandled_spawn_error_handler`. A handler can call
   the default for the errors that must end the process.
 
+## Thrown values with no Python class
+
+A `BamlError` or `BamlPanic` carries the thrown BAML value as `.value`. Where
+the generated SDK has a class for it, `.value` is an instance of that class.
+A thrown value can also be of a class that has no Python class: a process that
+uses `baml_bridge` with no generated SDK has none, and a program can make a
+class at run time. Such an instance is a `baml_bridge.BamlClassInstance`:
+
+```python
+try:
+    call_function_sync(runtime, "missing", {}).result()
+except BamlError as error:
+    error.class_name                # "baml.errors.InvalidArgument"
+    error.value.class_name          # the same name, also on a nested instance
+    error.value.fields["message"]   # fields under their BAML names
+```
+
+A returned value is different: it has a declared type that a typed caller
+relies on, so a returned instance of a class with no Python class is an error.
+
 ## Requirements
 
 - Python 3.10+

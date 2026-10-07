@@ -46,6 +46,7 @@ from .proto import (
     python_type_to_wire_ty,
 )
 from .typemap import (
+    BamlClassInstance,
     BamlTypeMap,
     set_type_map,
     get_type_map,
@@ -574,6 +575,7 @@ __all__ = [
     "call_function",
     "call_function_sync",
     "define_function",
+    "BamlClassInstance",
     "BamlTypeMap",
     "set_type_map",
     "get_type_map",
