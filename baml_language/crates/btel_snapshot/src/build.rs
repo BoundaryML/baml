@@ -482,6 +482,15 @@ impl Builder {
             },
         }
     }
+    /// [`Leaves::define`], outside any container.
+    #[inline]
+    pub fn define(&mut self, definition: &Definition, carried: &mut Carried) -> DefinitionRef {
+        if !carried.carries(&definition.group) {
+            let Storage { graph, meter, .. } = &mut *self.0;
+            carry(&mut graph.definitions, carried, meter, &definition.group);
+        }
+        DefinitionRef::of(definition)
+    }
     /// A class or enum declaration. Its name is held beside the objects.
     /// With its recorded definition (from [`Leaves::define`]), the
     /// declaration is identified by it rather than by its runtime tag.

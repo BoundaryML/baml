@@ -495,17 +495,7 @@ impl Visitor for Hasher {
         Ok(())
     }
     fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error> {
-        // Encoded whole and hashed in one call: the same input as hashing
-        // each small piece, for less. A longer one is hashed piece by piece.
-        let mut encoded = [0_u8; 256];
-        let mut rest = &mut encoded[..];
-        let fits = identity.serialize(&mut rest).is_ok();
-        let len = 256 - rest.len();
-        if fits {
-            self.absorb(&encoded[..len]);
-        } else {
-            self.borsh(identity);
-        }
+        self.borsh(identity);
         Ok(())
     }
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {

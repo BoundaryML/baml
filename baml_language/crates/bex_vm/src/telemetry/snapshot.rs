@@ -174,14 +174,18 @@ impl Scratch {
                             let Object::Class(class) = (unsafe { instance.class.get() }) else {
                                 unreachable!("instance class")
                             };
-                            let type_arguments: SmallVec<[OwnedType; 2]> = {
-                                let mut leaves = b.leaves();
-                                instance
-                                    .class_type_args
-                                    .iter()
-                                    .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
-                                    .collect()
-                            };
+                            // A generic instance's type arguments; most have none.
+                            let type_arguments: SmallVec<[OwnedType; 2]> =
+                                if instance.class_type_args.is_empty() {
+                                    SmallVec::new()
+                                } else {
+                                    let mut leaves = b.leaves();
+                                    instance
+                                        .class_type_args
+                                        .iter()
+                                        .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
+                                        .collect()
+                                };
                             b.instance(
                                 declaration,
                                 type_arguments,
@@ -200,13 +204,13 @@ impl Scratch {
                 Object::Class(class) => {
                     // SAFETY: inherited heap permit.
                     let definition = unsafe { definitions::of(ptr) }
-                        .map(|definition| b.leaves().define(definition, &mut self.carried));
+                        .map(|definition| b.define(definition, &mut self.carried));
                     b.declaration(&class.name, class.type_tag, false, definition)
                 }
                 Object::Enum(enm) => {
                     // SAFETY: inherited heap permit.
                     let definition = unsafe { definitions::of(ptr) }
-                        .map(|definition| b.leaves().define(definition, &mut self.carried));
+                        .map(|definition| b.define(definition, &mut self.carried));
                     b.declaration(&enm.name, enm.type_tag, true, definition)
                 }
                 Object::Cell(cell) => {
