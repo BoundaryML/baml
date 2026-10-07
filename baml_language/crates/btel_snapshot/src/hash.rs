@@ -185,6 +185,7 @@ pub(crate) struct TypeLeaf {
 /// small pieces a type has. A type without parts has its leaf made once.
 pub(crate) fn ty(ty: &OwnedType) -> TypeLeaf {
     use baml_type::RealizedTy as T;
+    static CONSTANT: [OnceLock<TypeLeaf>; 14] = [const { OnceLock::new() }; 14];
     let constant = match ty {
         T::Int => 0,
         T::Bigint => 1,
@@ -213,7 +214,6 @@ pub(crate) fn ty(ty: &OwnedType) -> TypeLeaf {
         | T::Future(..)
         | T::TypeAlias(_) => return encoded(ty),
     };
-    static CONSTANT: [OnceLock<TypeLeaf>; 14] = [const { OnceLock::new() }; 14];
     *CONSTANT[constant].get_or_init(|| encoded(ty))
 }
 

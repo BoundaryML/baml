@@ -61,6 +61,7 @@ impl std::fmt::Debug for DefinitionBlob {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DefinitionBlob")
             .field("id", &self.id)
+            .field("carried_by", &self.carried_by)
             .field("len", &self.bytes.len())
             .field("children", &self.children.len())
             .finish()

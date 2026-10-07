@@ -184,11 +184,12 @@ impl Leaves<'_> {
     /// [`Self::ty`] for a caller that knows whether a head of `ty` names a
     /// definition.
     pub fn described(&mut self, ty: OwnedType, defined: bool) -> TypeId {
-        debug_assert_eq!(defined, {
+        #[cfg(debug_assertions)]
+        {
             let mut any = false;
             ty.visit_heads(&mut |head| any |= matches!(head, TypeIdentity::Defined(_)));
-            any
-        });
+            assert_eq!(defined, any, "the caller knows whether a head is defined");
+        }
         let id = TypeId(u32::try_from(self.types.len()).expect("type arena exhausted"));
         self.types.push(
             Type {
