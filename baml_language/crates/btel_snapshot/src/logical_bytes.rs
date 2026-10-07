@@ -14,16 +14,39 @@ impl Blob<'_> {
     /// eight-byte field ID and the full value cost; captured generic args add their
     /// type costs. Lists/maps add their captured declared element/key/value type
     /// costs and every full child value cost. Reflected Type values add the cost of
-    /// the represented type: `null=8`, `List<int>[7,7]=48`,
-    /// `map<string,int>{a:7}=49`.
+    /// the represented type.
+    ///
+    /// Worked examples (all costs are bytes):
+    /// ```text
+    /// List<int>[7, 7]:
+    ///   8 list ID + 8 element type + 2 * (8 int ID + 8 payload) = 48
+    ///
+    /// map<string, int>{"a": 7}:
+    ///   8 map ID + 8 key type + 8 value type
+    ///   + (8 string ID + 1 UTF-8 byte) + (8 int ID + 8 payload) = 49
+    ///
+    /// Example { a: 7 }:
+    ///   8 class ID + 8 field ID + (8 int ID + 8 payload) = 32
+    ///
+    /// List<int | string>[7, "hi"]:
+    ///   8 list ID + (8 union ID + 8 int type + 8 string type)
+    ///   + (8 int ID + 8 payload) + (8 string ID + 2 UTF-8 bytes) = 58
+    ///
+    /// A reflected type value representing List<int>:
+    ///   8 Type ID + (8 list ID + 8 element type) = 24
+    /// ```
     ///
     /// Captured type trees count eight per node plus constituent/generic types.
     /// Interfaces add eight per associated-binding ID; functions count parameter,
     /// return and throws types, excluding parameter names/modes. Literal types add
     /// their scalar payload (no extra type prefix); enum-variant types add eight
     /// for the variant ID. Nominal/alias leaves do not expand unavailable schemas.
-    /// Declaration names/source, omitted/truncated content and internal wrappers
-    /// add no bytes. This is a semantic approximation, not an encoded byte length.
+    /// Declaration names/source, pure omission/truncation markers and internal
+    /// wrappers add no bytes. Partially truncated containers still count their
+    /// type information and retained values: a `List<int>` retaining two integers
+    /// from 1,000 costs 48, just like the complete two-element list above. The
+    /// 998 uncaptured integers contribute zero. This is a semantic approximation,
+    /// not an encoded byte length.
     ///
     /// Every repeated reference counts full content again; a cycle backedge counts
     /// only its 16-byte CAS ID. Media adds decoded bytes and captured URL/path/MIME
@@ -365,6 +388,18 @@ mod tests {
             |b| {
                 let ty = b.leaves().ty(OwnedType::int());
                 let list = b.list(ty, [SnapshotValue::Int(7); 2].into_iter(), |_, v| v);
+                object(b, list)
+            },
+            48,
+        );
+        check(
+            |b| {
+                let ty = b.leaves().ty(OwnedType::int());
+                let mut list = b.list(ty, [SnapshotValue::Int(7); 2].into_iter(), |_, v| v);
+                if let SnapshotObject::List { original_len, .. } = &mut list {
+                    *original_len = 1_000;
+                }
+                assert!(list.is_cut());
                 object(b, list)
             },
             48,
