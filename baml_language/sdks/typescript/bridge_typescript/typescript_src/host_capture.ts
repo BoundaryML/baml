@@ -128,10 +128,14 @@ export function capture(value: unknown): string {
                     [util.types.isNumberObject, Number.prototype.valueOf],
                     [util.types.isBooleanObject, Boolean.prototype.valueOf],
                     [util.types.isStringObject, String.prototype.valueOf],
-                    [util.types.isBigIntObject, BigInt.prototype.valueOf],
                     [util.types.isSymbolObject, Symbol.prototype.valueOf],
                 ] as const) {
                     if (matches(value)) return copy(Reflect.apply(unbox, value, []), depth);
+                }
+                // BigInt is the remaining boxed primitive; Node 20 typings do not
+                // expose isBigIntObject. The intrinsic valueOf skips application hooks.
+                if (util.types.isBoxedPrimitive(value)) {
+                    return copy(BigInt.prototype.valueOf.call(value), depth);
                 }
                 if (util.types.isDate(value)) {
                     return Number.isFinite(nativeDateTime.call(value)) ? copy(nativeDateISO.call(value), depth) : copy({ $date: 'invalid' }, depth);
