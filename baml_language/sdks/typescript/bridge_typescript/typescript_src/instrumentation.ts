@@ -36,6 +36,9 @@ function optionsHandle(options: unknown): BamlHandle | undefined {
     return handle;
 }
 
+/** Wrap a host function, capturing outputs and errors by default.
+ * Inputs require explicit options; pass trace.empty_span() for no value capture.
+ */
 export function instrument<F extends Body>(body: F): F;
 export function instrument<F extends Body>(options: unknown, body: F, display?: Display): F;
 export function instrument<F extends Body>(optionsOrBody: unknown, body?: F, display?: Display): F {

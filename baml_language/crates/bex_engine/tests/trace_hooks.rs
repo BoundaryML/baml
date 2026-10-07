@@ -69,7 +69,7 @@ async fn hook_and_target_call_paths_share_the_authored_caller() {
         BexEngine::new_with_telemetry_recording(
             common::compile_for_engine(
                 r#"
-function select() -> trace.Options throws never { trace.rich() }
+function select() -> trace.Options throws never { trace.span(inputs = true) }
 /// baml:$trace=select
 function target() -> int { 42 }
 function main() -> int { target() }
@@ -421,6 +421,7 @@ async fn telemetry_off_selects_ordinary_bytecode_and_never_executes_hooks() {
                     | bex_vm_types::bytecode::OpCode::TraceHookTiming
                     | bex_vm_types::bytecode::OpCode::TraceHookSpan
                     | bex_vm_types::bytecode::OpCode::TraceHookRich
+                    | bex_vm_types::bytecode::OpCode::TraceHookEmptySpan
             ));
             pc += opcode.encoded_size();
         }
@@ -475,22 +476,22 @@ function hidden_target() -> bool { trace.current_span_id() != null }
 function timing_target() -> bool { trace.current_span_id() != null }
 /// baml:$trace=trace.span
 function span_target() -> bool { trace.current_span_id() != null }
-/// baml:$trace=trace.rich
+/// baml:$trace=trace.empty_span
 function rich_target() -> bool { trace.current_span_id() != null }
 /// baml:$trace=trace.hidden
 function reserved_target(expected: trace.SpanId) -> bool { trace.current_span_id() == expected }
 function hidden() -> trace.Options throws never {
-    assert.equal(hidden_target($trace = trace.rich()), true);
+    assert.equal(hidden_target($trace = trace.span(inputs = true)), true);
     trace.context(metadata = { "user_hook": true })
 }
 /// baml:$trace=hidden
 function user_target() -> bool { trace.current_context().metadata["user_hook"] == true }
 function main() -> int {
-    assert.equal(hidden_target($trace = trace.rich()), false);
-    assert.equal(timing_target($trace = trace.rich()), false);
+    assert.equal(hidden_target($trace = trace.span(inputs = true)), false);
+    assert.equal(timing_target($trace = trace.span(inputs = true)), false);
     assert.equal(span_target($trace = trace.hidden()), true);
     assert.equal(rich_target($trace = trace.hidden()), true);
-    let reserved = trace.rich().reserve();
+    let reserved = trace.span(inputs = true).reserve();
     assert.equal(reserved_target(reserved.id(), $trace = reserved), true);
     assert.equal(user_target(), true);
     42
@@ -501,7 +502,7 @@ function main() -> int {
         ("user.hidden_target", Instruction::TraceHookHidden),
         ("user.timing_target", Instruction::TraceHookTiming),
         ("user.span_target", Instruction::TraceHookSpan),
-        ("user.rich_target", Instruction::TraceHookRich),
+        ("user.rich_target", Instruction::TraceHookEmptySpan),
     ] {
         let index = program.rendered_callables()[name].object;
         let bex_vm_types::Object::Function(function) = &program.objects[index] else {

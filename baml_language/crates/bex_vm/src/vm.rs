@@ -1953,6 +1953,7 @@ fn disable_declared_trace_hooks(objects: &mut [Object]) {
                     | Instruction::TraceHookTiming
                     | Instruction::TraceHookSpan
                     | Instruction::TraceHookRich
+                    | Instruction::TraceHookEmptySpan
             ) {
                 *instruction = Instruction::Pop(0);
             }
@@ -9048,7 +9049,8 @@ impl BexVm {
                     OpCode::TraceHookHidden
                     | OpCode::TraceHookTiming
                     | OpCode::TraceHookSpan
-                    | OpCode::TraceHookRich => {
+                    | OpCode::TraceHookRich
+                    | OpCode::TraceHookEmptySpan => {
                         let returned =
                             (self.telemetry.is_some() && !self.hooks_suppressed()).then(|| {
                                 CallTrace {
@@ -9062,9 +9064,25 @@ impl BexVm {
                                             }
                                             _ => btel_types::InvocationMode::Span,
                                         }),
-                                        inputs: (op == OpCode::TraceHookRich).then_some(true),
-                                        output: (op == OpCode::TraceHookRich).then_some(true),
-                                        error: (op == OpCode::TraceHookRich).then_some(true),
+                                        inputs: if op == OpCode::TraceHookEmptySpan {
+                                            Some(false)
+                                        } else {
+                                            (op == OpCode::TraceHookRich).then_some(true)
+                                        },
+                                        output: if op == OpCode::TraceHookEmptySpan {
+                                            Some(false)
+                                        } else {
+                                            (op == OpCode::TraceHookRich
+                                                || op == OpCode::TraceHookSpan)
+                                                .then_some(true)
+                                        },
+                                        error: if op == OpCode::TraceHookEmptySpan {
+                                            Some(false)
+                                        } else {
+                                            (op == OpCode::TraceHookRich
+                                                || op == OpCode::TraceHookSpan)
+                                                .then_some(true)
+                                        },
                                         ..Default::default()
                                     },
                                     context: None,

@@ -1338,6 +1338,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                             BuiltinTraceHook::Timing => Instruction::TraceHookTiming,
                             BuiltinTraceHook::Span => Instruction::TraceHookSpan,
                             BuiltinTraceHook::Rich => Instruction::TraceHookRich,
+                            BuiltinTraceHook::EmptySpan => Instruction::TraceHookEmptySpan,
                         });
                     }
                     IntrinsicOp::ApplyTraceHook => {

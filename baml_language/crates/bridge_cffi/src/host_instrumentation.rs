@@ -13,7 +13,12 @@ fn invalid(message: &str) -> BridgeError {
 /// Validate marker configuration without capturing a runtime or ambient parent.
 pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
     if key == 0 {
-        return Ok(TraceOptionsData::default());
+        // Bare Python/Node instrumentation uses the same capture defaults as span().
+        return Ok(TraceOptionsData {
+            output: Some(true),
+            error: Some(true),
+            ..Default::default()
+        });
     }
     let entry = HANDLE_TABLE
         .resolve(key)
@@ -114,4 +119,32 @@ pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>
         .ok()?
         .host
         .clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bare_instrumentation_requests_outputs_and_errors_but_not_inputs() {
+        let resolved = options(0).unwrap();
+        assert_eq!(resolved.inputs, None);
+        assert_eq!(resolved.output, Some(true));
+        assert_eq!(resolved.error, Some(true));
+    }
+
+    #[test]
+    fn explicit_empty_span_keeps_capture_disabled() {
+        let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(Arc::new(TraceOptionsData {
+            inputs: Some(false),
+            output: Some(false),
+            error: Some(false),
+            ..Default::default()
+        })));
+        let resolved = options(key).unwrap();
+        assert_eq!(resolved.inputs, Some(false));
+        assert_eq!(resolved.output, Some(false));
+        assert_eq!(resolved.error, Some(false));
+        assert!(HANDLE_TABLE.release(key));
+    }
 }
