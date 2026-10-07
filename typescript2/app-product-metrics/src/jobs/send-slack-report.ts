@@ -129,6 +129,7 @@ async function postHogCardStates(
     );
 }
 
+/** Require visible, loaded cards whose contents and dimensions remain stable for 20 seconds. */
 async function waitForPostHogDashboard(page: Page): Promise<void> {
   const deadline = Date.now() + dashboardRenderTimeoutMs;
   let readySince: number | undefined;
@@ -196,6 +197,7 @@ export function dashboardReportBlocks(
   ];
 }
 
+/** Capture the native charts and fully rendered embeds in a fresh browser. */
 async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -338,6 +340,7 @@ interface DashboardCapture {
   top: number;
 }
 
+/** Expand the canvas and shift subsequent embeds when full-page captures outgrow their iframes. */
 export async function composeDashboardCapture(
   pageDimensions: { height: number; width: number },
   nativeCharts: DashboardCapture[],
