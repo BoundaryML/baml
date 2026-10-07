@@ -28,8 +28,8 @@
 //! is an enum: 1, its Borsh `DeclarationName`, then the 16-byte ID of its
 //! recorded definition's group and its u32 position there; or 0, its Borsh
 //! `TypeTag`, then its name, as format 4 wrote it. A type head that names a
-//! recorded definition is Borsh tag 2 of `TypeIdentity`: the name, the group
-//! ID and the position. The groups a blob names this way follow its value
+//! recorded definition is Borsh tag 2 of `TypeIdentity`: the group ID and the
+//! position, without the name. The groups a blob names this way follow its value
 //! children in the child table, in first-use order. A definition group's own
 //! blob has root tag 2; [`crate::definition`] describes its content.
 //!

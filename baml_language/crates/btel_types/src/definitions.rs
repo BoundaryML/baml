@@ -57,6 +57,19 @@ impl DefinitionBlob {
     }
 }
 
+impl Drop for DefinitionBlob {
+    /// Frees the groups it alone holds with a stack, not recursion: a chain
+    /// of groups, each naming the one before, is as long as a program makes it.
+    fn drop(&mut self) {
+        let mut stack = std::mem::take(&mut self.children).into_vec();
+        while let Some(child) = stack.pop() {
+            if let Some(mut child) = Arc::into_inner(child) {
+                stack.extend(std::mem::take(&mut child.children).into_vec());
+            }
+        }
+    }
+}
+
 impl std::fmt::Debug for DefinitionBlob {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DefinitionBlob")
@@ -117,6 +130,24 @@ impl std::fmt::Debug for DefinitionCell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Dropping the head of a long chain of groups, each naming the one
+    /// before, frees the chain without recursing.
+    #[test]
+    fn a_long_chain_of_groups_drops_on_a_small_stack() {
+        std::thread::Builder::new()
+            .stack_size(256 << 10)
+            .spawn(|| {
+                let mut head = Arc::new(DefinitionBlob::new([0; 16], Box::new([]), Box::new([])));
+                for _ in 0..100_000 {
+                    head = Arc::new(DefinitionBlob::new([0; 16], Box::new([]), Box::new([head])));
+                }
+                drop(head);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
 
     fn blob(n: u8) -> Arc<DefinitionBlob> {
         Arc::new(DefinitionBlob::new([n; 16], Box::new([n]), Box::new([])))

@@ -362,6 +362,7 @@ fn person_capture(
     person: Option<&Definition>,
     carried: &mut Carried,
 ) -> crate::Snapshot {
+    carried.begin();
     let mut b = pool.try_acquire().unwrap();
     let definition = person.map(|person| b.leaves().define(person, carried));
     let declaration = b.declaration(
@@ -487,6 +488,62 @@ fn a_possible_loss_makes_streams_carry_again() {
     crate::forget_carried();
     assert_eq!(blobs(), 2, "carried again");
     assert_eq!(blobs(), 1, "named by ID again");
+}
+
+/// A loss noticed in the middle of a capture waits for the stream's next
+/// capture: a capture never carries a group twice.
+#[test]
+fn a_possible_loss_waits_for_the_next_capture() {
+    let _carrying = carrying();
+    let pool = SnapshotPool::new(4, Limits::default());
+    let person = group(&[class(
+        anonymous("Person"),
+        vec![field("name", TyTemplate::String)],
+    )]);
+    let mut stream = Carried::default();
+    stream.begin();
+    let mut b = pool.try_acquire().unwrap();
+    let first = b.leaves().define(&person[0], &mut stream);
+    crate::forget_carried();
+    let again = b.leaves().define(&person[0], &mut stream);
+    assert_eq!(first, again);
+    let ty = b
+        .leaves()
+        .ty(OwnedType::Class(TypeIdentity::Defined(first), Box::new([])));
+    let snapshot = b.finish(SnapshotValue::Type(ty), &mut Shaper::default());
+    assert_eq!(
+        snapshot.blobs().len(),
+        2,
+        "the group once, then the capture"
+    );
+    let next = person_capture(&pool, 1, Some(&person[0]), &mut stream);
+    assert_eq!(next.blobs().len(), 2, "the next capture carries it again");
+}
+
+/// A capture holds a group once even when it carries it twice, here two
+/// classes with one definition through two carried sets: an upload must
+/// not repeat an ID.
+#[test]
+fn a_capture_holds_each_group_once() {
+    let pool = SnapshotPool::new(4, Limits::default());
+    let person = || {
+        group(&[class(
+            anonymous("Person"),
+            vec![field("name", TyTemplate::String)],
+        )])
+    };
+    let (person, twin) = (person(), person());
+    let mut b = pool.try_acquire().unwrap();
+    let first = b.leaves().define(&person[0], &mut Carried::default());
+    let second = b.leaves().define(&twin[0], &mut Carried::default());
+    assert_eq!(first, second);
+    let ty = b
+        .leaves()
+        .ty(OwnedType::Class(TypeIdentity::Defined(first), Box::new([])));
+    let snapshot = b.finish(SnapshotValue::Type(ty), &mut Shaper::default());
+    let ids: Vec<_> = snapshot.blobs().map(|blob| blob.id()).collect();
+    assert_eq!(ids.len(), 2, "{ids:?}");
+    assert_ne!(ids[0], ids[1]);
 }
 
 /// A carried definition group is schema, not captured content: its blob

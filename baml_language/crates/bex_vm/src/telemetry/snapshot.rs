@@ -133,6 +133,7 @@ impl Scratch {
         self.seen.clear();
         self.rust_seen.clear();
         self.work.clear();
+        self.carried.begin();
         let root = match input {
             Input::FunctionArgs(args) => {
                 b.arguments(args.iter(), |leaves, value| self.add(leaves, *value, 0))

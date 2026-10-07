@@ -335,6 +335,12 @@ impl Shaper {
     fn add_definitions(&mut self, graph: &Graph, shape: &mut Shape, meter: &Meter) {
         for (at, group) in graph.definitions.iter().enumerate() {
             let id = CasId::from_bytes(group.id());
+            // A group carried twice in one capture (two classes with one
+            // definition, between which the stream's set forgot it) is one
+            // blob: an upload must not repeat an ID.
+            if self.ids.contains_key(&id) {
+                continue;
+            }
             let index = BlobIndex(u32::try_from(shape.blobs.len()).expect("bounded blob count"));
             shape.blobs.push(
                 BlobEntry {
