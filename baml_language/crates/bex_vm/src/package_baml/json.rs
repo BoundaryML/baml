@@ -1097,9 +1097,10 @@ fn serialize_class_instance(
 
 /// Emit a tagged JSON object for a media value.
 ///
-/// Shape: `{ "kind": "image"|..., "source": "url"|"file"|"base64", "value":
-/// <data>, "mime": <mime_type-or-null> }`.  The `value` is the URL, the file
-/// path, or the base64 payload depending on `source`.
+/// Shape: `{ "kind": "image"|..., "source": "url"|"base64", "value":
+/// <data>, "mime": <mime_type-or-null> }`, with `"name": <name>` when the
+/// value has one.  The `value` is the URL or the base64 payload depending on
+/// `source`.
 fn serialize_media(
     vm: &mut BexVm,
     value: Value,
@@ -1111,8 +1112,6 @@ fn serialize_media(
 
     let (source, payload) = if let Some(url) = media.url() {
         ("url", url)
-    } else if let Some(file) = media.file() {
-        ("file", file)
     } else {
         ("base64", media.base64().as_str().to_owned())
     };
@@ -1131,6 +1130,9 @@ fn serialize_media(
             None => serde_json::Value::Null,
         },
     );
+    if let Some(name) = media.name() {
+        obj.insert("name".into(), serde_json::Value::String(name));
+    }
     Ok(serde_json::Value::Object(obj))
 }
 
@@ -1623,14 +1625,29 @@ fn deserialize_media(
         .ok_or_else(|| raise_decode(vm, "media object missing `value`", path))?;
     let mime = map.get("mime").and_then(serde_json::Value::as_str);
 
-    let media_arc: Arc<bex_vm_types::MediaValue> = match source {
-        "url" => bex_vm_types::MediaValue::from_url(kind, value_str, mime),
-        "file" => bex_vm_types::MediaValue::from_file(kind, value_str, mime),
-        "base64" | "inline" => bex_vm_types::MediaValue::from_base64(kind, value_str.into(), mime),
-        other => {
+    let name = map.get("name").and_then(serde_json::Value::as_str);
+
+    let media_arc: Arc<bex_vm_types::MediaValue> = match (source, name) {
+        ("url", _) => bex_vm_types::MediaValue::from_url(kind, value_str, mime),
+        ("base64" | "inline", Some(name)) => {
+            bex_vm_types::MediaValue::from_file_content(kind, name, value_str.into(), mime)
+        }
+        ("base64" | "inline", None) => {
+            bex_vm_types::MediaValue::from_base64(kind, value_str.into(), mime)
+        }
+        // Reading a path out of data would let any JSON name a file to read.
+        ("file", _) => {
             return Err(raise_decode(
                 vm,
-                format!("unknown media source `{other}` (expected url|file|base64)"),
+                "media source `file` is not supported: a file is read when the value is built \
+                 (use `from_file`), so JSON carries its content as `base64`",
+                path,
+            ));
+        }
+        (other, _) => {
+            return Err(raise_decode(
+                vm,
+                format!("unknown media source `{other}` (expected url|base64)"),
                 path,
             ));
         }

@@ -6766,8 +6766,8 @@ export namespace baml_bridge {
                 /** BamlValueMedia base64 */
                 base64?: (string|null);
 
-                /** BamlValueMedia file */
-                file?: (string|null);
+                /** BamlValueMedia fileContent */
+                fileContent?: (baml_bridge.cffi.v1.IBamlValueMediaFileContent|null);
             }
 
             /** Represents a BamlValueMedia. */
@@ -6791,11 +6791,11 @@ export namespace baml_bridge {
                 /** BamlValueMedia base64. */
                 public base64?: (string|null);
 
-                /** BamlValueMedia file. */
-                public file?: (string|null);
+                /** BamlValueMedia fileContent. */
+                public fileContent?: (baml_bridge.cffi.v1.IBamlValueMediaFileContent|null);
 
                 /** BamlValueMedia value. */
-                public value?: ("url"|"base64"|"file");
+                public value?: ("url"|"base64"|"fileContent");
 
                 /**
                  * Creates a new BamlValueMedia instance using the specified properties.
@@ -6869,6 +6869,109 @@ export namespace baml_bridge {
 
                 /**
                  * Gets the default type url for BamlValueMedia
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a BamlValueMediaFileContent. */
+            interface IBamlValueMediaFileContent {
+
+                /** BamlValueMediaFileContent name */
+                name?: (string|null);
+
+                /** BamlValueMediaFileContent base64 */
+                base64?: (string|null);
+            }
+
+            /** Represents a BamlValueMediaFileContent. */
+            class BamlValueMediaFileContent implements IBamlValueMediaFileContent {
+
+                /**
+                 * Constructs a new BamlValueMediaFileContent.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IBamlValueMediaFileContent);
+
+                /** BamlValueMediaFileContent name. */
+                public name: string;
+
+                /** BamlValueMediaFileContent base64. */
+                public base64: string;
+
+                /**
+                 * Creates a new BamlValueMediaFileContent instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlValueMediaFileContent instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IBamlValueMediaFileContent): baml_bridge.cffi.v1.BamlValueMediaFileContent;
+
+                /**
+                 * Encodes the specified BamlValueMediaFileContent message. Does not implicitly {@link baml_bridge.cffi.v1.BamlValueMediaFileContent.verify|verify} messages.
+                 * @param message BamlValueMediaFileContent message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IBamlValueMediaFileContent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlValueMediaFileContent message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlValueMediaFileContent.verify|verify} messages.
+                 * @param message BamlValueMediaFileContent message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IBamlValueMediaFileContent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlValueMediaFileContent message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlValueMediaFileContent
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.BamlValueMediaFileContent;
+
+                /**
+                 * Decodes a BamlValueMediaFileContent message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlValueMediaFileContent
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.BamlValueMediaFileContent;
+
+                /**
+                 * Verifies a BamlValueMediaFileContent message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlValueMediaFileContent message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlValueMediaFileContent
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.BamlValueMediaFileContent;
+
+                /**
+                 * Creates a plain object from a BamlValueMediaFileContent message. Also converts values to other types if specified.
+                 * @param message BamlValueMediaFileContent
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.BamlValueMediaFileContent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlValueMediaFileContent to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlValueMediaFileContent
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

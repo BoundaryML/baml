@@ -4,11 +4,12 @@ import { beforeAll, describe, expect, it } from "vitest";
 const rawHandleMediaExports = [
   "cloneHandle",
   "mediaBase64",
-  "mediaFile",
   "mediaFromBase64",
-  "mediaFromFile",
+  "mediaFromFileBytes",
+  "mediaFromFileContent",
   "mediaFromUrl",
   "mediaMimeType",
+  "mediaName",
   "mediaUrl",
   "releaseHandle",
   "seedFunctionRefHandle",
@@ -48,14 +49,20 @@ describe("raw WASM handle and media exports", () => {
     const url = raw.mediaFromUrl(1, "https://example.com/image.png", "image/png");
     expect(url).toBeTypeOf("bigint");
     expect(raw.mediaUrl(url, 6)).toBe("https://example.com/image.png");
-    expect(raw.mediaFile(url, 6)).toBeUndefined();
+    expect(raw.mediaName(url, 6)).toBeUndefined();
     expect(raw.mediaBase64(url, 6)).toBe("");
     expect(raw.mediaMimeType(url, 6)).toBe("image/png");
 
-    const file = raw.mediaFromFile(2, "/tmp/audio.wav");
-    expect(raw.mediaFile(file, 7)).toBe("/tmp/audio.wav");
+    // This module has no file system: the host reads, and passes bytes.
+    const file = raw.mediaFromFileBytes(2, "/recordings/audio.wav", new TextEncoder().encode("voice"));
+    expect(raw.mediaName(file, 7)).toBe("audio.wav");
+    expect(raw.mediaBase64(file, 7)).toBe("dm9pY2U=");
     expect(raw.mediaUrl(file, 7)).toBeUndefined();
-    expect(raw.mediaMimeType(file, 7)).toBeUndefined();
+    expect(raw.mediaMimeType(file, 7)).toBe("audio/wav");
+
+    const content = raw.mediaFromFileContent(3, "/reports/q3.pdf", "JVBERi0xLjc=");
+    expect(raw.mediaName(content, 9)).toBe("q3.pdf");
+    expect(raw.mediaMimeType(content, 9)).toBe("application/pdf");
 
     const base64 = raw.mediaFromBase64(4, "dm9pY2U=", "video/mp4");
     expect(raw.mediaBase64(base64, 8)).toBe("dm9pY2U=");
@@ -63,6 +70,7 @@ describe("raw WASM handle and media exports", () => {
 
     expect(raw.releaseHandle(url)).toBe(true);
     expect(raw.releaseHandle(file)).toBe(true);
+    expect(raw.releaseHandle(content)).toBe(true);
     expect(raw.releaseHandle(base64)).toBe(true);
   });
 

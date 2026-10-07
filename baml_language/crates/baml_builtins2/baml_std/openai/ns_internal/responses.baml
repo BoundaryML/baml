@@ -430,7 +430,7 @@ function _lower_block(
                     } else {
                         ai.wire.resolve_media(pdf, false)
                     };
-                    let name = _file_name(pdf.file() ?? pdf.url());
+                    let name = _file_name(pdf.name() ?? pdf.url());
                     if let url: string = resolved.url {
                         OaInputFile {
                             type: "input_file",
@@ -781,8 +781,8 @@ function render(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.
     _request(c, input, false, preview = false)
 }
 
-/// The request one `render` would send. This path never reads local media or
-/// downloads URLs; provider-unsupported URL forms return PreviewUnsupported.
+/// The request one `render` would send. This path never downloads URLs;
+/// provider-unsupported URL forms return PreviewUnsupported.
 function preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
     _request(c, input, false, preview = true)
 }

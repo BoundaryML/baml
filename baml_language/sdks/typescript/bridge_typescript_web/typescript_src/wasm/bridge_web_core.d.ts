@@ -84,15 +84,27 @@ export function isInvocationCancelled(key: bigint): boolean;
 
 export function mediaBase64(key: bigint, handle_type: number): string;
 
-export function mediaFile(key: bigint, handle_type: number): string | undefined;
-
 export function mediaFromBase64(media_kind_value: number, base64: string, mime_type?: string | null): bigint;
 
-export function mediaFromFile(media_kind_value: number, file: string, mime_type?: string | null): bigint;
+/**
+ * Media from the bytes of `file`, which the JavaScript host read: this
+ * module has no file system of its own.
+ */
+export function mediaFromFileBytes(media_kind_value: number, file: string, content: Uint8Array, mime_type?: string | null): bigint;
+
+/**
+ * Media from base64 content that was read from `file`. Reads nothing.
+ */
+export function mediaFromFileContent(media_kind_value: number, file: string, base64: string, mime_type?: string | null): bigint;
 
 export function mediaFromUrl(media_kind_value: number, url: string, mime_type?: string | null): bigint;
 
 export function mediaMimeType(key: bigint, handle_type: number): string | undefined;
+
+/**
+ * The base name of the file the content was read from, if any.
+ */
+export function mediaName(key: bigint, handle_type: number): string | undefined;
 
 export function mediaUrl(key: bigint, handle_type: number): string | undefined;
 
@@ -167,10 +179,6 @@ export interface InitOutput {
     readonly releaseHandle: (a: bigint) => number;
     readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
     readonly seedGenericMediaHandle: () => [bigint, number, number];
-    readonly callFunction: (a: number, b: number) => any;
-    readonly callFunctionSync: (a: number, b: number) => [number, number];
-    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
-    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly cancelFunctionCall: (a: bigint) => number;
     readonly configureWorkerdRuntime: () => void;
     readonly getBridgeRuntimeVersion: () => [number, number];
@@ -181,6 +189,12 @@ export interface InitOutput {
     readonly invocationProtocolVersion: () => number;
     readonly newFunctionCall: () => [bigint, number, number];
     readonly releaseFunctionCall: (a: bigint) => number;
+    readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
+    readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
+    readonly invocationContext: (a: bigint) => [number, number, number, number];
+    readonly isInvocationCancelled: (a: bigint) => [number, number, number];
+    readonly traceSelection: (a: bigint, b: bigint) => [number, number, number];
+    readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
     readonly _testWebFireHostRelease: (a: bigint) => void;
     readonly _testWebHostCallableCount: () => number;
     readonly _testWebHostReleaseCallbackInstalled: () => number;
@@ -194,19 +208,18 @@ export interface InitOutput {
     readonly registerWebHostCancelCallback: (a: any) => number;
     readonly registerWebHostValueReleaseCallback: (a: any) => number;
     readonly releaseWebHostCallable: (a: bigint) => void;
-    readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
-    readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
-    readonly invocationContext: (a: bigint) => [number, number, number, number];
-    readonly isInvocationCancelled: (a: bigint) => [number, number, number];
-    readonly traceSelection: (a: bigint, b: bigint) => [number, number, number];
-    readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
     readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];
-    readonly mediaFile: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaFromBase64: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
-    readonly mediaFromFile: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
+    readonly mediaFromFileBytes: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [bigint, number, number];
+    readonly mediaFromFileContent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [bigint, number, number];
     readonly mediaFromUrl: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
     readonly mediaMimeType: (a: bigint, b: number) => [number, number, number, number];
+    readonly mediaName: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
+    readonly callFunction: (a: number, b: number) => any;
+    readonly callFunctionSync: (a: number, b: number) => [number, number];
+    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
+    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly completeHostCall: (a: number, b: number, c: number, d: number) => number;
     readonly mintHostValueKey: () => bigint;
     readonly registerHostCallable: (a: any) => bigint;

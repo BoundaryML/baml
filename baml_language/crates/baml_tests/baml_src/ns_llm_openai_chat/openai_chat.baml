@@ -1349,6 +1349,31 @@ test "chat_pdf_url_is_inlined" {
     )
 }
 
+// A PDF read from a file holds its content and the file's base name, never
+// the path: the filename sent is that name.
+function chat_pdf_from_file_is_named() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let doc = baml.media.Pdf.from_file_content("/reports/2026/q3.pdf", "JVBERi0xLjQ=", null);
+            let _ = cl.invoke(_chat_doc_input(doc));
+            let body = mock.last_request().json();
+            [
+                baml.json.path<string>(body, ".messages[0].content[1].file.filename"),
+                baml.json.path<string>(body, ".messages[0].content[1].file.file_data"),
+            ].join("|")
+        },
+    )
+}
+
+test "chat_pdf_from_file_is_named" {
+    assert.equal(
+        chat_pdf_from_file_is_named(),
+        "q3.pdf|data:application/pdf;base64,JVBERi0xLjQ=",
+    )
+}
+
 // An already-inline PDF takes the same path, and a scheme the client cannot
 // fetch is a typed configuration error rather than a blank `file_data`.
 function chat_pdf_base64_and_unfetchable() -> string {
