@@ -489,6 +489,28 @@ fn a_possible_loss_makes_streams_carry_again() {
     assert_eq!(blobs(), 1, "named by ID again");
 }
 
+/// A carried definition group is schema, not captured content: its blob
+/// counts no logical bytes, and the capture that names it counts what it
+/// would naming the class by tag.
+#[test]
+fn definition_groups_count_no_logical_bytes() {
+    let _carrying = carrying();
+    let pool = SnapshotPool::new(4, Limits::default());
+    let person = group(&[class(
+        anonymous("Person"),
+        vec![field("name", TyTemplate::String)],
+    )]);
+    let defined = person_capture(&pool, 1, Some(&person[0]), &mut Carried::default());
+    let blobs: Vec<_> = defined.blobs().collect();
+    assert_eq!(blobs.len(), 2, "the group, then the capture");
+    assert_eq!(blobs[0].logical_bytes_approx_v1(), Some(0));
+    let by_tag = person_capture(&pool, 1, None, &mut Carried::default());
+    assert_eq!(
+        defined.root_blob().logical_bytes_approx_v1(),
+        by_tag.root_blob().logical_bytes_approx_v1()
+    );
+}
+
 /// A group carried for the first time brings the groups it names that the
 /// stream has not carried, each before the groups that name it.
 #[test]
