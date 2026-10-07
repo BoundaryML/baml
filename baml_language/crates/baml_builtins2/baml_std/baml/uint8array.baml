@@ -227,7 +227,7 @@ class Uint8Array {
         $rust_function
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         /// Lossily decodes the bytes as UTF-8.
         ///
         /// Each invalid sequence becomes U+FFFD, the replacement character. Use

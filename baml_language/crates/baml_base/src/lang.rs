@@ -144,6 +144,71 @@ const fn str_eq(a: &str, b: &str) -> bool {
     true
 }
 
+/// A written type spelling as it appears in a stdlib native KEY: every path
+/// headed by `root.` is spelled under `package`, the stdlib package's fixed
+/// name, so `root.TypeView` written inside `reflect` keys as
+/// `reflect.TypeView`. A native key names a `$rust_function` body for the
+/// codegen's dispatch tables, and both producers — the codegen extractor
+/// reading source text and the MIR lowering reading the HIR type ref — spell
+/// the `{iface}$for${target}` segment through this one function so the two
+/// cannot drift. The segment is otherwise the written text verbatim — a
+/// string literal in a type argument included, whatever it contains.
+///
+/// A key is not a name: nothing resolves it, and `Function.name` renders the
+/// canonical display form. Spelling the package here only keeps the key —
+/// and the Rust identifiers the codegen derives from it — reading as the
+/// package rather than as a namespace called `root`.
+#[must_use]
+pub fn native_key_spelling(package: &str, written: &str) -> String {
+    const ROOT: &str = "root.";
+    let mut out = String::with_capacity(written.len());
+    let mut rest = written;
+    let mut path_start = true;
+    while !rest.is_empty() {
+        if path_start && rest.starts_with(ROOT) {
+            out.push_str(package);
+            out.push('.');
+            rest = &rest[ROOT.len()..];
+            path_start = false;
+            continue;
+        }
+        if let Some(literal) = string_literal_prefix(rest) {
+            out.push_str(literal);
+            rest = &rest[literal.len()..];
+            path_start = false;
+            continue;
+        }
+        let c = rest
+            .chars()
+            .next()
+            .unwrap_or_else(|| unreachable!("non-empty"));
+        path_start = !(c.is_alphanumeric() || c == '_' || c == '.');
+        out.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    out
+}
+
+/// The string literal `text` starts with, closing quote included, if it
+/// starts with one: `"…"` with backslash escapes. An unterminated literal
+/// runs to the end of `text`.
+fn string_literal_prefix(text: &str) -> Option<&str> {
+    let mut chars = text.char_indices();
+    if chars.next()?.1 != '"' {
+        return None;
+    }
+    let mut escaped = false;
+    for (index, c) in chars {
+        match (escaped, c) {
+            (true, _) => escaped = false,
+            (false, '\\') => escaped = true,
+            (false, '"') => return Some(&text[..=index]),
+            (false, _) => {}
+        }
+    }
+    Some(text)
+}
+
 /// Where the stdlib packages are installed. A package is absent when the
 /// stdlib (or that package) is not installed in the database, in which case
 /// every identity test against it is `false`.
@@ -176,7 +241,37 @@ impl LangRoots {
 
 #[cfg(test)]
 mod tests {
-    use super::LangPackage;
+    use super::{LangPackage, native_key_spelling};
+
+    #[test]
+    fn a_native_key_spells_root_as_the_package() {
+        assert_eq!(
+            native_key_spelling("reflect", "root.TypeView$for$Type"),
+            "reflect.TypeView$for$Type"
+        );
+        assert_eq!(
+            native_key_spelling("baml", "root.io.Read$for$root.fs.File"),
+            "baml.io.Read$for$baml.fs.File"
+        );
+        assert_eq!(
+            native_key_spelling("baml", "Add<root.time.Duration>"),
+            "Add<baml.time.Duration>"
+        );
+        // Only a path HEAD is `root`: an item or namespace of that name is
+        // left alone, and so is a bare `root`.
+        assert_eq!(native_key_spelling("baml", "sub.root.Foo"), "sub.root.Foo");
+        assert_eq!(native_key_spelling("baml", "rooted.Foo"), "rooted.Foo");
+        assert_eq!(native_key_spelling("baml", "root"), "root");
+        // A string literal is not a path, whatever it says.
+        assert_eq!(
+            native_key_spelling("baml", r#"Tag<"root.x", root.Foo>"#),
+            r#"Tag<"root.x", baml.Foo>"#
+        );
+        assert_eq!(
+            native_key_spelling("baml", r#"Tag<"a\"root.x", root.Foo>"#),
+            r#"Tag<"a\"root.x", baml.Foo>"#
+        );
+    }
 
     #[test]
     fn every_package_is_at_its_own_index_and_round_trips_its_name() {

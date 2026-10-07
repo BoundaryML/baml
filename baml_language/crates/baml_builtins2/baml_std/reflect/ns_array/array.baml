@@ -3,19 +3,19 @@ class Type {
     /// The wrapped `type` value. Private by invariant: reflection natives are
     /// its only readers, and each kind method panics if the held type no longer
     /// classifies as this view's kind.
-    _ty: reflect.Type,
+    _ty: root.Type,
 
-    implements reflect.TypeView {
+    implements root.TypeView {
         //baml:vm
         //baml:fallible
-        function as_type(self) -> reflect.Type throws never {
+        function as_type(self) -> root.Type throws never {
             $rust_function
         }
     }
     /// The type of the array's elements.
     //baml:mut_vm
     //baml:fallible
-    function element_type(self) -> reflect.Type throws never {
+    function element_type(self) -> root.Type throws never {
         $rust_function
     }
 }

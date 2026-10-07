@@ -153,8 +153,9 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
 
         // The class is the first uppercase-initial segment before the final
         // method segment (if any). An implements-block method's segment is
-        // `{Iface}$for${Class}` — for a DOTTED written interface
-        // (`root.io.Read$for$File`) the interface's path components parse
+        // `{Iface}$for${Class}` — for a DOTTED interface target (a written
+        // `root.io.Read` spelled `baml.io.Read$for$File` in the key) the
+        // interface's path components parse
         // as namespace segments here, which lands correctly only because
         // namespace segments are lowercase and the `$for$` segment starts
         // with the interface's uppercase name. Contingent, not designed —

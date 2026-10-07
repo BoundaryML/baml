@@ -6,27 +6,27 @@
 /// `Type.fields()` describes the type only and is ownerless.
 class Field {
     name: string,
-    type: reflect.Type?,
-    meta: reflect.Meta,
+    type: root.Type?,
+    meta: root.Meta,
     /// Present only for handles returned from `reflect.AnyClass.list_fields` or
     /// `get_field`. Type-side descriptors returned by `Type.fields()` are
     /// intentionally ownerless.
     _owner: unknown?,
 
     /// This field's schema metadata. Same value as the `meta` field.
-    function metadata(self) -> reflect.Meta throws never {
+    function metadata(self) -> root.Meta throws never {
         self.meta
     }
 
     /// Read this field from its bound owner. An ownerless type-side descriptor
     /// returns `null`.
-    function value<T>(self) -> T? throws reflect.errors.TypeMismatch {
-        let owner: reflect.AnyClass = self._owner else {
+    function value<T>(self) -> T? throws root.errors.TypeMismatch {
+        let owner: root.AnyClass = self._owner else {
             return null;
         };
-        reflect.class.get_field<T>(owner, self.name) catch (e) {
-            reflect.errors.CompilationError { message } => {
-                throw reflect.errors.TypeMismatch { message: message }
+        root.class.get_field<T>(owner, self.name) catch (e) {
+            root.errors.CompilationError { message } => {
+                throw root.errors.TypeMismatch { message: message }
             }
         }
     }
@@ -35,9 +35,9 @@ class Field {
 /// Construct a closed runtime class. Map iteration order is definition order.
 function new(
     name: string,
-    fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>,
-    implementations: reflect.interface.Implementation[] = [],
-) -> Type throws reflect.errors.CompilationError {
+    fields: map<string, root.Type | root.WithMeta<root.Type>>,
+    implementations: root.interface.Implementation[] = [],
+) -> Type throws root.errors.CompilationError {
     // Native functions receive the omitted-argument sentinel instead of
     // evaluating BAML default expressions. Keep the public API as the BEP
     // specifies and resolve the default in this BAML wrapper before crossing
@@ -49,9 +49,9 @@ function new(
 //baml:mut_vm
 function _new(
     name: string,
-    fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>,
-    implementations: reflect.interface.Implementation[],
-) -> Type throws reflect.errors.CompilationError {
+    fields: map<string, root.Type | root.WithMeta<root.Type>>,
+    implementations: root.interface.Implementation[],
+) -> Type throws root.errors.CompilationError {
     $rust_function
 }
 
@@ -68,7 +68,7 @@ class Builder {
     _handle: $rust_type,
     _roots: unknown[],
     _neighbors: Builder[],
-    _resolved: reflect.Type?,
+    _resolved: root.Type?,
 
     /// Append one field in definition order.
     ///
@@ -79,11 +79,8 @@ class Builder {
     function field(
         self,
         name: string,
-        ty: reflect.Type
-            | reflect.WithMeta<reflect.Type>
-            | PendingType
-            | reflect.WithMeta<PendingType>,
-    ) -> Builder throws reflect.errors.CompilationError {
+        ty: root.Type | root.WithMeta<root.Type> | PendingType | root.WithMeta<PendingType>,
+    ) -> Builder throws root.errors.CompilationError {
         $rust_function
     }
 
@@ -96,8 +93,8 @@ class Builder {
     /// Validate and freeze this builder's complete connected recursive group.
     function build(
         self,
-        implementations: reflect.interface.Implementation[] = [],
-    ) -> Type throws reflect.errors.CompilationError {
+        implementations: root.interface.Implementation[] = [],
+    ) -> Type throws root.errors.CompilationError {
         self._build(implementations)
     }
 
@@ -105,8 +102,8 @@ class Builder {
     //baml:mut_vm
     function _build(
         self,
-        implementations: reflect.interface.Implementation[],
-    ) -> Type throws reflect.errors.CompilationError {
+        implementations: root.interface.Implementation[],
+    ) -> Type throws root.errors.CompilationError {
         $rust_function
     }
 }
@@ -116,7 +113,7 @@ class Builder {
 class PendingType {
     _handle: $rust_type,
     _roots: unknown[],
-    _resolved: reflect.Type?,
+    _resolved: root.Type?,
 
     /// Construct an array over this pending type.
     //baml:mut_vm
@@ -132,13 +129,13 @@ class PendingType {
 
     /// Construct a union containing this pending type and `others`.
     //baml:mut_vm
-    function union(self, others: (reflect.Type | PendingType)[]) -> PendingType throws never {
+    function union(self, others: (root.Type | PendingType)[]) -> PendingType throws never {
         $rust_function
     }
 
     /// Return the frozen type, or null while any referenced builder is pending.
     //baml:mut_vm
-    function resolved(self) -> reflect.Type? throws never {
+    function resolved(self) -> root.Type? throws never {
         $rust_function
     }
 
@@ -151,14 +148,14 @@ class PendingType {
         description: string? = null,
         docstring: string? = null,
         other: map<string, string>? = null,
-    ) -> reflect.WithMeta<PendingType> throws never {
+    ) -> root.WithMeta<PendingType> throws never {
         $rust_function
     }
 }
 
 /// Assert-read a named field from a runtime-shaped class instance.
 //baml:mut_vm
-function get_field<T>(value: unknown, name: string) -> T throws reflect.errors.CompilationError {
+function get_field<T>(value: unknown, name: string) -> T throws root.errors.CompilationError {
     $rust_function
 }
 
@@ -167,12 +164,12 @@ class Type {
     /// The wrapped `type` value. Private by invariant: reflection natives are
     /// its only readers, and each kind method panics if the held type no longer
     /// classifies as this view's kind.
-    _ty: reflect.Type,
+    _ty: root.Type,
 
-    implements reflect.TypeView {
+    implements root.TypeView {
         //baml:vm
         //baml:fallible
-        function as_type(self) -> reflect.Type throws never {
+        function as_type(self) -> root.Type throws never {
             $rust_function
         }
     }
@@ -186,7 +183,7 @@ class Type {
     /// The class declaration's own schema metadata.
     //baml:mut_vm
     //baml:fallible
-    function meta(self) -> reflect.Meta throws never {
+    function meta(self) -> root.Meta throws never {
         $rust_function
     }
 }

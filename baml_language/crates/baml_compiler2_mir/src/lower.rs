@@ -1226,10 +1226,12 @@ fn render_with_frame_indices(
 /// The codegen-lockstep NATIVE KEY for a builtin body: the dot-free
 /// `{iface as written}$for${target as written}` scheme that
 /// `baml_builtins2_codegen::extract` produces byte-for-byte for its dispatch
-/// tables and sys-op paths. This is a KEY, not a name — `Function.name`
-/// renders the canonical `<(target as iface)>` display form
-/// ([`definition_link_name`]) — so the written-form dependence here is confined
-/// to the attach boundary the codegen already owns.
+/// tables and sys-op paths, with a written `root.` spelled as the package
+/// ([`baml_base::native_key_spelling`], shared with the extractor). This is a
+/// KEY, not a name — `Function.name` renders the canonical
+/// `<(target as iface)>` display form ([`definition_link_name`]) — so the
+/// written-form dependence here is confined to the attach boundary the
+/// codegen already owns.
 pub fn native_key_for<'db>(
     db: &'db dyn crate::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -1239,6 +1241,7 @@ pub fn native_key_for<'db>(
         method_owner,
     };
     let pkg_info = file_package(db, func_loc.file(db));
+    let package = spelling(db).of(pkg_info.root);
     let name = function_data(db, func_loc).name.clone();
     let item = match method_owner(db, func_loc) {
         // A class-inherent method has no written-form target to key on: its
@@ -1250,26 +1253,24 @@ pub fn native_key_for<'db>(
         Some(MethodOwner::Impl(impl_loc)) => {
             let block = impl_block_data(db, impl_loc);
             let for_display = match &block.subject {
-                ImplSubjectData::Free { for_target, .. } => {
-                    block.type_refs.display(*for_target).to_string()
-                }
+                ImplSubjectData::Free { for_target, .. } => baml_base::native_key_spelling(
+                    package.as_str(),
+                    &block.type_refs.display(*for_target).to_string(),
+                ),
                 ImplSubjectData::InClass { class, .. } => class_data(db, *class).name.to_string(),
             };
-            Name::new(format!(
-                "{}$for${for_display}",
-                block.type_refs.display(block.interface_target),
-            ))
+            let iface_display = baml_base::native_key_spelling(
+                package.as_str(),
+                &block.type_refs.display(block.interface_target).to_string(),
+            );
+            Name::new(format!("{iface_display}$for${for_display}"))
         }
         None => {
-            return link_name(
-                spelling(db).of(pkg_info.root),
-                &pkg_info.namespace_path,
-                &[name.as_str()],
-            );
+            return link_name(package, &pkg_info.namespace_path, &[name.as_str()]);
         }
     };
     link_name(
-        spelling(db).of(pkg_info.root),
+        package,
         &pkg_info.namespace_path,
         &[item.as_str(), name.as_str()],
     )

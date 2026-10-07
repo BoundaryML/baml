@@ -3,12 +3,12 @@ class Type {
     /// The wrapped `type` value. Private by invariant: reflection natives are
     /// its only readers, and each kind method panics if the held type no longer
     /// classifies as this view's kind.
-    _ty: reflect.Type,
+    _ty: root.Type,
 
-    implements reflect.TypeView {
+    implements root.TypeView {
         //baml:vm
         //baml:fallible
-        function as_type(self) -> reflect.Type throws never {
+        function as_type(self) -> root.Type throws never {
             $rust_function
         }
     }
@@ -18,7 +18,7 @@ class Type {
     ///
     /// The mirror of `reflect.Type.implements`, asked from the interface's
     /// side. `false` when `other` is not a class.
-    function implemented_by(self, other: reflect.Type) -> bool throws never {
+    function implemented_by(self, other: root.Type) -> bool throws never {
         $rust_function
     }
 }
@@ -44,13 +44,13 @@ class Implementation {
         self,
         interface_field: string,
         class_field: string? = null,
-    ) -> Implementation throws reflect.errors.CompilationError {
+    ) -> Implementation throws root.errors.CompilationError {
         $rust_function
     }
 }
 
 /// Start a structural witness for a static interface.
 //baml:mut_vm
-function implementation<I>() -> Implementation throws reflect.errors.CompilationError {
+function implementation<I>() -> Implementation throws root.errors.CompilationError {
     $rust_function
 }

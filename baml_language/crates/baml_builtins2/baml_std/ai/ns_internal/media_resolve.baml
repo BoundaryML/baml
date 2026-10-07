@@ -98,14 +98,14 @@ function _resolve_media_preview_content(
                     mime_type: media_url.slice(5, separator),
                 };
             }
-            throw ai.errors.PreviewUnsupported {
+            throw root.errors.PreviewUnsupported {
                 provider: "media-preview",
                 detail: "request preview cannot represent a non-base64 data URL",
             }
         }
         return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime };
     }
-    throw ai.errors.PreviewUnsupported {
+    throw root.errors.PreviewUnsupported {
         provider: "media-preview",
         detail: "request preview received media without inline data or a URL",
     }

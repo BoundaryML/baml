@@ -256,8 +256,13 @@ impl Package {
 
     /// The package `own` — this package, by its own pointer — spells as
     /// `name`: itself by its own name, else the package its edge `name`
-    /// reaches. Anything else is invisible from here; the runtime mirror of
-    /// the compiler's `accessible_package`.
+    /// reaches. Anything else is invisible from here.
+    ///
+    /// The compiler spells a package's own declarations `root.…` only
+    /// (`hir::package::path_package`); the self-name clause here serves
+    /// HOST-supplied names (`user.main`), which spell the root by its label
+    /// until the SDK boundary refers to declarations by image identity.
+    /// Nothing compiled relies on it.
     pub fn accessible(&self, own: HeapPtr, name: &Name) -> Option<HeapPtr> {
         if self.name == *name {
             return Some(own);

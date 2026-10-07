@@ -405,11 +405,11 @@ fn projected_interface(
 /// The names the roots of a request take, made distinct: an aliased package
 /// is named by its first alias; a package no alias reaches — one a mount's
 /// edges reach — by the first edge name reaching it; either suffixed with
-/// `$k` when the name is taken or is one of the package's OWN edge names (a
-/// root's name resolves to the root itself, so it must not shadow an edge
-/// its blob spells). A root's name is what the program spells its
-/// declarations by where no edge reaches it; every declaration a consumer
-/// can write is spelled through an edge or a re-export instead.
+/// `$k` when the name is taken. A root's name is display metadata and what
+/// the program spells its declarations by where no edge reaches it; it
+/// resolves nothing — a package reaches itself as `root` only — so it may
+/// coincide with one of the package's own edge names. Every declaration a
+/// consumer can write is spelled through an edge or a re-export.
 fn root_names(
     packages: &IndexMap<bex_vm_types::RuntimePackageIdentity, RuntimePackageMount>,
     aliases: &IndexMap<String, bex_vm_types::RuntimePackageIdentity>,
@@ -425,16 +425,9 @@ fn root_names(
         if names.contains_key(&identity) {
             return;
         }
-        let own_edges = packages
-            .get(&identity)
-            .map(|mount| &mount.edges)
-            .into_iter()
-            .flat_map(|edges| edges.keys())
-            .cloned()
-            .collect::<HashSet<Name>>();
         let mut candidate = preferred.clone();
         let mut suffix = 1;
-        while taken.contains(&candidate) || own_edges.contains(&candidate) {
+        while taken.contains(&candidate) {
             candidate = Name::new(format!("{preferred}${suffix}"));
             suffix += 1;
         }
@@ -1117,11 +1110,11 @@ fn session_contract_head(
     workspace: baml_base::SourceRoot,
     name: &TypeName,
 ) -> Option<baml_type::DeclName> {
-    use baml_compiler2_hir::package::{accessible_package, package_dependency_closure, spelling};
+    use baml_compiler2_hir::package::{dependency_named, package_dependency_closure, spelling};
 
     let root = if name.is_local() {
         workspace
-    } else if let Some(root) = accessible_package(db, workspace, name.package()) {
+    } else if let Some(root) = dependency_named(db, workspace, name.package()) {
         root
     } else {
         let root = spelling(db).root(name.package())?;

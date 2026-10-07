@@ -1878,9 +1878,11 @@ impl BamlClassInterfaceType for PackageReflectImpl {
     }
 }
 
-// The `implements reflect.TypeView` blocks' `as_type` bodies — impl-block
+// The `implements root.TypeView` blocks' `as_type` bodies — impl-block
 // methods, so codegen emits one `…ReflectTypeView_for_Type` trait per view
-// class (plus the aggregating `BamlNamespace…Reflect` supertraits).
+// class (plus the aggregating `BamlNamespace…Reflect` supertraits): the
+// native key spells the written `root.` as the package's fixed name
+// (`baml_base::native_key_spelling`).
 
 impl BamlClassArrayReflectTypeView_for_Type for PackageReflectImpl {
     impl_as_type!(Array, array);

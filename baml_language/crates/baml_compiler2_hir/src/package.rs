@@ -162,17 +162,6 @@ pub fn edge_table(db: &dyn crate::Db, root: SourceRoot) -> Vec<(Name, SourceRoot
     edges
 }
 
-/// The package `root` spells as `name`: itself, when `name` is its own
-/// declared name (a named package may qualify its own items by it), else the
-/// dependency reached by the edge named `name`. Anything else is invisible.
-/// An unnamed package has no name to spell itself by besides `root`.
-pub fn accessible_package(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Option<SourceRoot> {
-    if root.self_name(db).is_some_and(|own| own == *name) {
-        return Some(root);
-    }
-    dependency_named(db, root, name)
-}
-
 /// The spelling of the edge from a package to itself — Rust's `crate`.
 pub const ROOT_SEGMENT: &str = "root";
 
@@ -209,8 +198,15 @@ pub enum PathHead {
 
 /// The package `first` names when it heads a qualified path written in
 /// `own`: `root` is `own` itself, any other name is `own`'s edge of that
-/// name ([`accessible_package`]). `None` when `first` names no package the
+/// name ([`dependency_named`]). `None` when `first` names no package the
 /// writer can see — the path is then read in the surrounding scope.
+///
+/// A package's own declared name is NOT among its edges: a package spells
+/// itself as `root` and nothing else (Rust's `crate`), so the standard
+/// library writes `root.json.json` inside `baml`, and a project named `app`
+/// that writes `app.Foo` names an item `app` of its scope. The name on the
+/// manifest is display metadata and the default a dependent spells the
+/// package by, never a way to reach it.
 ///
 /// The ONE place a written first segment becomes a package; whether the
 /// segment is read as one at all is [`path_head`]'s call.
@@ -218,7 +214,7 @@ pub fn path_package(db: &dyn crate::Db, own: SourceRoot, first: &Name) -> Option
     if first.as_str() == ROOT_SEGMENT {
         return Some(own);
     }
-    accessible_package(db, own, first)
+    dependency_named(db, own, first)
 }
 
 /// The [`PathHead`] of `segments`, written in the namespace `namespace` of
@@ -840,6 +836,17 @@ mod tests {
         );
         // A name no edge carries - the dependency's OWN name included - is a
         // plain name of the scope: `Cart.empty` starts at the item `Cart`.
+        // A package's own declared name is not an edge either: `lib` spells
+        // itself as `root` only, and `lib.Foo` written inside it is the item
+        // `lib` of its scope followed by a member.
+        assert_eq!(
+            path_head(&db, lib, &[], &path(&["lib", "Foo"])),
+            PathHead::Plain
+        );
+        assert_eq!(
+            path_head(&db, lib, &[], &path(&["root", "Foo"])),
+            PathHead::Package(lib)
+        );
         assert_eq!(
             path_head(&db, app, &[], &path(&["lib", "Foo"])),
             PathHead::Plain

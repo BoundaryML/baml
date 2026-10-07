@@ -6,7 +6,7 @@
 //! `NativeBuiltin` record. The CST is also retained per file for
 //! `//baml:mut_self`, `//baml:vm`, and `//baml:mut_vm` directive scanning.
 
-use baml_base::FileId;
+use baml_base::{FileId, native_key_spelling};
 use baml_compiler_diagnostics::ToDiagnostic;
 use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
 use baml_compiler2_ast::ast::{
@@ -275,9 +275,10 @@ fn extract_from_class(
     // method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));
     let in_impl = class_def.implements.iter().flat_map(|b| {
-        // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
-        // build the method's fully-qualified name, so reuse it verbatim.
-        let iface = b.target.to_string();
+        // The interface `TypeExpr`'s `Display` is the exact form MIR keys
+        // on, with a written `root.` spelled as the package — through the
+        // same function MIR uses, so the two cannot drift.
+        let iface = native_key_spelling(package_of(namespace_prefix), &b.target.to_string());
         b.methods.iter().map(move |m| (m, Some(iface.clone())))
     });
     for (method, iface_qualifier) in direct.chain(in_impl) {
@@ -612,8 +613,14 @@ fn extract_from_implements_for(
             )
         });
 
-    // The synthetic class segment must match MIR's `{iface}$for${for}` exactly.
-    let synthetic_class = format!("{}$for${}", impl_def.interface_target, impl_def.for_target);
+    // The synthetic class segment must match MIR's `{iface}$for${for}`
+    // exactly: both spell a written `root.` as the package.
+    let package = package_of(namespace_prefix);
+    let synthetic_class = format!(
+        "{}$for${}",
+        native_key_spelling(package, &impl_def.interface_target.to_string()),
+        native_key_spelling(package, &impl_def.for_target.to_string()),
+    );
 
     let impl_generics: Vec<String> = impl_def
         .generic_params
@@ -892,6 +899,14 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
         }
         _ => vec![],
     }
+}
+
+/// The package of a `{package}` or `{package}.{ns…}` prefix: the stdlib
+/// package's fixed name, which a native key spells a written `root.` as.
+fn package_of(namespace_prefix: &str) -> &str {
+    namespace_prefix
+        .split_once('.')
+        .map_or(namespace_prefix, |(package, _)| package)
 }
 
 /// The namespace-only part of a `{package}` or `{package}.{ns…}` prefix.
@@ -1608,8 +1623,8 @@ implements<T, E> Modifier<T, E> for Root {
             "baml_random_rng_for_systemrandom_random"
         );
         assert_eq!(
-            super::path_to_fn_name("baml.fs.root.io.Read$for$File.read"),
-            "baml_fs_root_io_read_for_file_read"
+            super::path_to_fn_name("baml.fs.baml.io.Read$for$File.read"),
+            "baml_fs_baml_io_read_for_file_read"
         );
     }
 
