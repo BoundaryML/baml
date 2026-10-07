@@ -41,6 +41,9 @@ pub(crate) struct TranslateCtx {
     /// runtime `.py` path, where callable types fall back to
     /// `typing.Callable[..., R]` (Protocol classes are stub-only).
     pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
+    /// `.pyi`-only: maps each `Ty::Function` in the leaf whose values BAML
+    /// makes to the name of the `typing.Protocol` emitted for it, which has
+    /// the handle and the async entry path of a BAML closure.
     pub(crate) returned_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
     /// Rewrite source `ai.stream.Stream<T>` to the underlying host
     /// `_BamlStream` type. `Stream` is a host re-export rather than a normal
@@ -64,23 +67,29 @@ pub(crate) struct SelfRef {
     pub(crate) bare_name: String,
 }
 
-/// Which side makes the function values of a type. It decides what a
-/// `typing.Callable` returns.
+/// Which side makes the function values of a type. It decides the Python
+/// type of a callable: what it returns, and which Protocol names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CallableSide {
-    /// The host passes the callable to BAML: a function argument, a class
-    /// field. It may be an `async def`: the bridge runs the coroutine it
-    /// returns to completion (`baml_bridge._dispatch`), so the return type
-    /// admits that coroutine too.
+pub(crate) enum CallableSide {
+    /// The host may have made the callable: a function argument, a class
+    /// field, a type alias. It may be an `async def`: the bridge runs the
+    /// coroutine it returns to completion (`baml_bridge._dispatch`), so the
+    /// return type admits that coroutine too.
+    ///
+    /// A position that either side fills (a field of a class that the host
+    /// builds and that BAML returns) is on this side as well. A callable that
+    /// BAML made is also a value of the host's type: it returns the value,
+    /// and it takes every callback a host callable is given. So the host's
+    /// type is the one that every value of the position has.
     Host,
-    /// BAML hands the callable to the host: a returned function, an argument
-    /// of a host callback. A call returns the value.
+    /// Only BAML makes the callable: a returned function, an argument of a
+    /// host callback. A call returns the value.
     Baml,
 }
 
 impl CallableSide {
     /// The side that makes the parameters of a function this side makes.
-    fn of_params(self) -> Self {
+    pub(crate) fn of_params(self) -> Self {
         match self {
             Self::Host => Self::Baml,
             Self::Baml => Self::Host,
@@ -144,7 +153,7 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
                 && let [value] = &**args
             {
                 let stream_type = translate_ty_from(value, ctx, side);
-                let yield_type = translate_stream_yield_ty(value, ctx);
+                let yield_type = translate_stream_yield_ty(value, ctx, side);
                 let next_type = if ctx.include_stream_done {
                     let done = if ctx.current_leaf.segments == ["ai", "stream"] {
                         "Done"
@@ -218,19 +227,21 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
         | Ty::PromptAst
         | Ty::Future(..) => "typing.Any".to_string(),
         Ty::Function { params, ret, .. } => {
-            if let Some(name) = ctx.callback_protocols.as_ref().and_then(|map| map.get(ty)) {
+            // A callable that `typing.Callable` cannot describe is emitted as
+            // a named `typing.Protocol`, and the type expression here is that
+            // Protocol's name: a host callback with optional params, and
+            // every callable that BAML makes.
+            let protocols = match side {
+                CallableSide::Host => &ctx.callback_protocols,
+                CallableSide::Baml => &ctx.returned_protocols,
+            };
+            if let Some(name) = protocols.as_ref().and_then(|map| map.get(ty)) {
                 return name.clone();
             }
             let has_optional = params
                 .iter()
                 .any(|param| param.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional);
             if has_optional {
-                // A callback with optional params is emitted as a named
-                // `typing.Protocol` (see `TranslateCtx::callback_protocols`):
-                // the type expression here is just that Protocol's name.
-                if let Some(name) = ctx.callback_protocols.as_ref().and_then(|map| map.get(ty)) {
-                    return name.clone();
-                }
                 // Runtime `.py` path (no Protocol map): `typing.Callable` can't
                 // express per-param optionality, so widen the arg list.
                 format!(
@@ -264,7 +275,7 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
 /// Async iteration consumes the raw `next()` protocol: `Done` terminates the
 /// iterator and top-level null partials are skipped. Render the value that can
 /// actually reach the loop body rather than reusing the broader next type.
-fn translate_stream_yield_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
+fn translate_stream_yield_ty(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String {
     match ty {
         Ty::Null => "typing_extensions.Never".to_string(),
         Ty::Union(items) => {
@@ -274,17 +285,17 @@ fn translate_stream_yield_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 .collect::<Vec<_>>();
             match non_null.as_slice() {
                 [] => "typing_extensions.Never".to_string(),
-                [only] => translate_ty(only, ctx),
+                [only] => translate_ty_from(only, ctx, side),
                 many => format!(
                     "typing.Union[{}]",
                     many.iter()
-                        .map(|item| translate_ty(item, ctx))
+                        .map(|item| translate_ty_from(item, ctx, side))
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
             }
         }
-        _ => translate_ty(ty, ctx),
+        _ => translate_ty_from(ty, ctx, side),
     }
 }
 
@@ -366,13 +377,11 @@ fn projected_bare_name(name: &Name, ctx: &TranslateCtx) -> String {
     )
 }
 
-/// Function values returned by BAML expose controls and an async entry path.
+/// The Python type of `ty` where BAML supplies the value: what a function
+/// returns. Function values returned by BAML expose controls and an async
+/// entry path.
 pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
-    let mut returned_ctx = ctx.clone();
-    returned_ctx
-        .callback_protocols
-        .clone_from(&ctx.returned_protocols);
-    translate_ty_from(ty, &returned_ctx, CallableSide::Baml)
+    translate_ty_from(ty, ctx, CallableSide::Baml)
 }
 
 #[cfg(test)]
@@ -575,6 +584,53 @@ mod tests {
         assert_eq!(
             translate_callback_param_ty(&returned, &ctx(&["lorem"])),
             "typing.Callable[[typing.Callable[[int], typing.Union[str, typing.Coroutine[typing.Any, typing.Any, str]]]], bool]",
+        );
+    }
+
+    /// A callable is named by the Protocol of the side that makes it, at
+    /// every depth: the same function type is a different Python type as a
+    /// host callback and as a BAML closure.
+    #[test]
+    fn callable_takes_the_protocol_of_the_side_that_makes_it() {
+        let optional = callable(
+            vec![
+                callable_param(Ty::Int),
+                optional_callable_param("limit", Ty::Int),
+            ],
+            Box::new(Ty::String),
+        );
+        let mut ctx = ctx(&["lorem"]);
+        ctx.callback_protocols = Some(std::rc::Rc::new(IndexMap::from([(
+            optional.clone(),
+            "_HostCallback".to_string(),
+        )])));
+        ctx.returned_protocols = Some(std::rc::Rc::new(IndexMap::from([(
+            optional.clone(),
+            "_BamlReturned1".to_string(),
+        )])));
+
+        assert_eq!(translate_ty(&optional, &ctx), "_HostCallback");
+        assert_eq!(translate_return_ty(&optional, &ctx), "_BamlReturned1");
+        assert_eq!(
+            translate_callback_param_ty(&optional, &ctx),
+            "_BamlReturned1"
+        );
+
+        // A host callback is handed a BAML closure, and returns a host one.
+        let takes = callable(vec![callable_param(optional.clone())], Box::new(Ty::Bool));
+        assert_eq!(
+            translate_ty(&takes, &ctx),
+            "typing.Callable[[_BamlReturned1], typing.Union[bool, typing.Coroutine[typing.Any, typing.Any, bool]]]",
+        );
+        let gives = callable(vec![], Box::new(optional.clone()));
+        assert_eq!(
+            translate_ty(&gives, &ctx),
+            "typing.Callable[[], typing.Union[_HostCallback, typing.Coroutine[typing.Any, typing.Any, _HostCallback]]]",
+        );
+        // A list keeps the side of the value that holds it.
+        assert_eq!(
+            translate_return_ty(&list(Box::new(optional)), &ctx),
+            "typing.List[_BamlReturned1]",
         );
     }
 

@@ -35,6 +35,13 @@ The generated type of a callback parameter or class field accepts both forms:
 `typing.Callable[[...], typing.Union[R, typing.Coroutine[typing.Any, typing.Any, R]]]`,
 so a type checker takes a plain function and an `async def` for it.
 
+A class has one type for a field, whoever built the instance. A call of a
+function-typed field therefore has the type `R | Coroutine[Any, Any, R]` also
+on an instance that BAML returned, where the callable is a BAML closure and
+the call returns `R`. A function that BAML returns directly, and a callable
+that BAML passes to a callback, is typed as the BAML closure it is: a call
+returns `R`, optional parameters are keyword-only, and `call_async` awaits it.
+
 Each dispatch of an async entry receives a separate copy of its application
 `ContextVars`. Callback writes do not change the awaiting task's context or
 another dispatch's context. An async callback need not run in the caller's
