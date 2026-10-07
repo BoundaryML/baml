@@ -27,7 +27,6 @@ PYPROJECT = ROOT / "baml_language" / "sdks" / "python" / "pyproject.toml"
 PY_INIT = ROOT / "baml_language" / "sdks" / "python" / "src" / "baml_bridge" / "__init__.py"
 VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
 NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "package.json"
-NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "dist" / "native.js"
 WEB_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript_web" / "package.json"
 NODE_VERSION_RS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "src" / "version.rs"
 WEB_VERSION_RS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript_web" / "src" / "version.rs"
@@ -784,36 +783,8 @@ def stamp(plan: ReleasePlan) -> None:
     PY_INIT.write_text(text, encoding="utf-8")
 
 
-def regenerate_node_bridge() -> None:
-    if not NODE_PACKAGE.exists():
-        return
-
-    try:
-        subprocess.run(
-            ["pnpm", "install", "--frozen-lockfile", "--ignore-workspace", "--ignore-scripts"],
-            cwd=NODE_PACKAGE.parent,
-            check=True,
-        )
-        subprocess.run(
-            ["pnpm", "build:debug"],
-            cwd=NODE_PACKAGE.parent,
-            check=True,
-        )
-    except FileNotFoundError:
-        fail("pnpm is required to install and regenerate the Node bridge after a canary version bump")
-    except subprocess.CalledProcessError as exc:
-        fail(
-            "failed to install or regenerate the Node bridge after stamping versions. "
-            "Run `cd baml_language/sdks/typescript/bridge_typescript && "
-            "pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts && pnpm build:debug` "
-            "for details.",
-            code=exc.returncode,
-        )
-
-
 def sync_canary() -> None:
     stamp(make_plan("canary"))
-    regenerate_node_bridge()
 
 
 def exact_regex_field(path: Path, pattern: str, expected: str) -> bool:
@@ -1004,29 +975,6 @@ def check_release() -> None:
             r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = "([^"]+)";$',
             expected.npm_version,
         )
-        if not NODE_NATIVE_JS.exists():
-            mismatches.append(
-                "node native loader version guards: "
-                f"{NODE_NATIVE_JS.relative_to(ROOT)} is missing. Run "
-                "`scripts/baml-language-version sync` and commit the generated output."
-            )
-        else:
-            native_text = NODE_NATIVE_JS.read_text(encoding="utf-8")
-            native_versions = sorted(
-                set(re.findall(r"bindingPackageVersion !== '([^']+)'", native_text))
-            )
-            if not native_versions:
-                mismatches.append(
-                    "node native loader version guards: no napi version guards found in "
-                    f"{NODE_NATIVE_JS.relative_to(ROOT)}"
-                )
-            elif native_versions != [expected.canonical_version]:
-                mismatches.append(
-                    "node native loader version guards: "
-                    f"{NODE_NATIVE_JS.relative_to(ROOT)} embeds {', '.join(native_versions)}; "
-                    f"expected {expected.canonical_version}. Run "
-                    "`scripts/baml-language-version sync` and commit the generated output."
-                )
     if WEB_PACKAGE.exists():
         checks["web package version"] = (
             json_version(WEB_PACKAGE) == expected.npm_version

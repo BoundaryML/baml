@@ -1,2 +1,3 @@
+/dist
 # Native addon build artifacts are produced by `pnpm build:napi-*`.
 *.node
