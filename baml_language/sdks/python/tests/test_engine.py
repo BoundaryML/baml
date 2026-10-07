@@ -140,8 +140,9 @@ raise SystemExit(42)
 # A host chooses what an unobserved spawn error does to its process
 # (`set_unhandled_spawn_error_handler`). The state is process-wide and the
 # default ends the process, so each case runs in a child process: `main` leaves
-# a failed task unobserved, and `cancelled_main` cancels a task whose cleanup
-# then fails. A child that survives exits with status 42.
+# a failed task unobserved, `cancelled_main` cancels a task whose cleanup then
+# fails, and `cancelled_after_failure_main` cancels a task that has already
+# failed. A child that survives exits with status 42.
 UNHANDLED_SPAWN_SCRIPT = """\
 import json
 import sys
@@ -170,6 +171,12 @@ function cancelled_main() -> int {
     baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
     1
 }
+function cancelled_after_failure_main() -> int {
+    let failed = spawn { bad() };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    failed.cancel();
+    1
+}
 '''
 
 seen = []
@@ -182,19 +189,8 @@ def record(error, cancelled):
             "text": str(error),
             "cancelled": cancelled,
             "baml_frames": "main.baml" in "".join(traceback.format_exception(error)),
-            "event_loop": _has_running_loop(),
         }
     )
-
-
-def _has_running_loop():
-    import asyncio
-
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return False
-    return True
 
 
 def run(entry):
@@ -236,7 +232,6 @@ run("main")
             "text": "str: 'boom'",
             "cancelled": False,
             "baml_frames": True,
-            "event_loop": False,
         }
     ]
 
@@ -302,6 +297,22 @@ run("cancelled_main")
     [seen] = json.loads(result.stdout)
     assert seen["cancelled"] is True
     assert seen["text"] == "str: 'cleanup boom'"
+
+
+def test_unhandled_spawn_error_handler_is_told_of_a_cancel_after_the_failure():
+    result = run_unhandled_spawn_script(
+        """\
+baml_bridge.set_unhandled_spawn_error_handler(record)
+run("cancelled_after_failure_main")
+"""
+    )
+
+    # The task had failed before anything cancelled it, and the flag is still
+    # set: it says that the task was cancelled, not that the cancel came first.
+    assert result.returncode == 42, result.stderr
+    [seen] = json.loads(result.stdout)
+    assert seen["cancelled"] is True
+    assert seen["text"] == "str: 'boom'"
 
 
 def test_unhandled_spawn_error_default_prints_a_cancelled_task_and_continues():

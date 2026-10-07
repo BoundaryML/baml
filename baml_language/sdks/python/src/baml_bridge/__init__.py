@@ -61,18 +61,20 @@ UnhandledSpawnErrorHandler = Callable[[BaseException, bool], None]
 
 `error` is the exception a call would have raised for the same failure (a
 `BamlError`, a `BamlPanic`, or the exception a host callback raised), with the
-BAML frames in its traceback. `cancelled` is true when the task was cancelled
-before it failed, for example by an error in its cleanup."""
+BAML frames in its traceback. `cancelled` is true when the task was cancelled:
+its cancellation fired before it failed (the error is then often one of its
+cleanup), or `cancel()` was called on it at any time, also after it failed."""
 
 
 def default_unhandled_spawn_error_handler(error: BaseException, cancelled: bool) -> None:
     """Print the error of a spawned task that nothing observed, and end the
-    process with exit status 1 unless the task was cancelled.
+    process unless the task was cancelled.
 
     A failure that no code awaited is a defect of the program, as an uncaught
     exception is, so the default does not let the program run on. The exit is
-    immediate (`os._exit`): no `atexit` handler and no `finally` block runs,
-    and buffered output is lost."""
+    immediate (`os._exit(1)`; on Windows the process terminates itself with
+    `SIGTERM`): no `atexit` handler and no `finally` block runs, and buffered
+    output is lost."""
     traceback.print_exception(error)
     if not cancelled:
         sys.stderr.flush()

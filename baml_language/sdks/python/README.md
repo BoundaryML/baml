@@ -55,9 +55,9 @@ does not revive the cancelled BAML call.
 A BAML `spawn { ... }` task can end with an error that no code awaits. The
 runtime finds such a task at a later garbage collection or at shutdown, and
 reports its error one time to one handler for the process. The default handler
-prints the traceback and ends the process with exit status 1, as an uncaught
-exception ends a script. If the task was cancelled before it failed, the
-default only prints.
+prints the traceback and ends the process, as an uncaught exception ends a
+script (exit status 1; on Windows the process terminates itself with
+`SIGTERM`). If the task was cancelled, the default only prints.
 
 A server must usually not end because of one stray task. It installs a
 handler that reports the error and returns:
@@ -78,7 +78,8 @@ baml_bridge.set_unhandled_spawn_error_handler(report)
 - `error` is the exception that a call raises for the same failure (a
   `BamlError`, a `BamlPanic`, or the exception a Python callback raised). Its
   traceback has the BAML frames. `cancelled` is `True` when the task was
-  cancelled before it failed.
+  cancelled: its cancellation fired before it failed, or `cancel()` was called
+  on it at any time, also after it failed.
 - The handler runs on a thread of the BAML runtime, not on the thread or the
   event loop that made the call, and no event loop runs on that thread. It must
   return soon and must not call BAML. To reach the application, use
