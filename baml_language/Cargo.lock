@@ -2062,6 +2062,7 @@ name = "btel_snapshot"
 version = "0.0.0-beta"
 dependencies = [
  "baml_type",
+ "base64",
  "bex_str",
  "borsh",
  "btel_settings",

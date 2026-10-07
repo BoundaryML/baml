@@ -11,7 +11,7 @@ use crate::{
     encoding::{STRING_BLOB_HEADER_BYTES, string_blob_header},
     graph::{SnapshotRoot, SnapshotValue, StringId},
     pool::Storage,
-    shape::BlobEntry,
+    shape::{BlobEntry, LogicalBytesV1},
 };
 
 /// A blob that is one string, on its own: what the blob holds before the
@@ -21,10 +21,15 @@ pub struct Leaf {
     id: CasId,
     header: [u8; STRING_BLOB_HEADER_BYTES],
     content: BexStr,
+    logical_bytes_v1: Option<u64>,
 }
 impl Leaf {
     pub fn id(&self) -> CasId {
         self.id
+    }
+    /// Customer content size, measured before the capture gives up strings.
+    pub fn logical_bytes_v1(&self) -> Option<u64> {
+        self.logical_bytes_v1
     }
     /// Exact length of what [`Self::write`] writes.
     pub fn encoded_len(&self) -> u64 {
@@ -93,6 +98,10 @@ impl Kept<'_> {
     pub fn encoded_len(&self) -> u64 {
         self.0.encoded_len()
     }
+    /// Customer content size, retained before the capture gives up strings.
+    pub fn logical_bytes_v1(&self) -> Option<u64> {
+        self.0.logical_bytes_v1()
+    }
     /// As [`Blob::write`].
     pub fn write(&self, scratch: &mut BlobScratch, w: &mut impl Write) -> io::Result<()> {
         self.0.write(scratch, w)
@@ -135,6 +144,13 @@ impl Snapshot {
     /// is content, never a name written in place, so nothing the capture
     /// still writes reads one it gave up.
     pub fn split(mut self) -> Split {
+        // Measure while all child content is still held; delivery can release
+        // string leaves before it serializes the blobs that reference them.
+        for index in 0..self.0.shape.blobs.len() {
+            let index = BlobIndex(u32::try_from(index).expect("bounded blob count"));
+            let size = self.blob(index).logical_bytes_v1();
+            self.0.shape.blobs[index.0 as usize].logical_bytes_v1 = LogicalBytesV1::Measured(size);
+        }
         let Storage { graph, shape, .. } = &mut *self.0;
         let mut leaves = Vec::new();
         let mut kept = false;
@@ -151,6 +167,10 @@ impl Snapshot {
                 id: entry.id,
                 header: string_blob_header(entry.id, len),
                 content,
+                logical_bytes_v1: match entry.logical_bytes_v1 {
+                    LogicalBytesV1::Measured(size) => size,
+                    LogicalBytesV1::Unmeasured => unreachable!("measured before split"),
+                },
             };
             debug_assert_eq!(leaf.encoded_len(), entry.encoded_len);
             leaves.push(leaf);

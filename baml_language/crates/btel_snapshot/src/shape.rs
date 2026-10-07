@@ -68,7 +68,16 @@ pub(crate) struct BlobEntry {
     pub(crate) members: Range<ObjectId>,
     pub(crate) children: Range<BlobIndex>,
     pub(crate) encoded_len: u64,
+    /// Unmeasured, or measured before delivery releases leaves. A measured
+    /// None is an expanded total that cannot fit in u64.
+    pub(crate) logical_bytes_v1: LogicalBytesV1,
 }
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum LogicalBytesV1 {
+    Unmeasured,
+    Measured(Option<u64>),
+}
+
 /// Where other blobs find an object stored in a blob of its own.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Home {
@@ -429,6 +438,7 @@ impl Shaper {
                         members,
                         children: child_range,
                         encoded_len,
+                        logical_bytes_v1: LogicalBytesV1::Unmeasured,
                     },
                     meter,
                 );
