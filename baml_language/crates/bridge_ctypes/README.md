@@ -9,15 +9,14 @@ cargo build -p bridge_ctypes
 #   -> sdks/rust/bridge_rust/src/wire/baml_bridge.cffi.v1.rs (committed)
 #   -> sdks/python/src/baml_bridge/cffi/v1/*_pb2.py(i)
 
-# Node / TypeScript (protobufjs + napi loader)
+# Node / TypeScript (protobufjs)
 cd sdks/typescript/bridge_typescript && pnpm build:debug
 #   -> sdks/typescript/bridge_typescript/typescript_src/proto/baml_cffi.{js,d.ts}
-#   -> sdks/typescript/bridge_typescript/dist/native.js
 #
-# scripts/baml-language-version bump/set/sync install the pinned Node bridge
-# dependencies and run this automatically after version bumps because napi
-# stamps package.json's version into dist/native.js. build:proto alone is only
-# sufficient for proto schema-only changes.
+# The package's dist/ is build output and is not committed. A proto
+# schema-only change needs no native build, but build:proto alone leaves the
+# generated header off:
+#   pnpm build:proto && pnpm build:tag-generated-files
 
 # TypeScript (ts-proto / buf) — typescript2/pkg-proto consumer
 cd typescript2/pkg-proto && pnpm generate
