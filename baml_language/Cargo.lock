@@ -1788,6 +1788,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridge_encode"
+version = "0.1.0"
+dependencies = [
+ "baml_sdkgen_types",
+ "baml_type",
+ "bridge_ctypes",
+ "num-bigint",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "bridge_java"
 version = "0.0.0-beta"
 dependencies = [
