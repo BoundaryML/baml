@@ -68,7 +68,16 @@ pub(crate) struct BlobEntry {
     pub(crate) members: Range<ObjectId>,
     pub(crate) children: Range<BlobIndex>,
     pub(crate) encoded_len: u64,
+    /// Unmeasured, or measured before delivery releases leaves. A measured
+    /// None is an expanded total that cannot fit in u64.
+    pub(crate) logical_bytes_approx_v1: LogicalBytesApproxV1,
 }
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum LogicalBytesApproxV1 {
+    Unmeasured,
+    Measured(Option<u64>),
+}
+
 /// Where other blobs find an object stored in a blob of its own.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Home {
@@ -86,6 +95,8 @@ pub(crate) struct Shape {
     pub(crate) members: Arena<ObjectId>,
     /// Each blob's children in first-use order, concatenated.
     pub(crate) children: Arena<BlobIndex>,
+    /// Per-object strongly connected component, populated only for delivery.
+    pub(crate) logical_units: Arena<u32>,
     /// Per object, string and bigint: the blob other blobs find it in. Empty
     /// when the capture is one blob.
     object_homes: Arena<Option<Home>>,
@@ -109,6 +120,7 @@ impl Shape {
             blobs,
             members,
             children,
+            logical_units,
             object_homes,
             string_homes,
             bigint_homes,
@@ -116,6 +128,7 @@ impl Shape {
         blobs.clear();
         members.clear();
         children.clear();
+        logical_units.clear();
         object_homes.clear();
         string_homes.clear();
         bigint_homes.clear();
@@ -126,6 +139,7 @@ impl Shape {
             blobs,
             members,
             children,
+            logical_units,
             object_homes,
             string_homes,
             bigint_homes,
@@ -133,6 +147,7 @@ impl Shape {
         size_of_val(&**blobs)
             + size_of_val(&**members)
             + size_of_val(&**children)
+            + size_of_val(&**logical_units)
             + size_of_val(&**object_homes)
             + size_of_val(&**string_homes)
             + size_of_val(&**bigint_homes)
@@ -142,6 +157,7 @@ impl Shape {
             blobs,
             members,
             children,
+            logical_units,
             object_homes,
             string_homes,
             bigint_homes,
@@ -150,6 +166,7 @@ impl Shape {
             blobs.capacity_bytes(),
             members.capacity_bytes(),
             children.capacity_bytes(),
+            logical_units.capacity_bytes(),
             object_homes.capacity_bytes(),
             string_homes.capacity_bytes(),
             bigint_homes.capacity_bytes(),
@@ -429,6 +446,7 @@ impl Shaper {
                         members,
                         children: child_range,
                         encoded_len,
+                        logical_bytes_approx_v1: LogicalBytesApproxV1::Unmeasured,
                     },
                     meter,
                 );
@@ -673,6 +691,16 @@ struct Cuts {
     /// Per string and bigint: whether a value that holds it is cut there.
     strings: Vec<bool>,
     bigints: Vec<bool>,
+}
+
+/// Reuse the shaper's iterative SCC search without changing storage policy.
+pub(crate) fn logical_units(graph: &Graph, root: SnapshotRoot) -> Vec<u32> {
+    if graph.objects.is_empty() {
+        return Vec::new();
+    }
+    let mut cuts = Cuts::default();
+    cuts.find(graph, root, u64::MAX, u64::MAX);
+    cuts.nodes.iter().map(|node| node.unit).collect()
 }
 
 impl Cuts {

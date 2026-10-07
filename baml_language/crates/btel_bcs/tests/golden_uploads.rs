@@ -208,6 +208,7 @@ fn fixture_envelopes_embed_exact_sources_and_ordered_membership() {
                     candidate.snapshot_format_version
                 );
                 assert_eq!(hex::encode(&object.blob_sha256), digest(&object.blob));
+                assert_eq!(object.logical_bytes_approx_v1, Some(16));
                 let source = sources["snapshots"]
                     .as_array()
                     .unwrap()

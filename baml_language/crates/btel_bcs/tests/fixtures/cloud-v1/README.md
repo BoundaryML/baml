@@ -145,6 +145,11 @@ bytes per object (batch.hex with two objects by six). Server response plans,
 dispositions, placement, headers and the zero-candidate recording and envelope
 are unchanged.
 
+The logical-size refresh adds `CasObject.logical_bytes_approx_v1` (field 5) with value
+16 for every scalar int64 fixture (eight-byte type ID plus eight-byte value).
+Upload envelopes grow by two bytes per CAS object; their lengths and SHA-256s follow those bodies. Recording bytes, CAS
+blob bytes, IDs, blob digests, prepare requests, and server plans are unchanged.
+
 Tests independently check envelope version, IDs, ordered membership, recording
 presence and exact source bytes, CAS format version and exact blob bytes, each
 blob SHA-256, and whole-envelope length/SHA-256. Corruption sensitivity tests
