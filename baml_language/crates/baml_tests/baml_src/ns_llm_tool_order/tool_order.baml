@@ -78,12 +78,23 @@ client ToolOrderBedrock = aws.BedrockClient.new(
     endpoint_url = "http://localhost:1234",
 );
 
-/// `names` in the order `body` first writes each one as a JSON string.
+/// `names` in the order `body` first writes each one as a JSON string. A name
+/// that `body` does not write is reported in place of an order, so a request
+/// that drops a tool cannot pass as one that lists it first.
 function tool_order_seen(body: string, names: string[]) -> string {
     let text = body;
+    let missing = names.filter((name) -> {
+        text.index_of(`"${name}"`) == null
+    });
+    if (missing.length() > 0) {
+        return `missing: ${missing.join(",")}`;
+    }
     names
         .sort_by_key((name) -> {
-            text.index_of(`"${name}"`) ?? -1
+            match (text.index_of(`"${name}"`)) {
+                let at: int => at,
+                null => baml.sys.panic(`"${name}" was found above`),
+            }
         })
         .join(",")
 }
@@ -146,6 +157,40 @@ function tool_order_parameters() -> string {
 
 test "a tool schema lists the parameters in declaration order" {
     assert.equal(tool_order_parameters(), "zebra,apple,mango")
+}
+
+// `required` is a list of its own, so its order is pinned apart from the
+// order of `properties`. `mango` is in it: a nullable parameter with no
+// default is still passed by every call.
+
+function tool_order_required() -> string[] {
+    baml.json.path_or<string[]>(
+        baml.json.from(ai.tools.tool(tool_order_zulu).input_schema),
+        ".required",
+        [],
+    )
+}
+
+test "a tool schema lists the required parameters in declaration order" {
+    assert.equal(tool_order_required(), ["zebra", "apple", "mango"])
+}
+
+// The fields of a class parameter and the variants of an enum parameter keep
+// their declaration order too.
+
+function tool_order_fields_and_variants() -> string[] {
+    let schema = baml.json.to_string(ai.tools.tool(tool_order_zulu).input_schema);
+    [tool_order_seen(schema, ["high", "low"]), tool_order_seen(schema, ["Alpha", "Zeta"])]
+}
+
+test "a tool schema lists class fields and enum variants in declaration order" {
+    assert.equal(tool_order_fields_and_variants(), ["low,high", "Zeta,Alpha"])
+}
+
+// A name that the body does not write is reported, not ordered.
+
+test "a missing name is reported in place of an order" {
+    assert.equal(tool_order_seen("{\"present\": 1}", ["absent", "present"]), "missing: absent")
 }
 
 // The same declaration renders the same bytes each time.
