@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: Public Slack channel for the report
+        description: Public Slack channel name or channel ID (use an ID for private channels)
         required: true
         default: '#general'
         type: string
@@ -46,8 +46,8 @@ jobs:
         run: pnpm --filter app-product-metrics report:slack
         working-directory: typescript2
 
-      - name: Upload screenshot when delivery fails
-        if: failure()
+      - name: Upload dashboard screenshot
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: product-metrics-dashboard

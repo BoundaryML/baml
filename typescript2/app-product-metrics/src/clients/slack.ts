@@ -76,6 +76,8 @@ export async function resolveSlackChannelId(
   channelName: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
+  const channel = channelName.trim();
+  if (/^[CG][A-Z0-9]+$/.test(channel)) return channel;
   const normalizedChannelName = channelName.trim().replace(/^#/, '');
   if (!normalizedChannelName) throw new Error('Slack channel name is required');
 
