@@ -293,6 +293,7 @@ namespace baml.sap:
   class _NoYield { methods: [] }
   class _ParseCache<T> { methods: [_parse_final, _parse_partial] }
   function _new_parse_cache<T>
+  function coerce<T>
   function parse<T>
   function parse_type
 namespace baml.spawn:

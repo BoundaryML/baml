@@ -59,3 +59,25 @@ function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors
     type T = unreflect(t);
     parse<T>(text)
 }
+
+/// Coerce an already-parsed JSON value into `T`: Schema-Aligned Parsing
+/// without its text stage.
+///
+/// `parse` first finds and repairs the JSON in a model's text, then aligns it
+/// to `T`. A value that arrives parsed, such as the arguments of a tool call,
+/// needs only the second step. The alignment is the same: fields and variants
+/// are read under the names the output format shows, and a `@skip` field is
+/// not read.
+///
+/// The type is often data here (`type T = unreflect(t)`), so a `T` that the
+/// parser cannot model is thrown, where `parse` panics: `unknown`,
+/// `uint8array`, a function, a type that holds one of those, and a class with
+/// a `@skip` field whose type has no value to fill in.
+///
+/// # Throws
+/// - `baml.errors.ParseError` if `value` does not align to `T`, or if the
+///   parser cannot model `T`.
+//baml:mut_vm
+function coerce<T>(value: root.json.json) -> T throws root.errors.ParseError {
+    $rust_function
+}

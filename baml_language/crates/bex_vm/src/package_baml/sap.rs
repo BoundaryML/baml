@@ -70,6 +70,31 @@ impl BamlNamespaceSap for PackageBamlImpl {
         )));
         Ok(Value::object(cache))
     }
+
+    fn coerce(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError> {
+        let target = parse_target(vm)?;
+        // `throws ParseError`, where `parse<T>` panics: the type of a coercion
+        // is often data, so one the parser cannot model is an answer for the
+        // caller, not a bug of the program.
+        let model = build_model(vm, &target).map_err(|e| {
+            parse_error(format!(
+                "schema-aligned parsing cannot model this type: {e}"
+            ))
+        })?;
+        if let Some(unfillable) = unfillable_skipped_field(vm, &target)? {
+            return Err(parse_error(unfillable));
+        }
+        let json = super::json::json_value_to_serde(vm, *value);
+        let aligned = align(
+            vm,
+            &model,
+            &target,
+            &parsed_tree(&json),
+            Completion::Final,
+            parse_error,
+        )?;
+        aligned.ok_or_else(|| parse_error("a complete value did not align to a value"))
+    }
 }
 
 impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
@@ -174,9 +199,10 @@ fn parse(
 ) -> Result<Option<Value>, VmRustFnError> {
     let cache = vm.rust_data_field::<ParseCache>(&cache, 0)?;
     let target_type = parse_target(vm)?;
-    let model = &cache.model;
-    // An unresolvable target is a schema bug, not an incomplete reply.
-    let target = model
+    // An unresolvable target is a schema bug, not an incomplete reply: it
+    // reports before the text is looked at.
+    cache
+        .model
         .resolved_target()
         .map_err(|e| llm_client(e.to_string()))?;
     let is_done = completion == Completion::Final;
@@ -187,25 +213,80 @@ fn parse(
         // be coerced until the JSON starts: skip the partial, wait for text.
         Err(_) => return Ok(None),
     };
+    align(
+        vm,
+        &cache.model,
+        &target_type,
+        &value,
+        completion,
+        llm_client,
+    )
+}
+
+/// Align `value` to the target of `model` and allocate the result, or `None`
+/// for a partial value that does not align yet: the second stage of a parse,
+/// and the whole of a coercion. `mismatch` raises a value that does not align.
+fn align(
+    vm: &mut BexVm,
+    model: &CompiledSapModel,
+    target_type: &RealizedTy,
+    value: &jsonish::Value<'_>,
+    completion: Completion,
+    mismatch: impl Fn(String) -> VmRustFnError,
+) -> Result<Option<Value>, VmRustFnError> {
+    let target = model
+        .resolved_target()
+        .map_err(|e| mismatch(e.to_string()))?;
+    let is_done = completion == Completion::Final;
     let context = ParsingContext::new(model.db());
-    let parsed = match TyResolvedRef::coerce(&context, target, &value) {
+    let parsed = match TyResolvedRef::coerce(&context, target, value) {
         Ok(parsed) => parsed,
-        Err(e) if is_done => return Err(llm_client(e.to_string())),
+        Err(e) if is_done => return Err(mismatch(e.to_string())),
         Err(_) => return Ok(None),
     };
     // Only a value to allocate needs the declarations: a partial that does not
     // parse yet skips the walk.
     parsed
         .map(|parsed| {
-            let declarations = Declarations::reached_by(vm, &target_type);
-            to_heap(vm, &parsed, model.db(), &declarations)
+            let declarations = Declarations::reached_by(vm, target_type);
+            to_heap(vm, &parsed, model.db(), &declarations, &mismatch)
         })
         .transpose()
+}
+
+/// The tree the text stage would have produced for `json`, had it been
+/// written out: every value complete, nothing repaired.
+fn parsed_tree(json: &serde_json::Value) -> jsonish::Value<'_> {
+    use jsonish::CompletionState::Complete;
+    match json {
+        serde_json::Value::Null => jsonish::Value::Null,
+        serde_json::Value::Bool(value) => jsonish::Value::Boolean(*value),
+        serde_json::Value::Number(number) => jsonish::Value::Number(number.clone(), Complete),
+        serde_json::Value::String(text) => jsonish::Value::String(text.as_str().into(), Complete),
+        serde_json::Value::Array(items) => {
+            jsonish::Value::Array(items.iter().map(parsed_tree).collect(), Complete)
+        }
+        serde_json::Value::Object(entries) => jsonish::Value::Object(
+            entries
+                .iter()
+                .map(|(key, value)| (key.as_str().into(), parsed_tree(value)))
+                .collect(),
+            Complete,
+        ),
+    }
 }
 
 /// A parse failure, as `baml.errors.LlmClient`.
 fn llm_client(message: impl Into<String>) -> VmRustFnError {
     VmBamlError::LlmClient {
+        message: message.into(),
+    }
+    .into()
+}
+
+/// A coercion failure, as `baml.errors.ParseError`.
+fn parse_error(message: impl Into<String>) -> VmRustFnError {
+    VmBamlError::ParseError {
         message: message.into(),
     }
     .into()
@@ -257,16 +338,19 @@ fn invariant(message: String) -> VmRustFnError {
 }
 
 /// Allocate `value`: the same value the parser produced, on the heap.
+/// `mismatch` raises a value the heap cannot hold: the parser's integer is
+/// wider than the VM's.
 fn to_heap(
     vm: &mut BexVm,
     value: &BamlValueWithFlags<'_, '_, '_, DefKey>,
     db: &TypeRefDb<'_, DefKey>,
     declarations: &Declarations,
+    mismatch: &impl Fn(String) -> VmRustFnError,
 ) -> Result<Value, VmRustFnError> {
     Ok(match &value.value {
         BamlValue::String(s) => Value::object(vm.alloc_string(s.value.as_ref())),
         BamlValue::Int(i) => Value::try_int(i.value).ok_or_else(|| {
-            llm_client(format!(
+            mismatch(format!(
                 "integer {} is outside the BAML integer range [{}, {}]",
                 i.value,
                 Value::INT_MIN,
@@ -291,7 +375,7 @@ fn to_heap(
             let items = array
                 .value
                 .iter()
-                .map(|item| to_heap(vm, item, db, declarations))
+                .map(|item| to_heap(vm, item, db, declarations, mismatch))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
@@ -306,7 +390,10 @@ fn to_heap(
             );
             let mut entries = IndexMap::with_capacity(map.value.len());
             for (k, v) in &map.value {
-                entries.insert(BexStr::from(k.as_ref()), to_heap(vm, v, db, declarations)?);
+                entries.insert(
+                    BexStr::from(k.as_ref()),
+                    to_heap(vm, v, db, declarations, mismatch)?,
+                );
             }
             Value::object(vm.alloc_map(key, value_ty, entries))
         }
@@ -337,7 +424,7 @@ fn to_heap(
             let mut values = Vec::with_capacity(fields.len());
             for (name, skip, field_type) in fields {
                 let field_value = match c.value.get(name.as_str()) {
-                    Some(parsed) => to_heap(vm, parsed, db, declarations)?,
+                    Some(parsed) => to_heap(vm, parsed, db, declarations, mismatch)?,
                     None if skip => skipped_field_default(vm, c.name, &name, &field_type)?,
                     None => {
                         return Err(invariant(format!(
@@ -378,6 +465,48 @@ fn skipped_field_default(
     let realized = RealizedTy::try_from(field_type.clone())
         .map_err(|_| no_default("of a generic parameter"))?;
     empty_value(vm, &realized, &mut Vec::new())?.ok_or_else(|| no_default(&realized.to_string()))
+}
+
+/// The first `@skip` field, among the classes a parse of `target` can build,
+/// whose type has no value to hold, as the message for it. A parse that builds
+/// such a class panics ([`skipped_field_default`]).
+fn unfillable_skipped_field(
+    vm: &mut BexVm,
+    target: &RealizedTy,
+) -> Result<Option<String>, VmRustFnError> {
+    let skipped: Vec<(String, String, RuntimeTy)> = parsed_declarations(vm, target)
+        .into_iter()
+        .filter_map(|ptr| match vm.get_object(ptr) {
+            Object::Class(class) => Some(class),
+            _ => None,
+        })
+        .flat_map(|class| {
+            class
+                .fields
+                .iter()
+                .filter(|field| field.skip)
+                .map(move |field| {
+                    (
+                        class.name.to_string(),
+                        field.name.clone(),
+                        field.field_type.clone(),
+                    )
+                })
+        })
+        .collect();
+    for (class, field, field_type) in skipped {
+        let fillable = match RealizedTy::try_from(field_type) {
+            Ok(realized) => empty_value(vm, &realized, &mut Vec::new())?.is_some(),
+            Err(_) => false,
+        };
+        if !fillable {
+            return Ok(Some(format!(
+                "the `@skip` field `{class}.{field}` has a type with no default value for \
+                 schema-aligned parsing to fill in"
+            )));
+        }
+    }
+    Ok(None)
 }
 
 /// The empty value of `ty`: `null` for a nullable type, the zero of a number,
