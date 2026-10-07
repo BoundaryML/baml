@@ -446,6 +446,9 @@ def define_function(
                 function_name=baml_fqn,
                 _baml=options,
             )
+            if baml_fqn.endswith("@stream"):
+                from ._stream import _decode_stream_result
+                return _decode_stream_result(rt.call_function_sync(args_proto, stream=True))
             result_bytes = rt.call_function_sync(args_proto)
             return decode_call_result(result_bytes)
 
@@ -484,10 +487,16 @@ def define_function(
                 _baml=options,
             )
             try:
-                result_bytes = await rt.call_function(args_proto)
+                if baml_fqn.endswith("@stream"):
+                    result_bytes = await rt.call_function(args_proto, stream=True)
+                else:
+                    result_bytes = await rt.call_function(args_proto)
             except asyncio.CancelledError:
                 cancel_function_call(call_id)
                 raise
+            if baml_fqn.endswith("@stream"):
+                from ._stream import _decode_stream_result
+                return _decode_stream_result(result_bytes, asynchronous=True)
             return _decode_call_result_async(result_bytes)
 
         _set_binding_metadata(_async)
