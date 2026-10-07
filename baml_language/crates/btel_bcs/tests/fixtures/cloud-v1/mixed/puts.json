@@ -12,8 +12,8 @@
       "query": "capability=fixed-v1",
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
       "body_file": "recording.hex",
-      "length": 440,
-      "sha256": "6610218e3b42d5b3211c827121001eb1aabdfb89c19afd3dbd72a15b20bad780"
+      "length": 442,
+      "sha256": "612244acd7c2dabcfa4b7dc505816c044fcff0a4bbe508924383de27b4603b13"
     },
     {
       "upload_id": "batch",
@@ -21,8 +21,8 @@
       "query": "capability=fixed-v1",
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "batch"},
       "body_file": "batch.hex",
-      "length": 129,
-      "sha256": "7348f72f6941e2cdd2d6b7d7834da76a6a0ef54b7fc51a557a04fb022ff8187a"
+      "length": 131,
+      "sha256": "bfcb16f65791d52753094df44b70df05560c5222223af49d0cf4be7aa2e7542a"
     },
     {
       "upload_id": "object",
@@ -30,8 +30,8 @@
       "query": "capability=fixed-v1",
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "object"},
       "body_file": "object.hex",
-      "length": 130,
-      "sha256": "2994aa921ff279d69814091ea4e8c40e06fb529d2ea3e0b95a7859cbc0a87b56"
+      "length": 132,
+      "sha256": "a5140c2edfff22cf19174b0cf713bb6e99c217311cf46f6a17c7980310c7903c"
     }
   ]
 }
