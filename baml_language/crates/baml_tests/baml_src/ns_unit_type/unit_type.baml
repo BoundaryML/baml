@@ -259,6 +259,26 @@ test "a tag receives nothing for an interpolation with no value" {
     assert.equal(unit_parts`a${ log.entries.push("x"); }b${ 1 }c`, ["ab", "c"])
 }
 
+// ---- a header comment does not decide what a block evaluates to -----------------------------
+
+function unit_header_after_value() -> int {
+    let x = 4;
+    x + 1
+    //# done
+}
+
+function unit_header_after_statement(log: UnitLog) -> void {
+    log.entries.push("ran");
+    //# done
+}
+
+test "a header comment after the final expression leaves it the block's value" {
+    let log = UnitLog { entries: [] };
+    assert.equal(unit_header_after_value(), 5);
+    unit_header_after_statement(log);
+    assert.equal(log.entries, ["ran"])
+}
+
 // ---- only a session submission's final expression is its value ---------------------------
 
 test "an earlier expression of a session submission is a statement" {
@@ -270,5 +290,12 @@ test "an earlier expression of a session submission is a statement" {
             xs.length()
         `),
         3,
+    );
+    assert.equal(
+        session.eval<int>(`
+            xs.length() + 1
+            //# done
+        `),
+        4,
     )
 }

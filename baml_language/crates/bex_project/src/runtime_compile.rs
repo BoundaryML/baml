@@ -1322,6 +1322,11 @@ fn lower_session_submission(
     let mut step_ranges: Vec<std::ops::Range<usize>> = Vec::new();
     let mut result_step = None;
     let mut result_name: Option<String> = None;
+    // A header comment is not code: the last element that is decides what
+    // the submission evaluates to.
+    let last_code = elements
+        .iter()
+        .rposition(|element| !matches!(element, BlockElement::HeaderComment(_)));
 
     for (index, element) in elements.iter().enumerate() {
         let (node, wrapped_range, has_semicolon, is_statement) = match element {
@@ -1374,7 +1379,7 @@ fn lower_session_submission(
         // one is a statement, as it would be in a block: its value is
         // dropped, so an `if` with no `else` there owes no unit branch.
         let returns_value =
-            index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
+            Some(index) == last_code && !is_outer_let && !is_statement && !has_semicolon;
         let (generated_name, step_source, commit_global, binding) = if is_type_binding {
             let Some((name, operand)) = runtime_type_binding_parts(raw) else {
                 return Err(vec![runtime_diagnostic(

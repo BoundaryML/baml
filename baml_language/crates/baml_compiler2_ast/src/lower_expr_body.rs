@@ -1608,9 +1608,14 @@ impl LoweringContext {
         let mut tail_expr = None;
 
         let elements: Vec<_> = block.elements().collect();
+        // A header comment says nothing about what the block evaluates to:
+        // the last element that is code decides.
+        let last_code = elements
+            .iter()
+            .rposition(|element| !matches!(element, BlockElement::HeaderComment(_)));
 
         for (idx, element) in elements.iter().enumerate() {
-            let is_last = idx == elements.len() - 1;
+            let is_last = Some(idx) == last_code;
             match element {
                 BlockElement::Stmt(node) => {
                     let stmt_id = match node.kind() {
@@ -1714,6 +1719,10 @@ impl LoweringContext {
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), span));
                     }
                 }
+                // One written after the block's final expression heads
+                // nothing: statements run before that expression, and
+                // keeping it as one would put the expression under it.
+                BlockElement::HeaderComment(_) if tail_expr.is_some() => {}
                 BlockElement::HeaderComment(node) => {
                     let stmt_id = self.lower_header_comment(node);
                     stmts.push(stmt_id);
