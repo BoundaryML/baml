@@ -413,6 +413,7 @@ fn root_bytes(snapshot: &crate::Snapshot) -> Vec<u8> {
 /// the same. A stream's carried set is its own.
 #[test]
 fn a_stream_carries_a_group_once_and_names_it_after() {
+    let _carrying = carrying();
     let pool = SnapshotPool::new(4, Limits::default());
     let person = group(&[class(
         anonymous("Person"),
@@ -455,10 +456,44 @@ fn a_stream_carries_a_group_once_and_names_it_after() {
     );
 }
 
+/// Tests that count what a stream carries hold this, because a possible loss
+/// makes every stream in the process carry again.
+fn carrying() -> std::sync::MutexGuard<'static, ()> {
+    static CARRYING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    CARRYING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// After a writer may have lost a capture, a stream carries a group it
+/// carried before again, with its next capture that names it, and then names
+/// it by ID alone.
+#[test]
+fn a_possible_loss_makes_streams_carry_again() {
+    let _carrying = carrying();
+    let pool = SnapshotPool::new(4, Limits::default());
+    let person = group(&[class(
+        anonymous("Person"),
+        vec![field("name", TyTemplate::String)],
+    )]);
+    let mut stream = Carried::default();
+    let mut blobs = || {
+        person_capture(&pool, 1, Some(&person[0]), &mut stream)
+            .blobs()
+            .len()
+    };
+    assert_eq!(blobs(), 2, "carried");
+    assert_eq!(blobs(), 1, "named by ID");
+    crate::forget_carried();
+    assert_eq!(blobs(), 2, "carried again");
+    assert_eq!(blobs(), 1, "named by ID again");
+}
+
 /// A group carried for the first time brings the groups it names that the
 /// stream has not carried, each before the groups that name it.
 #[test]
 fn carrying_a_group_carries_what_it_names_first() {
+    let _carrying = carrying();
     let pool = SnapshotPool::new(4, Limits::default());
     let resume = group(&[class(
         declared("user.Resume"),

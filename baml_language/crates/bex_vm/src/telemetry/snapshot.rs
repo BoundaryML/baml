@@ -33,7 +33,8 @@ pub(super) struct Scratch {
     /// The definition groups this VM thread's captures have carried. Its
     /// records reach the processor in the order it writes them, across OS
     /// threads too (a producer seals before the thread suspends), so a group
-    /// it carried is stored before any later capture of its names it.
+    /// it carried is stored before any later capture of its names it. A
+    /// writer that loses a capture makes it carry its groups again.
     carried: Carried,
     /// Text replaced wherever a captured string, map key or media URL quotes
     /// it, longest first. Empty except while a network span's error is

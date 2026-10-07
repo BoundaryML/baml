@@ -332,6 +332,9 @@ impl Shared {
         state.last_error = Some(error);
         state.loss_count = state.loss_count.saturating_add(1);
         state.progress.reset_cas |= reset_cas;
+        // The lost payload may have carried a definition group that later
+        // captures name by ID only.
+        btel_snapshot::forget_carried();
     }
 
     fn initial_connection_failed(&self, error: DeliveryError) -> DeliveryError {

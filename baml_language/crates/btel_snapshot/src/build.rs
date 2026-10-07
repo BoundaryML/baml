@@ -72,16 +72,36 @@ pub struct Leaves<'b> {
 /// the order they are made. Keep one per such stream, and never share one
 /// between streams that go to different writers. Forgetting a group, as a
 /// full set does, only carries it again: the writers store it once.
+///
+/// A writer that may have lost a capture calls [`forget_carried`], and every
+/// stream then carries its groups again. Captures that named a lost group in
+/// the meantime read it once a later capture carries it again.
 pub struct Carried {
-    /// This stream's number, unique in the process.
+    /// This stream's number, unique in the process. A stream that forgets
+    /// what it carried takes a new one, so no group's marker names it.
     stream: u64,
+    /// [`LOSSES`] when this stream last started carrying from scratch.
+    losses: u64,
     groups: FxHashSet<[u8; 16]>,
 }
+
+/// Stream numbers: unique in the process, never 0.
+static STREAMS: AtomicU64 = AtomicU64::new(1);
+/// How many times a writer may have lost a capture.
+static LOSSES: AtomicU64 = AtomicU64::new(0);
+
+/// Make every stream carry its groups again, because a writer may have lost
+/// a capture that carried one. Each stream notices on its next capture that
+/// names a group.
+pub fn forget_carried() {
+    LOSSES.fetch_add(1, Ordering::Relaxed);
+}
+
 impl Default for Carried {
     fn default() -> Self {
-        static STREAMS: AtomicU64 = AtomicU64::new(1);
         Self {
             stream: STREAMS.fetch_add(1, Ordering::Relaxed),
+            losses: LOSSES.load(Ordering::Relaxed),
             groups: FxHashSet::default(),
         }
     }
@@ -90,6 +110,9 @@ impl Carried {
     /// Whether `group` is carried already; otherwise mark it carried.
     #[inline]
     fn carries(&mut self, group: &DefinitionBlob) -> bool {
+        if LOSSES.load(Ordering::Relaxed) != self.losses {
+            *self = Self::default();
+        }
         // The group remembers its last carrier: one load when it is this
         // stream, the usual case.
         group.carried_by(self.stream) || self.carries_slow(group)
