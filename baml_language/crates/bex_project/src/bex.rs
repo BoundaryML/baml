@@ -82,6 +82,10 @@ pub trait Bex: Send + Sync {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
+    /// Finalize the host's BAML lifetime before closing its telemetry recording.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_process_exit(&self, status: bex_engine::ProcessStatus);
+
     /// Wait for in-flight calls and spawned work, report unreachable
     /// unobserved errors, and close the runtime. `grace` bounds the whole
     /// wait (`None` waits for as long as the work takes); see
@@ -229,6 +233,11 @@ impl Bex for BexEngine {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
         BexEngine::set_unhandled_spawn_error_handler(self, handler);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_process_exit(&self, status: bex_engine::ProcessStatus) {
+        BexEngine::record_process_exit(self, status);
     }
 
     async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>) {

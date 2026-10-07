@@ -23,7 +23,10 @@ use baml_type::{
     interned::{InferTy, Ty},
 };
 
-use super::{Adjust, Adjustment, Expectation, InferenceContext, WorkingResult};
+use super::{
+    Adjust, Adjustment, InferenceContext, WorkingResult,
+    flow::{CondFacts, TestPosition},
+};
 
 /// What a value's static type says about its runtime truthiness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,39 +151,43 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// Type a condition position (`if`/`while`/guard, and `&&`/`||`
-    /// operands): any type is accepted, a non-`bool` records the Truthy
-    /// adjustment for MIR, `void` is a mismatch (there is no value to
-    /// test), and a statically-decided branch warns.
+    /// Type a branch condition (`if`/`while`/guard) and return what each
+    /// outcome proves: any type is accepted, a non-`bool` records the
+    /// Truthy adjustment for MIR, `void` is a mismatch (there is no value
+    /// to test), and a statically-decided branch warns.
     ///
     /// Inference runs with NO expectation - a `bool` expectation would
     /// wrongly pin type variables the condition is free to leave open
     /// under truthiness.
-    pub(super) fn check_condition(&mut self, body: &ExprBody, condition: ExprId) -> Ty {
-        self.check_truthy_operand(body, condition, true)
+    pub(super) fn check_condition(
+        &mut self,
+        body: &ExprBody,
+        condition: ExprId,
+    ) -> (Ty, CondFacts) {
+        self.check_truthy_operand(body, condition, true, TestPosition::Condition)
     }
 
-    /// Types the operand of `!` (B-1563): same acceptance and warnings as
-    /// a condition position, but NO `Adjust::Truthy` is recorded -
-    /// `OpCode::Not` performs the truthiness coercion itself, so a
-    /// recorded adjustment would be dead metadata with no MIR consumer.
-    pub(super) fn check_not_operand(&mut self, body: &ExprBody, operand: ExprId) -> Ty {
-        self.check_truthy_operand(body, operand, false)
-    }
-
-    /// The shared operand walk behind both positions: infer with no
-    /// expectation, bail on error, defer open types to `finish`, decide
-    /// closed ones. `coerce` distinguishes a branch condition (records
-    /// `Adjust::Truthy`) from a `!` operand (records nothing -
-    /// `OpCode::Not` coerces itself); everything else - acceptance, the
-    /// `void` mismatch, the always-constant warning - is identical, and
-    /// keeping it in one place is what stops the two paths drifting
-    /// apart again.
-    fn check_truthy_operand(&mut self, body: &ExprBody, operand: ExprId, coerce: bool) -> Ty {
-        let ty = self.infer_expr(body, operand, &Expectation::None);
+    /// The operand walk behind every tested position: a branch condition,
+    /// an operand of `&&`/`||`, and the operand of `!` (B-1563). Infer with
+    /// no expectation, bail on error, defer open types to `finish`, decide
+    /// closed ones. `coerce` distinguishes a condition or an `&&`/`||`
+    /// operand (records `Adjust::Truthy`) from a `!` operand (records
+    /// nothing - `OpCode::Not` performs the truthiness coercion itself, so
+    /// a recorded adjustment would be dead metadata with no MIR consumer);
+    /// everything else - acceptance, the `void` mismatch, the
+    /// always-constant warning - is identical, and keeping it in one place
+    /// is what stops the positions drifting apart again.
+    pub(super) fn check_truthy_operand(
+        &mut self,
+        body: &ExprBody,
+        operand: ExprId,
+        coerce: bool,
+        position: TestPosition,
+    ) -> (Ty, CondFacts) {
+        let (ty, facts) = self.infer_test(body, operand, position);
         let resolved = self.table.resolve_completely(&ty);
         if resolved.has_error() {
-            return ty;
+            return (ty, facts);
         }
         let is_literal = matches!(body.exprs[operand], Expr::Literal(_) | Expr::Null);
         if resolved.has_infer() {
@@ -193,12 +200,12 @@ impl<'db> InferenceContext<'db> {
                 is_literal,
                 coerce,
             });
-            return ty;
+            return (ty, facts);
         }
         if let Some(decision) = Self::decide_condition(&resolved) {
             self.apply_condition_decision(operand, resolved, is_literal, coerce, decision);
         }
-        ty
+        (ty, facts)
     }
 
     /// Deferred half of `check_condition` (B-1563): conditions whose type

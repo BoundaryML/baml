@@ -9,7 +9,11 @@ import logging
 import sys
 import threading
 
-from ._execution_context import _current_execution_context, _ExecutionContext
+from ._execution_context import (
+    _current_execution_context,
+    _ExecutionContext,
+    _trace_options_scope,
+)
 from .baml_py import (
     _begin_host_invocation,
     _define_host_marker,
@@ -18,6 +22,7 @@ from .baml_py import (
 )
 from ._host_marker import consume_adoption, register_marker
 from .typemap import get_type_map
+from ._host_capture import register_capture as register_capture, capture_for as capture_for
 
 
 class TraceUsageError(TypeError):
@@ -99,13 +104,9 @@ def _exit(execution, token, outcome, value):
 
 
 def _exception_capture(error):
-    try:
-        return {
-            "type": type.__getattribute__(type(error), "__qualname__"),
-            "args": BaseException.args.__get__(error, type(error)),
-        }
-    except Exception:
-        return None
+    # The capture adapter applies the same exception defaults and registered
+    # projections to passed, returned, and escaping exceptions.
+    return error
 
 
 def instrument(function_or_options=None, *, name=None):
@@ -113,6 +114,8 @@ def instrument(function_or_options=None, *, name=None):
 
     Native generators and arbitrary callable objects are currently unsupported.
     Construction validates configuration but captures no execution context.
+    Mode and capture requests default Python-to-BAML calls in the body; an
+    explicit _baml trace control overrides these defaults (None opts out).
     """
     if name is not None and (not isinstance(name, str) or not name):
         raise TraceUsageError("instrument name must be a nonempty string or None")
@@ -170,15 +173,42 @@ def instrument(function_or_options=None, *, name=None):
 
             @functools.wraps(function)
             async def asynchronous(*args, **kwargs):
+                with _trace_options_scope(options):
+                    if consume_adoption(marker):
+                        return await function(*args, **kwargs)
+                    execution, token = _enter(
+                        definition, options, _caller_site(), inputs(args, kwargs)
+                    )
+                    outcome = "ok"
+                    result = None
+                    try:
+                        result = await function(*args, **kwargs)
+                        return result
+                    except asyncio.CancelledError:
+                        outcome = "cancelled"
+                        raise
+                    except BaseException as error:
+                        outcome = "error"
+                        result = _exception_capture(error)
+                        raise
+                    finally:
+                        _exit(execution, token, outcome, result)
+
+            register_marker(asynchronous, marker)
+            return asynchronous
+
+        @functools.wraps(function)
+        def synchronous(*args, **kwargs):
+            with _trace_options_scope(options):
                 if consume_adoption(marker):
-                    return await function(*args, **kwargs)
+                    return function(*args, **kwargs)
                 execution, token = _enter(
                     definition, options, _caller_site(), inputs(args, kwargs)
                 )
                 outcome = "ok"
                 result = None
                 try:
-                    result = await function(*args, **kwargs)
+                    result = function(*args, **kwargs)
                     return result
                 except asyncio.CancelledError:
                     outcome = "cancelled"
@@ -189,31 +219,6 @@ def instrument(function_or_options=None, *, name=None):
                     raise
                 finally:
                     _exit(execution, token, outcome, result)
-
-            register_marker(asynchronous, marker)
-            return asynchronous
-
-        @functools.wraps(function)
-        def synchronous(*args, **kwargs):
-            if consume_adoption(marker):
-                return function(*args, **kwargs)
-            execution, token = _enter(
-                definition, options, _caller_site(), inputs(args, kwargs)
-            )
-            outcome = "ok"
-            result = None
-            try:
-                result = function(*args, **kwargs)
-                return result
-            except asyncio.CancelledError:
-                outcome = "cancelled"
-                raise
-            except BaseException as error:
-                outcome = "error"
-                result = _exception_capture(error)
-                raise
-            finally:
-                _exit(execution, token, outcome, result)
 
         register_marker(synchronous, marker)
         return synchronous

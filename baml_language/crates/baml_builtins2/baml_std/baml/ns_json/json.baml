@@ -457,11 +457,20 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
 /// `enum` of their variant names, `uint8array` to `string`, and `unknown` to
 /// the empty schema `{}`. A nullable type becomes a `["T", "null"]` type list
-/// where it can, and `anyOf` otherwise.
+/// where it can, and `anyOf` otherwise. A nullable enum also lists `null` in
+/// its `enum`, and a nullable literal uses `anyOf`, because `enum` and `const`
+/// restrict the value whatever `type` says.
 ///
 /// This pass *does* respect `@alias` and `@skip`, where the value conversions
 /// do not — a schema is read by something outside BAML, so it must describe
 /// the wire names. That is also why an enum variant lowers under its alias.
+///
+/// Documentation becomes `description`, with the text the output format
+/// shows: a class's or a field's `@description`, then its `///` docstring. A
+/// field's `description` sits beside the `$ref` when the field is a class. An
+/// enum's `description` holds its own documentation and one
+/// `- <variant>: <documentation>` line per documented variant, because JSON
+/// Schema has no description per `enum` value.
 ///
 /// The root type is emitted inline, and every class and named alias beneath it
 /// goes into `$defs` to be reached by `$ref`. That is what lets a recursive

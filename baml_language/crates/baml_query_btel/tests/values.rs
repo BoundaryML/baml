@@ -309,10 +309,11 @@ async fn large_strings_are_stored_once_and_queries_read_through_them() {
         ]
     );
     // Four distinct 32 KiB strings, each stored once, and per call a small
-    // inputs root and a small output root that name them, plus launch context.
+    // inputs root and a small output root that name them, plus launch context
+    // and the shutdown collection's GC statistics.
     let sizes = blob_sizes(project.path());
     let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
-    assert_eq!(small.len(), 5, "{sizes:?}");
+    assert_eq!(small.len(), 6, "{sizes:?}");
     assert_eq!(large.len(), 4, "{sizes:?}");
     assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
 
@@ -374,11 +375,12 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
         ]
     );
     // Four distinct images, each stored once; per call a small inputs root
-    // that names them, one output both calls share, and launch context.
+    // that names them, one output both calls share, launch context, and the
+    // shutdown collection's GC statistics.
     let sizes = blob_sizes(project.path());
     let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
     assert_eq!(large.len(), 4, "{sizes:?}");
-    assert_eq!(small.len(), 4, "{sizes:?}");
+    assert_eq!(small.len(), 5, "{sizes:?}");
     // The list names its element class, whose definition is stored once.
     let definitions: Vec<_> = blobs(project.path())
         .into_iter()

@@ -1,11 +1,28 @@
 """Private inheritable execution context; independent of execution lifetime."""
 
+from contextlib import contextmanager
 from contextvars import ContextVar
 
 from .baml_py import _invocation_context
 from .cffi.v1 import baml_outbound_pb2
 
 _current_execution_context = ContextVar("baml_execution_context", default=None)
+# Python instrumentation supplies defaults for calls made by its body. Keep
+# this separate from runtime context: BAML context patches must still win on
+# callback reentry, and reservations must never become inheritable defaults.
+_current_trace_options = ContextVar("baml_python_trace_options", default=())
+
+
+@contextmanager
+def _trace_options_scope(options):
+    if options is None:
+        yield
+        return
+    token = _current_trace_options.set(_current_trace_options.get() + (options,))
+    try:
+        yield
+    finally:
+        _current_trace_options.reset(token)
 
 
 class _ExecutionContext:

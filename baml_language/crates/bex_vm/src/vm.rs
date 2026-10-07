@@ -274,6 +274,17 @@ struct CallTrace {
     context: Option<Arc<ContextPatch>>,
 }
 
+/// The target's existing frame waits here while its declaration hook runs.
+/// Contains no heap pointers: arguments and callable/type metadata stay rooted
+/// in the ordinary frame and evaluation stack across suspension and GC.
+struct PendingTraceHook {
+    frame: usize,
+    caller: Option<usize>,
+    caller_pc: u32,
+    trace: Option<CallTrace>,
+    evaluating: bool,
+}
+
 #[derive(Clone, Debug, Default)]
 struct FrameTypeMetadata {
     /// Exact runtime type values for explicitly supplied slots. Wrapper-
@@ -453,8 +464,11 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            pending_trace_hooks: Vec::new(),
+            inherited_hook_suppression: false,
             pending_host_trace: None,
             entry_trace: None,
+            entry_trace_context: None,
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -1683,8 +1697,12 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
+    pending_trace_hooks: Vec<PendingTraceHook>,
+    /// Inherited by a spawned BAML task independently of the parent's lifetime.
+    inherited_hook_suppression: bool,
     pending_host_trace: Option<CallTrace>,
     entry_trace: Option<crate::telemetry::TraceConfig>,
+    entry_trace_context: Option<Arc<ContextPatch>>,
     root_context: Context,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
@@ -1861,6 +1879,14 @@ pub struct BytecodeProgram {
 /// 1. Attaches native function implementations to builtin functions
 /// 2. Builds resolved name lookups for functions, classes, and enums
 pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmInternalError> {
+    convert_program_with_trace_hooks(program, true)
+}
+
+/// Select the immutable execution image before any frame can enter it.
+pub fn convert_program_with_trace_hooks(
+    program: bex_vm_types::Program,
+    enabled: bool,
+) -> Result<BytecodeProgram, VmInternalError> {
     // The one road from an executable into a VM: a decoded program is
     // checked against the format's laws here, and everything after — the
     // rendered views, the loader — indexes into a program that keeps them.
@@ -1873,6 +1899,9 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         .map(crate::package_baml::attach_builtins)
         .collect::<Result<Vec<_>, _>>()?;
 
+    if !enabled {
+        disable_declared_trace_hooks(&mut objects);
+    }
     prepare_compact_code(&mut objects, &program.globals);
 
     // The by-name view of the executable's callables, from the package
@@ -1895,6 +1924,46 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         packages: program.packages,
         root: program.root,
     })
+}
+
+/// Telemetry-off engines keep argument defaults and the authored body but
+/// bypass the hook prologue. Instruction indices stay stable; compact PCs are
+/// rebuilt afterwards, before there are any frames or suspended continuations.
+fn disable_declared_trace_hooks(objects: &mut [Object]) {
+    for object in objects {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        let instructions = &mut function.bytecode.instructions;
+        if let Some(begin) = instructions
+            .iter()
+            .position(|instruction| matches!(instruction, Instruction::BeginTraceHook(_)))
+        {
+            let finish = instructions
+                .iter()
+                .position(|instruction| matches!(instruction, Instruction::EndTraceHook))
+                .expect("hook decision boundary");
+            let offset = isize::try_from(finish + 1 - begin).expect("hook prologue fits a jump");
+            instructions[begin] = Instruction::Jump(offset);
+            // An unreachable no-op replaces the end marker, so all entry paths
+            // recognize this callee as ordinary and start no pending hook.
+            instructions[finish] = Instruction::Pop(0);
+        }
+        for instruction in instructions {
+            if matches!(
+                instruction,
+                Instruction::TraceHookHidden
+                    | Instruction::TraceHookTiming
+                    | Instruction::TraceHookSpan
+                    | Instruction::TraceHookRich
+            ) {
+                *instruction = Instruction::Pop(0);
+            }
+            if let Instruction::CallHooked { callee, ntypeargs } = *instruction {
+                *instruction = Instruction::Call { callee, ntypeargs };
+            }
+        }
+    }
 }
 
 /// Rebuild executable streams after loader changes (including float boxing),
@@ -2242,8 +2311,11 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            pending_trace_hooks: Vec::new(),
+            inherited_hook_suppression: false,
             pending_host_trace: None,
             entry_trace: None,
+            entry_trace_context: None,
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -2311,6 +2383,170 @@ impl BexVm {
             .unwrap_or(&self.root_context)
     }
 
+    pub fn hooks_suppressed(&self) -> bool {
+        self.inherited_hook_suppression
+            || self.pending_trace_hooks.iter().any(|hook| hook.evaluating)
+    }
+
+    pub fn inherit_hook_suppression(&mut self, suppressed: bool) {
+        assert!(
+            self.frames.is_empty(),
+            "hook suppression must precede task entry"
+        );
+        self.inherited_hook_suppression = suppressed;
+    }
+
+    fn begin_trace_hook(&mut self, frame: usize, with_settings: bool) -> Result<Value, VmError> {
+        if self.telemetry.is_none() || self.hooks_suppressed() {
+            self.finish_trace_hook(frame, Value::NULL)?;
+            return Ok(Value::NULL);
+        }
+        let pending = self.pending_trace_hooks.last_mut().expect("hooked entry");
+        debug_assert_eq!(pending.frame, frame);
+        pending.evaluating = true;
+        if !with_settings {
+            return Ok(Value::bool(true));
+        }
+        let trace = pending.trace.as_ref();
+        let config = trace.map(|trace| trace.telemetry).unwrap_or_default();
+        let context = trace.and_then(|trace| trace.context.clone());
+        // SAFETY: the frame roots the callable under the active heap permit.
+        let function = unsafe { self.load_function(frame)? };
+        let mut options = self.telemetry.as_ref().map_or_else(
+            || crate::telemetry::ordinary_settings(function, config),
+            |state| state.entry_settings(function, config),
+        );
+        options.context = context;
+        Ok(crate::package_trace::alloc_settings(self, &options))
+    }
+
+    fn finish_trace_hook(&mut self, frame_idx: usize, result: Value) -> Result<(), VmError> {
+        let returned = if result.is_null() {
+            None
+        } else {
+            Some(self.trace_config(result)?)
+        };
+        self.finish_trace_hook_config(frame_idx, returned)
+    }
+
+    fn finish_trace_hook_config(
+        &mut self,
+        frame_idx: usize,
+        returned: Option<CallTrace>,
+    ) -> Result<(), VmError> {
+        let mut pending = self.pending_trace_hooks.pop().expect("hooked entry");
+        debug_assert_eq!(pending.frame, frame_idx);
+        if let Some(returned) = returned {
+            let previous = pending.trace.take();
+            let reserved = previous
+                .as_ref()
+                .is_some_and(|trace| trace.telemetry.reserved_id.is_some());
+            let (under, over) = if reserved {
+                (
+                    returned.context.as_ref(),
+                    previous.as_ref().and_then(|trace| trace.context.as_ref()),
+                )
+            } else {
+                (
+                    previous.as_ref().and_then(|trace| trace.context.as_ref()),
+                    returned.context.as_ref(),
+                )
+            };
+            let context = match (under, over) {
+                (Some(under), Some(over)) => {
+                    let mut patch = under.as_ref().clone();
+                    patch.compose(over.as_ref().clone());
+                    (!patch.is_empty()).then(|| Arc::new(patch))
+                }
+                (Some(patch), None) | (None, Some(patch)) => Some(patch.clone()),
+                (None, None) => None,
+            };
+            let telemetry = if reserved {
+                let prior = previous.unwrap().telemetry;
+                crate::telemetry::TraceConfig {
+                    inputs: Some(
+                        prior.inputs == Some(true) || returned.telemetry.inputs == Some(true),
+                    ),
+                    output: Some(
+                        prior.output == Some(true) || returned.telemetry.output == Some(true),
+                    ),
+                    error: Some(
+                        prior.error == Some(true) || returned.telemetry.error == Some(true),
+                    ),
+                    ..prior
+                }
+            } else {
+                returned.telemetry
+            };
+            pending.trace = Some(CallTrace { telemetry, context });
+        }
+        // The pending frame inherited the caller's context; hook mutations
+        // belonged to its own frame. Apply only the returned options here.
+        let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
+            unreachable!()
+        };
+        if let Some(patch) = pending
+            .trace
+            .as_ref()
+            .and_then(|trace| trace.context.as_deref())
+        {
+            frame.context = frame.context.with_patch(patch);
+        }
+        if self.telemetry.is_none() {
+            return Ok(());
+        }
+        let context = frame.context.clone();
+        let locals_offset = frame.locals_offset;
+        let type_args = frame.type_args.clone();
+        // SAFETY: all input slots, callable and metadata remain rooted.
+        let function = unsafe { self.load_function(frame_idx)? };
+        let callee = self
+            .frame_function_identity(frame_idx)
+            .expect("hook target identity");
+        let caller = pending
+            .caller
+            .and_then(|index| self.frame_function_identity(index));
+        let observed = pending.caller.is_some_and(|index| matches!(&self.frames[index], Frame::Bytecode(frame) if frame.telemetry.is_some()));
+        // Resolve captured parameter cells without allocating for ordinary arities.
+        let args: SmallVec<[Value; 8]> = self.stack.0
+            [locals_offset.raw()..locals_offset.raw() + function.arity]
+            .iter()
+            .map(|value| {
+                value
+                    .as_object_ptr()
+                    .and_then(|ptr| match self.get_object(ptr) {
+                        Object::Cell(cell) => Some(cell.load()),
+                        _ => None,
+                    })
+                    .unwrap_or(*value)
+            })
+            .collect();
+        if let Some(state) = &mut self.telemetry {
+            state.set_context(context);
+            let telemetry = unsafe {
+                state.enter_bytecode_with_trace(
+                    function,
+                    callee,
+                    caller,
+                    pending.caller_pc,
+                    observed,
+                    &args,
+                    pending.trace.as_ref().map(|trace| trace.telemetry),
+                    CallTypeArgs {
+                        carried: &type_args,
+                        passed: &[],
+                    },
+                    |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+                )
+            };
+            let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
+                unreachable!()
+            };
+            frame.telemetry = telemetry;
+        }
+        Ok(())
+    }
+
     pub fn set_root_context(&mut self, context: Context) {
         assert!(
             self.frames.is_empty(),
@@ -2336,6 +2572,7 @@ impl BexVm {
         options: &bex_vm_types::trace::TraceOptionsData,
         reserved_id: Option<btel_types::TelemetryId>,
     ) {
+        self.entry_trace_context.clone_from(&options.context);
         self.entry_trace = Some(crate::telemetry::TraceConfig {
             mode: options.mode,
             inputs: options.inputs,
@@ -4303,6 +4540,12 @@ impl BexVm {
         // callable and therefore yields `BamlHostCallHostValue` to the engine.
         if matches!(self.get_object(function), Object::HostClosure(_)) {
             debug_assert!(type_args.is_empty(), "host closures have no type arguments");
+            if let Some(patch) = self.entry_trace_context.take() {
+                self.root_context = self.root_context.with_patch(&patch);
+                if let Some(state) = &mut self.telemetry {
+                    state.set_context(self.root_context.clone());
+                }
+            }
             self.push_host_closure_trampoline_frame(function, args);
             return;
         }
@@ -4336,9 +4579,38 @@ impl BexVm {
             other => unreachable!("expect function or closure as entry point, got {other:?}"),
         };
 
+        let hooked_entry = self
+            .get_object(dispatch_ptr)
+            .as_callable()
+            .is_ok_and(|callee| {
+                callee
+                    .bytecode
+                    .compact
+                    .as_ref()
+                    .is_some_and(|code| code.trace_hook_finish_pc.is_some())
+            });
+        if !hooked_entry && let Some(patch) = self.entry_trace_context.take() {
+            self.root_context = self.root_context.with_patch(&patch);
+            if let Some(state) = &mut self.telemetry {
+                state.set_context(self.root_context.clone());
+            }
+        }
         match callable_kind {
             FunctionKind::Bytecode => {
-                let frame_telemetry = if self.telemetry.is_some() {
+                let hooked = hooked_entry;
+                if hooked {
+                    self.pending_trace_hooks.push(PendingTraceHook {
+                        frame: self.frames.len(),
+                        caller: None,
+                        caller_pc: 0,
+                        trace: self.entry_trace.take().map(|telemetry| CallTrace {
+                            telemetry,
+                            context: self.entry_trace_context.take(),
+                        }),
+                        evaluating: false,
+                    });
+                }
+                let frame_telemetry = if !hooked && self.telemetry.is_some() {
                     // SAFETY: the active heap permit prevents collection here. A
                     // closure remains in the frame because capture opcodes need it,
                     // while producer identity uses its underlying function.
@@ -5667,6 +5939,13 @@ impl BexVm {
             .iter()
             .enumerate()
             .filter_map(|(idx, frame)| {
+                if self
+                    .pending_trace_hooks
+                    .iter()
+                    .any(|hook| hook.frame == idx && hook.evaluating)
+                {
+                    return None;
+                }
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
                     Frame::Bytecode(frame) => {
@@ -5837,6 +6116,43 @@ impl BexVm {
                 }
             };
 
+            // Recoverable hook failures land at the decision boundary, before
+            // the target starts. Task cancellation keeps unwinding normally.
+            if self
+                .pending_trace_hooks
+                .last()
+                .is_some_and(|hook| hook.frame == depth && hook.evaluating)
+            {
+                let cancelled = self.as_instance(&exception_value).is_ok_and(|instance| {
+                    instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
+                });
+                if !cancelled {
+                    let finish = frame_function
+                        .bytecode
+                        .compact
+                        .as_ref()
+                        .and_then(|code| code.trace_hook_finish_pc)
+                        .expect("hook finish PC");
+                    self.stack.truncate(
+                        frame_locals_offset.raw()
+                            + frame_function.arity
+                            + frame_function.real_local_count,
+                    );
+                    self.stack.push(Value::NULL);
+                    let Frame::Bytecode(frame) = &mut self.frames[depth] else {
+                        unreachable!()
+                    };
+                    frame.instruction_ptr = finish;
+                    if let Some(evidence) = evidence.take() {
+                        self.error_hook_fallback(evidence);
+                    }
+                    self.restore_caller_context(depth);
+                    *frame_idx = depth;
+                    *function = frame_function;
+                    return Ok(());
+                }
+            }
+
             // Find the INNERMOST exception table entry covering this PC: the
             // NARROWEST range — the largest `start_pc`, then the smallest
             // `end_pc`, and for byte-identical ranges the LATEST table entry
@@ -5953,6 +6269,7 @@ impl BexVm {
             }
 
             let popped = self.frames.pop().expect("frame stack is not empty");
+            self.pending_trace_hooks.retain(|hook| hook.frame < depth);
             match popped {
                 Frame::Bytecode(bf) => {
                     self.stack.drain(bf.locals_offset..);
@@ -6644,8 +6961,24 @@ impl BexVm {
 
             FunctionKind::Bytecode => {
                 // Push the new frame.
+                let hooked = callee
+                    .bytecode
+                    .compact
+                    .as_ref()
+                    .is_some_and(|code| code.trace_hook_finish_pc.is_some());
+                let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
+                let caller_pc = if caller_frame_idx == *frame_idx {
+                    call_site
+                } else {
+                    let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
+                        unreachable!()
+                    };
+                    caller.faulting_pc
+                };
                 let inherited = self.current_context();
-                let context = trace
+                let context = (!hooked)
+                    .then_some(trace.as_ref())
+                    .flatten()
                     .as_ref()
                     .and_then(|trace| trace.context.as_deref())
                     .map_or_else(|| inherited.clone(), |patch| inherited.with_patch(patch));
@@ -6675,9 +7008,11 @@ impl BexVm {
                     closure_type_args
                 };
 
-                let frame_telemetry = if self.telemetry.is_some() {
+                let frame_telemetry = if !hooked && self.telemetry.is_some() {
                     let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
-                    let actual_caller = self.frame_function_identity(caller_frame_idx);
+                    let actual_caller = self
+                        .visible_bytecode_caller_index(*frame_idx)
+                        .and_then(|index| self.frame_function_identity(index));
                     let caller_is_observed = matches!(
                         self.frames.get(caller_frame_idx),
                         Some(Frame::Bytecode(BytecodeFrame {
@@ -6723,6 +7058,15 @@ impl BexVm {
                 } else {
                     None
                 };
+                if hooked {
+                    self.pending_trace_hooks.push(PendingTraceHook {
+                        frame: self.frames.len(),
+                        caller: self.visible_bytecode_caller_index(*frame_idx),
+                        caller_pc: u32::try_from(caller_pc).unwrap_or(u32::MAX),
+                        trace,
+                        evaluating: false,
+                    });
+                }
                 // Construct after reserving capacity so the frame can be written
                 // directly into the vector instead of moved through a temporary.
                 self.frames.extend(std::iter::once_with(|| {
@@ -7344,11 +7688,35 @@ impl BexVm {
         }
     }
 
-    /// Resolve hidden native continuations to their bytecode caller in O(1).
+    /// Resolve native continuations and pending hook targets to their caller.
     fn bytecode_caller_index(&self, frame_idx: usize) -> usize {
-        match &self.frames[frame_idx] {
+        let index = match &self.frames[frame_idx] {
             Frame::Bytecode(_) => frame_idx,
             Frame::Native(frame) => frame.bytecode_caller,
+        };
+        if let Some(pending) = self
+            .pending_trace_hooks
+            .iter()
+            .find(|pending| pending.frame == index && pending.evaluating)
+        {
+            pending.caller.unwrap_or(index)
+        } else {
+            index
+        }
+    }
+
+    /// A root entry's pending target is bookkeeping, not a visible caller of
+    /// its hook. Keep the physical frame for execution without inventing a
+    /// target-to-hook edge in the recorded call path.
+    fn visible_bytecode_caller_index(&self, frame_idx: usize) -> Option<usize> {
+        let index = self.bytecode_caller_index(frame_idx);
+        match self
+            .pending_trace_hooks
+            .iter()
+            .find(|pending| pending.frame == index && pending.evaluating)
+        {
+            Some(pending) => pending.caller,
+            None => Some(index),
         }
     }
 
@@ -8662,6 +9030,42 @@ impl BexVm {
                     }
 
                     // ── Call ──────────────────────────────────────────────────────
+                    OpCode::BeginTraceHook => {
+                        let with_settings = read_i8_unchecked(code, pc) != 0;
+                        let value = self.begin_trace_hook(*frame_idx, with_settings)?;
+                        self.stack.push(value);
+                    }
+                    OpCode::TraceHookHidden
+                    | OpCode::TraceHookTiming
+                    | OpCode::TraceHookSpan
+                    | OpCode::TraceHookRich => {
+                        let returned =
+                            (self.telemetry.is_some() && !self.hooks_suppressed()).then(|| {
+                                CallTrace {
+                                    telemetry: crate::telemetry::TraceConfig {
+                                        mode: Some(match op {
+                                            OpCode::TraceHookHidden => {
+                                                btel_types::InvocationMode::Hidden
+                                            }
+                                            OpCode::TraceHookTiming => {
+                                                btel_types::InvocationMode::Timing
+                                            }
+                                            _ => btel_types::InvocationMode::Span,
+                                        }),
+                                        inputs: (op == OpCode::TraceHookRich).then_some(true),
+                                        output: (op == OpCode::TraceHookRich).then_some(true),
+                                        error: (op == OpCode::TraceHookRich).then_some(true),
+                                        ..Default::default()
+                                    },
+                                    context: None,
+                                }
+                            });
+                        self.finish_trace_hook_config(*frame_idx, returned)?;
+                    }
+                    OpCode::EndTraceHook => {
+                        let result = self.stack.ensure_pop();
+                        self.finish_trace_hook(*frame_idx, result)?;
+                    }
                     OpCode::SetCallTrace => {
                         debug_assert!(
                             matches!(
@@ -8671,6 +9075,7 @@ impl BexVm {
                                 Some(
                                     OpCode::Call
                                         | OpCode::CallExactArgs
+                                        | OpCode::CallHooked
                                         | OpCode::CallIndirect
                                         | OpCode::VirtualCall
                                 )
@@ -8680,7 +9085,7 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         self.pending_call_trace = Some(self.trace_config(value)?);
                     }
-                    OpCode::Call | OpCode::CallExactArgs => {
+                    OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
                         let raw = read_u32_unchecked(code, pc);
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
 

@@ -7,14 +7,47 @@ use super::{
 };
 
 impl TelemetryState {
+    /// Publish a completed runtime operation as a root, without a synthetic
+    /// wrapper/function span. The caller creates a fresh root before the work
+    /// and may defer publication until its locks have been released.
+    pub fn complete_runtime_root(
+        &mut self,
+        metadata: &btel_types::FunctionMetadata,
+        completed_at: btel_types::ClockInstant,
+    ) {
+        assert!(self.is_root_thread() && !self.thread.started && !self.thread.completed);
+        let call_path = allocate_call_path_id(&LAST_CALL_PATH_ID);
+        self.write_span(SpanRecord::HostFunctionDefined(Box::new(metadata.clone())));
+        self.write_span(SpanRecord::CallPathDefined {
+            call_path,
+            parent_call_path: btel_types::CallPathId::ROOT,
+            visible_caller: None,
+            caller_pc: 0,
+            callee: metadata.function_id,
+            edge: CallPathEdge::Spawn,
+        });
+        self.thread.spawn_call_path = call_path;
+        self.set_thread_name(&metadata.fqn);
+        self.complete_thread_at(InvocationOutcome::Ok, completed_at);
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn capture_host(
         &self,
         value: &btel_snapshot::host::HostValue,
     ) -> Option<btel_snapshot::Snapshot> {
+        self.capture_host_with(value, |_| None)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn capture_host_with<'a>(
+        &self,
+        value: &btel_snapshot::host::HostValue,
+        resolve: impl Fn(&str) -> Option<&'a btel_snapshot::host::HostDeclaration>,
+    ) -> Option<btel_snapshot::Snapshot> {
         self.runtime
             .acquire_snapshot()
-            .map(|builder| btel_snapshot::host::capture(builder, value))
+            .map(|builder| btel_snapshot::host::capture_with(builder, value, resolve))
     }
 
     #[cfg(not(target_arch = "wasm32"))]

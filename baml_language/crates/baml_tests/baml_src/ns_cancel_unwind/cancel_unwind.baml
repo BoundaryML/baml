@@ -28,7 +28,7 @@ function wait_until_set(flag: Flag) -> void {
     }
 }
 
-function spawn_sleeper(log: Log, tok: baml.spawn.CancelToken, started: Flag) -> baml.future.Future<int, baml.errors.Io> {
+function spawn_sleeper(log: Log, tok: baml.spawn.CancelToken, started: Flag) -> baml.future.Future<int, never> {
     spawn with tok {
         started.set = true
         defer { log.entries.push("cleanup") }

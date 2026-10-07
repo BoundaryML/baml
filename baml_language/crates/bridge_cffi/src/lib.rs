@@ -411,11 +411,14 @@ fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
 #[cfg(target_arch = "wasm32")]
 fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
 
-/// Shut down the process-wide runtime, if one is installed. `grace` bounds
+/// Finalize the host's BAML lifetime and shut down the process-wide runtime,
+/// if one is installed. The OS process's exit outcome remains unknown. `grace` bounds
 /// the wait for its in-flight calls and spawned work (`None` waits for as long
 /// as they take).
 pub async fn shutdown_runtime(grace: Option<std::time::Duration>) -> Result<(), BridgeError> {
     if let Some(runtime) = platform::take_runtime()? {
+        #[cfg(not(target_arch = "wasm32"))]
+        runtime.record_process_exit(btel_types::ProcessStatus::Unknown);
         runtime.shutdown(grace).await;
     }
     Ok(())
@@ -592,5 +595,7 @@ mod generated_metadata_tests {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host_capture;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod host_instrumentation;

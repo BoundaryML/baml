@@ -18,9 +18,9 @@ fn rows(result: &baml_query_btel::QueryResult) -> Vec<Vec<Json>> {
 const STATS_SQL: &str = "SELECT function_name, SUM(invocation_count) AS n FROM profiler
      WHERE node_type = 'function' GROUP BY function_name ORDER BY n DESC";
 
-/// Completed spans per name: retained calls and futures, while recording.
-const SPANS_SQL: &str =
-    "SELECT span_name, COUNT(*) AS n FROM spans GROUP BY span_name ORDER BY n DESC";
+/// Application spans per name: retained calls and futures, while recording.
+const SPANS_SQL: &str = "SELECT span_name, COUNT(*) AS n FROM spans WHERE span_name != 'baml.gc'
+     GROUP BY span_name ORDER BY n DESC";
 
 fn stats(index: &mut baml_query_btel::Index) -> BTreeMap<String, i64> {
     counts_of(&sql(index, STATS_SQL))
@@ -110,7 +110,7 @@ async fn population_outcomes_include_timing_only_calls_and_recursive_errors() {
         "SELECT function_name, SUM(invocation_count), SUM(return_count), SUM(error_count),
            SUM(nonpanic_error_count), SUM(panic_error_count), SUM(future_cancel_count),
            SUM(missing_count)
-         FROM profiler GROUP BY function_name ORDER BY function_name",
+         FROM profiler WHERE node_type = 'function' GROUP BY function_name ORDER BY function_name",
     );
     let counts = |name, n, ok, errors| {
         vec![
@@ -179,7 +179,8 @@ async fn acceptance_queries_answer_from_real_recordings() {
     let roots = sql(
         &mut index,
         "SELECT span_name, status, duration > 0, start_time < end_time FROM spans
-         WHERE span_type = 'future' AND parent_span_id IS NULL ORDER BY start_time",
+         WHERE span_type = 'future' AND parent_span_id IS NULL AND span_name != 'baml.gc'
+         ORDER BY start_time",
     );
     let run = |name, status| vec![json!(name), json!(status), json!(1), json!(1)];
     assert_eq!(
@@ -1312,7 +1313,8 @@ async fn generic_calls_record_their_type_args_by_name() {
         let futures = sql(
             &mut index,
             &format!(
-                "SELECT COUNT(*), COUNT(type_args) FROM {relation} WHERE span_type = 'future'"
+                "SELECT COUNT(*), COUNT(type_args) FROM {relation}
+                 WHERE span_type = 'future' AND span_name != 'baml.gc'"
             ),
         );
         assert_eq!(futures.rows, vec![vec![json!(2), json!(0)]], "{relation}");

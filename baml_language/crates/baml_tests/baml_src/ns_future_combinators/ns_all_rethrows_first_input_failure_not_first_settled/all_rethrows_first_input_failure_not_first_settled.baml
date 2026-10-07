@@ -3,9 +3,7 @@
 // first in wall-clock time.
 
 function bad_slow() -> int throws string {
-    baml.sys.sleep(baml.time.Duration.from_milliseconds(120n)) catch (e) {
-        let e => null
-    };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(120n));
     throw "first"
 }
 

@@ -1484,7 +1484,13 @@ mod tests {
                 .collect()
         };
         assert_eq!(edges("log"), vec![]);
-        assert_eq!(edges("baml"), vec![("log".to_string(), root_of("log"))]);
+        assert_eq!(
+            edges("baml"),
+            vec![
+                ("log".to_string(), root_of("log")),
+                ("trace".to_string(), root_of("trace")),
+            ]
+        );
         assert_eq!(
             edges("testing"),
             vec![("baml".to_string(), root_of("baml"))]

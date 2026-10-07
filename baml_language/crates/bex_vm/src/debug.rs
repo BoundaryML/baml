@@ -142,7 +142,9 @@ pub(crate) fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
-        Instruction::Call { callee, .. } | Instruction::SysOp(callee) => {
+        Instruction::Call { callee, .. }
+        | Instruction::CallHooked { callee, .. }
+        | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunction { function, .. } => {
@@ -211,7 +213,13 @@ pub(crate) fn display_instruction(
                 format!("(switch table {table_idx})")
             }
         }
-        Instruction::Pop(_)
+        Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
+        | Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
@@ -429,6 +437,13 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
+        | Instruction::CallHooked { .. }
+        | Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
         | Instruction::CallIndirect
         | Instruction::SetCallTrace
         | Instruction::VirtualCall { .. } => Style::new().magenta(),
@@ -940,6 +955,13 @@ fn display_instruction_textual(
 
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
+        Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
+        Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
+        Instruction::EndTraceHook => "end_trace_hook".into(),
+        Instruction::TraceHookHidden => "trace_hook_hidden".into(),
+        Instruction::TraceHookTiming => "trace_hook_timing".into(),
+        Instruction::TraceHookSpan => "trace_hook_span".into(),
+        Instruction::TraceHookRich => "trace_hook_rich".into(),
 
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::SetCallTrace => "set_call_trace".to_string(),
@@ -1199,6 +1221,13 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::Call { .. }
+        | Instruction::CallHooked { .. }
+        | Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
         | Instruction::SysOp(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
@@ -1280,6 +1309,11 @@ pub fn display_compact_bytecode(
         write!(f, "{offset:04}  {op:<24}")?;
 
         match op {
+            OpCode::BeginTraceHook => {
+                let value = code[pc];
+                pc += 1;
+                writeln!(f, "{value}")?;
+            }
             // Unit ops: no operands
             OpCode::Return
             | OpCode::Await
@@ -1291,6 +1325,11 @@ pub fn display_compact_bytecode(
             | OpCode::StoreArrayElement
             | OpCode::StoreMapElement
             | OpCode::CallIndirect
+            | OpCode::EndTraceHook
+            | OpCode::TraceHookHidden
+            | OpCode::TraceHookTiming
+            | OpCode::TraceHookSpan
+            | OpCode::TraceHookRich
             | OpCode::SetCallTrace
             | OpCode::Discriminant
             | OpCode::TypeTag
@@ -1434,7 +1473,7 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            OpCode::Call | OpCode::CallExactArgs => {
+            OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
                 let callee = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;

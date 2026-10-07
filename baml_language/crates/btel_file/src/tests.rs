@@ -24,6 +24,35 @@ fn delta() -> AggregateDelta {
     }
 }
 
+#[test]
+fn process_completion_accepts_unknown_outcomes_but_rejects_invalid_statuses() {
+    let id = RecordingId::generate();
+    for status in [-1, 0, 1, 2, 3, 4, 5] {
+        let file = proto::RecordingFile {
+            header: Some(proto::RecordingHeader {
+                format_major: btel_settings::encoding::FORMAT_MAJOR,
+                format_minor: btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR,
+                recording_id: id.as_bytes().to_vec(),
+                ..Default::default()
+            }),
+            sequence: 1,
+            end: Some(proto::RecordingEnd {
+                process_end: Some(proto::ProcessEnd {
+                    status,
+                    at_unix_ns: 123,
+                }),
+            }),
+            ..Default::default()
+        };
+        let parsed = reader::validate_file(&file.encode_to_vec(), id, 1);
+        assert_eq!(
+            parsed.is_ok(),
+            (1..=4).contains(&status),
+            "status {status}: {parsed:?}"
+        );
+    }
+}
+
 fn files(id: RecordingId, count: usize) -> Vec<SealedFile> {
     let output = RefCell::new(Vec::new());
     let mut publisher = RecordingPublisher::new(id, RecordingConfig::default(), |f| {

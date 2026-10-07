@@ -608,6 +608,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 .any(|arg| self.operand_reads_spawn_captured_local(arg, seen)),
             Rvalue::Uint8Array(_)
             | Rvalue::LoadType(_)
+            | Rvalue::TraceHookSettings { .. }
             | Rvalue::CurrentPackage(_)
             | Rvalue::MakeGenericFunction { .. } => false,
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1330,6 +1331,19 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {
+                    IntrinsicOp::BuiltinTraceHook(mode) => {
+                        use baml_compiler2_mir::BuiltinTraceHook;
+                        self.emit(match mode {
+                            BuiltinTraceHook::Hidden => Instruction::TraceHookHidden,
+                            BuiltinTraceHook::Timing => Instruction::TraceHookTiming,
+                            BuiltinTraceHook::Span => Instruction::TraceHookSpan,
+                            BuiltinTraceHook::Rich => Instruction::TraceHookRich,
+                        });
+                    }
+                    IntrinsicOp::ApplyTraceHook => {
+                        self.emit_operand_pull(&args[0]);
+                        self.emit(Instruction::EndTraceHook);
+                    }
                     IntrinsicOp::BindType(slot) => {
                         let [value] = args.as_slice() else {
                             unreachable!("`BindType` carries exactly one operand")
@@ -2335,9 +2349,23 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                         self.emit(Instruction::SetCallTrace);
                     }
 
-                    let instruction = Instruction::Call {
-                        callee: global_callee,
-                        ntypeargs,
+                    let hooked = callee_item.is_some_and(|function| match function {
+                        baml_compiler2_hir::loc::DeclRef::Source(function) => {
+                            baml_compiler2_hir::item_data::function_trace_hook(self.db, function)
+                                .is_some()
+                        }
+                        baml_compiler2_hir::loc::DeclRef::External(_) => false,
+                    });
+                    let instruction = if hooked {
+                        Instruction::CallHooked {
+                            callee: global_callee,
+                            ntypeargs,
+                        }
+                    } else {
+                        Instruction::Call {
+                            callee: global_callee,
+                            ntypeargs,
+                        }
                     };
                     // Pulling nested argument producers may install their own
                     // debug spans. Restore the terminator's enclosing call span
@@ -3449,6 +3477,11 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         let const_idx = self.add_constant(ConstValue::Type(anchored));
         let inst = self.emit(Instruction::LoadType(const_idx));
         self.set_operand(inst, OperandMeta::Const(self.spelled_template(template)));
+        Ok(())
+    }
+
+    fn trace_hook_settings(&mut self, with_settings: bool) -> Result<(), Self::Error> {
+        self.emit(Instruction::BeginTraceHook(with_settings));
         Ok(())
     }
 

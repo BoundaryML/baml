@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 813
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
@@ -129,25 +128,25 @@ function         baml.io.eprint                   <builtin>/baml/ns_io/io.baml:4
 function         baml.io.eprintln                 <builtin>/baml/ns_io/io.baml:50
 interface        baml.io.Read                     <builtin>/baml/ns_io/read.baml:7
 interface        baml.io.Write                    <builtin>/baml/ns_io/write.baml:9
-class            baml.iter.Done                   <builtin>/baml/ns_iter/iter.baml:12
-interface        baml.iter.Iterable               <builtin>/baml/ns_iter/iter.baml:26
-interface        baml.iter.Iterator               <builtin>/baml/ns_iter/iter.baml:73
-function         baml.iter.flatten                <builtin>/baml/ns_iter/iter.baml:541
-class            baml.iter.ArrayIterator          <builtin>/baml/ns_iter/iter.baml:555
-class            baml.iter.Range                  <builtin>/baml/ns_iter/iter.baml:610
-class            baml.iter.Repeat                 <builtin>/baml/ns_iter/iter.baml:669
-class            baml.iter.Map                    <builtin>/baml/ns_iter/iter.baml:721
-class            baml.iter.Filter                 <builtin>/baml/ns_iter/iter.baml:754
-class            baml.iter.FilterMap              <builtin>/baml/ns_iter/iter.baml:796
-class            baml.iter.FlatMap                <builtin>/baml/ns_iter/iter.baml:843
-class            baml.iter.Flatten                <builtin>/baml/ns_iter/iter.baml:901
-class            baml.iter.Peekable               <builtin>/baml/ns_iter/iter.baml:962
-class            baml.iter.StepBy                 <builtin>/baml/ns_iter/iter.baml:1022
-class            baml.iter.Chain                  <builtin>/baml/ns_iter/iter.baml:1067
-class            baml.iter.Take                   <builtin>/baml/ns_iter/iter.baml:1110
-class            baml.iter.Skip                   <builtin>/baml/ns_iter/iter.baml:1157
-class            baml.iter.TakeWhile              <builtin>/baml/ns_iter/iter.baml:1203
-class            baml.iter.SkipWhile              <builtin>/baml/ns_iter/iter.baml:1250
+class            baml.iter.Done                   <builtin>/baml/ns_iter/iter.baml:15
+interface        baml.iter.Iterable               <builtin>/baml/ns_iter/iter.baml:29
+interface        baml.iter.Iterator               <builtin>/baml/ns_iter/iter.baml:76
+function         baml.iter.flatten                <builtin>/baml/ns_iter/iter.baml:544
+class            baml.iter.ArrayIterator          <builtin>/baml/ns_iter/iter.baml:558
+class            baml.iter.Range                  <builtin>/baml/ns_iter/iter.baml:616
+class            baml.iter.Repeat                 <builtin>/baml/ns_iter/iter.baml:678
+class            baml.iter.Map                    <builtin>/baml/ns_iter/iter.baml:733
+class            baml.iter.Filter                 <builtin>/baml/ns_iter/iter.baml:767
+class            baml.iter.FilterMap              <builtin>/baml/ns_iter/iter.baml:810
+class            baml.iter.FlatMap                <builtin>/baml/ns_iter/iter.baml:858
+class            baml.iter.Flatten                <builtin>/baml/ns_iter/iter.baml:917
+class            baml.iter.Peekable               <builtin>/baml/ns_iter/iter.baml:979
+class            baml.iter.StepBy                 <builtin>/baml/ns_iter/iter.baml:1040
+class            baml.iter.Chain                  <builtin>/baml/ns_iter/iter.baml:1086
+class            baml.iter.Take                   <builtin>/baml/ns_iter/iter.baml:1130
+class            baml.iter.Skip                   <builtin>/baml/ns_iter/iter.baml:1178
+class            baml.iter.TakeWhile              <builtin>/baml/ns_iter/iter.baml:1225
+class            baml.iter.SkipWhile              <builtin>/baml/ns_iter/iter.baml:1273
 type             baml.json.json                   <builtin>/baml/ns_json/json.baml:10
 class            baml.json.ParseError             <builtin>/baml/ns_json/json.baml:18
 class            baml.json.DecodeError            <builtin>/baml/ns_json/json.baml:29
@@ -165,9 +164,9 @@ function         baml.json.field                  <builtin>/baml/ns_json/json.ba
 class            baml.json.PathError              <builtin>/baml/ns_json/json.baml:268
 function         baml.json.path                   <builtin>/baml/ns_json/json.baml:342
 function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:444
-function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:475
-function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:490
-function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:514
+function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:484
+function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:499
+function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:523
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:4
 class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:50
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:96
@@ -238,12 +237,12 @@ class            baml.sys.WritePipe               <builtin>/baml/ns_sys/sys.baml
 function         baml.sys.exec                    <builtin>/baml/ns_sys/sys.baml:188
 function         baml.sys.start_process           <builtin>/baml/ns_sys/sys.baml:202
 function         baml.sys.shell                   <builtin>/baml/ns_sys/sys.baml:211
-function         baml.sys.sleep                   <builtin>/baml/ns_sys/sys.baml:219
-function         baml.sys.collect_garbage         <builtin>/baml/ns_sys/sys.baml:226
-function         baml.sys.panic                   <builtin>/baml/ns_sys/sys.baml:236
-function         baml.sys.exit                    <builtin>/baml/ns_sys/sys.baml:246
-function         baml.sys.argv                    <builtin>/baml/ns_sys/sys.baml:252
-function         baml.sys.pid                     <builtin>/baml/ns_sys/sys.baml:261
+function         baml.sys.sleep                   <builtin>/baml/ns_sys/sys.baml:220
+function         baml.sys.collect_garbage         <builtin>/baml/ns_sys/sys.baml:232
+function         baml.sys.panic                   <builtin>/baml/ns_sys/sys.baml:242
+function         baml.sys.exit                    <builtin>/baml/ns_sys/sys.baml:252
+function         baml.sys.argv                    <builtin>/baml/ns_sys/sys.baml:258
+function         baml.sys.pid                     <builtin>/baml/ns_sys/sys.baml:267
 class            baml.time.Duration               <builtin>/baml/ns_time/duration.baml:22
 class            baml.time.Instant                <builtin>/baml/ns_time/instant.baml:24
 class            baml.time.PlainDate              <builtin>/baml/ns_time/plaindate.baml:16

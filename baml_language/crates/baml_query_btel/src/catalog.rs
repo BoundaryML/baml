@@ -94,11 +94,11 @@ pub const PROCESSES: Relation = Relation {
         col(
             "status",
             "text",
-            "running, success, error, panicked, or unknown (its engines stopped without saying how the process ended)",
+            "running, success, error, panicked, or unknown (the host did not report the OS process's exit outcome)",
         ),
         value(
             "status_history",
-            "[{status, timestamp}]: running from the process's start, then how it ended",
+            "[{status, timestamp}]: running from the process's start, then its reported completion or exit outcome",
         ),
         col(
             "last_updated",
@@ -124,9 +124,12 @@ FROM (
     MAX(r.initial_context_cas) AS initial_context_cas,
     MAX(r.host) AS host, MAX(r.command) AS command,
     MIN(r.process_started_ns) AS started_ns,
-    CASE MAX(r.process_end_status) WHEN 1 THEN 'success' WHEN 2 THEN 'error'
+    CASE MAX(CASE WHEN r.process_end_status = 4 THEN 0 ELSE r.process_end_status END)
+      WHEN 0 THEN 'unknown' WHEN 1 THEN 'success' WHEN 2 THEN 'error'
       WHEN 3 THEN 'panicked' END AS ended,
-    MAX(r.process_end_ns) AS ended_ns,
+    -- A known outcome's time wins over a later unknown completion's.
+    COALESCE(MAX(IIF(r.process_end_status = 4, NULL, r.process_end_ns)),
+      MAX(r.process_end_ns)) AS ended_ns,
     SUM(r.terminal_sequence IS NULL) AS open,
     MAX(r.updated_ns) AS updated_ns
   FROM main.recording r
@@ -136,7 +139,7 @@ FROM (
 
 pub const PROFILER: Relation = Relation {
     name: "profiler",
-    doc: "One row per calling-context tree node of each ended process, merged over its call sites, threads and engines. Empty for a process until its end is recorded.",
+    doc: "One row per calling-context tree node of each process whose host reported completion, merged over its call sites, threads and engines. Empty until completion is recorded; the OS process's exit outcome can remain unknown.",
     columns: &[
         col(
             "profiler_node_id",
@@ -358,7 +361,9 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
   __btel_ref(2, c.type_args_cas, NULL,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
-  __btel_ref(1, c.inputs_cas, f.argument_names,
+  -- Host adapters capture a named map (Python) or positional list (Node) as
+  -- a value root. BAML functions capture FunctionArgs with a slot layout.
+  __btel_ref(IIF(f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   IIF(c.outcome = 1, __btel_ref(2, c.value_cas, NULL, 0), NULL) AS output_value,
   NULL AS network_event_values,
@@ -573,7 +578,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     e.multiplier, e.shift) AS start_time,
   __btel_ref(2, c.type_args_cas, NULL,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
-  __btel_ref(1, c.inputs_cas, f.argument_names,
+  __btel_ref(IIF(f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   NULL AS network_event_values,
   cx.distinct_id AS context_distinct_id,

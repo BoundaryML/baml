@@ -64,6 +64,8 @@ pub fn get_bridge_runtime_version() -> &'static str {
 }
 
 #[napi(js_name = "shutdownRuntime")]
+/// Finalize the SDK lifetime, drain work and finish telemetry delivery.
+/// Repeated calls are harmless; the OS process's exit outcome remains unknown.
 pub async fn shutdown_runtime() -> napi::Result<()> {
     bridge_cffi::shutdown_runtime(None)
         .await

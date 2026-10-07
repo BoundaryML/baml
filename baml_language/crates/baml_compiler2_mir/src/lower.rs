@@ -4559,6 +4559,7 @@ impl<'db> LoweringContext<'db> {
         let parameter_defaults =
             baml_compiler2_hir::signature::function_parameter_defaults(self.db, func_loc);
         self.lower_default_parameter_prologue(func_data, &parameter_defaults)?;
+        self.lower_trace_hook_prologue(func_loc);
 
         // Lower root expression into return place
         let root_expr = self.body.root_expr;
@@ -4594,6 +4595,137 @@ impl<'db> LoweringContext<'db> {
         mir.lambdas = std::mem::take(&mut self.pending_lambdas);
 
         Ok(mir)
+    }
+
+    fn lower_trace_hook_prologue(&mut self, function: FunctionLoc<'db>) {
+        use baml_compiler2_hir_ty::infer::trace_hooks::{HookArgument, declaration_plan};
+        let Some(plan) = declaration_plan(self.db, function) else {
+            return;
+        };
+        if plan
+            .arguments
+            .iter()
+            .all(|argument| *argument == HookArgument::Default)
+            && let Some(mode) = self.builtin_trace_hook(plan.function)
+        {
+            self.builder.push_statement(
+                StatementKind::Intrinsic {
+                    op: IntrinsicOp::BuiltinTraceHook(mode),
+                    args: Vec::new(),
+                },
+                None,
+            );
+            return;
+        }
+        let settings = self.builder.temp(RuntimeTy::unknown());
+        self.builder.assign(
+            Place::local(settings),
+            Rvalue::TraceHookSettings {
+                with_settings: plan.arguments.contains(&HookArgument::Settings),
+            },
+        );
+        let enabled = self.builder.temp(RuntimeTy::Bool);
+        self.builder.assign(
+            Place::local(enabled),
+            Rvalue::BinaryOp {
+                op: BinOp::Ne,
+                left: Operand::copy_local(settings),
+                right: Operand::Constant(Constant::Null),
+            },
+        );
+        let invoke = self.builder.create_block();
+        let finish = self.builder.create_block();
+        let body = self.builder.create_block();
+        self.builder
+            .branch(Operand::copy_local(enabled), invoke, body);
+        self.builder.set_current_block(invoke);
+        let mut args = Vec::new();
+        for ty in &plan.type_args {
+            let ty = self.ty_to_template(ty, &self.enclosing_generic_params());
+            let local = self.builder.temp(RuntimeTy::unknown());
+            self.builder
+                .assign(Place::local(local), Rvalue::LoadType(ty));
+            args.push(Operand::copy_local(local));
+        }
+        for arg in &plan.arguments {
+            args.push(match arg {
+                HookArgument::Default => Operand::Constant(Constant::OmittedArg),
+                HookArgument::Settings => Operand::copy_local(settings),
+                HookArgument::Target(index) => {
+                    let local =
+                        self.binding_locals[&BindingId::parameter(self.current_scope, *index)];
+                    Operand::Copy(self.value_place(local))
+                }
+            });
+        }
+        let result = self
+            .builder
+            .temp(self.convert_tir_ty_for_runtime(&plan.return_ty));
+        self.builder.call_with_type_args(
+            Operand::Constant(Constant::Function(plan.function)),
+            args,
+            plan.type_args.len(),
+            Place::local(result),
+            finish,
+        );
+        self.builder.set_current_block(finish);
+        self.builder.push_statement(
+            StatementKind::Intrinsic {
+                op: IntrinsicOp::ApplyTraceHook,
+                args: vec![Operand::copy_local(result)],
+            },
+            None,
+        );
+        self.builder.goto(body);
+        self.builder.set_current_block(body);
+    }
+
+    fn builtin_trace_hook(
+        &self,
+        function: FunctionRef<'db>,
+    ) -> Option<crate::ir::BuiltinTraceHook> {
+        use crate::ir::BuiltinTraceHook;
+        let (root, namespace_is_empty, name) = match function {
+            DeclRef::Source(function) => {
+                if baml_compiler2_hir::item_data::method_owner(self.db, function).is_some() {
+                    return None;
+                }
+                let package = file_package(self.db, function.file(self.db));
+                (
+                    package.root,
+                    package.namespace_path.is_empty(),
+                    baml_compiler2_hir::item_data::function_data(self.db, function)
+                        .name
+                        .clone(),
+                )
+            }
+            DeclRef::External(function) => {
+                if !is_precompiled_stdlib(self.db, function.package(self.db)) {
+                    return None;
+                }
+                let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { function } =
+                    function.slot(self.db)
+                else {
+                    return None;
+                };
+                (
+                    function.root(),
+                    function.namespace().is_empty(),
+                    function.name().clone(),
+                )
+            }
+        };
+        // Declaration identity protects user hooks with the same spelling.
+        if !self.lang().is(baml_base::LangPackage::Trace, root) || !namespace_is_empty {
+            return None;
+        }
+        match name.as_str() {
+            "hidden" => Some(BuiltinTraceHook::Hidden),
+            "timing" => Some(BuiltinTraceHook::Timing),
+            "span" => Some(BuiltinTraceHook::Span),
+            "rich" => Some(BuiltinTraceHook::Rich),
+            _ => None,
+        }
     }
 
     fn lower_default_parameter_prologue(

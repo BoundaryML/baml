@@ -30,29 +30,39 @@ pub struct ProcessInfo {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessStatus {
+    /// The host finalized its SDK lifetime without reporting an exit outcome.
+    Unknown,
     Success,
     Error,
     Panicked,
 }
 
-/// How a process ended, as its host decided before shutting engines down.
+/// The end of a host's BAML lifetime, reported before shutting engines down.
+/// SDK shutdown can report completion without knowing the OS process's outcome.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProcessExit {
     pub status: ProcessStatus,
     pub at_unix_ns: i64,
 }
 
-/// Written by the host once it knows the process is exiting, read when the
-/// recording ends. Engines shut down for any other reason leave it empty.
+/// Written by the host when it finalizes its BAML lifetime, read when the
+/// recording ends. Internal engine shutdown, such as replacement, leaves it empty.
 #[derive(Debug, Default)]
 pub struct ProcessExitSlot(std::sync::Mutex<Option<ProcessExit>>);
 
 impl ProcessExitSlot {
     pub fn set(&self, exit: ProcessExit) {
-        *self
+        let mut held = self
             .0
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(exit);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // SDK finalization must not erase an outcome the host already reported.
+        if exit.status == ProcessStatus::Unknown
+            && held.is_some_and(|exit| exit.status != ProcessStatus::Unknown)
+        {
+            return;
+        }
+        *held = Some(exit);
     }
 
     pub fn get(&self) -> Option<ProcessExit> {
@@ -60,5 +70,31 @@ impl ProcessExitSlot {
             .0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sdk_completion_preserves_a_known_host_outcome() {
+        for status in [
+            ProcessStatus::Success,
+            ProcessStatus::Error,
+            ProcessStatus::Panicked,
+        ] {
+            let slot = ProcessExitSlot::default();
+            let known = ProcessExit {
+                status,
+                at_unix_ns: 1,
+            };
+            slot.set(known);
+            slot.set(ProcessExit {
+                status: ProcessStatus::Unknown,
+                at_unix_ns: 2,
+            });
+            assert_eq!(slot.get(), Some(known));
+        }
     }
 }

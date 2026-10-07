@@ -493,6 +493,7 @@ struct ActiveCall {
         btel_types::context::Context,
         Option<bex_vm::telemetry::ThreadSpawnContext>,
         u64,
+        bool,
     )>,
 }
 
@@ -906,6 +907,11 @@ impl Default for EngineConfig {
     }
 }
 
+type ExtractedEnumDefinitions = (
+    indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition>,
+    indexmap::IndexMap<::sys_types::DefKey, Vec<String>>,
+);
+
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
@@ -1024,6 +1030,8 @@ pub struct BexEngine {
     method_owners: HashMap<HeapPtr, HeapPtr>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
     resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
+    #[cfg(not(target_arch = "wasm32"))]
+    host_capture_declarations: HashMap<String, btel_snapshot::host::HostDeclaration>,
     /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
     resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
@@ -1792,8 +1800,11 @@ impl BexEngine {
         let init_order = bytecode_program.init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode =
-            bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
+        let bytecode = bex_vm::vm::convert_program_with_trace_hooks(
+            bytecode_program,
+            auto_telemetry_level.is_some(),
+        )
+        .map_err(EngineError::VmInternalError)?;
 
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
@@ -1958,6 +1969,8 @@ impl BexEngine {
                     delivery,
                     #[cfg(not(target_arch = "wasm32"))]
                     process_exit,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    gc_function: std::sync::OnceLock::new(),
                 })
             })
             .transpose()?;
@@ -2052,7 +2065,38 @@ impl BexEngine {
 
         // Extract class and enum definitions for output format rendering.
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
-        let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
+        let (enum_definitions, host_enum_variants) =
+            Self::extract_enum_definitions(&resolved_enum_names);
+        #[cfg(not(target_arch = "wasm32"))]
+        let host_capture_declarations = class_definitions
+            .iter()
+            .map(|(identity, definition)| {
+                (
+                    identity.name().to_string(),
+                    btel_snapshot::host::HostDeclaration {
+                        identity: identity.clone(),
+                        fields: definition
+                            .fields
+                            .iter()
+                            .map(|field| field.name.clone())
+                            .collect(),
+                        variants: None,
+                    },
+                )
+            })
+            .chain(enum_definitions.keys().map(|identity| {
+                (
+                    identity.name().to_string(),
+                    btel_snapshot::host::HostDeclaration {
+                        identity: identity.clone(),
+                        fields: vec![],
+                        variants: host_enum_variants.get(identity).cloned(),
+                    },
+                )
+            }))
+            .collect();
+        #[cfg(target_arch = "wasm32")]
+        let _ = host_enum_variants;
 
         let bex_work = bex_work::BexWork::new(&heap);
         let heap_permit_manager = Arc::new(HeapPermitManager::new());
@@ -2144,6 +2188,8 @@ impl BexEngine {
             root_package,
             method_owners,
             resolved_class_names,
+            #[cfg(not(target_arch = "wasm32"))]
+            host_capture_declarations,
             resolved_enum_names,
             sys_ops,
             runtime_compiler,
@@ -2292,19 +2338,29 @@ impl BexEngine {
     /// Extract enum definitions from the heap for output format rendering.
     fn extract_enum_definitions(
         resolved_enum_names: &indexmap::IndexMap<String, HeapPtr>,
-    ) -> indexmap::IndexMap<::sys_types::DefKey, sys_types::EnumDefinition> {
+    ) -> ExtractedEnumDefinitions {
         let mut defs = indexmap::IndexMap::new();
+        let mut capture_variants = indexmap::IndexMap::new();
         for (_name, ptr) in resolved_enum_names {
             // SAFETY: ptr is from resolved_enum_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Enum(enm) = obj {
+                // Captures retain the VM's complete variant ordering, including
+                // variants omitted from the LLM output-format definition.
+                capture_variants.insert(
+                    ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
+                    enm.variants
+                        .iter()
+                        .map(|variant| variant.name.clone())
+                        .collect(),
+                );
                 defs.insert(
                     ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
                     bex_vm::definitions::enum_definition(enm),
                 );
             }
         }
-        defs
+        (defs, capture_variants)
     }
 
     /// Gather runtime definitions from the type descriptors passed directly
@@ -2942,6 +2998,8 @@ impl BexEngine {
         mut heap_guard: HeapGuard<'_>,
         mut cycle: bex_heap::GcCycleProfiler,
     ) -> bex_heap::GcStats {
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut gc_telemetry = telemetry_state::GcTelemetry::start(self.telemetry.as_ref());
         let cleanup_version = self.bex_work.cleanup_version();
         cycle.parked();
 
@@ -3044,6 +3102,8 @@ impl BexEngine {
         }
         drop(heap_guard);
         cycle.released();
+        #[cfg(not(target_arch = "wasm32"))]
+        gc_telemetry.finish(self.telemetry.as_ref(), &self.heap, &stats, reason);
 
         // Flush deferred host-value releases now that the stop-the-world window
         // has closed. Collecting a dead `Object::HostClosure` runs
@@ -4199,6 +4259,9 @@ impl BexEngine {
             }
             context = inherited.context.clone();
             thread.host_environment = inherited.host_environment;
+            thread
+                .vm
+                .inherit_hook_suppression(inherited.hook_suppression);
         }
         if host_environment != 0 {
             thread.host_environment = host_environment;
@@ -4216,9 +4279,6 @@ impl BexEngine {
             options
         };
         if let Some(options) = options {
-            if let Some(patch) = &options.context {
-                context = context.with_patch(patch);
-            }
             thread.vm.set_entry_trace(&options, None);
         }
         thread.vm.set_root_context(context);
@@ -4236,6 +4296,7 @@ impl BexEngine {
                 thread.vm.current_context().clone(),
                 thread.vm.invocation_ancestry(),
                 thread.host_environment,
+                thread.vm.hooks_suppressed(),
             ));
         }
     }
@@ -4264,6 +4325,7 @@ impl BexEngine {
             context: frame.0.clone(),
             ancestry: frame.1.clone(),
             host_environment: frame.2,
+            hook_suppression: frame.3,
         })
     }
 
@@ -5298,6 +5360,7 @@ impl BexEngine {
                     child_thread_id,
                     telemetry,
                     context,
+                    thread.vm.hooks_suppressed(),
                     thread.host_environment,
                     log_capture.cloned(),
                 )
@@ -5362,6 +5425,7 @@ impl BexEngine {
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
+        hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
@@ -5376,6 +5440,7 @@ impl BexEngine {
             thread_id,
             telemetry,
             context,
+            hook_suppression,
             host_environment,
             log_capture,
         ))
@@ -5401,6 +5466,7 @@ impl BexEngine {
         thread_id: u64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
+        hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
@@ -5439,6 +5505,7 @@ impl BexEngine {
             child_vm.set_telemetry_thread_name(name);
         }
 
+        child_vm.inherit_hook_suppression(hook_suppression);
         child_vm.set_root_context(context);
         child_vm.set_entry_point(entry, &[]);
 
@@ -5874,6 +5941,7 @@ impl BexEngine {
                                 context: thread.vm.current_context().clone(),
                                 ancestry: thread.vm.invocation_ancestry(),
                                 host_environment: thread.host_environment,
+                                hook_suppression: thread.vm.hooks_suppressed(),
                             };
                             let host_options = (operation == SysOp::BamlHostCallHostValue)
                                 .then(|| thread.vm.take_host_call_options());

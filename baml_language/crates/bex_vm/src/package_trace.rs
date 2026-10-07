@@ -88,7 +88,7 @@ fn alloc_id(vm: &mut BexVm, id: SpanId) -> Value {
     .to_value(vm)
 }
 
-fn alloc_settings(vm: &mut BexVm, options: &TraceOptionsData) -> Value {
+pub(crate) fn alloc_settings(vm: &mut BexVm, options: &TraceOptionsData) -> Value {
     let mode = options.mode.map_or(Value::NULL, |mode| {
         let name = match mode {
             InvocationMode::Hidden => "Hidden",

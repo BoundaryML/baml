@@ -489,6 +489,61 @@ fn processes_merge_engines_and_rebuild_on_new_evidence() {
 }
 
 #[test]
+fn sdk_completion_builds_the_profiler_with_an_unknown_exit_outcome() {
+    let project = tempfile::tempdir().unwrap();
+    let recording = Recording::new(project.path(), 1, Some([9; 16]));
+    recording.write(1, tree(vec![delta(1, false, 2, 20, ok())], vec![]));
+    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+    assert!(rows(&mut index, "SELECT * FROM profiler").is_empty());
+    // The SDK completion ends one second after the known outcome below.
+    let mut completion = process_end(proto::ProcessStatus::Unknown);
+    completion.process_end.as_mut().unwrap().at_unix_ns += 1_000_000_000;
+    recording.write(
+        2,
+        proto::RecordingFile {
+            end: Some(completion),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT function_name, invocation_count, total_time FROM profiler"
+        ),
+        vec![vec![json!("user.A"), json!(2), json!(20)]]
+    );
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT status, status_history[1]['status'] FROM processes"
+        ),
+        vec![vec![json!("unknown"), json!("unknown")]]
+    );
+
+    // UNKNOWN's wire number is higher, but it must not outrank a known outcome.
+    let known = Recording::new(project.path(), 2, Some([9; 16]));
+    known.write(
+        1,
+        proto::RecordingFile {
+            end: Some(process_end(proto::ProcessStatus::Error)),
+            ..Default::default()
+        },
+    );
+    // The status and its timestamp come from the same outcome.
+    assert_eq!(
+        rows(
+            &mut index,
+            "SELECT status, status_history[1]['timestamp'], last_updated FROM processes"
+        ),
+        vec![vec![
+            json!("error"),
+            json!("2026-09-21T14:13:20.000001Z"),
+            json!("2026-09-21T14:13:20.000001Z")
+        ]]
+    );
+}
+
+#[test]
 fn unknown_counts_and_times_are_null_never_guessed() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path(), 1, Some([9; 16]));
