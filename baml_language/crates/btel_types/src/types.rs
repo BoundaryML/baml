@@ -288,6 +288,10 @@ impl<R: Copy> DeclarationLookup<R> {
     /// The caller holds heap access, resolves each and `mark_resolved`s it.
     /// A declaration collected meanwhile was extracted by the collector and
     /// is skipped. Deferred declarations are queued as room frees up.
+    ///
+    /// Lock order: a shard lock may be held while taking the queue's (as
+    /// `register` does), never the reverse. So the queue is only ever held
+    /// on its own here.
     pub fn take_pending(&self, max: usize) -> Vec<(TypeTag, R)> {
         let mut out = Vec::new();
         if self.static_pending_len.load(Ordering::Acquire) > 0 {
@@ -299,12 +303,13 @@ impl<R: Copy> DeclarationLookup<R> {
         if self.deferred.load(Ordering::Acquire) > 0 {
             self.requeue_deferred();
         }
-        let mut pending = lock(&self.pending);
-        while out.len() < max {
-            let Some(tag) = pending.pop_front() else {
-                break;
-            };
-            self.pending_len.fetch_sub(1, Ordering::AcqRel);
+        let tags: Vec<TypeTag> = {
+            let mut pending = lock(&self.pending);
+            let take = pending.len().min(max.saturating_sub(out.len()));
+            self.pending_len.fetch_sub(take, Ordering::AcqRel);
+            pending.drain(..take).collect()
+        };
+        for tag in tags {
             if let Some(entry) = read(self.shard(tag)).get(&tag)
                 && entry.state == State::Queued
             {
@@ -314,29 +319,33 @@ impl<R: Copy> DeclarationLookup<R> {
         out
     }
 
-    /// Queue deferred declarations while the queue has room.
+    /// Queue deferred declarations while the queue has room: mark them under
+    /// their shards' locks, then queue them under the queue's alone.
     fn requeue_deferred(&self) {
-        let mut pending = lock(&self.pending);
+        let room =
+            MAX_PENDING_DECLARATIONS.saturating_sub(self.pending_len.load(Ordering::Acquire));
+        let mut requeued = Vec::new();
         for shard in &self.shards {
-            if pending.len() >= MAX_PENDING_DECLARATIONS
-                || self.deferred.load(Ordering::Acquire) == 0
-            {
-                return;
+            if requeued.len() >= room {
+                break;
             }
             let mut shard = write(&shard.0);
             for (tag, entry) in shard.iter_mut() {
-                if entry.state != State::Deferred {
-                    continue;
+                if requeued.len() >= room {
+                    break;
                 }
-                if pending.len() >= MAX_PENDING_DECLARATIONS {
-                    return;
+                if entry.state == State::Deferred {
+                    entry.state = State::Queued;
+                    requeued.push(*tag);
                 }
-                entry.state = State::Queued;
-                pending.push_back(*tag);
-                self.pending_len.fetch_add(1, Ordering::AcqRel);
-                self.deferred.fetch_sub(1, Ordering::AcqRel);
             }
         }
+        if requeued.is_empty() {
+            return;
+        }
+        self.deferred.fetch_sub(requeued.len(), Ordering::AcqRel);
+        self.pending_len.fetch_add(requeued.len(), Ordering::AcqRel);
+        lock(&self.pending).extend(requeued);
     }
 
     pub fn mark_resolved(&self, tag: TypeTag) {
@@ -549,6 +558,50 @@ mod tests {
         }
         assert_eq!(lookup.lost(), 2);
         assert_eq!(lookup.take_settled().len(), MAX_SETTLED_DEFINITIONS);
+        assert!(!lookup.has_work());
+    }
+
+    /// Registering threads overflow the queue while a resolver drains it
+    /// and re-queues deferred work, all at once: no lock-order inversion
+    /// between the map's shards and the queue (a deadlock fails the test
+    /// rather than hanging it), and every registration is resolved once.
+    #[test]
+    fn concurrent_overflow_and_draining_never_deadlock() {
+        let lookup = std::sync::Arc::new(DeclarationLookup::<usize>::default());
+        let per_thread = MAX_PENDING_DECLARATIONS;
+        let threads = 4;
+        let (done, finished) = std::sync::mpsc::channel();
+        let registrars: Vec<_> = (0..threads)
+            .map(|t| {
+                let lookup = std::sync::Arc::clone(&lookup);
+                std::thread::spawn(move || {
+                    for n in 0..per_thread {
+                        let id = i64::try_from(t * per_thread + n).unwrap();
+                        lookup.register(dynamic(id), n, None);
+                    }
+                })
+            })
+            .collect();
+        {
+            let lookup = std::sync::Arc::clone(&lookup);
+            std::thread::spawn(move || {
+                let mut resolved = 0;
+                while resolved < threads * per_thread {
+                    for (tag, _) in lookup.take_pending(512) {
+                        lookup.mark_resolved(tag);
+                        resolved += 1;
+                    }
+                }
+                done.send(resolved).unwrap();
+            });
+        }
+        let resolved = finished
+            .recv_timeout(std::time::Duration::from_secs(60))
+            .expect("registration and draining deadlocked");
+        assert_eq!(resolved, threads * per_thread);
+        for registrar in registrars {
+            registrar.join().unwrap();
+        }
         assert!(!lookup.has_work());
     }
 
