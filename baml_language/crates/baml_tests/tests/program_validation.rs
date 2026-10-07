@@ -4,10 +4,12 @@
 //! instead of panicking in the loader. A compiled program satisfies the laws;
 //! each corruption below breaks one and names it.
 
+use baml_base::LangPackage;
 use bex_vm_types::{
     GlobalIndex, Object, ObjectIndex, Program, TyTemplate, TypeHead,
     bytecode::{SwitchDispatch, SwitchKey, SwitchTable},
     errors::VmInternalError,
+    types::PackageKind,
 };
 
 const SOURCE: &str = r#"
@@ -208,4 +210,44 @@ fn an_init_order_that_is_not_the_init_packages_is_refused() {
     assert!(program.packages[root as usize].init.is_none());
     program.init_order.push(root);
     assert!(refused(program).contains("not exactly the packages with an `$init`"));
+}
+
+#[test]
+fn a_second_language_package_is_refused() {
+    let mut program = program();
+    // The root relabelled as the `baml` language package: the executable then
+    // holds two, and the runtime, which finds the package by what it is,
+    // could not tell which it means.
+    let root = program.root;
+    program.packages[root as usize].kind = PackageKind::Language(LangPackage::Baml);
+    assert!(refused(program).contains("is a second `baml` language package"));
+}
+
+/// The `baml` package is required by the loader, which finds it by identity
+/// in the package index it builds — one step past `validate`, so this one
+/// goes through `BexVm::from_program`.
+#[test]
+fn an_executable_without_the_baml_package_is_refused() {
+    let mut program = program();
+    // The `baml` package demoted to an ordinary one: the runtime's own error
+    // and panic classes are then declared by no language package.
+    let baml = program
+        .packages
+        .iter_mut()
+        .find(|package| package.kind == PackageKind::Language(LangPackage::Baml))
+        .expect("the stdlib prefix holds the `baml` package");
+    baml.kind = PackageKind::Ordinary;
+    let park_requested = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    match bex_vm::BexVm::from_program(program, park_requested) {
+        Err(VmInternalError::InvalidProgram(error)) => {
+            assert!(
+                error
+                    .to_string()
+                    .contains("the `baml` language package is required"),
+                "refused for another law: {error}"
+            );
+        }
+        Err(other) => panic!("refused for another reason: {other}"),
+        Ok(_) => panic!("a program without the `baml` package loaded"),
+    }
 }

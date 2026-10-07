@@ -714,7 +714,7 @@ fn bind_slots(
         // parent's table.
         let edge_name = match locator {
             Locator::Prelude(language) => {
-                let target = vm.language_package(*language).ok_or_else(|| {
+                let target = vm.packages.lang_package(*language).ok_or_else(|| {
                     link_error(format!(
                         "the language package `{}` is not loaded",
                         language.manifest_name()

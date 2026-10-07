@@ -569,15 +569,15 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     }
     writeln!(out, "{indent}}}\n").unwrap();
 
-    // Impl with to_value()
-    let fqn = format!("{}.{}", def.namespace_prefix, def.name);
+    // Impl with to_value(): the class by identity, never by a spelled name.
+    let item = crate::lang_item::lang_item_expr(&def.namespace_prefix, &def.name);
     writeln!(out, "{indent}impl {class_ident} {{").unwrap();
     writeln!(
         out,
         "{inner}pub fn to_value(self, vm: &mut BexVm) -> bex_vm_types::Value {{"
     )
     .unwrap();
-    writeln!(out, "{inner2}let class_ptr = vm.resolve_class({fqn:?});").unwrap();
+    writeln!(out, "{inner2}let class_ptr = vm.lang_object({item});").unwrap();
 
     // Convert each field to a Value
     for field in &def.fields {

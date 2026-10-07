@@ -1198,8 +1198,10 @@ impl baml_type::TyRenderStrategy<baml_type::DeclName> for BodyPackageSpelling<'_
     }
 }
 
-/// The link-key `where` suffix for an impl-provided interface body: the
-/// impl's canonical constraint set, rendered with frame indices.
+/// The `where` suffix of an impl-provided interface body's DISPLAY: the
+/// impl's constraint set, rendered with frame indices. Display only — the
+/// body's identity is its structural `ImplBodyKey`, whose coherence part
+/// carries the same constraints.
 ///
 /// The impl identity key must include every input coherence's admissibility
 /// check discriminates on (see `interfaces::coherence` in `hir_ty`). Under the

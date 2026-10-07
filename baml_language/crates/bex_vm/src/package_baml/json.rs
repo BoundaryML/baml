@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use baml_type::{MediaKind, TypeName};
+use baml_type::MediaKind;
 use bex_vm_types::{RealizedTy, TyTemplate};
 
 /// The runtime type of an untyped `json` value: the recursive `baml.json.json`
@@ -148,7 +148,7 @@ pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) ->
 /// collection pass disagree with the dispatch pass.
 fn has_to_json_override(vm: &BexVm, value: Value) -> Result<bool, VmInternalError> {
     Ok(matches!(
-        super::shim_rule_method(vm, value, "ToJson", "to_json")?,
+        super::shim_rule_method(vm, value, crate::lang_items::BAML_TO_JSON, "to_json")?,
         Some(resolved) if !resolved.is_default
     ))
 }
@@ -451,9 +451,10 @@ impl Continuation for ToJsonWalkContinuation {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const JSON_PARSE_ERROR_FQN: &str = "baml.json.ParseError";
-const JSON_DECODE_ERROR_FQN: &str = "baml.json.DecodeError";
-const JSON_SERIALIZATION_ERROR_FQN: &str = "baml.json.SerializationError";
+const JSON_PARSE_ERROR: baml_base::LangItem = crate::lang_items::BAML_JSON_PARSE_ERROR;
+const JSON_DECODE_ERROR: baml_base::LangItem = crate::lang_items::BAML_JSON_DECODE_ERROR;
+const JSON_SERIALIZATION_ERROR: baml_base::LangItem =
+    crate::lang_items::BAML_JSON_SERIALIZATION_ERROR;
 
 // ─── Trait implementation ─────────────────────────────────────────────────────
 
@@ -549,49 +550,26 @@ impl BamlNamespaceJson for PackageBamlImpl {
 pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
-        match throw_json_parse_error(vm, msg) {
-            Ok(v) => VmRustFnError::thrown_fresh(v),
-            Err(e) => VmRustFnError::InternalError(e),
-        }
+        VmRustFnError::thrown_fresh(throw_json_parse_error(vm, msg))
     })?;
-    validate_json_bigint_bounds(&parsed).map_err(|message| {
-        match throw_json_parse_error(vm, message) {
-            Ok(v) => VmRustFnError::thrown_fresh(v),
-            Err(e) => VmRustFnError::InternalError(e),
-        }
-    })?;
+    validate_json_bigint_bounds(&parsed)
+        .map_err(|message| VmRustFnError::thrown_fresh(throw_json_parse_error(vm, message)))?;
     Ok(serde_to_value(vm, &parsed))
 }
 
 // ─── Error throwers ───────────────────────────────────────────────────────────
 
-fn throw_json_parse_error(vm: &mut BexVm, message: String) -> Result<Value, VmInternalError> {
-    let class_ptr = vm.lookup_type_by_fqn(JSON_PARSE_ERROR_FQN).ok_or_else(|| {
-        VmInternalError::MissingNativeFunction {
-            name: JSON_PARSE_ERROR_FQN.to_string(),
-        }
-    })?;
+fn throw_json_parse_error(vm: &mut BexVm, message: String) -> Value {
+    let class_ptr = vm.lang_object(JSON_PARSE_ERROR);
     let message_val = Value::object(vm.alloc_string(message));
-    Ok(Value::object(
-        vm.alloc_instance(class_ptr, vec![message_val]),
-    ))
+    Value::object(vm.alloc_instance(class_ptr, vec![message_val]))
 }
 
-fn throw_json_decode_error(
-    vm: &mut BexVm,
-    message: String,
-    path: &str,
-) -> Result<Value, VmInternalError> {
-    let class_ptr = vm
-        .lookup_type_by_fqn(JSON_DECODE_ERROR_FQN)
-        .ok_or_else(|| VmInternalError::MissingNativeFunction {
-            name: JSON_DECODE_ERROR_FQN.to_string(),
-        })?;
+fn throw_json_decode_error(vm: &mut BexVm, message: String, path: &str) -> Value {
+    let class_ptr = vm.lang_object(JSON_DECODE_ERROR);
     let message_val = Value::object(vm.alloc_string(message));
     let path_val = Value::object(vm.alloc_string(path.to_string()));
-    Ok(Value::object(
-        vm.alloc_instance(class_ptr, vec![message_val, path_val]),
-    ))
+    Value::object(vm.alloc_instance(class_ptr, vec![message_val, path_val]))
 }
 
 fn throw_json_serialization_error(
@@ -599,26 +577,16 @@ fn throw_json_serialization_error(
     message: String,
     path: &str,
     reason: &str,
-) -> Result<Value, VmInternalError> {
-    let class_ptr = vm
-        .lookup_type_by_fqn(JSON_SERIALIZATION_ERROR_FQN)
-        .ok_or_else(|| VmInternalError::MissingNativeFunction {
-            name: JSON_SERIALIZATION_ERROR_FQN.to_string(),
-        })?;
+) -> Value {
+    let class_ptr = vm.lang_object(JSON_SERIALIZATION_ERROR);
     let message_val = Value::object(vm.alloc_string(message));
     let path_val = Value::object(vm.alloc_string(path.to_string()));
     let reason_val = Value::object(vm.alloc_string(reason.to_string()));
-    Ok(Value::object(vm.alloc_instance(
-        class_ptr,
-        vec![message_val, path_val, reason_val],
-    )))
+    Value::object(vm.alloc_instance(class_ptr, vec![message_val, path_val, reason_val]))
 }
 
 fn raise_decode(vm: &mut BexVm, message: impl Into<String>, path: &str) -> VmRustFnError {
-    match throw_json_decode_error(vm, message.into(), path) {
-        Ok(v) => VmRustFnError::thrown_fresh(v),
-        Err(e) => VmRustFnError::InternalError(e),
-    }
+    VmRustFnError::thrown_fresh(throw_json_decode_error(vm, message.into(), path))
 }
 
 fn raise_serialize(
@@ -627,10 +595,12 @@ fn raise_serialize(
     path: &str,
     reason: &str,
 ) -> VmRustFnError {
-    match throw_json_serialization_error(vm, message.into(), path, reason) {
-        Ok(v) => VmRustFnError::thrown_fresh(v),
-        Err(e) => VmRustFnError::InternalError(e),
-    }
+    VmRustFnError::thrown_fresh(throw_json_serialization_error(
+        vm,
+        message.into(),
+        path,
+        reason,
+    ))
 }
 
 // ─── serde_json ↔ VM Value conversion (untyped) ──────────────────────────────
@@ -1203,10 +1173,7 @@ pub fn json_from_string_typed(
 ) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
-        match throw_json_parse_error(vm, msg) {
-            Ok(v) => VmRustFnError::thrown_fresh(v),
-            Err(e) => VmRustFnError::InternalError(e),
-        }
+        VmRustFnError::thrown_fresh(throw_json_parse_error(vm, msg))
     })?;
     validate_json_bigint_bounds(&parsed).map_err(|message| raise_decode(vm, message, ""))?;
     let mut path = String::new();
@@ -1598,17 +1565,16 @@ fn deserialize_media_by_kind(
     kind: MediaKind,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
-    let Some(fqn) = kind.wrapper_class_name() else {
+    let Some(wrapper) = kind.wrapper_class() else {
         return Err(raise_decode(
             vm,
             "cannot deserialize generic media - type must be concrete (image|audio|video|pdf)",
             path,
         ));
     };
-    let qtn = TypeName::from_dotted_path(fqn);
     let head = vm
-        .declaration_head(&qtn)
-        .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
+        .lang_head(wrapper)
+        .ok_or_else(|| raise_decode(vm, format!("media class `{wrapper}` not found"), path))?;
     deserialize_media(vm, json, kind, head, path)
 }
 
@@ -2400,12 +2366,7 @@ fn provided_from_json(
     // Type-directed dispatch: there is no receiver value, so the resolver
     // roots in the world that owns the target declaration (its package for a
     // runtime class; the lexical frame's world for static declarations).
-    let from_json_qtn = baml_type::TypeName::new(
-        baml_type::Name::new("baml"),
-        Vec::new(),
-        baml_type::Name::new("FromJson"),
-    );
-    let from_json_head = vm.declaration_head(&from_json_qtn)?;
+    let from_json_head = vm.lang_head(crate::lang_items::BAML_FROM_JSON)?;
     let owner = match vm.get_object(head.ptr()) {
         Object::Class(class) => class
             .owner

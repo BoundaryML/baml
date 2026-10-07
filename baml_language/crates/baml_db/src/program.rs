@@ -234,6 +234,7 @@ fn link_set<'a>(
     root: SourceRoot,
 ) -> LinkSet<'a> {
     let spelling = spelling(db);
+    let lang = baml_compiler2_hir::package::lang_roots(db);
     let position = |root: SourceRoot| {
         packages
             .iter()
@@ -246,10 +247,10 @@ fn link_set<'a>(
             .map(|package| LinkPackage {
                 name: spelling.of(package.root).clone(),
                 // The language packages are the prelude: reached under fixed
-                // names by every package, declared by none. The fact is which
-                // one the root is installed as; the edges to them are edges
-                // like any other.
-                kind: match baml_compiler2_hir::package::lang_roots(db).package_of(package.root) {
+                // names by every package, declared by none. Which one a root
+                // is, the installation table says; the edges to them are
+                // edges like any other.
+                kind: match lang.package_of(package.root) {
                     Some(language) => bex_vm_types::types::PackageKind::Language(language),
                     None => {
                         debug_assert_ne!(

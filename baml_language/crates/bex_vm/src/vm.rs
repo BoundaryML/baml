@@ -1987,16 +1987,98 @@ pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::Con
 ///
 /// One extra entry follows the error classes, at `DURATION_CLASS_PTR_INDEX`:
 /// `baml.time.Duration`, which `baml.errors.Timeout.duration` is an instance of.
-pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
+///
+/// # Errors
+///
+/// An executable that loads no `baml` package, or one whose `baml` package
+/// declares no such class: the runtime cannot run without the language's
+/// own error and panic classes, so the program is refused at load.
+pub fn resolve_error_class_ptrs(
+    packages: &crate::package_load::PackageIndex,
+) -> Result<Arc<[HeapPtr]>, VmInternalError> {
     ErrorClass::ALL
         .iter()
-        .map(ErrorClass::fqn)
-        .chain(std::iter::once("baml.time.Duration"))
-        .map(|fqn| {
-            crate::package_load::lookup_type_by_fqn(packages, fqn)
-                .unwrap_or_else(|| panic!("error class {fqn:?} not in packages"))
-        })
+        .map(ErrorClass::item)
+        .chain(std::iter::once(crate::lang_items::BAML_TIME_DURATION))
+        .map(|item| lang_declaration_required(packages, item))
         .collect()
+}
+
+/// The declaration `item` names, or the error that refuses an executable
+/// without it ([`resolve_error_class_ptrs`]).
+fn lang_declaration_required(
+    packages: &crate::package_load::PackageIndex,
+    item: baml_base::LangItem,
+) -> Result<HeapPtr, VmInternalError> {
+    packages.lang_declaration(item).ok_or_else(|| {
+        VmInternalError::InvalidProgram(bex_vm_types::types::InvalidProgram(format!(
+            "the executable does not load `{item}`: the `{}` language package is required",
+            item.package().manifest_name()
+        )))
+    })
+}
+
+/// Every declaration the runtime's own code names by identity
+/// ([`crate::lang_items::runtime_items`]) is declared by its language package
+/// when the executable loads that package — what makes [`BexVm::lang_object`]
+/// infallible afterwards. A package the executable does not load is not an
+/// error here (a program without the standard library); the `baml` package
+/// itself is required by [`resolve_error_class_ptrs`].
+///
+/// # Errors
+///
+/// A loaded language package that does not declare an item the runtime
+/// names: the stdlib sources and the runtime out of step, refused at load.
+pub fn require_lang_items(
+    packages: &crate::package_load::PackageIndex,
+) -> Result<(), VmInternalError> {
+    crate::lang_items::runtime_items()
+        .filter(|item| packages.lang_package(item.package()).is_some())
+        .try_for_each(|item| {
+            if packages.lang_declaration(item).is_some() {
+                Ok(())
+            } else {
+                Err(VmInternalError::InvalidProgram(
+                    bex_vm_types::types::InvalidProgram(format!(
+                        "the executable's `{}` language package does not declare `{item}`, which the runtime names",
+                        item.package().manifest_name()
+                    )),
+                ))
+            }
+        })
+}
+
+/// The standard-library tables a VM is constructed over, resolved once per
+/// executable from its package index and shared by every VM over it (the
+/// `Arc`s): the one road on which the runtime's requirements of the standard
+/// library are checked, so no load path can skip one.
+pub struct StdlibTables {
+    /// [`resolve_error_class_ptrs`].
+    pub error_class_ptrs: Arc<[HeapPtr]>,
+    /// [`resolve_panic_class_ptrs`].
+    pub panic_class_ptrs: Arc<[HeapPtr]>,
+    /// [`StdlibHeads::resolve`](crate::package_load::StdlibHeads::resolve).
+    pub heads: Arc<crate::package_load::StdlibHeads>,
+}
+
+impl StdlibTables {
+    /// Resolve every table and check every requirement
+    /// ([`require_lang_items`]).
+    ///
+    /// # Errors
+    ///
+    /// The executable loads no `baml` package, or a language package it loads
+    /// does not declare an item the runtime names.
+    pub fn resolve(packages: &crate::package_load::PackageIndex) -> Result<Self, VmInternalError> {
+        let error_class_ptrs = resolve_error_class_ptrs(packages)?;
+        let panic_class_ptrs = resolve_panic_class_ptrs(packages)?;
+        require_lang_items(packages)?;
+        Ok(Self {
+            error_class_ptrs,
+            panic_class_ptrs,
+            heads: Arc::new(crate::package_load::StdlibHeads::resolve(packages)),
+        })
+    }
 }
 
 /// Where `baml.time.Duration` sits in the error class table: right after the
@@ -2006,13 +2088,13 @@ const DURATION_CLASS_PTR_INDEX: usize = ErrorClass::ALL.len();
 /// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
 /// [`PanicClass`] discriminant. Shared across spawns like
 /// [`resolve_error_class_ptrs`].
-pub fn resolve_panic_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
+pub fn resolve_panic_class_ptrs(
+    packages: &crate::package_load::PackageIndex,
+) -> Result<Arc<[HeapPtr]>, VmInternalError> {
     PanicClass::ALL
         .iter()
-        .map(|pc| {
-            crate::package_load::lookup_type_by_fqn(packages, pc.fqn())
-                .unwrap_or_else(|| panic!("panic class {:?} not in packages", pc.fqn()))
-        })
+        .map(PanicClass::item)
+        .map(|item| lang_declaration_required(packages, item))
         .collect()
 }
 
@@ -2282,9 +2364,8 @@ impl BexVm {
         let tlab = Tlab::new_empty(Arc::clone(&heap));
 
         // `error_class_ptrs` / `panic_class_ptrs` / `stdlib_heads` are resolved
-        // once from `packages` by the caller (`resolve_error_class_ptrs` /
-        // `resolve_panic_class_ptrs` / `StdlibHeads::resolve`) and shared
-        // across spawned VMs.
+        // once from `packages` by the caller (`StdlibTables::resolve`) and
+        // shared across spawned VMs.
 
         let early_yield = EarlyYieldCheck::new(
             #[cfg(not(target_arch = "wasm32"))]
@@ -3115,11 +3196,13 @@ impl BexVm {
     /// The head for the declaration `qtn` names — its tag and its pointer, both
     /// read off the declaration itself.
     ///
-    /// The one name→head channel inside the VM, for the boundaries that
-    /// genuinely start from a name (the algebra's `reflect.AnyFunction` case, host
-    /// conversion, codegen FQN constants). Everything interior already holds a
-    /// head and must deref it instead: content-addressing a name into a tag
-    /// would fabricate an identity rather than resolve one, and cannot see a
+    /// The one name→head channel inside the VM, for the boundary that
+    /// genuinely starts from a name: host conversion, where a wire name
+    /// arrives (the SDK boundary, until it carries identity). Everything
+    /// interior already holds a head and must deref it instead — the
+    /// runtime's own stdlib references go by identity
+    /// ([`Self::lang_head`]): content-addressing a name into a tag would
+    /// fabricate an identity rather than resolve one, and cannot see a
     /// runtime-created declaration at all.
     pub fn declaration_head(&self, qtn: &baml_type::TypeName) -> Option<bex_vm_types::TypeHead> {
         let ptr = self
@@ -3162,13 +3245,39 @@ impl BexVm {
             .copied()
     }
 
-    /// Look up a class, enum, or interface object by its fully-qualified dotted
-    /// name — the package as the root reaches it, then the item path — from
-    /// the root's viewpoint. For builtin (prelude) types referenced by
-    /// constant FQN; not valid for `user`-package types, whose rendered name
-    /// elides the package — use [`Self::lookup_type`] there.
-    pub fn lookup_type_by_fqn(&self, fqn: &str) -> Option<HeapPtr> {
-        crate::package_load::lookup_type_by_fqn(&self.packages, fqn)
+    /// The class, enum, interface, or recursive type alias `item` names in its
+    /// language package, by identity
+    /// ([`PackageIndex::lang_declaration`](crate::package_load::PackageIndex::lang_declaration)):
+    /// the package by what it is, never by a name the program gives it. `None`
+    /// when the executable does not load that package (a program without the
+    /// standard library); native code that is itself part of the package
+    /// reads through [`Self::lang_object`].
+    pub fn lang_declaration(&self, item: baml_base::LangItem) -> Option<HeapPtr> {
+        self.packages.lang_declaration(item)
+    }
+
+    /// The head of the declaration `item` names, if its package is loaded.
+    pub fn lang_head(&self, item: baml_base::LangItem) -> Option<bex_vm_types::TypeHead> {
+        self.packages.lang_head(item)
+    }
+
+    /// [`Self::lang_declaration`] for a declaration the standard library is
+    /// known to make: the native code asking is that package's own, so the
+    /// package is loaded whenever the code runs, and load resolved every item
+    /// of [`crate::lang_items::runtime_items`] against it
+    /// ([`require_lang_items`]). Used by the generated `copy::` struct
+    /// `to_value()` methods — whose items the builtins codegen derives from
+    /// the stdlib sources the package was compiled from — and by native code
+    /// that reaches a stdlib declaration.
+    ///
+    /// # Panics
+    ///
+    /// When `item`'s package is not loaded: native code of a package the
+    /// executable does not hold is running.
+    pub fn lang_object(&self, item: baml_base::LangItem) -> HeapPtr {
+        self.lang_declaration(item).unwrap_or_else(|| {
+            panic!("the standard library declares `{item}`, which is not loaded")
+        })
     }
 
     /// The `Object::TypeAlias` pointer for `qtn`, if its package declares one.
@@ -4397,9 +4506,11 @@ impl BexVm {
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
-        let error_class_ptrs = resolve_error_class_ptrs(&package_index);
-        let panic_class_ptrs = resolve_panic_class_ptrs(&package_index);
-        let stdlib_heads = Arc::new(crate::package_load::StdlibHeads::resolve(&package_index));
+        let StdlibTables {
+            error_class_ptrs,
+            panic_class_ptrs,
+            heads: stdlib_heads,
+        } = StdlibTables::resolve(&package_index)?;
         Ok(Self::new(
             heap,
             globals,
@@ -5429,15 +5540,6 @@ impl BexVm {
                 got: self.type_of(value),
             }),
         }
-    }
-
-    /// Look up a class by fully-qualified name and return its `HeapPtr`.
-    ///
-    /// Used by generated `copy::` struct `to_value()` methods.
-    /// Panics if the class is not found (programming error — all builtin classes must exist).
-    pub fn resolve_class(&self, name: &str) -> HeapPtr {
-        self.lookup_type_by_fqn(name)
-            .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
     }
 
     fn allocate_real_locals_for_frame(

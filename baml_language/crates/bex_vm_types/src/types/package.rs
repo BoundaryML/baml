@@ -1,6 +1,9 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    hash::{Hash, Hasher},
+    sync::{Arc, atomic::AtomicBool},
+};
 
-use baml_base::Name;
+use baml_base::{LangPackage, Name};
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
@@ -27,6 +30,30 @@ impl LocalName {
     #[must_use]
     pub fn under(&self, package: &Name) -> baml_type::TypeName {
         baml_type::TypeName::new(package.clone(), self.namespace.clone(), self.name.clone())
+    }
+}
+
+/// A [`LocalName`] borrowed in parts, for looking a declaration up in a
+/// package's tables without building the owned key: hashes and compares as
+/// the `LocalName` with the same namespace and name does.
+#[derive(Debug, Clone, Copy)]
+pub struct LocalNameRef<'a> {
+    pub namespace: &'a [Name],
+    pub name: &'a Name,
+}
+
+impl Hash for LocalNameRef<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Field by field, as `LocalName`'s derived `Hash` does; a `Vec<Name>`
+        // hashes as its slice.
+        self.namespace.hash(state);
+        self.name.hash(state);
+    }
+}
+
+impl indexmap::Equivalent<LocalName> for LocalNameRef<'_> {
+    fn equivalent(&self, key: &LocalName) -> bool {
+        key.namespace == self.namespace && key.name == *self.name
     }
 }
 
@@ -77,11 +104,11 @@ pub struct Package {
     // tables are keyed by it — so two packages carrying one label collide
     // there.
     pub name: Name,
-    /// What the package is ([`PackageKind`]): a language package — one of
-    /// the prelude every package reaches under a fixed name — or an ordinary
-    /// one. A fact about the package, carried from the compiler's root kind
-    /// by the linker and set by whatever creates a package at run time; never
-    /// decided from a name or from how an edge reaches it.
+    /// What the package is ([`PackageKind`]): which language package — one
+    /// of the prelude every package reaches under a fixed name — or an
+    /// ordinary one. A fact about the package, carried from the compiler's
+    /// installation table by the linker and set by whatever creates a package
+    /// at run time; never decided from a name or from how an edge reaches it.
     pub kind: PackageKind,
     /// The package's edge table: every package it reaches, by the name it
     /// reaches it under — its declared dependencies, then the language
@@ -139,12 +166,14 @@ pub struct Package {
 /// ([`EdgeKind`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum PackageKind {
-    /// One of the standard library's packages, which one by identity:
-    /// shipped with the toolchain and reached by every package under its
-    /// fixed name without being declared — the prelude. A dependency slot
-    /// binds one by this identity and carries no interface fingerprint
-    /// (`Locator::Prelude`).
-    Language(baml_base::LangPackage),
+    /// One of the standard library's packages, and which: shipped with the
+    /// toolchain and reached by every package under its fixed name without
+    /// being declared — the prelude. A dependency slot binds one by this identity
+    /// and carries no interface fingerprint (`Locator::Prelude`). The
+    /// language's own implementation reaches the package by this identity
+    /// (a [`LangItem`](baml_base::LangItem) names a declaration of it), so
+    /// an executable holds at most one package per language package.
+    Language(LangPackage),
     /// Any other package: the program's root or one of its dependencies, a
     /// `Package.compile` result, a session, a `with_types` view.
     #[default]
@@ -294,6 +323,19 @@ impl Package {
         self.edges.get(name).map(|edge| edge.target)
     }
 
+    /// The class, enum, interface, or recursive type alias the package
+    /// declares at `namespace`.`name`, if any. The one type namespace: a path
+    /// names at most one declaration.
+    pub fn declaration(&self, namespace: &[Name], name: &Name) -> Option<HeapPtr> {
+        let key = LocalNameRef { namespace, name };
+        self.classes
+            .get(&key)
+            .or_else(|| self.enums.get(&key))
+            .or_else(|| self.interfaces.get(&key))
+            .or_else(|| self.type_aliases.get(&key))
+            .copied()
+    }
+
     /// Everything this package reaches, in edge order: ordinary packages,
     /// the prelude, a re-exported base, anonymous declarations alike. What
     /// each target is, the object at it says ([`PackageKind`], or a class or
@@ -347,8 +389,8 @@ pub struct ProgramPackage {
     /// [`Program::packages`](crate::Program::packages), and two packages may
     /// carry the same label.
     pub name: Name,
-    /// What the package is — [`Package::kind`], from the compiler's root
-    /// kind: a language package or an ordinary one.
+    /// What the package is — [`Package::kind`], from the compiler's
+    /// installation table: which language package, or an ordinary one.
     pub kind: PackageKind,
     /// The package's edge table: every package it reaches, by the name it
     /// reaches it under, as ordinals into
@@ -503,4 +545,59 @@ impl ProgramImplRule {
 pub struct ProgramMethodImpl {
     pub fqn: ObjectIndex,
     pub frame: Vec<TyTemplate>,
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::Name;
+    use indexmap::IndexMap;
+
+    use super::{LocalName, LocalNameRef};
+    use crate::HeapPtr;
+
+    /// A borrowed key finds the owned entry: the two hash alike and compare
+    /// equal, so a package table is read without building a `LocalName`.
+    #[test]
+    fn a_borrowed_local_name_finds_the_owned_entry() {
+        let mut table: IndexMap<LocalName, HeapPtr> = IndexMap::new();
+        let table_entry = LocalName::new(vec![Name::new("toml")], Name::new("Table"));
+        let root_entry = LocalName::new(Vec::new(), Name::new("Arg"));
+        table.insert(table_entry, HeapPtr::null());
+        table.insert(root_entry, HeapPtr::null());
+
+        let toml = [Name::new("toml")];
+        assert!(
+            table
+                .get(&LocalNameRef {
+                    namespace: &toml,
+                    name: &Name::new("Table"),
+                })
+                .is_some()
+        );
+        assert!(
+            table
+                .get(&LocalNameRef {
+                    namespace: &[],
+                    name: &Name::new("Arg"),
+                })
+                .is_some()
+        );
+        // A different namespace or name is a different declaration.
+        assert!(
+            table
+                .get(&LocalNameRef {
+                    namespace: &[],
+                    name: &Name::new("Table"),
+                })
+                .is_none()
+        );
+        assert!(
+            table
+                .get(&LocalNameRef {
+                    namespace: &toml,
+                    name: &Name::new("Arg"),
+                })
+                .is_none()
+        );
+    }
 }

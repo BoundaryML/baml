@@ -278,8 +278,19 @@ impl Program {
                 "the packages place {next} objects of {object_count}"
             )));
         }
+        // The runtime finds each language package by what it is, so an
+        // executable holds at most one of each.
+        let mut language_packages = HashSet::new();
         for package in &self.packages {
             let name = &package.name;
+            if let PackageKind::Language(language) = package.kind
+                && !language_packages.insert(language)
+            {
+                return Err(invalid(format!(
+                    "package `{name}` is a second `{}` language package",
+                    language.manifest_name()
+                )));
+            }
             let placed_here = |index: ObjectIndex, role: &str| -> Result<(), InvalidProgram> {
                 let raw = u32::try_from(index.raw()).expect("object pools fit u32");
                 if package.objects.contains(&raw) {

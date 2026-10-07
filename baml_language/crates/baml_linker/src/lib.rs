@@ -242,7 +242,19 @@ impl Linker<'_, '_> {
                 self.set.packages.len()
             )));
         }
+        // The runtime finds each language package by what it is, so a set
+        // holds at most one of each (`Program::validate` holds the executable
+        // to the same law).
+        let mut language_packages = HashSet::new();
         for package in &self.set.packages {
+            if let bex_vm_types::types::PackageKind::Language(language) = package.kind
+                && !language_packages.insert(language)
+            {
+                return Err(LinkError::DuplicateLanguagePackage {
+                    package: package.name.clone(),
+                    language,
+                });
+            }
             layout::validate_objects(&package.name, package.unit, package.tail)?;
             let mut edges = HashSet::new();
             for edge in &package.edges {

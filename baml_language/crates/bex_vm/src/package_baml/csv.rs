@@ -57,8 +57,8 @@ use crate::{
     package_load::{StdlibHeads, TimeClass},
 };
 
-const CSV_ERROR_KIND_FQN: &str = "baml.csv.ErrorKind";
-const ITER_DONE_FQN: &str = "baml.iter.Done";
+const CSV_ERROR_KIND: baml_base::LangItem = crate::lang_items::BAML_CSV_ERROR_KIND;
+const ITER_DONE: baml_base::LangItem = crate::lang_items::BAML_ITER_DONE;
 
 // =============================================================================
 // Error plumbing
@@ -131,11 +131,7 @@ fn opt_int_value(o: Option<i64>) -> Value {
 }
 
 fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
-    let enm_ptr = vm.lookup_type_by_fqn(CSV_ERROR_KIND_FQN).ok_or_else(|| {
-        VmInternalError::MissingNativeFunction {
-            name: CSV_ERROR_KIND_FQN.to_string(),
-        }
-    })?;
+    let enm_ptr = vm.lang_object(CSV_ERROR_KIND);
     let idx = match vm.get_object(enm_ptr) {
         Object::Enum(en) => en
             .variants
@@ -144,7 +140,7 @@ fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
         _ => None,
     }
     .ok_or_else(|| VmInternalError::MissingNativeFunction {
-        name: format!("{CSV_ERROR_KIND_FQN}.{}", e.kind.variant_name()),
+        name: format!("{CSV_ERROR_KIND}.{}", e.kind.variant_name()),
     })?;
     let kind = Value::object(vm.alloc_variant(enm_ptr, idx));
     let message = Value::object(vm.alloc_string(e.message.clone()));
@@ -173,17 +169,13 @@ fn throw_err(vm: &mut BexVm, e: &ErrInfo) -> VmRustFnError {
 }
 
 fn need_data_value(vm: &mut BexVm) -> Value {
-    let class_ptr = vm.resolve_class("baml.csv._NeedData");
+    let class_ptr = vm.lang_object(crate::lang_items::BAML_CSV_NEED_DATA);
     Value::object(vm.alloc_instance(class_ptr, vec![]))
 }
 
-fn done_value(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
-    let class_ptr = vm.lookup_type_by_fqn(ITER_DONE_FQN).ok_or_else(|| {
-        VmInternalError::MissingNativeFunction {
-            name: ITER_DONE_FQN.to_string(),
-        }
-    })?;
-    Ok(Value::object(vm.alloc_instance(class_ptr, vec![])))
+fn done_value(vm: &mut BexVm) -> Value {
+    let class_ptr = vm.lang_object(ITER_DONE);
+    Value::object(vm.alloc_instance(class_ptr, vec![]))
 }
 
 // =============================================================================
@@ -2199,7 +2191,7 @@ impl BamlClassCsvReader for PackageBamlImpl {
         };
         match polled {
             Ok(Polled::NeedData) => Ok(need_data_value(vm)),
-            Ok(Polled::Done) => done_value(vm),
+            Ok(Polled::Done) => Ok(done_value(vm)),
             Ok(Polled::Skipped(info)) => {
                 let error = error_value(vm, &info)?;
                 Ok(copy::csv::Skip { error }.to_value(vm))

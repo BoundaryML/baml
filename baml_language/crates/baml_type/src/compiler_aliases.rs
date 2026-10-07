@@ -10,7 +10,7 @@
 //! a wire name ([`TypeName`]) by the package's manifest spelling. Neither
 //! lookup compares a package name string of its own.
 
-use baml_base::{LangPackage, LangRoots, Name, Path, static_path};
+use baml_base::{LangItem, LangPackage, LangRoots, Name, Path, static_path};
 
 use crate::{DeclName, PrimitiveType, QualifiedTypeName, TypeName};
 
@@ -50,26 +50,21 @@ pub struct Definition {
 }
 
 impl Definition {
+    /// The declaration by identity: its package and its path there.
+    pub const fn item(self) -> LangItem {
+        LangItem::new(self.package, self.path())
+    }
+
     /// The declaration's compile-time head, or `None` when `lang` has no
     /// installation of its package (a database without the standard library).
     pub fn decl_name(self, lang: LangRoots) -> Option<DeclName> {
-        let (name, namespace) = self.split_path();
-        Some(DeclName::in_root(
-            lang.get(self.package)?,
-            namespace.to_vec(),
-            name.clone(),
-        ))
+        DeclName::of_lang_item(lang, self.item())
     }
 
     /// The declaration's wire name (`baml.media.Image`, `reflect.Type`): a
     /// dependency edge names a language package by its manifest spelling.
     pub fn type_name(self) -> TypeName {
-        let (name, namespace) = self.split_path();
-        TypeName::new(
-            Name::new(self.package.manifest_name()),
-            namespace.to_vec(),
-            name.clone(),
-        )
+        TypeName::of_lang_item(self.item())
     }
 
     /// The declaration as the compiler writes it (`json` → `baml.json.json`):
@@ -104,14 +99,11 @@ impl Definition {
     }
 
     /// The path inside the package: the spelling without its package segment.
-    pub fn path(self) -> &'static [Name] {
-        &self.spelled[1..]
-    }
-
-    fn split_path(self) -> (&'static Name, &'static [Name]) {
-        self.path()
-            .split_last()
-            .expect("builtin definition paths are nonempty")
+    pub const fn path(self) -> &'static [Name] {
+        let Some((_, path)) = self.spelled.split_first() else {
+            panic!("a builtin definition is spelled under its package");
+        };
+        path
     }
 }
 

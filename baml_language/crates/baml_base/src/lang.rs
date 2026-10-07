@@ -7,10 +7,11 @@
 //! provider package the client a `"provider/model"` shorthand constructs —
 //! the way rustc knows `core` and `std`. The compiler refers to them by
 //! [`LangPackage`], and the database records which root each one was
-//! installed at in a [`LangRoots`]. The manifest name is consulted exactly
-//! once, at install; nothing downstream compares a package name string
-//! except to read back a name the compiler itself wrote
-//! ([`LangPackage::from_manifest_name`]).
+//! installed at in a [`LangRoots`]. The manifest name is consulted at
+//! install, and read back only where a name genuinely arrives — a path the
+//! compiler itself wrote, a mount seam's edge name
+//! ([`LangPackage::from_manifest_name`]); nothing resolves a stdlib
+//! declaration by a name the program gives its package.
 //!
 //! The compiler's own desugars name these packages. A desugar lowers to a
 //! source-shaped path (`spawn { .. }` becomes a call of
@@ -19,16 +20,22 @@
 //! not capture it, and inside the `baml` package itself — where no edge is
 //! called `baml` — it still means the package.
 
+use std::fmt;
+
+use borsh::{BorshDeserialize, BorshSerialize};
+
 #[cfg(doc)]
 use crate::PathOrigin;
-use crate::files::SourceRoot;
+use crate::{Name, files::SourceRoot};
 
-/// A stdlib package, by identity. Serialized by discriminant (a dependency
-/// table's prelude entry, a package record's kind): the order of the
-/// variants is a wire contract — append, never reorder.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
+/// A stdlib package, by identity.
+///
+/// Serializable: an executable records which of its packages is which
+/// language package (`PackageKind::Language`), so the runtime finds the
+/// stdlib by what it is rather than by a name the program gives it. The
+/// discriminant is the wire form: the order of the variants is a contract —
+/// append, never reorder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum LangPackage {
     /// The core package: builtin companion classes, `baml.panics`, `baml.ops`.
     Baml,
@@ -148,6 +155,90 @@ const fn str_eq(a: &str, b: &str) -> bool {
     true
 }
 
+/// A declaration of a language package, by identity: the package and the
+/// item's path within it. `baml.toml.Table` is the item `toml.Table` of
+/// [`LangPackage::Baml`], whatever the program calls its packages.
+///
+/// This is how the language's own implementation names a stdlib declaration.
+/// The runtime's native code is not a package with an edge table, so no name
+/// it could spell a package by is anyone's edge name; it names the package by
+/// what it is and the item by its path there. Written with
+/// [`lang_item!`](crate::lang_item):
+///
+/// ```ignore
+/// const TABLE: LangItem = lang_item!(Baml: toml.Table);
+/// ```
+///
+/// [`fmt::Display`] renders the item under the package's manifest name
+/// (`baml.toml.Table`), for messages only: nothing resolves that rendering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LangItem {
+    package: LangPackage,
+    namespace: &'static [Name],
+    name: &'static Name,
+}
+
+impl LangItem {
+    /// The item at `path` — its namespace, then its name — in `package`.
+    ///
+    /// # Panics
+    ///
+    /// When `path` is empty: an item has a name. [`lang_item!`](crate::lang_item)
+    /// cannot write an empty path.
+    #[must_use]
+    pub const fn new(package: LangPackage, path: &'static [Name]) -> Self {
+        let Some((name, namespace)) = path.split_last() else {
+            panic!("a language item has a name");
+        };
+        Self {
+            package,
+            namespace,
+            name,
+        }
+    }
+
+    /// The language package declaring the item.
+    #[must_use]
+    pub const fn package(self) -> LangPackage {
+        self.package
+    }
+
+    /// The namespace path inside the package; empty at the package's root.
+    #[must_use]
+    pub const fn namespace(self) -> &'static [Name] {
+        self.namespace
+    }
+
+    /// The item's own name.
+    #[must_use]
+    pub const fn name(self) -> &'static Name {
+        self.name
+    }
+}
+
+impl fmt::Display for LangItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.package.manifest_name())?;
+        for segment in self.namespace {
+            write!(f, ".{}", segment.as_str())?;
+        }
+        write!(f, ".{}", self.name.as_str())
+    }
+}
+
+/// A [`LangItem`] as a constant: `lang_item!(Baml: toml.Table)` is the item
+/// `toml.Table` of [`LangPackage::Baml`]. The package is a [`LangPackage`]
+/// variant, so a package the language does not have cannot be written.
+#[macro_export]
+macro_rules! lang_item {
+    ($package:ident : $($segment:ident).+) => {
+        $crate::LangItem::new(
+            $crate::LangPackage::$package,
+            $crate::static_path!($($segment).+),
+        )
+    };
+}
+
 /// A written type spelling as it appears in a stdlib native KEY: every path
 /// headed by `root.` is spelled under `package`, the stdlib package's fixed
 /// name, so `root.TypeView` written inside `reflect` keys as
@@ -223,13 +314,6 @@ pub struct LangRoots {
 }
 
 impl LangRoots {
-    /// The language package installed at `root`, if `root` is one.
-    pub fn package_of(self, root: SourceRoot) -> Option<LangPackage> {
-        LangPackage::ALL
-            .into_iter()
-            .find(|package| self.get(*package) == Some(root))
-    }
-
     /// The root `package` is installed at, if any.
     #[must_use]
     pub fn get(self, package: LangPackage) -> Option<SourceRoot> {
@@ -248,11 +332,40 @@ impl LangRoots {
         self.roots[package as usize] = Some(root);
         self
     }
+
+    /// Which language package `root` is, if it is one: the inverse of
+    /// [`Self::get`].
+    #[must_use]
+    pub fn package_of(self, root: SourceRoot) -> Option<LangPackage> {
+        LangPackage::ALL
+            .into_iter()
+            .find(|package| self.roots[*package as usize] == Some(root))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{LangPackage, native_key_spelling};
+    use super::{LangItem, LangPackage, native_key_spelling};
+    use crate::Name;
+
+    #[test]
+    fn a_lang_item_is_a_package_and_a_path_and_renders_under_the_manifest_name() {
+        const TABLE: LangItem = lang_item!(Baml: toml.Table);
+        assert_eq!(TABLE.package(), LangPackage::Baml);
+        assert_eq!(TABLE.namespace(), &[Name::new_static("toml")]);
+        assert_eq!(TABLE.name(), &Name::new_static("Table"));
+        assert_eq!(TABLE.to_string(), "baml.toml.Table");
+
+        let arg = lang_item!(Reflect: Arg);
+        assert!(arg.namespace().is_empty());
+        assert_eq!(arg.to_string(), "reflect.Arg");
+
+        // A keyword is a namespace like any other.
+        let view = lang_item!(Reflect: enum.Type);
+        assert_eq!(view.to_string(), "reflect.enum.Type");
+        assert_eq!(view, lang_item!(Reflect: enum.Type));
+        assert_ne!(view, lang_item!(Reflect: class.Type));
+    }
 
     #[test]
     fn a_native_key_spells_root_as_the_package() {

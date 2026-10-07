@@ -1229,9 +1229,11 @@ pub(crate) fn alloc_kind_view(
         type_value.as_object_ptr().map(|ptr| vm.get_object(ptr)),
         Some(Object::Type(_))
     ));
-    let name = kind.class_name();
-    let class = vm.declaration_head(&name).unwrap_or_else(|| {
-        unreachable!("reflection kind class `{name}` is declared by the stdlib")
+    let class = vm.lang_head(kind.class()).unwrap_or_else(|| {
+        unreachable!(
+            "reflection kind class `{}` is declared by the stdlib",
+            kind.class()
+        )
     });
     Value::object(vm.alloc_instance(class.ptr(), vec![type_value]))
 }
@@ -1274,10 +1276,9 @@ pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
     let Object::Instance(instance) = vm.get_object(ptr) else {
         return None;
     };
-    let is_view = baml_type::type_kind::TypeKind::ALL.iter().any(|kind| {
-        vm.declaration_head(&kind.class_name())
-            .is_some_and(|head| head.ptr() == instance.class)
-    });
+    let is_view = baml_type::type_kind::TypeKind::ALL
+        .iter()
+        .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class));
     is_view.then(|| instance.fields[0].load())
 }
 
@@ -1542,15 +1543,14 @@ fn alloc_compilation_error_with_span(
             super::reflect::diagnostic_value(vm, &runtime)
         })
         .collect();
-    let diagnostic_qtn = baml_type::QualifiedTypeName::from_dotted_path("reflect.Diagnostic");
     let diagnostic_ty = bex_vm_types::RealizedTy::Class(
-        vm.declaration_head(&diagnostic_qtn)
+        vm.lang_head(crate::lang_items::REFLECT_DIAGNOSTIC)
             .unwrap_or_else(|| unreachable!("`reflect.Diagnostic` is declared by the stdlib")),
         Box::new([]),
     );
     let diagnostics = Value::object(vm.alloc_array(diagnostic_ty, values));
     let message = Value::object(vm.alloc_string(message));
-    let class = vm.resolve_class("reflect.errors.CompilationError");
+    let class = vm.lang_object(crate::lang_items::REFLECT_ERRORS_COMPILATION_ERROR);
     Value::object(vm.alloc_instance(class, vec![message, diagnostics]))
 }
 

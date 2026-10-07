@@ -1304,6 +1304,17 @@ fn a_prelude_dependency_carries_no_fingerprint() {
     };
     let unfingerprinted = make_consumer(None);
     link(&set(&unfingerprinted)).unwrap();
+    // The runtime finds each language package by what it is, so a second
+    // package claiming to be `baml` cannot link.
+    let mut doubled = set(&unfingerprinted);
+    doubled.packages[1].kind = PackageKind::Language(baml_base::LangPackage::Baml);
+    assert!(matches!(
+        link(&doubled),
+        Err(LinkError::DuplicateLanguagePackage {
+            language: baml_base::LangPackage::Baml,
+            ..
+        })
+    ));
     let fingerprinted = make_consumer(Some([7; 32]));
     assert!(matches!(
         link(&set(&fingerprinted)),

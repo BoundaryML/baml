@@ -317,6 +317,15 @@ pub enum MediaKind {
 }
 
 impl MediaKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 5] = [
+        Self::Image,
+        Self::Audio,
+        Self::Video,
+        Self::Pdf,
+        Self::Generic,
+    ];
+
     /// Tag value used in the BEP-038 `{ kind, source, value, mime }` JSON
     /// shape. `Generic` collapses to `"media"` (any media subtype).
     pub fn tag_str(self) -> &'static str {
@@ -330,11 +339,23 @@ impl MediaKind {
     }
 
     /// The stdlib wrapper class (`baml.media.*`) that carries this media kind
-    /// as a nominal value; `None` for `Generic`, which has no wrapper class.
-    ///
-    /// Single source of truth for the kind ↔ wrapper-class mapping, together
-    /// with [`MediaKind::from_wrapper_class_name`]. Consumers must resolve
-    /// wrapper class names through these instead of local string matches.
+    /// as a nominal value, by identity; `None` for `Generic`, which has no
+    /// wrapper class. What the runtime reaches the class by.
+    pub const fn wrapper_class(self) -> Option<crate::LangItem> {
+        match self {
+            MediaKind::Image => Some(crate::lang_item!(Baml: media.Image)),
+            MediaKind::Audio => Some(crate::lang_item!(Baml: media.Audio)),
+            MediaKind::Video => Some(crate::lang_item!(Baml: media.Video)),
+            MediaKind::Pdf => Some(crate::lang_item!(Baml: media.Pdf)),
+            MediaKind::Generic => None,
+        }
+    }
+
+    /// [`Self::wrapper_class`] as a wire name (`baml.media.Image`): how a
+    /// host spells the class. Single source of truth for the kind ↔
+    /// wrapper-class-name mapping, together with
+    /// [`MediaKind::from_wrapper_class_name`]. Consumers must resolve wrapper
+    /// class names through these instead of local string matches.
     pub const fn wrapper_class_name(self) -> Option<&'static str> {
         match self {
             MediaKind::Image => Some("baml.media.Image"),
@@ -374,8 +395,16 @@ mod media_kind_wrapper_tests {
                 .wrapper_class_name()
                 .expect("concrete kind has a wrapper");
             assert_eq!(MediaKind::from_wrapper_class_name(name), Some(kind));
+            // The identity and the wire name spell one declaration.
+            assert_eq!(
+                kind.wrapper_class()
+                    .expect("concrete kind has a wrapper")
+                    .to_string(),
+                name
+            );
         }
         assert_eq!(MediaKind::Generic.wrapper_class_name(), None);
+        assert_eq!(MediaKind::Generic.wrapper_class(), None);
         assert_eq!(MediaKind::from_wrapper_class_name("baml.media.File"), None);
         assert_eq!(MediaKind::from_wrapper_class_name("user.Image"), None);
     }

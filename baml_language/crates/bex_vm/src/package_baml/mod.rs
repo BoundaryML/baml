@@ -289,11 +289,11 @@ pub(super) struct ShimRuleMethod {
 }
 
 /// The rule-resolved `method` entry behind a value-position stdlib shim: `v`'s
-/// impl of the root-package interface `iface_name`, read off the impl-rule
-/// tables exactly as `dispatch_op` (ops.rs) reads operators — never by
-/// constructing a mangled global name, so blanket and out-of-body impls and
-/// runtime-declared classes all resolve. Pure resolution over `&BexVm` with no
-/// VM-heap allocation, so it is safe in GC-sensitive collection passes.
+/// impl of the stdlib interface `iface`, read off the impl-rule tables exactly
+/// as `dispatch_op` (ops.rs) reads operators — never by constructing a
+/// mangled global name, so blanket and out-of-body impls and runtime-declared
+/// classes all resolve. Pure resolution over `&BexVm` with no VM-heap
+/// allocation, so it is safe in GC-sensitive collection passes.
 ///
 /// `Ok(None)` = no concrete receiver type or no applicable rule — the shims'
 /// structural-fallback case. A frame that fails to realize is an internal
@@ -301,17 +301,11 @@ pub(super) struct ShimRuleMethod {
 pub(super) fn shim_rule_method(
     vm: &BexVm,
     v: Value,
-    iface_name: &str,
+    iface: baml_base::LangItem,
     method: &str,
 ) -> Result<Option<ShimRuleMethod>, VmInternalError> {
-    let qtn = baml_type::TypeName::new(
-        baml_type::Name::new("baml"),
-        Vec::new(),
-        baml_type::Name::new(iface_name),
-    );
-    // A stdlib FQN constant is one of the places a name legitimately becomes
-    // a head; it resolves once, off the declaration.
-    let Some(iface_head) = vm.declaration_head(&qtn) else {
+    // The interface by identity; `None` only in a program without the stdlib.
+    let Some(iface_head) = vm.lang_head(iface) else {
         return Ok(None);
     };
     let Some(self_ty) = vm.value_concrete_ty(v) else {
@@ -354,7 +348,7 @@ pub(super) fn make_to_string_callee(
     vm: &mut BexVm,
     v: Value,
 ) -> Result<Option<HeapPtr>, VmInternalError> {
-    match shim_rule_method(vm, v, "ToString", "to_string")? {
+    match shim_rule_method(vm, v, crate::lang_items::BAML_TO_STRING, "to_string")? {
         Some(resolved) if !resolved.is_default => Ok(Some(rule_bound_method(vm, v, resolved))),
         _ => Ok(None),
     }
@@ -370,7 +364,7 @@ pub(super) fn make_to_json_callee(
     vm: &mut BexVm,
     v: Value,
 ) -> Result<Option<HeapPtr>, VmInternalError> {
-    match shim_rule_method(vm, v, "ToJson", "to_json")? {
+    match shim_rule_method(vm, v, crate::lang_items::BAML_TO_JSON, "to_json")? {
         Some(resolved) if !resolved.is_default => Ok(Some(rule_bound_method(vm, v, resolved))),
         _ => Ok(None),
     }

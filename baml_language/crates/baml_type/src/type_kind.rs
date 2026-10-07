@@ -1,6 +1,6 @@
 //! Closed BEP-066 reflection-kind classification.
 
-use baml_base::{LangPackage, LangRoots, SourceRoot};
+use baml_base::{LangItem, LangPackage, LangRoots, SourceRoot, lang_item};
 
 use crate::{
     DeclName, Name, QualifiedTypeName, RealizedTy, TypeName,
@@ -48,22 +48,32 @@ impl TypeKind {
         }
     }
 
-    /// The builtin class that is the sealed view for this kind, by wire name.
-    pub fn class_name(self) -> QualifiedTypeName {
-        QualifiedTypeName::new(
-            Name::new("reflect"),
-            vec![Name::new(self.namespace())],
-            Name::new("Type"),
-        )
+    /// The builtin class that is the sealed view for this kind, by identity:
+    /// `reflect.<kind>.Type`. [`Self::class_name`] and [`Self::class_decl`]
+    /// derive from it.
+    pub const fn class(self) -> LangItem {
+        match self {
+            Self::Class => lang_item!(Reflect: class.Type),
+            Self::Enum => lang_item!(Reflect: enum.Type),
+            Self::Union => lang_item!(Reflect: union.Type),
+            Self::Literal => lang_item!(Reflect: literal.Type),
+            Self::Array => lang_item!(Reflect: array.Type),
+            Self::Map => lang_item!(Reflect: map.Type),
+            Self::Interface => lang_item!(Reflect: interface.Type),
+            Self::Primitive => lang_item!(Reflect: primitive.Type),
+            Self::Function => lang_item!(Reflect: function.Type),
+        }
     }
 
-    /// [`Self::class_name`] in the installed `reflect` package.
+    /// [`Self::class`] by wire name.
+    pub fn class_name(self) -> QualifiedTypeName {
+        TypeName::of_lang_item(self.class())
+    }
+
+    /// [`Self::class`] in the installed `reflect` package.
     pub fn class_decl(self, reflect: SourceRoot) -> DeclName {
-        DeclName::in_root(
-            reflect,
-            vec![Name::new(self.namespace())],
-            Name::new("Type"),
-        )
+        let class = self.class();
+        DeclName::in_root(reflect, class.namespace().to_vec(), class.name().clone())
     }
 }
 
@@ -197,6 +207,11 @@ mod tests {
     fn kind_names_are_closed_and_recognized() {
         for kind in TypeKind::ALL {
             assert!(is_type_kind_class(&kind.class_name()));
+            // The wire namespace segment and the identity spell one view.
+            let class = kind.class();
+            assert_eq!(class.namespace().len(), 1);
+            assert_eq!(class.namespace()[0].as_str(), kind.namespace());
+            assert_eq!(class.name().as_str(), "Type");
         }
         assert!(!is_type_kind_class(&QualifiedTypeName::from_dotted_path(
             "reflect.Type"

@@ -238,7 +238,7 @@ fn has_to_string_override(
     value: Value,
 ) -> Result<bool, crate::errors::VmInternalError> {
     Ok(matches!(
-        super::shim_rule_method(vm, value, "ToString", "to_string")?,
+        super::shim_rule_method(vm, value, crate::lang_items::BAML_TO_STRING, "to_string")?,
         Some(resolved) if !resolved.is_default
     ))
 }

@@ -1876,11 +1876,13 @@ impl BexEngine {
             })
             .collect();
         let dynamic_dispatch = Arc::new(bex_vm::package_load::DynDispatchTables::default());
-        // Resolve the builtin error/panic class pointers once; shared with every
-        // spawned VM rather than re-resolved per `BexVm::new`.
-        let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
-        let panic_class_ptrs = bex_vm::vm::resolve_panic_class_ptrs(&packages);
-        let stdlib_heads = Arc::new(bex_vm::package_load::StdlibHeads::resolve(&packages));
+        // Resolve the stdlib tables once; shared with every spawned VM rather
+        // than re-resolved per `BexVm::new`.
+        let bex_vm::vm::StdlibTables {
+            error_class_ptrs,
+            panic_class_ptrs,
+            heads: stdlib_heads,
+        } = bex_vm::vm::StdlibTables::resolve(&packages).map_err(EngineError::VmInternalError)?;
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.

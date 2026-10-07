@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use baml_base::{Dependency, Name};
+use baml_base::{Dependency, LangPackage, Name};
 use baml_db::{OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
@@ -49,10 +49,8 @@ async fn a_root_without_files_is_still_the_program_root() {
     assert!(
         root_package.edges.iter().any(|edge| {
             edge.name.as_str() == "baml"
-                && matches!(
-                    program.packages[edge.target as usize].kind,
-                    PackageKind::Language(_)
-                )
+                && program.packages[edge.target as usize].kind
+                    == PackageKind::Language(LangPackage::Baml)
         }),
         "the root reaches the prelude: {:?}",
         root_package.edges

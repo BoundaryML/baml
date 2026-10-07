@@ -65,7 +65,7 @@ impl BamlNamespaceSap for PackageBamlImpl {
         })?;
         let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model });
         let data = Value::object(vm.alloc_rust_data(data));
-        let class = vm.resolve_class("baml.sap._ParseCache");
+        let class = vm.lang_object(crate::lang_items::BAML_SAP_PARSE_CACHE);
         let cache = vm.tlab.alloc(Object::Instance(Instance::new(
             class,
             Box::new([target]),
@@ -114,7 +114,7 @@ impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
         match parse(vm, *cache, json, Completion::Partial)? {
             Some(value) => Ok(value),
             None => {
-                let no_yield = vm.resolve_class("baml.sap._NoYield");
+                let no_yield = vm.lang_object(crate::lang_items::BAML_SAP_NO_YIELD);
                 Ok(Value::object(vm.alloc_instance(no_yield, Vec::new())))
             }
         }

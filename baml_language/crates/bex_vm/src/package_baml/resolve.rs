@@ -362,12 +362,17 @@ impl<'vm> ImplResolver<'vm> {
         if active.len() >= 64 {
             return false;
         }
+        // `Equals` is the `baml` package's, which is required at load.
+        let equals = self
+            .vm
+            .lang_head(crate::lang_items::BAML_OPS_EQUALS)
+            .unwrap_or_else(|| {
+                unreachable!(
+                    "the required `baml` package declares `{}`",
+                    crate::lang_items::BAML_OPS_EQUALS
+                )
+            });
         if matches!(ty, RealizedTy::Class(..) | RealizedTy::Enum(_))
-            && let Some(equals) =
-                self.vm
-                    .declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
-                        "baml.ops.Equals",
-                    ))
             && self.rules_for(equals).iter().any(|rule| {
                 // Unproven bounds cannot establish the absence of custom
                 // equality: those bounds may depend on Hash itself.
@@ -726,9 +731,7 @@ impl<'vm> ImplResolver<'vm> {
         // observe the blanket rule's broader receiver.
         let any_class = self
             .vm
-            .declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
-                "reflect.AnyClass",
-            ));
+            .lang_head(baml_type::normalize::WellKnownHead::AnyClass.item());
         if any_class.is_some_and(|head| head == iface) {
             return matches!(concrete_ty, RealizedTy::Class(..));
         }

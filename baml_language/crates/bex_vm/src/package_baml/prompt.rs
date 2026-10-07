@@ -288,7 +288,7 @@ impl PromptAssembly {
         }
         .merge_adjacent();
 
-        let prompt_ast_class = vm.resolve_class("ai.Prompt");
+        let prompt_ast_class = vm.lang_object(crate::lang_items::AI_PROMPT);
         let data = Value::object(vm.alloc_rust_data(ast));
         NativeCallResult::Done(Value::object(
             vm.alloc_instance(prompt_ast_class, vec![data]),
@@ -376,7 +376,7 @@ impl BamlClassPrompt for PackageAiImpl {
                 .expect("ai.Prompt._data must contain bex_vm_types::PromptAst")
                 .to_structured_messages()
         };
-        let message_class = vm.resolve_class("ai.PromptMessage");
+        let message_class = vm.lang_object(crate::lang_items::AI_PROMPT_MESSAGE);
         messages
             .into_iter()
             .map(|(role, content, metadata)| {
@@ -410,21 +410,16 @@ fn prompt_content_values(vm: &mut BexVm, content: &PromptAstSimple) -> Vec<Value
     match content {
         PromptAstSimple::String(text) => vec![Value::object(vm.alloc_string(text.clone()))],
         PromptAstSimple::Media(media) => {
-            let class_name = match media.kind {
-                baml_type::MediaKind::Image => "baml.media.Image",
-                baml_type::MediaKind::Audio => "baml.media.Audio",
-                baml_type::MediaKind::Video => "baml.media.Video",
-                baml_type::MediaKind::Pdf => "baml.media.Pdf",
-                baml_type::MediaKind::Generic => {
-                    panic!("generic media cannot inhabit a concrete prompt part")
-                }
-            };
-            let class = vm.resolve_class(class_name);
+            let wrapper = media
+                .kind
+                .wrapper_class()
+                .unwrap_or_else(|| panic!("generic media cannot inhabit a concrete prompt part"));
+            let class = vm.lang_object(wrapper);
             let data = Value::object(vm.alloc_rust_data(media.clone()));
             vec![Value::object(vm.alloc_instance(class, vec![data]))]
         }
         PromptAstSimple::CacheDelimiter(args) => {
-            let class = vm.resolve_class("ai.CacheDelimiter");
+            let class = vm.lang_object(crate::lang_items::AI_CACHE_DELIMITER);
             let args = super::json::serde_to_value(vm, args);
             vec![Value::object(vm.alloc_instance(class, vec![args]))]
         }

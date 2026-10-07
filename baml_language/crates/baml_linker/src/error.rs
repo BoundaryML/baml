@@ -34,6 +34,12 @@ pub enum LinkError {
     /// A package's edge table reaches two packages under one name, so the
     /// name would resolve to neither.
     DuplicateEdge { package: Name, edge: Name },
+    /// Two packages of the set are the same language package; the runtime
+    /// finds each language package by identity, so one world holds one.
+    DuplicateLanguagePackage {
+        package: Name,
+        language: baml_base::LangPackage,
+    },
     /// Two packages with `let`s reach each other, so neither can initialize
     /// after the other.
     InitCycle { package: Name, other: Name },
@@ -94,6 +100,11 @@ impl std::fmt::Display for LinkError {
             Self::DuplicateEdge { package, edge } => {
                 write!(f, "package `{package}` reaches two packages as `{edge}`")
             }
+            Self::DuplicateLanguagePackage { package, language } => write!(
+                f,
+                "package `{package}` is a second `{}` language package",
+                language.manifest_name()
+            ),
             Self::InitCycle { package, other } => write!(
                 f,
                 "packages `{package}` and `{other}` reach each other and both have `let`s, so \

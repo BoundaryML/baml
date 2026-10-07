@@ -36,7 +36,7 @@
 
 use std::fmt;
 
-use baml_base::{LangPackage, LangRoots, Name, SourceRoot};
+use baml_base::{LangItem, LangPackage, LangRoots, Name, SourceRoot};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{BuiltinTypeName, PrimitiveType};
@@ -234,6 +234,17 @@ impl DeclName {
         Self::qualified(root, namespace, name)
     }
 
+    /// The compile-time head of a language item: its path in the root
+    /// `lang` installs its package at. `None` when that package is not
+    /// installed (a database without the standard library).
+    pub fn of_lang_item(lang: LangRoots, item: LangItem) -> Option<Self> {
+        Some(Self::in_root(
+            lang.get(item.package())?,
+            item.namespace().to_vec(),
+            item.name().clone(),
+        ))
+    }
+
     /// The declaring package.
     pub fn root(&self) -> SourceRoot {
         self.pkg
@@ -283,6 +294,16 @@ impl QualifiedTypeName<Package> {
             namespace,
             name,
         }
+    }
+
+    /// The wire name of a language item (`baml.media.Image`): a host spells
+    /// a language package by its manifest name.
+    pub fn of_lang_item(item: LangItem) -> Self {
+        Self::new(
+            Name::new(item.package().manifest_name()),
+            item.namespace().to_vec(),
+            item.name().clone(),
+        )
     }
 
     /// A type at the root namespace of the artifact's own package — a bare
