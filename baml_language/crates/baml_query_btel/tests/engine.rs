@@ -1208,7 +1208,10 @@ fn without_definitions(value: &Json) -> Json {
         Json::Object(map) => Json::Object(
             map.iter()
                 .filter(|(key, _)| {
-                    !matches!(key.as_str(), "def" | "definition" | "$def" | "$definition")
+                    !matches!(
+                        key.as_str(),
+                        "def_id" | "definition" | "$def_id" | "$definition"
+                    )
                 })
                 .map(|(key, item)| (key.clone(), without_definitions(item)))
                 .collect(),
@@ -1306,7 +1309,7 @@ async fn generic_calls_record_their_type_args_by_name() {
         assert_eq!(rows, expected, "{relation}");
         // A class argument names its definition.
         assert!(
-            calls.rows[5][1]["T"]["$type"]["def"].is_string(),
+            calls.rows[5][1]["T"]["$type"]["def_id"].is_string(),
             "{relation}"
         );
         assert_eq!(calls.columns[1].column_type, "baml_value");

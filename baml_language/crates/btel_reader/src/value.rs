@@ -806,7 +806,7 @@ fn description_label(kind: Description) -> &'static str {
 }
 
 /// A class or enum recorded with its definition names it by ID, after its
-/// name: `"def"` in a type node, `"$def"` in an instance (after `$class`)
+/// name: `"def_id"` in a type node, `"$def_id"` in an instance (after `$class`)
 /// or enum value (after `$variant`). A cell includes each definition once,
 /// at its first reference in output order, under `"definition"` or
 /// `"$definition"`; later references carry the ID alone, so a recursive
@@ -920,7 +920,7 @@ impl<'a> Renderer<'a> {
             ..
         } = blob.object(id)
         {
-            self.reference(map, *definition, "$def", "$definition");
+            self.reference(map, *definition, "$def_id", "$definition");
         }
     }
 
@@ -1330,7 +1330,7 @@ impl<'a> Renderer<'a> {
 
 impl ty::Definitions for Renderer<'_> {
     fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef) {
-        self.reference(node, definition, "def", "definition");
+        self.reference(node, definition, "def_id", "definition");
     }
     fn name(&mut self, definition: DefinitionRef) -> Option<String> {
         let group = self.span.group(definition.group).ok()?;

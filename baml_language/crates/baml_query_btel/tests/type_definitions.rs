@@ -21,7 +21,7 @@ fn normalized(value: &Json) -> Json {
                 let mut out = Map::new();
                 for (key, item) in map {
                     let renamed = match (key.as_str(), item) {
-                        ("def" | "$def", Json::String(id)) => {
+                        ("def_id" | "$def_id", Json::String(id)) => {
                             let at = ids.iter().position(|seen| seen == id).unwrap_or_else(|| {
                                 ids.push(id.clone());
                                 ids.len() - 1
@@ -48,7 +48,7 @@ fn raw_ids(value: &Json) -> Vec<String> {
             Json::Object(map) => {
                 for (key, item) in map {
                     match (key.as_str(), item) {
-                        ("def" | "$def", Json::String(id)) => out.push(id.clone()),
+                        ("def_id" | "$def_id", Json::String(id)) => out.push(id.clone()),
                         _ => walk(item, out),
                     }
                 }
@@ -143,7 +143,7 @@ async fn declared_types_carry_their_definitions() {
         "SELECT type_args FROM spans WHERE span_name = 'user.Pick' ORDER BY start_time",
     );
     let cells: Vec<Json> = rows.rows.iter().map(|row| normalized(&row[0])).collect();
-    let resume = json!({"type": "class", "name": "user.Resume", "def": "d0", "definition": resume_definition()});
+    let resume = json!({"type": "class", "name": "user.Resume", "def_id": "d0", "definition": resume_definition()});
     assert_eq!(
         cells,
         vec![
@@ -153,7 +153,7 @@ async fn declared_types_carry_their_definitions() {
                 "type": "class",
                 "name": "user.Box",
                 "args": [resume],
-                "def": "d1",
+                "def_id": "d1",
                 "definition": {
                     "kind": "class",
                     "name": "user.Box",
@@ -168,14 +168,14 @@ async fn declared_types_carry_their_definitions() {
             json!({"T": ty(json!({
                 "type": "class",
                 "name": "user.Employee",
-                "def": "d0",
+                "def_id": "d0",
                 "definition": {
                     "kind": "class",
                     "name": "user.Employee",
                     "fields": [
                         {"name": "name", "schema": {"type": "string"}},
                         {"name": "manager", "schema": {"type": "optional", "inner":
-                            {"type": "class", "name": "user.Employee", "def": "d0"}}},
+                            {"type": "class", "name": "user.Employee", "def_id": "d0"}}},
                     ],
                 },
             }))}),
@@ -183,19 +183,19 @@ async fn declared_types_carry_their_definitions() {
             json!({"T": ty(json!({
                 "type": "class",
                 "name": "user.Left",
-                "def": "d0",
+                "def_id": "d0",
                 "definition": {
                     "kind": "class",
                     "name": "user.Left",
                     "fields": [{"name": "right", "schema": {"type": "optional", "inner": {
                         "type": "class",
                         "name": "user.Right",
-                        "def": "d1",
+                        "def_id": "d1",
                         "definition": {
                             "kind": "class",
                             "name": "user.Right",
                             "fields": [{"name": "left", "schema": {"type": "optional", "inner":
-                                {"type": "class", "name": "user.Left", "def": "d0"}}}],
+                                {"type": "class", "name": "user.Left", "def_id": "d0"}}}],
                         },
                     }}}],
                 },
@@ -203,7 +203,7 @@ async fn declared_types_carry_their_definitions() {
             json!({"T": ty(json!({
                 "type": "enum",
                 "name": "user.Status",
-                "def": "d0",
+                "def_id": "d0",
                 "definition": status_definition(),
             }))}),
         ]
@@ -216,13 +216,13 @@ async fn declared_types_carry_their_definitions() {
     assert_eq!(
         normalized(&echo.rows[0][0]),
         json!({
-            "r": {"$class": "user.Resume", "$def": "d0", "$definition": resume_definition(), "name": "ann", "age": 3},
-            "s": {"$enum": "user.Status", "$variant": "Inactive", "$def": "d1", "$definition": status_definition()},
+            "r": {"$class": "user.Resume", "$def_id": "d0", "$definition": resume_definition(), "name": "ann", "age": 3},
+            "s": {"$enum": "user.Status", "$variant": "Inactive", "$def_id": "d1", "$definition": status_definition()},
         })
     );
     assert_eq!(
         normalized(&echo.rows[0][1]),
-        json!({"$class": "user.Resume", "$def": "d0", "$definition": resume_definition(), "name": "ann", "age": 3})
+        json!({"$class": "user.Resume", "$def_id": "d0", "$definition": resume_definition(), "name": "ann", "age": 3})
     );
     // One class, one id: within a recording, every reference to Resume has
     // the same id, whichever cell or capture it is in.
@@ -285,11 +285,10 @@ async fn runtime_classes_carry_their_definitions_and_identity() {
         &mut index,
         "SELECT type_args, input_args, output_value FROM spans WHERE span_name = 'user.Echo'",
     );
-    let instance =
-        json!({"$class": "Person", "$def": "d0", "$definition": person, "name": "ann", "age": 3});
+    let instance = json!({"$class": "Person", "$def_id": "d0", "$definition": person, "name": "ann", "age": 3});
     assert_eq!(
         normalized(&echo.rows[0][0]),
-        json!({"T": ty(json!({"type": "class", "name": "Person", "def": "d0", "definition": person}))})
+        json!({"T": ty(json!({"type": "class", "name": "Person", "def_id": "d0", "definition": person}))})
     );
     assert_eq!(normalized(&echo.rows[0][1]), json!({"x": instance}));
     assert_eq!(normalized(&echo.rows[0][2]), instance);
@@ -301,7 +300,7 @@ async fn runtime_classes_carry_their_definitions_and_identity() {
     assert_eq!(
         normalized(&picks.rows[0][0]),
         json!({"T": ty(json!({"type": "optional", "inner":
-            {"type": "class", "name": "Person", "def": "d0", "definition": other}}))})
+            {"type": "class", "name": "Person", "def_id": "d0", "definition": other}}))})
     );
     // Same name, different classes: different ids in one cell.
     assert_eq!(
@@ -310,8 +309,8 @@ async fn runtime_classes_carry_their_definitions_and_identity() {
             "type": "map",
             "key": {"type": "string"},
             "value": {"type": "union", "variants": [
-                {"type": "class", "name": "Person", "def": "d0", "definition": person},
-                {"type": "class", "name": "Person", "def": "d1", "definition": other},
+                {"type": "class", "name": "Person", "def_id": "d0", "definition": person},
+                {"type": "class", "name": "Person", "def_id": "d1", "definition": other},
             ]},
         }))})
     );
@@ -360,7 +359,7 @@ async fn definitions_survive_collection_of_their_class() {
     let temp = json!({"T": ty(json!({"type": "list", "item": {
         "type": "class",
         "name": "Temp",
-        "def": "d0",
+        "def_id": "d0",
         "definition": {"kind": "class", "name": "Temp", "fields": [{"name": "i", "schema": {"type": "int"}}]},
     }}))});
     for row in &uses.rows {

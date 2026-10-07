@@ -9,7 +9,7 @@
 //! `$class` spells it; a head the capture could not resolve has a `null` name.
 //!
 //! A class, enum or enum variant recorded with its definition names it with
-//! `def`, after its arguments, and the cell it is rendered in may include the
+//! `def_id`, after its arguments, and the cell it is rendered in may include the
 //! definition there (see [`Definitions`]); its name is the definition's. A
 //! recorded definition's field types use the same vocabulary, with
 //! `{"type": "typeParam", "index": N}` for generic parameter `N`.
@@ -33,7 +33,7 @@ pub(super) struct Head {
 
 /// What rendering a type asks of the cell it is rendered into.
 pub(super) trait Definitions {
-    /// `node` names `definition`: add its `def`, and its `definition` when
+    /// `node` names `definition`: add its `def_id`, and its `definition` when
     /// the cell includes it there.
     fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef);
     /// The name a recorded definition gives its class or enum, if its group
@@ -66,7 +66,7 @@ struct Ids;
 #[cfg(test)]
 impl Definitions for Ids {
     fn refer(&mut self, node: &mut Map<String, Json>, definition: DefinitionRef) {
-        node.insert("def".into(), Json::from(definition_id(definition)));
+        node.insert("def_id".into(), Json::from(definition_id(definition)));
     }
     fn name(&mut self, _: DefinitionRef) -> Option<String> {
         None

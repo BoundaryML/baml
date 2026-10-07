@@ -33,18 +33,18 @@ Rendering lives in `btel_reader` (`value.rs`, `value/ty.rs`), so local `baml que
 
 **References.** Every class or enum reference carries the id of its definition:
 
-- type nodes (in `$type`, and in a definition's field types): `"def": "<id>"` on `class`, `enum` and `enumVariant` nodes;
-- instances: `"$def": "<id>"`, right after `"$class"` and before the fields;
-- enum values: `"$def": "<id>"`, after `"$enum"` and `"$variant"`.
+- type nodes (in `$type`, and in a definition's field types): `"def_id": "<id>"` on `class`, `enum` and `enumVariant` nodes;
+- instances: `"$def_id": "<id>"`, right after `"$class"` and before the fields;
+- enum values: `"$def_id": "<id>"`, after `"$enum"` and `"$variant"`.
 
-**Definitions.** Each rendered cell includes a definition once, at the first reference to it in document order, under `"definition"` (type nodes) or `"$definition"` (instances and enum values). Later references in the cell carry the id alone. Within a type node the order is `type`, `name`, `args`, `def`, `definition`, so a generic argument's definition comes before the generic class's own. Recursive references inside a definition are therefore ids alone.
+**Definitions.** Each rendered cell includes a definition once, at the first reference to it in document order, under `"definition"` (type nodes) or `"$definition"` (instances and enum values). Later references in the cell carry the id alone. Within a type node the order is `type`, `name`, `args`, `def_id`, `definition`, so a generic argument's definition comes before the generic class's own. Recursive references inside a definition are therefore ids alone.
 
 ```json
-{"type": "class", "name": "user.Employee", "def": "d0", "definition": {
+{"type": "class", "name": "user.Employee", "def_id": "d0", "definition": {
   "kind": "class", "name": "user.Employee",
   "fields": [
     {"name": "name", "schema": {"type": "string"}},
-    {"name": "manager", "schema": {"type": "optional", "inner": {"type": "class", "name": "user.Employee", "def": "d0"}}}
+    {"name": "manager", "schema": {"type": "optional", "inner": {"type": "class", "name": "user.Employee", "def_id": "d0"}}}
   ]}}
 ```
 
