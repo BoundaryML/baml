@@ -28,7 +28,7 @@ function broad(value: string) -> string { value }
 function hidden(value: int) -> int { value }
 /// baml:$trace=trace.timing
 function timing() -> int { 1 }
-/// baml:$trace=trace.rich
+/// baml:$trace=trace.empty_span
 function rich(value: int) -> int { value }
 function record() -> trace.Options throws never { trace.span(output = true) }
 /// baml:$trace=record
@@ -128,7 +128,7 @@ function second() -> int { 1 }
         [
             r#"Invalid trace hook `wrong_return` for function `first`.
 The hook returns `int`, but must return `trace.Options` or `null`.
-help: Return tracing options (for example `trace.rich()`) or `null` to keep the current settings."#,
+help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings."#,
             r#"Invalid trace hook `throwing` for function `second`.
 The hook may throw `string`, but trace hooks require `throws never`.
 help: Handle these errors inside the hook or its default expressions."#,
@@ -301,7 +301,7 @@ fn malformed_hook_is_an_error() {
             errors(&format!("{directive}\nfunction target() -> int {{ 1 }}")),
             [r#"Invalid trace hook directive on function `target`.
 Expected `/// baml:$trace=hook_name` with a function reference.
-help: Use a function name without call parentheses, for example `/// baml:$trace=trace.rich`."#]
+help: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`."#]
         );
     }
 }
@@ -318,7 +318,7 @@ function target() -> int { 1 }
         ),
         [r#"Invalid trace hook `policy` for function `target`.
 The hook returns `int`, but must return `trace.Options` or `null`.
-help: Return tracing options (for example `trace.rich()`) or `null` to keep the current settings."#]
+help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings."#]
     );
 }
 
@@ -343,7 +343,7 @@ fn parameter_errors_identify_the_attachment_and_both_declarations_across_files()
     let db = setup_multi_file_db(&[
         (
             "ns_app/hooks.baml",
-            r#"function capture_search(query: string, maximum: string, settings: trace.Settings) -> trace.Options throws never { trace.rich() }"#,
+            r#"function capture_search(query: string, maximum: string, settings: trace.Settings) -> trace.Options throws never { trace.span(inputs = true) }"#,
         ),
         (
             "ns_app/search.baml",
@@ -444,7 +444,7 @@ class Handler {
         diagnostic.message,
         r#"Invalid trace hook `Policies.capture` for function `Handler.search`.
 The hook returns `int`, but must return `trace.Options` or `null`.
-help: Return tracing options (for example `trace.rich()`) or `null` to keep the current settings."#
+help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings."#
     );
     assert_eq!(diagnostic.related_info.len(), 1);
     let related = &diagnostic.related_info[0];
@@ -534,6 +534,6 @@ function target() -> int { 1 }
         ),
         [r#"Invalid trace hook `policy` for function `target`.
 The hook returns `void`, but must return `trace.Options` or `null`.
-help: Return tracing options (for example `trace.rich()`) or `null` to keep the current settings."#]
+help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings."#]
     );
 }

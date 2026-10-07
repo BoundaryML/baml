@@ -8,6 +8,22 @@ const handlers = new Map<Function, CaptureHandler>();
 let capturing = false;
 const nativeDateTime = Date.prototype.getTime;
 const nativeDateISO = Date.prototype.toISOString;
+const nativeStackGetter = Object.getOwnPropertyDescriptor(new Error(), 'stack')?.get;
+const unavailable = Symbol('host capture unavailable');
+const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+const typedField = (name: string | symbol, value: object) => Object.getOwnPropertyDescriptor(typedArrayPrototype, name)!.get!.call(value);
+const regexpSource = Object.getOwnPropertyDescriptor(RegExp.prototype, 'source')!.get!;
+function dataField(value: object, key: string): PropertyDescriptor | undefined {
+    let current: object | null = value;
+    for (let depth = 0; current !== null && depth < 32; depth++) {
+        if (util.types.isProxy(current)) return undefined;
+        const field = Object.getOwnPropertyDescriptor(current, key);
+        if (field) return field;
+        current = Object.getPrototypeOf(current);
+    }
+    return undefined;
+}
+
 // Paired surrogates form one code point, so this matches only lone ones.
 const loneSurrogate = /\p{Surrogate}/u;
 
@@ -70,8 +86,18 @@ export function capture(value: unknown): string {
         if (remaining-- <= 0) return ['values'];
         if (depth > 8) return ['depth'];
         if (value === null) return ['null'];
+        if (value === unavailable) return ['unavailable'];
+        if (value === undefined) return copy({ $undefined: true }, depth);
+        if (typeof value === 'bigint') return copy({ $bigint: BigInt.prototype.toString.call(value) }, depth);
+        if (typeof value === 'symbol') {
+            const description = Object.getOwnPropertyDescriptor(Symbol.prototype, 'description')!.get!.call(value);
+            return copy({ $symbol: { description, key: Symbol.keyFor(value) } }, depth);
+        }
         if (typeof value === 'boolean') return ['bool', value];
-        if (typeof value === 'number') return Number.isFinite(value) ? ['number', value] : ['unavailable'];
+        if (typeof value === 'number') {
+            if (Object.is(value, -0)) return copy({ $number: '-0' }, depth);
+            return Number.isFinite(value) ? ['number', value] : copy({ $number: Number.isNaN(value) ? 'NaN' : value > 0 ? 'Infinity' : '-Infinity' }, depth);
+        }
         if (typeof value === 'string') {
             const fits = text(value);
             return fits ? ['string', value] : fits === false ? ['bytes'] : ['unavailable'];
@@ -87,7 +113,7 @@ export function capture(value: unknown): string {
                 for (let index = 0; index < length; index++) {
                     if (remaining <= 0) return ['values'];
                     const field = Object.getOwnPropertyDescriptor(value, String(index));
-                    values.push(field && 'value' in field ? copy(field.value, depth + 1) : opaque());
+                    values.push(!field ? copy({ $hole: true }, depth + 1) : 'value' in field ? copy(field.value, depth + 1) : opaque());
                 }
                 return ['list', values];
             }
@@ -98,32 +124,110 @@ export function capture(value: unknown): string {
                     const handler = registered.get(ctor);
                     if (handler) return copy(handler(value), depth + 1);
                 }
+                for (const [matches, unbox] of [
+                    [util.types.isNumberObject, Number.prototype.valueOf],
+                    [util.types.isBooleanObject, Boolean.prototype.valueOf],
+                    [util.types.isStringObject, String.prototype.valueOf],
+                    [util.types.isBigIntObject, BigInt.prototype.valueOf],
+                    [util.types.isSymbolObject, Symbol.prototype.valueOf],
+                ] as const) {
+                    if (matches(value)) return copy(Reflect.apply(unbox, value, []), depth);
+                }
                 if (util.types.isDate(value)) {
-                    return Number.isFinite(nativeDateTime.call(value)) ? copy(nativeDateISO.call(value), depth) : ['unavailable'];
+                    return Number.isFinite(nativeDateTime.call(value)) ? copy(nativeDateISO.call(value), depth) : copy({ $date: 'invalid' }, depth);
                 }
                 if (util.types.isNativeError(value)) {
-                    const projected: Record<string, unknown> = Object.create(null);
-                    projected.type = 'Error';
-                    let proto = prototype;
-                    for (let step = 0; proto !== null && step < 32; step++) {
-                        if (util.types.isProxy(proto)) break;
-                        const name = Object.getOwnPropertyDescriptor(proto, 'name')?.value;
-                        if (typeof name === 'string') { projected.type = name; break; }
-                        // `class ValidationError extends Error {}` has no own `name`;
-                        // record its class name, as Python records `__qualname__`.
-                        const ctor = Object.getOwnPropertyDescriptor(proto, 'constructor')?.value;
-                        const ctorName = typeof ctor === 'function' && !util.types.isProxy(ctor)
-                            ? Object.getOwnPropertyDescriptor(ctor, 'name')?.value : undefined;
-                        if (typeof ctorName === 'string' && ctorName !== '') { projected.type = ctorName; break; }
-                        proto = Object.getPrototypeOf(proto);
+                    const fields = Object.create(null) as Record<string, unknown>;
+                    const attributes = Object.create(null) as Record<string, unknown>;
+                    const ctor = dataField(value, 'constructor')?.value;
+                    fields.type = typeof ctor === 'function' && !util.types.isProxy(ctor)
+                        ? Object.getOwnPropertyDescriptor(ctor, 'name')?.value : 'Error';
+                    for (const key of ['name', 'message']) {
+                        const field = dataField(value, key);
+                        fields[key] = field && 'value' in field ? field.value : unavailable;
                     }
-                    const name = Object.getOwnPropertyDescriptor(value, 'name')?.value;
-                    if (typeof name === 'string') projected.type = name;
-                    const message = Object.getOwnPropertyDescriptor(value, 'message');
-                    projected.message = message && 'value' in message ? message.value : '';
-                    const cause = Object.getOwnPropertyDescriptor(value, 'cause');
-                    if (cause && 'value' in cause) projected.cause = cause.value;
-                    return copy(projected, depth);
+                    const stack = Object.getOwnPropertyDescriptor(value, 'stack');
+                    fields.stack = stack && 'value' in stack ? stack.value : unavailable;
+                    const prepare = dataField(Error, 'prepareStackTrace');
+                    if (stack?.get && stack.get === nativeStackGetter
+                        && (!prepare || ('value' in prepare && prepare.value === undefined))
+                        && ['name', 'message'].every(key => {
+                            const field = dataField(value, key);
+                            return !field || ('value' in field && typeof field.value === 'string');
+                        })) {
+                        try { fields.stack = stack.get.call(value); } catch { /* Keep other fields. */ }
+                    }
+                    const cause = dataField(value, 'cause');
+                    if (cause) fields.cause = 'value' in cause ? cause.value : unavailable;
+                    let scanned = 0;
+                    for (const key of Object.getOwnPropertyNames(value)) {
+                        if (scanned++ >= 512) break;
+                        if (['name', 'message', 'stack', 'cause'].includes(key)) continue;
+                        const field = Object.getOwnPropertyDescriptor(value, key)!;
+                        if (key === 'errors') fields.errors = 'value' in field ? field.value : unavailable;
+                        else attributes[key] = 'value' in field ? field.value : unavailable;
+                    }
+                    fields.attributes = scanned > 512 ? unavailable : attributes;
+                    return copy(fields, depth);
+                }
+                if (typeof DOMException !== 'undefined' && prototype === DOMException.prototype) {
+                    const field = (key: string) => Object.getOwnPropertyDescriptor(DOMException.prototype, key)!.get!.call(value);
+                    return copy({ type: 'DOMException', name: field('name'), message: field('message'), code: field('code') }, depth);
+                }
+                if (util.types.isMap(value)) {
+                    if (Object.getOwnPropertyDescriptor(Map.prototype, 'size')!.get!.call(value) > remaining / 3) return ['values'];
+                    const entries: unknown[][] = [];
+                    for (const [key, item] of Map.prototype.entries.call(value)) {
+                        entries.push([key, item]);
+                    }
+                    return copy({ $map: entries }, depth);
+                }
+                if (util.types.isSet(value)) {
+                    if (Object.getOwnPropertyDescriptor(Set.prototype, 'size')!.get!.call(value) > remaining) return ['values'];
+                    return copy({ $set: Array.from(Set.prototype.values.call(value)) }, depth);
+                }
+                if (util.types.isUint8Array(value)) {
+                    const length = typedField('byteLength', value);
+                    if (length * 2 > bytes) return ['bytes'];
+                    const buffer = typedField('buffer', value);
+                    const offset = typedField('byteOffset', value);
+                    return copy({ encoding: 'hex', data: Buffer.from(buffer, offset, length).toString('hex') }, depth);
+                }
+                if (util.types.isTypedArray(value)) {
+                    const length = typedField('length', value);
+                    if (length > remaining) return ['values'];
+                    const values = [];
+                    for (let index = 0; index < length; index++) values.push(Object.getOwnPropertyDescriptor(value, String(index))!.value);
+                    return copy({ type: typedField(Symbol.toStringTag, value), values }, depth);
+                }
+                if (util.types.isAnyArrayBuffer(value) || util.types.isDataView(value)) {
+                    const view = util.types.isDataView(value);
+                    const proto = view ? DataView.prototype : util.types.isSharedArrayBuffer(value) ? SharedArrayBuffer.prototype : ArrayBuffer.prototype;
+                    const length = Object.getOwnPropertyDescriptor(proto, 'byteLength')!.get!.call(value);
+                    if (length * 2 > bytes) return ['bytes'];
+                    const buffer = view ? Object.getOwnPropertyDescriptor(DataView.prototype, 'buffer')!.get!.call(value) : value;
+                    const offset = view ? Object.getOwnPropertyDescriptor(DataView.prototype, 'byteOffset')!.get!.call(value) : 0;
+                    return copy({ encoding: 'hex', data: Buffer.from(buffer, offset, length).toString('hex') }, depth);
+                }
+                if (util.types.isRegExp(value)) {
+                    const flags = [['hasIndices', 'd'], ['global', 'g'], ['ignoreCase', 'i'], ['multiline', 'm'], ['dotAll', 's'], ['unicode', 'u'], ['unicodeSets', 'v'], ['sticky', 'y']]
+                        .filter(([name]) => Object.getOwnPropertyDescriptor(RegExp.prototype, name)?.get?.call(value)).map(([, flag]) => flag).join('');
+                    return copy({ $regexp: { source: regexpSource.call(value), flags, lastIndex: Object.getOwnPropertyDescriptor(value, 'lastIndex')?.value } }, depth);
+                }
+                if (prototype === URL.prototype) {
+                    const url = new URL(URL.prototype.toString.call(value));
+                    url.username = ''; url.password = ''; url.search = ''; url.hash = '';
+                    return copy(URL.prototype.toString.call(url), depth);
+                }
+                if ((typeof Request !== 'undefined' && prototype === Request.prototype)
+                    || (typeof Response !== 'undefined' && prototype === Response.prototype)) {
+                    const request = prototype === Request.prototype;
+                    const rawURL = Object.getOwnPropertyDescriptor(prototype, 'url')!.get!.call(value);
+                    const url = rawURL ? new URL(rawURL) : null;
+                    if (url) { url.username = ''; url.password = ''; url.search = ''; url.hash = ''; }
+                    return copy(request
+                        ? { method: Object.getOwnPropertyDescriptor(prototype, 'method')!.get!.call(value), url: url?.toString() ?? null }
+                        : { status_code: Object.getOwnPropertyDescriptor(prototype, 'status')!.get!.call(value), url: url?.toString() ?? null }, depth);
                 }
                 if (prototype !== Object.prototype && prototype !== null) return ['unavailable'];
             }

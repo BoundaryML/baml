@@ -121,6 +121,36 @@ and a bounded diagnostic. The audit includes hostile serializer/getter hooks,
 custom handler failures and cycles, native/builtin precedence, asynchronous
 functions, and value/byte budgets.
 
+Spans request outputs and errors by default. Request inputs explicitly with
+`trace.span(inputs=True)` in Python or `trace.span({ inputs: true })` in Node.
+`trace.empty_span()` requests a span without value capture. The equivalent
+builders are available on `trace.Options`; `trace.rich()` has been removed.
+
+Exception defaults include the message, stored attributes, causes, groups, and
+traceback/stack. Python also captures module, implicit context and suppression.
+Python exception messages use guarded `str(error)`; failures retain the other
+fields. Node skips application getters and custom stack formatters. Registered
+exception projections still take precedence over these defaults.
+
+Additional Python defaults cover UUIDs and decimals as strings, ordinary enums
+by value, dataclass fields, sets as lists, and bytes/bytearray as
+`{encoding: "hex", data: "..."}`. Pydantic validation errors expose structured
+field errors without copying validation inputs. Optional requests/httpx request
+and response adapters capture method, URL and status. HTTP summaries omit URL
+credentials, query parameters, fragments, headers and bodies; streams are never
+consumed. Applications can override these adapters with registered projections.
+
+Node defaults preserve core JavaScript values using JSON-compatible markers:
+`{$undefined: true}`, `{$hole: true}`, `{$bigint: "123"}`, and
+`{$number: "NaN" | "Infinity" | "-Infinity" | "-0"}`. Maps use
+`{$map: [[key, value], ...]}` and sets use `{$set: [...]}`. Symbols retain a
+description and global registry key, not live identity. Typed arrays retain
+their type and values; buffers, ArrayBuffers and DataViews use hex bytes.
+Regular expressions retain source, flags and lastIndex; invalid dates use
+`{$date: "invalid"}`. Valid dates retain the existing ISO-string representation.
+URLs and fetch Request/Response objects use the same HTTP summary rules.
+Promises, functions, proxies and weak collections remain opaque.
+
 The Node common-type execution case is
 `sdk_tests/crates/typescript/function_calls/customizable/host_common_types.test.ts`;
 copy it to the generated fixture's `node/` directory when editing without

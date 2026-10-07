@@ -11,7 +11,7 @@ function current() -> trace.SpanId? {
 }
 
 function capture_success(value: string) -> string {
-    let reserved = trace.span().reserve();
+    let reserved = trace.empty_span().reserve();
     assert.equal(current($trace = reserved) == reserved.id(), true);
     success(value, $trace = trace.span(inputs = true, output = true, error = true))
 }

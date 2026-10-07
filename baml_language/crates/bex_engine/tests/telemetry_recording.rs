@@ -470,3 +470,84 @@ fn telemetry_environment_modes() {
         }
     });
 }
+
+// A child process keeps environment overrides isolated from concurrent tests.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn user_recordings_honor_baml_home() {
+    const CHILD: &str = "BAML_USER_RECORDING_TEST_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let home = tempfile::tempdir().unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "user_recordings_honor_baml_home", "--nocapture"])
+            .env(CHILD, "1")
+            .env("BAML_HOME", home.path())
+            .env("BOUNDARY_API_KEY", "local")
+            .env("BAML_TELEMETRY", "medium")
+            .status()
+            .unwrap();
+        assert!(status.success(), "isolated recording test failed");
+        return;
+    }
+    let root = std::path::PathBuf::from(std::env::var_os("BAML_HOME").unwrap()).join("btel");
+    let program = baml_test_support::compile_source(
+        r#"
+        function success(value: string) -> string { value + ":output" }
+        function capture_success(value: string) -> string {
+            success(value, $trace = trace.span())
+        }
+        "#,
+    );
+    let recording = TelemetryRecording::from_boundary_env().unwrap();
+    let engine = Arc::new(
+        BexEngine::new_with_telemetry_recording(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+            None,
+            btel_clock::ClockMode::Monotonic,
+            recording,
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        engine
+            .telemetry_recording_directory()
+            .unwrap()
+            .parent()
+            .unwrap(),
+        root.join("recordings")
+    );
+    engine
+        .call_function(
+            "capture_success",
+            vec![BexExternalValue::String("relocated".into())],
+            context(),
+            true,
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(10), engine.shutdown())
+        .await
+        .unwrap();
+    assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    let mut found_output = false;
+    for file in btel_file::read_directory(engine.telemetry_recording_directory().unwrap())
+        .unwrap()
+        .files
+    {
+        for section in file.spans.unwrap().sections {
+            for event in section.events {
+                if let Some(proto::span_event::Event::FunctionCompletion(done)) = event.event {
+                    if let Some(id) = done.value_cas_id {
+                        assert_eq!(read_string_capture(&root, id, false), "relocated:output");
+                        found_output = true;
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        found_output,
+        "expected an output snapshot in the relocated CAS"
+    );
+}

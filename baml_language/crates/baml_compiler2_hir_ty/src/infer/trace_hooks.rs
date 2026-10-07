@@ -302,7 +302,7 @@ fn checked_declaration<'db>(
                             format!("The runtime supplies `trace.Settings` as the final argument, but hook parameter `{hook_param}` expects `{}`.\nhelp: Make the final required hook parameter accept `trace.Settings`.", expected.spell(&viewpoint))
                         }
                     } else {
-                        format!("The hook returns `{}`, but must return `trace.Options` or `null`.\nhelp: Return tracing options (for example `trace.rich()`) or `null` to keep the current settings.", got.spell(&viewpoint))
+                        format!("The hook returns `{}`, but must return `trace.Options` or `null`.\nhelp: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings.", got.spell(&viewpoint))
                     }
                 }
                 TirTypeError::ThrowsContractViolation { extra, .. } if default_only_throws => format!("The hook's omitted default expressions may throw `{}`, but trace hooks require `throws never`.\nhelp: Handle these errors inside the default expressions.", extra.spell(&viewpoint)),
