@@ -107,12 +107,9 @@ struct RuntimeAST {
 
 impl RuntimeAST {
     pub fn base_url(&self) -> String {
-        // const SAM_API_URL: &str = "https://abe8c5ez29.execute-api.us-east-1.amazonaws.com";
-        // const CHRIS_API_URL: &str = "https://o2em3sulde.execute-api.us-east-1.amazonaws.com";
-        // return SAM_API_URL.to_string();
         match self.env_vars.get("BOUNDARY_API_URL") {
             Some(url) if !url.is_empty() => url,
-            _ => "https://api.boundaryml.com".to_string(),
+            _ => "https://api.prod.bcs.boundaryml.com".to_string(),
         }
     }
 
