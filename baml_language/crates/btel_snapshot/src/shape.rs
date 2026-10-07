@@ -70,10 +70,10 @@ pub(crate) struct BlobEntry {
     pub(crate) encoded_len: u64,
     /// Unmeasured, or measured before delivery releases leaves. A measured
     /// None is an expanded total that cannot fit in u64.
-    pub(crate) logical_bytes_v1: LogicalBytesV1,
+    pub(crate) logical_bytes_approx_v1: LogicalBytesApproxV1,
 }
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum LogicalBytesV1 {
+pub(crate) enum LogicalBytesApproxV1 {
     Unmeasured,
     Measured(Option<u64>),
 }
@@ -446,7 +446,7 @@ impl Shaper {
                         members,
                         children: child_range,
                         encoded_len,
-                        logical_bytes_v1: LogicalBytesV1::Unmeasured,
+                        logical_bytes_approx_v1: LogicalBytesApproxV1::Unmeasured,
                     },
                     meter,
                 );

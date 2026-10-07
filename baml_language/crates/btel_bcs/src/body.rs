@@ -96,13 +96,15 @@ struct Piece {
     buffered: usize,
     shared: usize,
     after: usize,
-    logical_bytes_v1: Option<u64>,
+    logical_bytes_approx_v1: Option<u64>,
 }
 impl Piece {
     fn of(candidate: &Candidate, owners: &[Arc<Structure>]) -> Result<Self, DeliveryError> {
-        let logical_bytes_v1 = match &candidate.source {
-            Source::Leaf(leaf) => leaf.logical_bytes_v1(),
-            Source::Kept { owner, blob } => owners[*owner as usize].blob(*blob).logical_bytes_v1(),
+        let logical_bytes_approx_v1 = match &candidate.source {
+            Source::Leaf(leaf) => leaf.logical_bytes_approx_v1(),
+            Source::Kept { owner, blob } => owners[*owner as usize]
+                .blob(*blob)
+                .logical_bytes_approx_v1(),
         };
         let blob_len =
             usize::try_from(candidate.encoded_len).map_err(|_| DeliveryError::Capacity)?;
@@ -117,7 +119,7 @@ impl Piece {
             - usize::try_from(candidate.buffered_len())
                 .unwrap_or_else(|_| unreachable!("part of `blob_len`"));
         let after = delimited_len(field::BLOB_SHA256, <Sha256 as Digest>::output_size())
-            + logical_bytes_v1.map_or(0, |size| {
+            + logical_bytes_approx_v1.map_or(0, |size| {
                 key_len(field::LOGICAL_BYTES_V1) + encoded_len_varint(size)
             });
         let fields = delimited_len(field::SNAPSHOT_ID, candidate.id.as_bytes().len())
@@ -138,7 +140,7 @@ impl Piece {
             buffered: blob_len - header - shared,
             shared,
             after,
-            logical_bytes_v1,
+            logical_bytes_approx_v1,
         })
     }
 
@@ -263,7 +265,7 @@ pub(crate) fn build(
         delimited(&mut buffered, field::BLOB_SHA256, digest.len());
         buffered.extend_from_slice(&digest);
         // Optional presence matters: a measured empty value emits zero too.
-        if let Some(size) = piece.logical_bytes_v1 {
+        if let Some(size) = piece.logical_bytes_approx_v1 {
             encode_key(field::LOGICAL_BYTES_V1, WireType::Varint, &mut buffered);
             encode_varint(size, &mut buffered);
         }
@@ -319,7 +321,7 @@ mod tests {
                     snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
                     blob_sha256: Sha256::digest(&bytes).to_vec(),
                     blob: bytes,
-                    logical_bytes_v1: blob.logical_bytes_v1(),
+                    logical_bytes_approx_v1: blob.logical_bytes_approx_v1(),
                 }
             })
             .collect();
@@ -393,14 +395,14 @@ mod tests {
                 decoded
                     .cas_objects
                     .iter()
-                    .map(|value| value.logical_bytes_v1)
+                    .map(|value| value.logical_bytes_approx_v1)
                     .collect::<Vec<_>>(),
                 [
-                    Some(2048),
-                    Some(2047),
-                    Some(10_000),
-                    Some(300),
-                    Some(14_395)
+                    Some(2056),
+                    Some(2055),
+                    Some(10_008),
+                    Some(308),
+                    Some(14_443)
                 ]
             );
             // Framing, the first string, framing with the short string
@@ -423,13 +425,13 @@ mod tests {
         let snapshot = pool
             .try_acquire()
             .unwrap()
-            .finish(SnapshotValue::Null, &mut Shaper::default());
+            .finish(SnapshotValue::OmittedArg, &mut Shaper::default());
         let expected = encoded_whole(&snapshot, None);
         let body = body_of(snapshot, None, usize::MAX).unwrap();
         assert_eq!(body.chunks().concat(), expected);
         let decoded = CloudUploadEnvelope::decode(expected.as_slice()).unwrap();
         assert_eq!(decoded.cas_objects.len(), 1);
-        assert_eq!(decoded.cas_objects[0].logical_bytes_v1, Some(0));
+        assert_eq!(decoded.cas_objects[0].logical_bytes_approx_v1, Some(0));
     }
 
     #[test]

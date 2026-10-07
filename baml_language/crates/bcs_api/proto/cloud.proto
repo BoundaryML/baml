@@ -15,5 +15,5 @@ message CasObject {
   uint32 snapshot_format_version = 2; // The blob format version.
   bytes blob = 3;
   bytes blob_sha256 = 4;
-  optional uint64 logical_bytes_v1 = 5; // Customer content size, including children; absent when unknown.
+  optional uint64 logical_bytes_approx_v1 = 5; // Approximate customer bytes, including children; absent when unknown.
 }

@@ -22,7 +22,7 @@
       "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "object"},
       "body_file": "object.hex",
       "length": 137,
-      "sha256": "ae6bbd66a09492e1f093719973ad08569290c6366e3db7798eb4b9657056891d"
+      "sha256": "bba0900fca1a8a71cd48186d44312e88e3a18e831f6e8d622866062b950ec952"
     }
   ]
 }

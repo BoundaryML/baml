@@ -2,26 +2,99 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    Blob, MediaSource, SnapshotObject, SnapshotRoot, SnapshotValue, shape::LogicalBytesV1,
+    Blob, MediaSource, SnapshotObject, SnapshotRoot, SnapshotValue, shape::LogicalBytesApproxV1,
 };
 
 impl Blob<'_> {
-    /// Total logical content of this value, including values stored in children.
+    /// Approximate customer bytes, including content referenced in child CAS blobs.
     ///
-    /// Strings, keys, field names and enum variants count UTF-8 bytes; booleans
-    /// count one byte; integers and floats eight; bigints their magnitude bytes;
-    /// byte arrays their captured bytes. Container framing, type/declaration
-    /// descriptions, omitted values and uncaptured/truncated content count zero.
-    /// Every reference counts its content again. A recursive cycle backedge
-    /// counts only its 16-byte CAS ID. Media content counts decoded bytes,
-    /// not base64 framing; invalid base64 counts the captured text instead.
-    /// URL/path and MIME text count too. None means the expanded size exceeds
-    /// u64. Traversal is iterative; closed object subgraphs are memoized,
-    /// including cyclic ones, only when their component has no active ancestor.
-    pub fn logical_bytes_v1(&self) -> Option<u64> {
+    /// Each captured value has an eight-byte type ID, then: null has no payload;
+    /// bool one byte; int/float eight; strings UTF-8 bytes; bigint magnitude bytes;
+    /// binary captured bytes; enum an eight-byte variant ID. Class fields add an
+    /// eight-byte field ID and the full value cost; captured generic args add their
+    /// type costs. Lists/maps add their captured declared element/key/value type
+    /// costs and every full child value cost. Reflected Type values add the cost of
+    /// the represented type. Thus null=8, List<int>[7,7]=48, {a:7}:map<string,int>=49.
+    ///
+    /// Captured type trees count eight per node plus constituent/generic types.
+    /// Interfaces add eight per associated-binding ID; functions count parameter,
+    /// return and throws types, excluding parameter names/modes. Literal types add
+    /// their scalar payload (no extra type prefix); enum-variant types add eight
+    /// for the variant ID. Nominal/alias leaves do not expand unavailable schemas.
+    /// Declaration names/source, omitted/truncated content and internal wrappers
+    /// add no bytes. This is a semantic approximation, not an encoded byte length.
+    ///
+    /// Every repeated reference counts full content again; a cycle backedge counts
+    /// only its 16-byte CAS ID. Media adds decoded bytes and captured URL/path/MIME
+    /// text; invalid base64 adds captured text. None means the expanded size exceeds
+    /// u64. Traversal is iterative; closed components, including cyclic ones, are
+    /// memoized only when no member of that component is active on the path.
+    pub fn logical_bytes_approx_v1(&self) -> Option<u64> {
         enum Task {
             Value(SnapshotValue),
             Finish(crate::ObjectId, u64),
+        }
+        fn type_bytes(root: &crate::OwnedType) -> Option<u64> {
+            use baml_type::RealizedTy;
+
+            let mut pending = vec![root];
+            let mut total = 0u64;
+            while let Some(ty) = pending.pop() {
+                let payload = match ty {
+                    RealizedTy::Class(_, args) | RealizedTy::Union(args) => {
+                        pending.extend(args.iter());
+                        0
+                    }
+                    RealizedTy::Interface(_, args, bindings) => {
+                        pending.extend(args.iter());
+                        pending.extend(bindings.iter().map(|(_, ty)| ty));
+                        8u64.checked_mul(bindings.len() as u64)?
+                    }
+                    RealizedTy::List(inner) => {
+                        pending.push(inner);
+                        0
+                    }
+                    RealizedTy::Map { key, value } | RealizedTy::Future(key, value) => {
+                        pending.extend([key.as_ref(), value.as_ref()]);
+                        0
+                    }
+                    RealizedTy::Function {
+                        params,
+                        ret,
+                        throws,
+                    } => {
+                        pending.extend(params.iter().map(|param| &param.ty));
+                        pending.extend([ret.as_ref(), throws.as_ref()]);
+                        0
+                    }
+                    RealizedTy::Literal(literal, _) => match literal {
+                        baml_type::Literal::Int(_) | baml_type::Literal::Float(_) => 8,
+                        baml_type::Literal::Bool(_) => 1,
+                        baml_type::Literal::String(value) => value.len() as u64,
+                        baml_type::Literal::Bigint(value) => value.bits().div_ceil(8),
+                    },
+                    RealizedTy::EnumVariant(_, _) => 8,
+                    RealizedTy::Int
+                    | RealizedTy::Bigint
+                    | RealizedTy::Float
+                    | RealizedTy::String
+                    | RealizedTy::Bool
+                    | RealizedTy::Null
+                    | RealizedTy::Uint8Array
+                    | RealizedTy::Media(_)
+                    | RealizedTy::Enum(_)
+                    | RealizedTy::RustType
+                    | RealizedTy::Type
+                    | RealizedTy::Resource
+                    | RealizedTy::PromptAst
+                    | RealizedTy::Void
+                    | RealizedTy::TypeAlias(_)
+                    | RealizedTy::Unknown
+                    | RealizedTy::Never => 0,
+                };
+                total = total.checked_add(8)?.checked_add(payload)?;
+            }
+            Some(total)
         }
         fn media_bytes(text: &str) -> u64 {
             // Stream decoding into a sink: no allocation of a second payload.
@@ -31,7 +104,7 @@ impl Blob<'_> {
             );
             std::io::copy(&mut decoded, &mut std::io::sink()).unwrap_or(text.len() as u64)
         }
-        if let LogicalBytesV1::Measured(size) = self.entry().logical_bytes_v1 {
+        if let LogicalBytesApproxV1::Measured(size) = self.entry().logical_bytes_approx_v1 {
             return size;
         }
         let snapshot = self.snapshot;
@@ -71,15 +144,14 @@ impl Blob<'_> {
                 }
             };
             let bytes = match value {
-                SnapshotValue::Null
-                | SnapshotValue::OmittedArg
-                | SnapshotValue::Truncated(_)
-                | SnapshotValue::Type(_) => 0,
-                SnapshotValue::Bool(_) => 1,
-                SnapshotValue::Int(_) | SnapshotValue::Float(_) => 8,
-                SnapshotValue::String(id) => snapshot.string(id).len() as u64,
-                SnapshotValue::Bigint(id) => snapshot.bigint(id).bits().div_ceil(8),
-                SnapshotValue::Enum { name, .. } => snapshot.label(name).len() as u64,
+                SnapshotValue::OmittedArg | SnapshotValue::Truncated(_) => 0,
+                SnapshotValue::Null => 8,
+                SnapshotValue::Bool(_) => 8 + 1,
+                SnapshotValue::Int(_) | SnapshotValue::Float(_) => 8 + 8,
+                SnapshotValue::String(id) => 8 + snapshot.string(id).len() as u64,
+                SnapshotValue::Bigint(id) => 8 + snapshot.bigint(id).bits().div_ceil(8),
+                SnapshotValue::Enum { .. } => 8 + 8,
+                SnapshotValue::Type(id) => 8u64.checked_add(type_bytes(snapshot.ty(id))?)?,
                 SnapshotValue::Object(id) if active.contains(&id) => {
                     std::mem::size_of::<crate::CasId>() as u64
                 }
@@ -104,8 +176,8 @@ impl Blob<'_> {
                             .copied()
                             .unwrap_or(0)
                             == 0
-                        && let LogicalBytesV1::Measured(size) =
-                            snapshot.0.shape.blobs[home.blob.0 as usize].logical_bytes_v1
+                        && let LogicalBytesApproxV1::Measured(size) =
+                            snapshot.0.shape.blobs[home.blob.0 as usize].logical_bytes_approx_v1
                     {
                         total = total.checked_add(size?)?;
                         continue;
@@ -114,27 +186,45 @@ impl Blob<'_> {
                     *active_units.entry(units[id.0 as usize]).or_default() += 1;
                     pending.push(Task::Finish(id, total));
                     match snapshot.object(id) {
-                        SnapshotObject::Uint8Array { data } => data.len() as u64,
-                        SnapshotObject::List { items, .. } => {
+                        SnapshotObject::Uint8Array { data } => 8 + data.len() as u64,
+                        SnapshotObject::List {
+                            element_type,
+                            items,
+                            ..
+                        } => {
                             pending
                                 .extend(snapshot.values(*items).iter().copied().map(Task::Value));
-                            0
+                            8u64.checked_add(type_bytes(snapshot.ty(*element_type))?)?
                         }
-                        SnapshotObject::Map { entries, .. } => {
+                        SnapshotObject::Map {
+                            key_type,
+                            value_type,
+                            entries,
+                            ..
+                        } => {
                             for entry in snapshot.entries(*entries) {
                                 pending.extend([entry.key, entry.value].map(Task::Value));
                             }
-                            0
+                            8u64.checked_add(type_bytes(snapshot.ty(*key_type))?)?
+                                .checked_add(type_bytes(snapshot.ty(*value_type))?)?
                         }
-                        SnapshotObject::Instance { fields, .. } => {
-                            let mut keys = 0;
+                        SnapshotObject::Instance {
+                            type_arguments,
+                            fields,
+                            ..
+                        } => {
+                            let mut bytes = 8u64;
+                            for ty in snapshot.type_arguments(*type_arguments) {
+                                bytes = bytes.checked_add(type_bytes(ty)?)?;
+                            }
                             for field in snapshot.fields(*fields) {
-                                keys = u64::checked_add(keys, field.key.len() as u64)?;
+                                bytes = bytes.checked_add(8)?;
                                 pending.push(Task::Value(field.value));
                             }
-                            keys
+                            bytes
                         }
                         SnapshotObject::Cell(value) => {
+                            // Internal wrapper; its value carries the type ID.
                             pending.push(Task::Value(*value));
                             0
                         }
@@ -143,7 +233,7 @@ impl Blob<'_> {
                         } => {
                             let metadata =
                                 mime_type.map_or(0, |id| snapshot.label(id).len() as u64);
-                            metadata
+                            8 + metadata
                                 + match *source {
                                     MediaSource::Url { url, data } => {
                                         snapshot.label(url).len() as u64
@@ -190,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_content_bytes_exclude_types_and_uncaptured_values() {
+    fn exact_bytes_include_value_type_ids_but_exclude_uncaptured_content() {
         let pool = SnapshotPool::new(1, Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let text = b.leaves().string_value(&"é".into());
@@ -202,6 +292,35 @@ mod tests {
             &mut b,
             SnapshotObject::Uint8ArrayTruncated { original_len: 999 },
         );
+        let declaration = b.declaration(
+            &baml_type::DeclarationName::Declared(baml_type::TypeName::from_dotted_path(
+                "app.Kind",
+            )),
+            baml_type::typetag::TypeTag::of_static_index(0),
+            true,
+        );
+        let declaration = b.leaves().object(declaration).unwrap();
+        let name = b.leaves().label(&"LongVariantName".into()).unwrap();
+        let enum_value = SnapshotValue::Enum {
+            declaration,
+            variant: 0,
+            name,
+        };
+        let class = b.declaration(
+            &baml_type::DeclarationName::Declared(baml_type::TypeName::from_dotted_path(
+                "app.Class",
+            )),
+            baml_type::typetag::TypeTag::of_static_index(1),
+            false,
+        );
+        let class = b.leaves().object(class).unwrap();
+        let instance = b.instance(
+            class,
+            [],
+            [("é", SnapshotValue::Bool(true))].into_iter(),
+            |_, (key, value)| (key.into(), value),
+        );
+        let instance = object(&mut b, instance);
         let root = b.arguments(
             [
                 SnapshotValue::Null,
@@ -215,14 +334,98 @@ mod tests {
                 SnapshotValue::Type(ty),
                 SnapshotValue::Truncated(Limit::Bytes),
                 unavailable,
+                enum_value,
+                instance,
             ]
             .into_iter(),
             |_, value| value,
         );
         let snapshot = b.finish(root, &mut Shaper::default());
         assert_eq!(
-            snapshot.root_blob().logical_bytes_v1(),
-            Some(1 + 8 + 8 + 2 + 2 + 3)
+            snapshot.root_blob().logical_bytes_approx_v1(),
+            Some(8 + 9 + 16 + 16 + 10 + 10 + 11 + 16 + 16 + 8 + 8 + 9)
+        );
+    }
+
+    #[test]
+    fn containers_and_reflected_types_count_captured_dynamic_type_content() {
+        let pool = SnapshotPool::new(1, Limits::default());
+        let check = |make: fn(&mut Builder) -> SnapshotValue, expected| {
+            let mut b = pool.try_acquire().unwrap();
+            let root = make(&mut b);
+            let snapshot = b.finish(root, &mut Shaper::default());
+            assert_eq!(
+                snapshot.root_blob().logical_bytes_approx_v1(),
+                Some(expected)
+            );
+        };
+        check(|_| SnapshotValue::Null, 8);
+        check(
+            |b| {
+                let ty = b.leaves().ty(OwnedType::int());
+                let list = b.list(ty, [SnapshotValue::Int(7); 2].into_iter(), |_, v| v);
+                object(b, list)
+            },
+            48,
+        );
+        check(
+            |b| {
+                let key = b.leaves().ty(OwnedType::string());
+                let value = b.leaves().ty(OwnedType::int());
+                let map = b.map(key, value, [()].into_iter(), |leaves, ()| {
+                    (leaves.string_value(&"a".into()), SnapshotValue::Int(7))
+                });
+                object(b, map)
+            },
+            49,
+        );
+        check(
+            |b| {
+                let class = b.declaration(
+                    &baml_type::DeclarationName::Declared(baml_type::TypeName::from_dotted_path(
+                        "app.Example",
+                    )),
+                    baml_type::typetag::TypeTag::of_static_index(0),
+                    false,
+                );
+                let class = b.leaves().object(class).unwrap();
+                let instance = b.instance(class, [], [()].into_iter(), |_, ()| {
+                    ("long_field_name".into(), SnapshotValue::Int(7))
+                });
+                object(b, instance)
+            },
+            32,
+        );
+        check(
+            |b| SnapshotValue::Type(b.leaves().ty(OwnedType::list(OwnedType::int()))),
+            24,
+        );
+        check(
+            |b| {
+                let element_type = b.leaves().ty(OwnedType::Union(
+                    vec![OwnedType::int(), OwnedType::string()].into_boxed_slice(),
+                ));
+                let text = b.leaves().string_value(&"hi".into());
+                let list = b.list(
+                    element_type,
+                    [SnapshotValue::Int(7), text].into_iter(),
+                    |_, v| v,
+                );
+                object(b, list)
+            },
+            58,
+        );
+        check(
+            |b| {
+                let ty = OwnedType::Map {
+                    key: Box::new(OwnedType::string()),
+                    value: Box::new(OwnedType::list(OwnedType::Union(
+                        vec![OwnedType::int(), OwnedType::Null].into_boxed_slice(),
+                    ))),
+                };
+                SnapshotValue::Type(b.leaves().ty(ty))
+            },
+            56,
         );
     }
 
@@ -254,14 +457,17 @@ mod tests {
             },
         ] {
             let snapshot = aliases(&pool, policy);
-            assert_eq!(snapshot.root_blob().logical_bytes_v1(), Some(2 + 5 + 2 + 5));
+            assert_eq!(
+                snapshot.root_blob().logical_bytes_approx_v1(),
+                Some(24 + 10 + 16 + 10 + 11 + 10 + 16 + 10 + 11)
+            );
             let root_id = snapshot.root_id();
             let split = snapshot.split();
             // Delivery can drop strings before it reads the parent metadata.
             drop(split.leaves);
             let structure = split.structure.unwrap();
             let root = structure.blobs().find(|blob| blob.id() == root_id).unwrap();
-            assert_eq!(root.logical_bytes_v1(), Some(14));
+            assert_eq!(root.logical_bytes_approx_v1(), Some(118));
         }
     }
 
@@ -281,7 +487,10 @@ mod tests {
         let root = b.arguments([SnapshotValue::Object(id); 2].into_iter(), |_, v| v);
         let snapshot = b.finish(root, &mut Shaper::default());
         assert_eq!(std::mem::size_of::<crate::CasId>(), 16);
-        assert_eq!(snapshot.root_blob().logical_bytes_v1(), Some((8 + 16) * 2));
+        assert_eq!(
+            snapshot.root_blob().logical_bytes_approx_v1(),
+            Some((16 + 16 + 16) * 2)
+        );
     }
 
     #[test]
@@ -318,8 +527,8 @@ mod tests {
             );
             let snapshot = b.finish(root, &mut Shaper::new(policy));
             assert_eq!(
-                snapshot.root_blob().logical_bytes_v1(),
-                Some((8 + 1 + 16) * 2)
+                snapshot.root_blob().logical_bytes_approx_v1(),
+                Some((16 + 16 + 16 + 9 + 16) * 2)
             );
             let split = snapshot.split();
             assert_eq!(
@@ -329,8 +538,8 @@ mod tests {
                     .blobs()
                     .last()
                     .unwrap()
-                    .logical_bytes_v1(),
-                Some(50)
+                    .logical_bytes_approx_v1(),
+                Some(146)
             );
         }
     }
@@ -356,7 +565,10 @@ mod tests {
                 leaf_bytes: 1,
             }),
         );
-        assert_eq!(snapshot.root_blob().logical_bytes_v1(), Some(9 + 4));
+        assert_eq!(
+            snapshot.root_blob().logical_bytes_approx_v1(),
+            Some(8 + 9 + 4)
+        );
         let split = snapshot.split();
         drop(split.leaves);
         assert_eq!(
@@ -366,8 +578,8 @@ mod tests {
                 .blobs()
                 .last()
                 .unwrap()
-                .logical_bytes_v1(),
-            Some(13)
+                .logical_bytes_approx_v1(),
+            Some(21)
         );
     }
 
@@ -389,9 +601,9 @@ mod tests {
             let list = b.list(ty, [value, value].into_iter(), |_, v| v);
             value = object(&mut b, list);
         }
-        // 24 * 2^60 does not fit u64; the physical graph has only 61 objects.
+        // At least 48 * 2^60 does not fit u64; the physical graph has only 61 objects.
         let snapshot = b.finish(value, &mut Shaper::new(ShapePolicy::Whole));
-        assert_eq!(snapshot.root_blob().logical_bytes_v1(), None);
+        assert_eq!(snapshot.root_blob().logical_bytes_approx_v1(), None);
     }
 
     #[test]
@@ -405,6 +617,6 @@ mod tests {
             value = object(&mut b, list);
         }
         let snapshot = b.finish(value, &mut Shaper::new(ShapePolicy::Whole));
-        assert_eq!(snapshot.root_blob().logical_bytes_v1(), None);
+        assert_eq!(snapshot.root_blob().logical_bytes_approx_v1(), None);
     }
 }
