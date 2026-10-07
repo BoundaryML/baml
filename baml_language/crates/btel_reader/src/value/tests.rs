@@ -620,6 +620,41 @@ mod definitions {
         )
     }
 
+    /// A field type whose only non-null member is itself a nullable union
+    /// renders as that union's optional, not as `null`: field types are not
+    /// flattened as captured types are.
+    #[test]
+    fn a_nested_nullable_field_type_keeps_its_members() {
+        let nullable = |members: Vec<TyTemplate<Head<'static>>>| {
+            TyTemplate::Union(members.into_iter().chain([TyTemplate::Null]).collect())
+        };
+        let made = definition::group(&[class(
+            "Holder",
+            vec![
+                ("plain", nullable(vec![TyTemplate::Int])),
+                ("twice", nullable(vec![nullable(vec![TyTemplate::Int])])),
+                (
+                    "plain_pair",
+                    nullable(vec![TyTemplate::Int, TyTemplate::String]),
+                ),
+                (
+                    "twice_pair",
+                    nullable(vec![nullable(vec![TyTemplate::Int, TyTemplate::String])]),
+                ),
+                ("nulls", nullable(vec![nullable(vec![])])),
+            ],
+        )]);
+        let mut blobs = Blobs::default();
+        store(&mut blobs, &[&made[0]]);
+        let rendered = render_type(&blobs, defined(&made[0]));
+        let fields = &rendered.json["$type"]["definition"]["fields"];
+        let schema = |at: usize| &fields[at]["schema"];
+        assert_eq!(schema(0)["type"], "optional");
+        assert_eq!(schema(1), schema(0));
+        assert_eq!(schema(3), schema(2));
+        assert_eq!(schema(4), &json!({"type": "null"}));
+    }
+
     /// A chain of definitions, each reached through a deep field type, nests
     /// no deeper than one rendering allows: it renders on a 2 MiB stack,
     /// cut where the bound is reached.

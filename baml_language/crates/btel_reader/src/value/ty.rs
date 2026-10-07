@@ -197,8 +197,10 @@ fn level(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
             let rest: Vec<_> = members.iter().filter(|ty| !is_null(ty)).collect();
             match rest.as_slice() {
                 [] => leaf("null"),
-                [TyTemplate::Union(inner), ..] if rest.len() == 1 && inner.iter().any(is_null) => {
-                    leaf("null")
+                // `(A | null) | null`: the inner union is the optional
+                // already. Field types are not flattened as captured ones are.
+                [inner @ TyTemplate::Union(nested)] if nested.iter().any(is_null) => {
+                    template(inner, cx)
                 }
                 [inner] => node("optional", [("inner", template(inner, cx))]),
                 _ => {
