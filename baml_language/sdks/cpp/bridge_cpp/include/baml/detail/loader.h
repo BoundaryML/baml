@@ -332,12 +332,13 @@ inline const loaded_api& load_api() {
               "runtime or predates the versioned ABI");
     }
     const BamlApiV1* table = get_api();
-    if (table == nullptr || table->abi_version != 3 ||
+    if (table == nullptr || table->abi_version != BAML_API_V1_ABI_VERSION ||
         table->struct_size < sizeof(BamlApiV1)) {
-      throw runtime_error("BAML_RUNTIME_ABI_MISMATCH",
-                          "expected ABI revision 3 table of at least " +
-                              std::to_string(sizeof(BamlApiV1)) +
-                              " bytes from " + chosen);
+      throw runtime_error(
+          "BAML_RUNTIME_ABI_MISMATCH",
+          "expected ABI revision " + std::to_string(BAML_API_V1_ABI_VERSION) +
+              " table of at least " + std::to_string(sizeof(BamlApiV1)) +
+              " bytes from " + chosen);
     }
     if (table->version == nullptr ||
         table->initialize_runtime_from_blob == nullptr ||
@@ -363,7 +364,8 @@ inline const loaded_api& load_api() {
         table->register_host_dispatch_v2 == nullptr ||
         table->register_host_cancel_callback == nullptr ||
         table->trace_selection == nullptr ||
-        table->invocation_context == nullptr) {
+        table->invocation_context == nullptr || table->media_name == nullptr ||
+        table->media_from_file_content == nullptr) {
       throw runtime_error(
           "BAML_RUNTIME_ABI_MISMATCH",
           "runtime ABI table contains a null required operation");

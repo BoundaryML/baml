@@ -167,9 +167,11 @@ public final class BamlHandle implements AutoCloseable {
         return new BamlHandle(BamlFfi.nativeMediaFromUrl(kind, url, mimeType), handleType);
     }
 
-    /** Mint a media handle from a local file path. */
-    public static BamlHandle mediaFromFile(int kind, int handleType, String path, String mimeType) {
-        return new BamlHandle(BamlFfi.nativeMediaFromFile(kind, path, mimeType), handleType);
+    /** Mint a media handle from base64 content read from {@code file}. Reads nothing. */
+    public static BamlHandle mediaFromFileContent(
+            int kind, int handleType, String file, String base64, String mimeType) {
+        return new BamlHandle(
+                BamlFfi.nativeMediaFromFileContent(kind, file, base64, mimeType), handleType);
     }
 
     /** Mint a media handle from a base64 payload. */
@@ -183,9 +185,9 @@ public final class BamlHandle implements AutoCloseable {
         return BamlFfi.nativeMediaUrl(key);
     }
 
-    /** The media's local file path, or {@code null} when not file-backed. */
-    public String mediaFile() {
-        return BamlFfi.nativeMediaFile(key);
+    /** The base name of the file the content was read from, or {@code null}. */
+    public String mediaName() {
+        return BamlFfi.nativeMediaName(key);
     }
 
     /** The media's base64 payload (never {@code null}). */

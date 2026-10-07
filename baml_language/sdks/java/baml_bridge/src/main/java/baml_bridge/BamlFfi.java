@@ -218,8 +218,12 @@ public final class BamlFfi {
     /** Mint an `Adt(Media)` row from a URL; returns its handle key. */
     static native long nativeMediaFromUrl(int kind, String url, String mimeType);
 
-    /** Mint an `Adt(Media)` row from a local file path; returns its handle key. */
-    static native long nativeMediaFromFile(int kind, String path, String mimeType);
+    /**
+     * Mint an `Adt(Media)` row from base64 content read from {@code file},
+     * named by its base name; returns its handle key. Reads nothing.
+     */
+    static native long nativeMediaFromFileContent(
+            int kind, String file, String base64, String mimeType);
 
     /** Mint an `Adt(Media)` row from a base64 payload; returns its handle key. */
     static native long nativeMediaFromBase64(int kind, String base64, String mimeType);
@@ -227,8 +231,8 @@ public final class BamlFfi {
     /** The media's source URL, or {@code null} when it is not URL-backed. */
     static native String nativeMediaUrl(long key);
 
-    /** The media's local file path, or {@code null} when it is not file-backed. */
-    static native String nativeMediaFile(long key);
+    /** The base name of the file the content was read from, or {@code null}. */
+    static native String nativeMediaName(long key);
 
     /** The media's base64 payload (never {@code null}; empty when unavailable). */
     static native String nativeMediaBase64(long key);

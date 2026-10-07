@@ -7,7 +7,7 @@ namespace Baml.Cffi;
 internal readonly record struct NativeMediaSnapshot(
     string Url,
     string Base64,
-    string File,
+    string Name,
     string MimeType);
 
 internal sealed unsafe partial class NativeApi
@@ -27,25 +27,39 @@ internal sealed unsafe partial class NativeApi
         byte[]? encodedMimeType = payload.MediaType is null
             ? null
             : NullTerminatedMediaUtf8(payload.MediaType, "media MIME type");
+        byte[]? encodedName = payload.Name is null
+            ? null
+            : NullTerminatedMediaUtf8(payload.Name, "media name");
         ulong key = 0;
         int rawHandleType = 0;
         BamlCffiStatus status;
         fixed (byte* representationPointer = encodedRepresentation)
         fixed (byte* mimeTypePointer = encodedMimeType)
+        fixed (byte* namePointer = encodedName)
         {
-            status = payload.IsUrl
-                ? table->MediaFromUrl(
+            status = (payload.IsUrl, encodedName is null) switch
+            {
+                (true, _) => table->MediaFromUrl(
                     (int)mediaType,
                     representationPointer,
                     mimeTypePointer,
                     &key,
-                    &rawHandleType)
-                : table->MediaFromBase64(
+                    &rawHandleType),
+                // Content read from a file keeps the file's name.
+                (false, false) => table->MediaFromFileContent(
+                    (int)mediaType,
+                    namePointer,
+                    representationPointer,
+                    mimeTypePointer,
+                    &key,
+                    &rawHandleType),
+                (false, true) => table->MediaFromBase64(
                     (int)mediaType,
                     representationPointer,
                     mimeTypePointer,
                     &key,
-                    &rawHandleType);
+                    &rawHandleType),
+            };
         }
 
         if (status != BamlCffiStatus.Ok
@@ -83,7 +97,7 @@ internal sealed unsafe partial class NativeApi
         return new NativeMediaSnapshot(
             ReadMediaField(lease.Key, handleType, table->MediaUrl, "URL"),
             ReadMediaField(lease.Key, handleType, table->MediaBase64, "base64"),
-            ReadMediaField(lease.Key, handleType, table->MediaFile, "file"),
+            ReadMediaField(lease.Key, handleType, table->MediaName, "name"),
             ReadMediaField(lease.Key, handleType, table->MediaMimeType, "MIME type"));
     }
 

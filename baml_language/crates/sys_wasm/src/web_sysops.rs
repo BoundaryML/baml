@@ -373,6 +373,15 @@ impl io::IoClassFsFile for WebFs {
     ) -> SysOpOutput<Option<Vec<u8>>> {
         host_unavailable("filesystem")
     }
+    fn bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        host_unavailable("filesystem")
+    }
     fn close(
         &self,
         _h: &Arc<BexHeap>,

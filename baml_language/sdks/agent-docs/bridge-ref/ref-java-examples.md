@@ -583,10 +583,11 @@ class is generated for it (`translate_ty.rs:101-108`; `lib.rs` test asserts
 // baml_bridge/src/main/java/baml_sdk/baml/media/Image.java (runtime-owned, hand-written)
 public final class Image implements BamlMedia {
     public static Image from_url(String url, String mimeType) { … }
-    public static Image from_file(String path, String mimeType) { … }
+    public static Image from_file(String path, String mimeType) { … }   // reads the file now
+    public static Image from_file_content(String file, String base64, String mimeType) { … }
     public static Image from_base64(String base64, String mimeType) { … }
     public String url()  { return handle.mediaUrl(); }
-    public String file() { return handle.mediaFile(); }
+    public String name() { return handle.mediaName(); }   // the file's base name, if any
     public String base64() { return handle.mediaBase64(); }
     public String mime_type() { return handle.mediaMimeType(); }   // PreserveCase: NOT mimeType()
 }

@@ -304,7 +304,7 @@ function _anth_apply_cache_control(blocks: AnthBlock[], cache_control: baml.json
 /// sys_llm's `send_url` default for this provider.
 /// The four image media types the Messages API accepts on a base64 source. It
 /// validates the declared `media_type` against the actual bytes, so anything
-/// else is a 400 — including `image/svg+xml` (which `ai.internal._media_mime_type`
+/// else is a 400 — including `image/svg+xml` (which `baml.media.Image.infer_mime_type`
 /// produces for an `.svg` source) and `image/png` guessed for an unknown
 /// extension. Checking here keeps the error client-side and specific; the check
 /// is per-provider because the allowed set is.
@@ -873,8 +873,7 @@ function render(c: root.Client, input: ai.ModelTurnInput) -> baml.http.Request {
     _request(c, input, false, preview = false)
 }
 
-/// The request one `render` would send. URL media remains a URL reference;
-/// local files are rejected before any filesystem read.
+/// The request one `render` would send. URL media remains a URL reference.
 function preview(c: root.Client, input: ai.ModelTurnInput) -> baml.http.Request {
     _request(c, input, false, preview = true)
 }

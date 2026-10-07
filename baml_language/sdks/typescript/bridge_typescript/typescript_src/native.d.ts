@@ -8,10 +8,16 @@ export type HostExecution = _HostExecution
 
 export declare class BamlAudio {
   static fromUrl(url: string, mimeType?: string | undefined | null): BamlAudio
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlAudio
+  /**
+   * Base64 content that was read from `file`: named by its base
+   * name, with the MIME type it implies unless one is given.
+   * Reads nothing.
+   */
+  static fromFileContent(file: string, base64: string, mimeType?: string | undefined | null): BamlAudio
   static fromBase64(base64: string, mimeType?: string | undefined | null): BamlAudio
   url(): string | null
-  file(): string | null
+  /** The base name of the file the content was read from, if any. */
+  name(): string | null
   base64(): string
   mimeType(): string | null
   /**
@@ -44,10 +50,16 @@ export declare class BamlHandle {
 
 export declare class BamlImage {
   static fromUrl(url: string, mimeType?: string | undefined | null): BamlImage
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlImage
+  /**
+   * Base64 content that was read from `file`: named by its base
+   * name, with the MIME type it implies unless one is given.
+   * Reads nothing.
+   */
+  static fromFileContent(file: string, base64: string, mimeType?: string | undefined | null): BamlImage
   static fromBase64(base64: string, mimeType?: string | undefined | null): BamlImage
   url(): string | null
-  file(): string | null
+  /** The base name of the file the content was read from, if any. */
+  name(): string | null
   base64(): string
   mimeType(): string | null
   /**
@@ -66,10 +78,16 @@ export declare class BamlImage {
 
 export declare class BamlPdf {
   static fromUrl(url: string, mimeType?: string | undefined | null): BamlPdf
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlPdf
+  /**
+   * Base64 content that was read from `file`: named by its base
+   * name, with the MIME type it implies unless one is given.
+   * Reads nothing.
+   */
+  static fromFileContent(file: string, base64: string, mimeType?: string | undefined | null): BamlPdf
   static fromBase64(base64: string, mimeType?: string | undefined | null): BamlPdf
   url(): string | null
-  file(): string | null
+  /** The base name of the file the content was read from, if any. */
+  name(): string | null
   base64(): string
   mimeType(): string | null
   /**
@@ -111,10 +129,16 @@ export declare class BamlRuntime {
 
 export declare class BamlVideo {
   static fromUrl(url: string, mimeType?: string | undefined | null): BamlVideo
-  static fromFile(file: string, mimeType?: string | undefined | null): BamlVideo
+  /**
+   * Base64 content that was read from `file`: named by its base
+   * name, with the MIME type it implies unless one is given.
+   * Reads nothing.
+   */
+  static fromFileContent(file: string, base64: string, mimeType?: string | undefined | null): BamlVideo
   static fromBase64(base64: string, mimeType?: string | undefined | null): BamlVideo
   url(): string | null
-  file(): string | null
+  /** The base name of the file the content was read from, if any. */
+  name(): string | null
   base64(): string
   mimeType(): string | null
   /**

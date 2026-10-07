@@ -76,9 +76,11 @@ internal static class MediaProtocol
                 BamlValueMedia.ValueOneofCase.Base64 => MediaPayload.FromBytes(
                     DecodeBase64(wire.Base64, path),
                     RequireMimeType(mimeType, path)),
-                BamlValueMedia.ValueOneofCase.File => MediaPayload.FromBytes(
-                    ReadFile(wire.File, path),
-                    RequireMimeType(mimeType, path)),
+                // Content read from a file keeps the file's name.
+                BamlValueMedia.ValueOneofCase.FileContent => MediaPayload.FromBytes(
+                    DecodeBase64(wire.FileContent.Base64, path),
+                    RequireMimeType(mimeType, path),
+                    wire.FileContent.Name),
                 _ => throw Invalid(path, "The inline media value has no representation."),
             },
             path);
@@ -94,22 +96,21 @@ internal static class MediaProtocol
     {
         NativeMediaSnapshot snapshot = api.ReadMedia(owner, handleType, contract.MediaType);
         int representations = (snapshot.Url.Length == 0 ? 0 : 1)
-            + (snapshot.Base64.Length == 0 ? 0 : 1)
-            + (snapshot.File.Length == 0 ? 0 : 1);
+            + (snapshot.Base64.Length == 0 ? 0 : 1);
         if (representations != 1)
         {
             throw Invalid(path, $"The media handle exposed {representations} representations.");
         }
 
         string? mimeType = snapshot.MimeType.Length == 0 ? null : snapshot.MimeType;
+        string? name = snapshot.Name.Length == 0 ? null : snapshot.Name;
         MediaPayload payload = Materialize(
             () => snapshot.Url.Length != 0
                 ? MediaPayload.FromUrl(snapshot.Url, mimeType)
                 : MediaPayload.FromBytes(
-                    snapshot.Base64.Length != 0
-                        ? DecodeBase64(snapshot.Base64, path)
-                        : ReadFile(snapshot.File, path),
-                    RequireMimeType(mimeType, path)),
+                    DecodeBase64(snapshot.Base64, path),
+                    RequireMimeType(mimeType, path),
+                    name),
             path);
         return BamlGeneratedValue.CreateMedia(CreateManaged(contract, payload), path);
     }
@@ -231,43 +232,6 @@ internal static class MediaProtocol
             throw new BamlProtocolException(
                 "The native bridge returned malformed BAML media.",
                 $"Invalid base64 media at {path}: {error.Message}");
-        }
-    }
-
-    private static byte[] ReadFile(string pathValue, string path)
-    {
-        try
-        {
-            using var stream = new FileStream(
-                pathValue,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 81920,
-                FileOptions.SequentialScan);
-            if (stream.Length > BamlValueLimits.MaxBytes)
-            {
-                throw Invalid(path, $"The media file exceeds the {BamlValueLimits.MaxBytes}-byte limit.");
-            }
-
-            byte[] bytes = new byte[checked((int)stream.Length)];
-            stream.ReadExactly(bytes);
-            if (stream.ReadByte() != -1)
-            {
-                throw Invalid(path, "The media file grew beyond its declared bounded length.");
-            }
-
-            return bytes;
-        }
-        catch (BamlProtocolException)
-        {
-            throw;
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            throw new BamlProtocolException(
-                "The native bridge returned an unreadable BAML media file.",
-                $"Could not eagerly read media at {path}: {error.Message}");
         }
     }
 

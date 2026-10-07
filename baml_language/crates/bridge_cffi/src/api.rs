@@ -16,7 +16,11 @@ use crate::Buffer;
 /// Hosts and runtimes built against different revisions must reject one another
 /// before reading that slot. Revision 3 requires runtime-bound allocations,
 /// an invocation clock, allocation release and V2 host dispatch/cancellation.
-pub const BAML_API_V1_ABI_VERSION: u32 = 3;
+///
+/// Revision 4: a media value holds content, never a file path.
+/// `media_from_file` always fails and `media_file` is always absent;
+/// `media_name` and `media_from_file_content` are required.
+pub const BAML_API_V1_ABI_VERSION: u32 = 4;
 
 /// Valid `media_kind` values for media constructors.
 ///
@@ -125,6 +129,16 @@ pub type BamlMediaConstructorFn = unsafe extern "C" fn(
     out_key: *mut u64,
     out_handle_type: *mut i32,
 ) -> BamlCffiStatus;
+/// Construct media from base64 content read from a file, using a raw
+/// `BamlCffiMediaKind` value.
+pub type BamlMediaFromFileContentFn = unsafe extern "C" fn(
+    media_kind: i32,
+    file: *const libc::c_char,
+    base64: *const libc::c_char,
+    mime_type_or_null: *const libc::c_char,
+    out_key: *mut u64,
+    out_handle_type: *mut i32,
+) -> BamlCffiStatus;
 /// Read media using a raw `BamlCffiHandleType` value; zero accepts any type.
 pub type BamlMediaAccessorFn =
     unsafe extern "C" fn(key: u64, handle_type: i32, out: *mut Buffer) -> BamlCffiStatus;
@@ -158,7 +172,7 @@ pub type BamlInvocationContextFn =
 ///
 /// A host must not unload the native library while a returned buffer, owned
 /// handle, registered callback, or asynchronous call can still reach it. The
-/// The ABI has no callback-unregistration operation in V1. Hosts must call
+/// ABI has no callback-unregistration operation in V1. Hosts must call
 /// `shutdown_runtime` before unloading the native library.
 ///
 /// No Rust panic may unwind across this ABI. Operations with a diagnostic or
@@ -166,11 +180,12 @@ pub type BamlInvocationContextFn =
 /// An otherwise unexpected panic aborts the process rather than crossing into
 /// foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
 ///
-/// V1 is append-only: existing fields may never be reordered, removed, or
-/// change type or semantics. New fields may only be appended. Before reading a
-/// field, consumers must verify that `struct_size` reaches the end of that
-/// field. `baml_api_v1_is_compatible` performs the check for the original V1
-/// prefix. A larger unknown size is compatible; a truncated prefix is not.
+/// V1 is append-only: existing fields may never be reordered or removed, and
+/// a field changes type or semantics only with a new ABI revision. New fields
+/// may only be appended. Before reading a field, consumers must verify that
+/// `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
+/// performs the check for the fields this revision requires. A larger unknown
+/// size is compatible; a truncated prefix is not.
 #[repr(C)]
 pub struct BamlApiV1 {
     /// Function-table ABI version. Always `BAML_API_V1_ABI_VERSION`.
@@ -247,8 +262,11 @@ pub struct BamlApiV1 {
     /// The optional MIME type may be null. On success, both output pointers are
     /// written and the returned key must be released with `handle_release`.
     pub media_from_url: BamlMediaConstructorFn,
-    /// Create an owned media handle from a borrowed NUL-terminated file path.
-    /// Ownership and output rules match `media_from_url`.
+    /// Always `UnsupportedHandleType`: a media value is built from content,
+    /// never from a file path, and this library reads no file. A host reads
+    /// the file itself and calls `media_from_file_content`, or calls
+    /// `baml.media.<Kind>.from_file`. The slot stays because this table is
+    /// append-only.
     pub media_from_file: BamlMediaConstructorFn,
     /// Create an owned media handle from borrowed NUL-terminated base64 data.
     /// Ownership and output rules match `media_from_url`.
@@ -259,7 +277,9 @@ pub struct BamlApiV1 {
     /// represented by a zero-length buffer. Release every successful output
     /// once with `free_buffer`.
     pub media_url: BamlMediaAccessorFn,
-    /// Read a media file path. Ownership rules match `media_url`.
+    /// Always absent: a media value holds content, never a file path. The
+    /// slot stays because this table is append-only. Ownership rules match
+    /// `media_url`.
     pub media_file: BamlMediaAccessorFn,
     /// Read media base64 data. Ownership rules match `media_url`.
     pub media_base64: BamlMediaAccessorFn,
@@ -295,6 +315,15 @@ pub struct BamlApiV1 {
     /// Read a detached generated trace.Context; key zero reads empty context.
     /// The caller owns the returned buffer. This never admits an invocation.
     pub invocation_context: BamlInvocationContextFn,
+    /// Read a media value's name: the base name of the file its content was
+    /// read from, absent otherwise. Ownership rules match `media_url`.
+    pub media_name: BamlMediaAccessorFn,
+    /// Create an owned media handle from borrowed NUL-terminated base64
+    /// content that was read from the file at `file`: the value is named by
+    /// its base name, and its MIME type, when not given, is what the name
+    /// implies. Nothing is read. Ownership and output rules match
+    /// `media_from_url`.
+    pub media_from_file_content: BamlMediaFromFileContentFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -330,6 +359,8 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     register_host_cancel_callback: crate::register_host_cancel_callback,
     trace_selection: crate::trace_selection_ffi,
     invocation_context: crate::invocation_context_ffi,
+    media_name: crate::baml_media_name,
+    media_from_file_content: crate::baml_media_from_file_content,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -354,8 +385,8 @@ mod tests {
     }
 
     #[test]
-    fn unified_call_target_uses_a_new_abi_revision() {
-        assert_eq!(BAML_API_V1_ABI_VERSION, 3);
+    fn a_changed_contract_uses_a_new_abi_revision() {
+        assert_eq!(BAML_API_V1_ABI_VERSION, 4);
     }
 
     #[test]
@@ -395,6 +426,11 @@ mod tests {
         assert_same_function!(api.media_file, crate::baml_media_file);
         assert_same_function!(api.media_base64, crate::baml_media_base64);
         assert_same_function!(api.media_mime_type, crate::baml_media_mime_type);
+        assert_same_function!(api.media_name, crate::baml_media_name);
+        assert_same_function!(
+            api.media_from_file_content,
+            crate::baml_media_from_file_content
+        );
         assert_same_function!(api.register_bridge, crate::register_bridge_ffi);
         assert_same_function!(
             api.register_unhandled_spawn_error_callback,
@@ -429,6 +465,8 @@ mod tests {
         let _: BamlMediaAccessorFn = api.media_file;
         let _: BamlMediaAccessorFn = api.media_base64;
         let _: BamlMediaAccessorFn = api.media_mime_type;
+        let _: BamlMediaAccessorFn = api.media_name;
+        let _: BamlMediaFromFileContentFn = api.media_from_file_content;
         let _: BamlRegisterBridgeFn = api.register_bridge;
         let _: BamlRegisterUnhandledSpawnErrorCallbackFn =
             api.register_unhandled_spawn_error_callback;
