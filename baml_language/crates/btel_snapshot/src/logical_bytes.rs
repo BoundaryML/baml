@@ -16,11 +16,12 @@ impl Blob<'_> {
     /// counts only its 16-byte CAS ID. Media content counts decoded bytes,
     /// not base64 framing; invalid base64 counts the captured text instead.
     /// URL/path and MIME text count too. None means the expanded size exceeds
-    /// u64. Traversal is iterative and acyclic object totals are memoized.
+    /// u64. Traversal is iterative; closed object subgraphs are memoized,
+    /// including cyclic ones, only when their component has no active ancestor.
     pub fn logical_bytes_v1(&self) -> Option<u64> {
         enum Task {
             Value(SnapshotValue),
-            Finish(crate::ObjectId, u64, u64),
+            Finish(crate::ObjectId, u64),
         }
         fn media_bytes(text: &str) -> u64 {
             // Stream decoding into a sink: no allocation of a second payload.
@@ -34,6 +35,13 @@ impl Blob<'_> {
             return size;
         }
         let snapshot = self.snapshot;
+        let local_units;
+        let units = if snapshot.0.shape.logical_units.is_empty() && snapshot.object_count() > 0 {
+            local_units = crate::shape::logical_units(&snapshot.0.graph, self.entry().root);
+            &local_units[..]
+        } else {
+            &snapshot.0.shape.logical_units[..]
+        };
         let mut pending = match self.entry().root {
             SnapshotRoot::Value(value) => vec![Task::Value(value)],
             SnapshotRoot::FunctionArgs(args) => snapshot
@@ -45,14 +53,18 @@ impl Blob<'_> {
         };
         let mut active = FxHashSet::default();
         let mut completed = FxHashMap::default();
-        let mut cycles = 0;
+        let mut active_units = FxHashMap::<u32, usize>::default();
         let mut total = 0u64;
         while let Some(task) = pending.pop() {
             let value = match task {
                 Task::Value(value) => value,
-                Task::Finish(id, before, cycle_count) => {
+                Task::Finish(id, before) => {
                     active.remove(&id);
-                    if cycles == cycle_count {
+                    let count = active_units
+                        .get_mut(&units[id.0 as usize])
+                        .expect("active component");
+                    *count -= 1;
+                    if *count == 0 {
                         completed.insert(id, total - before);
                     }
                     continue;
@@ -69,23 +81,29 @@ impl Blob<'_> {
                 SnapshotValue::Bigint(id) => snapshot.bigint(id).bits().div_ceil(8),
                 SnapshotValue::Enum { name, .. } => snapshot.label(name).len() as u64,
                 SnapshotValue::Object(id) if active.contains(&id) => {
-                    cycles += 1;
                     std::mem::size_of::<crate::CasId>() as u64
                 }
-                SnapshotValue::Object(id) if completed.contains_key(&id) => completed[&id],
+                SnapshotValue::Object(id)
+                    if completed.contains_key(&id)
+                        && active_units
+                            .get(&units[id.0 as usize])
+                            .copied()
+                            .unwrap_or(0)
+                            == 0 =>
+                {
+                    completed[&id]
+                }
                 SnapshotValue::Object(id) => {
                     // Child blobs were measured first. Their root total is
                     // reusable; a non-root member of a cycle has its own walk.
                     if let Some(home) = snapshot.0.shape.object_home(id)
                         && home.blob != self.index()
                         && home.node == 0
-                        && !active.iter().any(|active_id| {
-                            snapshot
-                                .0
-                                .shape
-                                .object_home(*active_id)
-                                .is_some_and(|active_home| active_home.blob == home.blob)
-                        })
+                        && active_units
+                            .get(&units[id.0 as usize])
+                            .copied()
+                            .unwrap_or(0)
+                            == 0
                         && let LogicalBytesV1::Measured(size) =
                             snapshot.0.shape.blobs[home.blob.0 as usize].logical_bytes_v1
                     {
@@ -93,7 +111,8 @@ impl Blob<'_> {
                         continue;
                     }
                     active.insert(id);
-                    pending.push(Task::Finish(id, total, cycles));
+                    *active_units.entry(units[id.0 as usize]).or_default() += 1;
+                    pending.push(Task::Finish(id, total));
                     match snapshot.object(id) {
                         SnapshotObject::Uint8Array { data } => data.len() as u64,
                         SnapshotObject::List { items, .. } => {
@@ -350,6 +369,29 @@ mod tests {
                 .logical_bytes_v1(),
             Some(13)
         );
+    }
+
+    #[test]
+    fn repeated_cyclic_subgraph_is_memoized_and_reports_real_overflow() {
+        let pool = SnapshotPool::new(1, Limits::default());
+        let mut b = pool.try_acquire().unwrap();
+        let ty = b.leaves().ty(OwnedType::unknown());
+        let cycle = b.leaves().reserve().unwrap();
+        let id = cycle.id();
+        let list = b.list(
+            ty,
+            [SnapshotValue::Int(7), SnapshotValue::Object(id)].into_iter(),
+            |_, v| v,
+        );
+        b.leaves().fill(cycle, list);
+        let mut value = SnapshotValue::Object(id);
+        for _ in 0..60 {
+            let list = b.list(ty, [value, value].into_iter(), |_, v| v);
+            value = object(&mut b, list);
+        }
+        // 24 * 2^60 does not fit u64; the physical graph has only 61 objects.
+        let snapshot = b.finish(value, &mut Shaper::new(ShapePolicy::Whole));
+        assert_eq!(snapshot.root_blob().logical_bytes_v1(), None);
     }
 
     #[test]

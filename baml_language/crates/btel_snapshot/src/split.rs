@@ -144,6 +144,9 @@ impl Snapshot {
     /// is content, never a name written in place, so nothing the capture
     /// still writes reads one it gave up.
     pub fn split(mut self) -> Split {
+        let units = crate::shape::logical_units(&self.0.graph, self.root());
+        let Storage { shape, meter, .. } = &mut *self.0;
+        shape.logical_units.extend_from_slice(&units, meter);
         // Measure while all child content is still held; delivery can release
         // string leaves before it serializes the blobs that reference them.
         for index in 0..self.0.shape.blobs.len() {
