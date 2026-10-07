@@ -23,15 +23,15 @@ class Tool {
     ///
     /// A raw tool (`raw_tool`) hands the argument map straight to its
     /// `raw_handler` and returns that string as-is. A schema-derived tool
-    /// validates, dispatches through reflection, and JSON-serializes the
-    /// result; that reflection boundary widens exactly representable integral
-    /// arguments into float parameters (see reflect.call_any).
+    /// aligns a model's arguments to its handler's parameters
+    /// (`_typed_arguments`), dispatches through reflection, which validates
+    /// them, and JSON-serializes the result.
     function call(self, args: map<string, unknown>) -> string {
         if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler {
             return rh(args);
         }
         if let h: reflect.AnyFunction = self.handler {
-            let value = reflect.call_any(h, args) catch (e) {
+            let value = reflect.call_any(h, _typed_arguments(self.name, h, args)) catch (e) {
                 let bad: reflect.InvalidArgumentError => {
                     throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
                 },
@@ -41,6 +41,71 @@ class Tool {
             throw baml.errors.InvalidArgument { message: `tool ${self.name} has no handler` }
         }
     }
+}
+
+/// (internal) The arguments of a tool call as `reflect.call_any` takes them.
+///
+/// A provider hands over a model's arguments as parsed JSON: a class is a
+/// map, an enum a string, a list a list of json. `reflect.call_any` takes
+/// values of the parameter types, and the only JSON values that are such
+/// values are the scalars. So the parameters that were sent JSON are read as
+/// the fields of one class, the JSON is aligned to that class as any other
+/// model output is (`baml.sap.coerce`), and the fields of the result are
+/// the arguments.
+///
+/// An argument passes as it arrived when it names no parameter, and when it is
+/// already a value of its parameter's type: that is what BAML code passes when
+/// it calls a tool itself, and it is every value of an `unknown` parameter.
+/// `reflect.call_any` judges every argument that passed.
+function _typed_arguments(
+    tool: string,
+    handler: reflect.AnyFunction,
+    args: map<string, unknown>,
+) -> map<string, unknown> throws baml.errors.InvalidArgument {
+    let sig = reflect.signature(handler);
+    let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {};
+    let sent: map<string, baml.json.json> = {};
+    for (let param in sig.args.concat(sig.opts.values())) {
+        if (!args.has(param.name)) {
+            continue;
+        }
+        if let value: baml.json.json = args.get(param.name) {
+            type Declared = unreflect(param.type);
+            if (!(value is Declared)) {
+                let _ = fields.set(param.name, param.type);
+                let _ = sent.set(param.name, value);
+            }
+        }
+    }
+    if (fields.length() == 0) {
+        return args;
+    }
+    let parameters = reflect.class.new("Arguments", fields) catch (e) {
+        reflect.errors.CompilationError => {
+            throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
+        },
+    };
+    type Arguments = unreflect(parameters.as_type());
+    let aligned = baml.sap.coerce<Arguments>(sent) catch (e) {
+        baml.errors.ParseError => {
+            // The text goes back to the model, and it quotes the value that
+            // did not align, whatever its size.
+            throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message.slice(0, 1000)}` }
+        },
+    };
+    let typed: map<string, unknown> = {};
+    for (let name in args.keys()) {
+        let _ = typed.set(name, args.get(name));
+    }
+    for (let name in fields.keys()) {
+        let value = reflect.class.get_field<unknown>(aligned, name) catch (e) {
+            reflect.errors.CompilationError => {
+                baml.sys.panic(`the aligned arguments of ${tool} have no field ${name}`)
+            },
+        };
+        let _ = typed.set(name, value);
+    }
+    typed
 }
 
 /// The explicit constructor. `tools: [f]` normalizes through this.

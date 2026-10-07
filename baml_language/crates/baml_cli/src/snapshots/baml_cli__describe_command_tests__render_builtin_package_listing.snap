@@ -221,6 +221,7 @@ function         baml.regex.new                   <builtin>/baml/ns_regex/regex.
 function         baml.regex.escape                <builtin>/baml/ns_regex/regex.baml:268
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:45
 function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:58
+function         baml.sap.coerce                  <builtin>/baml/ns_sap/sap.baml:81
 class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:23
 interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.baml:60
 class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:78
