@@ -58,7 +58,7 @@ The always-on process aggregates the current week every day at 6:00 AM in `Ameri
 infisical run --env=prod-product-metrics -- sh -c 'curl --fail-with-body --request POST --header "Authorization: Bearer $SLACK_POST_TRIGGER_TOKEN" --header "Content-Type: application/json" --data '\''{"start":"2026-08-17","end":"2026-08-24"}'\'' https://boundary-product-metrics.fly.dev/aggregate-weekly-metric'
 ```
 
-Trigger the Fly service's separately configured Slack post on demand with the bearer token from Infisical:
+The Fly service does not schedule Slack posts. Trigger its manual Slack summary on demand with the bearer token from Infisical:
 
 ```bash
 infisical run --env=prod-product-metrics -- sh -c 'curl --fail-with-body --request POST --header "Authorization: Bearer $SLACK_POST_TRIGGER_TOKEN" https://boundary-product-metrics.fly.dev/post'
