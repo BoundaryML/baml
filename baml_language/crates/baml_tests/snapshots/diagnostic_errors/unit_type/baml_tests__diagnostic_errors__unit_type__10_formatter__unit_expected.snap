@@ -95,6 +95,26 @@ function lone_if_let_binding(v: int?) -> int {
     1
 }
 
+// Each branch is held to the unit type on its own: one mistake does not hide
+// the other.
+function else_if_chain_tails(a: bool, b: bool) -> void {
+    if (a) {
+        produce()
+    } else if (b) {
+        produce()
+    }
+}
+
+function catch_arm_tails() -> void {
+    {
+        produce()
+    } catch (e) {
+        _ => {
+            produce()
+        },
+    }
+}
+
 // A value typed by a block's own `type T = …` is no different: where the unit
 // type is expected it is a value left undiscarded, not one that escapes.
 function make<T>() -> T[] {

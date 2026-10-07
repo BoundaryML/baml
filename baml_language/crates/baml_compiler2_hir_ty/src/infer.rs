@@ -2147,12 +2147,37 @@ impl<'db> InferenceContext<'db> {
     /// dropped silently, so its mismatch reports at the expression that
     /// produces it and names the remedy.
     fn check_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
+        self.check_expr_fits(body, expr, expected).0
+    }
+
+    /// [`Self::check_expr`], also answering whether the expression fits as
+    /// far as is known now.
+    fn check_expr_fits(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> (Ty, bool) {
         let ty = self.infer_expr_with_hint(body, expr, Some(expected));
+        // Whether the unit type is what was expected is asked when the
+        // mismatch reports: the expectation may not be solved yet.
         let tail = value_tail(body, expr);
-        if tail != expr && self.is_unit_ty(expected) {
+        if tail != expr {
             self.unit_positions.insert(expr, (tail, UnitContext::Block));
         }
-        self.check_inferred(expr, ty, expected)
+        let fits = self.check_fits(expr, &ty, expected);
+        (ty, fits)
+    }
+
+    /// Types one branch of an `if`, `match` or `catch`. A hard expectation
+    /// CHECKS each branch (rustc coerces every arm to the expectation): a
+    /// failing one reports at ITSELF and recovers as the expectation, so the
+    /// join does not report the same mismatch again on the whole expression,
+    /// nor one branch's mistake hide another's. A passing one keeps its
+    /// ACTUAL type (literal grain survives the join).
+    fn infer_branch(&mut self, body: &ExprBody, branch: ExprId, expected: &Expectation) -> Ty {
+        match expected.only_has_type() {
+            Some(expected_ty) => {
+                let (actual, fits) = self.check_expr_fits(body, branch, expected_ty);
+                if fits { actual } else { expected_ty.clone() }
+            }
+            None => self.infer_expr(body, branch, expected),
+        }
     }
 
     /// The checking half of [`Self::check_expr`]: relate an already inferred
@@ -2425,7 +2450,7 @@ impl<'db> InferenceContext<'db> {
         self.diverges = Diverges::Maybe;
         // With no `else`, this is the type of the whole `if`.
         let then_ty = match else_branch {
-            Some(_) => self.infer_expr(body, then_branch, &branch_expectation),
+            Some(_) => self.infer_branch(body, then_branch, &branch_expectation),
             None => self.infer_lone_if(body, expr, then_branch, expected),
         };
         let then_diverges = self.diverges;
@@ -2444,7 +2469,7 @@ impl<'db> InferenceContext<'db> {
             return then_ty;
         };
         self.diverges = Diverges::Maybe;
-        let else_ty = self.infer_expr(body, else_branch, &branch_expectation);
+        let else_ty = self.infer_branch(body, else_branch, &branch_expectation);
         let else_diverges = self.diverges;
         let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
         let else_flow = (else_diverges == Diverges::Maybe).then_some(else_flow);
@@ -10525,7 +10550,7 @@ impl<'db> InferenceContext<'db> {
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
         // Caught values need not satisfy the enclosing callable's contract.
         self.throws_channels.push(ThrowsChannel::default());
-        let base_ty = self.infer_expr(body, base, &branch_expectation);
+        let base_ty = self.infer_branch(body, base, &branch_expectation);
         let channel = self
             .throws_channels
             .pop()
@@ -10656,7 +10681,7 @@ impl<'db> InferenceContext<'db> {
                     self.flow.insert(binding, outcome.matched_ty.clone());
                 }
                 self.diverges = Diverges::Maybe;
-                let arm_ty = self.infer_expr(body, arm.body, &branch_expectation);
+                let arm_ty = self.infer_branch(body, arm.body, &branch_expectation);
                 self.flow = entry_flow;
                 arm_tys.push(arm_ty);
                 // Definitely-handled facts leave the set; the survivors

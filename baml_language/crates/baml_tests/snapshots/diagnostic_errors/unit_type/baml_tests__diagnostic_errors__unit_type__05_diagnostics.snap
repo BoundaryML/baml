@@ -206,6 +206,15 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
+    ╭─[interpolation.baml:27:16]
+ 27 │   `${ if (a) { "one" } else if (b) { "two" } }Answer.`
+    ·                ──┬──
+    ·                  ╰── expected `null`, found `"one"`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
     ╭─[interpolation.baml:27:38]
  27 │   `${ if (a) { "one" } else if (b) { "two" } }Answer.`
     ·                                      ──┬──
@@ -455,10 +464,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[unit_expected.baml:37:3]
+    ╭─[unit_expected.baml:37:12]
  37 │   if (c) { produce() } else { produce(); }
-    ·   ────────────────────┬───────────────────
-    ·                       ╰── expected `null`, found `int | null`; end this with `;` to discard the value
+    ·            ────┬────
+    ·                ╰── expected `null`, found `int`; end this with `;` to discard the value
     ╰────
 
   [type] E0001
@@ -527,8 +536,44 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[unit_expected.baml:83:3]
- 83 │   make<T>()
+    ╭─[unit_expected.baml:80:12]
+ 80 │   if (a) { produce() } else if (b) { produce() }
+    ·            ────┬────
+    ·                ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:80:38]
+ 80 │   if (a) { produce() } else if (b) { produce() }
+    ·                                      ────┬────
+    ·                                          ╰── an `if` without `else` evaluates to `null`, so its branch cannot produce `int`; add an `else` branch, or end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:84:5]
+ 84 │   { produce() } catch (e) {
+    ·     ────┬────
+    ·         ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:85:12]
+ 85 │     _ => { produce() },
+    ·            ────┬────
+    ·                ╰── expected `null`, found `int`; end this with `;` to discard the value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unit_expected.baml:95:3]
+ 95 │   make<T>()
     ·   ────┬────
     ·       ╰── expected `null`, found `T[]`; end this with `;` to discard the value
     ╰────

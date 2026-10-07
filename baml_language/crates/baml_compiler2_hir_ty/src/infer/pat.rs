@@ -140,24 +140,7 @@ impl<'db> InferenceContext<'db> {
                 let (_, guard_facts) = self.check_condition(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }
-            // A hard branch expectation CHECKS each arm (rustc coerces
-            // every arm to the expectation): a failing arm reports at
-            // ITSELF - and recovers as the expectation, so the join does
-            // not re-report the same mismatch on the whole match. A
-            // passing arm keeps its ACTUAL type (literal grain survives
-            // the join).
-            let arm_ty = match branch_expectation.only_has_type() {
-                Some(expected_ty) => {
-                    let expected_ty = expected_ty.clone();
-                    let actual = self.check_expr(body, arm.body, &expected_ty);
-                    if self.result.type_mismatches.contains_key(&arm.body) {
-                        expected_ty
-                    } else {
-                        actual
-                    }
-                }
-                None => self.infer_expr(body, arm.body, &branch_expectation),
-            };
+            let arm_ty = self.infer_branch(body, arm.body, &branch_expectation);
             all_diverge = all_diverge.and(self.diverges);
             self.flow = saved_flow;
             arm_tys.push(arm_ty);
