@@ -14,7 +14,8 @@ impl Blob<'_> {
     /// eight-byte field ID and the full value cost; captured generic args add their
     /// type costs. Lists/maps add their captured declared element/key/value type
     /// costs and every full child value cost. Reflected Type values add the cost of
-    /// the represented type. Thus null=8, List<int>[7,7]=48, {a:7}:map<string,int>=49.
+    /// the represented type: `null=8`, `List<int>[7,7]=48`,
+    /// `map<string,int>{a:7}=49`.
     ///
     /// Captured type trees count eight per node plus constituent/generic types.
     /// Interfaces add eight per associated-binding ID; functions count parameter,

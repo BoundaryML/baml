@@ -34,7 +34,7 @@ mod field {
     pub(super) const SNAPSHOT_FORMAT_VERSION: u32 = 2;
     pub(super) const BLOB: u32 = 3;
     pub(super) const BLOB_SHA256: u32 = 4;
-    pub(super) const LOGICAL_BYTES_V1: u32 = 5;
+    pub(super) const LOGICAL_BYTES_APPROX_V1: u32 = 5;
 }
 
 /// How much of a blob's `encoded_len` bytes a body holds in a buffer of its
@@ -120,7 +120,7 @@ impl Piece {
                 .unwrap_or_else(|_| unreachable!("part of `blob_len`"));
         let after = delimited_len(field::BLOB_SHA256, <Sha256 as Digest>::output_size())
             + logical_bytes_approx_v1.map_or(0, |size| {
-                key_len(field::LOGICAL_BYTES_V1) + encoded_len_varint(size)
+                key_len(field::LOGICAL_BYTES_APPROX_V1) + encoded_len_varint(size)
             });
         let fields = delimited_len(field::SNAPSHOT_ID, candidate.id.as_bytes().len())
             + uint32::encoded_len(field::SNAPSHOT_FORMAT_VERSION, &BLOB_VERSION)
@@ -266,7 +266,11 @@ pub(crate) fn build(
         buffered.extend_from_slice(&digest);
         // Optional presence matters: a measured empty value emits zero too.
         if let Some(size) = piece.logical_bytes_approx_v1 {
-            encode_key(field::LOGICAL_BYTES_V1, WireType::Varint, &mut buffered);
+            encode_key(
+                field::LOGICAL_BYTES_APPROX_V1,
+                WireType::Varint,
+                &mut buffered,
+            );
             encode_varint(size, &mut buffered);
         }
     }
