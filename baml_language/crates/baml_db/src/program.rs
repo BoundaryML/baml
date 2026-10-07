@@ -162,7 +162,7 @@ pub fn compile_program_with(
             };
             Some(Ok(LinkedPackage {
                 root: package,
-                edges: edge_table(db, package),
+                edges: edge_table(db, package).clone(),
                 emitted,
             }))
         })

@@ -909,8 +909,8 @@ fn bind_locators(
             }
             Locator::Direct { edge, .. } | Locator::Transitive { edge, .. } => edge,
         };
-        let Some((_, target)) = edge_table(db, parent)
-            .into_iter()
+        let Some(&(_, target)) = edge_table(db, parent)
+            .iter()
             .find(|(edge, _)| edge == edge_name)
         else {
             return Err(ImportError::UnknownDependency {
@@ -1330,7 +1330,7 @@ pub fn export_interface(
     let mut table = DependencyTable::new(root);
     // Every direct non-prelude edge, in edge order, named by a row or not:
     // the digest of each is what makes this blob's digest cover its closure.
-    for (_, dependency) in edge_table(db, root) {
+    for &(_, dependency) in edge_table(db, root) {
         if dependency.kind(db) != baml_base::SourceRootKind::Stdlib {
             table.slot(db, dependency);
         }

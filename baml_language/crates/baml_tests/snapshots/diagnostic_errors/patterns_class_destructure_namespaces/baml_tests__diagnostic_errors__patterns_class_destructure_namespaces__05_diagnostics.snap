@@ -36,7 +36,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0007
 
-  × class `llm.openai.Response` has no field `missing`
+  × class `root.llm.openai.Response` has no field `missing`
     ╭─[main.baml:22:9]
  22 │         root.llm.openai.Response { missing } => 1,
     ·         ────────────────────────────────────

@@ -517,8 +517,8 @@ impl CacheContext {
             .map(|file| (rel_path(root_path, &file.path(db)), file.text(db).as_str()))
             .collect();
         let dependencies: Vec<(String, [u8; 32])> = edge_table(db, root)
-            .into_iter()
-            .map(|(edge, dependency)| (edge.to_string(), self.interface_digest(db, dependency)))
+            .iter()
+            .map(|(edge, dependency)| (edge.to_string(), self.interface_digest(db, *dependency)))
             .collect();
         package_key(&PackageKeyInputs {
             compiler_fingerprint: self.fingerprint,

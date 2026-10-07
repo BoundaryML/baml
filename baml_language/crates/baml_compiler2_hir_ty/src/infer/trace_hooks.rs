@@ -68,7 +68,7 @@ fn checked_declaration<'db>(
         .expect("hook source span");
     let hook_name = path.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
     let package = baml_compiler2_hir::file_package::file_package(db, function.file(db));
-    let viewpoint = crate::render::Viewpoint::user_facing(db, package.root);
+    let viewpoint = crate::render::Viewpoint::for_file(db, function.file(db));
     let mut target_path = package.namespace_path;
     match baml_compiler2_hir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => target_path.push(

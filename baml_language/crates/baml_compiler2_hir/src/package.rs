@@ -143,6 +143,10 @@ pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Op
 /// methods in `reflect` while `reflect` depends on `baml`, which no manifest
 /// edge could express without a cycle. A non-stdlib root already carries the
 /// prelude as explicit edges, so for it the fixed names add nothing.
+///
+/// Tracked: a viewpoint, a binder and an edge walk each read it, and it
+/// changes only with a manifest or the installed language packages.
+#[salsa::tracked(returns(ref))]
 pub fn edge_table(db: &dyn crate::Db, root: SourceRoot) -> Vec<(Name, SourceRoot)> {
     let mut edges: Vec<(Name, SourceRoot)> = root
         .dependencies(db)
@@ -880,10 +884,11 @@ pub fn edge_path(
             break;
         }
         for (edge, root) in edge_table(db, current) {
+            let root = *root;
             if root == owner || parents.contains_key(&root) {
                 continue;
             }
-            parents.insert(root, (current, edge));
+            parents.insert(root, (current, edge.clone()));
             queue.push_back(root);
         }
     }
@@ -931,8 +936,8 @@ pub fn edge_spelling(db: &dyn crate::Db, owner: SourceRoot, target: SourceRoot) 
 pub fn edge_target(db: &dyn crate::Db, owner: SourceRoot, path: &EdgePath) -> Option<SourceRoot> {
     path.0.iter().try_fold(owner, |current, edge| {
         edge_table(db, current)
-            .into_iter()
-            .find_map(|(name, root)| (name == *edge).then_some(root))
+            .iter()
+            .find_map(|(name, root)| (name == edge).then_some(*root))
     })
 }
 

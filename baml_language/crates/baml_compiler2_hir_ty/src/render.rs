@@ -7,30 +7,40 @@
 //! canonical dumps. Every other renderer of compile-time types (the IDE's
 //! hover, describe) implements [`TyRenderStrategy`] with its own policy.
 
-use baml_base::{Dependency, SourceRoot};
-use baml_compiler2_hir::package::{Spelling, spelling};
+use std::borrow::Cow;
+
+use baml_base::{SourceFile, SourceRoot};
+use baml_compiler2_hir::package::{ROOT_SEGMENT, Spelling, edge_table, spelling};
 use baml_type::{DeclName, Interface, LoweringTy, Name, Ty, TyRenderStrategy};
 
-/// A viewpoint: the root looking (when there is one), the names it reaches
-/// its dependencies by, and the spelling table.
+/// A viewpoint: the root looking (when there is one), the namespace in it
+/// that is looking, the names it reaches its dependencies by, and the
+/// spelling table.
 ///
-/// Rendering *user-facing* (a viewer is set) spells the viewer's own
-/// package bare, every dependency by the viewer's edge name for it — what
-/// source in that package writes, a declaration a dependency re-exports by
-/// the path the re-export gives it — and a package the viewer has no edge
-/// to by its provenance spelling ([`Spelling::of`]); synthetic effect
+/// Rendering *user-facing* (a viewer is set) spells a declaration as source
+/// in the viewer's namespace writes it (`TYPE_SYSTEM.md` § Declarations,
+/// Packages, and Names): a declaration of that namespace bare, any other
+/// declaration of the viewer's package `root.`-qualified, every dependency
+/// by the viewer's edge name for it, a declaration a dependency re-exports
+/// by the path the re-export gives it — and a package the viewer has no
+/// edge to by its provenance spelling ([`Spelling::of`]); synthetic effect
 /// parameters show as `callback`. Rendering *canonically* (no viewer)
 /// spells every package by its provenance spelling and every parameter
 /// verbatim, which is what dumps and identity-bearing text expect.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Viewpoint<'a> {
     spelling: &'a Spelling,
     viewer: Option<SourceRoot>,
-    /// The viewer's dependency edges; empty without a viewer or a database.
-    edges: &'a [Dependency],
-    /// The database the viewer's dependencies are read from, for the
-    /// re-exports they carry; none without a database.
-    db: Option<&'a dyn baml_compiler2_hir::Db>,
+    /// The namespace of the viewer's package that is looking: empty for the
+    /// package's root namespace, which is also the view when no file is
+    /// looking ([`user_facing`](Self::user_facing)).
+    namespace: Cow<'a, [Name]>,
+    /// The viewer's edge table — every package it reaches, by the name it
+    /// reaches it under ([`edge_table`]); empty without a viewer.
+    edges: &'a [(Name, SourceRoot)],
+    /// The database the roots live in: the viewer's re-exports and every
+    /// package's own name and edges are read from it.
+    db: &'a dyn baml_compiler2_hir::Db,
 }
 
 /// A declaration that source in the viewer's package cannot write: its
@@ -41,14 +51,40 @@ pub struct Viewpoint<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unspellable(pub DeclName);
 
+/// A package the viewer has no edge to: the one outcome of
+/// [`Viewpoint::package_segment`] a source path cannot be built from.
+struct NoEdge;
+
 impl<'a> Viewpoint<'a> {
-    /// User-facing rendering as seen from `viewer`'s package.
+    /// User-facing rendering as seen from `viewer`'s package, from its root
+    /// namespace: the view of a reader addressing the package as a whole
+    /// (a host, `baml describe`) rather than from one of its files.
     pub fn user_facing(db: &'a dyn baml_compiler2_hir::Db, viewer: SourceRoot) -> Self {
+        Self::for_namespace(db, viewer, Cow::Borrowed(&[]))
+    }
+
+    /// User-facing rendering as seen from `file`: its package and its
+    /// namespace, so every declaration spells as source in that file writes
+    /// it. The viewpoint of a diagnostic reported in `file`.
+    pub fn for_file(db: &'a dyn baml_compiler2_hir::Db, file: SourceFile) -> Self {
+        let package = baml_compiler2_hir::file_package::file_package(db, file);
+        Self::for_namespace(db, package.root, Cow::Owned(package.namespace_path))
+    }
+
+    /// User-facing rendering as seen from `namespace` of `viewer`'s package:
+    /// [`for_file`](Self::for_file) for a reader whose namespace is known
+    /// without a file in hand.
+    pub fn for_namespace(
+        db: &'a dyn baml_compiler2_hir::Db,
+        viewer: SourceRoot,
+        namespace: Cow<'a, [Name]>,
+    ) -> Self {
         Self {
             spelling: spelling(db),
             viewer: Some(viewer),
-            edges: viewer.dependencies(db),
-            db: Some(db),
+            namespace,
+            edges: edge_table(db, viewer),
+            db,
         }
     }
 
@@ -57,79 +93,122 @@ impl<'a> Viewpoint<'a> {
         Self {
             spelling: spelling(db),
             viewer: None,
+            namespace: Cow::Borrowed(&[]),
             edges: &[],
-            db: None,
+            db,
         }
     }
 
-    /// A viewpoint over an explicit spelling table (user-facing when `viewer`
-    /// is set, with no edges), for callers that hold the table outside a
-    /// database.
-    pub fn over(spelling: &'a Spelling, viewer: Option<SourceRoot>) -> Self {
-        Self {
-            spelling,
-            viewer,
-            edges: &[],
-            db: None,
+    /// The path of a declaration of the viewer's own package: bare when it
+    /// belongs to the viewing namespace, else `root.<ns>.<Name>` — the two
+    /// ways source names an item of its own package, and nothing else.
+    fn own_path(&self, decl: &DeclName) -> String {
+        if decl.namespace() == self.namespace.as_ref() {
+            decl.name().to_string()
+        } else {
+            join_path(Some(ROOT_SEGMENT), decl)
         }
     }
 
     /// The name the viewer reaches `root` by, if it has an edge to it.
-    fn edge_name(&self, root: SourceRoot) -> Option<&'a Name> {
+    fn edge_name(&self, root: SourceRoot) -> Option<&Name> {
         self.edges
             .iter()
-            .find(|edge| edge.root == root)
-            .map(|edge| &edge.name)
+            .find(|(_, target)| *target == root)
+            .map(|(name, _)| name)
     }
 
     /// The package segment of `decl`'s path from this viewpoint: none inside
-    /// the viewer's own package, the viewer's edge name where it has one,
-    /// else the provenance spelling — which source in the viewer's package
-    /// cannot write, so [`source_path`](Self::source_path) refuses it.
-    fn package_segment(&self, root: SourceRoot) -> Result<Option<&'a str>, Unspellable> {
+    /// the viewer's own package, the viewer's edge name where it has one —
+    /// unless an item of the viewing namespace is spelled like that edge, in
+    /// which case the name reads the item and the package is out of reach
+    /// from here (`TYPE_SYSTEM.md` § Declarations, Packages, and Names) — the
+    /// provenance spelling when no viewer is looking (canonical), and
+    /// [`NoEdge`] for a package a viewer reaches no other way — which source
+    /// in the viewer's package cannot write.
+    fn package_segment(&self, root: SourceRoot) -> Result<Option<&str>, NoEdge> {
         if self.viewer == Some(root) {
             return Ok(None);
         }
-        match self.edge_name(root) {
-            Some(name) => Ok(Some(name.as_str())),
-            None if self.viewer.is_some() => Err(Unspellable(DeclName::in_root(
-                root,
-                Vec::new(),
-                Name::new(""),
-            ))),
-            None => Ok(Some(self.spelling.of(root).as_str())),
+        match (self.edge_name(root), self.viewer) {
+            (Some(name), Some(_)) if self.edge_is_shadowed(name) => Err(NoEdge),
+            (Some(name), _) => Ok(Some(name.as_str())),
+            (None, Some(_)) => Err(NoEdge),
+            (None, None) => Ok(Some(self.spelling.of(root).as_str())),
         }
     }
 
-    /// The dotted path of `decl` as source in the viewer's package writes
-    /// it: bare or `ns.Name` inside the viewer's package, `edge.ns.Name` for
-    /// a dependency, `edge.ns.Name` by the re-export's path for a
-    /// declaration a dependency re-exports. [`Unspellable`] when the viewer
-    /// reaches the declaration no such way.
+    /// Whether an item of the viewing namespace is spelled like the viewer's
+    /// edge `name`: source there reads the name as the item, so the edge is
+    /// out of reach — for the package it leads to and for everything that
+    /// package re-exports alike (`TYPE_SYSTEM.md` § Declarations, Packages,
+    /// and Names).
+    fn edge_is_shadowed(&self, name: &Name) -> bool {
+        self.viewer.is_some_and(|viewer| {
+            baml_compiler2_hir::namespace::namespace_declares(
+                self.db,
+                viewer,
+                &self.namespace,
+                name,
+            )
+        })
+    }
+
+    /// The dotted path of `decl` as source in the viewer's namespace writes
+    /// it: bare for a declaration of that namespace, `root.ns.Name` for the
+    /// rest of the viewer's package, `edge.ns.Name` for a dependency,
+    /// `edge.ns.Name` by the re-export's path for a declaration a dependency
+    /// re-exports. [`Unspellable`] when the viewer reaches the declaration no
+    /// such way — and for every declaration when no viewer is looking: a
+    /// canonical rendering is for display, and nothing writes it as source.
     pub fn source_path(&self, decl: &DeclName) -> Result<String, Unspellable> {
+        if self.viewer.is_none() {
+            return Err(Unspellable(decl.clone()));
+        }
         match self.package_segment(decl.root()) {
-            Ok(package) => Ok(join_path(package, decl)),
-            Err(_) => self
+            Ok(None) => Ok(self.own_path(decl)),
+            Ok(Some(package)) => Ok(join_path(Some(package), decl)),
+            Err(NoEdge) => self
                 .reexport_path(decl)
                 .ok_or_else(|| Unspellable(decl.clone())),
         }
     }
 
     /// The path a re-export reachable through one of the viewer's edges
-    /// gives `decl`, if any: `edge.ns.Name` as the re-export spells it.
+    /// gives `decl`, if any: `edge.ns.Name` as the re-export spells it. An
+    /// edge an item of the viewing namespace shadows reaches nothing.
     fn reexport_path(&self, decl: &DeclName) -> Option<String> {
-        let db = self.db?;
-        self.edges.iter().find_map(|edge| {
+        self.edges.iter().find_map(|(edge, target)| {
+            if self.edge_is_shadowed(edge) {
+                return None;
+            }
             let (namespace, name) =
-                crate::package_interface::reexport_paths(db, edge.root).get(decl)?;
+                crate::package_interface::reexport_paths(self.db, *target).get(decl)?;
             Some(
-                std::iter::once(edge.name.as_str())
+                std::iter::once(edge.as_str())
                     .chain(namespace.iter().map(Name::as_str))
                     .chain(std::iter::once(name.as_str()))
                     .collect::<Vec<_>>()
                     .join("."),
             )
         })
+    }
+
+    /// How a package the viewer has no edge to is shown — display only, never
+    /// source ([`source_path`](Self::source_path) refuses it) — following
+    /// Rust, which prints such a crate's own name: the package's declared
+    /// name when it has one; an unnamed package shows the name its nearest
+    /// dependent reaches it by (the last hop of the shortest edge path from
+    /// the viewer), the one spelling some manifest actually wrote. With no
+    /// edge path at all, the provenance spelling.
+    pub fn display_package(&self, root: SourceRoot) -> Cow<'a, str> {
+        if let Some(own) = root.self_name(self.db) {
+            return Cow::Owned(own.to_string());
+        }
+        self.viewer
+            .and_then(|viewer| baml_compiler2_hir::package::edge_path(self.db, viewer, root))
+            .and_then(|hops| hops.last().map(|(_, edge, _)| Cow::Owned(edge.to_string())))
+            .unwrap_or_else(|| Cow::Borrowed(self.spelling.of(root).as_str()))
     }
 
     /// `ty` as source in the viewer's package writes it, or the first
@@ -151,34 +230,35 @@ impl<'a> Viewpoint<'a> {
         self.viewer
     }
 
-    /// The spelling table this viewpoint renders through.
-    pub fn spelling(&self) -> &'a Spelling {
-        self.spelling
-    }
-
     /// The package prefix of a path from this viewpoint, for display: `None`
-    /// inside the viewer's own package (elided), the viewer's edge name for a
-    /// dependency, and the provenance spelling for a package the viewer has
-    /// no edge to (a diagnostic must still name it). What [`path`](Self::path)
-    /// joins; callers assembling dotted paths of their own take it directly.
-    pub fn package_prefix(&self, root: SourceRoot) -> Option<&'a str> {
+    /// inside the viewer's own package (elided — an own-package path then
+    /// follows [`path`](Self::path)'s rule: bare in the viewing namespace,
+    /// `root.`-qualified elsewhere), the viewer's edge name for a dependency,
+    /// and the display name of a package the viewer has no edge to
+    /// ([`display_package`](Self::display_package); a diagnostic must still
+    /// name it). Callers assembling dotted paths of their own take it
+    /// directly.
+    pub fn package_prefix(&self, root: SourceRoot) -> Option<Cow<'_, str>> {
         match self.package_segment(root) {
-            Ok(package) => package,
-            Err(_) => Some(self.spelling.of(root).as_str()),
+            Ok(package) => package.map(Cow::Borrowed),
+            Err(NoEdge) => Some(self.display_package(root)),
         }
     }
 
-    /// The dotted path of a declaration for display: `ns.Name` inside the
-    /// viewer's own package, `edge.ns.Name` for a dependency or for a
-    /// declaration a dependency re-exports (by the re-export's path), and
-    /// the provenance spelling for a package the viewer reaches no other way
-    /// (a diagnostic must still name it).
+    /// The dotted path of a declaration for display: bare for a declaration
+    /// of the viewing namespace, `root.ns.Name` for the rest of the viewer's
+    /// package, `edge.ns.Name` for a dependency or for a declaration a
+    /// dependency re-exports (by the re-export's path), and the display name
+    /// of a package the viewer reaches no other way
+    /// ([`display_package`](Self::display_package); a diagnostic must still
+    /// name it).
     pub fn path(&self, decl: &DeclName) -> String {
         match self.package_segment(decl.root()) {
-            Ok(package) => join_path(package, decl),
-            Err(_) => self
+            Ok(None) => self.own_path(decl),
+            Ok(Some(package)) => join_path(Some(package), decl),
+            Err(NoEdge) => self
                 .reexport_path(decl)
-                .unwrap_or_else(|| join_path(Some(self.spelling.of(decl.root()).as_str()), decl)),
+                .unwrap_or_else(|| join_path(Some(&self.display_package(decl.root())), decl)),
         }
     }
 }

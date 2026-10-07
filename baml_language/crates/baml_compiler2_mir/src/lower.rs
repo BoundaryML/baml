@@ -1957,12 +1957,14 @@ impl<'db> LoweringContext<'db> {
         ))
     }
 
-    /// The viewpoint this function's diagnostics and display strings spell
-    /// types from: its own file's package.
-    fn viewpoint(&self) -> baml_compiler2_hir_ty::render::Viewpoint<'db> {
+    /// The viewpoint a function's DISPLAY fields (`display_param_types`,
+    /// `display_return_type`) spell types from: the package's root namespace,
+    /// facing a host that reads the package as a whole — the same one emit
+    /// uses for a declared function's, so a lambda's agree with its owner's.
+    fn display_viewpoint(&self) -> baml_compiler2_hir_ty::render::Viewpoint<'db> {
         baml_compiler2_hir_ty::render::Viewpoint::user_facing(
             self.db,
-            file_package(self.db, self.file).root,
+            self.file.source_root(self.db),
         )
     }
 
@@ -5022,7 +5024,7 @@ impl<'db> LoweringContext<'db> {
             ));
         }
         let sig_return_type = sig_template(self, &return_type);
-        let sig_display_return_type = return_type.render_with(&self.viewpoint());
+        let sig_display_return_type = return_type.render_with(&self.display_viewpoint());
         let ret_local_ty = self.convert_tir_ty_for_runtime(&return_type);
 
         // Declare return place _0, then parameter locals _1..=_n.
@@ -5038,7 +5040,7 @@ impl<'db> LoweringContext<'db> {
                 .insert(param.name.clone(), tir_ty.clone());
             let param_ty = self.convert_tir_ty_for_runtime(tir_ty);
             sig_param_types.push(sig_template(self, tir_ty));
-            sig_display_param_types.push(tir_ty.render_with(&self.viewpoint()));
+            sig_display_param_types.push(tir_ty.render_with(&self.display_viewpoint()));
             self.declare_parameter(param_idx, &param.name, param_ty);
         }
         let sig_throws_type = sig_template(self, &throws_type);

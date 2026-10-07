@@ -1958,6 +1958,31 @@ fn view_world(reexports: &[(&str, ReExport<TypeName>)]) -> Result<ProjectDatabas
     Ok(db)
 }
 
+/// An item of the viewing namespace spelled like the edge shadows the edge
+/// (`TYPE_SYSTEM.md` § Declarations, Packages, and Names): `view.Entry` would
+/// read a member of the item, so the re-export is no source spelling either,
+/// and the declaration displays by its package's own name.
+#[test]
+fn a_re_export_through_a_shadowed_edge_is_not_a_source_spelling() {
+    use baml_compiler2_hir_ty::render::{Unspellable, Viewpoint};
+    let mut db = view_world(&[("Entry", ReExport::Type(wire_name("app", &[], "Entry")))])
+        .expect("a faithful view mounts");
+    db.file(
+        "/hir-ty-package-interface-view/main.baml",
+        "class view { x int }\n",
+    );
+    let spelling = baml_compiler2_hir::package::spelling(&db);
+    let lib = spelling.root(&Name::new("app")).expect("app is installed");
+    let workspace = db.workspace_root().unwrap();
+    let entry = DeclName::in_root(lib, Vec::new(), Name::new("Entry"));
+    let viewpoint = Viewpoint::user_facing(&db, workspace);
+    assert_eq!(
+        viewpoint.source_path(&entry),
+        Err(Unspellable(entry.clone()))
+    );
+    assert_eq!(viewpoint.path(&entry), "app.Entry");
+}
+
 #[test]
 fn a_re_export_resolves_to_the_defining_declaration() {
     use baml_compiler2_hir_ty::{

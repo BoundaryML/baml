@@ -348,9 +348,14 @@ fn compute_function_metadata<'db>(
             .unzip()
     }
 
+    // The display fields face a host reading the package as a whole (`baml
+    // run --list`), so they are spelled from the package's root namespace —
+    // never from the declaring file's, which would mix two viewpoints in one
+    // signature. The package is the function's own: a unit cannot know who
+    // roots the program.
     let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(
         db,
-        file_package(db, func_loc.file(db)).root,
+        func_loc.file(db).source_root(db),
     );
 
     let file = func_loc.file(db);

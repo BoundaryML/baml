@@ -2728,10 +2728,7 @@ impl<'db> TirDiagnostic<'db> {
 
         RenderedTirDiagnostic {
             error: self.error.clone(),
-            message: self.error.render(&Viewpoint::user_facing(
-                db,
-                baml_compiler2_hir::file_package::file_package(db, scope_file).root,
-            )),
+            message: self.error.render(&Viewpoint::for_file(db, scope_file)),
             range: primary_range,
             severity: self.severity,
             related,

@@ -435,7 +435,7 @@ fn a_dependency_is_spelled_by_its_edge_name_not_its_own() {
 }
 
 #[test]
-fn a_transitive_dependency_is_named_by_provenance_but_not_spellable() {
+fn a_transitive_dependency_is_shown_by_its_own_name_or_its_nearest_edge_but_not_spellable() {
     let (mut db, workspace) = workspace_db();
     let leaf = db
         .add_source_root(
@@ -476,6 +476,32 @@ fn a_transitive_dependency_is_named_by_provenance_but_not_spellable() {
     );
     let m = baml_type::DeclName::in_root(mid, Vec::new(), Name::new("get"));
     assert_eq!(viewpoint.source_path(&m).as_deref(), Ok("mid.get"));
+
+    // An UNNAMED transitive dependency has no own name to show; it is shown
+    // by the name its nearest dependent reaches it by — `mid`'s edge `twig` —
+    // the one spelling a manifest actually wrote. Still not source here.
+    let twig = db
+        .add_source_root(SourceRootSpec::new(
+            "<builtin>/twig",
+            SourceRootKind::Dependency,
+        ))
+        .expect("twig root");
+    db.file("<builtin>/twig/twig.baml", "class T { y int }\n");
+    db.add_dependency(
+        mid,
+        Dependency {
+            name: Name::new("twig"),
+            root: twig,
+        },
+    )
+    .expect("edge mid -> twig");
+    let viewpoint = baml_compiler2_hir_ty::render::Viewpoint::user_facing(&db, workspace);
+    let t = baml_type::DeclName::in_root(twig, Vec::new(), Name::new("T"));
+    assert_eq!(viewpoint.path(&t), "twig.T");
+    assert_eq!(
+        viewpoint.source_path(&t),
+        Err(baml_compiler2_hir_ty::render::Unspellable(t))
+    );
 }
 
 #[test]

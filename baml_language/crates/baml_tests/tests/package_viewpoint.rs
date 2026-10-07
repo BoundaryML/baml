@@ -70,6 +70,35 @@ async fn a_root_without_files_is_still_the_program_root() {
     assert_eq!(registry, BexExternalValue::Null);
 }
 
+/// A function's display signature — what `baml run --list` and a host's
+/// function listing show — is spelled from its OWN package's root namespace:
+/// a type of that namespace bare, one of another namespace `root.`-qualified,
+/// never from the declaring file's namespace (which would leave a bare name
+/// a reader at the root cannot resolve).
+#[test]
+fn function_metadata_is_spelled_from_the_package_root() {
+    let mut db = ProjectDatabase::new();
+    let workspace = db.workspace(std::path::Path::new("/viewpoint/metadata"));
+    db.file("/viewpoint/metadata/main.baml", "class Foo { x int }\n");
+    db.file(
+        "/viewpoint/metadata/ns_util/main.baml",
+        "class Bar { y int }\nfunction make(f: root.Foo) -> Bar { Bar { y: f.x } }\n",
+    );
+    let program = compile_program(&db, workspace, OptLevel::Two).expect("compiles");
+    let make = program
+        .objects
+        .iter()
+        .find_map(|object| match object {
+            bex_vm_types::Object::Function(function) if function.name.ends_with("util.make") => {
+                Some(function)
+            }
+            _ => None,
+        })
+        .expect("`make` is pooled");
+    assert_eq!(make.display_param_types, vec!["Foo".to_string()]);
+    assert_eq!(make.display_return_type, "root.util.Bar");
+}
+
 /// The root reaches package `lib` under the edge name `gadgets`, and `lib`
 /// reaches `core`. A host names `lib` as the root does — `gadgets` — never by
 /// `lib`'s own spelling, and `core`, which the root reaches only through

@@ -9883,10 +9883,10 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// The viewpoint this body's diagnostics spell types from: its own file's
-    /// package.
+    /// The viewpoint this body's diagnostics spell types from: its own file,
+    /// so a type reads as the file's source writes it.
     fn viewpoint(&self) -> crate::render::Viewpoint<'db> {
-        crate::render::Viewpoint::user_facing(self.db, self.viewer())
+        crate::render::Viewpoint::for_file(self.db, self.owner_file)
     }
 
     /// The package this body belongs to: what its member lookups can see and
@@ -9898,26 +9898,12 @@ impl<'db> InferenceContext<'db> {
     fn qualified_interface_display(&self, iface: &baml_type::interned::InferInterface) -> String {
         let qtn = &iface.name;
         let vp = self.viewpoint();
-        // The hint is source the reader pastes, so an interface of this
-        // package is spelled the way source reaches it: its bare name from
-        // the package's root namespace when it is declared there, else its
-        // full `root.…` path — the only other spelling there is.
-        let base = if Some(qtn.root()) == vp.viewer()
-            && !(self.lower.namespace_context().is_empty() && qtn.namespace().is_empty())
-        {
-            match qtn.namespace().as_slice() {
-                [] => format!("root.{}", qtn.name()),
-                ns => format!(
-                    "root.{}.{}",
-                    ns.iter()
-                        .map(baml_type::Name::as_str)
-                        .collect::<Vec<_>>()
-                        .join("."),
-                    qtn.name()
-                ),
-            }
-        } else {
-            qtn.spell(&vp)
+        // The hint is source the reader pastes, so the interface is spelled
+        // as source in this file writes it; one the file cannot write (no
+        // edge to its package) is shown as the viewpoint displays it.
+        let base = match vp.source_path(qtn) {
+            Ok(path) => path,
+            Err(_) => qtn.spell(&vp),
         };
         if iface.generics.is_empty() {
             base

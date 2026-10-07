@@ -851,6 +851,18 @@ fn describe_reflect_type_and_intrinsic() {
     );
 }
 
+/// A standard-library method's signature is spelled as the viewer writes it
+/// (`baml.errors.Io`), not as the library's own source does (`root.errors.Io`
+/// inside `baml`).
+#[test]
+fn describe_builtin_method_signature_is_spelled_from_the_viewer() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "baml.http.Response.text");
+    assert!(output.contains("baml.errors.Io"), "{output}");
+    assert!(output.contains("baml.errors.Timeout"), "{output}");
+    assert!(!output.contains("root."), "{output}");
+}
+
 /// `baml describe ai.internal` — list items in the `ai.internal` namespace,
 /// the home of the package-private helpers and the prompt-rendering plumbing
 /// (there is deliberately no `baml.prompt` namespace).

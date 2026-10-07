@@ -1,10 +1,7 @@
-//! Test-only heads and viewpoints: roots minted in a bare salsa database, so
-//! the crate's pure unit tests (exhaustiveness, coherence, unification) can
-//! build root-headed types and spell them without a compiler database.
-//!
-//! The common spellings are created in alphabetical order, so their ids — and
-//! the canonical order of heads across packages — match the name order the
-//! tests were written against.
+//! Test-only heads and viewpoints: roots minted in a minimal compiler
+//! database, so the crate's pure unit tests (exhaustiveness, coherence,
+//! unification) can build root-headed types and spell them without a project
+//! database.
 
 use std::{
     collections::HashMap,
@@ -12,68 +9,125 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use baml_base::{LangPackage, LangRoots, Name, SourceRoot, SourceRootKind};
-use baml_compiler2_hir::package::Spelling;
+use baml_base::{LangPackage, LangRoots, Name, SourceRoot, SourceRootKind, SourceRootTable};
 use baml_type::{DeclName, Ty, unify::AliasEquivCtx};
 
 use crate::render::Viewpoint;
 
-struct World {
-    db: salsa::DatabaseImpl,
-    roots: HashMap<String, SourceRoot>,
-    /// The spelling table over `roots`, rebuilt (and leaked, so viewpoints
-    /// can be `'static`) after any root is created.
-    spelling: Option<&'static Spelling>,
+/// The smallest database the viewpoint and the package queries accept: a
+/// root table and nothing else (no stdlib installed, no seeds). Cloning
+/// yields another handle on the same storage.
+#[salsa::db]
+#[derive(Clone)]
+struct TestDb {
+    storage: salsa::Storage<Self>,
+    roots: Option<SourceRootTable>,
 }
 
-const PRELUDE: [&str; 8] = ["ai", "app", "baml", "dep", "me", "other", "reflect", "user"];
+#[salsa::db]
+impl salsa::Database for TestDb {}
 
-static WORLD: LazyLock<Mutex<World>> = LazyLock::new(|| {
-    let mut world = World {
-        db: salsa::DatabaseImpl::default(),
-        roots: HashMap::new(),
-        spelling: None,
-    };
-    for package in PRELUDE {
-        create(&mut world, package);
+#[salsa::db]
+impl baml_compiler2_hir::Db for TestDb {
+    fn source_roots(&self) -> SourceRootTable {
+        self.roots.expect("table present from construction")
     }
-    Mutex::new(world)
+}
+
+struct World {
+    /// A database handle is not `Sync` (its query stack is thread-local), so
+    /// the shared one lives behind a lock and each test thread works on a
+    /// clone ([`db`]). Nothing is ever mutated after construction.
+    db: Mutex<TestDb>,
+    roots: HashMap<&'static str, SourceRoot>,
+}
+
+/// Every package a test may spell. The world is built once and never
+/// mutated afterwards, so viewpoints can borrow its database for `'static`;
+/// a test naming a package outside this list is told to add it here.
+const PACKAGES: [&str; 22] = [
+    "ai",
+    "anthropic",
+    "app",
+    "argpkg",
+    "assert",
+    "aws",
+    "baml",
+    "claude_code",
+    "dep",
+    "google",
+    "ifacepkg",
+    "log",
+    "me",
+    "openai",
+    "other",
+    "pinpkg",
+    "reflect",
+    "testing",
+    "trace",
+    "typesafeai",
+    "user",
+    "vercel",
+];
+
+static WORLD: LazyLock<World> = LazyLock::new(|| {
+    let mut db = TestDb {
+        storage: salsa::Storage::default(),
+        roots: None,
+    };
+    let mut roots = HashMap::new();
+    let mut table = Vec::new();
+    // Created in the list's alphabetical order, so root ids — and the canonical
+    // order of heads across packages — match the name order the tests were
+    // written against.
+    for package in PACKAGES {
+        let unnamed = package == "user";
+        let root = SourceRoot::new(
+            &db,
+            PathBuf::from(format!("<test>/{package}")),
+            if unnamed {
+                SourceRootKind::Workspace
+            } else {
+                SourceRootKind::Stdlib
+            },
+            (!unnamed).then(|| Name::new(package)),
+            Vec::new(),
+            None,
+            Vec::new(),
+        );
+        roots.insert(package, root);
+        table.push(root);
+    }
+    db.roots = Some(SourceRootTable::new(&db, table));
+    World {
+        db: Mutex::new(db),
+        roots,
+    }
 });
 
-fn create(world: &mut World, package: &str) -> SourceRoot {
-    let World {
-        db,
-        roots,
-        spelling,
-    } = world;
-    *spelling = None;
-    let unnamed = package == "user";
-    let root = SourceRoot::new(
-        db,
-        PathBuf::from(format!("<test>/{package}")),
-        if unnamed {
-            SourceRootKind::Workspace
-        } else {
-            SourceRootKind::Stdlib
-        },
-        (!unnamed).then(|| Name::new(package)),
-        Vec::new(),
-        None,
-        Vec::new(),
-    );
-    roots.insert(package.to_string(), root);
-    root
+thread_local! {
+    /// This thread's handle on the world's database, leaked so a viewpoint
+    /// over it can be `'static` (one handle per test thread, for the life of
+    /// the test process).
+    static DB: &'static TestDb = Box::leak(Box::new(
+        WORLD
+            .db
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone(),
+    ));
 }
 
-/// The test root spelled `package`, created on first use.
+/// This thread's handle on the test database.
+fn db() -> &'static TestDb {
+    DB.with(|db| *db)
+}
+
+/// The test root spelled `package`.
 pub(crate) fn root(package: &str) -> SourceRoot {
-    let mut world = WORLD
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(root) = world.roots.get(package) {
-        return *root;
-    }
-    create(&mut world, package)
+    WORLD.roots.get(package).copied().unwrap_or_else(|| {
+        panic!("test package `{package}` is not in `test_heads::PACKAGES`; add it there")
+    })
 }
 
 /// The shape of the wire constructor `QualifiedTypeName::new(pkg, ns, name)`.
@@ -124,28 +178,8 @@ pub(crate) fn no_aliases() -> AliasEquivCtx<'static> {
     alias_ctx(&*NO_ALIASES)
 }
 
-/// The spelling table over every test root created so far.
-pub(crate) fn spelling() -> &'static Spelling {
-    let mut world = WORLD
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(spelling) = world.spelling {
-        return spelling;
-    }
-    let mut pairs: Vec<(SourceRoot, Name)> = world
-        .roots
-        .iter()
-        .map(|(name, root)| (*root, Name::new(name)))
-        .collect();
-    pairs.sort();
-    let spelling: &'static Spelling = Box::leak(Box::new(Spelling::from_pairs(pairs)));
-    world.spelling = Some(spelling);
-    spelling
-}
-
 /// The viewpoint diagnostics render from: user-facing for the nameless
 /// workspace root (its own items bare, every other package spelled).
 pub(crate) fn viewpoint() -> Viewpoint<'static> {
-    let viewer = root("user");
-    Viewpoint::over(spelling(), Some(viewer))
+    Viewpoint::user_facing(db(), root("user"))
 }
