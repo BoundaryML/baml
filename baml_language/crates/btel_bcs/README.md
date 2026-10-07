@@ -26,7 +26,7 @@ from the engine level: the former engine-level spelling `auto` is replaced by
 
 `baml run`, `baml test`, and native SDK runtimes select cloud recording from
 `BOUNDARY_API_KEY` or a saved `baml auth login` session. `BOUNDARY_API_URL`
-overrides `[boundary].api_url` and defaults to `https://api.cloud.boundaryml.com`.
+overrides `[boundary].api_url` and defaults to `https://api.prod.bcs.boundaryml.com`.
 User sessions write to the user's personal environment; API keys enforce their
 provisioned ingestion scope. `BOUNDARY_PROJECT` overrides `[boundary].project`.
 
