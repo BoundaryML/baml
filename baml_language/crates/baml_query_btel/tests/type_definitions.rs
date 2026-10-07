@@ -1,11 +1,10 @@
-//! The A/B contract for recorded type definitions (see
-//! `baml_language/docs/dyn-type-definitions/SPEC.md`).
+//! Recorded class and enum definitions, as `baml query` renders them.
 //!
 //! Every class or enum a captured value names carries a definition id, and
 //! each rendered cell includes a definition the first time it names it.
-//! Both implementations must pass these tests unchanged. Definition ids are
-//! opaque: the assertions rename them `d0`, `d1`, … in order of first
-//! appearance within a cell, and compare raw ids only for identity.
+//! Definition ids are opaque: the assertions rename them `d0`, `d1`, … in
+//! order of first appearance within a cell, and compare raw ids only for
+//! identity.
 
 mod support;
 

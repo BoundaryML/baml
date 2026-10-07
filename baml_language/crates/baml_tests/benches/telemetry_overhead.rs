@@ -1,5 +1,4 @@
-//! Telemetry overhead per call, for the type-definition A/B comparison
-//! (`baml_language/docs/dyn-type-definitions/SPEC.md`).
+//! Telemetry overhead per call.
 //! Run with: cargo bench -p baml_tests --bench telemetry_overhead
 //!
 //! Each scenario's `main` makes `CALLS` calls in a loop; every scenario runs
@@ -167,8 +166,9 @@ function main() -> int {{
     )
 );
 
-// 6. A new runtime class on every call: every call is a first sighting.
-// B's worst case. Building the class costs the same with telemetry off.
+// 6. A new runtime class on every call: every call is a first sighting, so
+// each makes the class's definition. Building the class costs the same with
+// telemetry off.
 scenario!(
     new_runtime_class_each_call,
     &format!(
@@ -189,8 +189,7 @@ function main() -> int {{
     )
 );
 
-// 7. Runtime classes collected soon after use, under collection pressure:
-// A's worst case (definitions pending while their classes are collected).
+// 7. Runtime classes collected soon after use, under collection pressure.
 scenario!(
     runtime_classes_under_collection,
     &format!(
