@@ -17,6 +17,10 @@ import {
   call_repeatedly_async,
   call_returned_callback_async,
   call_returned_callback_in_list_async,
+  call_throwing_void_callback_async,
+  call_void_callback_async,
+  call_void_callback_three_args_async,
+  call_void_callback_two_args_async,
   call_with_callback,
   call_with_callback_async,
   call_with_class_callback_async,
@@ -28,6 +32,8 @@ import {
   make_adder,
   make_counter,
   make_pair_builder,
+  make_void_callback,
+  make_void_forwarder_async,
 } from "./baml_sdk/host_callable_tests/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
@@ -88,6 +94,53 @@ describe("function_calls — generated SDK host callables", () => {
     const nextValue = make_counter(40);
     expect(nextValue()).toBe(41);
     expect(nextValue()).toBe(42);
+  });
+
+  // A unit callable has no result to carry in either direction: a host
+  // callback returns `null` whatever its arity, and calling a BAML closure
+  // returned to the host yields `null`.
+  it("host_callable_void_signatures", async () => {
+    const seen: unknown[][] = [];
+    const one = (value: number) => {
+      seen.push([value]);
+      return null;
+    };
+    const two = (value: number, label: string) => {
+      seen.push([value, label]);
+      return null;
+    };
+    const three = (value: number, label: string, flag: boolean) => {
+      seen.push([value, label, flag]);
+      return null;
+    };
+
+    await expect(call_void_callback_async(one, 1)).resolves.toBe(1);
+    await expect(call_void_callback_two_args_async(two, 2, "two")).resolves.toBe(2);
+    await expect(
+      call_void_callback_three_args_async(three, 3, "three", true),
+    ).resolves.toBe(3);
+
+    await expect(call_throwing_void_callback_async(one, 4)).resolves.toBeNull();
+    const thrown = new Error("void failed");
+    const failing = (_value: number): null => {
+      throw thrown;
+    };
+    await expect(call_throwing_void_callback_async(failing, 4)).rejects.toBe(thrown);
+
+    expect(make_void_callback()()).toBeNull();
+
+    const forward = await make_void_forwarder_async(two);
+    await expect(forward.callAsync(5, "five")).resolves.toBeNull();
+    await expect(forward.callAsync(6, "six")).resolves.toBeNull();
+
+    expect(seen).toEqual([
+      [1],
+      [2, "two"],
+      [3, "three", true],
+      [4],
+      [5, "five"],
+      [6, "six"],
+    ]);
   });
 
   it("host_callables_surfaces_a_throwing_callback_as_a_baml_error", async () => {

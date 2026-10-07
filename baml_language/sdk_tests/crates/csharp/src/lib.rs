@@ -142,6 +142,7 @@ mod tests {
             "baml_closure_is_a_native_callable_with_host_language_arguments=ok",
             "baml_closure_decodes_multiple_args_and_structured_return_values=ok",
             "baml_closure_is_reusable_and_retains_mutable_captures=ok",
+            "host_callable_void_signatures=ok",
         ] {
             assert_stdout_contains(&output, marker);
         }

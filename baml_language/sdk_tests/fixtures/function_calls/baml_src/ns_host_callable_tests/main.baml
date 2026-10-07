@@ -188,6 +188,23 @@ function call_throwing_void_callback(
     callback(value)
 }
 
+// A unit callback takes its arguments positionally like any other, whatever
+// its arity and whichever of `void` and `null` spells its return type.
+function call_void_callback_two_args(callback: (int, string) -> void, value: int, label: string) -> int {
+    callback(value, label)
+    value
+}
+
+function call_void_callback_three_args(
+    callback: (int, string, bool) -> null,
+    value: int,
+    label: string,
+    flag: bool,
+) -> int {
+    callback(value, label, flag)
+    value
+}
+
 function propagate_throwing_callback(
     callback: (int) -> string throws baml.errors.HostCallable,
     value: int,
@@ -222,6 +239,22 @@ function make_counter(start: int) -> () -> int throws never {
     return () -> int {
         current += 1;
         current
+    }
+}
+
+// A returned closure with no value: the host's call completes with nothing to
+// read back.
+function make_void_callback() -> () -> void throws never {
+    return () -> void {}
+}
+
+// The retained host callback is the only observer of the returned closure's
+// arguments.
+function make_void_forwarder(
+    callback: (int, string) -> void throws baml.errors.HostCallable,
+) -> (value: int, label: string) -> void throws baml.errors.HostCallable {
+    return (value: int, label: string) -> void throws baml.errors.HostCallable {
+        callback(value, label)
     }
 }
 

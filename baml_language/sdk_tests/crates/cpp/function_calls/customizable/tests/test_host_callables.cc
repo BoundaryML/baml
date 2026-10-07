@@ -67,6 +67,54 @@ BAML_TEST(baml_closure_is_reusable_and_retains_mutable_captures) {
   BAML_ASSERT_EQ(next_value(), int64_t{42});
 }
 
+BAML_TEST(host_callable_void_signatures) {
+  // A unit callable has no result to carry in either direction: a host
+  // callback is a void std::function whatever its arity, and so is a BAML
+  // closure returned to the host.
+  std::vector<std::string> seen;
+
+  BAML_ASSERT_EQ(
+      baml_sdk::host_callable_tests::call_void_callback(
+          [&seen](int64_t value) { seen.push_back(std::to_string(value)); }, 1),
+      int64_t{1});
+  const auto two = [&seen](int64_t value, std::string label) {
+    seen.push_back(std::to_string(value) + ":" + label);
+  };
+  BAML_ASSERT_EQ(
+      baml_sdk::host_callable_tests::call_void_callback_two_args(two, 2, "two"),
+      int64_t{2});
+  BAML_ASSERT_EQ(baml_sdk::host_callable_tests::call_void_callback_three_args(
+                     [&seen](int64_t value, std::string label, bool flag) {
+                       seen.push_back(std::to_string(value) + ":" + label +
+                                      ":" + (flag ? "true" : "false"));
+                     },
+                     3, "three", true),
+                 int64_t{3});
+
+  baml_sdk::host_callable_tests::call_throwing_void_callback(
+      [&seen](int64_t value) { seen.push_back(std::to_string(value)); }, 4);
+  bool threw = false;
+  try {
+    baml_sdk::host_callable_tests::call_throwing_void_callback(
+        [](int64_t) { throw std::runtime_error("void failed"); }, 4);
+    baml_test::fail("call_throwing_void_callback did not throw");
+  } catch (const std::runtime_error& e) {
+    threw = true;
+    BAML_ASSERT_EQ(std::string(e.what()), std::string("void failed"));
+  }
+  BAML_ASSERT(threw);
+
+  const auto nothing = baml_sdk::host_callable_tests::make_void_callback();
+  nothing();
+
+  const auto forward = baml_sdk::host_callable_tests::make_void_forwarder(two);
+  forward(5, "five");
+  forward(6, "six");
+
+  BAML_ASSERT((seen == std::vector<std::string>{"1", "2:two", "3:three:true",
+                                                "4", "5:five", "6:six"}));
+}
+
 BAML_TEST(
     host_callables_throwing_callable_round_trips_original_host_exception) {
   // A native C++ exception thrown inside a host callable surfaces back to
