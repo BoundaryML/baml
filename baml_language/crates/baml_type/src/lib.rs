@@ -164,40 +164,9 @@ pub fn contains_ty_where<N: Clone>(ty: &Ty<N>, pred: &dyn Fn(&Ty<N>) -> bool) ->
     if pred(ty) {
         return true;
     }
-
-    match ty {
-        Ty::AssociatedTypeProjection {
-            base, interface, ..
-        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
-        Ty::List(inner) => contains_ty_where(inner, pred),
-        Ty::Map {
-            key: k, value: v, ..
-        } => contains_ty_where(k, pred) || contains_ty_where(v, pred),
-        Ty::Union(tys) => tys.iter().any(|t| contains_ty_where(t, pred)),
-        Ty::Future(value, error) => {
-            contains_ty_where(value, pred) || contains_ty_where(error, pred)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|param| contains_ty_where(&param.ty, pred))
-                || contains_ty_where(ret, pred)
-                || contains_ty_where(throws, pred)
-        }
-        Ty::Class(_, type_args) => type_args.iter().any(|t| contains_ty_where(t, pred)),
-        Ty::Interface(_, type_args, associated_bindings) => {
-            type_args.iter().any(|t| contains_ty_where(t, pred))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_ty_where(ty, pred))
-        }
-        _ => false,
-    }
+    let mut found = false;
+    ty.visit_children(&mut |child| found = found || contains_ty_where(child, pred));
+    found
 }
 
 /// Does `ty` carry `Ty::Error` or `Ty::Unknown` anywhere in its structure?
