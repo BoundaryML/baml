@@ -182,6 +182,17 @@ pub enum LoweringDiagnostic {
     /// only fails at runtime.
     AssignmentInExpressionPosition { span: TextRange },
 
+    /// The left-hand side of an assignment (`=`, `+=`, …) is not a place:
+    /// e.g. `[x, y] = [1, 2]` or `P { a: a } = mk()`. BAML has no
+    /// destructuring assignment, and without this diagnostic the store went
+    /// into a temporary and the statement silently did nothing.
+    /// `suggestion` is the closest valid `let` destructure when the target is
+    /// a class or array literal of plain names.
+    InvalidAssignmentTarget {
+        span: TextRange,
+        suggestion: Option<String>,
+    },
+
     /// Parser recovery produced an object-literal node without a constructor
     /// identifier. The AST cannot represent a constructor-less object, so the
     /// expression lowers to `Missing` and this diagnostic preserves the error.
@@ -637,6 +648,22 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "assignment not allowed here",
+            ),
+            LoweringDiagnostic::InvalidAssignmentTarget { span, suggestion } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                match suggestion {
+                    Some(suggestion) => format!(
+                        "invalid assignment target; a pattern cannot be assigned into. \
+                         To destructure into new bindings (rebinding any that already \
+                         exist), write `{suggestion}`"
+                    ),
+                    None => "invalid assignment target; only a variable, a field, or an \
+                             index can be assigned to"
+                        .to_string(),
+                },
+                *span,
+                "cannot assign to this expression",
             ),
             LoweringDiagnostic::MissingObjectConstructor { span } => (
                 DiagnosticId::InvalidSyntax,
