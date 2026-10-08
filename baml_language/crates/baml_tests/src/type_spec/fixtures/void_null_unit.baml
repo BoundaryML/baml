@@ -1,16 +1,14 @@
-// Ruling 1 (S15): void and null are the same unit type (interim).
+// `void` is another spelling of `null`, the unit type (BEP-079).
 //
-// Until tuple types give `void` a home as the empty tuple, `void` and
-// `null` are mutually-subtyping spellings of the unit type (TIR's
-// behavior; kills the 2,680 void-vs-null error-channel entries).
-// Implemented leaf-side in hir_ty's subtype discharge; renders keep
-// the written spelling.
+// One type, not two mutually-assignable ones: `void` lowers to `null`
+// wherever it is written, so it is valid in every type position and
+// renders as `null`.
 function g() -> void throws never {
     null
 }
 
 function f() -> int throws never {
     let v: void = null;
-     // ^ void
+     // ^ null
     0
 }

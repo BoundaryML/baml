@@ -10,9 +10,9 @@
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_sdk.primitives.Fns;
@@ -51,7 +51,7 @@ class TestPrimitives {
 
     @Test
     void test_primitives_return_null() {
-        assertNull(Fns.return_null());
+        assertDoesNotThrow(() -> Fns.return_null());
     }
 
     @Test
@@ -101,7 +101,7 @@ class TestPrimitives {
 
     @Test
     void test_primitives_round_trip_null() {
-        assertNull(Fns.round_trip_null(null));
+        assertDoesNotThrow(() -> Fns.round_trip_null(null));
     }
 
     @Test

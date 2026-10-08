@@ -249,7 +249,6 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::MetaType(_) => RuntimeTy::Type,
         TyVariant::Resource(_) => RuntimeTy::Resource,
         TyVariant::PromptAst(_) => RuntimeTy::PromptAst,
-        TyVariant::Void(_) => RuntimeTy::Void,
         TyVariant::TypeVar(v) => RuntimeTy::TypeVar(ParamTy::new(v.index, Name::new(&v.name))),
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),

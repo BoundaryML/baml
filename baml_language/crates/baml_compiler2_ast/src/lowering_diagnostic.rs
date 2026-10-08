@@ -133,9 +133,6 @@ pub enum LoweringDiagnostic {
     /// A `${}` interpolation with no expression inside.
     EmptyInterpolation { span: TextRange },
 
-    /// `void` was used outside of a function return type position.
-    VoidInNonReturnPosition { context: String, span: TextRange },
-
     /// The `_` wildcard type was used in a position where it cannot be inferred
     /// (a signature, field, or alias type, as opposed to a `let` binding
     /// annotation or a `throws`-clause member).
@@ -555,13 +552,6 @@ impl LoweringDiagnostic {
                 "empty interpolation ${} has no expression".to_string(),
                 *span,
                 "expected an expression inside ${…}",
-            ),
-            LoweringDiagnostic::VoidInNonReturnPosition { context, span } => (
-                DiagnosticId::VoidInNonReturnPosition,
-                Severity::Error,
-                format!("`void` can only be used as a function return type, not as {context}"),
-                *span,
-                "`void` not allowed here",
             ),
             LoweringDiagnostic::WildcardTypeNotAllowed { context, span } => (
                 DiagnosticId::WildcardTypeNotAllowed,

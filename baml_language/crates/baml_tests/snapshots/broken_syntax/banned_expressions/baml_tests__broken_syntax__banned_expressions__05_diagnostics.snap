@@ -11,14 +11,14 @@ source: crates/baml_tests/src/generated_tests.rs
    ·            ╰── expected `expression`, found `let`
    ╰────
 
-  [type] E0001
+  [type] E0029
 
-  × mismatched types
+  × missing value
     ╭─[banned_expressions.baml:8:23]
   8 │ ╭─▶ function Bar() -> int {
   9 │ │     let b = 42
  10 │ ├─▶ }
-    · ╰──── expected `int`, found `void`
+    · ╰──── expected `int`, but this block ends without a value
     ╰────
 
   [hir] E0010

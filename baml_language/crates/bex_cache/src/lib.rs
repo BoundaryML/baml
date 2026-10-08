@@ -177,7 +177,14 @@ use sha2::{Digest, Sha256};
 /// `callable_throws` fragments from their file's; a dependency table is a
 /// list of `Locator`s; and the executable is laid out package-major in
 /// link-set order.
-pub const FORMAT_VERSION: u32 = 18;
+///
+/// Version 19: BEP-079's unit type. `void` is a spelling of `null`, so
+/// `DiagnosticId` lost `VoidInNonReturnPosition` (E0110) from the middle of
+/// the enum, which renumbers the Borsh discriminant of every diagnostic id
+/// declared after it in the manifest's per-file diagnostics rows. The type
+/// family lost `Void` (Borsh discriminant 22, now reserved) with it: a
+/// cached unit carrying the retired discriminant no longer decodes.
+pub const FORMAT_VERSION: u32 = 19;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use baml_compiler2_ast::{AstSourceMap, BuiltinKind, ExprBody, FunctionBodyDef};
+use baml_compiler2_ast::{AstSourceMap, BuiltinKind, Expr, ExprBody, FunctionBodyDef};
 
 use crate::loc::{FunctionLoc, LetLoc};
 
@@ -22,6 +22,26 @@ pub enum FunctionBody {
     Builtin(BuiltinKind),
     /// Body was omitted or could not be parsed.
     Missing,
+}
+
+impl FunctionBody {
+    /// Whether the body ends in a final expression, the value it evaluates
+    /// to. A body that ends in a statement has none, and neither has a
+    /// function with no expression body at all.
+    pub fn has_final_expr(&self) -> bool {
+        match self {
+            FunctionBody::Expr(body) => body.root_expr.is_some_and(|root| {
+                matches!(
+                    body.exprs[root],
+                    Expr::Block {
+                        tail_expr: Some(_),
+                        ..
+                    }
+                )
+            }),
+            FunctionBody::Builtin(_) | FunctionBody::Missing => false,
+        }
+    }
 }
 
 /// Salsa query: semantic function body (no source map).

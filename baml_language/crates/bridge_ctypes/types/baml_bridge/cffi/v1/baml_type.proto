@@ -15,6 +15,9 @@ option optimize_for = LITE_RUNTIME;
 // to represent the type of anything that can be inspected in BAML, including
 // the type of a function's arg (which, for a generic function, is a TypeVar).
 message BamlTy {
+  // Formerly `void`: the unit type is the `null` primitive.
+  reserved 20;
+  reserved "void";
   oneof ty {
     BamlTyPrimitive primitive = 1;
     // `class_ty` (not `class`) — `class` is a reserved word in Python, where
@@ -40,7 +43,6 @@ message BamlTy {
     BamlTyMetaType meta_type = 17;
     BamlTyResource resource = 18;
     BamlTyPromptAst prompt_ast = 19;
-    BamlTyVoid void = 20;
     BamlTyTypeVar type_var = 22;
     BamlTyAssociatedTypeProjection associated_type_projection = 23;
     BamlTyNever never = 24;
@@ -255,9 +257,6 @@ message BamlTyResource {}
 
 // Opaque structured prompt tree for LLM calls (`RuntimeTy::PromptAst`).
 message BamlTyPromptAst {}
-
-// The void type — the type of effectful expressions (`RuntimeTy::Void`).
-message BamlTyVoid {}
 
 // A type variable / generic parameter such as `T` in `Array<T>`
 // (`RuntimeTy::TypeVar`).

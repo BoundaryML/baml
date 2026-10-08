@@ -86,9 +86,9 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         Ty::Float => Ok(quote! { ::core::primitive::f64 }),
         Ty::String => Ok(quote! { ::std::string::String }),
         Ty::Bool => Ok(quote! { ::core::primitive::bool }),
-        // BAML `null` (as a type) and `void` both surface as unit: null
-        // rides the wire as an absent value, a void function returns null.
-        Ty::Null | Ty::Void => Ok(quote! { () }),
+        // BAML's unit type (`null`, also spelled `void`) surfaces as Rust's:
+        // null rides the wire as an absent value.
+        Ty::Null => Ok(quote! { () }),
         // Rust cannot refine value-level literals in types; a literal type
         // widens to its base primitive (the same widening TS applies going
         // from `Literal[42]`-style types to `number`).
@@ -455,7 +455,6 @@ mod tests {
     fn primitives() {
         assert_eq!(rendered(&Ty::Int), ":: core :: primitive :: i64");
         assert_eq!(rendered(&Ty::String), ":: std :: string :: String");
-        assert_eq!(rendered(&Ty::Void), "()");
         assert_eq!(rendered(&Ty::Null), "()");
         assert_eq!(rendered(&Ty::Bigint), ":: baml_bridge :: BigInt");
         assert_eq!(

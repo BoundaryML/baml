@@ -140,24 +140,7 @@ impl<'db> InferenceContext<'db> {
                 let (_, guard_facts) = self.check_condition(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }
-            // A hard branch expectation CHECKS each arm (rustc coerces
-            // every arm to the expectation): a failing arm reports at
-            // ITSELF - and recovers as the expectation, so the join does
-            // not re-report the same mismatch on the whole match. A
-            // passing arm keeps its ACTUAL type (literal grain survives
-            // the join).
-            let arm_ty = match branch_expectation.only_has_type() {
-                Some(expected_ty) => {
-                    let expected_ty = expected_ty.clone();
-                    let actual = self.check_expr(body, arm.body, &expected_ty);
-                    if self.result.type_mismatches.contains_key(&arm.body) {
-                        expected_ty
-                    } else {
-                        actual
-                    }
-                }
-                None => self.infer_expr(body, arm.body, &branch_expectation),
-            };
+            let arm_ty = self.infer_branch(body, arm.body, &branch_expectation);
             all_diverge = all_diverge.and(self.diverges);
             self.flow = saved_flow;
             arm_tys.push(arm_ty);
@@ -170,6 +153,12 @@ impl<'db> InferenceContext<'db> {
             }
         }
         self.diverges = entry_diverges.or(all_diverge);
+        let parts = arms
+            .iter()
+            .zip(&arm_tys)
+            .map(|(&arm, ty)| (ty.clone(), self.take_units(body.match_arms[arm].body)))
+            .collect();
+        let units = self.join_units(parts, expected);
         // An unknown-FIELD in some arm's class pattern makes that arm's
         // matrix row a lie (the bad field dropped out), so usefulness
         // verdicts are noise - same suppression as an errored pattern.
@@ -217,6 +206,9 @@ impl<'db> InferenceContext<'db> {
                 });
             self.result.non_exhaustive_matches.insert(match_expr);
             return Ty::error();
+        }
+        if !units.is_empty() {
+            self.unjudged_units.insert(match_expr, units);
         }
         self.join(&arm_tys)
     }

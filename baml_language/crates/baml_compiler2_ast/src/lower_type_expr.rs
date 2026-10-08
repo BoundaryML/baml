@@ -452,7 +452,9 @@ fn lower_from_type_name_with_generic_args(
                 },
             },
             AliasTarget::Never => TypeExprKind::Never,
-            AliasTarget::Void => TypeExprKind::Void,
+            // `void` is the unit type's second spelling: it denotes `null` in
+            // every position, so it lowers to the very same node.
+            AliasTarget::Void => TypeExprKind::Null,
             AliasTarget::Unknown => TypeExprKind::Unknown,
             AliasTarget::Type => TypeExprKind::Type,
             AliasTarget::Map => {
@@ -482,77 +484,6 @@ fn lower_from_type_name_with_generic_args(
         }
     };
     kind.at(span)
-}
-
-/// Recursively check that `void` does not appear in a non-return-type position.
-///
-/// `void` is only valid as the *bare* return type of a function. It must not
-/// appear in parameter types, field types, union members, list/optional
-/// wrappers, or function-type parameter positions. When `void` IS used as the
-/// return type of a `TypeExprKind::Function`, it is exempt.
-///
-/// Set `allow_root_void = true` when calling on a function return-type annotation
-/// to permit a bare `-> void` while still rejecting `-> void?` or `-> void[]`.
-///
-/// Emits `VoidInNonReturnPosition` for every invalid occurrence.
-pub(crate) fn check_void_type(
-    type_expr: &TypeExpr,
-    context: String,
-    span: TextRange,
-    allow_root_void: bool,
-    diags: &mut Vec<LoweringDiagnostic>,
-) {
-    match &type_expr.kind {
-        TypeExprKind::Void if !allow_root_void => {
-            diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
-        }
-        TypeExprKind::Void => {}
-        TypeExprKind::Optional { inner, .. } => {
-            // Once inside a wrapper, void is never allowed (even in return position).
-            check_void_type(
-                inner,
-                "an optional type (`void?`)".to_string(),
-                span,
-                false,
-                diags,
-            );
-        }
-        TypeExprKind::List { inner, .. } => {
-            check_void_type(
-                inner,
-                "a list type (`void[]`)".to_string(),
-                span,
-                false,
-                diags,
-            );
-        }
-        TypeExprKind::Map { key, value, .. } => {
-            check_void_type(key, "a map key type".to_string(), span, false, diags);
-            check_void_type(value, "a map value type".to_string(), span, false, diags);
-        }
-        TypeExprKind::Union { variants, .. } => {
-            for v in variants {
-                check_void_type(v, "a union member".to_string(), span, false, diags);
-            }
-        }
-        TypeExprKind::Function {
-            params,
-            ret: _,
-            throws,
-            ..
-        } => {
-            // ret is exempt — void IS allowed as function-type return type.
-            // But void in param types is not allowed.
-            for p in params {
-                check_void_type(&p.ty, context.clone(), span, false, diags);
-            }
-            if let Some(throws) = throws {
-                check_void_type(throws, "a throws type".to_string(), span, false, diags);
-            }
-        }
-        // All other variants (primitives, path, etc.) cannot contain void.
-        _ => {}
-    }
 }
 
 /// Validate `_` placement in a `throws` clause, neutralizing illegal holes.

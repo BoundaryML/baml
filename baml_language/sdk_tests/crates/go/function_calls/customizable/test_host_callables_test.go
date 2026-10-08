@@ -495,6 +495,59 @@ func Test_host_callable_void_signatures(t *testing.T) {
 	}, 1); err == nil {
 		t.Fatal("panicking void callback unexpectedly succeeded")
 	}
+
+	ctx := context.Background()
+	var mu sync.Mutex
+	var calls []string
+	record := func(call string) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, call)
+	}
+	got, err = baml_sdk.HostCallableTestsCallVoidCallbackTwoArgs(ctx, func(_ context.Context, value int64, label string) {
+		record(fmt.Sprintf("%d:%s", value, label))
+	}, 2, "two")
+	if err != nil || got != 2 {
+		t.Fatalf("two-argument void callback = %d, error %v", got, err)
+	}
+	got, err = baml_sdk.HostCallableTestsCallVoidCallbackThreeArgs(ctx, func(_ context.Context, value int64, label string, flag bool) {
+		record(fmt.Sprintf("%d:%s:%t", value, label, flag))
+	}, 3, "three", true)
+	if err != nil || got != 3 {
+		t.Fatalf("three-argument void callback = %d, error %v", got, err)
+	}
+
+	nothing, err := baml_sdk.HostCallableTestsMakeVoidCallback(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nothing.Call(ctx)
+
+	forward, err := baml_sdk.HostCallableTestsMakeVoidForwarder(ctx, func(_ context.Context, value int64, label string) error {
+		if value < 0 {
+			return errors.New("void failed")
+		}
+		record(fmt.Sprintf("%d:%s", value, label))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := forward.Call(ctx, 5, "five"); err != nil {
+		t.Fatalf("forward(5, five) = %v", err)
+	}
+	if err := forward.Call(ctx, -1, "negative"); err == nil {
+		t.Fatal("forward(-1, negative) unexpectedly succeeded")
+	}
+	if err := forward.Call(ctx, 6, "six"); err != nil {
+		t.Fatalf("forward(6, six) = %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"2:two", "3:three:true", "5:five", "6:six"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("void callbacks saw %v, want %v", calls, want)
+	}
 }
 
 func Test_nil_host_callable_fails_before_dispatch(t *testing.T) {

@@ -31,7 +31,7 @@ mapping was cross-checked against real generated output under
   `BamlFfi.callSync/callAsync` (last positional arg) and that `registerClass` carries per field —
   a typed `baml_bridge.BamlType` **data structure** (not a string), produced by `descriptor_expr`
   (translate_ty.rs) as a builder expression. A wholly wire-driven type (bigint / uint8array / null /
-  void / media / callable / handle / the `unknown`-family) passes the literal **`null`** (decode
+  media / callable / handle / the `unknown`-family) passes the literal **`null`** (decode
   wire-driven); a `TypeVar` passes `BamlType.typeVar("T")` and the union-with-a-TypeVar-arm case
   passes `null`.
 - `> ⚠ **Deviation from Python:** …` flags every divergence from the Python bridge.
@@ -141,7 +141,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::Primitive(Float)` | `Ty::Float` | `score float` | `double` | `java.lang.Double` | `BamlType.FLOAT` | :87 |
 | `Ty::Primitive(String)` | `Ty::String` | `name string` | `java.lang.String` | `java.lang.String` | `BamlType.STRING` | :88 |
 | `Ty::Primitive(Bool)` | `Ty::Bool` | `active bool` | `boolean` | `java.lang.Boolean` | `BamlType.BOOL` | :89 |
-| `Ty::Primitive(Null)` | `Ty::Null` | `null` in a union | `java.lang.Void` | `java.lang.Void` | `null` (wire-driven) | :91 |
+| `Ty::Primitive(Null)` | `Ty::Null` | `null` in a union | `java.lang.Void`; as a function return (`-> null` / `-> void`, the unit type) the method is `void`, and as a callback return the shape is `Runnable`/`Consumer`/`BiConsumer` | `java.lang.Void` | `null` (wire-driven) | :91 |
 | `Ty::Primitive(Uint8Array)` | `Ty::Uint8Array` | `data uint8array` | `byte[]` | `byte[]` | `null` (wire-driven) | :100 |
 | `Ty::Primitive(Image)` | `Ty::Media(Image)` | `photo image` | `baml_sdk.baml.media.Image` | (same) | `null` (wire-driven) | :102 |
 | `Ty::Primitive(Audio)` | `Ty::Media(Audio)` | `clip audio` | `baml_sdk.baml.media.Audio` | (same) | `null` (wire-driven) | :103 |
@@ -164,7 +164,6 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `BamlType.union(a, b, …)` ordered | :146, :198–233 |
 | `Ty::Unknown { … }` | `Ty::Unknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
 | `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → generated `@FunctionalInterface` (`IntOptCallback` shape, landed `202883518`) | (same) | `null` (wire-driven) | :148, :407–435 |
-| `Ty::Void { … }` | `Ty::Void` (Python calls it `Ty::Unit`) | `-> void` | `void` | `java.lang.Void` | `null` (wire-driven) | :149–152 |
 | no direct TIR variant | `Ty::BamlOptions` (Python-only) | generated function options plumbing | — no CodegenTy variant; options ride the trailing configurator overload | — | — | n/a |
 | `Ty::RustType { … }` | `Ty::RustType` | opaque builtin state | `baml_bridge.BamlHandle` | (same) | `null` (wire-driven) | :153 |
 | `Ty::Type { … }` | `Ty::Type` | `type` metatype keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
@@ -348,7 +347,7 @@ Notes:
   `BamlType.classByFqn("<baml fqn>")` (registry resolves the kind); `BamlType.list(D)`;
   `BamlType.map(BamlType.STRING, D)`; ordered union `BamlType.union(D, D, …)`; a literal
   `BamlType.literalString("…")` / `literalInt(…L)` / …; a type var `BamlType.typeVar("<name>")`.
-  Everything wire-driven (bigint / uint8array / null / void / media / callable / handle / the
+  Everything wire-driven (bigint / uint8array / null / media / callable / handle / the
   `unknown`-family) passes the literal `null`. Decode without a descriptor, or on any
   descriptor/value mismatch that has a self-describing wire form, falls back to the wire-driven path
   (error/panic values are always wire-driven).

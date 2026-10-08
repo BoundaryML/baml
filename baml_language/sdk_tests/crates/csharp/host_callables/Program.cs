@@ -53,6 +53,33 @@ Require(
     "zero-argument synchronous value or void callback changed");
 await RequireDispatchIdleAfterCompletion("synchronous void and zero-argument callbacks");
 
+var voidCalls = new List<string>();
+long twoArgumentVoidResult = Functions.CallVoidCallbackTwoArgs(
+    BamlCallback.FromSync<long, string>(
+        (value, label) => voidCalls.Add($"{value}:{label}")),
+    2L,
+    "two");
+long threeArgumentVoidResult = Functions.CallVoidCallbackThreeArgs(
+    BamlCallback.FromSync<long, string, bool>(
+        (value, label, flag) => voidCalls.Add($"{value}:{label}:{flag}")),
+    3L,
+    "three",
+    true);
+Require(
+    twoArgumentVoidResult == 2L && threeArgumentVoidResult == 3L,
+    "multi-argument void callback result changed");
+await Functions.MakeVoidCallback().InvokeAsync();
+var forwardVoid = Functions.MakeVoidForwarder(
+    BamlCallback.FromSync<long, string>(
+        (value, label) => voidCalls.Add($"{value}:{label}")));
+await forwardVoid.InvokeAsync(5L, "five");
+await forwardVoid.InvokeAsync(6L, "six");
+Require(
+    voidCalls.SequenceEqual(["2:two", "3:three:True", "5:five", "6:six"]),
+    "void callback or returned void closure arguments changed");
+await RequireDispatchIdleAfterCompletion("multi-argument void callbacks and returned void closures");
+Console.WriteLine("host_callable_void_signatures=ok");
+
 int synchronousOptionalCalls = 0;
 IReadOnlyList<string> synchronousOptionals = Functions.InvokeOptionals(
     BamlCallback.FromSync<

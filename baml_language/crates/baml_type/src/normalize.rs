@@ -770,7 +770,6 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::Null
             | NormalTy::Uint8Array
             | NormalTy::Media(_)
-            | NormalTy::Void
             | NormalTy::RustType
             | NormalTy::Type
             | NormalTy::Resource
@@ -806,7 +805,6 @@ enum Category {
     Null,
     Uint8Array,
     Media(MediaKind),
-    Void,
     RustType,
     Type,
     Resource,
@@ -833,7 +831,6 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Null => Category::Null,
             NormalTy::Uint8Array => Category::Uint8Array,
             NormalTy::Media(kind) => Category::Media(*kind),
-            NormalTy::Void => Category::Void,
             NormalTy::RustType => Category::RustType,
             NormalTy::Type => Category::Type,
             NormalTy::Resource => Category::Resource,
@@ -888,7 +885,6 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::Null
             | NormalTy::Uint8Array
             | NormalTy::Media(_)
-            | NormalTy::Void
             | NormalTy::RustType
             | NormalTy::Type
             | NormalTy::Resource
@@ -1053,7 +1049,6 @@ macro_rules! family_head_category {
             $($member)::+::Null => Category::Null,
             $($member)::+::Uint8Array => Category::Uint8Array,
             $($member)::+::Media(kind) => Category::Media(*kind),
-            $($member)::+::Void => Category::Void,
             $($member)::+::RustType => Category::RustType,
             $($member)::+::Type => Category::Type,
             $($member)::+::Resource => Category::Resource,
@@ -1171,7 +1166,6 @@ enum NormalTy<H: Head = DeclName, P: MuPhase<H> = Canonical> {
     Uint8Array,
     Media(MediaKind),
     // Nominal opaque leaves — each compatible only with itself.
-    Void,
     RustType,
     Type,
     Resource,
@@ -1315,7 +1309,6 @@ impl<H: Head> NormalTy<H, Named> {
             Ty::Null => NormalTy::Null,
             Ty::Uint8Array => NormalTy::Uint8Array,
             Ty::Media(kind) => NormalTy::Media(*kind),
-            Ty::Void => NormalTy::Void,
             Ty::RustType => NormalTy::RustType,
             Ty::Type => NormalTy::Type,
             Ty::Resource => NormalTy::Resource,
@@ -1480,7 +1473,6 @@ impl<H: Head> NormalTy<H, Named> {
             | NormalTy::Null
             | NormalTy::Uint8Array
             | NormalTy::Media(_)
-            | NormalTy::Void
             | NormalTy::RustType
             | NormalTy::Type
             | NormalTy::Resource
@@ -1514,7 +1506,6 @@ impl<H: Head> NormalTy<H, Named> {
             NormalTy::Null => Ty::Null,
             NormalTy::Uint8Array => Ty::Uint8Array,
             NormalTy::Media(kind) => Ty::Media(*kind),
-            NormalTy::Void => Ty::Void,
             NormalTy::RustType => Ty::RustType,
             NormalTy::Type => Ty::Type,
             NormalTy::Resource => Ty::Resource,
@@ -1706,7 +1697,6 @@ impl<H: Head> NormalTy<H, Named> {
             NormalTy::Null => NormalTy::Null,
             NormalTy::Uint8Array => NormalTy::Uint8Array,
             NormalTy::Media(kind) => NormalTy::Media(kind),
-            NormalTy::Void => NormalTy::Void,
             NormalTy::RustType => NormalTy::RustType,
             NormalTy::Type => NormalTy::Type,
             NormalTy::Resource => NormalTy::Resource,
@@ -2201,7 +2191,6 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Null => Ty::Null,
             NormalTy::Uint8Array => Ty::Uint8Array,
             NormalTy::Media(kind) => Ty::Media(kind),
-            NormalTy::Void => Ty::Void,
             NormalTy::RustType => Ty::RustType,
             NormalTy::Type => Ty::Type,
             NormalTy::Resource => Ty::Resource,
@@ -2485,7 +2474,6 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::Null
             | NormalTy::Uint8Array
             | NormalTy::Media(_)
-            | NormalTy::Void
             | NormalTy::RustType
             | NormalTy::Type
             | NormalTy::Resource
@@ -2647,7 +2635,6 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::Null
             | NormalTy::Uint8Array
             | NormalTy::Media(_)
-            | NormalTy::Void
             | NormalTy::RustType
             | NormalTy::Type
             | NormalTy::Resource
@@ -2909,7 +2896,6 @@ impl NormalTy {
             NormalTy::Null => K::Null,
             NormalTy::Uint8Array => K::Uint8Array,
             NormalTy::Media(kind) => K::Media(kind),
-            NormalTy::Void => K::Void,
             NormalTy::RustType => K::RustType,
             NormalTy::Type => K::Type,
             NormalTy::Resource => K::Resource,
@@ -3036,7 +3022,6 @@ impl NormalTy<DeclName, Named> {
             K::Null => NormalTy::Null,
             K::Uint8Array => NormalTy::Uint8Array,
             K::Media(kind) => NormalTy::Media(*kind),
-            K::Void => NormalTy::Void,
             K::RustType => NormalTy::RustType,
             K::Type => NormalTy::Type,
             K::Resource => NormalTy::Resource,

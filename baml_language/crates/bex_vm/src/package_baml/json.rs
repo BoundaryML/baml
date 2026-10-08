@@ -992,14 +992,6 @@ fn ty_value_to_serde(
             path,
             "unknown",
         )),
-        RealizedTy::Void => {
-            // `void` has no declared JSON shape to validate against here.
-            // Use structural serialization of the produced value.
-            // Instantiated generic class fields normally use `field_template`
-            // substitution before reaching this point.
-            untyped_value_to_serde(vm, value, path)
-        }
-
         // Type-level and opaque types carry no serializable runtime value:
         // reflection types (`Type`), opaque Rust state (`RustType`), and the
         // bottom type (`Never`).
@@ -1459,10 +1451,7 @@ fn ty_serde_to_value(
             Err(raise_decode(vm, "cannot deserialize opaque type", path))
         }
 
-        RealizedTy::Function { .. }
-        | RealizedTy::Future(_, _)
-        | RealizedTy::Unknown
-        | RealizedTy::Void => {
+        RealizedTy::Function { .. } | RealizedTy::Future(_, _) | RealizedTy::Unknown => {
             // These variants do not provide a concrete JSON schema to validate
             // against here. Preserve structural JSON conversion for values
             // whose shape is already JSON-representable.

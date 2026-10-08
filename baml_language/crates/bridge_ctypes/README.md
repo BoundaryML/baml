@@ -16,8 +16,10 @@ cd sdks/typescript/bridge_typescript && pnpm build:debug
 #
 # scripts/baml-language-version bump/set/sync install the pinned Node bridge
 # dependencies and run this automatically after version bumps because napi
-# stamps package.json's version into dist/native.js. build:proto alone is only
-# sufficient for proto schema-only changes.
+# stamps package.json's version into dist/native.js. A proto schema-only
+# change needs no native build, but build:proto alone leaves the generated
+# header off and the tracked dist/proto copies stale:
+#   pnpm build:proto && pnpm build:copy-proto && pnpm build:tag-generated-files
 
 # TypeScript (ts-proto / buf) — typescript2/pkg-proto consumer
 cd typescript2/pkg-proto && pnpm generate
@@ -26,11 +28,8 @@ cd typescript2/pkg-proto && pnpm generate
 # Go (protoc-gen-go)
 cd sdks/go/bridge_go && ./build.sh
 #   -> sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/*.pb.go
-# Keep baml_go's internal inbound/outbound consumers byte-identical:
-cp cffi/proto/baml_bridge/cffi/v1/baml_inbound.pb.go \
-  ../baml_go/internal/cffi/baml_inbound.pb.go
-cp cffi/proto/baml_bridge/cffi/v1/baml_outbound.pb.go \
-  ../baml_go/internal/cffi/baml_outbound.pb.go
+# Keep baml_go's internal copies byte-identical:
+cp cffi/proto/baml_bridge/cffi/v1/*.pb.go ../baml_go/internal/cffi/
 
 # C++ (pinned vendored protoc)
 cd ../../.. && cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored --exact
@@ -45,4 +44,4 @@ sdks/swift/scripts/generate-protos.sh
 
 Other consumers (`bridge_cffi`, `bridge_wasm`, `sdks/python/rust/bridge_python`) use the Rust prost types via `bridge_ctypes` — nothing extra to regenerate. `sdks/rust/bridge_rust` is the exception: it vendors the generated file (see above) because it publishes to crates.io and must not depend on this engine-coupled crate.
 
-No clients exist for Ruby, Java/Kotlin, C#/.NET, or PHP.
+No generated clients exist for Ruby, Java/Kotlin, C#/.NET, or PHP. The Java and C# bridges read and write the wire by hand (`sdks/java/baml_bridge` `ProtoReader`, `sdks/csharp/bridge_csharp` `BamlGeneratedCanonicalCodecs.cs`, and the C# generator's metadata encoder), as does the engine's trace encoder (`crates/bex_engine/src/trace_value_encode.rs`): a change to a message's fields is mirrored there by hand.

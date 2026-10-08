@@ -206,16 +206,8 @@ function run_tests(package: reflect.Package, names: string[]) -> Outcome throws 
 
 /// Why the test `name` failed, or `null` when it passed or does not exist.
 function failure_of(table: TestTable, name: string) -> Failure? throws never {
-    // BUG: `tests()` is declared as `map<string, () -> null throws unknown>`
-    // but its values reflect as `() -> void throws never`, and `void` and
-    // `null` function types are one type statically and two at run time, so
-    // `if let run: () -> null throws unknown = table.get(name)` fails for a
-    // present key. The lookup therefore goes through `has` and a subscript,
-    // which do not test the type. See README, compiler issue 2.
-    if (!table.has(name)) {
-        return null;
-    }
-    let run = table[name];
+    let run = table.get(name)
+        ?? return null;
     let passed: Failure? = null;
     // Panics are their own channel: `catch_all` covers thrown errors only, so
     // an `assert` failure (`baml.panics.AssertionFailed`) inside the case's

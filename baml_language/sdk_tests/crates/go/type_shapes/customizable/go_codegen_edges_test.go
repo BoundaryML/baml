@@ -16,19 +16,19 @@ import (
 // Go signature generated for every primitive and primitive literal currently
 // in scope, independently of runtime round-trip coverage.
 var (
-	_ func(context.Context, ...baml_go.CallOption) (int64, error)                      = baml_sdk.PrimitivesReturnInt
-	_ func(context.Context, ...baml_go.CallOption) (*big.Int, error)                   = baml_sdk.PrimitivesReturnBigint
-	_ func(context.Context, ...baml_go.CallOption) (float64, error)                    = baml_sdk.PrimitivesReturnFloat
-	_ func(context.Context, ...baml_go.CallOption) (string, error)                     = baml_sdk.PrimitivesReturnString
-	_ func(context.Context, ...baml_go.CallOption) (bool, error)                       = baml_sdk.PrimitivesReturnBool
-	_ func(context.Context, ...baml_go.CallOption) (baml_go.Null, error)               = baml_sdk.PrimitivesReturnNull
-	_ func(context.Context, int64, ...baml_go.CallOption) (int64, error)               = baml_sdk.PrimitivesRoundTripInt
-	_ func(context.Context, *big.Int, ...baml_go.CallOption) (*big.Int, error)         = baml_sdk.PrimitivesRoundTripBigint
-	_ func(context.Context, float64, ...baml_go.CallOption) (float64, error)           = baml_sdk.PrimitivesRoundTripFloat
-	_ func(context.Context, string, ...baml_go.CallOption) (string, error)             = baml_sdk.PrimitivesRoundTripString
-	_ func(context.Context, bool, ...baml_go.CallOption) (bool, error)                 = baml_sdk.PrimitivesRoundTripBool
-	_ func(context.Context, baml_go.Null, ...baml_go.CallOption) (baml_go.Null, error) = baml_sdk.PrimitivesRoundTripNull
-	_ func(context.Context, []byte, ...baml_go.CallOption) ([]byte, error)             = baml_sdk.PrimitivesRoundTripUint8Array
+	_ func(context.Context, ...baml_go.CallOption) (int64, error)              = baml_sdk.PrimitivesReturnInt
+	_ func(context.Context, ...baml_go.CallOption) (*big.Int, error)           = baml_sdk.PrimitivesReturnBigint
+	_ func(context.Context, ...baml_go.CallOption) (float64, error)            = baml_sdk.PrimitivesReturnFloat
+	_ func(context.Context, ...baml_go.CallOption) (string, error)             = baml_sdk.PrimitivesReturnString
+	_ func(context.Context, ...baml_go.CallOption) (bool, error)               = baml_sdk.PrimitivesReturnBool
+	_ func(context.Context, ...baml_go.CallOption) error                       = baml_sdk.PrimitivesReturnNull
+	_ func(context.Context, int64, ...baml_go.CallOption) (int64, error)       = baml_sdk.PrimitivesRoundTripInt
+	_ func(context.Context, *big.Int, ...baml_go.CallOption) (*big.Int, error) = baml_sdk.PrimitivesRoundTripBigint
+	_ func(context.Context, float64, ...baml_go.CallOption) (float64, error)   = baml_sdk.PrimitivesRoundTripFloat
+	_ func(context.Context, string, ...baml_go.CallOption) (string, error)     = baml_sdk.PrimitivesRoundTripString
+	_ func(context.Context, bool, ...baml_go.CallOption) (bool, error)         = baml_sdk.PrimitivesRoundTripBool
+	_ func(context.Context, baml_go.Null, ...baml_go.CallOption) error         = baml_sdk.PrimitivesRoundTripNull
+	_ func(context.Context, []byte, ...baml_go.CallOption) ([]byte, error)     = baml_sdk.PrimitivesRoundTripUint8Array
 
 	_ func(context.Context, ...baml_go.CallOption) (int64, error)          = baml_sdk.LiteralsReturnLiteral42
 	_ func(context.Context, ...baml_go.CallOption) (int64, error)          = baml_sdk.LiteralsReturnLiteralNegOne

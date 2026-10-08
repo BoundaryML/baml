@@ -203,7 +203,6 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
         | Ty::String
         | Ty::Bool
         | Ty::Null
-        | Ty::Void
         | Ty::Literal(..)
         | Ty::Uint8Array
         | Ty::Enum(..)

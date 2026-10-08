@@ -537,7 +537,6 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Bool => "bool".to_string(),
         Ty::Null => "null".to_string(),
         Ty::Uint8Array => "uint8array".to_string(),
-        Ty::Void => "void".to_string(),
         Ty::Unknown => "unknown".to_string(),
         // A generic class carries its concrete type args in its identity token
         // (`Wrapper<int>` vs `Wrapper<string>`) — kept for parity with
@@ -1337,7 +1336,7 @@ mod tests {
                 ty: t_class(event),
                 mode: CodegenFunctionParamMode::Required,
             }]),
-            ret: Box::new(Ty::Void),
+            ret: Box::new(Ty::Null),
             throws: Box::new(Ty::Never),
         };
         pool.insert(
@@ -2319,6 +2318,34 @@ mod tests {
             ),
             "{file}"
         );
+    }
+
+    #[test]
+    fn unit_return_is_a_void_method() {
+        // `fn settle(x: null) -> null`: a unit return is a `void` method with
+        // no `return` and no `@Nullable`, and its async sibling completes with
+        // `java.lang.Void`. A unit *parameter* still has a value to pass, so it
+        // stays the boxed, nullable `Void`.
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &["unit"], "settle"),
+            Symbol::Function(method_fn("settle", ("x", t_null()), t_null(), 0)),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("unit/Fns.java")];
+        assert!(
+            file.contains(
+                "public static void settle(java.lang.@org.jspecify.annotations.Nullable Void x) {"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "public static java.util.concurrent.CompletableFuture<java.lang.Void> settle_async(java.lang.@org.jspecify.annotations.Nullable Void x) {"
+            ),
+            "{file}"
+        );
+        assert!(!file.contains("return (java.lang.Void)"), "{file}");
     }
 
     #[test]

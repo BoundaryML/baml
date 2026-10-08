@@ -375,7 +375,6 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
             arms.len() == 1 && arm_is_representable(&arms[0], analysis)
         }
         Ty::Null
-        | Ty::Void
         | Ty::Literal(..)
         | Ty::Media(..)
         | Ty::Unknown
@@ -429,7 +428,6 @@ fn variant_name(arm: &Ty) -> Option<String> {
             }
         }
         Ty::Null
-        | Ty::Void
         | Ty::Literal(..)
         | Ty::Media(..)
         | Ty::Unknown

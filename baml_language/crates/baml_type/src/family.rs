@@ -29,9 +29,9 @@
 //! representation worth having (a name, an interned id, a heap handle) is
 //! cloneable, so this rules out nothing real.
 //!
-//! The semantic impls (`render_with`, `Display`, `validate_runtime`, the
-//! conversions, and the `lower_to_runtime` boundary)
-//! stay hand-written in `lib.rs`, `runtime_ty.rs`, and `realized_ty.rs`.
+//! The semantic impls (`render_with`, `Display`, the conversions, and the
+//! `lower_to_runtime` boundary) stay hand-written in `lib.rs`,
+//! `runtime_ty.rs`, and `realized_ty.rs`.
 
 use baml_type_macros::ty_family;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -172,8 +172,8 @@ ty_family! {
     /// The unified type representation for BAML, used from VIR through runtime.
     ///
     /// Contains both core runtime variants and compiler-only variants.
-    /// Runtime code should use `unreachable!()` for compiler-only variants.
-    /// Runtime code should call `validate_runtime()` to catch any that leak.
+    /// Runtime code holds a [`RuntimeTy`], which has none of the latter:
+    /// `lower_to_runtime` is the boundary that rejects them.
     ///
     #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
     #[borsh(use_discriminant = true)]
@@ -260,9 +260,8 @@ ty_family! {
         #[axis(concrete)]
         PromptAst = 21,
 
-        /// Void type — the type of effectful expressions (was VIR `Unit`).
-        #[axis(special)]
-        Void = 22,
+        // reserved: 22 was `Void`, a second unit type beside `Null`. BAML has
+        // one unit type (`null`); `void` is a source spelling of it.
         // reserved = 23
         /// Only recursive aliases survive lower_ty; non-recursive are expanded.
         #[axis(special)]
@@ -390,7 +389,7 @@ mod tests {
                     Box::new([Ty::Union(Box::new([Ty::Int, Ty::Null]))]),
                     Box::new([(Name::new("Item"), Ty::String)]),
                 )),
-                throws: Box::new(Ty::Void),
+                throws: Box::new(Ty::Never),
             }),
         }
     }
@@ -418,7 +417,7 @@ mod tests {
                     Box::new([Ty::Bool]),
                     Box::new([(Name::new("Item"), Ty::String)]),
                 )),
-                throws: Box::new(Ty::Void),
+                throws: Box::new(Ty::Never),
             }),
         };
 
@@ -479,7 +478,7 @@ mod tests {
                     // ...and through the tuple element of a binding list.
                     Box::new([(Name::new("Item"), Ty::Class(6, Box::new([])))]),
                 )),
-                throws: Box::new(Ty::Void),
+                throws: Box::new(Ty::Never),
             }),
         };
 
@@ -521,7 +520,7 @@ mod tests {
                     Some(Name::new("x")),
                     Ty::Class(1, Box::new([Ty::Enum(2)])),
                 )]),
-                ret: Box::new(Ty::Void),
+                ret: Box::new(Ty::Null),
                 throws: Box::new(Ty::Never),
             }),
             interface: Box::new(crate::Interface::new(
@@ -694,7 +693,8 @@ mod tests {
     }
 
     /// Lock the Borsh wire format. Every family member uses the explicit master
-    /// discriminants, with slots 23, 31, and 32 reserved for removed variants.
+    /// discriminants, with the slots of removed variants (22, 23, 29, 31, 32,
+    /// 35, 36) left reserved.
     /// `Infer`'s tag of 33 is what proves a removed variant leaves a gap rather
     /// than renumbering the tail.
     #[test]

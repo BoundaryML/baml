@@ -797,7 +797,6 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
         | RuntimeTy::String
         | RuntimeTy::Bool
         | RuntimeTy::Null
-        | RuntimeTy::Void
         | RuntimeTy::Media(..)
         | RuntimeTy::Class(..)
         | RuntimeTy::Enum(..)

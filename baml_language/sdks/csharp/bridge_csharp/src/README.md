@@ -120,7 +120,7 @@ case rather than inferring it from the payload type.
 ## Callbacks
 
 A BAML callable argument is a `Func<...,Task<TResult>>` (or the `Task` form for
-`void`). Its parameters are the BAML arguments; cancellation is available from
+a unit return, `void` or `null`). Its parameters are the BAML arguments; cancellation is available from
 `Invocation.Current` during dispatch. Optional BAML callback parameters are
 declaration-ordered `BamlOptional<T>` arguments:
 

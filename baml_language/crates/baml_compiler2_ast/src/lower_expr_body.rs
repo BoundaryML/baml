@@ -289,10 +289,7 @@ impl InitTestContext {
         span: TextRange,
     ) -> ExprId {
         match baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()) {
-            Some(block) => {
-                self.inner
-                    .lower_testset_collector_body(&block, collector, block_node.span_range())
-            }
+            Some(block) => self.inner.lower_testset_collector_body(&block, collector),
             None => self.inner.alloc_expr(Expr::Null, span),
         }
     }
@@ -1334,6 +1331,8 @@ struct LoweringContext {
     /// generated nodes are distinguishable from the user-written ones they wrap
     /// — see [`AstSourceMap::synthetic_exprs`]. Consumed by inlay hints.
     synthesizing: bool,
+    /// See [`ExprBody::tag_values`].
+    tag_values: Vec<ExprId>,
 }
 
 /// The elaborated form of a single `${…}` interpolation in an untagged
@@ -1363,6 +1362,7 @@ impl LoweringContext {
             needs_chain_wrap: std::collections::HashSet::new(),
             consumed_generic_args: std::collections::HashSet::new(),
             synthesizing: false,
+            tag_values: Vec::new(),
         }
     }
 
@@ -1566,73 +1566,17 @@ impl LoweringContext {
     ///
     /// Sets `testset_collector_var` for the duration — the exact inverse of
     /// [`Self::lower_lambda_body`] — so a `test` written inside registers
-    /// against `collector`. The body always ends in a `null` tail, which is what
-    /// the collector lambda's `-> void` signature expects.
+    /// against `collector`. The body is the collector lambda's, so it is
+    /// checked against that lambda's unit return like any other body.
     fn lower_testset_collector_body(
         &mut self,
         block: &baml_compiler_syntax::ast::BlockExpr,
         collector: Name,
-        range: TextRange,
     ) -> ExprId {
         let saved_collector = self.testset_collector_var.replace(collector);
-        let inner = self.lower_block_expr(block);
-        let body = self.ensure_null_tail(inner, range);
+        let body = self.lower_block_expr(block);
         self.testset_collector_var = saved_collector;
         body
-    }
-
-    /// Ensure a block expression ends with a `null` tail.
-    ///
-    /// If `block_id` refers to a `Block` with no tail expression, this adds a `null` tail
-    /// by constructing a new block expression that reuses the same statements.
-    /// If the block already has a non-null tail, this wraps it in a new block that evaluates
-    /// the original block as a statement and then returns null.
-    fn ensure_null_tail(&mut self, block_id: ExprId, range: TextRange) -> ExprId {
-        match self.exprs[block_id].clone() {
-            Expr::Block { stmts, tail_expr } => {
-                match tail_expr {
-                    None => {
-                        // No tail — add explicit null tail by allocating a new block
-                        let null_id = self.alloc_expr(Expr::Null, range);
-                        self.alloc_expr(
-                            Expr::Block {
-                                stmts,
-                                tail_expr: Some(null_id),
-                            },
-                            range,
-                        )
-                    }
-                    Some(t) if matches!(self.exprs[t], Expr::Null) => {
-                        // Already has null tail — return as-is
-                        block_id
-                    }
-                    Some(_) => {
-                        // Has a non-null tail expression — keep it as a statement and add null
-                        let inner_as_stmt = self.alloc_stmt(Stmt::Expr(block_id), range);
-                        let null_id = self.alloc_expr(Expr::Null, range);
-                        self.alloc_expr(
-                            Expr::Block {
-                                stmts: vec![inner_as_stmt],
-                                tail_expr: Some(null_id),
-                            },
-                            range,
-                        )
-                    }
-                }
-            }
-            _ => {
-                // Not a block — wrap in a block with null tail
-                let inner_as_stmt = self.alloc_stmt(Stmt::Expr(block_id), range);
-                let null_id = self.alloc_expr(Expr::Null, range);
-                self.alloc_expr(
-                    Expr::Block {
-                        stmts: vec![inner_as_stmt],
-                        tail_expr: Some(null_id),
-                    },
-                    range,
-                )
-            }
-        }
     }
 
     fn finish(
@@ -1651,6 +1595,7 @@ impl LoweringContext {
             match_arms: self.match_arms,
             catch_arms: self.catch_arms,
             type_annotations: self.type_annotations,
+            tag_values: self.tag_values,
             root_expr,
         };
         (body, self.source_map, self.diags, self.env_var_refs)
@@ -1663,9 +1608,14 @@ impl LoweringContext {
         let mut tail_expr = None;
 
         let elements: Vec<_> = block.elements().collect();
+        // A header comment says nothing about what the block evaluates to:
+        // the last element that is code decides.
+        let last_code = elements
+            .iter()
+            .rposition(|element| !matches!(element, BlockElement::HeaderComment(_)));
 
         for (idx, element) in elements.iter().enumerate() {
-            let is_last = idx == elements.len() - 1;
+            let is_last = Some(idx) == last_code;
             match element {
                 BlockElement::Stmt(node) => {
                     let stmt_id = match node.kind() {
@@ -1769,6 +1719,10 @@ impl LoweringContext {
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), span));
                     }
                 }
+                // One written after the block's final expression heads
+                // nothing: statements run before that expression, and
+                // keeping it as one would put the expression under it.
+                BlockElement::HeaderComment(_) if tail_expr.is_some() => {}
                 BlockElement::HeaderComment(node) => {
                     let stmt_id = self.lower_header_comment(node);
                     stmts.push(stmt_id);
@@ -2905,64 +2859,6 @@ impl LoweringContext {
             self.source_map.bind_name_spans.insert(id, span);
         }
         id
-    }
-
-    /// Walk a pattern and emit `VoidInNonReturnPosition` for any `Pattern::Type`
-    /// whose annotation is `void` (or contains `void` in a wrapper position).
-    fn check_pattern_void_in_annotation(&mut self, pat_id: PatId, context: &str) {
-        match self.patterns[pat_id].clone() {
-            Pattern::Type(ty) => {
-                let span = self.source_map.pattern_span(pat_id);
-                crate::lower_type_expr::check_void_type(
-                    &ty,
-                    context.to_string(),
-                    span,
-                    false,
-                    &mut self.diags,
-                );
-            }
-            Pattern::Or(pats) => {
-                for p in pats {
-                    self.check_pattern_void_in_annotation(p, context);
-                }
-            }
-            Pattern::Class { fields, .. } => {
-                for f in fields {
-                    self.check_pattern_void_in_annotation(f.pat, context);
-                }
-            }
-            Pattern::Array {
-                prefix,
-                rest,
-                suffix,
-                ascription,
-            } => {
-                for p in prefix.into_iter().chain(suffix) {
-                    self.check_pattern_void_in_annotation(p, context);
-                }
-                if let Some(rest) = rest
-                    && let Some(p) = rest.pat
-                {
-                    self.check_pattern_void_in_annotation(p, context);
-                }
-                if let Some(ty) = ascription {
-                    let span = self.source_map.pattern_span(pat_id);
-                    crate::lower_type_expr::check_void_type(
-                        &ty,
-                        context.to_string(),
-                        span,
-                        false,
-                        &mut self.diags,
-                    );
-                }
-            }
-            Pattern::Wildcard => {}
-            Pattern::Bind { subpat, .. } => {
-                if let Some(sp) = subpat {
-                    self.check_pattern_void_in_annotation(sp, context);
-                }
-            }
-        }
     }
 
     /// Lower a `TYPE_PATTERN`. Normally a `TYPE_EXPR` child is present, but
@@ -4181,7 +4077,13 @@ impl LoweringContext {
                 TemplateSegment::Text(s) => InterpPart::Value(
                     self.alloc_expr(Expr::Literal(Literal::String(s.clone())), span),
                 ),
-                TemplateSegment::Interp(e) => self.elaborate_default_interp(*e, span),
+                TemplateSegment::Interp(e) => {
+                    InterpPart::Value(self.elaborate_default_interp(*e, span))
+                }
+                // Spliced into the one enclosing concat scope rather than
+                // wrapped in a block of their own, which is what lets a `let`
+                // here be seen by a later `${…}` (BEP-049 §4 cross-site `let`).
+                TemplateSegment::Effect { stmts, .. } => InterpPart::Stmts(stmts.clone()),
                 TemplateSegment::For {
                     binding,
                     collection,
@@ -4297,29 +4199,8 @@ impl LoweringContext {
     }
 
     /// Elaborate a `${expr}` for the untagged path: wrap the inner block with
-    /// `.to_string()` (BEP §11). A statement-only (unit) block — or one whose
-    /// tail is itself a unit-valued expression (e.g. an `if`/`if let` with no
-    /// `else`) — renders `""` while still running its statements and tail for
-    /// their side effects.
-    fn elaborate_default_interp(&mut self, inner: ExprId, span: TextRange) -> InterpPart {
-        if let Expr::Block { stmts, tail_expr } = &self.exprs[inner] {
-            // A block is unit-valued when it has no tail, or its tail is a
-            // syntactically-unit expression. It renders "" but still runs its
-            // statements (and its tail, for side effects). Return the raw
-            // statements so the caller can splice them into the enclosing concat
-            // scope — keeping any `let` they bind visible to later segments
-            // (BEP-049 §4 cross-site `let`), instead of confining them to a
-            // per-segment block.
-            let tail_is_unit = tail_expr.map(|t| self.is_unit_tail(t)).unwrap_or(true);
-            if tail_is_unit {
-                let mut stmts = stmts.clone();
-                if let Some(t) = *tail_expr {
-                    let tail_stmt = self.alloc_stmt(Stmt::Expr(t), span);
-                    stmts.push(tail_stmt);
-                }
-                return InterpPart::Stmts(stmts);
-            }
-        }
+    /// `.to_string()` (BEP §11).
+    fn elaborate_default_interp(&mut self, inner: ExprId, span: TextRange) -> ExprId {
         // Render the value via `string.from(...)` — BAML's universal renderer
         // (BEP-049 §11). It dispatches `to_string` on the value's runtime class
         // when that class implements `baml.ToString`, otherwise falls back to a
@@ -4329,31 +4210,85 @@ impl LoweringContext {
             Expr::Path(vec![Name::new("string"), Name::new("from")]),
             span,
         );
-        InterpPart::Value(self.alloc_expr(
+        self.alloc_expr(
             Expr::Call {
                 callee,
                 type_args: Vec::new(),
                 args: vec![CallArg::positional(inner)],
             },
             span,
-        ))
+        )
+    }
+
+    /// The statements and tail of a `${…}` block that produces no value: it
+    /// has no tail, or its tail is a syntactically-unit expression. The
+    /// syntax decides which way an interpolation is read (BEP-049 §4); the
+    /// checker then holds a unit one to the unit type.
+    fn unit_interp(&self, inner: ExprId) -> Option<(&[StmtId], Option<ExprId>)> {
+        match &self.exprs[inner] {
+            Expr::Block { stmts, tail_expr } if tail_expr.is_none_or(|t| self.is_unit_tail(t)) => {
+                Some((stmts, *tail_expr))
+            }
+            _ => None,
+        }
+    }
+
+    /// The statements of a `${…}` block that produces no value. The block
+    /// still runs for its effects — its tail too — so these are everything
+    /// it does. Its tail is checked against the unit type rather than
+    /// discarded: an `if` with no `else` whose branch produces a value is an
+    /// error, not text that silently goes missing. `None` for an
+    /// interpolation that has a value.
+    fn unit_interp_stmts(&mut self, inner: ExprId, span: TextRange) -> Option<Vec<StmtId>> {
+        let (stmts, tail) = self.unit_interp(inner)?;
+        let mut stmts = stmts.to_vec();
+        if let Some(t) = tail {
+            // The check is the compiler's, not something the user wrote.
+            let prev_synth = std::mem::replace(&mut self.synthesizing, true);
+            stmts.push(self.unit_let(t, span));
+            self.synthesizing = prev_synth;
+        }
+        Some(stmts)
+    }
+
+    /// `let _: null = <value>;`, binding a name no user identifier can
+    /// spell: `value` is checked against the unit type and dropped.
+    fn unit_let(&mut self, value: ExprId, span: TextRange) -> StmtId {
+        let null = self.alloc_pattern(Pattern::Type(TypeExprKind::Null.at(span)), span);
+        let pattern = self.alloc_pattern(
+            Pattern::Bind {
+                name: Name::new(" __unit"),
+                subpat: Some(null),
+            },
+            span,
+        );
+        self.alloc_stmt(
+            Stmt::Let {
+                pattern,
+                initializer: Some(value),
+                origin: LetOrigin::Source,
+                else_branch: None,
+            },
+            span,
+        )
     }
 
     /// Is `expr` a syntactically unit-valued expression when it sits in a
-    /// block's tail position? Only expressions that TIR types as `Ty::Void`
-    /// qualify: an `if`/`if let` with no `else` branch (their missing arm is
-    /// `void`), or a nested block whose own tail is unit. `while`/`for`/
-    /// assignment/`let`/`return`/`throw`/`break`/`continue` are lowered as
-    /// `Stmt`s (never a `tail_expr`), so they're already covered by the
-    /// no-tail case and need not appear here.
+    /// block's tail position? Only the implicit-unit forms qualify: an
+    /// `if`/`if let` with no `else` branch (which evaluates to `null`), an
+    /// `else if` chain that ends in one, or a nested block whose own tail is
+    /// unit. `while`/`for`/assignment/`let`/`return`/`throw`/`break`/
+    /// `continue` are lowered as `Stmt`s (never a `tail_expr`), so they're
+    /// already covered by the no-tail case and need not appear here.
     fn is_unit_tail(&self, expr: ExprId) -> bool {
         match &self.exprs[expr] {
-            Expr::If {
-                else_branch: None, ..
-            }
-            | Expr::IfLet {
-                else_branch: None, ..
-            } => true,
+            Expr::If { else_branch, .. } | Expr::IfLet { else_branch, .. } => else_branch
+                .is_none_or(|else_branch| {
+                    matches!(
+                        self.exprs[else_branch],
+                        Expr::If { .. } | Expr::IfLet { .. }
+                    ) && self.is_unit_tail(else_branch)
+                }),
             Expr::Block { tail_expr, .. } => {
                 tail_expr.map(|t| self.is_unit_tail(t)).unwrap_or(true)
             }
@@ -4725,6 +4660,11 @@ impl LoweringContext {
                         self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
                     stmts.push(self.tt_assign(cur, empty, span));
                     stmts.push(self.tt_push_stmt(values, *e, span));
+                    self.tag_values.push(*e);
+                }
+                // No value to hand the tag: the text on either side joins.
+                TemplateSegment::Effect { stmts: effect, .. } => {
+                    stmts.extend(effect.iter().copied());
                 }
                 TemplateSegment::For {
                     binding,
@@ -4938,9 +4878,13 @@ impl LoweringContext {
             match seg {
                 BacktickSegment::Text(s) => out.push(TemplateSegment::Text(s)),
                 BacktickSegment::Interp(interp_node) => {
-                    out.push(TemplateSegment::Interp(
-                        self.lower_template_interp(&interp_node),
-                    ));
+                    let block = self.lower_template_interp(&interp_node);
+                    out.push(
+                        match self.unit_interp_stmts(block, interp_node.span_range()) {
+                            Some(stmts) => TemplateSegment::Effect { block, stmts },
+                            None => TemplateSegment::Interp(block),
+                        },
+                    );
                 }
                 BacktickSegment::For(for_seg) => {
                     if let Some(s) = self.lower_template_for(for_seg) {
@@ -5565,8 +5509,6 @@ impl LoweringContext {
         let pattern =
             pattern_id.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()));
 
-        self.check_pattern_void_in_annotation(pattern, "a let binding annotation");
-
         self.alloc_stmt(
             Stmt::Let {
                 pattern,
@@ -6072,13 +6014,11 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the testset body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let sub_body = match body_node_opt.as_ref().and_then(|body_node| {
-            baml_compiler_syntax::ast::BlockExpr::cast(body_node.clone())
-                .map(|block| (block, body_node.span_range()))
-        }) {
-            Some((block, range)) => {
-                self.lower_testset_collector_body(&block, Name::new("testset"), range)
-            }
+        let sub_body = match body_node_opt
+            .as_ref()
+            .and_then(|body_node| baml_compiler_syntax::ast::BlockExpr::cast(body_node.clone()))
+        {
+            Some(block) => self.lower_testset_collector_body(&block, Name::new("testset")),
             None => self.alloc_expr(Expr::Null, span),
         };
 

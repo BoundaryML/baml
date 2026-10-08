@@ -383,11 +383,13 @@ type:
     At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `type T = unreflect(t)` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`, or a `reflect.class.PendingType` from a builder; an `unknown` must be narrowed first with `match` or `is`), and `type T = SomeType` binds one to a static type. `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `unreflect` is legal only as the whole right-hand side of such a statement. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist; write `reflect.Type.of<T>()` and `reflect.Type`.
 
 void:
-  summary: "The return type of a function that produces no value."
+  summary: "The unit type, written as the return type of a function that produces no value."
   syntax: |
     function log_message(message: string) -> void {
       log.info(message)
     }
+  details: |
+    `void` is another spelling of `null`: the unit type, whose only value is `null`. The two are the same type in every position, and a call to a `void` function has a result like any other call — it is `null`. A function returning the unit type may leave out its final expression and may write a bare `return;`; both are shorthand for `null`. The shorthand holds only where the unit type itself is expected, or nothing is: a function returning `int?` must write its `null`, and a block with no final expression cannot be one branch of an `if` whose other branch produces a value. A unit-returning body is still checked against its return type, so a value left as its final expression is an error — end the expression with `;` to discard the value. An `if` with no `else` evaluates to `null` too, so when its value is used its branch must not produce one.
 
 never:
   summary: "The bottom type of an expression that never returns normally."
@@ -618,7 +620,7 @@ cleanup:
       }
     }
   details: |
-    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return, and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
+    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
 
 match:
   summary: "Pattern matching — branches based on the shape or type of a value."

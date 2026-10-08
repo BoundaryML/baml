@@ -111,7 +111,6 @@ impl Blob<'_> {
                     | RealizedTy::Type
                     | RealizedTy::Resource
                     | RealizedTy::PromptAst
-                    | RealizedTy::Void
                     | RealizedTy::TypeAlias(_)
                     | RealizedTy::Unknown
                     | RealizedTy::Never => 0,

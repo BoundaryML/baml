@@ -2616,7 +2616,7 @@ impl BlockExpr {
                         // A lambda can be a block's tail expression — e.g. a
                         // function whose body returns a middleware transformer
                         // (BEP-034). Without this it was silently dropped and
-                        // the block typed as void ("missing return value").
+                        // the block had no value ("missing value").
                         | SyntaxKind::LAMBDA_EXPR
                         | SyntaxKind::RAW_STRING_LITERAL
                         | SyntaxKind::BACKTICK_STRING_LITERAL

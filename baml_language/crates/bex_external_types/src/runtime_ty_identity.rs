@@ -17,7 +17,6 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
         | (T::Type, T::Type)
         | (T::Resource, T::Resource)
         | (T::PromptAst, T::PromptAst)
-        | (T::Void, T::Void)
         | (T::Never, T::Never) => true,
         (T::Media(left), T::Media(right)) => left == right,
         (T::Literal(left, ..), T::Literal(right, ..)) => left == right,

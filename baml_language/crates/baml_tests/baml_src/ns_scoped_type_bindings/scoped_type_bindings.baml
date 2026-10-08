@@ -475,7 +475,7 @@ function written_args_under_a_shadow<T>(log: string[], t: reflect.Type) -> void 
         log.push(reflect.Type.of<T[]>().to_string())
     }
     log.push(reflect.Type.of<T>().to_string())
-    log.push(reflect.Type.of<T[]>().to_string())
+    log.push(reflect.Type.of<T[]>().to_string());
 }
 
 test "a written type argument names the parameter visible where it is written" {

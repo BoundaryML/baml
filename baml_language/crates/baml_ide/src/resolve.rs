@@ -885,7 +885,9 @@ pub(crate) fn template_position_at(
     ) -> bool {
         segments.iter().any(|segment| match segment {
             TemplateSegment::Text(_) => false,
-            TemplateSegment::Interp(expr) => hit(source_map.expr_span(*expr)),
+            TemplateSegment::Interp(expr) | TemplateSegment::Effect { block: expr, .. } => {
+                hit(source_map.expr_span(*expr))
+            }
             TemplateSegment::For {
                 binding,
                 collection,

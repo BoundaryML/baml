@@ -43,7 +43,6 @@ pub fn any_type_child(ty: &Ty, mut predicate: impl FnMut(&Ty) -> bool) -> bool {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Void
         | Ty::Unknown
         | Ty::Never => false,
     }

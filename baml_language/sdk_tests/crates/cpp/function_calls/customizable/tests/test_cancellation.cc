@@ -11,16 +11,13 @@
 #include <chrono>
 #include <future>
 #include <thread>
-#include <variant>
 
 namespace throws_test = baml_sdk::throws_test;
 
-BAML_TEST(cancellation_sync_call_returns_none) {
-  BAML_ASSERT(throws_test::SleepMs(1) == std::monostate{});
-}
+BAML_TEST(cancellation_sync_call_returns_none) { throws_test::SleepMs(1); }
 
 BAML_TEST(cancellation_async_call_returns_none) {
-  BAML_ASSERT(throws_test::SleepMs_async(1).get() == std::monostate{});
+  throws_test::SleepMs_async(1).get();
 }
 
 BAML_TEST(cancellation_async_cancel_via_future_cancel) {
@@ -44,7 +41,7 @@ BAML_TEST(cancellation_future_wait_then_get) {
   BAML_ASSERT(fut.valid());
   BAML_ASSERT(fut.wait_for(std::chrono::seconds(30)) ==
               std::future_status::ready);
-  BAML_ASSERT(fut.get() == std::monostate{});
+  fut.get();
   BAML_ASSERT(!fut.valid());
 }
 
@@ -78,5 +75,5 @@ BAML_TEST(cancellation_future_destruction_detaches) {
   // The temporary future is dropped at the end of the statement: neither
   // blocks nor cancels, and later calls are unaffected.
   (void)throws_test::SleepMs_async(1);
-  BAML_ASSERT(throws_test::SleepMs(1) == std::monostate{});
+  throws_test::SleepMs(1);
 }

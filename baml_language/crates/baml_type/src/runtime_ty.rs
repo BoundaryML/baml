@@ -129,6 +129,86 @@ impl<N: Clone> RuntimeTy<N> {
         matches!(self, RuntimeTy::Null)
     }
 
+    /// True if this is the unit type — the type with exactly one value, which
+    /// source spells `null` or `void`. A unit-returning function carries no
+    /// information in its result, which is what a consumer that elides the
+    /// result (a CLI's stdout) keys on. A type that merely *admits* the unit
+    /// value (`int?`) is not unit; one that admits nothing else is, however it
+    /// is spelled (`null | null`, `never | null`).
+    ///
+    /// Decided structurally, which is exact for a runtime type: non-recursive
+    /// aliases are already expanded, and a recursive alias always reaches a
+    /// list or map (E0068), so it admits an empty container and is never unit.
+    pub fn is_unit(&self) -> bool {
+        match self {
+            RuntimeTy::Null => true,
+            RuntimeTy::Union(members) => {
+                members.iter().any(RuntimeTy::is_unit)
+                    && members
+                        .iter()
+                        .all(|member| member.is_unit() || member.is_uninhabited())
+            }
+            RuntimeTy::Never => false,
+            RuntimeTy::Int
+            | RuntimeTy::Bigint
+            | RuntimeTy::Float
+            | RuntimeTy::String
+            | RuntimeTy::Bool
+            | RuntimeTy::Uint8Array
+            | RuntimeTy::Media(..)
+            | RuntimeTy::Literal(..)
+            | RuntimeTy::Class(..)
+            | RuntimeTy::Interface(..)
+            | RuntimeTy::Enum(..)
+            | RuntimeTy::EnumVariant(..)
+            | RuntimeTy::List(..)
+            | RuntimeTy::Map { .. }
+            | RuntimeTy::Function { .. }
+            | RuntimeTy::Future(..)
+            | RuntimeTy::RustType
+            | RuntimeTy::Type
+            | RuntimeTy::Resource
+            | RuntimeTy::PromptAst
+            | RuntimeTy::TypeAlias(..)
+            | RuntimeTy::TypeVar(..)
+            | RuntimeTy::AssociatedTypeProjection { .. }
+            | RuntimeTy::Unknown => false,
+        }
+    }
+
+    /// True if no value has this type: `never`, or a union of such types.
+    fn is_uninhabited(&self) -> bool {
+        match self {
+            RuntimeTy::Never => true,
+            RuntimeTy::Union(members) => members.iter().all(RuntimeTy::is_uninhabited),
+            RuntimeTy::Null => false,
+            RuntimeTy::Int
+            | RuntimeTy::Bigint
+            | RuntimeTy::Float
+            | RuntimeTy::String
+            | RuntimeTy::Bool
+            | RuntimeTy::Uint8Array
+            | RuntimeTy::Media(..)
+            | RuntimeTy::Literal(..)
+            | RuntimeTy::Class(..)
+            | RuntimeTy::Interface(..)
+            | RuntimeTy::Enum(..)
+            | RuntimeTy::EnumVariant(..)
+            | RuntimeTy::List(..)
+            | RuntimeTy::Map { .. }
+            | RuntimeTy::Function { .. }
+            | RuntimeTy::Future(..)
+            | RuntimeTy::RustType
+            | RuntimeTy::Type
+            | RuntimeTy::Resource
+            | RuntimeTy::PromptAst
+            | RuntimeTy::TypeAlias(..)
+            | RuntimeTy::TypeVar(..)
+            | RuntimeTy::AssociatedTypeProjection { .. }
+            | RuntimeTy::Unknown => false,
+        }
+    }
+
     /// True if this is a union that includes `null` — i.e. an optional type.
     pub fn is_nullable_union(&self) -> bool {
         matches!(self, RuntimeTy::Union(members) if members.iter().any(RuntimeTy::is_null))
@@ -345,7 +425,6 @@ pub fn lower_to_runtime<N: Head>(
 
         // Bottom, opaque-leaf, and reflection types map faithfully.
         Ty::Never => RuntimeTy::Never,
-        Ty::Void => RuntimeTy::Void,
         Ty::Unknown => RuntimeTy::Unknown,
         Ty::RustType => RuntimeTy::RustType,
         Ty::Type => RuntimeTy::Type,
@@ -478,6 +557,27 @@ mod tests {
     use super::*;
     use crate::LoweringTy;
 
+    #[test]
+    fn is_unit_admits_exactly_the_unit_value() {
+        let unit: [RuntimeTy; 3] = [
+            RuntimeTy::Null,
+            RuntimeTy::Union(Box::new([RuntimeTy::Null, RuntimeTy::Null])),
+            RuntimeTy::Union(Box::new([RuntimeTy::Never, RuntimeTy::Null])),
+        ];
+        for ty in unit {
+            assert!(ty.is_unit(), "{ty:?}");
+        }
+        let not_unit: [RuntimeTy; 4] = [
+            RuntimeTy::Never,
+            RuntimeTy::Union(Box::new([RuntimeTy::Int, RuntimeTy::Null])),
+            RuntimeTy::Union(Box::new([RuntimeTy::Never, RuntimeTy::Never])),
+            RuntimeTy::Unknown,
+        ];
+        for ty in not_unit {
+            assert!(!ty.is_unit(), "{ty:?}");
+        }
+    }
+
     /// The head-free constructors build at any head, while a bare path still
     /// means the compiler's.
     ///
@@ -549,7 +649,7 @@ mod tests {
                 ),
             ]),
             ret: Box::new(Ty::Bool),
-            throws: Box::new(Ty::Void),
+            throws: Box::new(Ty::Never),
         };
         assert_round_trips(ty);
     }
@@ -613,7 +713,7 @@ mod tests {
         let ty: LoweringTy<TypeName> = LoweringTy::Function {
             params: Box::new([]),
             ret: Box::new(LoweringTy::Infer),
-            throws: Box::new(LoweringTy::Void),
+            throws: Box::new(LoweringTy::Never),
         };
         assert_eq!(
             RuntimeTy::try_from(&ty),

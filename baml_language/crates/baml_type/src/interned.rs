@@ -134,7 +134,6 @@ impl Ty {
             InferTy::Type => primitive!(Type),
             InferTy::Resource => primitive!(Resource),
             InferTy::PromptAst => primitive!(PromptAst),
-            InferTy::Void => primitive!(Void),
             InferTy::Unknown => primitive!(Unknown),
             InferTy::Never => primitive!(Never),
             InferTy::Error => primitive!(Error),
@@ -372,7 +371,6 @@ pub fn for_each_child(kind: &InferTy, mut visit: impl FnMut(&Ty)) {
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst
-        | InferTy::Void
         | InferTy::TypeAlias(..)
         | InferTy::TypeVar(..)
         | InferTy::Unknown
@@ -440,7 +438,6 @@ impl InferTy {
             | InferTy::Type
             | InferTy::Resource
             | InferTy::PromptAst
-            | InferTy::Void
             | InferTy::TypeAlias(..)
             | InferTy::TypeVar(..)
             | InferTy::Unknown
@@ -577,7 +574,6 @@ impl Ty {
             crate::Ty::Type => InferTy::Type,
             crate::Ty::Resource => InferTy::Resource,
             crate::Ty::PromptAst => InferTy::PromptAst,
-            crate::Ty::Void => InferTy::Void,
             crate::Ty::TypeAlias(name) => InferTy::TypeAlias(name.clone()),
             crate::Ty::TypeVar(param) => InferTy::TypeVar(param.clone()),
             crate::Ty::AssociatedTypeProjection {
@@ -671,7 +667,6 @@ impl Ty {
             InferTy::Type => crate::Ty::Type,
             InferTy::Resource => crate::Ty::Resource,
             InferTy::PromptAst => crate::Ty::PromptAst,
-            InferTy::Void => crate::Ty::Void,
             InferTy::TypeAlias(name) => crate::Ty::TypeAlias(name.clone()),
             InferTy::TypeVar(param) => crate::Ty::TypeVar(param.clone()),
             InferTy::AssociatedTypeProjection {
@@ -1058,10 +1053,6 @@ impl Ty {
         Ty::intern(InferTy::Never)
     }
 
-    pub fn void() -> Ty {
-        Ty::intern(InferTy::Void)
-    }
-
     pub fn error() -> Ty {
         Ty::intern(InferTy::Error)
     }
@@ -1146,7 +1137,6 @@ mod tests {
             P::Type,
             P::Resource,
             P::PromptAst,
-            P::Void,
             P::TypeAlias(name()),
             P::TypeVar(ParamTy::new(0, Name::new("T"))),
             P::AssociatedTypeProjection {
@@ -1293,7 +1283,6 @@ mod tests {
             InferTy::Type,
             InferTy::Resource,
             InferTy::PromptAst,
-            InferTy::Void,
             InferTy::Unknown,
             InferTy::Never,
             InferTy::Error,
