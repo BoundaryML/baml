@@ -411,7 +411,7 @@ test "resolve_unknown_prefix_is_typed" {
     // every prefix the compile-time map knows, so the two stay visibly in sync
     assert.contains(
         resolve_unknown_prefix_is_typed(),
-        "openai, openai-chat, openai-images, ollama, openrouter",
+        "openai, openai-chat, openai-decisions, openai-images, ollama, openrouter",
     );
     assert.contains(
         resolve_unknown_prefix_is_typed(),
