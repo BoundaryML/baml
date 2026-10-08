@@ -242,6 +242,120 @@ pub(crate) fn substitute(
     }
 }
 
+/// Solve the class parameters `template` mentions (by De Bruijn index into
+/// `solved`) from the concrete type `ty` a value turned out to have. Where the
+/// shapes differ nothing is learned; a parameter two fields determine
+/// differently is a conflict, reported as its index.
+pub(crate) fn unify(
+    template: &RuntimeTy,
+    ty: &RuntimeTy,
+    solved: &mut [Option<RuntimeTy>],
+) -> Result<(), usize> {
+    match template {
+        RuntimeTy::TypeVar(param) => {
+            let Some(index) = usize::try_from(param.index())
+                .ok()
+                .filter(|index| *index < solved.len())
+            else {
+                return Ok(());
+            };
+            match &solved[index] {
+                None => {
+                    solved[index] = Some(ty.clone());
+                    Ok(())
+                }
+                Some(bound) if bound == ty => Ok(()),
+                Some(_) => Err(index),
+            }
+        }
+        RuntimeTy::List(inner) => match ty {
+            RuntimeTy::List(found) => unify(inner, found, solved),
+            _ => Ok(()),
+        },
+        RuntimeTy::Map { key, value } => match ty {
+            RuntimeTy::Map {
+                key: found_key,
+                value: found_value,
+            } => {
+                unify(key, found_key, solved)?;
+                unify(value, found_value, solved)
+            }
+            _ => Ok(()),
+        },
+        RuntimeTy::Class(name, args) => match ty {
+            RuntimeTy::Class(found_name, found_args)
+                if found_name == name && found_args.len() == args.len() =>
+            {
+                args.iter()
+                    .zip(found_args.iter())
+                    .try_for_each(|(arg, found)| unify(arg, found, solved))
+            }
+            _ => Ok(()),
+        },
+        RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+        } => match ty {
+            RuntimeTy::Function {
+                params: found_params,
+                ret: found_ret,
+                throws: found_throws,
+            } if found_params.len() == params.len() => {
+                params
+                    .iter()
+                    .zip(found_params.iter())
+                    .try_for_each(|(param, found)| unify(&param.ty, &found.ty, solved))?;
+                unify(ret, found_ret, solved)?;
+                unify(throws, found_throws, solved)
+            }
+            _ => Ok(()),
+        },
+        RuntimeTy::Future(value, error) => match ty {
+            RuntimeTy::Future(found_value, found_error) => {
+                unify(value, found_value, solved)?;
+                unify(error, found_error, solved)
+            }
+            _ => Ok(()),
+        },
+        // `T?` learns nothing from a null and binds `T` from anything else;
+        // a union with several variables is left to the engine.
+        RuntimeTy::Union(members) => {
+            if members.iter().any(|member| member == ty) {
+                return Ok(());
+            }
+            let mut vars = members
+                .iter()
+                .filter(|member| matches!(member, RuntimeTy::TypeVar(_)));
+            match (vars.next(), vars.next()) {
+                (Some(var), None) => unify(var, ty, solved),
+                (Some(_), Some(_)) | (None, _) => Ok(()),
+            }
+        }
+        RuntimeTy::Int
+        | RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::Uint8Array
+        | RuntimeTy::Media(_)
+        | RuntimeTy::Literal(..)
+        | RuntimeTy::Enum(_)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::TypeAlias(_)
+        | RuntimeTy::Interface(..)
+        | RuntimeTy::AssociatedTypeProjection { .. }
+        | RuntimeTy::RustType
+        | RuntimeTy::Type
+        | RuntimeTy::Resource
+        | RuntimeTy::PromptAst
+        | RuntimeTy::Void
+        | RuntimeTy::Unknown
+        | RuntimeTy::Never => Ok(()),
+    }
+}
+
 /// Does `ty` mention a type variable anywhere?
 pub(crate) fn mentions_type_var(ty: &RuntimeTy) -> bool {
     match ty {

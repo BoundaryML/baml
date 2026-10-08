@@ -15,10 +15,12 @@
 //! read once into [`Facts`].
 //!
 //! Where a value's type is not fixed by its slot (an `unknown`, a union, an
-//! unbound type variable) the wire states it: a list, map or class node under
-//! such a slot carries a `value_type`, and the engine takes that type as the
-//! node's. Scalars, nulls, enums and handles are self-evident and never carry
-//! one. That is the whole contract between this encoder and the engine.
+//! unbound type variable) the wire states it: a list or map node under such a
+//! slot carries a `value_type`, and the engine takes that type as the node's.
+//! A class node always carries one, since the wire's `class_value` has no
+//! name of its own and every typed SDK states it the same way. Scalars, nulls,
+//! enums and handles are self-evident and never carry one. That is the whole
+//! contract between this encoder and the engine.
 
 mod encode;
 mod error;

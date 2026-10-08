@@ -21,6 +21,7 @@ import baml_bridge.proto
 
 from baml_bridge import BamlFunctionSpec, BamlPyHandle, BamlRuntimeValue, BamlStream
 from baml_bridge.baml_py import (
+    _encode_inbound,
     _handle_refcount,
     _live_handle_count,
     _release_wire_handle,
@@ -28,6 +29,7 @@ from baml_bridge.baml_py import (
     _seed_generic_media_handle,
     _seed_heap_handle,
 )
+from baml_bridge.proto import _EncodedCall
 from baml_bridge.cffi.v1 import (
     baml_handle_pb2,
     baml_inbound_pb2,
@@ -103,11 +105,8 @@ def test_encode_failure_releases_every_cloned_capability_handle():
         capabilities.append(wrap(handle))
 
     before = _live_handle_count()
-    with pytest.raises(TypeError, match="Cannot encode argument 'values'"):
-        baml_bridge.proto.encode_call_args(
-            {"values": [*capabilities, object()]},
-            call_id=1,
-        )
+    with pytest.raises(TypeError, match="argument `values`"):
+        _encode_inbound([*capabilities, object()], "values")
 
     assert _live_handle_count() == before
     for handle in handles:
@@ -121,9 +120,8 @@ def test_successful_encode_retains_clone_until_wire_owner_consumes_it():
     spec = BamlFunctionSpec._from_pyhandle(original)
     before = _live_handle_count()
 
-    encoded = baml_bridge.proto.encode_call_args({"spec": spec}, call_id=2)
-    args = baml_inbound_pb2.CallFunctionArgs.FromString(encoded)
-    wire_key = args.kwargs[0].value.handle.key
+    encoded = baml_inbound_pb2.InboundValue.FromString(_encode_inbound(spec, "spec"))
+    wire_key = encoded.handle.key
 
     assert wire_key != key
     assert _live_handle_count() == before + 1
@@ -218,7 +216,7 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
     call_ids: list[int] = []
 
     class BlockingRuntime:
-        async def call_function(self, _args):
+        async def call_function(self, _args, _kwargs=None, _cancel=None):
             entered.set()
             await asyncio.Future()
 
@@ -232,7 +230,7 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
 
     def encode_call_args(_args, call_id, **_kwargs):
         encoded_call_ids.append(call_id)
-        return b"encoded"
+        return _EncodedCall(b"encoded", None, {}, None)
 
     monkeypatch.setattr(baml_bridge.proto, "encode_call_args", encode_call_args)
     stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
@@ -255,7 +253,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
     call_ids: list[int] = []
 
     class BlockingRuntime:
-        async def call_function(self, _args):
+        async def call_function(self, _args, _kwargs=None, _cancel=None):
             entered.set()
             await asyncio.Future()
 
@@ -269,7 +267,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
     monkeypatch.setattr(
         baml_bridge.proto,
         "encode_call_args",
-        lambda _args, _call_id, **_kwargs: b"encoded",
+        lambda _args, _call_id, **_kwargs: _EncodedCall(b"encoded", None, {}, None),
     )
     stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
 
@@ -287,7 +285,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
 @pytest.mark.asyncio
 async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatch):
     class CompletedRuntime:
-        async def call_function(self, _args):
+        async def call_function(self, _args, _kwargs=None, _cancel=None):
             return b"cancelled-result"
 
     decoded: list[bytes] = []
@@ -302,7 +300,7 @@ async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatc
     monkeypatch.setattr(
         baml_bridge.proto,
         "encode_call_args",
-        lambda _args, _call_id, **_kwargs: b"encoded",
+        lambda _args, _call_id, **_kwargs: _EncodedCall(b"encoded", None, {}, None),
     )
 
     handle = typing.cast(BamlPyHandle, object())

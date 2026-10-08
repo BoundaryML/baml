@@ -73,16 +73,12 @@ pub enum EncodeErrorKind {
     UnknownAlias(TypeName),
     #[error("type alias {0} expands to itself")]
     AliasCycle(TypeName),
-    #[error(
-        "type parameter `{0}` is unbound and the value does not determine it; bind it explicitly"
-    )]
-    UnboundTypeVar(String),
-    #[error("an instance of generic class {0} must carry its type arguments here")]
+    #[error("the fields of this {0} do not determine its type arguments; give them explicitly")]
     MissingTypeArgs(TypeName),
-    #[error("a callable needs a function-typed slot, found slot {0}")]
-    CallableOutsideFunctionSlot(RuntimeTy),
-    #[error("the function declares no parameter `{0}`")]
-    UnknownParameter(String),
+    #[error("the fields of this {class} disagree about its type argument `{param}`")]
+    TypeArgConflict { class: TypeName, param: String },
+    #[error("cannot encode {found}: it has no BAML type")]
+    NoBamlType { found: String },
     #[error("{0}")]
     Host(String),
 }

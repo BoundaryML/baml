@@ -8,9 +8,10 @@
 //!
 //! Three slot shapes do not fix a node's type: `unknown`, an interface and an
 //! unbound type variable (open slots), and a union. A scalar, null, enum or
-//! handle under such a slot is self-evident. A list, map or class is not, so
-//! the node carries a `value_type` naming its concrete type, and the engine
-//! takes that as the node's type. Nothing else ever carries one.
+//! handle under such a slot is self-evident. A list or map is not, so the
+//! node carries a `value_type` naming its concrete type, and the engine takes
+//! that as the node's type. A class node carries one under every slot, since
+//! the wire's `class_value` has no name of its own. Nothing else ever does.
 
 use std::collections::HashMap;
 
@@ -26,7 +27,7 @@ use num_bigint::BigInt;
 
 use crate::{
     error::{EncodeError, EncodeErrorKind, PathSegment},
-    facts::{Facts, FunctionSig, mentions_type_var, substitute},
+    facts::{Facts, FunctionSig, mentions_type_var, substitute, unify},
     host::{Answer, HostValue, Leaf, LeafKind, Scalar, ScalarSlot},
 };
 
@@ -60,9 +61,9 @@ pub struct Encoded {
 ///
 /// `arguments` are `(declared parameter name, value)`; `type_args` are the
 /// caller's explicit type-parameter bindings by name. A type variable the
-/// caller did not bind stays open and the value states its type. A name no
-/// parameter declares is an error here; arity (missing required parameters)
-/// is the engine's to report.
+/// caller did not bind stays open and the value states its type. Names and
+/// arity are the engine's to judge: an argument no parameter declares goes
+/// as the type its value has, and the engine reports it.
 pub fn encode_arguments<V: HostValue>(
     facts: &Facts,
     signature: &FunctionSig,
@@ -74,15 +75,11 @@ pub fn encode_arguments<V: HostValue>(
         .iter()
         .map(|(name, value)| {
             let path = vec![PathSegment::Argument(name.clone())];
-            let param = signature
+            let slot = signature
                 .params
                 .iter()
                 .find(|param| param.name == *name)
-                .ok_or_else(|| EncodeError {
-                    path: path.clone(),
-                    kind: Box::new(EncodeErrorKind::UnknownParameter(name.clone())),
-                })?;
-            let slot = substitute(&param.ty, &resolve);
+                .map_or(RuntimeTy::Unknown, |param| substitute(&param.ty, &resolve));
             let encoded = Walk { facts, path }.encode(value, &slot)?;
             Ok(InboundMapEntry {
                 key: Some(Key::StringKey(name.clone())),
@@ -190,29 +187,67 @@ impl Walk<'_> {
             return Ok(exact(InboundValue::default(), RuntimeTy::Null));
         }
         if let Some((enumeration, variant)) = value.enum_member() {
-            let facts = self
-                .facts
-                .enumeration(&enumeration)
-                .map_err(|kind| self.err(kind))?;
-            return self.variant_of(facts, variant, Fit::AsIs);
+            return match self.facts.enumeration(&enumeration) {
+                Ok(facts) => self.variant_of(facts, variant, Fit::AsIs),
+                // The facts do not reach this enum (no descriptor, or a
+                // declaration the program made at run time): the host names
+                // what it has and the engine judges it.
+                Err(kind) if matches!(*kind, EncodeErrorKind::UnknownEnum(_)) => Ok(Encoded {
+                    value: variant_wire(&enumeration, variant),
+                    ty: RuntimeTy::Enum(enumeration),
+                    fit: Fit::AsIs,
+                }),
+                Err(kind) => Err(self.err(kind)),
+            };
         }
         if let Some(instance) = value.instance() {
-            let class = self
-                .facts
-                .class(&instance.class)
-                .map_err(|kind| self.err(kind))?;
-            let args = match instance.type_args {
-                Some(args) => args,
-                None if class.generic_params.is_empty() => Vec::new(),
-                None => {
-                    return Err(self.err(EncodeErrorKind::MissingTypeArgs(instance.class.clone())));
+            let (wire, args, fit) = match self.facts.class(&instance.class) {
+                Ok(class) => {
+                    let args = match instance.type_args {
+                        Some(args) => Some(args),
+                        None if class.generic_params.is_empty() => Some(Vec::new()),
+                        // Solved from the fields.
+                        None => None,
+                    };
+                    let (wire, fit, args) = self.fields(
+                        &instance.fields,
+                        class,
+                        args.as_deref(),
+                        FieldSource::Instance,
+                    )?;
+                    (wire, args, fit)
                 }
+                // The facts do not reach this class: the host names it and
+                // its fields are what they are; the engine checks them
+                // against the class it knows.
+                Err(kind) if matches!(*kind, EncodeErrorKind::UnknownClass(_)) => {
+                    let mut fit = Fit::AsIs;
+                    let fields = instance
+                        .fields
+                        .iter()
+                        .map(|(name, field)| {
+                            let encoded = self
+                                .child(PathSegment::Field(name.clone()))
+                                .open(field, slot)?;
+                            fit = fit.and(encoded.fit);
+                            Ok(InboundMapEntry {
+                                key: Some(Key::StringKey(name.clone())),
+                                value: Some(encoded.value),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, EncodeError>>()?;
+                    let wire = InboundValue {
+                        value_type: None,
+                        value: Some(Value::ClassValue(InboundClassValue { fields })),
+                    };
+                    (wire, instance.type_args.unwrap_or_default(), fit)
+                }
+                Err(kind) => return Err(self.err(kind)),
             };
-            let fields = self.fields(&instance.fields, class, &args, FieldSource::Instance)?;
             return Ok(stated(
-                fields.0,
+                wire,
                 RuntimeTy::Class(instance.class, args.into()),
-                fields.1,
+                fit,
             ));
         }
         if let Some(items) = value.list() {
@@ -228,7 +263,7 @@ impl Walk<'_> {
                     Ok(encoded.value)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let element = self.join(element_tys, slot)?;
+            let element = Self::join(element_tys);
             return Ok(stated(
                 InboundValue {
                     value_type: None,
@@ -264,9 +299,9 @@ impl Walk<'_> {
             let key = if key_tys.is_empty() {
                 RuntimeTy::String
             } else {
-                self.join(key_tys, slot)?
+                Self::join(key_tys)
             };
-            let item = self.join(value_tys, slot)?;
+            let item = Self::join(value_tys);
             return Ok(stated(
                 InboundValue {
                     value_type: None,
@@ -281,35 +316,36 @@ impl Walk<'_> {
                 fit,
             ));
         }
-        if value.callable(slot).is_some() {
-            return Err(self.err(EncodeErrorKind::CallableOutsideFunctionSlot(slot.clone())));
+        // A callable under an open slot has no signature the host can state;
+        // it crosses as a host callable and the engine binds it to the type
+        // it declares for the slot.
+        match value.callable(slot) {
+            Some(Ok(wire)) => return Ok(exact(wire, RuntimeTy::Unknown)),
+            Some(Err(error)) => return Err(self.err(EncodeErrorKind::Host(error.0))),
+            None => {}
         }
         match value.scalar(ScalarSlot::Open) {
             Answer::AsIs(scalar) | Answer::Converted(scalar) => {
                 let ty = scalar_ty(&scalar);
                 Ok(exact(scalar_wire(scalar), ty))
             }
-            Answer::No => Err(self.mismatch(value, slot)),
+            Answer::No => Err(self.err(EncodeErrorKind::NoBamlType {
+                found: value.describe(),
+            })),
         }
     }
 
-    /// The element type a container under an open slot has: the one type its
-    /// elements share, their union otherwise, and for no elements whatever
-    /// the slot allows (`unknown`), unless the slot is a type variable the
-    /// elements were meant to determine.
-    fn join(&self, mut tys: Vec<RuntimeTy>, slot: &RuntimeTy) -> Result<RuntimeTy, EncodeError> {
+    /// The element type a container has when its slot does not fix one: the
+    /// one type its elements share, their union otherwise, and `never` for no
+    /// elements, which is the exact type of an empty container.
+    fn join(mut tys: Vec<RuntimeTy>) -> RuntimeTy {
         if tys.iter().any(|ty| matches!(ty, RuntimeTy::Unknown)) {
-            return Ok(RuntimeTy::Unknown);
+            return RuntimeTy::Unknown;
         }
         match tys.len() {
-            0 => match slot {
-                RuntimeTy::TypeVar(param) => {
-                    Err(self.err(EncodeErrorKind::UnboundTypeVar(param.as_str().to_string())))
-                }
-                _ => Ok(RuntimeTy::Unknown),
-            },
-            1 => Ok(tys.pop().expect("one element")),
-            _ => Ok(RuntimeTy::Union(tys.into())),
+            0 => RuntimeTy::Never,
+            1 => tys.pop().expect("one element"),
+            _ => RuntimeTy::Union(tys.into()),
         }
     }
 
@@ -492,13 +528,7 @@ impl Walk<'_> {
             }));
         }
         Ok(Encoded {
-            value: InboundValue {
-                value_type: None,
-                value: Some(Value::EnumValue(InboundEnumValue {
-                    name: facts.name.render_dotted(false),
-                    value: variant,
-                })),
-            },
+            value: variant_wire(&facts.name, variant),
             ty: RuntimeTy::Enum(facts.name.clone()),
             fit,
         })
@@ -531,7 +561,7 @@ impl Walk<'_> {
         };
         if mentions_type_var(inner) {
             // The elements determine the element type; the node states it.
-            let element = self.join(element_tys, inner)?;
+            let element = Self::join(element_tys);
             Ok(stated(wire, RuntimeTy::List(Box::new(element)), fit))
         } else {
             Ok(Encoded {
@@ -579,7 +609,7 @@ impl Walk<'_> {
             })),
         };
         if mentions_type_var(value_slot) || mentions_type_var(key_slot) {
-            let item = self.join(value_tys, value_slot)?;
+            let item = Self::join(value_tys);
             let key = if mentions_type_var(key_slot) {
                 RuntimeTy::String
             } else {
@@ -631,6 +661,9 @@ impl Walk<'_> {
     ) -> Result<Encoded, EncodeError> {
         let class = self.facts.class(name).map_err(|kind| self.err(kind))?;
         let unrealized = mentions_type_var(slot);
+        // The class's type arguments: the slot's when it is realized, the
+        // instance's own when it carries them, and otherwise solved from the
+        // fields (`None` below).
         let (fields, args, source) = if let Some(instance) = value.instance() {
             if instance.class != *name {
                 return Err(self.mismatch(value, slot));
@@ -639,17 +672,13 @@ impl Walk<'_> {
                 Some(args) if !unrealized && args[..] != *slot_args => {
                     return Err(self.mismatch(value, slot));
                 }
-                Some(args) => args,
-                None if unrealized && !class.generic_params.is_empty() => {
-                    return Err(self.err(EncodeErrorKind::MissingTypeArgs(name.clone())));
-                }
-                None => slot_args.to_vec(),
+                Some(args) => Some(args),
+                None if unrealized && !class.generic_params.is_empty() => None,
+                None => Some(slot_args.to_vec()),
             };
             (instance.fields, args, FieldSource::Instance)
         } else if let Some(entries) = value.map() {
-            if unrealized && !class.generic_params.is_empty() {
-                return Err(self.err(EncodeErrorKind::MissingTypeArgs(name.clone())));
-            }
+            let args = (!unrealized || class.generic_params.is_empty()).then(|| slot_args.to_vec());
             let fields = entries
                 .into_iter()
                 .map(|(key, item)| match key.scalar(ScalarSlot::String) {
@@ -662,38 +691,46 @@ impl Walk<'_> {
                     }
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            (fields, slot_args.to_vec(), FieldSource::Mapping)
+            (fields, args, FieldSource::Mapping)
         } else {
             return Err(self.mismatch(value, slot));
         };
-        let (wire, fit) = self.fields(&fields, class, &args, source)?;
-        let ty = RuntimeTy::Class(name.clone(), args.into());
-        if unrealized {
-            Ok(stated(wire, ty, fit))
-        } else {
-            Ok(Encoded {
-                value: wire,
-                ty,
-                fit,
-            })
-        }
+        let (wire, fit, args) = self.fields(&fields, class, args.as_deref(), source)?;
+        // A class node always names its class: the wire's `class_value` has
+        // no name of its own, and every typed SDK states it the same way.
+        Ok(stated(
+            wire,
+            RuntimeTy::Class(name.clone(), args.into()),
+            fit,
+        ))
     }
 
-    /// Encode a class's fields against their declared types with `args`
-    /// substituted for the class's parameters.
+    /// Encode a class's fields against their declared types. With `args`, the
+    /// class's parameters are substituted first. Without, each field is
+    /// encoded against its declared type with the parameters open, and the
+    /// parameters are solved from the types the fields turn out to have.
+    /// Returns the arguments used or solved.
+    ///
+    /// The solve belongs to the host, not the engine: what `Box { value: "hi" }`
+    /// is (`Box<string>`, `Box<"hi">`, …) is a question about the host
+    /// language, and a typed host states its arguments outright and never
+    /// reaches this. A dynamic host answers with the natural type each field
+    /// value has, so the engine receives one definite type and solves nothing.
     fn fields<V: HostValue>(
         &self,
         fields: &[(String, V)],
         class: &crate::facts::ClassFacts,
-        args: &[RuntimeTy],
+        args: Option<&[RuntimeTy]>,
         source: FieldSource,
-    ) -> Result<(InboundValue, Fit), EncodeError> {
+    ) -> Result<(InboundValue, Fit, Vec<RuntimeTy>), EncodeError> {
         let resolve = |param: &ParamTy| {
+            let args = args?;
             usize::try_from(param.index())
                 .ok()
                 .filter(|index| *index < class.generic_params.len())
                 .and_then(|index| args.get(index).cloned())
         };
+        let mut solved: Vec<Option<RuntimeTy>> = vec![None; class.generic_params.len()];
         let mut fit = match source {
             FieldSource::Instance => Fit::AsIs,
             FieldSource::Mapping => Fit::Converted,
@@ -730,11 +767,26 @@ impl Walk<'_> {
                 }
             };
             fit = fit.and(encoded.fit);
+            if args.is_none()
+                && let Err(index) = unify(declared, &encoded.ty, &mut solved)
+            {
+                return Err(walk.err(EncodeErrorKind::TypeArgConflict {
+                    class: class.name.clone(),
+                    param: class.generic_params[index].as_str().to_string(),
+                }));
+            }
             wire_fields.push(InboundMapEntry {
                 key: Some(Key::StringKey(name.clone())),
                 value: Some(encoded.value),
             });
         }
+        let args = match args {
+            Some(args) => args.to_vec(),
+            None => solved
+                .into_iter()
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| self.err(EncodeErrorKind::MissingTypeArgs(class.name.clone())))?,
+        };
         Ok((
             InboundValue {
                 value_type: None,
@@ -743,6 +795,7 @@ impl Walk<'_> {
                 })),
             },
             fit,
+            args,
         ))
     }
 
@@ -773,6 +826,11 @@ impl Walk<'_> {
             }
             (LeafKind::Prompt, RuntimeTy::PromptAst) | (LeafKind::TypeValue, RuntimeTy::Type) => {
                 true
+            }
+            // `ai.Prompt` is the class a rendered prompt inhabits; a program
+            // declares it as a class, the wire carries the prompt itself.
+            (LeafKind::Prompt, RuntimeTy::Class(name, args)) => {
+                args.is_empty() && name.render_dotted(false) == <RuntimeTy>::PromptAst.to_string()
             }
             (LeafKind::Media(_) | LeafKind::Prompt | LeafKind::TypeValue, _) => false,
         };
@@ -806,8 +864,8 @@ fn exact(value: InboundValue, ty: RuntimeTy) -> Encoded {
     }
 }
 
-/// A node whose slot did not fix its type: a list, map or class carries the
-/// type it has; a scalar, null or enum is self-evident.
+/// A node that states its type: a list, map or class carries the type it has;
+/// a scalar, null or enum is self-evident and carries nothing.
 fn stated(mut value: InboundValue, ty: RuntimeTy, fit: Fit) -> Encoded {
     let needs_statement = matches!(
         value.value,
@@ -817,6 +875,17 @@ fn stated(mut value: InboundValue, ty: RuntimeTy, fit: Fit) -> Encoded {
         value.value_type = Some(runtime_ty_to_proto_ty(&ty));
     }
     Encoded { value, ty, fit }
+}
+
+/// An enum variant as the wire names it.
+fn variant_wire(enumeration: &TypeName, variant: String) -> InboundValue {
+    InboundValue {
+        value_type: None,
+        value: Some(Value::EnumValue(InboundEnumValue {
+            name: enumeration.render_dotted(false),
+            value: variant,
+        })),
+    }
 }
 
 /// A float literal type has exactly one member: the value its source text
@@ -893,13 +962,12 @@ impl EncodeErrorKind {
             | Self::NotRepresentable { .. }
             | Self::MapKey { .. }
             | Self::MissingTypeArgs(_)
-            | Self::CallableOutsideFunctionSlot(_) => true,
+            | Self::TypeArgConflict { .. }
+            | Self::NoBamlType { .. } => true,
             Self::UnknownClass(_)
             | Self::UnknownEnum(_)
             | Self::UnknownAlias(_)
             | Self::AliasCycle(_)
-            | Self::UnboundTypeVar(_)
-            | Self::UnknownParameter(_)
             | Self::Host(_) => false,
         }
     }
@@ -1399,10 +1467,18 @@ mod tests {
             Some(RuntimeTy::Class(tn("Box"), Box::new([RuntimeTy::Int])))
         );
 
-        assert!(matches!(
-            f.kind(&inst("Box", vec![("item", Mock::Int(1))]), "d"),
-            EncodeErrorKind::MissingTypeArgs(_)
-        ));
+        // An instance that carries no arguments has them solved from its
+        // fields: `item: T` holding an `int` makes it a `Box<int>`.
+        let solved = f.ok(&inst("Box", vec![("item", Mock::Int(1))]), "d");
+        assert_eq!(
+            stated_as(&solved),
+            Some(RuntimeTy::Class(tn("Box"), Box::new([RuntimeTy::Int])))
+        );
+        // A field holding null makes it a `Box<null>`: null is a type too.
+        assert_eq!(
+            stated_as(&f.ok(&inst("Box", vec![("item", Mock::Null)]), "d")),
+            Some(RuntimeTy::Class(tn("Box"), Box::new([RuntimeTy::Null])))
+        );
 
         // Bound explicitly, the slot is realized and the instance needs no args.
         let signature = f.facts.function("user.f").unwrap();
@@ -1415,7 +1491,10 @@ mod tests {
         )
         .unwrap();
         let value = entries[0].value.as_ref().unwrap();
-        assert!(value.value_type.is_none());
+        assert!(matches!(
+            value.value_type.as_ref().and_then(|ty| ty.ty.as_ref()),
+            Some(WireTy::ClassTy(class)) if class.type_args.len() == 1
+        ));
         let Some(Value::ClassValue(InboundClassValue { fields })) = &value.value else {
             panic!("class value");
         };
@@ -1425,13 +1504,13 @@ mod tests {
         );
 
         // A list over the unbound variable states the element type its
-        // elements have; empty, it determines nothing.
+        // elements have; empty, its exact type is `never[]`.
         let p = f.ok(&Mock::List(vec![Mock::Int(1), Mock::Int(2)]), "p");
         assert_eq!(stated_as(&p), Some(RuntimeTy::list(RuntimeTy::Int)));
-        assert!(matches!(
-            f.kind(&Mock::List(vec![]), "p"),
-            EncodeErrorKind::UnboundTypeVar(name) if name == "T"
-        ));
+        assert_eq!(
+            stated_as(&f.ok(&Mock::List(vec![]), "p")),
+            Some(RuntimeTy::list(RuntimeTy::Never))
+        );
     }
 
     #[test]
@@ -1458,7 +1537,7 @@ mod tests {
         );
         assert_eq!(
             stated_as(&f.ok(&Mock::List(vec![]), "g")),
-            Some(RuntimeTy::list(RuntimeTy::Unknown))
+            Some(RuntimeTy::list(RuntimeTy::Never))
         );
 
         let map = f.ok(&Mock::Map(vec![(Mock::Str("k"), Mock::Float(1.5))]), "g");
@@ -1469,13 +1548,54 @@ mod tests {
 
         let a = f.ok(&inst("A", vec![("x", Mock::Int(1))]), "g");
         assert_eq!(stated_as(&a), Some(RuntimeTy::Class(tn("A"), Box::new([]))));
+        assert_eq!(
+            stated_as(&f.ok(&inst("Box", vec![("item", Mock::Str("s"))]), "g")),
+            Some(RuntimeTy::Class(tn("Box"), Box::new([RuntimeTy::String])))
+        );
         assert!(matches!(
-            f.kind(&inst("Box", vec![("item", Mock::Int(1))]), "g"),
-            EncodeErrorKind::MissingTypeArgs(_)
+            f.kind(&Mock::Callable, "a"),
+            EncodeErrorKind::Mismatch { .. }
         ));
+        // A callable under an open slot crosses as a host callable the engine
+        // binds; the host states no type for it.
+        assert_eq!(f.ok(&Mock::Callable, "g").ty, RuntimeTy::Unknown);
+    }
+
+    #[test]
+    fn without_facts_the_host_names_what_it_has() {
+        // No descriptor at all: the walker has no classes or enums, so an
+        // instance names its class and its fields go as they are, and an
+        // enum member names its enum.
+        let facts = Facts::default();
+        let instance = inst("A", vec![("x", Mock::Int(1)), ("s", Mock::Str("k"))]);
+        let encoded = encode(&facts, &instance, &RuntimeTy::Unknown, vec![]).unwrap();
+        assert_eq!(
+            stated_as(&encoded),
+            Some(RuntimeTy::Class(tn("A"), Box::new([])))
+        );
+        let Some(Value::ClassValue(InboundClassValue { fields })) = &encoded.value.value else {
+            panic!("class value");
+        };
+        assert_eq!(fields.len(), 2);
+        let member = encode(
+            &facts,
+            &Mock::Member("Mood", "Sad"),
+            &RuntimeTy::Unknown,
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(member.ty, RuntimeTy::Enum(tn("Mood")));
+        // A declared slot still needs the facts.
         assert!(matches!(
-            f.kind(&Mock::Callable, "g"),
-            EncodeErrorKind::CallableOutsideFunctionSlot(_)
+            *encode(
+                &facts,
+                &instance,
+                &RuntimeTy::Class(tn("A"), Box::new([])),
+                vec![]
+            )
+            .unwrap_err()
+            .kind,
+            EncodeErrorKind::UnknownClass(_)
         ));
     }
 
@@ -1565,14 +1685,19 @@ mod tests {
             Some(Value::FloatValue(2.0))
         );
 
-        let error = encode_arguments(
+        // A name no parameter declares is the engine's to reject; it goes as
+        // the type its value has.
+        let entries = encode_arguments(
             &f.facts,
             signature,
             &HashMap::new(),
             &[("zz".to_string(), Mock::Int(1))],
         )
-        .unwrap_err();
-        assert!(matches!(*error.kind, EncodeErrorKind::UnknownParameter(name) if name == "zz"));
+        .unwrap();
+        assert_eq!(
+            entries[0].value.as_ref().unwrap().value,
+            Some(Value::IntValue(1))
+        );
 
         let nested = Mock::Map(vec![(Mock::Str("k"), Mock::Str("not an int"))]);
         let error = f.encode(&nested, "j").unwrap_err();

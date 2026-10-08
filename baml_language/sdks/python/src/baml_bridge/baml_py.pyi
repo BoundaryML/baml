@@ -19,10 +19,9 @@ __all__ = [
     "invocation_clock_ns",
     "lookup_host_value",
     "new_function_call",
-    "register_host_callable",
+    "register_program_descriptor",
     "register_unhandled_spawn_error_callback",
     "release_function_call",
-    "release_host_callable",
     "shutdown_runtime",
 ]
 
@@ -131,11 +130,11 @@ class BamlRuntime:
     def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
-
+        
         Mirrors `bridge_cffi::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
         runtime.
-
+        
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
@@ -144,18 +143,18 @@ class BamlRuntime:
     def initialize_runtime_from_blob(bytecode: typing.Sequence[builtins.int], embedded_baml_toml: typing.Optional[builtins.str] = None) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
-
+        
         Generated SDKs use this path so importing `baml_sdk` can skip parsing
         and compiling the inlined BAML source files.
-
+        
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, args_proto: bytes) -> typing.Any:
+    def call_function(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, args_proto: bytes) -> bytes:
+    def call_function_sync(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> bytes:
         r"""
         Call a BAML function synchronously (blocking).
         """
@@ -190,7 +189,7 @@ class BamlVideo:
 class FunctionResult:
     r"""
     Result of a BAML function call.
-
+    
     Contains the parsed Python object returned by the function.
     """
     def __new__(cls, value: typing.Any) -> FunctionResult:
@@ -204,17 +203,39 @@ class FunctionResult:
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class _HostExecution:
+    def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
+
+def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
+
 def _complete_host_call_error(call_id: builtins.int, error: typing.Any) -> None: ...
 
 def _complete_host_call_success(call_id: builtins.int, value: typing.Any) -> None: ...
 
+def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> BamlPyHandle: ...
+
 def _discard_host_call_args(args: typing.Sequence[builtins.int]) -> None: ...
+
+def _encode_inbound(value: typing.Any, name: builtins.str = ...) -> bytes:
+    r"""
+    Encode one Python value as the bridge would send it where the program
+    declares no type: the value's own type, stated on the wire where a
+    container or class needs it. Returns `InboundValue` bytes; raises
+    `TypeError` for a value the bridge cannot send. For inspection and tests.
+    """
 
 def _handle_refcount(key: builtins.int) -> typing.Optional[builtins.int]:
     r"""
     Test-only: the outstanding ownership count of a live key — the releases it
     still owes — or `None` for a dead/unknown key. Lets an audit see an
     exactly-once imbalance on a shared engine-heap key, which row counts hide.
+    """
+
+def _host_value_registry_len() -> builtins.int:
+    r"""
+    How many Python objects BAML currently holds through the registry. For
+    tests that check a failed encode released what it registered.
     """
 
 def _invocation_context(handle: typing.Optional[BamlPyHandle]) -> builtins.list[builtins.int]: ...
@@ -266,6 +287,8 @@ def _seed_heap_handle(slab_key: builtins.int) -> tuple[builtins.int, builtins.in
 
 def _trace_selection(handle: BamlPyHandle, call_id: builtins.int) -> tuple[builtins.list[builtins.int], typing.Optional[BamlPyHandle]]: ...
 
+def _validate_host_options(options: typing.Optional[BamlPyHandle]) -> tuple[builtins.bool, builtins.bool, builtins.bool]: ...
+
 def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def get_bridge_runtime_version() -> builtins.str: ...
@@ -274,7 +297,7 @@ def get_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.
-
+    
     Used by the pure-Python factories in `baml_bridge` so generated
     leaves don't have to thread a runtime reference through every call
     site.
@@ -295,7 +318,7 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     `baml_bridge.proto` to rehydrate a `baml.errors.HostCallable` thrown
     by BAML back to the original Python exception object on same-host
     round-trip.
-
+    
     Returns `None` if the handle is the wrong kind, the entry has been
     released (last `HostValueArc` clone already dropped), or the key
     never existed in this runtime's registry (cross-runtime handle):
@@ -304,51 +327,25 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
 
 def new_function_call() -> builtins.int: ...
 
-def register_host_callable(callable: typing.Any, marker: typing.Optional[BamlPyHandle] = None) -> builtins.int:
+def register_program_descriptor(descriptor: typing.Optional[typing.Sequence[builtins.int]]) -> None:
     r"""
-    Insert a Python callable into the registry and return its key.
-
-    Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
-    Called from the inbound encoder in `baml_bridge.proto` whenever a Python
-    callable appears as a kwarg.
+    Install the program descriptor a generated SDK embeds in its typemap
+    (`set_type_map` calls this), or clear it with `None`.
     """
 
 def register_unhandled_spawn_error_callback(callback: typing.Any) -> None: ...
 
 def release_function_call(call_id: builtins.int) -> builtins.bool: ...
 
-def release_host_callable(host_value_key: builtins.int) -> None:
-    r"""
-    Release a host callable the inbound encoder registered but never handed to
-    the engine — the encode-error rollback path.
-
-    Exposed to Python as `baml_py.release_host_callable(key)`. When
-    `encode_call_args` registers a callable for an early kwarg and then a
-    later kwarg fails to encode, the `CallFunctionArgs` is never sent, so the
-    engine never decodes — and so never releases — that key. Without this the
-    registry entry (holding a strong ref to the user callable) would leak for
-    the life of the process. The encoder calls this for every key it
-    registered during a failed encode.
-    """
-
 def shutdown_runtime(timeout: typing.Optional[builtins.float] = None) -> None:
     r"""
     Finalize the SDK lifetime: wait for in-flight calls and spawned work,
     report errors nothing observed, and finish recording and telemetry delivery.
     Repeated calls are harmless; the OS process's exit outcome remains unknown.
-
+    
     `timeout` (seconds) bounds the wait: once it passes, work still running is
     cancelled and then abandoned. Without one the wait lasts as long as the
     work does, as Python's own exit waits for non-daemon threads. Either way,
     Ctrl+C ends it with `KeyboardInterrupt`.
     """
 
-
-class _HostExecution:
-    def finish(self, outcome: builtins.str, value: typing.Optional[typing.Any]) -> None: ...
-
-def _begin_host_invocation(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], inherited: typing.Optional[BamlPyHandle], options: typing.Optional[BamlPyHandle], caller: tuple[builtins.str, builtins.int], inputs: typing.Optional[typing.Any]) -> tuple[_HostExecution, BamlPyHandle, builtins.list[builtins.int]]: ...
-
-def _validate_host_options(options: typing.Optional[BamlPyHandle]) -> tuple[builtins.bool, builtins.bool, builtins.bool]: ...
-
-def _define_host_marker(definition: tuple[builtins.str, builtins.str, builtins.str, builtins.int, builtins.int, builtins.str], options: typing.Optional[BamlPyHandle] = None) -> BamlPyHandle: ...

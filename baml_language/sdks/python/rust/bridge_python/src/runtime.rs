@@ -1,10 +1,12 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
+use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
+use prost::Message;
 use pyo3::{
-    Py, Python,
+    Bound, Py, Python,
     prelude::{PyResult, pyfunction, pymethods},
     pyclass,
-    types::PyAny,
+    types::{PyAny, PyDict},
 };
 use pyo3_stub_gen::{
     derive::{gen_methods_from_python, gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods},
@@ -79,10 +81,10 @@ submit! {
         import typing
 
         class BamlRuntime:
-            def call_function(self, args_proto: bytes) -> typing.Any:
+            def call_function(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> typing.Any:
                 """Call a BAML function asynchronously."""
 
-            def call_function_sync(self, args_proto: bytes) -> bytes:
+            def call_function_sync(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> bytes:
                 """Call a BAML function synchronously (blocking)."""
         "#
     }
@@ -93,15 +95,28 @@ impl BamlRuntime {
     /// Call a BAML function asynchronously.
     ///
     /// # Arguments
-    /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    #[pyo3(signature = (args_proto))]
-    fn call_function<'py>(&self, py: Python<'py>, args_proto: Vec<u8>) -> PyResult<Py<PyAny>> {
-        // Byte-returning site (32c): pre-call host-boundary failures don't
-        // raise — they become a structured BamlOutboundResult envelope so the
-        // future yields bytes that decode_call_result raises uniformly (same
-        // BamlError(baml.errors.*) as an engine failure).
+    /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` with its target and
+    ///   controls but no `kwargs`
+    /// * `kwargs` - The arguments by declared parameter name, as Python values;
+    ///   encoded here against the target's declared types
+    /// * `cancel` - The `_baml.cancel` token, if any
+    #[pyo3(signature = (args_proto, kwargs=None, cancel=None))]
+    fn call_function<'py>(
+        &self,
+        py: Python<'py>,
+        args_proto: Vec<u8>,
+        kwargs: Option<&Bound<'py, PyDict>>,
+        cancel: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        // A value that does not fit its declared type is the caller's error
+        // and raises here, before anything is sent. Byte-returning site (32c)
+        // otherwise: pre-call host-boundary failures don't raise — they become
+        // a structured BamlOutboundResult envelope so the future yields bytes
+        // that decode_call_result raises uniformly (same BamlError(baml.errors.*)
+        // as an engine failure).
         // `decode_invocation_request` pins a handle target before we yield to the event
         // loop, so a Python-side release of that handle cannot race the call.
+        let args_proto = encode_request(py, args_proto, kwargs, cancel)?;
         let request = bridge_cffi::decode_invocation_request(&args_proto);
 
         let environment = match &request {
@@ -126,13 +141,25 @@ impl BamlRuntime {
     /// Call a BAML function synchronously (blocking).
     ///
     /// # Arguments
-    /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    #[pyo3(signature = (args_proto))]
-    fn call_function_sync(&self, py: Python<'_>, args_proto: Vec<u8>) -> PyResult<Vec<u8>> {
-        // Byte-returning site (32c): pre-call host-boundary failures
+    /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` with its target and
+    ///   controls but no `kwargs`
+    /// * `kwargs` - The arguments by declared parameter name, as Python values;
+    ///   encoded here against the target's declared types
+    /// * `cancel` - The `_baml.cancel` token, if any
+    #[pyo3(signature = (args_proto, kwargs=None, cancel=None))]
+    fn call_function_sync(
+        &self,
+        py: Python<'_>,
+        args_proto: Vec<u8>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+        cancel: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Vec<u8>> {
+        // A value that does not fit its declared type raises here. Otherwise
+        // byte-returning site (32c): pre-call host-boundary failures
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // returned bytes decode + raise uniformly via decode_call_result.
+        let args_proto = encode_request(py, args_proto, kwargs, cancel)?;
         let request = (|| -> Result<_, bridge_cffi::BridgeError> {
             let request = bridge_cffi::decode_invocation_request(&args_proto)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
@@ -182,6 +209,30 @@ impl BamlRuntime {
             }
         }
     }
+}
+
+/// Fill the request's `kwargs` (and cancel token) from Python values encoded
+/// against the target's declared types, and return the complete request.
+///
+/// A failed encode has already released every owner it created; the
+/// identified call allocation is retired here so the failure does not strand
+/// it.
+fn encode_request(
+    py: Python<'_>,
+    args_proto: Vec<u8>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+    cancel: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Vec<u8>> {
+    if kwargs.is_none() && cancel.is_none() {
+        return Ok(args_proto);
+    }
+    let mut call = CallFunctionArgs::decode(args_proto.as_slice())
+        .map_err(|error| py_sdk_panic(format!("malformed CallFunctionArgs: {error}")))?;
+    if let Err(error) = crate::encode::encode_call_kwargs(py, &mut call, kwargs, cancel) {
+        bridge_cffi::release_function_call_by_id(call.call_id);
+        return Err(error);
+    }
+    Ok(call.encode_to_vec())
 }
 
 /// Return the process-global `BamlRuntime`, or raise `BamlError` if

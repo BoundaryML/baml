@@ -580,7 +580,8 @@ def test_generic_inference_host_only_object_not_encodable_from_python():
 
     with pytest.raises(TypeError) as excinfo:
         identity(HostThing(3))
-    assert "Cannot encode" in str(excinfo.value)
+    assert "cannot encode" in str(excinfo.value)
+    assert "no BAML type" in str(excinfo.value)
 
 
 # ===========================================================================

@@ -273,8 +273,13 @@ _TYPE_MAP = BamlTypeMap()
 
 
 def set_type_map(m: BamlTypeMap) -> None:
+    """Install `m` as the process typemap and hand its program descriptor to
+    the bridge, which encodes every argument against the types it declares."""
+    from .baml_py import register_program_descriptor
+
     global _TYPE_MAP
     _TYPE_MAP = m
+    register_program_descriptor(m.descriptor)
 
 
 def get_type_map() -> BamlTypeMap:

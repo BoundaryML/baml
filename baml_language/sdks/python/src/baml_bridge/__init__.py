@@ -180,7 +180,7 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 def call_function_sync(rt, function_name, kwargs, *, _baml=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name, _baml=_baml)
-    result_bytes = rt.call_function_sync(args_proto)
+    result_bytes = rt.call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
     return FunctionResult(decode_call_result(result_bytes))
 
 
@@ -188,7 +188,7 @@ async def call_function(rt, function_name, kwargs, *, _baml=None):
     call_id = new_function_call()
     args_proto = encode_call_args(kwargs, call_id, function_name=function_name, _baml=_baml)
     try:
-        result_bytes = await rt.call_function(args_proto)
+        result_bytes = await rt.call_function(args_proto, args_proto.kwargs, args_proto.cancel)
     except asyncio.CancelledError:
         cancel_function_call(call_id)
         raise
@@ -499,7 +499,7 @@ def define_function(
                 function_name=baml_fqn,
                 _baml=options,
             )
-            result_bytes = rt.call_function_sync(args_proto)
+            result_bytes = rt.call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
             return decode_call_result(result_bytes)
 
         _set_binding_metadata(_sync)
@@ -537,7 +537,7 @@ def define_function(
                 _baml=options,
             )
             try:
-                result_bytes = await rt.call_function(args_proto)
+                result_bytes = await rt.call_function(args_proto, args_proto.kwargs, args_proto.cancel)
             except asyncio.CancelledError:
                 cancel_function_call(call_id)
                 raise

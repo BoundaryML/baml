@@ -24,11 +24,12 @@ from typing import Generic, List, TypeVar
 
 import pydantic
 
+import pytest
+
+from baml_bridge.baml_py import _encode_inbound
 from baml_bridge.proto import (  # noqa: E402
-    _base_class_for_fqn,
     _ty_to_python_type,
     _parameterize_tys,
-    _set_inbound_value,
     python_type_to_wire_ty,
 )
 from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
@@ -87,38 +88,29 @@ def _fresh_typemap_with(*classes: type) -> BamlTypeMap:
 
 
 # ---------------------------------------------------------------------------
-# _base_class_for_fqn
-# ---------------------------------------------------------------------------
-
-
-def test_base_class_for_fqn_strips_parameterization():
-    parameterized = Box[int]
-    assert _base_class_for_fqn(parameterized) is Box
-
-
-def test_base_class_for_fqn_passes_non_generic_through():
-    assert _base_class_for_fqn(Plain) is Plain
-
-
-# ---------------------------------------------------------------------------
 # Inbound encoder uses base FQN
 # ---------------------------------------------------------------------------
 
 
+def _encode_with_typemap(value, *classes: type) -> baml_inbound_pb2.InboundValue:
+    """Encode `value` as the bridge sends it where no type is declared, with
+    the given classes registered as BAML classes."""
+    saved = get_type_map()
+    set_type_map(_fresh_typemap_with(*classes))
+    try:
+        return baml_inbound_pb2.InboundValue.FromString(_encode_inbound(value, "x"))
+    finally:
+        set_type_map(saved)
+
+
 def test_inbound_class_value_carries_base_fqn():
     """13b §2.1 — `Box[int](item=5)` serializes with `value_type.class_ty.name` set to
-    the base class's FQN, not the parameterized form. The runtime here is
-    not initialized so `_derive_baml_fqn` returns ""; what matters is that
-    the encoder reaches the Pydantic branch with the *base* class on the
-    `_derive_baml_fqn` call. Easiest assertion: the encode succeeds and
-    the resulting class_value's `fields` round-trip the data."""
-    inbound = baml_inbound_pb2.InboundValue()
-    box = Box[int](item=5)
-    _set_inbound_value(inbound, box, kwarg_name="x")
+    the base class's FQN, not the parameterized form, and its fields under
+    their wire names."""
+    inbound = _encode_with_typemap(Box[int](item=5), Box)
     assert inbound.WhichOneof("value") == "class_value"
+    assert inbound.value_type.class_ty.name == "user.lorem.Box"
     cv = inbound.class_value
-    # Without sdk_root set, FQN derivation returns "" — but it must not
-    # raise, and the field encoding must still happen.
     assert len(cv.fields) == 1
     assert cv.fields[0].string_key == "item"
     assert cv.fields[0].value.int_value == 5
@@ -389,36 +381,34 @@ def test_decode_class_nested_generic():
 # Phase 2/4: generic instance args carry sparse `value_type`; `_types=` is dict-only
 # ---------------------------------------------------------------------------
 
-import pytest  # noqa: E402
-
 from baml_bridge import _resolve_types_kwarg  # noqa: E402
 
 
 def test_generic_instance_carries_sparse_value_type():
     """A generic instance argument (`Box[int]`) carries its concrete class type
     args in the node-level `value_type` channel."""
-    inbound = baml_inbound_pb2.InboundValue()
-    _set_inbound_value(inbound, Box[int](item=5), kwarg_name="x")
+    inbound = _encode_with_typemap(Box[int](item=5), Box)
     assert inbound.HasField("value_type")
     assert len(inbound.value_type.class_ty.type_args) == 1
     assert inbound.value_type.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
 
 
 def test_unbound_generic_instance_carries_nominal_sparse_value_type():
-    """An erased generic keeps nominal identity while omitting unknown args."""
-    inbound = baml_inbound_pb2.InboundValue()
-    _set_inbound_value(inbound, Box(item=5), kwarg_name="x")
+    """With no program descriptor the bridge cannot know `Box` is generic; an
+    erased instance (`Box(item=5)`) keeps nominal identity and omits args."""
+    inbound = _encode_with_typemap(Box(item=5), Box)
     assert inbound.WhichOneof("value") == "class_value"
     assert inbound.HasField("value_type")
+    assert inbound.value_type.class_ty.name == "user.lorem.Box"
     assert len(inbound.value_type.class_ty.type_args) == 0
 
 
 def test_non_generic_instance_value_type_has_no_type_args():
     """A non-generic instance still binds its class via `value_type` (the FQN
     channel, now the sole class-name source) but carries no type args."""
-    inbound = baml_inbound_pb2.InboundValue()
-    _set_inbound_value(inbound, Plain(a=1), kwarg_name="x")
+    inbound = _encode_with_typemap(Plain(a=1), Plain)
     assert inbound.HasField("value_type")
+    assert inbound.value_type.class_ty.name == "user.lorem.Plain"
     assert len(inbound.value_type.class_ty.type_args) == 0
 
 

@@ -195,7 +195,7 @@ def test_callable_returning_unencodable_surfaces_as_error():
     rt = _make_runtime()
 
     def cb(_x: int):
-        return object()  # not encodable by _set_inbound_value
+        return object()  # fits no declared type the bridge can encode
 
     with pytest.raises(Exception) as exc_info:
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
@@ -276,34 +276,25 @@ def test_host_throw_encode_failure_releases_capability_clone():
 # ---------------------------------------------------------------------------
 
 
-def test_encode_error_releases_registered_callables(monkeypatch):
-    """If a later kwarg fails to encode, every callable registered for an
-    earlier kwarg must be released via `release_host_callable` so it doesn't
-    leak in the per-process registry."""
-    released: list = []
-    # Spy on the symbol where `encode_call_args` resolves it (proto's
-    # namespace), not its canonical home in `baml_py`. proto re-imports but
-    # doesn't re-export it, so the attribute read trips reportPrivateImportUsage.
-    real_release = _proto.release_host_callable  # pyright: ignore[reportPrivateImportUsage]
+def test_encode_error_releases_registered_callables():
+    """If a later argument fails to encode, every callable registered for an
+    earlier argument must be released again, so it does not leak in the
+    per-process registry. The call never reaches the engine."""
+    from baml_bridge.baml_py import _host_value_registry_len
 
-    def spy_release(key):
-        released.append(key)
-        return real_release(key)
-
-    monkeypatch.setattr(_proto, "release_host_callable", spy_release)
+    rt = _make_runtime()
 
     def cb(x: int) -> str:
         return str(x)
 
-    # `bad` is an un-encodable value (an arbitrary object). Dict iteration
-    # order in CPython 3.7+ is insertion order, so `callback` (registered
-    # first) is followed by `bad` (which fails) — exercising the rollback.
-    with pytest.raises(Exception):
-        _proto.encode_call_args({"callback": cb, "bad": object()}, call_id=3)
+    before = _host_value_registry_len()
+    # Dict iteration order in CPython 3.7+ is insertion order, so `callback`
+    # (registered first) is followed by `x` (an `object()` where an `int` is
+    # declared, which fails) — exercising the rollback.
+    with pytest.raises(TypeError, match="argument `x`"):
+        call_function_sync(rt, "CallCb", {"callback": cb, "x": object()})
 
-    assert len(released) == 1, (
-        f"expected exactly one callable to be released on rollback, got {released}"
-    )
+    assert _host_value_registry_len() == before
 
 
 # ---------------------------------------------------------------------------
@@ -374,22 +365,3 @@ def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
     )
 
 
-def test_encode_success_does_not_release(monkeypatch):
-    """A successful encode must NOT eagerly release the callable — that
-    happens later via the engine's GC-timed release path."""
-    released: list = []
-    monkeypatch.setattr(
-        _proto, "release_host_callable", lambda key: released.append(key)
-    )
-    # Stub registration too, so the callable is never inserted into the real
-    # process-wide table. Otherwise this test would leak a live host-value key:
-    # `encode_call_args` registers `cb`, but the bytes are discarded (never sent
-    # to the engine) and `release_host_callable` above is a no-op recorder, so
-    # nothing would ever release it.
-    monkeypatch.setattr(_proto, "register_host_callable", lambda _value, _marker: 999)
-
-    def cb(x: int) -> str:
-        return str(x)
-
-    _proto.encode_call_args({"callback": cb, "x": 5}, call_id=4)
-    assert released == [], "successful encode should not release the callable"

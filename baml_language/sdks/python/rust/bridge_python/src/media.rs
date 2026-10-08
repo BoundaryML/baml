@@ -207,6 +207,36 @@ macro_rules! define_media_pyclass {
         }
 
         impl $name {
+            /// The media's canonical payload as the inbound wire carries it:
+            /// kind, mime type, and exactly one of url / base64 / file.
+            pub(crate) fn wire_payload(
+                &self,
+                py: Python<'_>,
+            ) -> PyResult<bridge_ctypes::baml_bridge::cffi::BamlValueMedia> {
+                use bridge_ctypes::baml_bridge::cffi::{
+                    BamlValueMedia, MediaTypeEnum, baml_value_media::Value,
+                };
+                let media = match $media_kind {
+                    MediaKind::Image => MediaTypeEnum::Image,
+                    MediaKind::Audio => MediaTypeEnum::Audio,
+                    MediaKind::Video => MediaTypeEnum::Video,
+                    MediaKind::Pdf => MediaTypeEnum::Pdf,
+                    MediaKind::Generic => MediaTypeEnum::Other,
+                };
+                let value = if let Some(url) = self.url(py)? {
+                    Value::Url(url)
+                } else if let Some(file) = self.file(py)? {
+                    Value::File(file)
+                } else {
+                    Value::Base64(self.base64(py)?)
+                };
+                Ok(BamlValueMedia {
+                    media: media as i32,
+                    mime_type: self.mime_type(py)?,
+                    value: Some(value),
+                })
+            }
+
             fn access_optional_string(
                 &self,
                 py: Python<'_>,

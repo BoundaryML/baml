@@ -1815,15 +1815,19 @@ dependencies = [
 name = "bridge_python"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_sdkgen_types",
+ "baml_type",
  "baml_version",
  "bex_events",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "bridge_encode",
  "btel_snapshot",
  "btel_types",
  "indexmap",
  "log",
+ "num-bigint",
  "prost",
  "pyo3",
  "pyo3-async-runtimes",

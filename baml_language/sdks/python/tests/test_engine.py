@@ -557,10 +557,12 @@ class TestCallFunctionSync:
         result = call_function_sync(rt,"ReturnFloat", {"f": 3.14})
         assert abs(result.result() - 3.14) < 0.001
 
-    def test_raw_empty_list_uses_dynamic_union_default(self):
-        """A raw Python [] selects the first matching list arm."""
+    def test_raw_list_is_judged_by_the_type_it_states(self):
+        """This process has no generated SDK, so the bridge knows no declared
+        types and a raw Python list states the type its elements give it:
+        `[1]` is an `int[]` and takes that arm."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt, "ClassifyAmbiguousEmptyList", {"value": []})
+        result = call_function_sync(rt, "ClassifyAmbiguousEmptyList", {"value": [1]})
         assert result.result() == "ints"
 
     def test_returned_closure_accepts_args_and_decodes_results(self):
