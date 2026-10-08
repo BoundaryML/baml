@@ -4,13 +4,22 @@
     unused_variables,
     unused_assignments,
     unused_labels,
+    unused_imports,
     unreachable_code,
+    non_camel_case_types,
     clippy::just_underscores_and_digits,
-    clippy::needless_return
+    clippy::needless_return,
+    clippy::needless_borrow,
+    clippy::redundant_clone,
+    clippy::let_and_return,
+    clippy::unit_arg,
+    clippy::let_unit_value
 )]
-use bex_lang::{Int63, Panic, int};
+use bex_lang::{Int63, Panic, Str, Thrown, array, float, int, json, string};
+use bex_lang::handle::{Shared, shared};
+use bex_lang::render::ToBaml;
 /// BAML function `user.collatz_steps`.
-pub fn user_collatz_steps(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_collatz_steps(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: Int63 = Int63::ZERO;
     let mut _3: Int63 = Int63::ZERO;
@@ -70,7 +79,7 @@ pub fn user_collatz_steps(mut _1: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.sum_odd_squares`.
-pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: Int63 = Int63::ZERO;
     let mut _3: Int63 = Int63::ZERO;
@@ -134,7 +143,7 @@ pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.gcd`.
-pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
+pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _3: Int63 = Int63::ZERO;
     let mut _4: Int63 = Int63::ZERO;
@@ -163,7 +172,7 @@ pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.first_factor`.
-pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: Int63 = Int63::ZERO;
     let mut _3: bool = false;
@@ -206,7 +215,7 @@ pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.nested`.
-pub fn user_nested(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: Int63 = Int63::ZERO;
     let mut _3: Int63 = Int63::ZERO;

@@ -7,7 +7,7 @@ use std::{fmt::Write as _, path::Path};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::{NativeModule, Scalar, print::render_rust_file};
+use crate::{NativeModule, NativeTy, print::render_rust_file};
 
 /// How [`write_project`] lays out the generated crate.
 #[derive(Debug, Clone)]
@@ -23,11 +23,17 @@ pub struct ProjectOptions<'a> {
 
 /// Write `module` as a Cargo project under `out_dir`:
 ///
-/// - `Cargo.toml`: its own workspace, depending on `bex_lang` by path;
+/// - `Cargo.toml`: its own workspace, depending on `bex_lang` by path (the
+///   generated structs derive serde through `bex_lang::serde`);
 /// - `src/lib.rs`: the generated module;
 /// - `src/main.rs`: a host shim that parses `--<param> <value>` flags for the
-///   entry function, prints its result, and exits with the panic's exit code
-///   on an uncaught throw;
+///   entry function, prints its result through `ToBaml`, and exits with the
+///   throw's exit code on an uncaught throw. When the entry takes a class,
+///   array or nullable parameter the shim cannot parse
+///   ([`CompiledFunction::shim_callable`](crate::CompiledFunction::shim_callable)
+///   is false), `main` prints `` error: entry `user.x` takes non-scalar
+///   arguments; link the library instead `` and exits with code 2; writing
+///   the project never fails for that reason;
 /// - `mir.txt`: the MIR the module was generated from.
 pub fn write_project(
     module: &NativeModule<'_>,
@@ -83,10 +89,61 @@ const SHIM_HEADER: &str = "\
 #![allow(unused_mut, unused_variables, dead_code, clippy::all)]
 ";
 
+/// How the shim parses one parameter kind.
+enum ArgParser {
+    Int,
+    Bool,
+    Float,
+    Str,
+}
+
+impl ArgParser {
+    fn for_ty(ty: &NativeTy<'_>) -> Option<Self> {
+        match ty {
+            NativeTy::Int => Some(Self::Int),
+            NativeTy::Bool => Some(Self::Bool),
+            NativeTy::Float => Some(Self::Float),
+            NativeTy::Str => Some(Self::Str),
+            NativeTy::Null
+            | NativeTy::Array(_)
+            | NativeTy::Class(_)
+            | NativeTy::Option(_)
+            | NativeTy::ArrayIter(_) => None,
+        }
+    }
+
+    fn usage_name(&self) -> &'static str {
+        match self {
+            Self::Int => "int",
+            Self::Bool => "bool",
+            Self::Float => "float",
+            Self::Str => "string",
+        }
+    }
+
+    fn function(&self) -> TokenStream {
+        match self {
+            Self::Int => quote! { parse_int },
+            Self::Bool => quote! { parse_bool },
+            Self::Float => quote! { parse_float },
+            Self::Str => quote! { parse_string },
+        }
+    }
+
+    fn rust_type(&self) -> TokenStream {
+        match self {
+            Self::Int => quote! { bex_lang::Int63 },
+            Self::Bool => quote! { bool },
+            Self::Float => quote! { f64 },
+            Self::Str => quote! { bex_lang::Str },
+        }
+    }
+}
+
 /// The std-only `main.rs`: `--<param> <value>` flags in any order, `--help`,
 /// `error: ...` on stderr with exit 1 for bad input, the entry function's
-/// result on stdout, and `error: uncaught throw: ...` plus the panic's exit
-/// code when it throws.
+/// result (rendered through `ToBaml`) on stdout, and
+/// `error: uncaught throw: ...` plus the throw's exit code when it throws.
 fn host_shim(module: &NativeModule<'_>, options: &ProjectOptions<'_>) -> std::io::Result<String> {
     let entry = module
         .functions
@@ -95,39 +152,53 @@ fn host_shim(module: &NativeModule<'_>, options: &ProjectOptions<'_>) -> std::io
     let crate_ident = format_ident!("{}", options.crate_name.replace('-', "_"));
     let function = format_ident!("{}", entry.rust_name);
 
+    let mut parsers = Vec::with_capacity(entry.params.len());
+    for (_, ty) in &entry.params {
+        match ArgParser::for_ty(ty) {
+            Some(parser) => parsers.push(parser),
+            None => {
+                let message = format!(
+                    "error: entry `{}` takes non-scalar arguments; link the library instead",
+                    entry.link_name
+                );
+                let tokens = quote! {
+                    fn main() {
+                        eprintln!(#message);
+                        std::process::exit(2);
+                    }
+                };
+                return render_rust_file(SHIM_HEADER, tokens)
+                    .map_err(|error| std::io::Error::other(error.to_string()));
+            }
+        }
+    }
+
     let usage = {
         let mut text = format!("usage: {}", options.crate_name);
-        for (name, scalar) in &entry.params {
-            let kind = match scalar {
-                Scalar::Int => "int",
-                Scalar::Bool => "bool",
-            };
-            let _ = write!(text, " --{name} <{kind}>");
+        for ((name, _), parser) in entry.params.iter().zip(&parsers) {
+            let _ = write!(text, " --{name} <{}>", parser.usage_name());
         }
         text
     };
 
-    let slots: Vec<TokenStream> = entry
-        .params
+    let slots: Vec<TokenStream> = parsers
         .iter()
         .enumerate()
-        .map(|(index, (_, scalar))| {
+        .map(|(index, parser)| {
             let slot = format_ident!("arg_{index}");
-            let ty = scalar_type(*scalar);
+            let ty = parser.rust_type();
             quote! { let mut #slot: Option<#ty> = None; }
         })
         .collect();
     let arms: Vec<TokenStream> = entry
         .params
         .iter()
+        .zip(&parsers)
         .enumerate()
-        .map(|(index, (name, scalar))| {
+        .map(|(index, ((name, _), parser))| {
             let slot = format_ident!("arg_{index}");
             let flag = format!("--{name}");
-            let parser = match scalar {
-                Scalar::Int => quote! { parse_int },
-                Scalar::Bool => quote! { parse_bool },
-            };
+            let parser = parser.function();
             quote! { #flag => #slot = Some(#parser(#name, value)), }
         })
         .collect();
@@ -144,8 +215,13 @@ fn host_shim(module: &NativeModule<'_>, options: &ProjectOptions<'_>) -> std::io
         .collect();
     let values = (0..entry.params.len()).map(|index| format_ident!("value_{index}"));
     let print = match entry.ret {
-        Some(_) => quote! { Ok(value) => println!("{value}"), },
-        None => quote! { Ok(()) => {} },
+        NativeTy::Null => quote! { Ok(()) => {} },
+        _ => quote! {
+            Ok(value) => {
+                let rendered = bex_lang::render::ToBaml::to_baml(&value);
+                println!("{rendered}");
+            }
+        },
     };
 
     let tokens = quote! {
@@ -177,6 +253,17 @@ fn host_shim(module: &NativeModule<'_>, options: &ProjectOptions<'_>) -> std::io
             }
         }
 
+        fn parse_float(name: &str, value: &str) -> f64 {
+            match value.parse::<f64>() {
+                Ok(parsed) => parsed,
+                Err(_) => fail(&format!("argument `--{name}` expects a float, got `{value}`")),
+            }
+        }
+
+        fn parse_string(_name: &str, value: &str) -> bex_lang::Str {
+            bex_lang::Str::from(value.to_string())
+        }
+
         fn main() {
             let args: Vec<String> = std::env::args().skip(1).collect();
             #(#slots)*
@@ -200,19 +287,12 @@ fn host_shim(module: &NativeModule<'_>, options: &ProjectOptions<'_>) -> std::io
             #(#required)*
             match #crate_ident::#function(#(#values),*) {
                 #print
-                Err(panic) => {
-                    eprintln!("error: uncaught throw: {}", panic.render_readable());
-                    std::process::exit(panic.exit_code());
+                Err(thrown) => {
+                    eprintln!("error: uncaught throw: {}", thrown.render_readable());
+                    std::process::exit(thrown.exit_code());
                 }
             }
         }
     };
     render_rust_file(SHIM_HEADER, tokens).map_err(|error| std::io::Error::other(error.to_string()))
-}
-
-fn scalar_type(scalar: Scalar) -> TokenStream {
-    match scalar {
-        Scalar::Int => quote! { bex_lang::Int63 },
-        Scalar::Bool => quote! { bool },
-    }
 }

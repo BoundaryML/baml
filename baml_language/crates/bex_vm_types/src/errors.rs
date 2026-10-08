@@ -121,6 +121,12 @@ impl From<bex_lang::Panic> for VmPanic {
                 right: Value::int(0),
             },
             Panic::IntegerOverflow { message } => Self::IntegerOverflow { message },
+            Panic::IndexOutOfBounds { index, length } => Self::IndexOutOfBounds {
+                index: index.get(),
+                // A sequence length is never negative; `0` only guards the
+                // conversion, it cannot be reached from a real access.
+                length: usize::try_from(length.get()).unwrap_or(0),
+            },
             Panic::NegativeBitShift { message } => Self::NegativeBitShift { message },
             Panic::UserPanic { message } => Self::UserPanic { message },
             Panic::AssertionFailed => Self::AssertionFailed,
@@ -644,6 +650,10 @@ mod lang_parity_tests {
             Panic::IntegerOverflow {
                 message: "1 + 1 overflows int".into(),
             },
+            Panic::IndexOutOfBounds {
+                index: int63(-4),
+                length: int63(3),
+            },
             Panic::NegativeBitShift {
                 message: "bit shift count is negative: -1".into(),
             },
@@ -658,6 +668,20 @@ mod lang_parity_tests {
         for panic in panics {
             assert_eq!(VmPanic::from(panic.clone()).to_string(), panic.to_string());
         }
+    }
+
+    #[test]
+    fn index_out_of_bounds_keeps_the_written_index_and_length() {
+        assert_eq!(
+            VmPanic::from(Panic::IndexOutOfBounds {
+                index: int63(-4),
+                length: int63(3),
+            }),
+            VmPanic::IndexOutOfBounds {
+                index: -4,
+                length: 3,
+            }
+        );
     }
 
     #[test]
@@ -684,6 +708,13 @@ mod lang_parity_tests {
                     message: String::new(),
                 },
                 PanicClass::UserPanic,
+            ),
+            (
+                Panic::IndexOutOfBounds {
+                    index: Int63::ZERO,
+                    length: Int63::ZERO,
+                },
+                PanicClass::IndexOutOfBounds,
             ),
             (Panic::AssertionFailed, PanicClass::AssertionFailed),
             (Panic::Unreachable, PanicClass::Unreachable),

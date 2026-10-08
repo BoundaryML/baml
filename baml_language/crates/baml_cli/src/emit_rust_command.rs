@@ -1,6 +1,7 @@
 //! `baml __emit-rust`: ahead-of-time Rust emission for the supported subset.
 //!
-//! Hidden developer command. It lowers one entry function and its direct
+//! Hidden developer command. It lowers the requested functions (or, with
+//! `--all`, every admitted function of the workspace) and their transitive
 //! callees through the MIR-to-Rust backend and writes a standalone Cargo
 //! project that links `bex_lang`, the runtime crate shared with the VM. The
 //! generated binary contains no bytecode interpreter.
@@ -22,7 +23,7 @@ use clap::Args;
 
 use crate::reporter::{Reporter, print_error};
 
-/// Emit a standalone Rust project for one BAML function (developer preview).
+/// Emit a standalone Rust project for BAML functions (developer preview).
 #[derive(Args, Debug)]
 #[command(after_long_help = "\
 Examples:
@@ -30,6 +31,14 @@ Examples:
     baml __emit-rust --function main --out ./native \\
         --runtime-path <baml checkout>/baml_language/crates/bex_lang
     cargo run --release --manifest-path ./native/Cargo.toml -- --n 27
+
+  Emit `prepare` and `run` into one library (the shim is built around the
+  first function named):
+    baml __emit-rust --function prepare --function run --out ./native \\
+        --runtime-path <baml checkout>/baml_language/crates/bex_lang
+
+  Emit every function the backend admits, printing the admission report:
+    baml __emit-rust --all --out ./native --runtime-path ...
 
   Show which functions of the project the native backend accepts:
     baml __emit-rust --report")]
@@ -41,9 +50,20 @@ pub struct EmitRustArgs {
     #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
-    /// Entry function: a bare name (`main`) or link name (`user.main`).
-    #[arg(long, value_name = "NAME", required_unless_present = "report")]
-    pub function: Option<String>,
+    /// A function to compile: a bare name (`main`) or link name
+    /// (`user.main`). Repeatable; the first one is the host shim's entry.
+    #[arg(
+        long,
+        value_name = "NAME",
+        action = clap::ArgAction::Append,
+        required_unless_present_any = ["report", "all"]
+    )]
+    pub function: Vec<String>,
+
+    /// Compile every function of the workspace the backend admits, printing
+    /// the admission report; rejected functions are skipped.
+    #[arg(long, conflicts_with = "function")]
+    pub all: bool,
 
     /// Directory that receives the generated Cargo project.
     #[arg(long, value_name = "DIR", required_unless_present = "report")]
@@ -102,53 +122,67 @@ impl EmitRustArgs {
 
         if self.report {
             reporter.finish("Checked", format!("{} function(s)", functions.len()));
-            let mut accepted = 0usize;
-            for loc in &functions {
-                let link_name = MirFunctionId::Declared(*loc).link_name(db);
-                match native::admit(db, *loc) {
-                    Ok(()) => {
-                        accepted += 1;
-                        println!("native      {link_name}");
-                    }
-                    Err(native::Rejection::Unsupported(reason)) => {
-                        println!("unsupported {link_name}: {reason}");
-                    }
-                    Err(native::Rejection::Invalid(reason)) => {
-                        println!("INVALID     {link_name}: {reason}");
-                    }
-                }
-            }
-            println!("{accepted} of {} function(s) admitted", functions.len());
+            let admitted = print_report(db, &functions);
+            println!("{admitted} of {} function(s) admitted", functions.len());
             return Ok(crate::ExitCode::Success);
         }
 
-        let (Some(wanted), Some(out), Some(runtime_path)) =
-            (&self.function, &self.out, &self.runtime_path)
-        else {
-            bail!("--function, --out and --runtime-path are required unless --report is given");
+        let (Some(out), Some(runtime_path)) = (&self.out, &self.runtime_path) else {
+            bail!("--out and --runtime-path are required unless --report is given");
         };
 
-        let mut matches = functions.iter().copied().filter(|loc| {
-            let link_name = MirFunctionId::Declared(*loc).link_name(db);
-            link_name == *wanted || function_data(db, *loc).name.as_str() == wanted.as_str()
-        });
-        let Some(entry) = matches.next() else {
-            reporter.abandon();
-            print_error(format_args!(
-                "function `{wanted}` not found in the workspace"
-            ));
-            return Ok(crate::ExitCode::InvalidArgs);
+        let roots: Vec<_> = if self.all {
+            reporter.finish("Checked", format!("{} function(s)", functions.len()));
+            let roots: Vec<_> = functions
+                .iter()
+                .copied()
+                .filter(|loc| native::admit(db, *loc).is_ok())
+                .collect();
+            print_report(db, &functions);
+            if roots.is_empty() {
+                print_error(format_args!(
+                    "the native backend admits no function of this workspace"
+                ));
+                return Ok(crate::ExitCode::Other);
+            }
+            roots
+        } else {
+            let mut roots = Vec::with_capacity(self.function.len());
+            for wanted in &self.function {
+                let mut matches = functions.iter().copied().filter(|loc| {
+                    let link_name = MirFunctionId::Declared(*loc).link_name(db);
+                    link_name == *wanted || function_data(db, *loc).name.as_str() == wanted.as_str()
+                });
+                let Some(entry) = matches.next() else {
+                    reporter.abandon();
+                    print_error(format_args!(
+                        "function `{wanted}` not found in the workspace"
+                    ));
+                    return Ok(crate::ExitCode::InvalidArgs);
+                };
+                if matches.next().is_some() {
+                    reporter.abandon();
+                    print_error(format_args!(
+                        "function name `{wanted}` is ambiguous; use its link name (for example `user.{wanted}`)"
+                    ));
+                    return Ok(crate::ExitCode::InvalidArgs);
+                }
+                if !roots.contains(&entry) {
+                    roots.push(entry);
+                }
+            }
+            roots
         };
-        if matches.next().is_some() {
-            reporter.abandon();
-            print_error(format_args!(
-                "function name `{wanted}` is ambiguous; use its link name (for example `user.{wanted}`)"
-            ));
-            return Ok(crate::ExitCode::InvalidArgs);
-        }
 
-        reporter.spin("Emitting", MirFunctionId::Declared(entry).link_name(db));
-        let module = match native::compile(db, entry) {
+        reporter.spin(
+            "Emitting",
+            roots
+                .iter()
+                .map(|loc| MirFunctionId::Declared(*loc).link_name(db))
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+        let module = match native::compile_many(db, &roots) {
             Ok(module) => module,
             Err(native::Rejection::Unsupported(reason)) => {
                 reporter.abandon();
@@ -186,10 +220,47 @@ impl EmitRustArgs {
         for function in &module.functions {
             println!("native {}", function.link_name);
         }
+        let entry = &module.functions[module.entry];
+        if !entry.shim_callable() {
+            println!(
+                "shim: `{}` takes non-scalar arguments; the project is usable as a library only",
+                entry.link_name
+            );
+        }
         println!(
             "build: cargo build --release --manifest-path {}",
             out.join("Cargo.toml").display()
         );
         Ok(crate::ExitCode::Success)
     }
+}
+
+/// Print one admission line per function and return how many are admitted.
+/// An admitted function whose parameters the host shim cannot parse from the
+/// command line is marked `(library only)`.
+fn print_report(
+    db: &baml_db::ProjectDatabase,
+    functions: &[baml_db::baml_compiler2_hir::loc::FunctionLoc<'_>],
+) -> usize {
+    let mut accepted = 0usize;
+    for loc in functions {
+        let link_name = MirFunctionId::Declared(*loc).link_name(db);
+        match native::admit(db, *loc) {
+            Ok(admitted) => {
+                accepted += 1;
+                if admitted.shim_callable() {
+                    println!("native      {link_name}");
+                } else {
+                    println!("native (library only) {link_name}");
+                }
+            }
+            Err(native::Rejection::Unsupported(reason)) => {
+                println!("unsupported {reason}");
+            }
+            Err(native::Rejection::Invalid(reason)) => {
+                println!("INVALID     {reason}");
+            }
+        }
+    }
+    accepted
 }

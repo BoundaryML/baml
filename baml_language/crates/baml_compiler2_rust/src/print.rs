@@ -1,9 +1,10 @@
-//! Rust source for admitted functions, built as tokens and pretty-printed.
+//! Rust source for admitted functions and classes, built as tokens and
+//! pretty-printed.
 
 use baml_compiler2_hir::loc::FunctionLoc;
 use baml_compiler2_mir::{
-    BinOp, BlockId, Constant, Local, Operand, Place, Rvalue, ShortCircuitKind, StatementKind,
-    SwitchKey, Terminator, TyTemplate, TypeTest, UnaryOp,
+    AggregateKind, BinOp, BlockId, Constant, IndexKind, Local, Operand, Place, Rvalue,
+    ShortCircuitKind, StatementKind, SwitchKey, Terminator, TyTemplate, TypeTest, UnaryOp,
 };
 use baml_type::Literal;
 use proc_macro2::{Ident, Span, TokenStream};
@@ -13,8 +14,10 @@ use syn::Lifetime;
 
 use crate::{
     Rejection,
-    function::{CallKind, Candidate, LocalKind, is_dead_null_write},
+    classes::{ClassInfo, ClassTable},
+    function::{Builtin, CallKind, Candidate, LocalKind, SortKind, is_dead_null_write},
     structure::Stmt,
+    types::{Coercion, NativeTy, coercion},
 };
 
 /// The comment and crate attributes above the generated items. Token streams
@@ -26,23 +29,37 @@ const HEADER: &str = "\
     unused_variables,
     unused_assignments,
     unused_labels,
+    unused_imports,
     unreachable_code,
+    non_camel_case_types,
     clippy::just_underscores_and_digits,
-    clippy::needless_return
+    clippy::needless_return,
+    clippy::needless_borrow,
+    clippy::redundant_clone,
+    clippy::let_and_return,
+    clippy::unit_arg,
+    clippy::let_unit_value
 )]
 ";
 
-/// Render every candidate as one Rust module. `names` gives each function's
-/// Rust identifier, callees included.
+/// Render every class and candidate as one Rust module. `names` gives each
+/// function's Rust identifier, callees included.
 pub(crate) fn render_module<'db>(
+    classes: &[&ClassInfo<'db>],
     candidates: &[Candidate<'db>],
     names: &FxHashMap<FunctionLoc<'db>, Ident>,
+    table: &ClassTable<'db>,
 ) -> Result<String, Rejection> {
     let mut items = quote! {
-        use bex_lang::{Int63, Panic, int};
+        use bex_lang::{Int63, Panic, Str, Thrown, array, float, int, json, string};
+        use bex_lang::handle::{Shared, shared};
+        use bex_lang::render::ToBaml;
     };
+    for class in classes {
+        items.extend(render_class(class, table));
+    }
     for candidate in candidates {
-        items.extend(Printer::new(candidate, names).function()?);
+        items.extend(Printer::new(candidate, names, table).function()?);
     }
     render_rust_file(HEADER, items)
 }
@@ -58,22 +75,78 @@ pub(crate) fn render_rust_file(header: &str, tokens: TokenStream) -> Result<Stri
     Ok(format!("{header}{}", prettyplease::unparse(&file)))
 }
 
+/// The struct for one class: fields in declaration order with serde derives
+/// (through `bex_lang`'s re-export), and the `ToBaml` rendering
+/// `Name { f: v, .. }`.
+fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenStream {
+    let class_ident = |class| table.ident(class);
+    let doc = format!(" BAML class `{}`.", class.link_name);
+    let name = &class.ident;
+    let fields = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        let ty = field.ty.to_tokens(&class_ident);
+        let rename = field.renamed().then(|| {
+            let baml_name = &field.name;
+            quote! { #[serde(rename = #baml_name)] }
+        });
+        let float = (field.ty == NativeTy::Float).then(|| {
+            quote! { #[serde(serialize_with = "bex_lang::json::serialize_f64")] }
+        });
+        quote! {
+            #rename
+            #float
+            pub #ident: #ty,
+        }
+    });
+    let display_name = &class.display_name;
+    let expecting = format!("expected JSON object for class `{}`", class.json_name);
+    let rendered = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        let baml_name = &field.name;
+        quote! { (#baml_name, &self.#ident as &dyn ToBaml) }
+    });
+    quote! {
+        #[doc = #doc]
+        #[derive(bex_lang::serde::Serialize, bex_lang::serde::Deserialize)]
+        #[serde(crate = "bex_lang::serde", expecting = #expecting)]
+        pub struct #name {
+            #(#fields)*
+        }
+
+        impl ToBaml for #name {
+            fn render(&self, out: &mut String, _nested: bool) {
+                bex_lang::render::class(out, #display_name, &[#(#rendered),*]);
+            }
+        }
+    }
+}
+
 struct Printer<'a, 'db> {
     candidate: &'a Candidate<'db>,
     names: &'a FxHashMap<FunctionLoc<'db>, Ident>,
+    classes: &'a ClassTable<'db>,
     /// Blocks that head a loop, whose merge label (if any) needs its own name.
     loop_headers: FxHashSet<usize>,
 }
 
 impl<'a, 'db> Printer<'a, 'db> {
-    fn new(candidate: &'a Candidate<'db>, names: &'a FxHashMap<FunctionLoc<'db>, Ident>) -> Self {
+    fn new(
+        candidate: &'a Candidate<'db>,
+        names: &'a FxHashMap<FunctionLoc<'db>, Ident>,
+        classes: &'a ClassTable<'db>,
+    ) -> Self {
         let mut loop_headers = FxHashSet::default();
         collect_loop_headers(&candidate.structured, &mut loop_headers);
         Self {
             candidate,
             names,
+            classes,
             loop_headers,
         }
+    }
+
+    fn ty(&self, ty: &NativeTy<'db>) -> TokenStream {
+        ty.to_tokens(&|class| self.classes.ident(class))
     }
 
     fn function(&self) -> Result<TokenStream, Rejection> {
@@ -84,32 +157,33 @@ impl<'a, 'db> Printer<'a, 'db> {
             .ok_or_else(|| Rejection::invalid("function has no Rust name"))?;
         let doc = format!(" BAML function `{}`.", candidate.link_name);
         let params = candidate
-            .param_kinds()
-            .iter()
+            .param_tys()
+            .into_iter()
             .enumerate()
-            .map(|(index, kind)| {
+            .map(|(index, ty)| {
                 let ident = local_ident(Local(index + 1));
-                let ty = kind_type(*kind);
+                let ty = self.ty(ty);
                 quote! { mut #ident: #ty }
             });
-        let ret = kind_type(candidate.return_kind());
+        let ret = self.ty(candidate.return_ty());
         let locals = candidate
             .kinds
             .iter()
             .enumerate()
-            .filter(|(index, kind)| {
-                !(1..=candidate.arity()).contains(index) && **kind != LocalKind::Never
-            })
-            .map(|(index, kind)| {
+            .filter(|(index, _)| !(1..=candidate.arity()).contains(index))
+            .filter_map(|(index, kind)| {
+                let ty = kind.value()?;
                 let ident = local_ident(Local(index));
-                let ty = kind_type(*kind);
-                let zero = kind_zero(*kind);
-                quote! { let mut #ident: #ty = #zero; }
+                let tokens = self.ty(ty);
+                Some(match ty.zero() {
+                    Some(zero) => quote! { let mut #ident: #tokens = #zero; },
+                    None => quote! { let mut #ident: #tokens; },
+                })
             });
         let body = self.tail_stmts(&candidate.structured)?;
         Ok(quote! {
             #[doc = #doc]
-            pub fn #name(#(#params),*) -> Result<#ret, Panic> {
+            pub fn #name(#(#params),*) -> Result<#ret, Thrown> {
                 #(#locals)*
                 #(#body)*
             }
@@ -166,7 +240,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let else_branch = self.body(else_branch, tail)?;
                 match self.terminator(BlockId(*block))? {
                     Terminator::Branch { condition, .. } => {
-                        let condition = self.operand(condition)?;
+                        let condition = self.operand(condition, None)?;
                         quote! {
                             if #condition { #(#then_branch)* } else { #(#else_branch)* }
                         }
@@ -180,8 +254,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                         destination,
                         ..
                     } => {
-                        let operand = self.operand(operand)?;
-                        let destination = self.place(destination)?;
+                        let operand = self.operand(operand, None)?;
+                        let destination = self.local_place(destination)?;
                         match kind {
                             ShortCircuitKind::And => quote! {
                                 if #operand {
@@ -220,7 +294,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 else {
                     return Err(Rejection::invalid("multi-way branch without a switch"));
                 };
-                let discriminant = self.operand(discriminant)?;
+                let discriminant = self.operand(discriminant, None)?;
                 let mut seen = FxHashSet::default();
                 let mut match_arms = Vec::with_capacity(arms.len());
                 for (indices, body) in arms {
@@ -263,8 +337,12 @@ impl<'a, 'db> Printer<'a, 'db> {
             Stmt::Exit(block) => match (self.terminator(BlockId(*block))?, tail) {
                 (Terminator::Return, true) => quote! { Ok(_0) },
                 (Terminator::Return, false) => quote! { return Ok(_0); },
-                (Terminator::Unreachable, true) => quote! { Err(Panic::Unreachable) },
-                (Terminator::Unreachable, false) => quote! { return Err(Panic::Unreachable); },
+                (Terminator::Unreachable, true) => {
+                    quote! { Err(Thrown::from(Panic::Unreachable)) }
+                }
+                (Terminator::Unreachable, false) => {
+                    quote! { return Err(Thrown::from(Panic::Unreachable)); }
+                }
                 _ => return Err(Rejection::invalid("exit without a return")),
             },
         })
@@ -282,155 +360,612 @@ impl<'a, 'db> Printer<'a, 'db> {
                 lines.push(line);
             }
         }
-        if let Terminator::Call {
-            args, destination, ..
-        } = self.terminator(block)?
-        {
-            let call = self
-                .candidate
-                .call(block)
-                .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
-            lines.push(match call {
-                CallKind::Panic(message) => quote! {
-                    return Err(Panic::UserPanic { message: String::from(#message) });
-                },
-                CallKind::Direct { callee, .. } => {
-                    let callee = self
-                        .names
-                        .get(callee)
-                        .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
-                    let args = args
-                        .iter()
-                        .map(|arg| self.operand(arg))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let destination = self.place(destination)?;
-                    quote! { #destination = #callee(#(#args),*)?; }
-                }
-            });
+        match self.terminator(block)? {
+            Terminator::Call {
+                args,
+                ntypeargs,
+                destination,
+                ..
+            } => {
+                let call = self
+                    .candidate
+                    .call(block)
+                    .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
+                lines.push(self.call(call, &args[*ntypeargs..], destination)?);
+            }
+            Terminator::VirtualCall {
+                args, destination, ..
+            } => {
+                let call = self
+                    .candidate
+                    .call(block)
+                    .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
+                lines.push(self.call(call, args, destination)?);
+            }
+            _ => {}
         }
         Ok(lines)
+    }
+
+    fn call(
+        &self,
+        call: &CallKind<'db>,
+        args: &[Operand<'db>],
+        destination: &Place,
+    ) -> Result<TokenStream, Rejection> {
+        let arg = |index: usize| -> Result<&Operand<'db>, Rejection> {
+            args.get(index)
+                .ok_or_else(|| Rejection::invalid("call has fewer arguments than analyzed"))
+        };
+        // Statements run before the store, then the stored value.
+        let (prelude, value, result) = match call {
+            CallKind::Panic(message) => {
+                return Ok(quote! {
+                    return Err(Thrown::from(Panic::UserPanic { message: String::from(#message) }));
+                });
+            }
+            CallKind::Direct {
+                callee,
+                args: params,
+                result,
+                ..
+            } => {
+                let callee = self
+                    .names
+                    .get(callee)
+                    .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
+                let args = args
+                    .iter()
+                    .zip(params)
+                    .map(|(arg, param)| self.operand(arg, Some(param)))
+                    .collect::<Result<Vec<_>, _>>()?;
+                (TokenStream::new(), quote! { #callee(#(#args),*)? }, result)
+            }
+            CallKind::Builtin { builtin, result } => {
+                let (prelude, value) = match builtin {
+                    Builtin::ArrayPush => {
+                        let array = self.operand_ref(arg(0)?)?;
+                        let element_ty = match self.operand_ty(arg(0)?)? {
+                            NativeTy::Array(element) => *element,
+                            _ => return Err(Rejection::invalid("`push` on a non-array")),
+                        };
+                        let value = self.operand(arg(1)?, Some(&element_ty))?;
+                        (
+                            quote! { array::push(#array, #value); },
+                            quote! { array::len(#array) },
+                        )
+                    }
+                    Builtin::JsonDeserialize(target) => {
+                        let target = self.ty(target);
+                        let text = self.operand_ref(arg(0)?)?;
+                        (
+                            TokenStream::new(),
+                            quote! { json::deserialize::<#target>(#text)? },
+                        )
+                    }
+                    Builtin::JsonToString => {
+                        let value = self.operand_ref(arg(0)?)?;
+                        (TokenStream::new(), quote! { json::to_string(#value)? })
+                    }
+                    Builtin::ToStringDefault => {
+                        let value = self.operand_ref(arg(0)?)?;
+                        (TokenStream::new(), quote! { ToBaml::to_baml(#value) })
+                    }
+                    Builtin::StringLength => {
+                        let value = self.operand_ref(arg(0)?)?;
+                        (TokenStream::new(), quote! { string::length(#value) })
+                    }
+                    Builtin::StringIsAscii => {
+                        let value = self.operand_ref(arg(0)?)?;
+                        (TokenStream::new(), quote! { string::is_ascii(#value) })
+                    }
+                    Builtin::FloatFloor => {
+                        let value = self.operand(arg(0)?, None)?;
+                        (TokenStream::new(), quote! { float::floor(#value) })
+                    }
+                    Builtin::FloatItrunc => {
+                        let value = self.operand(arg(0)?, None)?;
+                        (TokenStream::new(), quote! { float::itrunc(#value)? })
+                    }
+                    Builtin::IsNull { operand } => {
+                        let value = self.operand_borrowed(arg(*operand)?)?;
+                        (TokenStream::new(), quote! { #value.is_none() })
+                    }
+                    Builtin::Iter => {
+                        let array = self.operand_ref(arg(0)?)?;
+                        (TokenStream::new(), quote! { array::iter(#array) })
+                    }
+                    Builtin::Next => {
+                        let (Operand::Copy(Place::Local(iterator))
+                        | Operand::Move(Place::Local(iterator))) = arg(0)?
+                        else {
+                            return Err(Rejection::invalid("`next` receiver is not a local"));
+                        };
+                        let iterator = local_ident(*iterator);
+                        (TokenStream::new(), quote! { array::next(&mut #iterator) })
+                    }
+                    Builtin::Sort(kind) => {
+                        let array = self.operand_ref(arg(0)?)?;
+                        let sorted = self.operand(arg(0)?, Some(result))?;
+                        let sort = match kind {
+                            SortKind::Int => quote! { array::sort_int },
+                            SortKind::Float => quote! { array::sort_float },
+                            SortKind::Str => quote! { array::sort_str },
+                        };
+                        (quote! { #sort(#array); }, sorted)
+                    }
+                };
+                (prelude, value, result)
+            }
+        };
+        let target = self.local_place(destination)?;
+        let target_ty = self.place_ty(destination)?;
+        let value = match coercion(result, &target_ty) {
+            Some(Coercion::Wrap) => quote! { Some(#value) },
+            _ => value,
+        };
+        Ok(quote! {
+            #prelude
+            #target = #value;
+        })
     }
 
     fn statement(&self, kind: &StatementKind<'db>) -> Result<Option<TokenStream>, Rejection> {
         match kind {
             StatementKind::Assign { destination, value } => {
-                let target = self.place(destination)?;
-                if is_dead_null_write(value)
-                    && !matches!(self.place_kind(destination)?, LocalKind::Void)
+                if let Place::Local(local) = destination
+                    && matches!(self.kind(*local)?, LocalKind::Type)
                 {
-                    return Ok(Some(quote! { return Err(Panic::Unreachable); }));
+                    // A `load_type` feeding a generic call: no code, the call
+                    // site is monomorphized.
+                    return Ok(None);
                 }
-                let value = self.rvalue(value)?;
-                Ok(Some(quote! { #target = #value; }))
+                let target_ty = self.place_ty(destination)?;
+                if is_dead_null_write(value)
+                    && !matches!(target_ty, NativeTy::Null | NativeTy::Option(_))
+                {
+                    return Ok(Some(
+                        quote! { return Err(Thrown::from(Panic::Unreachable)); },
+                    ));
+                }
+                let value = self.rvalue(value, &target_ty)?;
+                let value = match (value_rvalue_ty(self, kind, &target_ty), &target_ty) {
+                    (Some(actual), target) if coercion(&actual, target) == Some(Coercion::Wrap) => {
+                        quote! { Some(#value) }
+                    }
+                    _ => value,
+                };
+                Ok(Some(match destination {
+                    Place::Local(local) => {
+                        let ident = local_ident(*local);
+                        quote! { #ident = #value; }
+                    }
+                    // The value is computed first so a `borrow()` its
+                    // operands took on the same cell is released before the
+                    // `borrow_mut()` of the store.
+                    Place::Field { base, field } => {
+                        let class = base_ty(self, base)?;
+                        let field = self.field_ident(class, *field)?;
+                        let base = self.place(base)?;
+                        quote! {{
+                            let value = #value;
+                            #base.borrow_mut().#field = value;
+                        }}
+                    }
+                    Place::Index { base, index, kind } => {
+                        if *kind == IndexKind::Map {
+                            return Err(Rejection::unsupported("map index"));
+                        }
+                        let base = self.place(base)?;
+                        let index = local_ident(*index);
+                        quote! {{
+                            let value = #value;
+                            array::set(&#base, #index, value)?;
+                        }}
+                    }
+                    Place::Capture(_) | Place::Deref(_) => {
+                        return Err(Rejection::unsupported("captured local"));
+                    }
+                }))
             }
-            // Scalars have no destructor, and a dropped read cannot fail.
-            StatementKind::Drop(_) | StatementKind::Nop => Ok(None),
+            // Dropping a handle or a scalar early changes nothing observable;
+            // the Rust value is dropped at scope end.
+            StatementKind::Drop(_) | StatementKind::Nop | StatementKind::Intrinsic { .. } => {
+                Ok(None)
+            }
             other => Err(Rejection::unsupported(format!("statement {other:?}"))),
         }
     }
 
-    fn rvalue(&self, value: &Rvalue<'db>) -> Result<TokenStream, Rejection> {
+    /// The value of `value`, which is being stored into a place of type
+    /// `target`.
+    fn rvalue(
+        &self,
+        value: &Rvalue<'db>,
+        target: &NativeTy<'db>,
+    ) -> Result<TokenStream, Rejection> {
         Ok(match value {
-            Rvalue::Use(operand) => self.operand(operand)?,
-            Rvalue::BinaryOp { op, left, right } => {
-                let left = self.operand(left)?;
-                let right = self.operand(right)?;
-                match op {
-                    BinOp::Add => quote! { int::add(#left, #right)? },
-                    BinOp::Sub => quote! { int::sub(#left, #right)? },
-                    BinOp::Mul => quote! { int::mul(#left, #right)? },
-                    BinOp::Div => quote! { int::div(#left, #right)? },
-                    BinOp::Mod => quote! { int::rem(#left, #right)? },
-                    BinOp::Shl => quote! { int::shl(#left, #right)? },
-                    BinOp::Shr => quote! { int::shr(#left, #right)? },
-                    BinOp::BitAnd => quote! { int::bit_and(#left, #right) },
-                    BinOp::BitOr => quote! { int::bit_or(#left, #right) },
-                    BinOp::BitXor => quote! { int::bit_xor(#left, #right) },
-                    // Operands are locals or literal blocks, so no operator
-                    // needs parentheses around them.
-                    BinOp::Eq => quote! { #left == #right },
-                    BinOp::Ne => quote! { #left != #right },
-                    BinOp::Lt => quote! { #left < #right },
-                    BinOp::Le => quote! { #left <= #right },
-                    BinOp::Gt => quote! { #left > #right },
-                    BinOp::Ge => quote! { #left >= #right },
+            Rvalue::Use(operand) => {
+                let ty = self.operand_ty_with(operand, Some(target))?;
+                if coercion(&ty, target) == Some(Coercion::Unwrap) {
+                    // The for-in element copy, guarded by the `Done` test. A
+                    // `Copy` option is read in place; a handle is cloned.
+                    let option = self.operand_borrowed(operand)?;
+                    let option = if ty.is_copy() {
+                        option
+                    } else {
+                        quote! { #option.clone() }
+                    };
+                    return Ok(quote! {
+                        #option.expect("for-in element after Done check")
+                    });
                 }
+                self.operand(operand, Some(target))?
+            }
+            Rvalue::BinaryOp { op, left, right } => {
+                let left_ty = self.operand_ty(left)?;
+                let right_ty = self.operand_ty_with(right, Some(&left_ty))?;
+                let left_ty = match (&left_ty, &right_ty) {
+                    (NativeTy::Null, NativeTy::Option(_)) => right_ty.clone(),
+                    _ => left_ty,
+                };
+                self.binary_op(*op, left, right, &left_ty, &right_ty)?
             }
             Rvalue::UnaryOp { op, operand } => {
-                let kind = self.operand_kind(operand)?;
-                let operand = self.operand(operand)?;
-                match (op, kind) {
+                let ty = self.operand_ty(operand)?;
+                let operand = self.operand(operand, None)?;
+                match (op, ty) {
                     (UnaryOp::Not, _) => quote! { !#operand },
+                    (UnaryOp::Neg, NativeTy::Float) => quote! { -#operand },
                     (UnaryOp::Neg, _) => quote! { int::neg(#operand)? },
-                    (UnaryOp::Truthy, LocalKind::Int) => quote! { #operand != Int63::ZERO },
+                    (UnaryOp::Truthy, NativeTy::Int) => quote! { #operand != Int63::ZERO },
                     (UnaryOp::Truthy, _) => operand,
                 }
+            }
+            Rvalue::Array(_, elements) => {
+                let NativeTy::Array(element_ty) = target else {
+                    return Err(Rejection::invalid("array literal stored in a non-array"));
+                };
+                let element_tokens = self.ty(element_ty);
+                let elements = elements
+                    .iter()
+                    .map(|element| self.operand(element, Some(element_ty)))
+                    .collect::<Result<Vec<_>, _>>()?;
+                if elements.is_empty() {
+                    quote! { array::new::<#element_tokens>(Vec::new()) }
+                } else {
+                    quote! { array::new::<#element_tokens>(Vec::from([#(#elements),*])) }
+                }
+            }
+            Rvalue::Len(place) => {
+                let place = self.place(place)?;
+                quote! { array::len(&#place) }
+            }
+            Rvalue::Aggregate {
+                kind: AggregateKind::Class { class, .. },
+                fields,
+            } => {
+                let info = self.classes.info(*class)?;
+                let name = &info.ident;
+                let fields = fields
+                    .iter()
+                    .zip(&info.fields)
+                    .map(|(operand, field)| {
+                        let ident = &field.ident;
+                        let value = self.operand(operand, Some(&field.ty))?;
+                        Ok(quote! { #ident: #value })
+                    })
+                    .collect::<Result<Vec<_>, Rejection>>()?;
+                quote! { shared(#name { #(#fields),* }) }
             }
             Rvalue::IsType {
                 operand,
                 test: TypeTest::Template(TyTemplate::Literal(literal, _)),
             } => {
-                let operand = self.operand(operand)?;
+                let value = self.operand(operand, None)?;
                 match literal {
-                    Literal::Int(value) => {
-                        let expected = int_literal(*value)?;
-                        quote! { #operand == #expected }
+                    Literal::Int(value_lit) => {
+                        let expected = int_literal(*value_lit)?;
+                        quote! { #value == #expected }
                     }
-                    Literal::Bool(true) => operand,
-                    Literal::Bool(false) => quote! { !#operand },
+                    Literal::Bool(true) => value,
+                    Literal::Bool(false) => quote! { !#value },
                     _ => return Err(Rejection::unsupported("type test other than a literal")),
                 }
+            }
+            Rvalue::IsType {
+                operand,
+                test: TypeTest::Class { .. },
+            } => {
+                // Admission only accepts the `baml.iter.Done` test on an
+                // `Option`.
+                let option = self.operand_borrowed(operand)?;
+                quote! { #option.is_none() }
             }
             other => return Err(Rejection::unsupported(format!("rvalue {other:?}"))),
         })
     }
 
-    fn operand(&self, operand: &Operand<'db>) -> Result<TokenStream, Rejection> {
+    fn binary_op(
+        &self,
+        op: BinOp,
+        left: &Operand<'db>,
+        right: &Operand<'db>,
+        left_ty: &NativeTy<'db>,
+        right_ty: &NativeTy<'db>,
+    ) -> Result<TokenStream, Rejection> {
+        let unsupported = || {
+            Rejection::unsupported(format!(
+                "`{op}` on `{}` and `{}`",
+                self.describe(left_ty),
+                self.describe(right_ty)
+            ))
+        };
+        Ok(match left_ty {
+            NativeTy::Int => {
+                let l = self.operand(left, None)?;
+                let r = self.operand(right, None)?;
+                match op {
+                    BinOp::Add => quote! { int::add(#l, #r)? },
+                    BinOp::Sub => quote! { int::sub(#l, #r)? },
+                    BinOp::Mul => quote! { int::mul(#l, #r)? },
+                    BinOp::Div => quote! { int::div(#l, #r)? },
+                    BinOp::Mod => quote! { int::rem(#l, #r)? },
+                    BinOp::Shl => quote! { int::shl(#l, #r)? },
+                    BinOp::Shr => quote! { int::shr(#l, #r)? },
+                    BinOp::BitAnd => quote! { int::bit_and(#l, #r) },
+                    BinOp::BitOr => quote! { int::bit_or(#l, #r) },
+                    BinOp::BitXor => quote! { int::bit_xor(#l, #r) },
+                    // Operands are locals or literal blocks, so no operator
+                    // needs parentheses around them.
+                    BinOp::Eq => quote! { #l == #r },
+                    BinOp::Ne => quote! { #l != #r },
+                    BinOp::Lt => quote! { #l < #r },
+                    BinOp::Le => quote! { #l <= #r },
+                    BinOp::Gt => quote! { #l > #r },
+                    BinOp::Ge => quote! { #l >= #r },
+                }
+            }
+            NativeTy::Float => {
+                let l = self.operand(left, None)?;
+                let r = self.operand(right, None)?;
+                match op {
+                    BinOp::Add => quote! { #l + #r },
+                    BinOp::Sub => quote! { #l - #r },
+                    BinOp::Mul => quote! { #l * #r },
+                    BinOp::Div => quote! { #l / #r },
+                    BinOp::Mod => quote! { #l % #r },
+                    BinOp::Eq => quote! { float::eq(#l, #r) },
+                    BinOp::Ne => quote! { !float::eq(#l, #r) },
+                    BinOp::Lt => quote! { float::lt(#l, #r) },
+                    BinOp::Le => quote! { float::le(#l, #r) },
+                    BinOp::Gt => quote! { float::gt(#l, #r) },
+                    BinOp::Ge => quote! { float::ge(#l, #r) },
+                    _ => return Err(unsupported()),
+                }
+            }
+            NativeTy::Str => {
+                let l = self.operand_ref(left)?;
+                let r = self.operand_ref(right)?;
+                match op {
+                    BinOp::Add => quote! { string::concat(#l, #r) },
+                    BinOp::Eq => quote! { string::eq(#l, #r) },
+                    BinOp::Ne => quote! { !string::eq(#l, #r) },
+                    BinOp::Lt => quote! { string::cmp(#l, #r).is_lt() },
+                    BinOp::Le => quote! { string::cmp(#l, #r).is_le() },
+                    BinOp::Gt => quote! { string::cmp(#l, #r).is_gt() },
+                    BinOp::Ge => quote! { string::cmp(#l, #r).is_ge() },
+                    _ => return Err(unsupported()),
+                }
+            }
+            NativeTy::Bool => {
+                let l = self.operand(left, None)?;
+                let r = self.operand(right, None)?;
+                match op {
+                    BinOp::Eq => quote! { #l == #r },
+                    BinOp::Ne => quote! { #l != #r },
+                    _ => return Err(unsupported()),
+                }
+            }
+            NativeTy::Null => match op {
+                BinOp::Eq => quote! { true },
+                BinOp::Ne => quote! { false },
+                _ => return Err(unsupported()),
+            },
+            NativeTy::Option(_) => {
+                // One side is the `null` constant: admission checked that.
+                let value = if matches!(left, Operand::Constant(Constant::Null)) {
+                    right
+                } else {
+                    left
+                };
+                let value = self.operand_borrowed(value)?;
+                match op {
+                    BinOp::Eq => quote! { #value.is_none() },
+                    BinOp::Ne => quote! { #value.is_some() },
+                    _ => return Err(unsupported()),
+                }
+            }
+            NativeTy::Array(_) | NativeTy::Class(_) | NativeTy::ArrayIter(_) => {
+                return Err(unsupported());
+            }
+        })
+    }
+
+    /// An owned value for `operand`: a copy of a scalar, a clone of a handle
+    /// or string, or a literal. `expected` makes a `null` constant the `None`
+    /// of an `Option` target and wraps a `T` stored into a `T | null` in
+    /// `Some`.
+    fn operand(
+        &self,
+        operand: &Operand<'db>,
+        expected: Option<&NativeTy<'db>>,
+    ) -> Result<TokenStream, Rejection> {
+        let ty = self.operand_ty_with(operand, expected)?;
+        let expr = match operand {
+            Operand::Copy(place) | Operand::Move(place) => {
+                let expr = self.place(place)?;
+                if ty.is_copy() || matches!(place, Place::Index { .. }) {
+                    expr
+                } else {
+                    quote! { #expr.clone() }
+                }
+            }
+            Operand::Constant(constant) => match constant {
+                Constant::Int(value) => int_literal(*value)?,
+                Constant::Bool(value) => quote! { #value },
+                Constant::Float(value) => float_literal(*value),
+                Constant::String(value) => quote! { string::from_literal(#value) },
+                Constant::Null => match expected {
+                    Some(NativeTy::Option(_)) => quote! { None },
+                    _ => quote! { () },
+                },
+                other => return Err(Rejection::unsupported(format!("constant {other:?}"))),
+            },
+        };
+        Ok(
+            match expected.and_then(|expected| coercion(&ty, expected)) {
+                Some(Coercion::Wrap) => quote! { Some(#expr) },
+                _ => expr,
+            },
+        )
+    }
+
+    /// `operand` as an expression that can be borrowed without cloning: the
+    /// place itself, or a literal.
+    fn operand_borrowed(&self, operand: &Operand<'db>) -> Result<TokenStream, Rejection> {
         match operand {
             Operand::Copy(place) | Operand::Move(place) => self.place(place),
-            Operand::Constant(Constant::Int(value)) => int_literal(*value),
-            Operand::Constant(Constant::Bool(value)) => Ok(quote! { #value }),
-            Operand::Constant(Constant::Null) => Ok(quote! { () }),
-            Operand::Constant(other) => Err(Rejection::unsupported(format!("constant {other:?}"))),
+            Operand::Constant(_) => self.operand(operand, None),
         }
     }
 
-    fn operand_kind(&self, operand: &Operand<'db>) -> Result<LocalKind, Rejection> {
+    /// A `&T` for `operand`.
+    fn operand_ref(&self, operand: &Operand<'db>) -> Result<TokenStream, Rejection> {
+        let value = self.operand_borrowed(operand)?;
+        Ok(quote! { &#value })
+    }
+
+    fn operand_ty(&self, operand: &Operand<'db>) -> Result<NativeTy<'db>, Rejection> {
+        self.operand_ty_with(operand, None)
+    }
+
+    fn operand_ty_with(
+        &self,
+        operand: &Operand<'db>,
+        expected: Option<&NativeTy<'db>>,
+    ) -> Result<NativeTy<'db>, Rejection> {
         match operand {
-            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => self
-                .candidate
-                .kinds
-                .get(local.0)
-                .copied()
-                .ok_or_else(|| Rejection::invalid(format!("{local} is not declared"))),
-            Operand::Constant(Constant::Int(_)) => Ok(LocalKind::Int),
-            Operand::Constant(Constant::Bool(_)) => Ok(LocalKind::Bool),
-            Operand::Constant(Constant::Null) => Ok(LocalKind::Void),
-            other => Err(Rejection::unsupported(format!("operand {other:?}"))),
+            Operand::Copy(place) | Operand::Move(place) => self.place_ty(place),
+            Operand::Constant(Constant::Int(_)) => Ok(NativeTy::Int),
+            Operand::Constant(Constant::Bool(_)) => Ok(NativeTy::Bool),
+            Operand::Constant(Constant::Float(_)) => Ok(NativeTy::Float),
+            Operand::Constant(Constant::String(_)) => Ok(NativeTy::Str),
+            Operand::Constant(Constant::Null) => Ok(match expected {
+                Some(option @ NativeTy::Option(_)) => option.clone(),
+                _ => NativeTy::Null,
+            }),
+            other @ Operand::Constant(_) => {
+                Err(Rejection::unsupported(format!("operand {other:?}")))
+            }
         }
     }
 
-    fn place_kind(&self, place: &Place) -> Result<LocalKind, Rejection> {
+    fn kind(&self, local: Local) -> Result<&LocalKind<'db>, Rejection> {
+        self.candidate
+            .kinds
+            .get(local.0)
+            .ok_or_else(|| Rejection::invalid(format!("{local} is not declared")))
+    }
+
+    fn local_ty(&self, local: Local) -> Result<NativeTy<'db>, Rejection> {
+        match self.kind(local)? {
+            LocalKind::Value(ty) => Ok(ty.clone()),
+            LocalKind::Never => Err(Rejection::unsupported("read of a `never` local")),
+            LocalKind::Type => Err(Rejection::unsupported("type value used as a value")),
+        }
+    }
+
+    fn place_ty(&self, place: &Place) -> Result<NativeTy<'db>, Rejection> {
         match place {
-            Place::Local(local) => self
-                .candidate
-                .kinds
-                .get(local.0)
-                .copied()
-                .ok_or_else(|| Rejection::invalid(format!("{local} is not declared"))),
-            other => Err(Rejection::unsupported(format!("place `{other}`"))),
+            Place::Local(local) => self.local_ty(*local),
+            Place::Field { base, field } => {
+                let class = base_ty(self, base)?;
+                let info = self.classes.info(class)?;
+                info.fields
+                    .get(*field)
+                    .map(|f| f.ty.clone())
+                    .ok_or_else(|| Rejection::invalid(format!("no field slot {field}")))
+            }
+            Place::Index { base, kind, .. } => {
+                if *kind == IndexKind::Map {
+                    return Err(Rejection::unsupported("map index"));
+                }
+                match self.place_ty(base)? {
+                    NativeTy::Array(element) => Ok(*element),
+                    _ => Err(Rejection::invalid("index into a non-array")),
+                }
+            }
+            Place::Capture(_) | Place::Deref(_) => Err(Rejection::unsupported("captured local")),
         }
     }
 
+    /// The expression reading `place`, without cloning: a local, a field
+    /// through `borrow()`, or an indexed element (owned, via `array::get`).
     fn place(&self, place: &Place) -> Result<TokenStream, Rejection> {
-        self.place_kind(place)?;
         match place {
             Place::Local(local) => {
+                self.local_ty(*local)?;
                 let ident = local_ident(*local);
                 Ok(quote! { #ident })
             }
-            other => Err(Rejection::unsupported(format!("place `{other}`"))),
+            Place::Field { base, field } => {
+                let class = base_ty(self, base)?;
+                let field = self.field_ident(class, *field)?;
+                let base = self.place(base)?;
+                Ok(quote! { #base.borrow().#field })
+            }
+            Place::Index { base, index, kind } => {
+                if *kind == IndexKind::Map {
+                    return Err(Rejection::unsupported("map index"));
+                }
+                let base = self.place(base)?;
+                let index = local_ident(*index);
+                Ok(quote! { array::get(&#base, #index)? })
+            }
+            Place::Capture(_) | Place::Deref(_) => Err(Rejection::unsupported("captured local")),
         }
+    }
+
+    /// A place that must be a plain local: a call or short-circuit
+    /// destination.
+    fn local_place(&self, place: &Place) -> Result<TokenStream, Rejection> {
+        match place {
+            Place::Local(local) => {
+                self.kind(*local)?;
+                let ident = local_ident(*local);
+                Ok(quote! { #ident })
+            }
+            other => Err(Rejection::unsupported(format!(
+                "call destination `{other}`"
+            ))),
+        }
+    }
+
+    fn field_ident(
+        &self,
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
+        field: usize,
+    ) -> Result<Ident, Rejection> {
+        let info = self.classes.info(class)?;
+        info.fields
+            .get(field)
+            .map(|f| f.ident.clone())
+            .ok_or_else(|| Rejection::invalid(format!("no field slot {field}")))
+    }
+
+    fn describe(&self, ty: &NativeTy<'db>) -> String {
+        ty.describe(&|class| self.classes.link_name(class))
     }
 
     fn terminator(&self, block: BlockId) -> Result<&'a Terminator<'db>, Rejection> {
@@ -450,6 +985,56 @@ impl<'a, 'db> Printer<'a, 'db> {
         } else {
             Lifetime::new(&format!("'bb{block}"), Span::call_site())
         }
+    }
+}
+
+/// The natural type of a computed (non-`Use`) rvalue being assigned, for
+/// wrapping it into an `Option` target. `Use` operands wrap themselves.
+fn value_rvalue_ty<'db>(
+    printer: &Printer<'_, 'db>,
+    kind: &StatementKind<'db>,
+    target: &NativeTy<'db>,
+) -> Option<NativeTy<'db>> {
+    let StatementKind::Assign { value, .. } = kind else {
+        return None;
+    };
+    match value {
+        Rvalue::Use(_) | Rvalue::Array(..) | Rvalue::Aggregate { .. } => None,
+        Rvalue::BinaryOp { op, left, right } => {
+            let left_ty = printer.operand_ty(left).ok()?;
+            let right_ty = printer.operand_ty_with(right, Some(&left_ty)).ok()?;
+            let left_ty = match (&left_ty, &right_ty) {
+                (NativeTy::Null, NativeTy::Option(_)) => right_ty.clone(),
+                _ => left_ty,
+            };
+            let with_null = matches!(left, Operand::Constant(Constant::Null))
+                || matches!(right, Operand::Constant(Constant::Null));
+            crate::function::binop_ty(*op, &left_ty, &right_ty, with_null)
+        }
+        Rvalue::UnaryOp { op, operand } => match (op, printer.operand_ty(operand).ok()?) {
+            (UnaryOp::Not | UnaryOp::Truthy, _) => Some(NativeTy::Bool),
+            (UnaryOp::Neg, ty) => Some(ty),
+        },
+        Rvalue::Len(_) => Some(NativeTy::Int),
+        Rvalue::IsType { .. } => Some(NativeTy::Bool),
+        _ => {
+            let _ = target;
+            None
+        }
+    }
+}
+
+/// The class a field place's base holds.
+fn base_ty<'db>(
+    printer: &Printer<'_, 'db>,
+    base: &Place,
+) -> Result<baml_compiler2_hir_ty::extern_loc::ClassRef<'db>, Rejection> {
+    match printer.place_ty(base)? {
+        NativeTy::Class(class) => Ok(class),
+        other => Err(Rejection::invalid(format!(
+            "field access on a `{}`",
+            printer.describe(&other)
+        ))),
     }
 }
 
@@ -494,22 +1079,6 @@ fn local_ident(local: Local) -> Ident {
     format_ident!("_{}", local.0)
 }
 
-fn kind_type(kind: LocalKind) -> TokenStream {
-    match kind {
-        LocalKind::Int => quote! { Int63 },
-        LocalKind::Bool => quote! { bool },
-        LocalKind::Void | LocalKind::Never => quote! { () },
-    }
-}
-
-fn kind_zero(kind: LocalKind) -> TokenStream {
-    match kind {
-        LocalKind::Int => quote! { Int63::ZERO },
-        LocalKind::Bool => quote! { false },
-        LocalKind::Void | LocalKind::Never => quote! { () },
-    }
-}
-
 /// An `int` literal, range-checked here and folded at compile time there.
 fn int_literal(value: i64) -> Result<TokenStream, Rejection> {
     if baml_type::Int63::new(value).is_none() {
@@ -519,4 +1088,45 @@ fn int_literal(value: i64) -> Result<TokenStream, Rejection> {
     }
     let literal = proc_macro2::Literal::i64_suffixed(value);
     Ok(quote! { const { Int63::new(#literal).expect("int literal fits int") } })
+}
+
+/// A `float` literal that round-trips: `{:?}` of the value with an `f64`
+/// suffix, or the `f64` constants for the non-finite values.
+fn float_literal(value: f64) -> TokenStream {
+    if value.is_nan() {
+        quote! { f64::NAN }
+    } else if value == f64::INFINITY {
+        quote! { f64::INFINITY }
+    } else if value == f64::NEG_INFINITY {
+        quote! { f64::NEG_INFINITY }
+    } else {
+        let text = format!("{value:?}_f64");
+        let literal: proc_macro2::Literal = text
+            .trim_start_matches('-')
+            .parse()
+            .expect("a finite f64 debug rendering is a Rust float literal");
+        if value.is_sign_negative() {
+            quote! { (-#literal) }
+        } else {
+            quote! { #literal }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn float_literals_round_trip() {
+        assert_eq!(float_literal(1.0).to_string(), "1.0_f64");
+        assert_eq!(float_literal(-2.5).to_string(), "(- 2.5_f64)");
+        assert_eq!(float_literal(1e300).to_string(), "1e300_f64");
+        assert_eq!(float_literal(f64::NAN).to_string(), "f64 :: NAN");
+        assert_eq!(
+            float_literal(f64::NEG_INFINITY).to_string(),
+            "f64 :: NEG_INFINITY"
+        );
+        assert_eq!(float_literal(-0.0).to_string(), "(- 0.0_f64)");
+    }
 }

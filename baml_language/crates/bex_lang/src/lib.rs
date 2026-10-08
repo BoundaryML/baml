@@ -1,14 +1,45 @@
 //! Language semantics shared by the BAML VM and generated native code.
 //!
-//! The native backend links no VM crate, so the integer semantics and panic
-//! payloads both backends must agree on live here, depending only on
-//! [`baml_type`]. See `README.md` for what belongs in this crate.
+//! The native backend links no VM crate, so everything both backends must
+//! agree on — integer and float semantics, strings, arrays, `to_string`
+//! rendering, JSON, panics and thrown errors — lives here, over
+//! [`baml_type`], [`bex_str`] and serde. See `README.md` for what belongs in
+//! this crate.
 
 use std::fmt;
 
 pub use baml_type::{Int63, IntShiftError};
+/// Re-exported so generated code can derive `Serialize`/`Deserialize`
+/// (`#[serde(crate = "bex_lang::serde")]`) without its own dependency.
+pub use serde;
+/// Re-exported for generated code and hosts, see [`json`].
+pub use serde_json;
 
+pub mod array;
+pub mod errors;
+pub mod float;
+pub mod handle;
 pub mod int;
+pub mod json;
+pub mod render;
+pub mod string;
+mod thrown;
+
+pub use handle::{Shared, shared};
+pub use render::ToBaml;
+pub use string::Str;
+pub use thrown::{ErrorObject, Thrown, render_object};
+
+/// Narrow a container length to a BAML `int`. Lengths are bounded by
+/// `isize::MAX`, which exceeds the i63 range only on a 128-bit target; the
+/// saturation is defensive, never reached.
+#[inline]
+pub(crate) fn int_from_usize(len: usize) -> Int63 {
+    i64::try_from(len)
+        .ok()
+        .and_then(Int63::new)
+        .unwrap_or(Int63::MAX)
+}
 
 /// A catchable BAML panic that generated code or the VM can raise without a
 /// live heap. Each variant maps to one `baml.panics.*` class, carrying the
@@ -26,6 +57,15 @@ pub enum Panic {
     IntegerOverflow {
         /// Human-readable description of the overflowing operation.
         message: String,
+    },
+    /// An array or byte-array subscript landed outside the sequence, even
+    /// after counting a negative index back from the end. `index` is the
+    /// index the program wrote, not the resolved offset.
+    IndexOutOfBounds {
+        /// The subscript as written, before negative-index resolution.
+        index: Int63,
+        /// The length of the sequence at the time of the access.
+        length: Int63,
     },
     /// The right operand of `<<` or `>>` was negative.
     NegativeBitShift {
@@ -56,6 +96,7 @@ impl Panic {
         match self {
             Self::DivisionByZero { .. } => "DivisionByZero",
             Self::IntegerOverflow { .. } => "IntegerOverflow",
+            Self::IndexOutOfBounds { .. } => "IndexOutOfBounds",
             Self::NegativeBitShift { .. } => "NegativeBitShift",
             Self::UserPanic { .. } => "UserPanic",
             Self::AssertionFailed => "AssertionFailed",
@@ -71,6 +112,7 @@ impl Panic {
         match self {
             Self::DivisionByZero { .. } => "baml.panics.DivisionByZero",
             Self::IntegerOverflow { .. } => "baml.panics.IntegerOverflow",
+            Self::IndexOutOfBounds { .. } => "baml.panics.IndexOutOfBounds",
             Self::NegativeBitShift { .. } => "baml.panics.NegativeBitShift",
             Self::UserPanic { .. } => "baml.panics.UserPanic",
             Self::AssertionFailed => "baml.panics.AssertionFailed",
@@ -102,6 +144,9 @@ impl Panic {
         let class = self.class_fqn();
         match self {
             Self::DivisionByZero { dividend } => format!("{class} {{dividend: {dividend}}}"),
+            Self::IndexOutOfBounds { index, length } => {
+                format!("{class} {{index: {index}, length: {length}}}")
+            }
             Self::IntegerOverflow { message }
             | Self::NegativeBitShift { message }
             | Self::UserPanic { message } => format!("{class} {{message: {message:?}}}"),
@@ -135,6 +180,9 @@ impl fmt::Display for Panic {
                 write!(f, "division by zero: Int({dividend}) / Int(0)")
             }
             Self::IntegerOverflow { message } => write!(f, "integer overflow: {message}"),
+            Self::IndexOutOfBounds { index, length } => {
+                write!(f, "index out of bounds: {index} of {length}")
+            }
             Self::NegativeBitShift { message } => write!(f, "negative bit shift: {message}"),
             Self::UserPanic { message } => write!(f, "baml.sys.panic: {message}"),
             Self::AssertionFailed => f.write_str("assertion failed"),
@@ -173,6 +221,10 @@ mod tests {
             Panic::IntegerOverflow {
                 message: String::new(),
             },
+            Panic::IndexOutOfBounds {
+                index: int(5),
+                length: int(3),
+            },
             Panic::NegativeBitShift {
                 message: String::new(),
             },
@@ -205,6 +257,14 @@ mod tests {
             }
             .render_readable(),
             r#"baml.panics.IntegerOverflow {message: "4611686018427387903 + 1 overflows int"}"#
+        );
+        assert_eq!(
+            Panic::IndexOutOfBounds {
+                index: int(-4),
+                length: int(3)
+            }
+            .render_readable(),
+            "baml.panics.IndexOutOfBounds {index: -4, length: 3}"
         );
         assert_eq!(
             Panic::NegativeBitShift {
@@ -250,6 +310,14 @@ mod tests {
             }
             .to_string(),
             "integer overflow: 1 + 1 overflows int"
+        );
+        assert_eq!(
+            Panic::IndexOutOfBounds {
+                index: int(5),
+                length: int(3)
+            }
+            .to_string(),
+            "index out of bounds: 5 of 3"
         );
         assert_eq!(
             Panic::NegativeBitShift {

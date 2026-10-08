@@ -1,29 +1,32 @@
 //! An ahead-of-time backend that turns BAML MIR into Rust source.
 //!
-//! The subset is deliberately small: free functions over `int` and `bool`
-//! (plus `void` returns) with structured control flow, direct calls to other
-//! such functions, and `baml.sys.panic("...")`. Everything else is reported
-//! as [`Rejection::Unsupported`] so the caller keeps the bytecode. Control
-//! flow is emitted structurally (labeled blocks and loops, never a block
-//! dispatcher), which needs a reducible graph; BAML lowering only produces
-//! those, so an irreducible one is [`Rejection::Invalid`].
+//! The subset covers free functions over `int`, `bool`, `float`, `string`,
+//! arrays, non-generic data classes and `T | null`, with structured control
+//! flow, direct calls to other such functions, the for-in iterator protocol
+//! on arrays, and a table of stdlib builtins mapped to the `bex_lang`
+//! runtime. Everything else is reported as [`Rejection::Unsupported`] so the
+//! caller keeps the bytecode. Control flow is emitted structurally (labeled
+//! blocks and loops, never a block dispatcher), which needs a reducible
+//! graph; BAML lowering only produces those, so an irreducible one is
+//! [`Rejection::Invalid`].
 //!
-//! The generated code links the `bex_lang` runtime crate for integer
+//! The generated code links the `bex_lang` runtime crate for value
 //! semantics and panic payloads; this crate only names its paths.
 //!
 //! See `README.md` for the subset, the emission scheme and the rejections.
 
-use std::fmt;
-
 use baml_compiler2_hir::loc::FunctionLoc;
 use rustc_hash::FxHashMap;
 
+mod classes;
 mod function;
 mod print;
 mod project;
 mod structure;
+mod types;
 
 pub use project::{ProjectOptions, write_project};
+pub use types::NativeTy;
 
 /// Why a function was not compiled.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -55,24 +58,6 @@ impl Rejection {
     }
 }
 
-/// A native parameter or return type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Scalar {
-    /// BAML `int`, a `bex_lang::Int63`.
-    Int,
-    /// BAML `bool`, a Rust `bool`.
-    Bool,
-}
-
-impl fmt::Display for Scalar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Int => "int",
-            Self::Bool => "bool",
-        })
-    }
-}
-
 /// One function of a [`NativeModule`].
 #[derive(Debug, Clone)]
 pub struct CompiledFunction<'db> {
@@ -81,10 +66,44 @@ pub struct CompiledFunction<'db> {
     pub link_name: String,
     /// The Rust function's identifier in the generated module.
     pub rust_name: String,
-    /// BAML parameter names and types, in declaration order.
-    pub params: Vec<(String, Scalar)>,
-    /// The return type; `None` for `void`.
-    pub ret: Option<Scalar>,
+    /// BAML parameter names and native types, in declaration order.
+    pub params: Vec<(String, NativeTy<'db>)>,
+    /// The return type; [`NativeTy::Null`] for `void`.
+    pub ret: NativeTy<'db>,
+}
+
+impl CompiledFunction<'_> {
+    /// Whether the host shim can call this function from the command line:
+    /// every parameter is an `int`, `bool`, `float` or `string`. Otherwise a
+    /// project built around it is usable as a library only.
+    pub fn shim_callable(&self) -> bool {
+        self.params.iter().all(|(_, ty)| ty.is_shim_argument())
+    }
+}
+
+/// What [`admit`] learned about an admitted function.
+#[derive(Debug, Clone)]
+pub struct Admitted<'db> {
+    /// BAML parameter names and native types, in declaration order.
+    pub params: Vec<(String, NativeTy<'db>)>,
+    /// The return type; [`NativeTy::Null`] for `void`.
+    pub ret: NativeTy<'db>,
+}
+
+impl Admitted<'_> {
+    /// See [`CompiledFunction::shim_callable`].
+    pub fn shim_callable(&self) -> bool {
+        self.params.iter().all(|(_, ty)| ty.is_shim_argument())
+    }
+}
+
+/// One class of a [`NativeModule`], emitted as a struct.
+#[derive(Debug, Clone)]
+pub struct CompiledClass {
+    /// The BAML link name, e.g. `user.State`.
+    pub link_name: String,
+    /// The generated struct's identifier.
+    pub rust_name: String,
 }
 
 /// The Rust module compiled from one or more root functions and their
@@ -97,6 +116,8 @@ pub struct NativeModule<'db> {
     pub mir_dump: String,
     /// Compiled functions, callees before their callers.
     pub functions: Vec<CompiledFunction<'db>>,
+    /// Every class the functions touch, in first-use order.
+    pub classes: Vec<CompiledClass>,
     /// Indices into `functions` of the requested roots, in request order.
     pub roots: Vec<usize>,
     /// Index of the entry function in `functions`: the root [`compile`] was
@@ -105,14 +126,24 @@ pub struct NativeModule<'db> {
     pub entry: usize,
 }
 
-/// Whether `loc` alone is in the subset. Callees are not inspected.
+/// Whether `loc` alone is in the subset. Callees are not inspected; the
+/// classes its signature and body mention are.
 pub fn admit<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     loc: FunctionLoc<'db>,
-) -> Result<(), Rejection> {
-    function::analyze(db, loc)
-        .map(drop)
-        .map_err(|rejection| rejection.in_function(&link_name(db, loc)))
+) -> Result<Admitted<'db>, Rejection> {
+    let mut classes = classes::ClassTable::new(db);
+    let candidate = function::analyze(db, loc, &mut classes)
+        .map_err(|rejection| rejection.in_function(&link_name(db, loc)))?;
+    Ok(Admitted {
+        params: candidate
+            .param_names
+            .iter()
+            .zip(candidate.param_tys())
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect(),
+        ret: candidate.return_ty().clone(),
+    })
 }
 
 /// Compile `entry` and every function it transitively calls, recording
@@ -132,8 +163,9 @@ pub fn rust_name_for(db: &dyn baml_compiler2_mir::Db, loc: FunctionLoc<'_>) -> S
 
 /// The Rust identifier for a BAML link name: every character other than an
 /// ASCII letter or digit becomes `_`, and a leading digit gets a `_` prefix.
-/// `user.sum_of_squares` becomes `user_sum_of_squares`. Two functions whose
-/// link names sanitize alike cannot share a module.
+/// `user.sum_of_squares` becomes `user_sum_of_squares`; the class `user.Cell`
+/// becomes the struct `user_Cell`. Two names that sanitize alike cannot share
+/// a module.
 pub fn rust_name(link_name: &str) -> String {
     let mut name: String = link_name
         .chars()
@@ -143,6 +175,11 @@ pub fn rust_name(link_name: &str) -> String {
         name.insert(0, '_');
     }
     name
+}
+
+/// A BAML-flavoured description of `ty`, with classes by link name.
+pub fn describe_ty(db: &dyn baml_compiler2_mir::Db, ty: &NativeTy<'_>) -> String {
+    ty.describe(&|class| baml_compiler2_mir::class_link_name(db, class))
 }
 
 /// Compile every function in `roots` and every function they transitively
@@ -155,6 +192,7 @@ pub fn compile_many<'db>(
     let [first_root, ..] = roots else {
         return Err(Rejection::unsupported("no root function to compile"));
     };
+    let mut classes = classes::ClassTable::new(db);
     let mut graph = CallGraph {
         db,
         order: Vec::new(),
@@ -162,7 +200,7 @@ pub fn compile_many<'db>(
         path: Vec::new(),
     };
     for &root in roots {
-        graph.visit(root)?;
+        graph.visit(root, &mut classes)?;
     }
     let CallGraph { order, .. } = graph;
 
@@ -177,7 +215,8 @@ pub fn compile_many<'db>(
             let function::CallKind::Direct {
                 callee,
                 args,
-                destination,
+                result,
+                ..
             } = call
             else {
                 continue;
@@ -192,17 +231,18 @@ pub fn compile_many<'db>(
             if args.len() != callee.arity() {
                 return Err(mismatch("passes the wrong number of arguments"));
             }
-            if args != callee.param_kinds() {
+            if args.iter().collect::<Vec<_>>() != callee.param_tys() {
                 return Err(mismatch("passes arguments of the wrong type"));
             }
-            if *destination != callee.return_kind() {
-                return Err(mismatch("stores the result in a local of the wrong type"));
+            if result != callee.return_ty() {
+                return Err(mismatch("expects a result of the wrong type"));
             }
         }
     }
 
     let names = rust_names(&order)?;
-    let rust_source = print::render_module(&order, &names)?;
+    let class_infos = classes.finish()?;
+    let rust_source = print::render_module(&class_infos, &order, &names, &classes)?;
     let mir_dump = order
         .iter()
         .map(|candidate| baml_compiler2_mir::pretty::display_function(db, candidate.mir))
@@ -217,21 +257,24 @@ pub fn compile_many<'db>(
             params: candidate
                 .param_names
                 .iter()
-                .zip(candidate.param_kinds())
-                .map(|(name, kind)| {
-                    (
-                        name.clone(),
-                        kind.scalar().expect("parameters are int or bool"),
-                    )
-                })
+                .zip(candidate.param_tys())
+                .map(|(name, ty)| (name.clone(), ty.clone()))
                 .collect(),
-            ret: candidate.return_kind().scalar(),
+            ret: candidate.return_ty().clone(),
+        })
+        .collect();
+    let compiled_classes = class_infos
+        .iter()
+        .map(|info| CompiledClass {
+            link_name: info.link_name.clone(),
+            rust_name: info.ident.to_string(),
         })
         .collect();
     Ok(NativeModule {
         rust_source,
         mir_dump,
         functions,
+        classes: compiled_classes,
         roots: roots.iter().map(|root| index_of[root]).collect(),
         entry: index_of[first_root],
     })
@@ -259,7 +302,11 @@ struct CallGraph<'db> {
 }
 
 impl<'db> CallGraph<'db> {
-    fn visit(&mut self, loc: FunctionLoc<'db>) -> Result<(), Rejection> {
+    fn visit(
+        &mut self,
+        loc: FunctionLoc<'db>,
+        classes: &mut classes::ClassTable<'db>,
+    ) -> Result<(), Rejection> {
         let name = link_name(self.db, loc);
         match self.state.get(&loc) {
             Some(VisitState::Done) => return Ok(()),
@@ -280,18 +327,18 @@ impl<'db> CallGraph<'db> {
         }
         self.state.insert(loc, VisitState::Visiting);
         self.path.push(name.clone());
-        let candidate =
-            function::analyze(self.db, loc).map_err(|rejection| rejection.in_function(&name))?;
+        let candidate = function::analyze(self.db, loc, classes)
+            .map_err(|rejection| rejection.in_function(&name))?;
         let callees: Vec<FunctionLoc<'db>> = candidate
             .calls
             .iter()
             .filter_map(|(_, call)| match call {
                 function::CallKind::Direct { callee, .. } => Some(*callee),
-                function::CallKind::Panic(_) => None,
+                function::CallKind::Panic(_) | function::CallKind::Builtin { .. } => None,
             })
             .collect();
         for callee in callees {
-            self.visit(callee)?;
+            self.visit(callee, classes)?;
         }
         self.path.pop();
         self.state.insert(loc, VisitState::Done);

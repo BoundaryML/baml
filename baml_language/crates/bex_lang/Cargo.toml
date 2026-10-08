@@ -8,7 +8,10 @@ rust-version = { workspace = true }
 description = "Language semantics shared by the BAML VM and generated native code"
 
 [dependencies]
-baml_type = { workspace = true }
+baml_type = { workspace = true, features = [ "serde" ] }
+bex_str = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

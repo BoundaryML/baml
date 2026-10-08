@@ -28,10 +28,19 @@ use baml_db::{baml_compiler2_hir::item_data::file_functions, baml_compiler2_rust
 use baml_test_support::{compile_source_with_opt, setup_test_db};
 use baml_tests::engine::OptLevel;
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_lang::{Int63, Panic};
+use bex_lang::{Int63, Panic, Str, Thrown};
 use sys_native::SysOpsExt;
 
-const FIXTURES: &[&str] = &["arith", "loops", "matching", "calls"];
+const FIXTURES: &[&str] = &[
+    "arith",
+    "loops",
+    "matching",
+    "calls",
+    "arrays",
+    "strings",
+    "classes",
+    "benchmarks",
+];
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/native")
@@ -120,6 +129,10 @@ generated_module!(arith, "native/generated/arith.rs");
 generated_module!(calls, "native/generated/calls.rs");
 generated_module!(loops, "native/generated/loops.rs");
 generated_module!(matching, "native/generated/matching.rs");
+generated_module!(arrays, "native/generated/arrays.rs");
+generated_module!(strings, "native/generated/strings.rs");
+generated_module!(classes, "native/generated/classes.rs");
+generated_module!(benchmarks, "native/generated/benchmarks.rs");
 
 /// What the VM produced, with an uncaught panic reduced to its readable form
 /// (the text after `uncaught throw: `), which is also what `bex_lang::Panic`
@@ -128,6 +141,7 @@ generated_module!(matching, "native/generated/matching.rs");
 enum Observed {
     Int(i64),
     Bool(bool),
+    Str(String),
     Void,
     Panic(String),
 }
@@ -146,6 +160,42 @@ impl From<Result<bool, Panic>> for Observed {
         match value {
             Ok(v) => Self::Bool(v),
             Err(p) => Self::Panic(p.render_readable()),
+        }
+    }
+}
+
+impl From<Result<Str, Thrown>> for Observed {
+    fn from(value: Result<Str, Thrown>) -> Self {
+        match value {
+            Ok(v) => Self::Str(v.to_string()),
+            Err(t) => Self::Panic(t.render_readable()),
+        }
+    }
+}
+
+impl From<Result<Int63, Thrown>> for Observed {
+    fn from(value: Result<Int63, Thrown>) -> Self {
+        match value {
+            Ok(v) => Self::Int(v.get()),
+            Err(t) => Self::Panic(t.render_readable()),
+        }
+    }
+}
+
+impl From<Result<bool, Thrown>> for Observed {
+    fn from(value: Result<bool, Thrown>) -> Self {
+        match value {
+            Ok(v) => Self::Bool(v),
+            Err(t) => Self::Panic(t.render_readable()),
+        }
+    }
+}
+
+impl From<Result<(), Thrown>> for Observed {
+    fn from(value: Result<(), Thrown>) -> Self {
+        match value {
+            Ok(()) => Self::Void,
+            Err(t) => Self::Panic(t.render_readable()),
         }
     }
 }
@@ -199,6 +249,7 @@ impl Oracle {
         match result {
             Ok(BexExternalValue::Int(v)) => Observed::Int(v),
             Ok(BexExternalValue::Bool(v)) => Observed::Bool(v),
+            Ok(BexExternalValue::String(v)) => Observed::Str(v.to_string()),
             Ok(BexExternalValue::Null) => Observed::Void,
             Ok(other) => panic!("{entry}: unexpected VM value {other:?}"),
             Err(err) => {
@@ -225,6 +276,11 @@ trait IntoExternal {
 impl IntoExternal for i64 {
     fn into_external(self) -> BexExternalValue {
         BexExternalValue::Int(self)
+    }
+}
+impl IntoExternal for &str {
+    fn into_external(self) -> BexExternalValue {
+        BexExternalValue::String(self.into())
     }
 }
 impl IntoExternal for bool {
@@ -325,5 +381,75 @@ async fn calls_match_vm() {
     for x in [0, 3, 10] {
         check!(o, is_even(x) => user_is_even(int(x)));
         check!(o, noop(x) => user_noop(int(x)));
+    }
+}
+
+fn text(v: &str) -> Str {
+    Str::from(v)
+}
+
+#[tokio::test]
+async fn arrays_match_vm() {
+    use arrays::*;
+    let o = Oracle::new("arrays");
+    for n in [0, 1, 5, 40] {
+        check!(o, build(n) => user_build(int(n)));
+        check!(o, bubble(n) => user_bubble(int(n)));
+        check!(o, alias_mutation(n) => user_alias_mutation(int(n)));
+        check!(o, push_during_iteration(n) => user_push_during_iteration(int(n)));
+    }
+    for n in [0, 2, -1, -3, 3, -4, 7] {
+        check!(o, negative_index(n) => user_negative_index(int(n)));
+    }
+}
+
+#[tokio::test]
+async fn strings_match_vm() {
+    use strings::*;
+    let o = Oracle::new("strings");
+    for n in [0, 1, 7, -12, MAX] {
+        check!(o, greet(n) => user_greet(int(n)));
+        check!(o, same(n) => user_same(int(n)));
+        check!(o, ordered(n) => user_ordered(int(n)));
+    }
+    for n in [0, 1, 3] {
+        check!(o, repeat_len(n) => user_repeat_len(int(n)));
+        check!(o, ascii_check(n) => user_ascii_check(int(n)));
+    }
+}
+
+#[tokio::test]
+async fn classes_match_vm() {
+    use classes::*;
+    let o = Oracle::new("classes");
+    for n in [0, 3, -2, MAX] {
+        check!(o, make(n) => user_make(int(n)));
+        check!(o, render(n) => user_render(int(n)));
+        check!(o, nullable(n) => user_nullable(int(n)));
+    }
+    for raw in [
+        r#"{"x": 3, "y": 4}"#,
+        r#"{"y": 4, "x": -3, "extra": true}"#,
+        r#"{"x": 4611686018427387903, "y": 2}"#,
+        r#"{"x": 1.5, "y": 2}"#,
+        r#"{"x": 1}"#,
+        r#"not json"#,
+    ] {
+        check!(o, roundtrip(raw) => user_roundtrip(text(raw)));
+    }
+}
+
+#[tokio::test]
+async fn benchmarks_match_vm() {
+    use benchmarks::*;
+    let o = Oracle::new("benchmarks");
+    for raw in [
+        r#"{"count": 128, "seed": 1729}"#,
+        r#"{"count": 0, "seed": 5}"#,
+    ] {
+        check!(o, pipeline(raw) => user_pipeline(text(raw)));
+    }
+    for n in [0, 1, 2, 17, 300] {
+        check!(o, sorted_checksum(n) => user_sorted_checksum(int(n)));
     }
 }

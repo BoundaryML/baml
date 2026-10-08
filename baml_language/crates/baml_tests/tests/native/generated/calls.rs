@@ -4,19 +4,28 @@
     unused_variables,
     unused_assignments,
     unused_labels,
+    unused_imports,
     unreachable_code,
+    non_camel_case_types,
     clippy::just_underscores_and_digits,
-    clippy::needless_return
+    clippy::needless_return,
+    clippy::needless_borrow,
+    clippy::redundant_clone,
+    clippy::let_and_return,
+    clippy::unit_arg,
+    clippy::let_unit_value
 )]
-use bex_lang::{Int63, Panic, int};
+use bex_lang::{Int63, Panic, Str, Thrown, array, float, int, json, string};
+use bex_lang::handle::{Shared, shared};
+use bex_lang::render::ToBaml;
 /// BAML function `user.square`.
-pub fn user_square(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_square(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     _0 = int::mul(_1, _1)?;
     Ok(_0)
 }
 /// BAML function `user.sum_of_squares`.
-pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: Int63 = Int63::ZERO;
     let mut _3: Int63 = Int63::ZERO;
@@ -50,15 +59,17 @@ pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.checked_step`.
-pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: bool = false;
     'bb2: {
         _2 = _1 < const { Int63::new(0i64).expect("int literal fits int") };
         if _2 {
-            return Err(Panic::UserPanic {
-                message: String::from("negative input"),
-            });
+            return Err(
+                Thrown::from(Panic::UserPanic {
+                    message: String::from("negative input"),
+                }),
+            );
             break 'bb2;
         } else {
             break 'bb2;
@@ -68,7 +79,7 @@ pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.step_twice`.
-pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: Int63 = Int63::ZERO;
     _2 = user_checked_step(_1)?;
@@ -76,7 +87,7 @@ pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.is_even`.
-pub fn user_is_even(mut _1: Int63) -> Result<bool, Panic> {
+pub fn user_is_even(mut _1: Int63) -> Result<bool, Thrown> {
     let mut _0: bool = false;
     let mut _2: Int63 = Int63::ZERO;
     _2 = int::rem(_1, const { Int63::new(2i64).expect("int literal fits int") })?;
@@ -84,7 +95,7 @@ pub fn user_is_even(mut _1: Int63) -> Result<bool, Panic> {
     Ok(_0)
 }
 /// BAML function `user.count_even`.
-pub fn user_count_even(mut _1: Int63) -> Result<Int63, Panic> {
+pub fn user_count_even(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: Int63 = Int63::ZERO;
     let mut _3: Int63 = Int63::ZERO;
@@ -126,7 +137,7 @@ pub fn user_count_even(mut _1: Int63) -> Result<Int63, Panic> {
     Ok(_0)
 }
 /// BAML function `user.noop`.
-pub fn user_noop(mut _1: Int63) -> Result<(), Panic> {
+pub fn user_noop(mut _1: Int63) -> Result<(), Thrown> {
     let mut _0: () = ();
     let mut _2: Int63 = Int63::ZERO;
     _2 = int::add(_1, const { Int63::new(1i64).expect("int literal fits int") })?;
