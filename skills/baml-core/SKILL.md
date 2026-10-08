@@ -413,6 +413,7 @@ BAML values navigate with brackets: `input_args['customer']['age']`, `output_val
 - **API key — CI, servers, production.** Create a key for the environment at https://cloud.boundaryml.com and set `BOUNDARY_API_KEY`. The process then needs no login and no browser.
 - The Boundary API endpoint is built in. Set `BOUNDARY_API_URL` (or `[boundary]` `api_url`) only for another gateway.
 - `BAML_TELEMETRY=off|low|medium|high` sets how much a run records (default `medium`).
+- **Custom dashboard, hosted by Boundary.** A dashboard is one self-contained HTML file: `boundary.query(sql)` runs the same SQL as `baml query`, `boundary.openProcess(id)` / `boundary.openSpan(id)` open a trace in Boundary, and the page's `#` stays in the URL for deep links. Start from https://github.com/BoundaryML/boundary-dashboard-template and upload the file on the Dashboards page of an environment at https://cloud.boundaryml.com.
 - Empty result but you just ran the code? You are logged in or have a key, so the query asked Boundary — add `--local` for the local files, or check `baml auth status` for the project.
 
 ## BAML workflow visualizer annotations
