@@ -25,7 +25,7 @@ baml_compiler2_emit = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
-baml_compiler2_rust = { workspace = true }
+baml_compiler2_rust = { workspace = true, optional = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
@@ -46,3 +46,10 @@ toml = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[features]
+# The MIR-to-Rust backend (`baml __emit-rust`). Off by default: it pulls
+# `syn` (full), `quote` and `prettyplease` into every `baml_db` consumer,
+# including the LSP and the `bridge_wasm` browser bundle, which never emit
+# Rust. `baml_cli` and `baml_tests` turn it on.
+native-backend = [ "dep:baml_compiler2_rust" ]

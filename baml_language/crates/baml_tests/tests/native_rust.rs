@@ -24,11 +24,8 @@ use std::{
     sync::Arc,
 };
 
-use baml_db::{
-    baml_compiler2_hir::item_data::file_functions, baml_compiler2_rust as native,
-    testing::setup_test_db,
-};
-use baml_test_support::compile_source_with_opt;
+use baml_db::{baml_compiler2_hir::item_data::file_functions, baml_compiler2_rust as native};
+use baml_test_support::{compile_source_with_opt, setup_test_db};
 use baml_tests::engine::OptLevel;
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_lang::{Int63, Panic};
@@ -110,10 +107,10 @@ fn every_fixture_is_structured() {
 
 /// The committed backend output, compiled into this test binary. The
 /// generated files carry their own `#![allow]` set; the extra allowances here
-/// cover identifiers the test never calls.
+/// cover `pub` functions the test never calls.
 macro_rules! generated_module {
     ($name:ident, $file:literal) => {
-        #[allow(unreachable_pub, dead_code, clippy::all, clippy::pedantic)]
+        #[allow(unreachable_pub, dead_code)]
         #[path = $file]
         mod $name;
     };

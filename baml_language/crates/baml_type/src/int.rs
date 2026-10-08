@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::fmt;
 
 /// A BAML `int`, represented as a signed 63-bit two's-complement value.
 ///
@@ -15,33 +15,6 @@ pub struct Int63(i64);
 pub enum IntShiftError {
     /// The shift count was negative.
     NegativeCount(i64),
-}
-
-/// The text was not a decimal integer in the BAML `int` range.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParseInt63Error {
-    /// The text was not a valid decimal `i64` literal.
-    Invalid(std::num::ParseIntError),
-    /// The text parsed as an `i64` that falls outside the i63 range.
-    OutOfRange(i64),
-}
-
-impl fmt::Display for ParseInt63Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Invalid(err) => write!(f, "{err}"),
-            Self::OutOfRange(value) => write!(f, "{value} overflows int"),
-        }
-    }
-}
-
-impl std::error::Error for ParseInt63Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Invalid(err) => Some(err),
-            Self::OutOfRange(_) => None,
-        }
-    }
 }
 
 impl Int63 {
@@ -168,18 +141,9 @@ impl fmt::Display for Int63 {
     }
 }
 
-impl FromStr for Int63 {
-    type Err = ParseInt63Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = s.parse::<i64>().map_err(ParseInt63Error::Invalid)?;
-        Self::new(value).ok_or(ParseInt63Error::OutOfRange(value))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Int63, IntShiftError, ParseInt63Error};
+    use super::{Int63, IntShiftError};
 
     const BOUNDARIES: [i64; 9] = [
         Int63::MIN.get(),
@@ -274,37 +238,9 @@ mod tests {
     }
 
     #[test]
-    fn display_and_parse_round_trip() {
+    fn display_matches_i64() {
         for value in BOUNDARIES {
-            let int = Int63::new(value).unwrap();
-            assert_eq!(int.to_string(), value.to_string());
-            assert_eq!(int.to_string().parse::<Int63>(), Ok(int));
+            assert_eq!(Int63::new(value).unwrap().to_string(), value.to_string());
         }
-        assert_eq!("-4611686018427387904".parse::<Int63>(), Ok(Int63::MIN));
-        assert_eq!("4611686018427387903".parse::<Int63>(), Ok(Int63::MAX));
-        assert_eq!(
-            "4611686018427387904".parse::<Int63>(),
-            Err(ParseInt63Error::OutOfRange(4_611_686_018_427_387_904))
-        );
-        assert_eq!(
-            "-4611686018427387905".parse::<Int63>(),
-            Err(ParseInt63Error::OutOfRange(-4_611_686_018_427_387_905))
-        );
-        assert!(matches!(
-            "9223372036854775808".parse::<Int63>(),
-            Err(ParseInt63Error::Invalid(_))
-        ));
-        assert!(matches!(
-            "abc".parse::<Int63>(),
-            Err(ParseInt63Error::Invalid(_))
-        ));
-        assert!(matches!(
-            "".parse::<Int63>(),
-            Err(ParseInt63Error::Invalid(_))
-        ));
-        assert_eq!(
-            ParseInt63Error::OutOfRange(4_611_686_018_427_387_904).to_string(),
-            "4611686018427387904 overflows int"
-        );
     }
 }

@@ -13,8 +13,8 @@ use baml_db::{
         self as native, NativeModule, Rejection, Scalar, admit, compile, compile_many, rust_name,
         rust_name_for,
     },
-    testing::{assert_no_user_diagnostic_errors, setup_test_db},
 };
+use baml_test_support::{assert_no_user_diagnostic_errors, setup_test_db};
 
 fn function_named<'db>(db: &'db ProjectDatabase, name: &str) -> FunctionLoc<'db> {
     db.workspace_files()
@@ -128,7 +128,10 @@ function classify(x: int) -> int {
     assert!(source.contains("0i64 =>"), "{source}");
     assert!(source.contains("_ =>"), "{source}");
     assert!(source.contains("int::neg("), "{source}");
-    assert!(source.contains("return Ok(_0);"), "{source}");
+    assert!(
+        source.contains("    Ok(_0)\n}"),
+        "tail exit is the value: {source}"
+    );
 }
 
 #[test]
@@ -145,8 +148,14 @@ function pick(b: bool) -> int {
         "pick",
     );
     let source = &module.rust_source;
+    // A `bool` literal test is the operand itself (or its negation), never
+    // `== true` / `== false`.
     assert!(
-        source.contains("_1 == true") || source.contains("_1 == false"),
+        source.contains("= _1;") || source.contains("= !_1;"),
+        "{source}"
+    );
+    assert!(
+        !source.contains("== true") && !source.contains("== false"),
         "{source}"
     );
     assert!(source.contains("return Err(Panic::Unreachable)") || !source.contains("Unreachable"));
@@ -184,7 +193,7 @@ function find(n: int) -> int {
     );
     let source = &module.rust_source;
     assert!(source.contains(": loop {"), "{source}");
-    assert!(source.contains("return Ok(_0);"), "{source}");
+    assert!(source.contains("    Ok(_0)\n}"), "{source}");
     // The loop's own exit edge assigns `null` to the `int` return place: the
     // checker's proof that the edge is dead, emitted as an unreachable panic.
     assert!(

@@ -5,7 +5,8 @@
     unused_assignments,
     unused_labels,
     unreachable_code,
-    clippy::all
+    clippy::just_underscores_and_digits,
+    clippy::needless_return
 )]
 use bex_lang::{Int63, Panic, int};
 /// BAML function `user.collatz_steps`.
@@ -66,7 +67,7 @@ pub fn user_collatz_steps(mut _1: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = _2;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.sum_odd_squares`.
 pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Panic> {
@@ -130,7 +131,7 @@ pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = _2;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.gcd`.
 pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
@@ -159,7 +160,7 @@ pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = _3;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.first_factor`.
 pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Panic> {
@@ -202,7 +203,7 @@ pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Panic> {
         _0 = _1;
         break 'bb6;
     }
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.nested`.
 pub fn user_nested(mut _1: Int63) -> Result<Int63, Panic> {
@@ -284,5 +285,5 @@ pub fn user_nested(mut _1: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = _2;
-    return Ok(_0);
+    Ok(_0)
 }

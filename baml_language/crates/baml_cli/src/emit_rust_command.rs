@@ -5,6 +5,8 @@
 //! project that links `bex_lang`, the runtime crate shared with the VM. The
 //! generated binary contains no bytecode interpreter.
 
+// `println!` is this command's output: the admission report and the emitted
+// function list. The workspace ban on `print*!` targets stray debug prints.
 #![allow(clippy::print_stdout)]
 
 use std::path::PathBuf;

@@ -5,14 +5,15 @@
     unused_assignments,
     unused_labels,
     unreachable_code,
-    clippy::all
+    clippy::just_underscores_and_digits,
+    clippy::needless_return
 )]
 use bex_lang::{Int63, Panic, int};
 /// BAML function `user.square`.
 pub fn user_square(mut _1: Int63) -> Result<Int63, Panic> {
     let mut _0: Int63 = Int63::ZERO;
     _0 = int::mul(_1, _1)?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.sum_of_squares`.
 pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Panic> {
@@ -46,7 +47,7 @@ pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = _2;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.checked_step`.
 pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Panic> {
@@ -64,7 +65,7 @@ pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = int::add(_1, const { Int63::new(1i64).expect("int literal fits int") })?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.step_twice`.
 pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Panic> {
@@ -72,7 +73,7 @@ pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Panic> {
     let mut _2: Int63 = Int63::ZERO;
     _2 = user_checked_step(_1)?;
     _0 = user_checked_step(_2)?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.is_even`.
 pub fn user_is_even(mut _1: Int63) -> Result<bool, Panic> {
@@ -80,7 +81,7 @@ pub fn user_is_even(mut _1: Int63) -> Result<bool, Panic> {
     let mut _2: Int63 = Int63::ZERO;
     _2 = int::rem(_1, const { Int63::new(2i64).expect("int literal fits int") })?;
     _0 = _2 == const { Int63::new(0i64).expect("int literal fits int") };
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.count_even`.
 pub fn user_count_even(mut _1: Int63) -> Result<Int63, Panic> {
@@ -122,7 +123,7 @@ pub fn user_count_even(mut _1: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = _2;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.noop`.
 pub fn user_noop(mut _1: Int63) -> Result<(), Panic> {
@@ -130,5 +131,5 @@ pub fn user_noop(mut _1: Int63) -> Result<(), Panic> {
     let mut _2: Int63 = Int63::ZERO;
     _2 = int::add(_1, const { Int63::new(1i64).expect("int literal fits int") })?;
     _0 = ();
-    return Ok(_0);
+    Ok(_0)
 }

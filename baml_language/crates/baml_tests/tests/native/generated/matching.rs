@@ -5,7 +5,8 @@
     unused_assignments,
     unused_labels,
     unreachable_code,
-    clippy::all
+    clippy::just_underscores_and_digits,
+    clippy::needless_return
 )]
 use bex_lang::{Int63, Panic, int};
 /// BAML function `user.classify`.
@@ -34,7 +35,7 @@ pub fn user_classify(mut _1: Int63) -> Result<Int63, Panic> {
             }
         }
     }
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.match_returns`.
 pub fn user_match_returns(mut _1: Int63) -> Result<Int63, Panic> {
@@ -60,7 +61,7 @@ pub fn user_match_returns(mut _1: Int63) -> Result<Int63, Panic> {
             }
         }
     }
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.match_loop`.
 pub fn user_match_loop(mut _1: Int63) -> Result<Int63, Panic> {
@@ -102,14 +103,14 @@ pub fn user_match_loop(mut _1: Int63) -> Result<Int63, Panic> {
         }
     }
     _0 = _2;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.bool_match`.
 pub fn user_bool_match(mut _1: bool) -> Result<Int63, Panic> {
     let mut _0: Int63 = Int63::ZERO;
     let mut _2: bool = false;
     'bb3: {
-        _2 = _1 == true;
+        _2 = _1;
         if _2 {
             _0 = const { Int63::new(1i64).expect("int literal fits int") };
             break 'bb3;
@@ -118,5 +119,5 @@ pub fn user_bool_match(mut _1: bool) -> Result<Int63, Panic> {
             break 'bb3;
         }
     }
-    return Ok(_0);
+    Ok(_0)
 }

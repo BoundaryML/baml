@@ -64,7 +64,7 @@ pub use declaration_name::DeclarationName;
 pub use defs::*;
 pub use family::*;
 pub use head::{Head, TaggedTypeName};
-pub use int::{Int63, IntShiftError, ParseInt63Error};
+pub use int::{Int63, IntShiftError};
 pub use names::*;
 pub use param::*;
 pub use primitive::*;

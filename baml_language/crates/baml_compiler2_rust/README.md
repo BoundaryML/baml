@@ -62,8 +62,12 @@ single-entry loops, so that is a compiler bug.
 
 Tokens are built with `quote!`, parsed back with `syn` and printed with
 `prettyplease`; a parse failure is reported as `Rejection::Invalid`, never a
-panic. The module starts with a `//!` header and a blanket `#![allow(..)]` for
-the lints structured MIR output trips (unused `mut`, labels, unreachable code).
+panic. An exit in tail position (the end of the function, through `if` and
+`match` arms) is the function's value, `Ok(_0)`; every other exit is a
+`return`. The module starts with a `//!` header and an `#![allow(..)]` naming
+the lints structured MIR output trips: unused `mut`, variables, assignments and
+labels, unreachable code, the `_N` local names, and the `return`s a panic or a
+dead write leaves inside a leaf block.
 
 ## Using it
 

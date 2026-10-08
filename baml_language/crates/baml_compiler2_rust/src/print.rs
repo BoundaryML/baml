@@ -27,7 +27,8 @@ const HEADER: &str = "\
     unused_assignments,
     unused_labels,
     unreachable_code,
-    clippy::all
+    clippy::just_underscores_and_digits,
+    clippy::needless_return
 )]
 ";
 
@@ -105,7 +106,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let zero = kind_zero(*kind);
                 quote! { let mut #ident: #ty = #zero; }
             });
-        let body = self.stmts(&candidate.structured)?;
+        let body = self.tail_stmts(&candidate.structured)?;
         Ok(quote! {
             #[doc = #doc]
             pub fn #name(#(#params),*) -> Result<#ret, Panic> {
@@ -116,10 +117,31 @@ impl<'a, 'db> Printer<'a, 'db> {
     }
 
     fn stmts(&self, stmts: &[Stmt]) -> Result<Vec<TokenStream>, Rejection> {
-        stmts.iter().map(|stmt| self.stmt(stmt)).collect()
+        stmts.iter().map(|stmt| self.stmt(stmt, false)).collect()
     }
 
-    fn stmt(&self, stmt: &Stmt) -> Result<TokenStream, Rejection> {
+    /// [`Self::stmts`] with the last statement in tail position: an exit there
+    /// is the enclosing function's value rather than a `return`, through the
+    /// arms of an `if` or `match`. A labeled block or loop is never a tail,
+    /// since a `break` out of it has to land on code that follows.
+    fn tail_stmts(&self, stmts: &[Stmt]) -> Result<Vec<TokenStream>, Rejection> {
+        let Some((last, init)) = stmts.split_last() else {
+            return Ok(Vec::new());
+        };
+        let mut out = self.stmts(init)?;
+        out.push(self.stmt(last, true)?);
+        Ok(out)
+    }
+
+    fn body(&self, stmts: &[Stmt], tail: bool) -> Result<Vec<TokenStream>, Rejection> {
+        if tail {
+            self.tail_stmts(stmts)
+        } else {
+            self.stmts(stmts)
+        }
+    }
+
+    fn stmt(&self, stmt: &Stmt, tail: bool) -> Result<TokenStream, Rejection> {
         Ok(match stmt {
             Stmt::Leaf(block) => {
                 let lines = self.leaf(BlockId(*block))?;
@@ -140,8 +162,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                 then_branch,
                 else_branch,
             } => {
-                let then_branch = self.stmts(then_branch)?;
-                let else_branch = self.stmts(else_branch)?;
+                let then_branch = self.body(then_branch, tail)?;
+                let else_branch = self.body(else_branch, tail)?;
                 match self.terminator(BlockId(*block))? {
                     Terminator::Branch { condition, .. } => {
                         let condition = self.operand(condition)?;
@@ -215,10 +237,10 @@ impl<'a, 'db> Printer<'a, 'db> {
                     if patterns.is_empty() {
                         continue;
                     }
-                    let body = self.stmts(body)?;
+                    let body = self.body(body, tail)?;
                     match_arms.push(quote! { #(#patterns)|* => { #(#body)* } });
                 }
-                let otherwise = self.stmts(otherwise)?;
+                let otherwise = self.body(otherwise, tail)?;
                 quote! {
                     match #discriminant.get() {
                         #(#match_arms)*
@@ -238,9 +260,11 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let label = loop_label(*label);
                 quote! { continue #label; }
             }
-            Stmt::Exit(block) => match self.terminator(BlockId(*block))? {
-                Terminator::Return => quote! { return Ok(_0); },
-                Terminator::Unreachable => quote! { return Err(Panic::Unreachable); },
+            Stmt::Exit(block) => match (self.terminator(BlockId(*block))?, tail) {
+                (Terminator::Return, true) => quote! { Ok(_0) },
+                (Terminator::Return, false) => quote! { return Ok(_0); },
+                (Terminator::Unreachable, true) => quote! { Err(Panic::Unreachable) },
+                (Terminator::Unreachable, false) => quote! { return Err(Panic::Unreachable); },
                 _ => return Err(Rejection::invalid("exit without a return")),
             },
         })
@@ -347,12 +371,15 @@ impl<'a, 'db> Printer<'a, 'db> {
                 test: TypeTest::Template(TyTemplate::Literal(literal, _)),
             } => {
                 let operand = self.operand(operand)?;
-                let expected = match literal {
-                    Literal::Int(value) => int_literal(*value)?,
-                    Literal::Bool(value) => quote! { #value },
+                match literal {
+                    Literal::Int(value) => {
+                        let expected = int_literal(*value)?;
+                        quote! { #operand == #expected }
+                    }
+                    Literal::Bool(true) => operand,
+                    Literal::Bool(false) => quote! { !#operand },
                     _ => return Err(Rejection::unsupported("type test other than a literal")),
-                };
-                quote! { #operand == #expected }
+                }
             }
             other => return Err(Rejection::unsupported(format!("rvalue {other:?}"))),
         })

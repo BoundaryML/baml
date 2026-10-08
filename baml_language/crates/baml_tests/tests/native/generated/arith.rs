@@ -5,7 +5,8 @@
     unused_assignments,
     unused_labels,
     unreachable_code,
-    clippy::all
+    clippy::just_underscores_and_digits,
+    clippy::needless_return
 )]
 use bex_lang::{Int63, Panic, int};
 /// BAML function `user.arith`.
@@ -36,19 +37,19 @@ pub fn user_arith(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
     _12 = int::neg(_13)?;
     _14 = _10;
     _0 = int::add(_12, _14)?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.divide`.
 pub fn user_divide(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
     let mut _0: Int63 = Int63::ZERO;
     _0 = int::div(_1, _2)?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.remainder`.
 pub fn user_remainder(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
     let mut _0: Int63 = Int63::ZERO;
     _0 = int::rem(_1, _2)?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.add_to_max`.
 pub fn user_add_to_max(mut _1: Int63) -> Result<Int63, Panic> {
@@ -57,13 +58,13 @@ pub fn user_add_to_max(mut _1: Int63) -> Result<Int63, Panic> {
         _1,
         const { Int63::new(4611686018427387903i64).expect("int literal fits int") },
     )?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.negate`.
 pub fn user_negate(mut _1: Int63) -> Result<Int63, Panic> {
     let mut _0: Int63 = Int63::ZERO;
     _0 = int::neg(_1)?;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.in_range`.
 pub fn user_in_range(
@@ -85,7 +86,7 @@ pub fn user_in_range(
         }
     }
     _0 = _4;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.is_edge`.
 pub fn user_is_edge(mut _1: Int63, mut _2: Int63, mut _3: Int63) -> Result<bool, Panic> {
@@ -129,7 +130,7 @@ pub fn user_is_edge(mut _1: Int63, mut _2: Int63, mut _3: Int63) -> Result<bool,
         }
     }
     _0 = _4;
-    return Ok(_0);
+    Ok(_0)
 }
 /// BAML function `user.compare`.
 pub fn user_compare(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
@@ -152,5 +153,5 @@ pub fn user_compare(mut _1: Int63, mut _2: Int63) -> Result<Int63, Panic> {
             }
         }
     }
-    return Ok(_0);
+    Ok(_0)
 }

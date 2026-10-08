@@ -32,6 +32,9 @@ pub use baml_compiler2_emit;
 pub use baml_compiler2_hir;
 pub use baml_compiler2_hir_ty;
 pub use baml_compiler2_mir;
+// Stow routes compiler access through `baml_db`; the backend is a cargo
+// feature so the LSP, IDE and browser bundle do not link `syn`.
+#[cfg(feature = "native-backend")]
 pub use baml_compiler2_rust;
 pub use check::{
     CheckResult, NarrowedDiagnostics, check_file, check_files_parallel,

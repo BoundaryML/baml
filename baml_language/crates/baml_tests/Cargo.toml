@@ -18,7 +18,7 @@ baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
 baml_compiler2_mir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
-baml_db = { workspace = true }
+baml_db = { workspace = true, features = [ "native-backend" ] }
 baml_test_support = { workspace = true }
 baml_type = { workspace = true }
 bex_engine = { workspace = true }
