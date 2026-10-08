@@ -107,6 +107,30 @@ pub enum VmPanic {
     },
 }
 
+/// Lift a backend-neutral [`bex_lang::Panic`] into the VM's panic type.
+///
+/// `bex_lang` carries only `Int63` and strings; this is where the VM attaches
+/// its own `Value` representation (`DivisionByZero` keeps both operands, the
+/// divisor being the zero that caused it).
+impl From<bex_lang::Panic> for VmPanic {
+    fn from(panic: bex_lang::Panic) -> Self {
+        use bex_lang::Panic;
+        match panic {
+            Panic::DivisionByZero { dividend } => Self::DivisionByZero {
+                left: Value::int(dividend.get()),
+                right: Value::int(0),
+            },
+            Panic::IntegerOverflow { message } => Self::IntegerOverflow { message },
+            Panic::NegativeBitShift { message } => Self::NegativeBitShift { message },
+            Panic::UserPanic { message } => Self::UserPanic { message },
+            Panic::AssertionFailed => Self::AssertionFailed,
+            Panic::Unreachable => Self::Unreachable,
+            Panic::StackOverflow => Self::StackOverflow,
+            Panic::Exit { code } => Self::Exit { code: code.get() },
+        }
+    }
+}
+
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmBamlError {
@@ -533,4 +557,152 @@ pub fn format_traceback<'a>(frames: impl Iterator<Item = (&'a str, usize, &'a st
         writeln!(out, "  File \"{file}\", line {line}, in {function_name}").unwrap();
     }
     out
+}
+
+#[cfg(test)]
+mod lang_parity_tests {
+    //! `bex_lang` is the single source of truth for `int` panic messages; the
+    //! VM's own cold constructors format through it. These tests pin the
+    //! lifted `VmPanic` strings to the literals the VM has always produced.
+
+    use bex_lang::{Int63, Panic, int};
+
+    use super::VmPanic;
+    use crate::{PanicClass, Value};
+
+    fn int63(value: i64) -> Int63 {
+        Int63::new(value).expect("in range")
+    }
+
+    fn lifted(result: Result<Int63, Panic>) -> VmPanic {
+        VmPanic::from(result.expect_err("operation panics"))
+    }
+
+    #[test]
+    fn lifted_int_panics_match_the_vm_strings() {
+        let one = int63(1);
+        let max_plus_one = lifted(int::add(Int63::MAX, one));
+        assert_eq!(
+            max_plus_one,
+            VmPanic::IntegerOverflow {
+                message: "4611686018427387903 + 1 overflows int".into()
+            }
+        );
+        assert_eq!(
+            max_plus_one.to_string(),
+            "integer overflow: 4611686018427387903 + 1 overflows int"
+        );
+
+        let min_div_neg_one = lifted(int::div(Int63::MIN, int63(-1)));
+        assert_eq!(
+            min_div_neg_one,
+            VmPanic::IntegerOverflow {
+                message: "-4611686018427387904 / -1 overflows int".into()
+            }
+        );
+
+        let one_div_zero = lifted(int::div(one, Int63::ZERO));
+        assert_eq!(
+            one_div_zero,
+            VmPanic::DivisionByZero {
+                left: Value::int(1),
+                right: Value::int(0),
+            }
+        );
+        assert_eq!(
+            one_div_zero.to_string(),
+            "division by zero: Int(1) / Int(0)"
+        );
+        assert_eq!(lifted(int::rem(one, Int63::ZERO)), one_div_zero);
+
+        let one_shl_neg_one = lifted(int::shl(one, int63(-1)));
+        assert_eq!(
+            one_shl_neg_one,
+            VmPanic::NegativeBitShift {
+                message: "bit shift count is negative: -1".into()
+            }
+        );
+        assert_eq!(
+            one_shl_neg_one.to_string(),
+            "negative bit shift: bit shift count is negative: -1"
+        );
+
+        assert_eq!(
+            lifted(int::neg(Int63::MIN)),
+            VmPanic::IntegerOverflow {
+                message: "-(-4611686018427387904) overflows int".into()
+            }
+        );
+    }
+
+    #[test]
+    fn display_matches_for_every_lifted_variant() {
+        let panics = [
+            Panic::DivisionByZero {
+                dividend: int63(42),
+            },
+            Panic::IntegerOverflow {
+                message: "1 + 1 overflows int".into(),
+            },
+            Panic::NegativeBitShift {
+                message: "bit shift count is negative: -1".into(),
+            },
+            Panic::UserPanic {
+                message: "boom".into(),
+            },
+            Panic::AssertionFailed,
+            Panic::Unreachable,
+            Panic::StackOverflow,
+            Panic::Exit { code: int63(-7) },
+        ];
+        for panic in panics {
+            assert_eq!(VmPanic::from(panic.clone()).to_string(), panic.to_string());
+        }
+    }
+
+    #[test]
+    fn class_names_match_the_generated_panic_classes() {
+        let pairs = [
+            (
+                Panic::DivisionByZero { dividend: int63(1) },
+                PanicClass::DivisionByZero,
+            ),
+            (
+                Panic::IntegerOverflow {
+                    message: String::new(),
+                },
+                PanicClass::IntegerOverflow,
+            ),
+            (
+                Panic::NegativeBitShift {
+                    message: String::new(),
+                },
+                PanicClass::NegativeBitShift,
+            ),
+            (
+                Panic::UserPanic {
+                    message: String::new(),
+                },
+                PanicClass::UserPanic,
+            ),
+            (Panic::AssertionFailed, PanicClass::AssertionFailed),
+            (Panic::Unreachable, PanicClass::Unreachable),
+            (Panic::StackOverflow, PanicClass::StackOverflow),
+            (Panic::Exit { code: Int63::ZERO }, PanicClass::Exit),
+        ];
+        for (panic, class) in pairs {
+            assert_eq!(panic.class_fqn(), class.fqn());
+            assert_eq!(panic.class_name(), class.name());
+        }
+    }
+
+    #[test]
+    fn exit_code_round_trips_through_get() {
+        assert_eq!(
+            VmPanic::from(Panic::Exit { code: Int63::MAX }),
+            VmPanic::Exit {
+                code: Int63::MAX.get()
+            }
+        );
+    }
 }
