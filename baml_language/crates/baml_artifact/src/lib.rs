@@ -84,36 +84,42 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// artifact carrying the retired discriminant no longer decodes.
 pub const FORMAT_VERSION: u32 = 17;
 
-/// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
-/// HEAD), or empty when neither was available.
+/// Git commit this crate was stamped with (`BAML_GIT_SHA`), or empty for an
+/// unstamped build. Only release builds are stamped: a commit in every test
+/// and development build would recompile this crate and everything downstream
+/// of it on each new commit.
 const BUILD_COMMIT: &str = env!("BAML_ARTIFACT_BUILD_COMMIT");
 
-/// Identity of the build that encodes and accepts artifacts: the Git commit
-/// this crate was built from. Only a channel that does not enforce it (see
-/// [`ENFORCE_BUILD_FINGERPRINT`]) may build without a commit, e.g. from a
-/// source archive; it then falls back to the canonical BAML version.
-pub const BUILD_FINGERPRINT: &str = if BUILD_COMMIT.is_empty() {
-    baml_version::CANONICAL_VERSION
-} else {
+/// Fingerprint of an unstamped canary or development build. It is never a
+/// commit id, so a stamped build and an unstamped one always reject each
+/// other's artifacts.
+const UNSTAMPED_DEV_FINGERPRINT: &str = "unstamped-dev-build";
+
+/// Identity of the build that encodes and accepts artifacts: the Git commit a
+/// release build was stamped with. An unstamped build carries the fixed
+/// `UNSTAMPED_DEV_FINGERPRINT` on a channel that enforces the fingerprint
+/// (see [`ENFORCE_BUILD_FINGERPRINT`]), and the canonical BAML version on one
+/// that does not, e.g. a stable build from a source archive.
+pub const BUILD_FINGERPRINT: &str = if !BUILD_COMMIT.is_empty() {
     BUILD_COMMIT
+} else if ENFORCE_BUILD_FINGERPRINT {
+    UNSTAMPED_DEV_FINGERPRINT
+} else {
+    baml_version::CANONICAL_VERSION
 };
 
 const PREFIX_LEN: usize = MAGIC.len() + size_of::<u32>() + size_of::<u64>();
 
-/// Canary and development artifacts must come from the exact same commit.
+/// Canary and development artifacts must carry the fingerprint of the build
+/// that loads them. For a release that is its commit, so everything a release
+/// ships comes from the exact same commit. Unstamped builds share one
+/// fingerprint: they load each other's artifacts, with [`FORMAT_VERSION`] as
+/// the only skew check, and never a release's.
 ///
 /// Stable release archives may not carry Git metadata, so stable builds rely on
 /// [`FORMAT_VERSION`] plus the existing release-version metadata check instead;
 /// an equal-format fingerprint mismatch is accepted there with a warning.
 pub const ENFORCE_BUILD_FINGERPRINT: bool = channel_is(b"canary") || channel_is(b"dev");
-
-// Without a commit, an enforcing build would carry the version as its
-// fingerprint: it would reject every correctly fingerprinted artifact of its
-// own release while accepting any other commitless build of that version.
-const _: () = assert!(
-    !ENFORCE_BUILD_FINGERPRINT || !BUILD_COMMIT.is_empty(),
-    "this channel requires a Git commit fingerprint: build from a Git checkout, or set BAML_GIT_SHA to the commit being built",
-);
 
 const fn channel_is(expected: &[u8]) -> bool {
     let actual = baml_version::CHANNEL.as_bytes();
@@ -555,6 +561,17 @@ mod tests {
             assert!(matches!(result, Err(Error::Incompatible { .. })));
         } else {
             assert_eq!(result.unwrap(), 7);
+        }
+    }
+
+    #[test]
+    fn only_a_stamped_build_carries_a_commit() {
+        if !BUILD_COMMIT.is_empty() {
+            assert_eq!(BUILD_FINGERPRINT, BUILD_COMMIT);
+        } else if ENFORCE_BUILD_FINGERPRINT {
+            assert_eq!(BUILD_FINGERPRINT, UNSTAMPED_DEV_FINGERPRINT);
+        } else {
+            assert_eq!(BUILD_FINGERPRINT, baml_version::CANONICAL_VERSION);
         }
     }
 

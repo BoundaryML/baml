@@ -1,35 +1,4 @@
-use std::{env, process::Command};
-
-/// Runs `git` against the checkout being built.
-///
-/// `safe.directory=*` lets Git read a checkout owned by another uid, as in CI
-/// job containers, `cross`/maturin build containers, and dev containers. It
-/// grants nothing new: this build script already runs code from the same
-/// checkout.
-fn git_output(args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .args(["-c", "safe.directory=*"])
-        .args(args)
-        .output()
-        .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
-fn track_git_head() {
-    let Some(head) = git_output(&["rev-parse", "--git-path", "HEAD"]) else {
-        return;
-    };
-    println!("cargo:rerun-if-changed={head}");
-
-    if let Some(reference) = git_output(&["symbolic-ref", "-q", "HEAD"])
-        && let Some(path) = git_output(&["rev-parse", "--git-path", &reference])
-    {
-        println!("cargo:rerun-if-changed={path}");
-    }
-}
+use std::env;
 
 /// Whether `value` is a Git object name: 40 (SHA-1) or 64 (SHA-256) lowercase
 /// hex digits. Lowercase only, so a commit has exactly one spelling and
@@ -43,10 +12,12 @@ fn is_commit_id(value: &str) -> bool {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=BAML_GIT_SHA");
-    track_git_head();
 
-    // An explicit `BAML_GIT_SHA` (release CI, source archives) wins over the
-    // checkout's HEAD. An empty value counts as unset.
+    // Only an explicit `BAML_GIT_SHA` stamps a commit, and only release builds
+    // set one. The checkout's HEAD is deliberately not read: it would change
+    // this crate, and so every crate downstream of it, on every commit, and
+    // defeat the cargo and sccache caches of test and development builds. An
+    // empty value counts as unset.
     let commit = match env::var("BAML_GIT_SHA") {
         Ok(value) if !value.trim().is_empty() => {
             let value = value.trim();
@@ -54,20 +25,15 @@ fn main() {
                 is_commit_id(value),
                 "BAML_GIT_SHA must be a full lowercase Git commit id, got {value:?}"
             );
-            Some(value.to_owned())
+            value.to_owned()
         }
-        Ok(_) | Err(env::VarError::NotPresent) => {
-            git_output(&["rev-parse", "HEAD"]).filter(|head| is_commit_id(head))
-        }
+        Ok(_) | Err(env::VarError::NotPresent) => String::new(),
         Err(env::VarError::NotUnicode(value)) => {
             panic!("BAML_GIT_SHA must be a full lowercase Git commit id, got {value:?}")
         }
     };
 
-    // Empty when no commit is known. `lib.rs` decides whether the stamped
-    // channel may build without one.
-    println!(
-        "cargo:rustc-env=BAML_ARTIFACT_BUILD_COMMIT={}",
-        commit.unwrap_or_default()
-    );
+    // Empty when the build is unstamped. `lib.rs` picks the fingerprint such a
+    // build carries.
+    println!("cargo:rustc-env=BAML_ARTIFACT_BUILD_COMMIT={commit}");
 }

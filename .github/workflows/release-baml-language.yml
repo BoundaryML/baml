@@ -506,6 +506,7 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
+      - uses: ./.github/actions/export-build-fingerprint
       - uses: actions/download-artifact@v8
         with:
           name: release-plan

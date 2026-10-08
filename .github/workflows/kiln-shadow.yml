@@ -62,7 +62,7 @@ jobs:
           clean: false
           fetch-depth: 0
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -77,12 +77,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: Determine merge base
         id: merge_base
@@ -466,7 +460,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -481,12 +475,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
@@ -543,7 +531,7 @@ jobs:
           clean: false
           fetch-depth: 0
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -558,12 +546,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
@@ -650,7 +632,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -665,12 +647,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
@@ -715,7 +691,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -730,12 +706,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
       - name: "Install Rust toolchain"
@@ -847,7 +817,7 @@ jobs:
           clean: false
           fetch-depth: 0
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -862,12 +832,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
@@ -917,7 +881,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -932,12 +896,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -1040,7 +998,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -1055,12 +1013,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -1178,7 +1130,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -1193,12 +1145,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: |
@@ -1315,7 +1261,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -1330,12 +1276,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: |
@@ -1455,7 +1395,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -1470,12 +1410,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - uses: SebRollen/toml-action@v1.2.0
         id: msrv
@@ -1575,7 +1509,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -1590,12 +1524,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -2059,7 +1987,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -2074,12 +2002,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -2210,7 +2132,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -2225,12 +2147,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -2315,7 +2231,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -2330,12 +2246,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: |
@@ -2422,7 +2332,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -2437,12 +2347,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
@@ -2500,7 +2404,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -2515,12 +2419,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
@@ -2574,7 +2472,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -2589,12 +2487,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
@@ -2639,7 +2531,7 @@ jobs:
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
+      - name: "Backdate the git refs build scripts track"
         run: |
           echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
           basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
@@ -2654,12 +2546,6 @@ jobs:
           p+=("$(git rev-parse --git-path refs/heads/canary)")
           touch -t 197001010000 "${p[@]}"
           ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
