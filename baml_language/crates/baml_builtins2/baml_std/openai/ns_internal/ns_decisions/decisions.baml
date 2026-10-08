@@ -351,9 +351,14 @@ function request(
         let _ = headers.set("authorization", `Bearer ${key}`);
     }
     let base = ai.wire.resolve_credential(c.base_url, null) ?? "https://api.openai.com/v1";
+    let trimmed = if (base.ends_with("/")) {
+        base.slice(0, base.length() - 1)
+    } else {
+        base
+    };
     baml.http.Request {
         method: "POST",
-        url: `${base}/decisions`,
+        url: `${trimmed}/decisions`,
         headers: headers,
         body: baml.json.stringify(
             { "model": c.model, "input": evidence(p, preview), "questions": questions },
@@ -368,15 +373,10 @@ class Answer {
     choice: string?,
 }
 
-class Usage {
-    input_tokens: int,
-    output_tokens: int,
-}
-
 class Response {
     answers: Answer[],
     model: string?,
-    usage: Usage?,
+    usage: root.internal.OaUsage?,
 }
 
 function failed(detail: string) -> ai.errors.ParseFailed {
@@ -474,13 +474,18 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
         stop_reason: ai.content.StopReason.Complete,
         calls: [sent.call],
         usage: match (sent.value.usage) {
-            let usage: Usage => {
+            let usage: root.internal.OaUsage => {
                 ai.events.Usage {
-                    input_tokens: usage.input_tokens,
-                    output_tokens: usage.output_tokens,
-                    cached_input_tokens: null,
-                    reasoning_tokens: null,
-                    uncached_input_tokens: usage.input_tokens,
+                    input_tokens: usage.input_tokens ?? 0,
+                    output_tokens: usage.output_tokens ?? 0,
+                    cached_input_tokens: usage.input_tokens_details?.cached_tokens,
+                    reasoning_tokens: usage.output_tokens_details?.reasoning_tokens,
+                    cache_write_input_tokens: usage.input_tokens_details?.cache_write_tokens,
+                    uncached_input_tokens: ai.internal.uncached_input_tokens(
+                        usage.input_tokens,
+                        usage.input_tokens_details?.cached_tokens,
+                        cache_write = usage.input_tokens_details?.cache_write_tokens,
+                    ),
                 }
             },
             null => null,

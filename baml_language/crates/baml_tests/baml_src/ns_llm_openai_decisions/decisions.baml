@@ -756,3 +756,43 @@ function fetched_image() -> bool {
 test "remote images are fetched and inlined on invocation" {
     assert.is_true(fetched_image())
 }
+
+function usage_breakdown() -> bool {
+    let body = baml.json.stringify(
+        {
+            "answers": [{ "name": "result", "type": "predicate", "probability": 0.9 }],
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "input_tokens_details": { "cached_tokens": 25, "cache_write_tokens": 15 },
+                "output_tokens_details": { "reasoning_tokens": 7 },
+            },
+        },
+    );
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(body)], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let turn = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url()).invoke(
+            input(reflect.Type.of<bool>()),
+        );
+        assert.equal(turn.usage?.input_tokens, 100);
+        assert.equal(turn.usage?.output_tokens, 10);
+        assert.equal(turn.usage?.cached_input_tokens, 25);
+        assert.equal(turn.usage?.cache_write_input_tokens, 15);
+        assert.equal(turn.usage?.reasoning_tokens, 7);
+        assert.equal(turn.usage?.uncached_input_tokens, 60);
+        true
+    })
+}
+
+test "reported token usage breakdown is preserved" {
+    assert.is_true(usage_breakdown())
+}
+
+test "trailing slash base URL overrides use a single route separator" {
+    let cl = openai.DecisionsClient.new(base_url = "https://gateway.example/v1/");
+    assert.equal(
+        cl.render(input(reflect.Type.of<bool>())).url,
+        "https://gateway.example/v1/decisions",
+    )
+}
