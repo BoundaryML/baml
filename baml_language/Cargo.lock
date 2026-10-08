@@ -1144,6 +1144,7 @@ dependencies = [
  "bex_heap",
  "bex_vm_types",
  "btel_clock",
+ "btel_pricing",
  "btel_reader",
  "btel_recorder",
  "btel_settings",
@@ -1970,6 +1971,14 @@ dependencies = [
  "prost",
  "rustc-hash 2.1.2",
  "tempfile",
+]
+
+[[package]]
+name = "btel_pricing"
+version = "0.0.0-beta"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

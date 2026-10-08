@@ -19,7 +19,6 @@ pub mod format;
 pub mod functions;
 pub mod ingest;
 mod outcomes;
-mod pricing;
 pub mod query;
 pub mod schema;
 pub mod sql;
