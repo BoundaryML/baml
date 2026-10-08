@@ -243,6 +243,9 @@ def test_stream_recording_parent_chain(tmp_path):
     import baml_sdk
 
     marker = "stream-audit-" + uuid.uuid4().hex
+    # Local queries are project-relative: the child records beneath
+    # `<query_root>/.baml`, its BAML_HOME, and the query reads from there.
+    query_root = tmp_path / "config"
     env = {
         key: value
         for key, value in os.environ.items()
@@ -251,11 +254,11 @@ def test_stream_recording_parent_chain(tmp_path):
     env.update(
         BOUNDARY_API_KEY="local",
         BAML_TELEMETRY="medium",
-        BAML_HOME=str(tmp_path / "config"),
+        BAML_HOME=str(query_root / ".baml"),
         DO_NOT_TRACK="1",
     )
     env["PYTHONPATH"] = str(Path(baml_sdk.__file__).resolve().parent.parent)
-    recording_directory = Path.home() / ".baml/btel/recordings"
+    recording_directory = query_root / ".baml/btel/recordings"
     before = (
         set(recording_directory.iterdir()) if recording_directory.exists() else set()
     )
@@ -287,7 +290,7 @@ def test_stream_recording_parent_chain(tmp_path):
             "query",
             "--local",
             "--from",
-            str(Path.home()),
+            str(query_root),
             "--format",
             "json",
             sql,
