@@ -580,7 +580,17 @@ pub fn _discard_host_call_args(args: Vec<u8>) {
 #[pyfunction]
 pub fn _complete_host_call_success(py: Python<'_>, call_id: u32, value: Py<PyAny>) {
     catch_dispatch_panic(call_id, || {
-        complete_dispatch_result(call_id, encode_result_inbound(py, call_id, value));
+        match encode_result_inbound(py, call_id, value) {
+            Ok(bytes) => send_dispatch_success(call_id, &bytes),
+            // The host broke the callable's contract: a panic, as the engine's
+            // own return check reports it, not a catchable error.
+            Err(error) => {
+                observe_dispatch_error(call_id, py, &error);
+                let bytes = bridge_encode::host_contract_violation(&error.to_string(), "python")
+                    .encode_to_vec();
+                complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+            }
+        }
     });
 }
 
@@ -806,6 +816,17 @@ fn try_encode_baml_error_throw(
 ///   opaque `baml.errors.HostCallable` Instance carrying the four
 ///   metadata fields.
 fn send_dispatch_error_from_pyerr(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr) {
+    observe_dispatch_error(call_id, py, py_err);
+
+    if let Ok(Some(bytes)) = try_encode_baml_error_throw(py, call_id, py_err) {
+        complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+        return;
+    }
+    send_dispatch_error_opaque(call_id, py, py_err);
+}
+
+/// Report a failed dispatch to the instrumentation owner of `call_id`, if any.
+fn observe_dispatch_error(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr) {
     if let Some(owner) = bridge_cffi::host_instrumentation::callback(call_id) {
         let cancelled = PyModule::import(py, "asyncio")
             .and_then(|module| module.getattr("CancelledError"))
@@ -826,11 +847,11 @@ fn send_dispatch_error_from_pyerr(call_id: u32, py: Python<'_>, py_err: &pyo3::P
         };
         owner.observe(outcome, capture);
     }
+}
 
-    if let Ok(Some(bytes)) = try_encode_baml_error_throw(py, call_id, py_err) {
-        complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
-        return;
-    }
+/// Complete `call_id` with a `baml.errors.HostCallable` instance carrying
+/// `py_err`'s metadata and a handle to the exception object itself.
+fn send_dispatch_error_opaque(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr) {
     // The opaque path encodes nothing against the signature.
     drop(take_callback_signature(call_id));
 

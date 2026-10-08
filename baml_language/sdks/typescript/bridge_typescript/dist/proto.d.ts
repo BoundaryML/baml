@@ -9,13 +9,6 @@ import { baml_bridge } from './proto/baml_cffi.js';
 import { HandleKey } from './native.js';
 import type { InvocationOptions, InvokeOptions } from './invocation.js';
 import { BamlType } from './wire_ty.js';
-/**
- * Error thrown when a host callable (a JS `function`) is passed to the
- * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
- */
-export declare class HostCallableSyncError extends Error {
-    constructor(message: string);
-}
 export interface EncodeCallArgsOptions {
     callId: bigint;
     baml?: InvocationOptions | null;
@@ -69,23 +62,52 @@ export declare class BamlPrompt {
     private static cloneWire;
 }
 /**
- * Encode kwargs into `CallFunctionArgs` bytes.
- *
- * `syncMode` (default false) selects the sync guard: a host callable in the
- * kwargs of a *synchronous* call rejects with {@link HostCallableSyncError}
- * before any work, rather than registering a tsfn and then hanging.
- *
- * Release tradeoff: a callable that encodes successfully is registered in the
- * host-value table and is normally released only when the engine GCs the
- * `HostClosure` it allocated and fires the C release callback (a GC-timed
- * release, drained by the engine after collection).
- * Because the Node tsfn is built with `weak::<false>` it keeps a strong libuv
- * ref, so a *leaked* registry entry can also keep the Node process from
- * exiting — which is exactly why the encode-error rollback below matters: if a
- * later kwarg fails, the engine never sees (and so never releases) the keys we
- * already registered, so we release them here.
+ * The control part of a call as `CallFunctionArgs` bytes, with the values the
+ * bridge encodes against the target's declared types alongside: `kwargs` by
+ * declared parameter name and the `$baml.cancel` token, both still JavaScript
+ * values. `BamlRuntime.callFunction(bytes, kwargs, cancel)` takes all three.
  */
-export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer;
+export interface EncodedCall {
+    bytes: Buffer;
+    kwargs: Record<string, unknown>;
+    cancel: unknown;
+}
+/**
+ * Build the control part of a `CallFunctionArgs` for a call.
+ *
+ * The argument values are not encoded here; they ride the returned
+ * {@link EncodedCall} as JavaScript values, and the bridge walks them against
+ * the types the program declares for the target's parameters. `syncMode` is
+ * passed to the bridge by the entry point: a host callable in the arguments of
+ * a *synchronous* call is rejected there before any work, because the sync
+ * path blocks the event loop the callback would need.
+ */
+export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): EncodedCall;
+/** A leaf as the bridge takes it from {@link hostAdapter.leafOf}. */
+interface HostLeaf {
+    /** 0 handle, 1 image, 2 audio, 3 video, 4 pdf, 5 prompt, 6 type value. */
+    kind: number;
+    bytes: Uint8Array;
+    /** The handle key cloned for the wire, as a decimal string, so the bridge can release it if the call never goes out. */
+    cloned?: string;
+}
+/**
+ * What the runtime answers the bridge's walker: everything about a value that
+ * only the runtime knows. Registered once at module load
+ * (`registerHostAdapter`); the bridge calls back into it while encoding.
+ */
+export declare const hostAdapter: {
+    /** The BAML class a generated-class instance is an instance of, or undefined. */
+    classOf(value: unknown): string | undefined;
+    /** A generic instance's `$types`, lowered to wire `BamlTy` bytes, when every parameter is present. */
+    typeArgsOf(value: unknown): Uint8Array[] | undefined;
+    /** The wire leaf a runtime-owned value is, or undefined for any other value. */
+    leafOf(value: unknown): HostLeaf | undefined;
+    /** Bind a user function as a host callable; what comes back is the platform's (see `registerCallableDispatch`). */
+    dispatchFor(fn: (...args: unknown[]) => unknown): unknown;
+    /** A short, bounded rendering for error messages. */
+    describe(value: unknown): string;
+};
 interface InvocationSnapshot {
     wire: baml_bridge.cffi.v1.IInvocationOptions;
     cancel: unknown;

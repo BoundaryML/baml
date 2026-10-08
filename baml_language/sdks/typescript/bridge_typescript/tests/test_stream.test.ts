@@ -2,12 +2,13 @@
 //
 // End-to-end next()/final() needs a streaming BAML fixture and is deferred to
 // Phase 4. Here we validate the wrapper class structure and that a stream-typed
-// value encodes without throwing (the _toHandle round-trip through the encoder).
+// value encodes without throwing (the _toHandle round-trip through the bridge).
 
-import { BamlStream, BamlHandle, _seedFunctionRefHandle, encodeCallArgs } from '../dist/index.js';
+import { BamlStream, BamlHandle, _seedFunctionRefHandle } from '../dist/index.js';
+import { _encodeInbound } from '../dist/native.js';
 
 describe('BamlStream', () => {
-    test('_toHandle round-trips through encodeCallArgs', () => {
+    test('_toHandle round-trips through the bridge encoder', () => {
         // Seed any handle (a function ref is fine for the encoder test).
         const [key, ht] = _seedFunctionRefHandle(42);
         const h = new BamlHandle(key, ht);
@@ -18,6 +19,6 @@ describe('BamlStream', () => {
         expect((stream as unknown as { _classFqn: string })._classFqn).toBe('ai.stream.Stream');
 
         // Encoding a stream-typed value should not throw.
-        expect(() => encodeCallArgs({ self: stream }, { callId: 1n })).not.toThrow();
+        expect(() => _encodeInbound(stream, 'self')).not.toThrow();
     });
 });

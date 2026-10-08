@@ -22,11 +22,14 @@
 //! enums and handles are self-evident and never carry one. That is the whole
 //! contract between this encoder and the engine.
 
+mod contract;
 mod encode;
 mod error;
 mod facts;
 mod host;
+pub mod js;
 
+pub use contract::host_contract_violation;
 pub use encode::{Encoded, Fit, encode, encode_arguments};
 pub use error::{EncodeError, EncodeErrorKind, PathSegment};
 pub use facts::{ClassFacts, EnumFacts, Facts, FunctionSig, Param};

@@ -54,10 +54,24 @@ impl BamlRuntime {
     }
 
     /// Call a BAML function synchronously (blocking).
+    ///
+    /// `args_proto` carries the call's control part (target, type arguments,
+    /// invocation options) with no `kwargs`; `kwargs` are the arguments by
+    /// declared parameter name as JavaScript values, encoded here against the
+    /// target's declared types, and `cancel` the `$baml.cancel` token. A value
+    /// that does not fit raises before anything is sent.
     #[napi]
-    pub fn call_function_sync(&self, args_proto: Buffer) -> napi::Result<Buffer> {
+    pub fn call_function_sync<'env>(
+        &self,
+        env: &'env Env,
+        args_proto: Buffer,
+        kwargs: Option<Object<'env>>,
+        cancel: Option<Unknown<'env>>,
+    ) -> napi::Result<Buffer> {
+        let args_proto =
+            crate::encode::encode_request(env, args_proto.as_ref(), kwargs, cancel, true)?;
         let request = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
-            let request = bridge_cffi::decode_invocation_request(args_proto.as_ref())?;
+            let request = bridge_cffi::decode_invocation_request(&args_proto)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
             Ok((request, rt))
         })();
@@ -77,16 +91,22 @@ impl BamlRuntime {
         Ok(Buffer::from(bytes))
     }
 
-    /// Call a BAML function asynchronously.
+    /// Call a BAML function asynchronously. Arguments as for
+    /// [`Self::call_function_sync`]; they are encoded on the JavaScript thread
+    /// before the future is spawned.
     #[napi(ts_return_type = "Promise<Buffer>")]
     pub fn call_function<'e>(
         &self,
         env: &'e Env,
         args_proto: Buffer,
+        kwargs: Option<Object<'e>>,
+        cancel: Option<Unknown<'e>>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
+        let args_proto =
+            crate::encode::encode_request(env, args_proto.as_ref(), kwargs, cancel, false)?;
         // `decode_invocation_request` pins a handle target before the future is spawned,
         // so a JS-side release of that handle cannot race the call.
-        let request = bridge_cffi::decode_invocation_request(args_proto.as_ref());
+        let request = bridge_cffi::decode_invocation_request(&args_proto);
 
         // Same shared execute_invocation as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.

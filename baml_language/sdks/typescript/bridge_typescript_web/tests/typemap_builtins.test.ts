@@ -5,12 +5,11 @@ import {
   BamlStream,
   BamlTypeMap,
   decodeCallResult,
-  encodeCallArgs,
   setTypeMap,
 } from "@boundaryml/baml-bridge-web";
 import { beforeAll, describe, expect, it } from "vitest";
 
-const { BamlOutboundResult, CallFunctionArgs } = baml_bridge.cffi.v1;
+const { BamlOutboundResult, InboundValue } = baml_bridge.cffi.v1;
 
 function keyHalves(key: bigint): { low: number; high: number } {
   const normalized = BigInt.asUintN(64, key);
@@ -82,10 +81,10 @@ describe("builtin typemap decoding", () => {
     expect(stream).toBeInstanceOf(BamlStream);
     expect((stream as unknown as { _classFqn: string })._classFqn).toBe("ai.stream.Stream");
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
-    const bytes = encodeCallArgs({ self: stream }, { callId: 1n });
+    const bytes = raw._encodeWebInbound(stream, "self");
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 2);
 
-    const wireHandle = CallFunctionArgs.decode(bytes).kwargs[0]?.value?.handle;
+    const wireHandle = InboundValue.decode(bytes).handle;
     if (wireHandle === undefined || wireHandle === null) throw new Error("stream did not encode as a handle");
     expect(wireHandle.handleType).toBe(14);
     expect(raw.releaseHandle(bigintFromWireKey(wireHandle.key))).toBe(true);
@@ -97,8 +96,8 @@ describe("builtin typemap decoding", () => {
     expect((stream as BamlStream<unknown>)._toHandle()._releaseForTest()).toBe(true);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
 
-    const cloneBytes = encodeCallArgs({ self: clonedStream }, { callId: 2n });
-    const cloneWireHandle = CallFunctionArgs.decode(cloneBytes).kwargs[0]?.value?.handle;
+    const cloneBytes = raw._encodeWebInbound(clonedStream, "self");
+    const cloneWireHandle = InboundValue.decode(cloneBytes).handle;
     if (cloneWireHandle === undefined || cloneWireHandle === null) throw new Error("cloned stream did not encode as a handle");
     expect(raw.releaseHandle(bigintFromWireKey(cloneWireHandle.key))).toBe(true);
     expect(clonedHandle._releaseForTest()).toBe(true);

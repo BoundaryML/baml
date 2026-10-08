@@ -97,7 +97,16 @@ use crate::send_wrapper::SendWrapper;
 // most one entry across the whole process. Only the *dispatch callback* is
 // per-runtime (see `WasmHost`).
 
-type HostExecution = (Box<dyn Send + Sync>, Option<SendWrapper<Function>>);
+/// What a dispatched host call keeps alive until it completes.
+struct HostExecution {
+    /// The callable's key, so the completion can find what it was bound to.
+    key: u64,
+    /// The invocation context, callable and arguments the call reads; held
+    /// only so they outlive the dispatch.
+    _retained: Box<dyn Send + Sync>,
+    /// The runtime's cancellation observer, if it installed one.
+    cancel: Option<SendWrapper<Function>>,
+}
 
 thread_local! {
     /// `u64 → user JS callable`. Populated by [`register_host_callable`] from
@@ -188,6 +197,12 @@ fn next_call_id() -> u32 {
     })
 }
 
+/// The key of the host callable an in-flight call `call_id` was dispatched
+/// to, or `None` once the call has completed or was never dispatched.
+pub fn host_callable_key_for_call(call_id: u32) -> Option<u64> {
+    EXECUTIONS.with(|cell| cell.borrow().get(&call_id).map(|execution| execution.key))
+}
+
 #[wasm_bindgen(js_name = registerHostCancelCallback)]
 pub fn register_host_cancel_callback(callback: Function) -> bool {
     HOST_CANCEL_CALLBACK.with(|slot| {
@@ -272,7 +287,7 @@ impl Drop for WasmInflightGuard {
             let callback = EXECUTIONS.with(|cell| {
                 cell.borrow()
                     .get(&self.call_id)
-                    .and_then(|(_, callback)| callback.clone())
+                    .and_then(|execution| execution.cancel.clone())
             });
             if let Some(callback) = callback {
                 let _ = callback.call1(&JsValue::NULL, &JsValue::from(self.call_id));
@@ -703,15 +718,16 @@ impl WasmHost {
             EXECUTIONS.with(|cell| {
                 cell.borrow_mut().insert(
                     call_id,
-                    (
-                        Box::new((
+                    HostExecution {
+                        key: callable.key,
+                        _retained: Box::new((
                             ctx.cloned(),
                             HostValueArc::intern(callable.key, callable.kind),
                             positional.to_vec(),
                             optional.clone(),
                         )),
-                        callback,
-                    ),
+                        cancel: callback,
+                    },
                 )
             });
             let call_id_js = JsValue::from_f64(f64::from(call_id));

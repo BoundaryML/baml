@@ -139,7 +139,8 @@ impl Walk<'_> {
                 self.open(value, slot)
             }
             RuntimeTy::Union(members) => self.union(value, members),
-            RuntimeTy::Null => {
+            // `void` is the language's spelling of `null` in a result position.
+            RuntimeTy::Null | RuntimeTy::Void => {
                 if value.is_null() {
                     Ok(exact(InboundValue::default(), RuntimeTy::Null))
                 } else {
@@ -173,7 +174,6 @@ impl Walk<'_> {
             | RuntimeTy::Resource
             | RuntimeTy::RustType
             | RuntimeTy::Future(..)
-            | RuntimeTy::Void
             | RuntimeTy::Never
             | RuntimeTy::AssociatedTypeProjection { .. } => Err(self.mismatch(value, slot)),
             RuntimeTy::TypeAlias(_) => unreachable!("expand() leaves no alias at the head"),
@@ -753,7 +753,7 @@ impl Walk<'_> {
                 Some((_, value)) => walk.encode(value, &slot)?,
                 None => {
                     let expanded = walk.facts.expand(&slot).map_err(|kind| walk.err(kind))?;
-                    let nullable = matches!(expanded, RuntimeTy::Null)
+                    let nullable = matches!(expanded, RuntimeTy::Null | RuntimeTy::Void)
                         || matches!(expanded, RuntimeTy::Union(members)
                             if members.iter().any(RuntimeTy::is_null));
                     if let (FieldSource::Mapping, true) = (source, nullable) {
@@ -1511,6 +1511,28 @@ mod tests {
             stated_as(&f.ok(&Mock::List(vec![]), "p")),
             Some(RuntimeTy::list(RuntimeTy::Never))
         );
+    }
+
+    #[test]
+    fn void_is_null_in_a_result_position() {
+        let f = Fixture::new();
+        let encoded = encode(
+            &f.facts,
+            &Mock::Null,
+            &RuntimeTy::Void,
+            vec![PathSegment::Result],
+        )
+        .unwrap();
+        assert_eq!(encoded.ty, RuntimeTy::Null);
+        assert!(encoded.value.value.is_none());
+        let kind = encode(
+            &f.facts,
+            &Mock::Int(1),
+            &RuntimeTy::Void,
+            vec![PathSegment::Result],
+        )
+        .unwrap_err();
+        assert!(matches!(*kind.kind, EncodeErrorKind::Mismatch { .. }));
     }
 
     #[test]

@@ -171,10 +171,10 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn, baml: built.baml });
-            const callCtxBinding = attachInvocation(argsProto, callId);
+            const encoded = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn, baml: built.baml });
+            const callCtxBinding = attachInvocation(encoded.bytes, callId);
             try {
-                const resultBytes = rt.callFunctionSync(argsProto);
+                const resultBytes = rt.callFunctionSync(encoded.bytes, encoded.kwargs, encoded.cancel);
                 return decodeCallResult(resultBytes);
             }
             finally {
@@ -188,10 +188,10 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn, baml: built.baml });
-            const callCtxBinding = attachInvocation(argsProto, callId);
+            const encoded = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn, baml: built.baml });
+            const callCtxBinding = attachInvocation(encoded.bytes, callId);
             try {
-                const resultBytes = await rt.callFunction(argsProto);
+                const resultBytes = await rt.callFunction(encoded.bytes, encoded.kwargs, encoded.cancel);
                 return decodeCallResult(resultBytes);
             }
             finally {
@@ -233,10 +233,10 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn, baml: built.baml });
-                    const callCtxBinding = attachInvocation(argsProto, callId);
+                    const encoded = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn, baml: built.baml });
+                    const callCtxBinding = attachInvocation(encoded.bytes, callId);
                     try {
-                        const resultBytes = rt.callFunctionSync(argsProto);
+                        const resultBytes = rt.callFunctionSync(encoded.bytes, encoded.kwargs, encoded.cancel);
                         return decodeCallResult(resultBytes);
                     }
                     finally {
@@ -250,10 +250,10 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn, baml: built.baml });
-                    const callCtxBinding = attachInvocation(argsProto, callId);
+                    const encoded = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn, baml: built.baml });
+                    const callCtxBinding = attachInvocation(encoded.bytes, callId);
                     try {
-                        const resultBytes = await rt.callFunction(argsProto);
+                        const resultBytes = await rt.callFunction(encoded.bytes, encoded.kwargs, encoded.cancel);
                         return decodeCallResult(resultBytes);
                     }
                     finally {

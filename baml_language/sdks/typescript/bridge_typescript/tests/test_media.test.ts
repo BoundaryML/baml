@@ -7,8 +7,8 @@ import {
     BamlVideo,
     BamlPdf,
     decodeCallResult,
-    encodeCallArgs,
 } from '../dist/index.js';
+import { _encodeInbound } from '../dist/native.js';
 import { baml_bridge } from '../dist/proto/baml_cffi.js';
 
 type MediaCtor = {
@@ -51,17 +51,13 @@ describe.each(KINDS)('%s', (_name, Ctor) => {
 
 test('media crosses the call boundary as a portable payload', () => {
     const image = BamlImage.fromUrl('https://example.test/cat.png', 'image/png');
-    const encoded = encodeCallArgs({ image }, {
-        callId: 11n,
-        functionName: 'user.AcceptImage',
-    });
-    const call = baml_bridge.cffi.v1.CallFunctionArgs.decode(encoded);
-    expect(call.kwargs[0]?.value?.mediaValue).toMatchObject({
+    const value = baml_bridge.cffi.v1.InboundValue.decode(_encodeInbound(image, 'image'));
+    expect(value.mediaValue).toMatchObject({
         media: 1,
         mimeType: 'image/png',
         url: 'https://example.test/cat.png',
     });
-    expect(call.kwargs[0]?.value?.handle).toBeNull();
+    expect(value.handle).toBeNull();
 });
 
 test('outbound portable media reconstructs a fresh media wrapper', () => {

@@ -1,23 +1,23 @@
 //! Per-process Node.js host-value registry.
 //!
 //! When JavaScript passes a callable as an argument to a BAML function, the
-//! inbound encoder (`typescript_src/proto.ts`) calls
-//! [`register_host_callable`] (exposed as `registerHostCallable`) with a
-//! small JS *dispatch wrapper* that knows how to:
+//! bridge's argument walker (`crate::encode`) binds it to the function slot
+//! it fits and calls `register_callable` with the small JS *dispatch
+//! wrapper* the runtime's host adapter hands back, which knows how to:
 //!
 //!   1. Decode the engine-side `BamlOutboundValue` args (the wire payload is
 //!      a list shape — see `sys_native::host_impls::call_host_value`) into
 //!      JS positional arguments.
 //!   2. Invoke the user callable, awaiting its `Promise` when it returns one.
-//!   3. Encode the result as an `InboundValue` and invoke
-//!      [`complete_host_call`] (the napi-exposed wrapper around the C
-//!      `bridge_cffi::complete_host_call`).
+//!   3. Hand the result to [`complete_host_call_value`], which encodes it
+//!      against the bound slot's declared return type and completes the call
+//!      through the C `bridge_cffi::complete_host_call`.
 //!
-//! `register_host_callable` returns a `HandleKey` (a `{low, high}` u64
-//! split, matching the rest of the Node bridge) and stores the dispatch
-//! wrapper as a [`ThreadsafeFunction`] in a process-wide registry. The TS
-//! encoder emits `InboundValue::Handle { key, handle_type: HOST_VALUE_CALLABLE }`
-//! using that key.
+//! `register_callable` returns the key and stores the dispatch wrapper as a
+//! [`ThreadsafeFunction`] in a process-wide registry, together with the
+//! function type it was bound to. The walker emits
+//! `InboundValue::Handle { key, handle_type: HOST_VALUE_CALLABLE }` using
+//! that key.
 //!
 //! From Rust's side, when BAML invokes the host value, the `call_host_value`
 //! sysop calls the registered [`host_dispatch_callback`] which looks the
@@ -42,7 +42,7 @@
 //! layer rather than worked around here.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{Arc, LazyLock, Mutex, OnceLock},
 };
 
@@ -50,8 +50,8 @@ use bridge_ctypes::baml_bridge::cffi::{
     BamlHandleType, BamlOutboundValue, BamlToHostCall, baml_outbound_value::Value as OutboundValue,
 };
 use napi::{
-    Status,
-    bindgen_prelude::{Buffer, External, FnArgs, Function},
+    Env, Status,
+    bindgen_prelude::{Buffer, External, FnArgs, Function, Unknown},
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
 use napi_derive::napi;
@@ -225,7 +225,7 @@ pub fn discard_host_call_args_from_js(args: Buffer) {
 ///
 /// Wrapped in `FnArgs` because napi-rs's `JsValuesTupleIntoVec` is impl'd
 /// on `FnArgs<(...)>`, not raw tuples.
-type DispatchArgs = FnArgs<(u32, Buffer, External<HostExecutionLease>)>;
+pub(crate) type DispatchArgs = FnArgs<(u32, Buffer, External<HostExecutionLease>)>;
 
 /// Type of the per-callable dispatch wrapper held in the registry.
 ///
@@ -249,33 +249,50 @@ type DispatchTsfn =
 /// rather than dropping the call silently.
 const DISPATCH_QUEUE_SIZE: usize = 1024;
 
+/// A JS callable handed to BAML: its dispatch wrapper and the function type
+/// of the slot it was bound to.
+struct Registered {
+    tsfn: Arc<DispatchTsfn>,
+    /// The result and thrown value are encoded against this. `None` for a
+    /// callable bound under an open slot.
+    signature: Option<bex_project::RuntimeTy>,
+}
+
 /// Process-wide table of JS dispatch wrappers handed to BAML.
 ///
 /// The key is a freshly-allocated `u64` (never 0). Removal happens in
 /// [`host_release_callback`] when Rust drops its last clone of the
 /// corresponding `HostValueArc`.
-static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Arc<DispatchTsfn>>> =
+static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Registered>> =
     LazyLock::new(bridge_ctypes::HostValueRegistry::default);
 
-/// Register a JS dispatch wrapper in the host-value table and return its key.
-///
-/// Exposed to JS as `registerHostCallable(fn) -> HandleKey`. Called from
-/// the inbound encoder in `typescript_src/proto.ts` whenever a JS callable
-/// appears as a kwarg — the encoder constructs the dispatch wrapper around
-/// the user's function before calling this.
+/// The signature of each host call in flight, by callback id, from dispatch
+/// until its result or error is encoded.
+static CALLBACK_SIGNATURES: LazyLock<Mutex<HashMap<u32, Option<bex_project::RuntimeTy>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
+    CALLBACK_SIGNATURES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&call_id)
+        .flatten()
+}
+
+/// Register a JS dispatch wrapper in the host-value table, bound to
+/// `signature`, and return its key. `marker_key` is the host marker's handle
+/// when the user function was defined through the instrumentation surface.
 ///
 /// The `Function` is converted into a `ThreadsafeFunction` so it can outlive
 /// the napi call scope and be invoked from any thread (the engine's tokio
 /// runtime calls into this entry point from a worker thread).
-#[napi(
-    ts_args_type = "callable: (callId: number, argsBytes: Buffer, execution: object) => void, marker?: BamlHandle"
-)]
-pub fn register_host_callable(
+pub(crate) fn register_callable(
     callable: Function<'_, DispatchArgs, ()>,
-    marker: Option<&crate::handle::BamlHandle>,
-) -> napi::Result<HandleKey> {
+    marker_key: Option<u64>,
+    signature: Option<bex_project::RuntimeTy>,
+) -> napi::Result<u64> {
     let descriptor = bridge_cffi::host_instrumentation::registration_marker(
-        marker.map_or(0, crate::handle::BamlHandle::key_u64),
+        marker_key.unwrap_or(0),
         "typescript",
     )
     .map_err(crate::errors::bridge_error_to_napi)?;
@@ -286,9 +303,59 @@ pub fn register_host_callable(
         // Bound the queue (napi's default is unbounded); see DISPATCH_QUEUE_SIZE.
         .max_queue_size::<DISPATCH_QUEUE_SIZE>()
         .build()?;
-    let key = REGISTRY.insert(Arc::new(tsfn));
+    let key = REGISTRY.insert(Registered {
+        tsfn: Arc::new(tsfn),
+        signature,
+    });
     bex_project::HostValueArc::register_annotation(key, descriptor);
-    Ok(HandleKey::from_u64(key))
+    Ok(key)
+}
+
+/// Complete an in-flight host call with its JavaScript result, encoded
+/// against the return type of the slot the callable was bound to.
+///
+/// Exposed to JS as `completeHostCallValue(callId, value)`. A value that does
+/// not fit raises, and the JS dispatch wrapper then completes the call with
+/// that error instead.
+#[napi(js_name = "completeHostCallValue")]
+pub fn complete_host_call_value(env: Env, call_id: u32, value: Unknown<'_>) -> napi::Result<()> {
+    let ret = match take_callback_signature(call_id) {
+        Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
+        Some(_) | None => bex_project::RuntimeTy::Unknown,
+    };
+    match crate::encode::encode_value(&env, value, &ret, bridge_encode::PathSegment::Result) {
+        Ok(bytes) => complete_host_call_bytes(call_id, 0, &bytes),
+        // The host broke the callable's contract: a panic, as the engine's
+        // own return check reports it, not a catchable error.
+        Err(error) => complete_host_call_bytes(
+            call_id,
+            1,
+            &bridge_encode::host_contract_violation(&error.reason, "nodejs").encode_to_vec(),
+        ),
+    }
+    Ok(())
+}
+
+/// Complete an in-flight host call with a thrown BAML value (the `value` of
+/// a `BamlError`), encoded as the type it has: the engine's throw channel
+/// takes it with no declared slot and checks the throws contract after.
+///
+/// Exposed to JS as `completeHostCallThrow(callId, value)`.
+#[napi(js_name = "completeHostCallThrow")]
+pub fn complete_host_call_throw(env: Env, call_id: u32, value: Unknown<'_>) -> napi::Result<()> {
+    drop(take_callback_signature(call_id));
+    let bytes = crate::encode::encode_value(
+        &env,
+        value,
+        &bex_project::RuntimeTy::Unknown,
+        bridge_encode::PathSegment::Result,
+    )?;
+    complete_host_call_bytes(call_id, 1, &bytes);
+    Ok(())
+}
+
+fn complete_host_call_bytes(call_id: u32, is_error: i32, bytes: &[u8]) {
+    bridge_cffi::complete_host_call(call_id, is_error, bytes.as_ptr() as *const i8, bytes.len());
 }
 
 /// Complete an in-flight host call from the JS dispatch wrapper.
@@ -303,12 +370,10 @@ pub fn register_host_callable(
 /// the engine uses for cross-language completion.
 #[napi(js_name = "completeHostCall")]
 pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
-    bridge_cffi::complete_host_call(
-        call_id,
-        is_error,
-        content.as_ptr() as *const i8,
-        content.len(),
-    );
+    // An opaque or last-resort completion: nothing is encoded against the
+    // signature, so the in-flight entry is just dropped.
+    drop(take_callback_signature(call_id));
+    complete_host_call_bytes(call_id, is_error, content.as_ref());
 }
 
 /// Remove and drop the registry entry for `host_value_key` (if present).
@@ -316,11 +381,11 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
 /// Dropping the `ThreadsafeFunction` releases the underlying napi reference
 /// (and its strong `weak::<false>` libuv ref), allowing the user's JS
 /// callable to become GC-eligible and unpinning the event loop. Shared by the
-/// engine-driven release path ([`host_release_callback`]) and the encoder's
-/// rollback path ([`release_host_callable`]).
+/// engine-driven release path ([`host_release_callback`]) and the walker's
+/// rollback path (`release_registered`).
 fn drop_registry_entry(host_value_key: u64) {
     bex_project::HostValueArc::discard_annotation(host_value_key);
-    let popped: Option<Arc<DispatchTsfn>> = match REGISTRY.lock() {
+    let popped: Option<Registered> = match REGISTRY.lock() {
         Ok(mut t) => t.remove(&host_value_key),
         Err(e) => {
             // Poisoning means an earlier panic occurred while holding the
@@ -444,7 +509,7 @@ pub fn mint_host_value_key() -> HandleKey {
 /// and the TS-side map entry would be torn down with the process
 /// anyway.
 ///
-/// Note this is the inverse of `register_host_callable`'s dispatch tsfn,
+/// Note this is the inverse of `register_callable`'s dispatch tsfn,
 /// which is `weak::<false>()` — that one pins the loop because a hung
 /// host callback awaiting completion *must* keep the loop alive so the
 /// JS callback can actually run.
@@ -470,16 +535,13 @@ pub fn register_host_value_release_callback(
 /// Release a host callable the inbound encoder registered but never handed to
 /// the engine — the encode-error rollback path.
 ///
-/// Exposed to JS as `releaseHostCallable(key)`. When `encodeCallArgs`
-/// registers a callable for an early kwarg and then fails to encode a later
-/// kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
+/// When an encode registers a callable for an early argument and a later
+/// argument fails, the request is never sent, so the engine never decodes
 /// (and so never releases) that key. Without this, the registry entry — and
 /// its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
-/// would leak for the life of the process. The encoder calls this for every
-/// key it registered during a failed encode.
-#[napi(js_name = "releaseHostCallable")]
-pub fn release_host_callable(key: HandleKey) {
-    drop_registry_entry(key.to_u64());
+/// would leak for the life of the process.
+pub(crate) fn release_registered(key: u64) {
+    drop_registry_entry(key);
 }
 
 /// Dispatch a BAML→host call into JavaScript.
@@ -574,9 +636,17 @@ fn dispatch_host_callable(
 
     // Look up the dispatch wrapper. The `Arc::clone` is cheap (refcount bump);
     // we drop the registry mutex before scheduling the JS call so a long
-    // dispatch never blocks `register_host_callable` / `host_release_callback`.
+    // dispatch never blocks `register_callable` / `host_release_callback`.
     let tsfn: Option<Arc<DispatchTsfn>> = match REGISTRY.lock() {
-        Ok(t) => t.get(&host_value_key).cloned(),
+        Ok(t) => t.get(&host_value_key).map(|entry| {
+            // The result is encoded against the slot's signature once the
+            // callable returns; keep it by callback id until then.
+            CALLBACK_SIGNATURES
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(call_id, entry.signature.clone());
+            Arc::clone(&entry.tsfn)
+        }),
         Err(e) => {
             // Treat poisoning as a "no callable" condition for this
             // dispatch (the engine call must still complete), but log so
@@ -628,6 +698,7 @@ fn dispatch_host_callable(
 /// engine's existing internal-error path rather than masquerading as a
 /// catchable `baml.errors.HostCallable`.
 fn send_dispatch_error_no_callable(call_id: u32, host_value_key: u64) {
+    drop(take_callback_signature(call_id));
     sys_native::host_dispatch::complete_with_error(
         call_id,
         OpError::new(
@@ -644,6 +715,7 @@ fn send_dispatch_error_no_callable(call_id: u32, host_value_key: u64) {
 /// schedule the dispatch onto the libuv loop, so the user callable never
 /// ran. Same routing rationale as [`send_dispatch_error_no_callable`].
 fn send_dispatch_error_tsfn_status(call_id: u32, status: Status) {
+    drop(take_callback_signature(call_id));
     sys_native::host_dispatch::complete_with_error(
         call_id,
         OpError::new(

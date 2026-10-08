@@ -7,6 +7,8 @@
 use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
+pub mod encode;
+#[cfg(target_arch = "wasm32")]
 mod errors;
 #[cfg(target_arch = "wasm32")]
 pub mod handle;

@@ -1849,11 +1849,14 @@ dependencies = [
 name = "bridge_typescript"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_sdkgen_types",
+ "baml_type",
  "baml_version",
  "bex_events",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "bridge_encode",
  "btel_snapshot",
  "btel_types",
  "indexmap",
@@ -1861,6 +1864,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "num-bigint",
  "prost",
  "serde_json",
  "sys_native",
@@ -1870,12 +1874,16 @@ dependencies = [
 name = "bridge_typescript_web"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_sdkgen_types",
+ "baml_type",
  "baml_version",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "bridge_encode",
  "futures",
  "js-sys",
+ "num-bigint",
  "prost",
  "serde-wasm-bindgen",
  "sys_wasm",

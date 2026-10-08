@@ -26,6 +26,7 @@ pub fn register_web_host_value_release_callback(callback: js_sys::Function) -> b
 #[wasm_bindgen(js_name = releaseWebHostCallable)]
 pub fn release_web_host_callable(key: u64) {
     sys_wasm::release_host_callable(key);
+    crate::encode::forget_signature(key);
 }
 
 #[wasm_bindgen(js_name = completeWebHostCall)]

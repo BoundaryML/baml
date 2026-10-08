@@ -110,10 +110,22 @@ export declare class BamlRuntime {
    * natively, never in JavaScript).
    */
   static initializeRuntimeFromBlob(bytecode: string | Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
-  /** Call a BAML function synchronously (blocking). */
-  callFunctionSync(argsProto: Buffer): Buffer
-  /** Call a BAML function asynchronously. */
-  callFunction(argsProto: Buffer): Promise<Buffer>
+  /**
+   * Call a BAML function synchronously (blocking).
+   *
+   * `args_proto` carries the call's control part (target, type arguments,
+   * invocation options) with no `kwargs`; `kwargs` are the arguments by
+   * declared parameter name as JavaScript values, encoded here against the
+   * target's declared types, and `cancel` the `$baml.cancel` token. A value
+   * that does not fit raises before anything is sent.
+   */
+  callFunctionSync(argsProto: Buffer, kwargs?: object | undefined | null, cancel?: unknown | undefined | null): Buffer
+  /**
+   * Call a BAML function asynchronously. Arguments as for
+   * [`Self::call_function_sync`]; they are encoded on the JavaScript thread
+   * before the future is spawned.
+   */
+  callFunction(argsProto: Buffer, kwargs?: object | undefined | null, cancel?: unknown | undefined | null): Promise<Buffer>
 }
 
 export declare class BamlVideo {
@@ -143,6 +155,14 @@ export declare function _beginHostInvocation(definition: HostDefinition, inherit
 export declare function _defineHostMarker(definition: HostDefinition, options?: BamlHandle | undefined | null): BamlHandle
 
 export declare function _discardHostCallArgs(args: Buffer): void
+
+/**
+ * Encode one JavaScript value as the bridge would send it where the program
+ * declares no type: the value's own type, stated on the wire where a
+ * container or class needs it. Returns `InboundValue` bytes; raises for a
+ * value the bridge cannot send. For inspection and tests.
+ */
+export declare function _encodeInbound(value: unknown, name?: string | undefined | null): Buffer
 
 /** Close execution ownership only when the callback/Promise actually exits. */
 export declare function _finishHostCallExecution(execution: object): void
@@ -221,6 +241,25 @@ export declare function cancelFunctionCall(callId: string): boolean
  */
 export declare function completeHostCall(callId: number, isError: number, content: Buffer): void
 
+/**
+ * Complete an in-flight host call with a thrown BAML value (the `value` of
+ * a `BamlError`), encoded as the type it has: the engine's throw channel
+ * takes it with no declared slot and checks the throws contract after.
+ *
+ * Exposed to JS as `completeHostCallThrow(callId, value)`.
+ */
+export declare function completeHostCallThrow(callId: number, value: unknown): void
+
+/**
+ * Complete an in-flight host call with its JavaScript result, encoded
+ * against the return type of the slot the callable was bound to.
+ *
+ * Exposed to JS as `completeHostCallValue(callId, value)`. A value that does
+ * not fit raises, and the JS dispatch wrapper then completes the call with
+ * that error instead.
+ */
+export declare function completeHostCallValue(callId: number, value: unknown): void
+
 export declare function getBridgeRuntimeVersion(): string
 
 /**
@@ -283,18 +322,11 @@ export declare function mintHostValueKey(): HandleKey
 export declare function newFunctionCall(): string
 
 /**
- * Register a JS dispatch wrapper in the host-value table and return its key.
- *
- * Exposed to JS as `registerHostCallable(fn) -> HandleKey`. Called from
- * the inbound encoder in `typescript_src/proto.ts` whenever a JS callable
- * appears as a kwarg — the encoder constructs the dispatch wrapper around
- * the user's function before calling this.
- *
- * The `Function` is converted into a `ThreadsafeFunction` so it can outlive
- * the napi call scope and be invoked from any thread (the engine's tokio
- * runtime calls into this entry point from a worker thread).
+ * Install the runtime's adapter: `classOf(value)`, `typeArgsOf(value)`,
+ * `leafOf(value)`, `dispatchFor(fn)` and `describe(value)`. Called once at
+ * module load by the TypeScript runtime.
  */
-export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer, execution: object) => void, marker?: BamlHandle): HandleKey
+export declare function registerHostAdapter(adapter: object): void
 
 /**
  * Install the TS-side release callback. First-call-wins; subsequent
@@ -314,7 +346,7 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
  * and the TS-side map entry would be torn down with the process
  * anyway.
  *
- * Note this is the inverse of `register_host_callable`'s dispatch tsfn,
+ * Note this is the inverse of `register_callable`'s dispatch tsfn,
  * which is `weak::<false>()` — that one pins the loop because a hung
  * host callback awaiting completion *must* keep the loop alive so the
  * JS callback can actually run.
@@ -324,23 +356,15 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
  */
 export declare function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void
 
+/**
+ * Install the program descriptor a generated SDK embeds in its typemap
+ * (`setTypeMap` calls this), or clear it with `null`.
+ */
+export declare function registerProgramDescriptor(descriptor?: string | undefined | null): void
+
 export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
 
 export declare function releaseFunctionCall(callId: string): boolean
-
-/**
- * Release a host callable the inbound encoder registered but never handed to
- * the engine — the encode-error rollback path.
- *
- * Exposed to JS as `releaseHostCallable(key)`. When `encodeCallArgs`
- * registers a callable for an early kwarg and then fails to encode a later
- * kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
- * (and so never releases) that key. Without this, the registry entry — and
- * its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
- * would leak for the life of the process. The encoder calls this for every
- * key it registered during a failed encode.
- */
-export declare function releaseHostCallable(key: HandleKey): void
 
 /**
  * Finalize the SDK lifetime, drain work and finish telemetry delivery.
