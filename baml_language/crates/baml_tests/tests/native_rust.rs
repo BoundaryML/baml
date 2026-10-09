@@ -32,6 +32,7 @@ const FIXTURES: &[&str] = &[
     "catches",
     "classes",
     "defaults",
+    "defers",
     "enums",
     "floats",
     "loops",
@@ -104,6 +105,7 @@ generated_module!(maps, "native/generated/maps.rs");
 generated_module!(bigint, "native/generated/bigint.rs");
 generated_module!(throws, "native/generated/throws.rs");
 generated_module!(catches, "native/generated/catches.rs");
+generated_module!(defers, "native/generated/defers.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -822,5 +824,29 @@ async fn catches_match_vm() {
     }
     for n in [0, 2, 5, 10] {
         check!(o, catch_returns(n) => user_catch_returns(int(n)));
+    }
+}
+
+#[tokio::test]
+async fn defers_match_vm() {
+    use defers::*;
+    let o = Oracle::new("defers");
+    for x in [1, 2] {
+        check!(o, defer_order(x) => user_defer_order(int(x)));
+        check!(o, defer_sees_final(x) => user_defer_sees_final(int(x)));
+        check!(o, defer_nested_blocks(x) => user_defer_nested_blocks(int(x)));
+    }
+    for early in [true, false] {
+        check!(o, defer_early_return(early) => user_defer_early_return(early));
+    }
+    for n in [0, 1, 2, 3, 4] {
+        check!(o, defer_loop(n) => user_defer_loop(int(n)));
+        check!(o, defer_while(n) => user_defer_while(int(n)));
+    }
+    for x in [5, 0, -1] {
+        check!(o, defer_unwind(x) => user_defer_unwind(int(x)));
+        check!(o, defer_throws(x) => user_defer_throws(int(x)));
+        check!(o, defer_throw_uncaught(x) => user_defer_throw_uncaught(int(x)));
+        check!(o, defer_in_handler(x) => user_defer_in_handler(int(x)));
     }
 }

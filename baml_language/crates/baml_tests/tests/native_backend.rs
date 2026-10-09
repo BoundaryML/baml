@@ -1603,6 +1603,29 @@ function f(n: int) -> int {
 }
 
 #[test]
+fn defer_is_inlined_at_every_exit_and_lands_on_unwind() {
+    let module = compile_entry(
+        r#"
+function f(log: string[], n: int) -> int {
+    defer { log.push("cleanup") }
+    if (n < 0) { return -1 }
+    10 / n
+}
+"#,
+        "f",
+    );
+    let source = &module.rust_source;
+    // Lowering copies the body at the return, the fall-through and the pad.
+    assert_eq!(
+        source.matches("string::from_literal(\"cleanup\")").count(),
+        3,
+        "{source}"
+    );
+    // The pad re-raises what it landed with.
+    assert_contains(source, "return Err(_3.clone());");
+}
+
+#[test]
 fn rejects_spawn() {
     let rejection = reject(
         r"
