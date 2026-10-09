@@ -117,13 +117,19 @@ fn emit_fixture(name: &str) -> native::NativeModule<'static> {
         std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
     let db: &'static _ = Box::leak(Box::new(setup_test_db(&source)));
     assert_no_user_diagnostic_errors(db);
-    // A generic function is compiled at its call sites, so the roots are
-    // the non-generic declarations; the generic ones must be reached.
+    // A generic function (or a method of a generic class) is compiled at
+    // its call sites, so the roots are the other declarations; the generic
+    // ones must be reached from them.
     let roots: Vec<_> = db
         .workspace_files()
         .into_iter()
         .flat_map(|file| file_functions(db, file).iter().copied())
-        .filter(|&loc| function_data(db, loc).generic_params.is_empty())
+        .filter(|&loc| {
+            !matches!(
+                admit(db, loc),
+                Err(Rejection::Unsupported(reason)) if reason.contains("generic function (compiled at its call sites")
+            )
+        })
         .collect();
     native::compile_many(db, &roots)
         .unwrap_or_else(|rejection| panic!("fixture {name} was rejected: {rejection}"))
@@ -635,12 +641,10 @@ function prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }
         !source.contains("_2 ="),
         "type local is not assigned:\n{source}"
     );
-    assert_eq!(
-        module.functions[0].ret,
-        NativeTy::Class(match &module.functions[0].ret {
-            NativeTy::Class(class) => *class,
-            other => panic!("return type is a class, got {other:?}"),
-        })
+    assert!(
+        matches!(&module.functions[0].ret, NativeTy::Class(class) if class.args.is_empty()),
+        "return type is a non-generic class, got {:?}",
+        module.functions[0].ret
     );
     let names: Vec<&str> = module
         .classes
@@ -1369,13 +1373,18 @@ function f(c: Color) -> string { c.to_string() }
     );
 }
 
+/// A generic class instance is a struct of its own, even as a parameter.
 #[test]
-fn rejects_generic_class() {
-    let rejection = reject(
+fn generic_class_parameters_name_their_instance() {
+    let module = compile_entry(
         "class Box<T> { value: T }\nfunction f(b: Box<int>) -> int { b.value }",
         "f",
     );
-    assert_unsupported(&rejection, "generic class");
+    assert_contains(
+        &module.rust_source,
+        "pub fn user_f(mut _1: Shared<user_Box__int>) -> Result<Int63, Thrown>",
+    );
+    assert_eq!(module.classes[0].link_name, "user.Box<int>");
 }
 
 #[test]
@@ -1612,11 +1621,14 @@ function f(x: int | Shape) -> int { 1 }
     let rejection = reject(
         r"
 class Box<T> { value: T }
-function f(x: int | Box<int>) -> int { 1 }
+function f(x: int | Box<unknown>) -> int { 1 }
 ",
         "f",
     );
-    assert_unsupported(&rejection, "generic class (a union member)");
+    assert_unsupported(
+        &rejection,
+        "class `user.Box<unknown>` type argument `unknown`: unknown (a union member)",
+    );
 }
 
 /// A union of literals of one primitive is that primitive: a match on a
@@ -2641,5 +2653,147 @@ function f(n: int) -> int { nest(n, 3) }
     assert_unsupported(
         &rejection,
         "user.nest: instantiated at 16 type arguments along one call path (unbounded polymorphic recursion)",
+    );
+}
+
+/// A generic class is a struct per type-argument tuple, named after the
+/// arguments, with its fields and methods instantiated at them.
+#[test]
+fn generic_classes_are_instantiated_per_type_arguments() {
+    let module = compile_entry(
+        r#"
+class Box<T> {
+    value: T,
+    function get(self) -> T { self.value }
+}
+class Pair<A, B> { a: A, b: B }
+function f(n: int) -> int {
+    let b = Box<int> { value: n };
+    let s = Box { value: "s" };
+    let p = Pair<int, Box<string>> { a: n, b: s };
+    let nested = Box<Box<int>> { value: b };
+    b.get() + s.get().length() + p.b.get().length() + nested.get().get()
+}
+"#,
+        "f",
+    );
+    let names: Vec<&str> = module
+        .classes
+        .iter()
+        .map(|c| c.rust_name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "user_Box__int",
+            "user_Box__string",
+            "user_Pair__int__user_Box__string",
+            "user_Box__user_Box__int"
+        ],
+        "{names:?}"
+    );
+    assert_eq!(module.classes[2].link_name, "user.Pair<int, Box<string>>");
+    let functions: Vec<&str> = module
+        .functions
+        .iter()
+        .map(|function| function.rust_name.as_str())
+        .collect();
+    assert_eq!(
+        functions,
+        [
+            "user_Box_get__int",
+            "user_Box_get__string",
+            "user_Box_get__user_Box__int",
+            "user_f"
+        ]
+    );
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        "pub struct user_Box__int {\n    pub value: Int63,\n}",
+    );
+    assert_contains(
+        source,
+        "pub struct user_Box__string {\n    pub value: Str,\n}",
+    );
+    assert_contains(
+        source,
+        "pub struct user_Pair__int__user_Box__string {\n    pub a: Int63,\n    pub b: Shared<user_Box__string>,\n}",
+    );
+    assert_contains(
+        source,
+        "pub fn user_Box_get__int(mut _1: Shared<user_Box__int>) -> Result<Int63, Thrown>",
+    );
+    assert_contains(source, "bex_aot::render::class(out, \"Box\", ");
+    assert_contains(source, "const CLASS_FQN: &'static str = \"user.Box\";");
+    assert_contains(source, "shared(user_Box__user_Box__int {");
+    assert_contains(source, "= user_Box_get__user_Box__int(");
+}
+
+/// A `catch` binding of a generic class is still outside the subset: the
+/// class test decides by name only, which the arguments would refine.
+#[test]
+fn rejects_catch_binding_of_a_generic_class() {
+    let rejection = reject(
+        r"
+class Oops<T> { payload: T }
+function risky(n: int) -> int throws Oops<int> {
+    if (n < 0) { throw Oops<int> { payload: n } }
+    n
+}
+function f(n: int) -> int {
+    risky(n) catch (e) { let o: Oops<int> => o.payload }
+}
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "`catch` binding of a generic class");
+}
+
+/// A union among a class's type arguments is one instance whatever order
+/// a site spells it in: the checker canonicalizes the type, lowering keeps
+/// each site's spelling.
+#[test]
+fn class_type_arguments_canonicalize_union_order() {
+    let module = compile_entry(
+        r"
+class Box<T> { value: T }
+function f(n: int) -> int {
+    let a: Box<int | string> = Box<string | int> { value: n };
+    let b: Box<string | int> = a;
+    match (b.value) { let k: int => k, _ => 0 }
+}
+",
+        "f",
+    );
+    let names: Vec<&str> = module
+        .classes
+        .iter()
+        .map(|c| c.rust_name.as_str())
+        .collect();
+    assert_eq!(names, ["user_Box__int_or_string"]);
+}
+
+/// Inside an instance, a read the checker typed through a type test on a
+/// type parameter is outside the subset, not a MIR error.
+#[test]
+fn rejects_reads_typed_by_a_rigid_type_test() {
+    let db = setup_test_db(
+        r#"
+class Cell<T> { v: T }
+function split<T>(c: Cell<int>) -> string {
+    match (c) {
+        Cell<T> { v: 1 } => "rigid",
+        Cell<int> { v: _ } => "concrete",
+    }
+}
+function f() -> string { split<string>(Cell<int> { v: 1 }) }
+"#,
+    );
+    assert_no_user_diagnostic_errors(&db);
+    let rejection = compile(&db, function_named(&db, "f")).expect_err("the rigid read");
+    assert_unsupported(
+        &rejection,
+        "a read the checker typed through a narrowing on a type parameter",
     );
 }

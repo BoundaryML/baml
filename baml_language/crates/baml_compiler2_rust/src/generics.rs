@@ -14,12 +14,20 @@
 
 use std::fmt;
 
-use baml_compiler2_hir::loc::FunctionLoc;
+use baml_compiler2_hir::{
+    item_data::{ImplSubjectData, MethodOwner, impl_block_data, method_owner},
+    loc::FunctionLoc,
+};
 use baml_compiler2_hir_ty::{
-    facts::Facts, lower::function_generic_frame, package_interface::reduce_ground_projections,
+    facts::Facts,
+    lower::{class_generic_frame, class_qualified_name, function_generic_frame},
+    package_interface::reduce_ground_projections,
 };
 use baml_compiler2_mir::{RealizedTy, RuntimeTy, TyTemplate};
-use baml_type::{RuntimeGenericLayout, Ty, unify::substitute_ty};
+use baml_type::{
+    DeclName, ParamTy, RuntimeGenericLayout, Ty,
+    unify::{rewrite_ty, substitute_ty},
+};
 
 /// How many associated type projections may reduce through one another
 /// while a type is realized.
@@ -59,6 +67,11 @@ pub(crate) struct Frame<'db> {
     db: &'db dyn baml_compiler2_mir::Db,
     layout: RuntimeGenericLayout,
     args: Vec<RealizedTy>,
+    /// For a method of a generic class (declared in it or in its in-body
+    /// `implements` block): the class's head and parameters, which open the
+    /// frame. Lowering types the method's `self` as the bare class, without
+    /// its arguments; they are the frame's leading slots.
+    owner: Option<(DeclName, Vec<ParamTy>)>,
 }
 
 impl fmt::Debug for Frame<'_> {
@@ -98,7 +111,28 @@ impl<'db> Frame<'db> {
                 }
             });
         }
-        Ok(Self { db, layout, args })
+        let owner_class = match method_owner(db, loc) {
+            Some(MethodOwner::Class(class)) => Some(class),
+            Some(MethodOwner::Impl(block)) => match impl_block_data(db, block).subject {
+                ImplSubjectData::InClass { class, .. } => Some(class),
+                ImplSubjectData::Free { .. } => None,
+            },
+            Some(MethodOwner::Interface(_)) | None => None,
+        };
+        let owner = owner_class
+            .map(|class| {
+                (
+                    class_qualified_name(db, class),
+                    class_generic_frame(db, class),
+                )
+            })
+            .filter(|(_, params)| !params.is_empty());
+        Ok(Self {
+            db,
+            layout,
+            args,
+            owner,
+        })
     }
 
     /// The frame of a lambda created inside this one with the type
@@ -123,10 +157,22 @@ impl<'db> Frame<'db> {
     /// A type variable this frame does not bind, or a projection that does
     /// not reduce, is reported.
     pub(crate) fn realize(&self, ty: &RuntimeTy) -> Result<RuntimeTy, Unsupported> {
-        if self.args.is_empty() && !mentions_projection(ty) {
+        if self.args.is_empty() && self.owner.is_none() && !mentions_projection(ty) {
             return Ok(ty.clone());
         }
         let plain = Ty::from(ty);
+        // `self` of a generic class's method: the class at its own
+        // parameters, which the bindings then realize.
+        let plain = match &self.owner {
+            Some((head, params)) => rewrite_ty(&plain, &mut |node| match node {
+                Ty::Class(name, args) if name == head && args.is_empty() => Some(Ty::Class(
+                    head.clone(),
+                    params.iter().cloned().map(Ty::TypeVar).collect(),
+                )),
+                _ => None,
+            }),
+            None => plain,
+        };
         let bindings = self
             .layout
             .params()

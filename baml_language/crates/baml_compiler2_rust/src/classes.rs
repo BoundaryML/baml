@@ -2,27 +2,35 @@
 //! generated struct or enum.
 //!
 //! [`ClassTable`] is the one place a BAML runtime type becomes a
-//! [`NativeTy`]: mapping a type registers every class and enum it mentions,
-//! checks a class is data-only and non-generic, maps its fields (which may
-//! register further declarations), and remembers the result so a declaration
-//! reachable from several functions is checked and emitted once. A class
-//! whose fields leave the subset rejects every function that touches it,
-//! with the field named. Every closed union a mapped type mentions is
-//! registered too ([`UnionInfo`]), so its generated enum is emitted once.
+//! [`NativeTy`]: mapping a type registers every class instance and enum it
+//! mentions, checks a class is data-only, maps its fields at the instance's
+//! type arguments (which may register further declarations), and remembers
+//! the result so an instance reachable from several functions is checked
+//! and emitted once: a generic class is one struct per type-argument tuple
+//! (`user_Box__int`), as a generic function is one instance per tuple (D4).
+//! A class whose fields leave the subset rejects every function that
+//! touches it, with the field named. Every closed union a mapped type
+//! mentions is registered too ([`UnionInfo`]), so its generated enum is
+//! emitted once.
 
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef},
     layout,
+    package_interface::reduce_ground_projections,
 };
-use baml_compiler2_mir::{RuntimeTy, class_link_name, enum_link_name};
-use baml_type::DeclName;
+use baml_compiler2_mir::{RealizedTy, RuntimeTy, class_link_name, enum_link_name};
+use baml_type::{DeclName, Ty, unify::substitute_ty};
 use proc_macro2::{Ident, Span};
 use rustc_hash::FxHashMap;
 
 use crate::{
     Rejection, rust_name,
-    types::{NativeTy, Resolver, TypeDecl, Unsupported, from_runtime_ty},
+    types::{ClassInst, NativeTy, Resolver, TypeDecl, Unsupported, from_runtime_ty},
 };
+
+/// How many associated type projections may reduce through one another
+/// while a field's type is realized at the class's arguments.
+const PROJECTION_FUEL: u32 = 32;
 
 /// One field of a generated struct.
 #[derive(Debug, Clone)]
@@ -43,19 +51,25 @@ impl FieldInfo<'_> {
     }
 }
 
-/// A class admitted to the subset.
+/// A class instance admitted to the subset.
 #[derive(Debug, Clone)]
 pub(crate) struct ClassInfo<'db> {
-    /// The BAML link name, e.g. `user.Cell`.
+    /// The BAML link name, e.g. `user.Cell`, or `user.Box<int>` for an
+    /// instance of a generic class.
     pub link_name: String,
+    /// The class's own link name, `user.Box`: what a class test, a thrown
+    /// instance and the readable rendering name.
+    pub class_fqn: String,
     /// The unqualified class name, as `to_string` renders it.
     pub display_name: String,
     /// The name the VM uses in JSON decode errors: the user-facing display
     /// name (`State`, `ns.Item`, or package-qualified for a dependency).
     pub json_name: String,
-    /// The generated struct's identifier.
+    /// The generated struct's identifier: the link name sanitized, then
+    /// `__` and each type argument mangled (`user_Box__int`).
     pub ident: Ident,
-    /// Fields in declaration (= slot) order.
+    /// Fields in declaration (= slot) order, typed at the instance's
+    /// arguments.
     pub fields: Vec<FieldInfo<'db>>,
 }
 
@@ -133,8 +147,8 @@ enum State<'db> {
 /// order.
 pub(crate) struct ClassTable<'db> {
     db: &'db dyn baml_compiler2_mir::Db,
-    states: FxHashMap<ClassRef<'db>, State<'db>>,
-    order: Vec<ClassRef<'db>>,
+    states: FxHashMap<ClassInst<'db>, State<'db>>,
+    order: Vec<ClassInst<'db>>,
     enums: FxHashMap<EnumRef<'db>, Result<EnumInfo<'db>, String>>,
     enum_order: Vec<EnumRef<'db>>,
     /// Every union a mapped type mentions, in first-seen order.
@@ -143,14 +157,32 @@ pub(crate) struct ClassTable<'db> {
 
 impl<'db> Resolver<'db> for ClassTable<'db> {
     fn class(&mut self, head: &DeclName, args: &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported> {
-        if !args.is_empty() {
-            return Err(Unsupported("generic class".into()));
-        }
         let Some(class) = layout::class_ref_of(self.db, head) else {
             return Err(Unsupported("class without a declaration".into()));
         };
-        self.check(class)?;
-        Ok(NativeTy::Class(class))
+        let params = layout::class_generic_params(self.db, class);
+        if params.len() != args.len() {
+            // A method of a generic class reads `self` as the bare class;
+            // the frame fills its arguments before the type reaches here.
+            return Err(Unsupported(format!(
+                "generic class `{}` with {} of {} type arguments",
+                class_link_name(self.db, class),
+                args.len(),
+                params.len()
+            )));
+        }
+        let mut realized = Vec::with_capacity(args.len());
+        for arg in args {
+            realized.push(RealizedTy::try_from(arg).map_err(|error| {
+                Unsupported(match error.variant {
+                    "TypeVar" => "type variable (a class type argument)".to_string(),
+                    _ => "associated type projection (a class type argument)".to_string(),
+                })
+            })?);
+        }
+        let instance = ClassInst::new(class, realized);
+        self.check(&instance)?;
+        Ok(NativeTy::Class(instance))
     }
 
     fn enum_(&mut self, head: &DeclName) -> Result<NativeTy<'db>, Unsupported> {
@@ -201,16 +233,29 @@ impl<'db> ClassTable<'db> {
             RuntimeTy::Union(members) => members
                 .iter()
                 .find_map(|member| self.literal_type_walk(member, visited)),
-            RuntimeTy::Class(head, _) => {
+            RuntimeTy::Class(head, args) => {
+                if let Some(found) = args
+                    .iter()
+                    .find_map(|arg| self.literal_type_walk(arg, visited))
+                {
+                    return Some(found);
+                }
                 let class = layout::class_ref_of(self.db, head)?;
                 if visited.contains(&class) {
                     return None;
                 }
                 visited.push(class);
+                let params = layout::class_generic_params(self.db, class);
+                let bindings: FxHashMap<_, _> = params
+                    .iter()
+                    .cloned()
+                    .zip(args.iter().map(Ty::from))
+                    .collect();
                 layout::class_fields(self.db, class)
                     .iter()
                     .find_map(|(name, field_ty)| {
-                        let runtime_ty = RuntimeTy::try_from(field_ty).ok()?;
+                        let runtime_ty =
+                            RuntimeTy::try_from(&substitute_ty(field_ty, &bindings)).ok()?;
                         Some(match self.literal_type_walk(&runtime_ty, visited)? {
                             LiteralSite::Here => LiteralSite::Field(format!(
                                 "`{}` in field `{name}` of class `{}`",
@@ -359,28 +404,65 @@ impl<'db> ClassTable<'db> {
         }
     }
 
-    /// Admit `class`, mapping its fields once.
-    pub(crate) fn check(&mut self, class: ClassRef<'db>) -> Result<(), Unsupported> {
-        match self.states.get(&class) {
+    /// Admit the class instance `instance`, mapping its fields once.
+    pub(crate) fn check(&mut self, instance: &ClassInst<'db>) -> Result<(), Unsupported> {
+        match self.states.get(instance) {
             Some(State::Checking | State::Done(Ok(_))) => return Ok(()),
             Some(State::Done(Err(reason))) => return Err(Unsupported(reason.clone())),
             None => {}
         }
-        self.states.insert(class, State::Checking);
-        self.order.push(class);
-        let result = self.describe(class);
+        self.states.insert(instance.clone(), State::Checking);
+        self.order.push(instance.clone());
+        let result = self.describe(instance);
         let outcome = result
             .as_ref()
             .map(drop)
             .map_err(|reason| Unsupported(reason.clone()));
-        self.states.insert(class, State::Done(result));
+        self.states.insert(instance.clone(), State::Done(result));
         outcome
     }
 
-    fn describe(&mut self, class: ClassRef<'db>) -> Result<ClassInfo<'db>, String> {
-        let link_name = class_link_name(self.db, class);
-        if !layout::class_generic_params(self.db, class).is_empty() {
-            return Err(format!("generic class `{link_name}`"));
+    /// The link name of a class instance: the class's, with its type
+    /// arguments spelled (`user.Box<int>`).
+    pub(crate) fn instance_link_name(&self, instance: &ClassInst<'db>) -> String {
+        let link_name = class_link_name(self.db, instance.class);
+        if instance.args.is_empty() {
+            return link_name;
+        }
+        let args = instance
+            .args
+            .iter()
+            .map(|arg| self.spell(&RuntimeTy::from(arg.clone())))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{link_name}<{args}>")
+    }
+
+    fn describe(&mut self, instance: &ClassInst<'db>) -> Result<ClassInfo<'db>, String> {
+        let class = instance.class;
+        let class_fqn = class_link_name(self.db, class);
+        let link_name = self.instance_link_name(instance);
+        let params = layout::class_generic_params(self.db, class);
+        if params.len() != instance.args.len() {
+            return Err(format!(
+                "generic class `{class_fqn}` with {} of {} type arguments",
+                instance.args.len(),
+                params.len()
+            ));
+        }
+        // The struct's name carries the arguments mangled, which maps them
+        // (and registers what they mention) first.
+        let mut ident = rust_name(&class_fqn);
+        for arg in &instance.args {
+            let runtime_ty = RuntimeTy::from(arg.clone());
+            let native = self.map(&runtime_ty).map_err(|Unsupported(reason)| {
+                format!(
+                    "class `{link_name}` type argument `{}`: {reason}",
+                    self.spell(&runtime_ty)
+                )
+            })?;
+            ident.push_str("__");
+            ident.push_str(&native.mangle(&|decl| self.ident(decl)));
         }
         let head = layout::class_head(self.db, class);
         let display_name = head.name().to_string();
@@ -388,9 +470,22 @@ impl<'db> ClassTable<'db> {
             .wire(&head)
             .display_name()
             .to_string();
+        let bindings: FxHashMap<_, _> = params
+            .into_iter()
+            .zip(
+                instance
+                    .args
+                    .iter()
+                    .map(|arg| Ty::from(arg.as_runtime_ty())),
+            )
+            .collect();
         let mut fields = Vec::new();
         for (name, ty) in layout::class_fields(self.db, class) {
-            let runtime_ty = RuntimeTy::try_from(&ty).map_err(|_| {
+            // The field's type at the instance's arguments, with any
+            // projection over them reduced.
+            let realized =
+                reduce_ground_projections(self.db, &substitute_ty(&ty, &bindings), PROJECTION_FUEL);
+            let runtime_ty = RuntimeTy::try_from(&realized).map_err(|_| {
                 format!("class `{link_name}` field `{name}` has a compile-time-only type")
             })?;
             let native = self.map(&runtime_ty).map_err(|Unsupported(reason)| {
@@ -424,34 +519,41 @@ impl<'db> ClassTable<'db> {
             }
         }
         Ok(ClassInfo {
-            ident: Ident::new(&rust_name(&link_name), Span::call_site()),
+            ident: Ident::new(&ident, Span::call_site()),
             link_name,
+            class_fqn,
             display_name,
             json_name,
             fields,
         })
     }
 
-    /// The admitted class `class`. Every class a mapped type mentions is
-    /// admitted, so a miss is a bug in the caller.
-    pub(crate) fn info(&self, class: ClassRef<'db>) -> Result<&ClassInfo<'db>, Rejection> {
-        match self.states.get(&class) {
+    /// The admitted class instance `instance`. Every instance a mapped type
+    /// mentions is admitted, so a miss is a bug in the caller.
+    pub(crate) fn info(&self, instance: &ClassInst<'db>) -> Result<&ClassInfo<'db>, Rejection> {
+        match self.states.get(instance) {
             Some(State::Done(Ok(info))) => Ok(info),
             Some(State::Done(Err(reason))) => Err(Rejection::unsupported(reason.clone())),
             Some(State::Checking) | None => Err(Rejection::invalid(format!(
                 "class `{}` was used before it was admitted",
-                class_link_name(self.db, class)
+                self.instance_link_name(instance)
             ))),
         }
+    }
+
+    /// The link name of a class declaration, `user.Box`: what a class test
+    /// and a thrown instance are decided by, whatever the arguments.
+    pub(crate) fn class_fqn(&self, class: ClassRef<'db>) -> String {
+        class_link_name(self.db, class)
     }
 
     /// The generated item's identifier, for [`NativeTy::to_tokens`].
     pub(crate) fn ident(&self, decl: TypeDecl<'db>) -> Ident {
         match decl {
-            TypeDecl::Class(class) => match self.info(class) {
+            TypeDecl::Class(instance) => match self.info(&instance) {
                 Ok(info) => info.ident.clone(),
                 Err(_) => Ident::new(
-                    &rust_name(&class_link_name(self.db, class)),
+                    &rust_name(&self.instance_link_name(&instance)),
                     Span::call_site(),
                 ),
             },
@@ -472,9 +574,14 @@ impl<'db> ClassTable<'db> {
         use baml_compiler2_hir_ty::impls::{ResolvedImplementation, resolve_implementation};
         use baml_type::interned::{InferInterface, Ty as InternedTy};
         let concrete = match decl {
-            TypeDecl::Class(class) => {
-                baml_type::Ty::Class(layout::class_head(self.db, class), Box::new([]))
-            }
+            TypeDecl::Class(instance) => baml_type::Ty::Class(
+                layout::class_head(self.db, instance.class),
+                instance
+                    .args
+                    .iter()
+                    .map(|arg| Ty::from(arg.as_runtime_ty()))
+                    .collect(),
+            ),
             TypeDecl::Enum(enum_ref) => baml_type::Ty::Enum(layout::enum_head(self.db, enum_ref)),
         };
         let interface = InferInterface::new(interface.clone(), Box::new([]), Box::new([]));
@@ -487,7 +594,7 @@ impl<'db> ClassTable<'db> {
     /// The BAML link name, for [`NativeTy::describe`].
     pub(crate) fn link_name(&self, decl: TypeDecl<'db>) -> String {
         match decl {
-            TypeDecl::Class(class) => class_link_name(self.db, class),
+            TypeDecl::Class(instance) => self.instance_link_name(&instance),
             TypeDecl::Enum(enum_ref) => enum_link_name(self.db, enum_ref),
         }
     }
@@ -508,7 +615,7 @@ impl<'db> ClassTable<'db> {
         let mut by_ident: FxHashMap<String, &str> = FxHashMap::default();
         let mut classes = Vec::with_capacity(self.order.len());
         for class in &self.order {
-            let info = self.info(*class)?;
+            let info = self.info(class)?;
             if let Some(other) = by_ident.insert(info.ident.to_string(), &info.link_name) {
                 return Err(Rejection::unsupported(format!(
                     "classes `{}` and `{other}` both need the Rust name `{}`",
