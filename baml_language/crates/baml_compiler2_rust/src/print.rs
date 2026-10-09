@@ -16,13 +16,14 @@ use syn::Lifetime;
 
 use crate::{
     Rejection,
-    classes::{ClassInfo, ClassTable, EnumInfo},
+    classes::{ClassInfo, ClassTable, EnumInfo, UnionInfo},
     function::{
-        BigintOp, Builtin, CallKind, Candidate, LocalKind, MapOp, SortKind, is_dead_null_write,
-        is_omitted,
+        BigintOp, Builtin, CallKind, Candidate, LocalKind, MapOp, SortKind, TagSource,
+        binop_operand_tys, binop_ty, is_dead_null_write, is_omitted, unary_operand_ty,
     },
     structure::Stmt,
     types::{Coercion, NativeTy, TypeDecl, coercion},
+    unions::{MemberTest, TestSite},
 };
 
 /// The comment and crate attributes above the generated items. Token streams
@@ -36,6 +37,7 @@ const HEADER: &str = "\
     unused_labels,
     unused_imports,
     unreachable_code,
+    unreachable_patterns,
     non_camel_case_types,
     non_snake_case,
     clippy::bool_comparison,
@@ -46,6 +48,7 @@ const HEADER: &str = "\
     clippy::needless_return,
     clippy::needless_borrow,
     clippy::redundant_clone,
+    clippy::clone_on_copy,
     clippy::let_and_return,
     clippy::unit_arg,
     clippy::let_unit_value
@@ -57,6 +60,7 @@ const HEADER: &str = "\
 pub(crate) fn render_module<'db>(
     classes: &[&ClassInfo<'db>],
     enums: &[&EnumInfo<'db>],
+    unions: &[&UnionInfo<'db>],
     candidates: &[Candidate<'db>],
     names: &FxHashMap<FunctionLoc<'db>, Ident>,
     table: &ClassTable<'db>,
@@ -73,6 +77,9 @@ pub(crate) fn render_module<'db>(
     }
     for class in classes {
         items.extend(render_class(class, table));
+    }
+    for union in unions {
+        items.extend(render_union(union, table));
     }
     for candidate in candidates {
         items.extend(Printer::new(candidate, names, table).function()?);
@@ -207,6 +214,114 @@ fn render_enum(info: &EnumInfo<'_>) -> TokenStream {
                 Self::NAMES[*self as usize].to_string()
             }
         }
+
+        impl bex_aot::BamlEq for #name {
+            fn baml_eq(&self, other: &Self) -> bool {
+                self == other
+            }
+        }
+    }
+}
+
+/// The Rust enum for a closed union: one variant per member in the type
+/// system's order, holding the member's native value. `Copy` when every
+/// member is. `to_string`, the readable rendering and JSON delegate to the
+/// member held, as the VM renders the member value itself; JSON decoding
+/// takes the first member the text decodes as, as the VM's typed decode
+/// does (`bex_aot::json::deserialize_union`); `==` compares the members
+/// when both sides hold the same variant and is false otherwise, which is
+/// the VM's broad `==` across kinds, and exists only when every member
+/// compares natively (classes compare structurally on the VM).
+fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStream {
+    let class_ident = |decl| table.ident(decl);
+    let doc = format!(" BAML union `{}`.", info.described);
+    let name = &info.ident;
+    let variants = info
+        .variants
+        .iter()
+        .zip(&info.members)
+        .map(|(variant, member)| {
+            let ty = member.to_tokens(&class_ident);
+            quote! { #variant(#ty), }
+        });
+    let copy = info
+        .members
+        .iter()
+        .all(NativeTy::is_copy)
+        .then(|| quote! { Copy, });
+    let variant_names = &info.variants;
+    let decoders = info
+        .variants
+        .iter()
+        .zip(&info.members)
+        .map(|(variant, member)| {
+            let ty = member.to_tokens(&class_ident);
+            quote! {
+                |value| <#ty as bex_aot::serde::Deserialize>::deserialize(value).map(Self::#variant)
+            }
+        });
+    let comparable = info.members.iter().all(|member| {
+        matches!(
+            member,
+            NativeTy::Int
+                | NativeTy::Bool
+                | NativeTy::Float
+                | NativeTy::Bigint
+                | NativeTy::Str
+                | NativeTy::Null
+                | NativeTy::Enum(_)
+        )
+    });
+    let equals = comparable.then(|| {
+        quote! {
+            impl bex_aot::BamlEq for #name {
+                fn baml_eq(&self, other: &Self) -> bool {
+                    match (self, other) {
+                        #((Self::#variant_names(a), Self::#variant_names(b)) => bex_aot::BamlEq::baml_eq(a, b),)*
+                        _ => false,
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        #[doc = #doc]
+        #[derive(Clone, #copy Debug)]
+        pub enum #name {
+            #(#variants)*
+        }
+
+        impl ToBaml for #name {
+            fn render(&self, out: &mut String, nested: bool) {
+                match self {
+                    #(Self::#variant_names(value) => value.render(out, nested),)*
+                }
+            }
+        }
+
+        impl bex_aot::Readable for #name {
+            fn readable(&self) -> String {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::Readable::readable(value),)*
+                }
+            }
+        }
+
+        impl bex_aot::serde::Serialize for #name {
+            fn serialize<S: bex_aot::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::serde::Serialize::serialize(value, serializer),)*
+                }
+            }
+        }
+
+        impl<'de> bex_aot::serde::Deserialize<'de> for #name {
+            fn deserialize<D: bex_aot::serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                bex_aot::json::deserialize_union(deserializer, &[#(#decoders),*])
+            }
+        }
+
+        #equals
     }
 }
 
@@ -355,8 +470,11 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let ident = local_ident(Local(index));
                 let tokens = match kind {
                     LocalKind::Value(ty) => self.ty(ty),
-                    LocalKind::Tag => quote! { &'static str },
-                    LocalKind::Type | LocalKind::Never | LocalKind::Context => return None,
+                    LocalKind::Tag(TagSource::Thrown) => quote! { &'static str },
+                    LocalKind::Tag(TagSource::Union(_))
+                    | LocalKind::Type
+                    | LocalKind::Never
+                    | LocalKind::Context => return None,
                 };
                 Some(quote! { let mut #ident: #tokens; })
             });
@@ -427,32 +545,58 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let else_branch = self.body(else_branch, tail)?;
                 match self.terminator(BlockId(*block))? {
                     Terminator::Branch { condition, .. } => {
-                        let condition = self.operand(condition, None)?;
+                        let condition = self.operand(condition, Some(&NativeTy::Bool))?;
                         quote! {
                             if #condition { #(#then_branch)* } else { #(#else_branch)* }
                         }
                     }
                     // A `catch` arm binding: the caught error narrowed to the
                     // arm's class, as the handle it was thrown as.
-                    Terminator::NarrowBind { destination, .. } => {
-                        let source = self
-                            .candidate
-                            .narrow_sources
-                            .get(destination)
-                            .ok_or_else(|| {
-                                Rejection::invalid(format!(
-                                    "{destination} is narrowed but was never seeded with a caught error"
-                                ))
-                            })?;
-                        let source = local_ident(*source);
-                        let target = self.ty(&self.local_ty(*destination)?);
-                        let destination = local_ident(*destination);
-                        quote! {
-                            if let Some(value) = bex_aot::thrown::downcast::<#target>(&#source) {
-                                #destination = value;
-                                #(#then_branch)*
-                            } else {
-                                #(#else_branch)*
+                    Terminator::NarrowBind {
+                        destination,
+                        source,
+                        ..
+                    } => {
+                        if let Some(error) = self.candidate.narrow_sources.get(destination) {
+                            let error = local_ident(*error);
+                            let target = self.ty(&self.local_ty(*destination)?);
+                            let destination = local_ident(*destination);
+                            quote! {
+                                if let Some(value) = bex_aot::thrown::downcast::<#target>(&#error) {
+                                    #destination = value;
+                                    #(#then_branch)*
+                                } else {
+                                    #(#else_branch)*
+                                }
+                            }
+                        } else {
+                            // A binding pattern on a union: the test decides
+                            // the variant; the binding is the value itself,
+                            // read narrowed afterwards.
+                            let test = self.member_test(TestSite::Terminator(BlockId(*block)))?;
+                            let source_ty = self.operand_ty(source)?;
+                            let condition = self.member_test_tokens(source, &source_ty, test)?;
+                            let bind = match source {
+                                Operand::Copy(Place::Local(local))
+                                | Operand::Move(Place::Local(local))
+                                    if local == destination =>
+                                {
+                                    TokenStream::new()
+                                }
+                                _ => {
+                                    let destination_ty = self.local_ty(*destination)?;
+                                    let value = self.operand(source, Some(&destination_ty))?;
+                                    let destination = local_ident(*destination);
+                                    quote! { #destination = #value; }
+                                }
+                            };
+                            quote! {
+                                if #condition {
+                                    #bind
+                                    #(#then_branch)*
+                                } else {
+                                    #(#else_branch)*
+                                }
                             }
                         }
                     }
@@ -465,7 +609,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                         destination,
                         ..
                     } => {
-                        let operand = self.operand(operand, None)?;
+                        let operand_ty = self.operand_ty(operand)?;
+                        let destination_ty = self.place_ty(destination)?;
+                        let operand = match kind {
+                            ShortCircuitKind::Coalesce => self.operand(operand, None)?,
+                            _ => self.operand(operand, Some(&NativeTy::Bool))?,
+                        };
                         let destination = self.local_place(destination)?;
                         match kind {
                             ShortCircuitKind::And => quote! {
@@ -484,8 +633,26 @@ impl<'a, 'db> Printer<'a, 'db> {
                                     #(#then_branch)*
                                 }
                             },
+                            // `a ?? b`: a non-null `a` is the result; `b`
+                            // is evaluated into the result otherwise.
                             ShortCircuitKind::Coalesce => {
-                                return Err(Rejection::unsupported("`??`"));
+                                let NativeTy::Option(inner) = operand_ty else {
+                                    return Err(Rejection::invalid("`??` on a non-nullable"));
+                                };
+                                let result_ty = destination_ty;
+                                let store = coercion(&inner, &result_ty).ok_or_else(|| {
+                                    Rejection::invalid("`??` result does not fit its destination")
+                                })?;
+                                let value =
+                                    self.coerce(quote! { value }, &inner, &result_ty, store)?;
+                                quote! {
+                                    if let Some(value) = #operand {
+                                        #destination = #value;
+                                        #(#else_branch)*
+                                    } else {
+                                        #(#then_branch)*
+                                    }
+                                }
                             }
                         }
                     }
@@ -506,20 +673,41 @@ impl<'a, 'db> Printer<'a, 'db> {
                     return Err(Rejection::invalid("multi-way branch without a switch"));
                 };
                 // A multi-arm `catch` switches on the caught error's class
-                // tag: its fully qualified name, matched as a string.
+                // tag, its fully qualified name matched as a string; a
+                // multi-arm `match` on types switches on a union's tag,
+                // which is a `match` on the union value's variants.
                 let tag = match discriminant {
-                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
-                        if matches!(self.kind(*local)?, LocalKind::Tag) =>
-                    {
-                        Some(local_ident(*local))
+                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                        match self.kind(*local)? {
+                            LocalKind::Tag(source) => Some((*local, *source)),
+                            _ => None,
+                        }
                     }
                     _ => None,
                 };
-                let on_tag = tag.is_some();
-                let discriminant = match tag {
-                    Some(tag) => quote! { #tag },
-                    None => {
-                        let value = self.operand(discriminant, None)?;
+                let union = match tag {
+                    Some((_, TagSource::Union(source))) => {
+                        let ty = self.local_ty(source)?;
+                        let members = ty
+                            .union_members()
+                            .map(<[NativeTy<'db>]>::to_vec)
+                            .ok_or_else(|| Rejection::invalid("type tag of a non-union"))?;
+                        let info = self.classes.union_info(&members)?;
+                        Some((source, info, matches!(ty, NativeTy::Option(_))))
+                    }
+                    _ => None,
+                };
+                let discriminant = match (tag, &union) {
+                    (Some((local, TagSource::Thrown)), _) => {
+                        let tag = local_ident(local);
+                        quote! { #tag }
+                    }
+                    (_, Some((source, _, _))) => {
+                        let value = self.place(&Place::Local(*source))?;
+                        quote! { &#value }
+                    }
+                    _ => {
+                        let value = self.operand(discriminant, Some(&NativeTy::Int))?;
                         quote! { #value.get() }
                     }
                 };
@@ -538,8 +726,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                         if first != Some(*index) {
                             continue;
                         }
-                        match (key, on_tag) {
-                            (SwitchKey::Int(key), false) => {
+                        match (key, tag.map(|(_, source)| source)) {
+                            (SwitchKey::Int(key), None) => {
                                 if seen.insert(key.to_string()) {
                                     patterns.push(
                                         proc_macro2::Literal::i64_suffixed(*key)
@@ -547,19 +735,30 @@ impl<'a, 'db> Printer<'a, 'db> {
                                     );
                                 }
                             }
-                            (SwitchKey::Class(class), true) => {
+                            (SwitchKey::Class(class), Some(TagSource::Thrown)) => {
                                 let fqn = self.classes.link_name(TypeDecl::Class(*class));
                                 if seen.insert(fqn.clone()) {
                                     patterns.push(quote! { #fqn });
                                 }
                             }
-                            (SwitchKey::Class(_), false) => {
+                            (SwitchKey::Class(_), None) => {
                                 return Err(Rejection::unsupported("switch on a class tag"));
                             }
-                            (SwitchKey::Int(_), true) => {
+                            (SwitchKey::Int(_), Some(TagSource::Thrown)) => {
                                 return Err(Rejection::unsupported(
                                     "`catch` arm on a primitive type",
                                 ));
+                            }
+                            (_, Some(TagSource::Union(_))) => {
+                                let (_, info, nullable) =
+                                    union.as_ref().expect("a union tag names its union");
+                                let test =
+                                    self.member_test(TestSite::SwitchArm(BlockId(*block), *index))?;
+                                for pattern in variant_patterns(info, *nullable, test)? {
+                                    if seen.insert(pattern.to_string()) {
+                                        patterns.push(pattern);
+                                    }
+                                }
                             }
                         }
                     }
@@ -637,8 +836,22 @@ impl<'a, 'db> Printer<'a, 'db> {
             .stores
             .get(block.0)
             .ok_or_else(|| Rejection::invalid(format!("{block} was not analyzed")))?;
-        for (statement, store) in body.block(block).statements.iter().zip(stores) {
-            if let Some(line) = self.statement(&statement.kind, *store)? {
+        let values = self
+            .candidate
+            .values
+            .get(block.0)
+            .ok_or_else(|| Rejection::invalid(format!("{block} was not analyzed")))?;
+        for (index, ((statement, store), value)) in body
+            .block(block)
+            .statements
+            .iter()
+            .zip(stores)
+            .zip(values)
+            .enumerate()
+        {
+            if let Some(line) =
+                self.statement(block, index, &statement.kind, *store, value.as_ref())?
+            {
                 lines.push(line);
             }
         }
@@ -741,7 +954,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     }
                     Builtin::JsonDeserialize(target) => {
                         let target = self.ty(target);
-                        let text = self.operand_ref(arg(0)?)?;
+                        let text = self.operand_ref_as(arg(0)?, &NativeTy::Str)?;
                         (
                             TokenStream::new(),
                             self.fallible(&quote! { json::deserialize::<#target>(#text) }),
@@ -759,19 +972,19 @@ impl<'a, 'db> Printer<'a, 'db> {
                         (TokenStream::new(), quote! { ToBaml::to_baml(#value) })
                     }
                     Builtin::StringLength => {
-                        let value = self.operand_ref(arg(0)?)?;
+                        let value = self.operand_ref_as(arg(0)?, &NativeTy::Str)?;
                         (TokenStream::new(), quote! { string::length(#value) })
                     }
                     Builtin::StringIsAscii => {
-                        let value = self.operand_ref(arg(0)?)?;
+                        let value = self.operand_ref_as(arg(0)?, &NativeTy::Str)?;
                         (TokenStream::new(), quote! { string::is_ascii(#value) })
                     }
                     Builtin::FloatFloor => {
-                        let value = self.operand(arg(0)?, None)?;
+                        let value = self.operand(arg(0)?, Some(&NativeTy::Float))?;
                         (TokenStream::new(), quote! { float::floor(#value) })
                     }
                     Builtin::FloatItrunc => {
-                        let value = self.operand(arg(0)?, None)?;
+                        let value = self.operand(arg(0)?, Some(&NativeTy::Float))?;
                         (
                             TokenStream::new(),
                             self.fallible(&quote! { float::itrunc(#value) }),
@@ -818,18 +1031,22 @@ impl<'a, 'db> Printer<'a, 'db> {
                         (quote! { #sort(#array); }, sorted)
                     }
                     Builtin::Bigint(op) => {
-                        let first = self.operand_ref(arg(0)?)?;
+                        let first_ty = match op {
+                            BigintOp::Parse => NativeTy::Str,
+                            _ => NativeTy::Bigint,
+                        };
+                        let first = self.operand_ref_as(arg(0)?, &first_ty)?;
                         let call = match op {
                             BigintOp::Abs => quote! { bigint::abs(#first) },
                             BigintOp::Isqrt => self.fallible(&quote! { bigint::isqrt(#first) }),
                             BigintOp::ToInt => self.fallible(&quote! { bigint::to_int(#first) }),
                             BigintOp::Parse => self.fallible(&quote! { bigint::parse(#first) }),
                             BigintOp::Pow => {
-                                let second = self.operand_ref(arg(1)?)?;
+                                let second = self.operand_ref_as(arg(1)?, &NativeTy::Bigint)?;
                                 self.fallible(&quote! { bigint::pow(#first, #second) })
                             }
                             BigintOp::Ilog => {
-                                let second = self.operand_ref(arg(1)?)?;
+                                let second = self.operand_ref_as(arg(1)?, &NativeTy::Bigint)?;
                                 self.fallible(&quote! { bigint::ilog(#first, #second) })
                             }
                         };
@@ -843,7 +1060,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                         };
                         // Keys are borrowed by the reads and owned by the
                         // inserts, the values always owned.
-                        let key_ref = || self.operand_ref(arg(1)?);
+                        let key_ref = || self.operand_ref_as(arg(1)?, &key_ty);
                         let key = || self.operand(arg(1)?, Some(&key_ty));
                         let value = || self.operand(arg(2)?, Some(&value_ty));
                         let call = match op {
@@ -887,9 +1104,10 @@ impl<'a, 'db> Printer<'a, 'db> {
         let target = self.local_place(destination)?;
         let target_ty = self.place_ty(destination)?;
         let value = match coercion(result, &target_ty) {
-            Some(Coercion::Wrap) => quote! { Some(#value) },
+            // The call's effects are kept.
             Some(Coercion::Null) => quote! {{ #value; None }},
-            _ => value,
+            Some(store) => self.coerce(value, result, &target_ty, store)?,
+            None => value,
         };
         Ok(quote! {
             #prelude
@@ -897,12 +1115,220 @@ impl<'a, 'db> Printer<'a, 'db> {
         })
     }
 
-    /// One statement; `store` is how the analyzer found its value fits its
-    /// destination.
+    /// `expr`, a value of type `actual`, as a value of type `expected`
+    /// through `store` (see [`crate::types::coercion`]). A narrowing
+    /// coercion matches the variant the checker proved the value holds and
+    /// raises `Unreachable` from the others.
+    fn coerce(
+        &self,
+        expr: TokenStream,
+        actual: &NativeTy<'db>,
+        expected: &NativeTy<'db>,
+        store: Coercion,
+    ) -> Result<TokenStream, Rejection> {
+        let unreachable = self.raise(&quote! { Thrown::from(Panic::Unreachable) }, false);
+        let inner = |ty: &NativeTy<'db>| -> NativeTy<'db> {
+            match ty {
+                NativeTy::Option(inner) => (**inner).clone(),
+                other => other.clone(),
+            }
+        };
+        let union = |ty: &NativeTy<'db>| -> Result<&UnionInfo<'db>, Rejection> {
+            let members = ty
+                .union_members()
+                .ok_or_else(|| Rejection::invalid("union coercion on a non-union"))?;
+            self.classes.union_info(members)
+        };
+        // `U::v(expr)` for the variant of `target` holding `member`.
+        let inject = |expr: TokenStream, member: &NativeTy<'db>, target: &NativeTy<'db>| {
+            let info = union(target)?;
+            let name = &info.ident;
+            let variant = info.variant_of(member).ok_or_else(|| {
+                Rejection::invalid(format!(
+                    "`{}` is not a member of `{}`",
+                    self.describe(member),
+                    info.described
+                ))
+            })?;
+            Ok::<_, Rejection>(quote! { #name::#variant(#expr) })
+        };
+        // Re-tag every variant of `from` that `to` has; the others raise.
+        let retag = |expr: TokenStream, from: &NativeTy<'db>, to: &NativeTy<'db>| {
+            let from_info = union(from)?;
+            let to_info = union(to)?;
+            let from_name = &from_info.ident;
+            let to_name = &to_info.ident;
+            let mut arms = Vec::new();
+            for (variant, member) in from_info.variants.iter().zip(&from_info.members) {
+                if let Some(target) = to_info.variant_of(member) {
+                    arms.push(quote! { #from_name::#variant(value) => #to_name::#target(value), });
+                }
+            }
+            let fallback =
+                (arms.len() < from_info.variants.len()).then(|| quote! { _ => { #unreachable } });
+            Ok::<_, Rejection>(quote! { match #expr { #(#arms)* #fallback } })
+        };
+        Ok(match store {
+            Coercion::Identity => expr,
+            Coercion::Wrap => quote! { Some(#expr) },
+            Coercion::Null => quote! { None },
+            Coercion::Unwrap => quote! { #expr.expect("non-null by the checker's narrowing") },
+            Coercion::Inject => inject(expr, actual, expected)?,
+            Coercion::InjectSome => {
+                let injected = inject(expr, actual, &inner(expected))?;
+                quote! { Some(#injected) }
+            }
+            Coercion::Widen => retag(expr, actual, expected)?,
+            Coercion::WidenSome => {
+                let widened = retag(expr, actual, &inner(expected))?;
+                quote! { Some(#widened) }
+            }
+            Coercion::MapInject => {
+                let member = inner(actual);
+                let target = inner(expected);
+                let injected = inject(quote! { value }, &member, &target)?;
+                quote! { #expr.map(|value| #injected) }
+            }
+            Coercion::MapWiden => {
+                let widened = retag(quote! { value }, &inner(actual), &inner(expected))?;
+                quote! { #expr.map(|value| #widened) }
+            }
+            Coercion::Narrow => {
+                let info = union(actual)?;
+                let name = &info.ident;
+                let variant = info
+                    .variant_of(expected)
+                    .ok_or_else(|| Rejection::invalid("narrowed to a type that is not a member"))?;
+                quote! {
+                    match #expr {
+                        #name::#variant(value) => value,
+                        _ => { #unreachable }
+                    }
+                }
+            }
+            Coercion::NarrowUnion => retag(expr, actual, expected)?,
+            Coercion::UnwrapNarrow => {
+                let info = union(actual)?;
+                let name = &info.ident;
+                let variant = info
+                    .variant_of(expected)
+                    .ok_or_else(|| Rejection::invalid("narrowed to a type that is not a member"))?;
+                quote! {
+                    match #expr {
+                        Some(#name::#variant(value)) => value,
+                        _ => { #unreachable }
+                    }
+                }
+            }
+        })
+    }
+
+    /// The decision recorded for the type test at `site`.
+    fn member_test(&self, site: TestSite) -> Result<&MemberTest, Rejection> {
+        self.candidate
+            .member_tests
+            .get(&site)
+            .ok_or_else(|| Rejection::invalid(format!("type test at {site:?} was not analyzed")))
+    }
+
+    /// `test` on `operand`, a union or nullable value of type `ty`, as a
+    /// `bool` expression: a `matches!` over the variants it selects.
+    fn member_test_tokens(
+        &self,
+        operand: &Operand<'db>,
+        ty: &NativeTy<'db>,
+        test: &MemberTest,
+    ) -> Result<TokenStream, Rejection> {
+        let value = self.operand_borrowed(operand)?;
+        let nullable = matches!(ty, NativeTy::Option(_));
+        let info = match ty.union_members() {
+            Some(members) => Some(self.classes.union_info(members)?),
+            None => None,
+        };
+        // The pattern for one variant, binding its value as `value` when
+        // asked; on a nullable non-union the value itself.
+        let variant_pattern = |variant: usize, bind: bool| -> TokenStream {
+            let payload = if bind {
+                quote! { value }
+            } else {
+                quote! { _ }
+            };
+            let pattern = match info {
+                Some(info) => {
+                    let name = &info.ident;
+                    let variant = &info.variants[variant];
+                    quote! { #name::#variant(#payload) }
+                }
+                None => payload,
+            };
+            if nullable {
+                quote! { Some(#pattern) }
+            } else {
+                pattern
+            }
+        };
+        Ok(match test {
+            MemberTest::Null => quote! { #value.is_none() },
+            MemberTest::Variants(variants) if variants.is_empty() => quote! { false },
+            MemberTest::Variants(variants) => {
+                let patterns = variants
+                    .iter()
+                    .map(|variant| variant_pattern(*variant, false));
+                quote! { matches!(&#value, #(#patterns)|*) }
+            }
+            MemberTest::Literal { variant, literal } => {
+                let pattern = variant_pattern(*variant, true);
+                let guard = match literal {
+                    Literal::Int(expected) => {
+                        let expected = int_literal(*expected)?;
+                        quote! { *value == #expected }
+                    }
+                    Literal::Bool(expected) => quote! { *value == #expected },
+                    Literal::String(text) => {
+                        quote! { string::eq(value, &string::from_literal(#text)) }
+                    }
+                    Literal::Float(_) | Literal::Bigint(_) => {
+                        return Err(Rejection::unsupported(
+                            "type test against a float or bigint literal",
+                        ));
+                    }
+                };
+                quote! { matches!(&#value, #pattern if #guard) }
+            }
+            MemberTest::EnumVariant { variant, index } => {
+                let pattern = variant_pattern(*variant, true);
+                let member = match info {
+                    Some(info) => &info.members[*variant],
+                    None => ty.union_members().map_or(ty, |_| ty),
+                };
+                let NativeTy::Enum(enum_ref) = (match member {
+                    NativeTy::Option(inner) => &**inner,
+                    other => other,
+                }) else {
+                    return Err(Rejection::invalid("variant test on a non-enum member"));
+                };
+                let enum_info = self.classes.enum_info(*enum_ref)?;
+                let enum_name = &enum_info.ident;
+                let variant_ident = &enum_info
+                    .variants
+                    .get(*index)
+                    .ok_or_else(|| Rejection::invalid("enum variant index out of range"))?
+                    .ident;
+                quote! { matches!(&#value, #pattern if *value == #enum_name::#variant_ident) }
+            }
+        })
+    }
+
+    /// One statement, the `index`th of `block`; `store` is how the analyzer
+    /// found its value fits its destination and `value_ty` the value's own
+    /// type.
     fn statement(
         &self,
+        block: BlockId,
+        index: usize,
         kind: &StatementKind<'db>,
         store: Option<Coercion>,
+        value_ty: Option<&NativeTy<'db>>,
     ) -> Result<Option<TokenStream>, Rejection> {
         match kind {
             StatementKind::Assign { destination, value } => {
@@ -912,16 +1338,20 @@ impl<'a, 'db> Printer<'a, 'db> {
                         // call site is monomorphized.
                         return Ok(None);
                     }
-                    if matches!(self.kind(*local)?, LocalKind::Tag) {
-                        // `_t = type_tag(_e)`: the caught error's class name.
+                    if let LocalKind::Tag(source) = self.kind(*local)? {
                         let Rvalue::TypeTag(place) = value else {
-                            return Err(Rejection::invalid("class tag from a non-tag value"));
+                            return Err(Rejection::invalid("type tag from a non-tag value"));
                         };
-                        let thrown = self.place(place)?;
-                        let ident = local_ident(*local);
-                        return Ok(Some(
-                            quote! { #ident = bex_aot::thrown::class_fqn(&#thrown); },
-                        ));
+                        return Ok(match source {
+                            // `_t = type_tag(_e)`: the caught error's class name.
+                            TagSource::Thrown => {
+                                let thrown = self.place(place)?;
+                                let ident = local_ident(*local);
+                                Some(quote! { #ident = bex_aot::thrown::class_fqn(&#thrown); })
+                            }
+                            // The switch matches on the union itself.
+                            TagSource::Union(_) => None,
+                        });
                     }
                     if self.candidate.aliases.contains_key(local) {
                         // Reads of the alias go through its source.
@@ -946,12 +1376,17 @@ impl<'a, 'db> Printer<'a, 'db> {
                         self.raise(&quote! { Thrown::from(Panic::Unreachable) }, false),
                     ));
                 }
-                let value = self.rvalue(value, &target_ty)?;
+                let (value, actual) = self.rvalue(
+                    value,
+                    &target_ty,
+                    value_ty,
+                    TestSite::Statement(block, index),
+                )?;
                 let value = match store {
-                    Some(Coercion::Wrap) => quote! { Some(#value) },
                     // The unit has no effects to keep.
                     Some(Coercion::Null) => quote! { None },
-                    _ => value,
+                    Some(store) => self.coerce(value, &actual, &target_ty, store)?,
+                    None => value,
                 };
                 Ok(Some(match destination {
                     Place::Local(local) => {
@@ -996,38 +1431,30 @@ impl<'a, 'db> Printer<'a, 'db> {
         }
     }
 
-    /// The value of `value` as its own type; the caller applies the store's
-    /// coercion. `target` types a bare `null` and the for-in unwrap.
+    /// The value of `value` as its own type, and that type; the caller
+    /// applies the store's coercion. `target` types a bare `null` and says
+    /// what a union operand the checker narrowed is read as; `site` is
+    /// where the analyzer recorded a type test's decision.
     fn rvalue(
         &self,
         value: &Rvalue<'db>,
         target: &NativeTy<'db>,
-    ) -> Result<TokenStream, Rejection> {
+        value_ty: Option<&NativeTy<'db>>,
+        site: TestSite,
+    ) -> Result<(TokenStream, NativeTy<'db>), Rejection> {
+        // An array or map literal builds the type the analyzer found, which
+        // a union destination does not spell.
+        let literal_ty = value_ty.unwrap_or(target);
         Ok(match value {
             Rvalue::Use(operand) => {
                 let ty = self.operand_ty_with(operand, Some(target))?;
-                if coercion(&ty, target) == Some(Coercion::Unwrap) {
-                    // A `T | null` the checker proved is a `T` here: the
-                    // for-in element after the `Done` test, or a value after
-                    // a null test. A `Copy` option is read in place; a handle
-                    // is cloned.
-                    let option = self.operand_borrowed(operand)?;
-                    let option = if ty.is_copy() {
-                        option
-                    } else {
-                        quote! { #option.clone() }
-                    };
-                    return Ok(quote! {
-                        #option.expect("non-null by the checker's narrowing")
-                    });
-                }
-                self.operand_value(operand, Some(target))?
+                (self.operand_value(operand, Some(target))?, ty)
             }
             Rvalue::BinaryOp { op, left, right } => {
                 if is_omitted(left) || is_omitted(right) {
                     // The callee prologue's `param == <omitted>` test: every
                     // call passes the constant default, so it never holds.
-                    return Ok(match op {
+                    let value = match op {
                         BinOp::Eq => quote! { false },
                         BinOp::Ne => quote! { true },
                         _ => {
@@ -1035,7 +1462,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                                 "`{op}` against an omitted argument"
                             )));
                         }
-                    });
+                    };
+                    return Ok((value, NativeTy::Bool));
                 }
                 let left_ty = self.operand_ty(left)?;
                 let right_ty = self.operand_ty_with(right, Some(&left_ty))?;
@@ -1043,25 +1471,40 @@ impl<'a, 'db> Printer<'a, 'db> {
                     (NativeTy::Null, NativeTy::Option(_)) => right_ty.clone(),
                     _ => left_ty,
                 };
-                self.binary_op(*op, left, right, &left_ty, &right_ty)?
+                let with_null = matches!(left, Operand::Constant(Constant::Null))
+                    || matches!(right, Operand::Constant(Constant::Null));
+                let (left_ty, right_ty) =
+                    binop_operand_tys(*op, left_ty, right_ty, Some(target), with_null);
+                let ty = binop_ty(*op, &left_ty, &right_ty, with_null).ok_or_else(|| {
+                    Rejection::unsupported(format!(
+                        "`{op}` on `{}` and `{}`",
+                        self.describe(&left_ty),
+                        self.describe(&right_ty)
+                    ))
+                })?;
+                (self.binary_op(*op, left, right, &left_ty, &right_ty)?, ty)
             }
             Rvalue::UnaryOp { op, operand } => {
-                let ty = self.operand_ty(operand)?;
+                let ty = unary_operand_ty(self.operand_ty(operand)?, Some(target));
                 if matches!((op, &ty), (UnaryOp::Neg, NativeTy::Bigint)) {
-                    let operand = self.operand_ref(operand)?;
-                    return Ok(quote! { bigint::neg(#operand) });
+                    let operand = self.operand_ref_as(operand, &ty)?;
+                    return Ok((quote! { bigint::neg(#operand) }, NativeTy::Bigint));
                 }
-                let operand = self.operand(operand, None)?;
+                let operand = self.operand(operand, Some(&ty))?;
                 match (op, ty) {
-                    (UnaryOp::Not, _) => quote! { !#operand },
-                    (UnaryOp::Neg, NativeTy::Float) => quote! { -#operand },
-                    (UnaryOp::Neg, _) => self.fallible(&quote! { int::neg(#operand) }),
-                    (UnaryOp::Truthy, NativeTy::Int) => quote! { #operand != int::ZERO },
-                    (UnaryOp::Truthy, _) => operand,
+                    (UnaryOp::Not, _) => (quote! { !#operand }, NativeTy::Bool),
+                    (UnaryOp::Neg, NativeTy::Float) => (quote! { -#operand }, NativeTy::Float),
+                    (UnaryOp::Neg, _) => {
+                        (self.fallible(&quote! { int::neg(#operand) }), NativeTy::Int)
+                    }
+                    (UnaryOp::Truthy, NativeTy::Int) => {
+                        (quote! { #operand != int::ZERO }, NativeTy::Bool)
+                    }
+                    (UnaryOp::Truthy, _) => (operand, NativeTy::Bool),
                 }
             }
             Rvalue::Array(_, elements) => {
-                let NativeTy::Array(element_ty) = target else {
+                let NativeTy::Array(element_ty) = literal_ty else {
                     return Err(Rejection::invalid("array literal stored in a non-array"));
                 };
                 let element_tokens = self.ty(element_ty);
@@ -1069,23 +1512,25 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .iter()
                     .map(|element| self.operand(element, Some(element_ty)))
                     .collect::<Result<Vec<_>, _>>()?;
-                if elements.is_empty() {
+                let value = if elements.is_empty() {
                     quote! { array::new::<#element_tokens>(Vec::new()) }
                 } else {
                     quote! { array::new::<#element_tokens>(Vec::from([#(#elements),*])) }
-                }
+                };
+                (value, literal_ty.clone())
             }
             Rvalue::Len(place) => {
                 let is_map = matches!(self.place_ty(place)?, NativeTy::Map(..));
                 let place = self.place(place)?;
-                if is_map {
+                let value = if is_map {
                     quote! { map::len(&#place) }
                 } else {
                     quote! { array::len(&#place) }
-                }
+                };
+                (value, NativeTy::Int)
             }
             Rvalue::Map(_, _, entries) => {
-                let NativeTy::Map(key_ty, value_ty) = target else {
+                let NativeTy::Map(key_ty, value_ty) = literal_ty else {
                     return Err(Rejection::invalid("map literal stored in a non-map"));
                 };
                 let key_tokens = self.ty(key_ty);
@@ -1098,16 +1543,17 @@ impl<'a, 'db> Printer<'a, 'db> {
                         Ok(quote! { (#key, #value) })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
-                if entries.is_empty() {
+                let value = if entries.is_empty() {
                     quote! { map::new::<#key_tokens, #value_tokens>(Vec::new()) }
                 } else {
                     quote! { map::new::<#key_tokens, #value_tokens>(Vec::from([#(#entries),*])) }
-                }
+                };
+                (value, literal_ty.clone())
             }
             // Variants are declared in discriminant order.
             Rvalue::Discriminant(place) => {
                 let place = self.place(place)?;
-                quote! { int::lit(#place as i64) }
+                (quote! { int::lit(#place as i64) }, NativeTy::Int)
             }
             Rvalue::Aggregate {
                 kind: AggregateKind::Class { class, .. },
@@ -1124,48 +1570,78 @@ impl<'a, 'db> Printer<'a, 'db> {
                         Ok(quote! { #ident: #value })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
-                quote! { shared(#name { #(#fields),* }) }
+                (
+                    quote! { shared(#name { #(#fields),* }) },
+                    NativeTy::Class(*class),
+                )
             }
-            Rvalue::IsType {
-                operand,
-                test: TypeTest::Template(TyTemplate::Literal(literal, _)),
-            } => {
-                // Membership in a literal type is exact equality with the
-                // value, which for these primitives is `==`.
-                match literal {
-                    Literal::Int(value_lit) => {
-                        let value = self.operand(operand, None)?;
-                        let expected = int_literal(*value_lit)?;
-                        quote! { #value == #expected }
-                    }
-                    Literal::Bool(true) => self.operand(operand, None)?,
-                    Literal::Bool(false) => {
-                        let value = self.operand(operand, None)?;
-                        quote! { !#value }
-                    }
-                    Literal::String(text) => {
-                        let value = self.operand_ref(operand)?;
-                        quote! { string::eq(#value, &string::from_literal(#text)) }
-                    }
-                    _ => return Err(Rejection::unsupported("type test other than a literal")),
-                }
+            Rvalue::IsType { operand, test } => {
+                (self.is_type(operand, test, site)?, NativeTy::Bool)
             }
-            Rvalue::IsType {
-                operand,
-                test: TypeTest::Class { class, .. },
-            } => {
-                let value = self.operand_borrowed(operand)?;
-                if self.operand_ty(operand)? == NativeTy::Thrown {
-                    // A `catch` arm's class test, by the class's name.
-                    let fqn = self.classes.link_name(TypeDecl::Class(*class));
-                    quote! { bex_aot::thrown::is_class(&#value, #fqn) }
-                } else {
-                    // Admission only accepts the `baml.iter.Done` test on an
-                    // `Option` otherwise.
-                    quote! { #value.is_none() }
-                }
+            Rvalue::IsTypeTag { operand, .. } => {
+                let ty = self.operand_ty(operand)?;
+                let test = self.member_test(site)?;
+                (self.member_test_tokens(operand, &ty, test)?, NativeTy::Bool)
             }
             other => return Err(Rejection::unsupported(format!("rvalue {other:?}"))),
+        })
+    }
+
+    /// `is_type(operand, test)`.
+    fn is_type(
+        &self,
+        operand: &Operand<'db>,
+        test: &TypeTest<'db>,
+        site: TestSite,
+    ) -> Result<TokenStream, Rejection> {
+        let ty = self.operand_ty(operand)?;
+        Ok(match (test, &ty) {
+            // A `catch` arm's class test, by the class's name.
+            (TypeTest::Class { class, .. }, NativeTy::Thrown) => {
+                let value = self.operand_borrowed(operand)?;
+                let fqn = self.classes.link_name(TypeDecl::Class(*class));
+                quote! { bex_aot::thrown::is_class(&#value, #fqn) }
+            }
+            // Membership in a literal type is exact equality with the
+            // value, which for these primitives is `==`.
+            (
+                TypeTest::Template(TyTemplate::Literal(literal, _)),
+                NativeTy::Int | NativeTy::Bool | NativeTy::Str,
+            ) => match literal {
+                Literal::Int(value_lit) => {
+                    let value = self.operand(operand, None)?;
+                    let expected = int_literal(*value_lit)?;
+                    quote! { #value == #expected }
+                }
+                Literal::Bool(true) => self.operand(operand, None)?,
+                Literal::Bool(false) => {
+                    let value = self.operand(operand, None)?;
+                    quote! { !#value }
+                }
+                Literal::String(text) => {
+                    let value = self.operand_ref(operand)?;
+                    quote! { string::eq(#value, &string::from_literal(#text)) }
+                }
+                _ => return Err(Rejection::unsupported("type test other than a literal")),
+            },
+            // The for-in `Done` test on the result of `next`.
+            (TypeTest::Class { class, .. }, NativeTy::Option(_))
+                if !self.candidate.member_tests.contains_key(&site) =>
+            {
+                let _ = class;
+                let value = self.operand_borrowed(operand)?;
+                quote! { #value.is_none() }
+            }
+            (_, NativeTy::Union(_) | NativeTy::Option(_)) => {
+                let test = self.member_test(site)?;
+                self.member_test_tokens(operand, &ty, test)?
+            }
+            _ => {
+                return Err(Rejection::unsupported(format!(
+                    "type test on a `{}`",
+                    self.describe(&ty)
+                )));
+            }
         })
     }
 
@@ -1187,10 +1663,12 @@ impl<'a, 'db> Printer<'a, 'db> {
         if matches!(left_ty, NativeTy::Bigint) || matches!(right_ty, NativeTy::Bigint) {
             return self.bigint_op(op, left, right, left_ty, right_ty);
         }
+        // The operand types are the narrowed ones (`binop_operand_tys`), so
+        // each operand is read as its type.
         Ok(match left_ty {
             NativeTy::Int => {
-                let l = self.operand(left, None)?;
-                let r = self.operand(right, None)?;
+                let l = self.operand(left, Some(left_ty))?;
+                let r = self.operand(right, Some(right_ty))?;
                 match op {
                     BinOp::Add => self.fallible(&quote! { int::add(#l, #r) }),
                     BinOp::Sub => self.fallible(&quote! { int::sub(#l, #r) }),
@@ -1213,8 +1691,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                 }
             }
             NativeTy::Float => {
-                let l = self.operand(left, None)?;
-                let r = self.operand(right, None)?;
+                let l = self.operand(left, Some(left_ty))?;
+                let r = self.operand(right, Some(right_ty))?;
                 match op {
                     BinOp::Add => quote! { #l + #r },
                     BinOp::Sub => quote! { #l - #r },
@@ -1231,8 +1709,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                 }
             }
             NativeTy::Str => {
-                let l = self.operand_ref(left)?;
-                let r = self.operand_ref(right)?;
+                let l = self.operand_ref_as(left, left_ty)?;
+                let r = self.operand_ref_as(right, right_ty)?;
                 match op {
                     BinOp::Add => quote! { string::concat(#l, #r) },
                     BinOp::Eq => quote! { string::eq(#l, #r) },
@@ -1245,8 +1723,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                 }
             }
             NativeTy::Bool | NativeTy::Enum(_) => {
-                let l = self.operand(left, None)?;
-                let r = self.operand(right, None)?;
+                let l = self.operand(left, Some(left_ty))?;
+                let r = self.operand(right, Some(right_ty))?;
                 match op {
                     BinOp::Eq => quote! { #l == #r },
                     BinOp::Ne => quote! { #l != #r },
@@ -1273,10 +1751,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                 }
             }
             // Handled above: a `bigint` on either side takes the bigint path.
+            // A union operand is one the checker did not narrow.
             NativeTy::Bigint
             | NativeTy::Array(_)
             | NativeTy::Map(..)
             | NativeTy::Class(_)
+            | NativeTy::Union(_)
             | NativeTy::ArrayIter(_)
             | NativeTy::Thrown => {
                 return Err(unsupported());
@@ -1298,9 +1778,9 @@ impl<'a, 'db> Printer<'a, 'db> {
     ) -> Result<TokenStream, Rejection> {
         let side = |operand: &Operand<'db>, ty: &NativeTy<'db>| -> Result<TokenStream, Rejection> {
             match ty {
-                NativeTy::Bigint => self.operand_ref(operand),
+                NativeTy::Bigint => self.operand_ref_as(operand, ty),
                 NativeTy::Int => {
-                    let value = self.operand(operand, None)?;
+                    let value = self.operand(operand, Some(ty))?;
                     Ok(quote! { &bigint::from_int(#value) })
                 }
                 other => Err(Rejection::unsupported(format!(
@@ -1332,9 +1812,11 @@ impl<'a, 'db> Printer<'a, 'db> {
         })
     }
 
-    /// [`Self::operand_value`], then wrapped in `Some` when a `T` is passed
-    /// where `expected` is `T | null`: a call argument, an aggregate field or
-    /// an array element coerces by its operand type alone.
+    /// [`Self::operand_value`], coerced to `expected` when given: a `T`
+    /// passed where `T | null` is expected is wrapped in `Some`, a member
+    /// passed to a union is lifted into its variant, a union the checker
+    /// narrowed is read as the member. A call argument, an aggregate field
+    /// or an array element coerces by its operand type alone.
     fn operand(
         &self,
         operand: &Operand<'db>,
@@ -1342,13 +1824,26 @@ impl<'a, 'db> Printer<'a, 'db> {
     ) -> Result<TokenStream, Rejection> {
         let ty = self.operand_ty_with(operand, expected)?;
         let expr = self.operand_value(operand, expected)?;
-        Ok(
-            match expected.and_then(|expected| coercion(&ty, expected)) {
-                Some(Coercion::Wrap) => quote! { Some(#expr) },
-                Some(Coercion::Null) => quote! { None },
-                _ => expr,
-            },
-        )
+        match expected.and_then(|expected| coercion(&ty, expected).map(|store| (expected, store))) {
+            Some((expected, store)) => self.coerce(expr, &ty, expected, store),
+            None => Ok(expr),
+        }
+    }
+
+    /// A `&T` for `operand` read as `expected`: the place itself when it has
+    /// that type, else a borrow of the coerced value.
+    fn operand_ref_as(
+        &self,
+        operand: &Operand<'db>,
+        expected: &NativeTy<'db>,
+    ) -> Result<TokenStream, Rejection> {
+        let ty = self.operand_ty_with(operand, Some(expected))?;
+        if ty == *expected {
+            self.operand_ref(operand)
+        } else {
+            let value = self.operand(operand, Some(expected))?;
+            Ok(quote! { &#value })
+        }
     }
 
     /// An owned value for `operand` as its own type: a copy of a scalar, a
@@ -1458,7 +1953,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             LocalKind::Context => Err(Rejection::unsupported(
                 "read of a caught error's `baml.errors.Context` (`catch (e, ctx)`)",
             )),
-            LocalKind::Tag => Err(Rejection::unsupported("class tag used as a value")),
+            LocalKind::Tag(_) => Err(Rejection::unsupported("type tag used as a value")),
         }
     }
 
@@ -1580,6 +2075,38 @@ fn base_ty<'db>(
             printer.describe(&other)
         ))),
     }
+}
+
+/// The `match` patterns of one arm of a switch on a union's type tag: the
+/// variants the arm's key selects, `None` for the `null` key of a nullable.
+fn variant_patterns(
+    info: &UnionInfo<'_>,
+    nullable: bool,
+    test: &MemberTest,
+) -> Result<Vec<TokenStream>, Rejection> {
+    let name = &info.ident;
+    let wrap = |pattern: TokenStream| {
+        if nullable {
+            quote! { Some(#pattern) }
+        } else {
+            pattern
+        }
+    };
+    Ok(match test {
+        MemberTest::Null => vec![quote! { None }],
+        MemberTest::Variants(variants) => variants
+            .iter()
+            .map(|variant| {
+                let variant = &info.variants[*variant];
+                wrap(quote! { #name::#variant(_) })
+            })
+            .collect(),
+        MemberTest::Literal { .. } | MemberTest::EnumVariant { .. } => {
+            return Err(Rejection::invalid(
+                "a switch arm on a union's type tag names a literal",
+            ));
+        }
+    })
 }
 
 fn loop_label(block: usize) -> Lifetime {

@@ -4,8 +4,9 @@
 //! natively, and [`from_runtime_ty`] decides membership. The mapping to Rust
 //! spellings ([`NativeTy::to_tokens`]) is the value model of the design: `int`
 //! is `Int63`, `string` is `bex_aot::Str`, arrays and class instances are
-//! `Shared<..>` handles with reference semantics, and `T | null` is
-//! `Option<T>`.
+//! `Shared<..>` handles with reference semantics, `T | null` is
+//! `Option<T>`, and a closed union of two or more other types is a generated
+//! Rust enum with one variant per member ([`NativeTy::Union`]).
 
 use std::fmt;
 
@@ -42,6 +43,14 @@ pub enum NativeTy<'db> {
     Map(Box<NativeTy<'db>>, Box<NativeTy<'db>>),
     /// BAML `T | null`: `Option<T>`.
     Option(Box<NativeTy<'db>>),
+    /// A closed union of two or more members, none of them `null` (which
+    /// wraps the union in [`NativeTy::Option`]) and none a union: a
+    /// generated Rust enum with one variant per member, in the order the
+    /// type system canonicalizes the members (so one spelling's `float |
+    /// int` is the other's `int | float`). Members are the types above;
+    /// `unknown`, interfaces and generic classes make a union open, which
+    /// has no native type.
+    Union(Vec<NativeTy<'db>>),
     /// The iterator `iter()` yields on a `T[]`: `bex_aot::array::Iter<T>`.
     /// Never declared in BAML source; a refined type.
     ArrayIter(Box<NativeTy<'db>>),
@@ -78,6 +87,8 @@ impl<'db> NativeTy<'db> {
         match self {
             Self::Int | Self::Bool | Self::Float | Self::Null | Self::Enum(_) => true,
             Self::Option(inner) => inner.is_copy(),
+            // The generated enum derives `Copy` exactly when every member is.
+            Self::Union(members) => members.iter().all(NativeTy::is_copy),
             Self::Str
             | Self::Bigint
             | Self::Array(_)
@@ -85,6 +96,90 @@ impl<'db> NativeTy<'db> {
             | Self::Class(_)
             | Self::ArrayIter(_)
             | Self::Thrown => false,
+        }
+    }
+
+    /// The members of a union, or of a nullable union.
+    pub fn union_members(&self) -> Option<&[NativeTy<'db>]> {
+        match self {
+            Self::Union(members) => Some(members),
+            Self::Option(inner) => match &**inner {
+                Self::Union(members) => Some(members),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The identifier of the generated enum for a union with these members,
+    /// a pure function of the member types: `Union_int_or_float`,
+    /// `Union_user_A_or_user_B`.
+    pub fn union_ident(members: &[NativeTy<'db>], name: &dyn Fn(TypeDecl<'db>) -> Ident) -> Ident {
+        Ident::new(
+            &format!("Union_{}", Self::mangle_members(members, name)),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    /// The members mangled and joined with `_or_`.
+    fn mangle_members(members: &[NativeTy<'db>], name: &dyn Fn(TypeDecl<'db>) -> Ident) -> String {
+        members
+            .iter()
+            .map(|member| member.mangle(name))
+            .collect::<Vec<_>>()
+            .join("_or_")
+    }
+
+    /// This type as an identifier fragment: the variant name of a union
+    /// member (`int`, `string`, `int_array`, `user_A`), and a part of the
+    /// union's own name.
+    pub fn mangle(&self, name: &dyn Fn(TypeDecl<'db>) -> Ident) -> String {
+        match self {
+            Self::Int => "int".into(),
+            Self::Bool => "bool".into(),
+            Self::Float => "float".into(),
+            Self::Bigint => "bigint".into(),
+            Self::Str => "string".into(),
+            Self::Null => "null".into(),
+            Self::Array(inner) => format!("{}_array", inner.mangle(name)),
+            Self::Map(key, value) => format!("map_{}_{}", key.mangle(name), value.mangle(name)),
+            Self::Class(class) => name(TypeDecl::Class(*class)).to_string(),
+            Self::Enum(enum_ref) => name(TypeDecl::Enum(*enum_ref)).to_string(),
+            Self::Option(inner) => format!("{}_or_null", inner.mangle(name)),
+            Self::Union(members) => Self::mangle_members(members, name),
+            Self::ArrayIter(inner) => format!("{}_iter", inner.mangle(name)),
+            Self::Thrown => "thrown".into(),
+        }
+    }
+
+    /// Every union this type mentions, innermost first, each as its member
+    /// list.
+    pub fn unions(&self, out: &mut Vec<Vec<NativeTy<'db>>>) {
+        match self {
+            Self::Union(members) => {
+                for member in members {
+                    member.unions(out);
+                }
+                if !out.contains(members) {
+                    out.push(members.clone());
+                }
+            }
+            Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
+                inner.unions(out);
+            }
+            Self::Map(key, value) => {
+                key.unions(out);
+                value.unions(out);
+            }
+            Self::Int
+            | Self::Bool
+            | Self::Float
+            | Self::Bigint
+            | Self::Str
+            | Self::Null
+            | Self::Class(_)
+            | Self::Enum(_)
+            | Self::Thrown => {}
         }
     }
 
@@ -105,6 +200,11 @@ impl<'db> NativeTy<'db> {
             Self::Map(key, value) => {
                 key.classes(out);
                 value.classes(out);
+            }
+            Self::Union(members) => {
+                for member in members {
+                    member.classes(out);
+                }
             }
             Self::Int
             | Self::Bool
@@ -127,6 +227,11 @@ impl<'db> NativeTy<'db> {
             Self::Map(key, value) => {
                 key.enums(out);
                 value.enums(out);
+            }
+            Self::Union(members) => {
+                for member in members {
+                    member.enums(out);
+                }
             }
             Self::Int
             | Self::Bool
@@ -171,6 +276,10 @@ impl<'db> NativeTy<'db> {
                 let inner = inner.to_tokens(class_name);
                 quote! { Option<#inner> }
             }
+            Self::Union(members) => {
+                let name = Self::union_ident(members, class_name);
+                quote! { #name }
+            }
             Self::ArrayIter(inner) => {
                 let inner = inner.to_tokens(class_name);
                 quote! { bex_aot::array::Iter<#inner> }
@@ -199,6 +308,11 @@ impl<'db> NativeTy<'db> {
             Self::Class(class) => class_name(TypeDecl::Class(*class)),
             Self::Enum(enum_ref) => class_name(TypeDecl::Enum(*enum_ref)),
             Self::Option(inner) => format!("{} | null", inner.describe(class_name)),
+            Self::Union(members) => members
+                .iter()
+                .map(|member| member.describe(class_name))
+                .collect::<Vec<_>>()
+                .join(" | "),
             Self::ArrayIter(inner) => {
                 format!("baml.iter.Iterator<Item = {}>", inner.describe(class_name))
             }
@@ -217,31 +331,87 @@ pub(crate) enum Coercion {
     /// A `null`-typed value (the unit) into `T | null`: `None`.
     Null,
     /// `T | null` into `T`: the for-in element copy after the `Done` test,
-    /// `v.expect(..)`. Only an assignment's `Use` may do this; anywhere else
-    /// it is a value the checker narrowed, which the subset cannot follow.
+    /// or a value the checker narrowed after a null test, `v.expect(..)`.
     Unwrap,
+    /// A member into its union: the variant holding it.
+    Inject,
+    /// A member into a nullable union: `Some(variant)`.
+    InjectSome,
+    /// A union into a union with every member of it and more: a `match`
+    /// re-tagging each variant.
+    Widen,
+    /// [`Self::Widen`], then `Some`.
+    WidenSome,
+    /// A nullable member into a nullable union: `v.map(variant)`.
+    MapInject,
+    /// A nullable union into a wider nullable union.
+    MapWiden,
+    /// A union into one of its members: a value the checker narrowed by a
+    /// type test; the other variants are unreachable.
+    Narrow,
+    /// A union into a union of some of its members: narrowed likewise.
+    NarrowUnion,
+    /// A nullable union into one of its members: narrowed by a null test
+    /// and a type test.
+    UnwrapNarrow,
 }
 
 impl Coercion {
-    /// Whether the store needs no unwrap.
+    /// Whether the store needs no unwrap: anywhere else a value is a value
+    /// the checker narrowed, which only a `Use` or an operand may be.
     pub(crate) fn is_total(self) -> bool {
-        matches!(self, Self::Identity | Self::Wrap | Self::Null)
+        !self.narrows()
     }
+
+    /// Whether the store relies on the checker's narrowing: the source may
+    /// hold a value the destination cannot, which the checker proved it
+    /// does not here.
+    pub(crate) fn narrows(self) -> bool {
+        matches!(
+            self,
+            Self::Unwrap | Self::Narrow | Self::NarrowUnion | Self::UnwrapNarrow
+        )
+    }
+}
+
+/// Whether every member of `inner` is a member of `outer`.
+fn subset(inner: &[NativeTy<'_>], outer: &[NativeTy<'_>]) -> bool {
+    inner.iter().all(|member| outer.contains(member))
 }
 
 /// Whether `actual` can be stored into a place of type `expected`, and how.
 pub(crate) fn coercion(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> Option<Coercion> {
+    use NativeTy::{Null, Option as Opt, Union};
     if actual == expected {
-        Some(Coercion::Identity)
-    } else if matches!(expected, NativeTy::Option(inner) if **inner == *actual) {
-        Some(Coercion::Wrap)
-    } else if *actual == NativeTy::Null && matches!(expected, NativeTy::Option(_)) {
-        Some(Coercion::Null)
-    } else if matches!(actual, NativeTy::Option(inner) if **inner == *expected) {
-        Some(Coercion::Unwrap)
-    } else {
-        None
+        return Some(Coercion::Identity);
     }
+    Some(match (actual, expected) {
+        (_, Opt(inner)) if **inner == *actual => Coercion::Wrap,
+        (Null, Opt(_)) => Coercion::Null,
+        (Opt(inner), _) if **inner == *expected => Coercion::Unwrap,
+        (Union(from), Union(to)) if subset(from, to) => Coercion::Widen,
+        (Union(from), Union(to)) if subset(to, from) => Coercion::NarrowUnion,
+        (member, Union(members)) if members.contains(member) => Coercion::Inject,
+        (Union(members), member) if members.contains(member) => Coercion::Narrow,
+        (Opt(from), Opt(to)) => match (&**from, &**to) {
+            (Union(from), Union(to)) if subset(from, to) => Coercion::MapWiden,
+            (member, Union(members)) if members.contains(member) => Coercion::MapInject,
+            _ => return None,
+        },
+        (Union(from), Opt(to)) => match &**to {
+            Union(to) if subset(from, to) => Coercion::WidenSome,
+            _ => return None,
+        },
+        (member, Opt(to)) => match &**to {
+            Union(members) if members.contains(member) => Coercion::InjectSome,
+            _ => return None,
+        },
+        (Opt(from), member) => match &**from {
+            Union(members) if members.contains(member) => Coercion::UnwrapNarrow,
+            _ => return None,
+        },
+        _ => return None,
+    })
 }
 
 /// Resolves the declarations a runtime type names: a class head (with its
@@ -283,31 +453,53 @@ pub(crate) fn from_runtime_ty<'db>(
         RuntimeTy::Union(members) => {
             // Members fold to their native types first: every literal of one
             // primitive is that primitive (`"a" | "b"` is a `string`), a
-            // variant type its enum, so a union of literals erases. `null`
-            // makes the result nullable.
+            // variant type its enum, so a union of literals erases; a nested
+            // union contributes its members. `null` makes the result
+            // nullable. Two or more distinct members are a generated enum,
+            // in the order the type system gives them.
             let mut nullable = false;
             let mut distinct: Vec<NativeTy<'db>> = Vec::new();
-            for member in members {
+            let mut flat = Vec::new();
+            flatten_union(members, &mut flat);
+            for member in flat {
                 if matches!(member, RuntimeTy::Null) {
                     nullable = true;
                     continue;
                 }
-                let native = from_runtime_ty(member, class)?;
-                if !distinct.contains(&native) {
-                    distinct.push(native);
+                let native = from_runtime_ty(member, class).map_err(|Unsupported(reason)| {
+                    Unsupported(format!("{reason} (a union member)"))
+                })?;
+                match native {
+                    // `T | null` as a member is `T` and `null` as members.
+                    NativeTy::Option(inner) => {
+                        nullable = true;
+                        if !distinct.contains(&inner) {
+                            distinct.push(*inner);
+                        }
+                    }
+                    NativeTy::Union(inner) => {
+                        for member in inner {
+                            if !distinct.contains(&member) {
+                                distinct.push(member);
+                            }
+                        }
+                    }
+                    other => {
+                        if !distinct.contains(&other) {
+                            distinct.push(other);
+                        }
+                    }
                 }
             }
-            match (distinct.len(), nullable) {
-                (0, true) => NativeTy::Null,
-                (1, false) => distinct.remove(0),
-                (1, true) => {
-                    let inner = distinct.remove(0);
-                    if matches!(inner, NativeTy::Option(_)) {
-                        return Err(Unsupported("union other than `T | null`".into()));
-                    }
-                    NativeTy::Option(Box::new(inner))
-                }
-                _ => return Err(Unsupported("union other than `T | null`".into())),
+            let inner = match distinct.len() {
+                0 => NativeTy::Null,
+                1 => distinct.remove(0),
+                _ => NativeTy::Union(distinct),
+            };
+            if nullable && inner != NativeTy::Null {
+                NativeTy::Option(Box::new(inner))
+            } else {
+                inner
             }
         }
         // A variant type (`Color.Red`) is a literal type: its value is the
@@ -345,6 +537,16 @@ pub(crate) fn from_runtime_ty<'db>(
         }
         RuntimeTy::Type => return Err(Unsupported("type value".into())),
     })
+}
+
+/// The members of a union with nested unions spliced in, in order.
+fn flatten_union<'a>(members: &'a [RuntimeTy], out: &mut Vec<&'a RuntimeTy>) {
+    for member in members {
+        match member {
+            RuntimeTy::Union(inner) => flatten_union(inner, out),
+            other => out.push(other),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -424,9 +626,81 @@ mod tests {
             RuntimeTy::String,
             RuntimeTy::Null,
         ]));
-        assert_eq!(map(&wide).unwrap_err().0, "union other than `T | null`");
+        assert_eq!(
+            map(&wide).unwrap(),
+            NativeTy::Option(Box::new(NativeTy::Union(vec![
+                NativeTy::Int,
+                NativeTy::Str
+            ])))
+        );
         let two = RuntimeTy::Union(Box::new([RuntimeTy::Int, RuntimeTy::Float]));
-        assert!(map(&two).is_err());
+        assert_eq!(
+            map(&two).unwrap(),
+            NativeTy::Union(vec![NativeTy::Int, NativeTy::Float])
+        );
+    }
+
+    #[test]
+    fn closed_unions_keep_their_members_in_order() {
+        let int_float = NativeTy::Union(vec![NativeTy::Int, NativeTy::Float]);
+        assert_eq!(tokens(&int_float), "Union_int_or_float");
+        assert_eq!(describe(&int_float), "int | float");
+        assert!(int_float.is_copy());
+        let with_string = RuntimeTy::Union(Box::new([
+            RuntimeTy::Int,
+            RuntimeTy::Union(Box::new([RuntimeTy::Float, RuntimeTy::Null])),
+            RuntimeTy::List(Box::new(RuntimeTy::String)),
+        ]));
+        let mapped = map(&with_string).unwrap();
+        assert_eq!(
+            mapped,
+            NativeTy::Option(Box::new(NativeTy::Union(vec![
+                NativeTy::Int,
+                NativeTy::Float,
+                NativeTy::Array(Box::new(NativeTy::Str)),
+            ])))
+        );
+        assert!(!mapped.is_copy());
+        assert_eq!(
+            tokens(&mapped),
+            "Option<Union_int_or_float_or_string_array>"
+        );
+        assert_eq!(describe(&mapped), "int | float | string[] | null");
+        let mut unions = Vec::new();
+        mapped.unions(&mut unions);
+        assert_eq!(unions.len(), 1);
+        let open = RuntimeTy::Union(Box::new([RuntimeTy::Int, RuntimeTy::Unknown]));
+        assert_eq!(map(&open).unwrap_err().0, "unknown (a union member)");
+    }
+
+    #[test]
+    fn union_coercions() {
+        use NativeTy::{Float, Int, Str};
+        let int_float = NativeTy::Union(vec![Int, Float]);
+        let three = NativeTy::Union(vec![Int, Float, Str]);
+        let nullable = NativeTy::Option(Box::new(int_float.clone()));
+        assert_eq!(coercion(&Int, &int_float), Some(Coercion::Inject));
+        assert_eq!(coercion(&Int, &nullable), Some(Coercion::InjectSome));
+        assert_eq!(coercion(&Str, &int_float), None);
+        assert_eq!(coercion(&int_float, &three), Some(Coercion::Widen));
+        assert_eq!(
+            coercion(&int_float, &NativeTy::Option(Box::new(three.clone()))),
+            Some(Coercion::WidenSome)
+        );
+        assert_eq!(coercion(&three, &int_float), Some(Coercion::NarrowUnion));
+        assert_eq!(coercion(&int_float, &Int), Some(Coercion::Narrow));
+        assert_eq!(coercion(&nullable, &Int), Some(Coercion::UnwrapNarrow));
+        assert_eq!(coercion(&nullable, &int_float), Some(Coercion::Unwrap));
+        assert_eq!(
+            coercion(&NativeTy::Option(Box::new(Int)), &nullable),
+            Some(Coercion::MapInject)
+        );
+        assert_eq!(
+            coercion(&nullable, &NativeTy::Option(Box::new(three))),
+            Some(Coercion::MapWiden)
+        );
+        assert!(Coercion::Inject.is_total());
+        assert!(!Coercion::Narrow.is_total());
     }
 
     #[test]
@@ -450,7 +724,10 @@ mod tests {
             RuntimeTy::Literal(Literal::Int(1), Freshness::Regular),
             literal("a"),
         ]));
-        assert_eq!(map(&mixed).unwrap_err().0, "union other than `T | null`");
+        assert_eq!(
+            map(&mixed).unwrap(),
+            NativeTy::Union(vec![NativeTy::Int, NativeTy::Str])
+        );
     }
 
     #[test]

@@ -24,6 +24,13 @@
 //! (`narrow_bind`), which is typed as the class and remembers which error
 //! local it narrows ([`Candidate::narrow_sources`]); a multi-arm `catch`
 //! switches on the error's class tag ([`LocalKind::Tag`]).
+//!
+//! A union value is a generated enum. Every type test on one (`is_type`,
+//! `is_type_tag`, a `narrow_bind`, an arm of a `switch` on its `type_tag`)
+//! is resolved here to the variants it selects ([`Candidate::member_tests`]),
+//! and a read of a union as one of its members, which lowering emits where
+//! the checker narrowed the value, is a [`Coercion::Narrow`] the printer
+//! turns into a `match` whose other arms are unreachable.
 
 use baml_base::LangPackage;
 use baml_compiler2_hir::{
@@ -48,6 +55,7 @@ use crate::{
     classes::ClassTable,
     structure::{Cfg, Flow, Stmt, structurize},
     types::{Coercion, NativeTy, TypeDecl, coercion},
+    unions::{MemberTest, TestSite, member_tag, tag_variants},
 };
 
 /// The link name of the stdlib function whose call is emitted as a panic.
@@ -77,17 +85,28 @@ pub(crate) enum LocalKind<'db> {
     /// only by `rethrow` and `throw_if_panic`, which carry the error alone;
     /// any other read is outside the subset. Not declared in the output.
     Context,
-    /// The class tag of a caught error (`type_tag` of a thrown value): the
-    /// class's fully qualified name, switched on by a multi-arm `catch`.
-    /// Declared as `&'static str`.
-    Tag,
+    /// The type tag of a value (`type_tag`), switched on by a multi-arm
+    /// `match` on types or a multi-arm `catch`.
+    Tag(TagSource),
+}
+
+/// Whose type tag a [`LocalKind::Tag`] local holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TagSource {
+    /// A caught error's class tag: the class's fully qualified name,
+    /// declared as `&'static str`.
+    Thrown,
+    /// The tag of this union (or nullable union) local: the switch on it
+    /// is a `match` on the local's variants, and the tag local is never
+    /// declared.
+    Union(Local),
 }
 
 impl<'db> LocalKind<'db> {
     pub(crate) fn value(&self) -> Option<&NativeTy<'db>> {
         match self {
             Self::Value(ty) => Some(ty),
-            Self::Type | Self::Never | Self::Context | Self::Tag => None,
+            Self::Type | Self::Never | Self::Context | Self::Tag(_) => None,
         }
     }
 }
@@ -209,6 +228,10 @@ pub(crate) struct Candidate<'db> {
     /// to `body.blocks[..].statements`; `None` for a statement that stores
     /// nothing.
     pub stores: Vec<Vec<Option<Coercion>>>,
+    /// The native type of each statement's value before the store, parallel
+    /// to `stores`: what an array or map literal builds, which its
+    /// destination (a union, say) does not spell.
+    pub values: Vec<Vec<Option<NativeTy<'db>>>>,
     /// Temporaries the printer reads through their source place instead of
     /// declaring and assigning; see [`find_aliases`].
     pub aliases: FxHashMap<Local, Place>,
@@ -221,6 +244,8 @@ pub(crate) struct Candidate<'db> {
     /// the handler error local it narrows: the printer downcasts that local
     /// and never emits the `copy` that seeded the temporary.
     pub narrow_sources: FxHashMap<Local, Local>,
+    /// What every type test on a union or nullable value decides, by site.
+    pub member_tests: FxHashMap<TestSite, MemberTest>,
     /// Whether the function is on a call cycle, so its body runs under a
     /// depth guard. Set by the call graph, not by [`analyze`].
     pub recursive: bool,
@@ -353,11 +378,13 @@ pub(crate) fn analyze<'db>(
         classes,
         narrows: FxHashMap::default(),
         narrow_sources: FxHashMap::default(),
+        member_tests: FxHashMap::default(),
     };
     let handler_kinds = env.handler_locals()?;
     let unresolved = env.declare_locals(mir.arity, &handler_kinds)?;
     env.register_enum_constants()?;
     env.refine(unresolved)?;
+    env.union_tags()?;
     let kinds: Vec<LocalKind<'db>> = env
         .kinds
         .iter()
@@ -370,14 +397,19 @@ pub(crate) fn analyze<'db>(
     let mut flows = Vec::with_capacity(body.blocks.len());
     let mut calls = Vec::new();
     let mut stores = Vec::with_capacity(body.blocks.len());
+    let mut values = Vec::with_capacity(body.blocks.len());
     for block in &body.blocks {
         let mut block_stores = Vec::with_capacity(block.statements.len());
-        for statement in &block.statements {
-            block_stores.push(env.statement(&statement.kind)?);
+        let mut block_values = Vec::with_capacity(block.statements.len());
+        for (index, statement) in block.statements.iter().enumerate() {
+            let stored = env.statement(block.id, index, &statement.kind)?;
+            block_stores.push(stored.as_ref().map(|(store, _)| *store));
+            block_values.push(stored.map(|(_, actual)| actual));
         }
         stores.push(block_stores);
+        values.push(block_values);
         let terminator = block.terminator.as_ref().expect("checked above");
-        let (flow, call) = env.terminator(terminator)?;
+        let (flow, call) = env.terminator(block.id, terminator)?;
         flows.push(flow);
         if let Some(call) = call {
             calls.push((block.id, call));
@@ -400,6 +432,7 @@ pub(crate) fn analyze<'db>(
     let structured = structurize(&cfg).map_err(|error| Rejection::invalid(error.to_string()))?;
     let aliases = find_aliases(body, mir.arity, &kinds, &stores);
     let narrow_sources = env.narrow_sources;
+    let member_tests = env.member_tests;
 
     Ok(Candidate {
         loc,
@@ -410,10 +443,12 @@ pub(crate) fn analyze<'db>(
         param_names,
         calls,
         stores,
+        values,
         aliases,
         structured: structured.stmts,
         unwind_jumps: structured.unwind_jumps,
         narrow_sources,
+        member_tests,
         recursive: false,
     })
 }
@@ -437,6 +472,8 @@ struct Env<'a, 'db> {
     narrows: FxHashMap<Local, baml_compiler2_hir_ty::extern_loc::ClassRef<'db>>,
     /// See [`Candidate::narrow_sources`].
     narrow_sources: FxHashMap<Local, Local>,
+    /// See [`Candidate::member_tests`].
+    member_tests: FxHashMap<TestSite, MemberTest>,
 }
 
 impl<'db> Env<'_, 'db> {
@@ -528,7 +565,7 @@ impl<'db> Env<'_, 'db> {
                 } = &statement.kind
                     && is_thrown(&kinds, source)
                 {
-                    kinds.insert(*destination, LocalKind::Tag);
+                    kinds.insert(*destination, LocalKind::Tag(TagSource::Thrown));
                 }
             }
         }
@@ -635,7 +672,7 @@ impl<'db> Env<'_, 'db> {
                 let mut blocked = false;
                 for def in local_defs {
                     let ty = match def {
-                        Def::Rvalue(value) => self.rvalue_ty(value, None),
+                        Def::Rvalue(value) => self.rvalue_ty(value, None, None),
                         Def::Terminator(terminator) => self.terminator_result_ty(terminator),
                     };
                     match ty {
@@ -677,6 +714,48 @@ impl<'db> Env<'_, 'db> {
                 });
             }
         }
+    }
+
+    /// Retype the `type_tag` of every union (or nullable union) local as
+    /// the tag of that local: a multi-arm `match` on types switches on it,
+    /// which is a `match` on the local's variants, so the tag has no value
+    /// of its own. Declared `int` in MIR, whose tag numbers are the VM's.
+    fn union_tags(&mut self) -> Result<(), Rejection> {
+        for block in &self.body.blocks {
+            for statement in &block.statements {
+                let StatementKind::Assign {
+                    destination: Place::Local(destination),
+                    value: Rvalue::TypeTag(place),
+                } = &statement.kind
+                else {
+                    continue;
+                };
+                if matches!(self.kind(*destination)?, LocalKind::Tag(_)) {
+                    continue;
+                }
+                let Place::Local(source) = place else {
+                    return Err(Rejection::unsupported(
+                        "type tag of a place other than a local",
+                    ));
+                };
+                let LocalKind::Value(ty) = self.kind(*source)? else {
+                    return Err(Rejection::unsupported("type tag of a non-value"));
+                };
+                if ty.union_members().is_none() {
+                    return Err(Rejection::unsupported(format!(
+                        "type tag of a `{}`",
+                        self.describe(ty)
+                    )));
+                }
+                if !matches!(self.kind(*destination)?, LocalKind::Value(NativeTy::Int)) {
+                    return Err(Rejection::invalid(format!(
+                        "{destination} holds a type tag but is not an int"
+                    )));
+                }
+                self.kinds[destination.0] = Some(LocalKind::Tag(TagSource::Union(*source)));
+            }
+        }
+        Ok(())
     }
 
     /// Admit the enum of every variant constant the body mentions, so a
@@ -728,7 +807,7 @@ impl<'db> Env<'_, 'db> {
             LocalKind::Context => Err(Rejection::unsupported(
                 "read of a caught error's `baml.errors.Context` (`catch (e, ctx)`)",
             )),
-            LocalKind::Tag => Err(Rejection::unsupported("class tag used as a value")),
+            LocalKind::Tag(_) => Err(Rejection::unsupported("type tag used as a value")),
         }
     }
 
@@ -751,6 +830,13 @@ impl<'db> Env<'_, 'db> {
                 NativeTy::Option(_) => {
                     Err(Rejection::unsupported("field access on a nullable value"))
                 }
+                // The checker narrowed the union to one class and lowering
+                // reads the field by its slot in that class, which the MIR
+                // does not name.
+                union @ NativeTy::Union(_) => Err(Rejection::unsupported(format!(
+                    "field read on a narrowed `{}` (bind it with `let x: C =>` to read its fields)",
+                    self.describe(&union)
+                ))),
                 NativeTy::Thrown => Err(Rejection::unsupported(
                     "field read on a caught error typed by the checker, without a class test (bind it with `let e: C =>`)",
                 )),
@@ -849,10 +935,15 @@ impl<'db> Env<'_, 'db> {
         })
     }
 
+    /// The type of an rvalue. `expected` is the destination's type, which
+    /// types a `null` constant and says what a union operand the checker
+    /// narrowed is read as; `site` records a type test's decision (not
+    /// given during refinement, which only asks for the type).
     fn rvalue_ty(
         &mut self,
         value: &Rvalue<'db>,
         expected: Option<&NativeTy<'db>>,
+        site: Option<TestSite>,
     ) -> Result<NativeTy<'db>, Rejection> {
         match value {
             Rvalue::Use(operand) => self.operand_ty(operand, expected),
@@ -876,18 +967,20 @@ impl<'db> Env<'_, 'db> {
                     (NativeTy::Null, NativeTy::Option(_)) => right_ty.clone(),
                     _ => left_ty,
                 };
-                binop_ty(*op, &left_ty, &right_ty, is_null(left) || is_null(right)).ok_or_else(
-                    || {
-                        Rejection::unsupported(format!(
-                            "`{op}` on `{}` and `{}`",
-                            self.describe(&left_ty),
-                            self.describe(&right_ty)
-                        ))
-                    },
-                )
+                let with_null = is_null(left) || is_null(right);
+                let (left_ty, right_ty) =
+                    binop_operand_tys(*op, left_ty, right_ty, expected, with_null);
+                binop_ty(*op, &left_ty, &right_ty, with_null).ok_or_else(|| {
+                    Rejection::unsupported(format!(
+                        "`{op}` on `{}` and `{}`",
+                        self.describe(&left_ty),
+                        self.describe(&right_ty)
+                    ))
+                })
             }
             Rvalue::UnaryOp { op, operand } => {
                 let ty = self.operand_ty(operand, None)?;
+                let ty = unary_operand_ty(ty, expected);
                 match (op, &ty) {
                     (UnaryOp::Not, NativeTy::Bool) => Ok(NativeTy::Bool),
                     (UnaryOp::Neg, NativeTy::Int) => Ok(NativeTy::Int),
@@ -904,7 +997,7 @@ impl<'db> Env<'_, 'db> {
                 let element = self.template_ty(template)?;
                 for operand in elements {
                     let actual = self.operand_ty(operand, Some(&element))?;
-                    if !stores(&actual, &element) {
+                    if !fits(&actual, &element) {
                         return Err(Rejection::invalid(format!(
                             "array literal of `{}` holds a `{}`",
                             self.describe(&element),
@@ -928,7 +1021,7 @@ impl<'db> Env<'_, 'db> {
                 for (key_operand, value_operand) in entries {
                     for (operand, expected) in [(key_operand, &key), (value_operand, &value)] {
                         let actual = self.operand_ty(operand, Some(expected))?;
-                        if !stores(&actual, expected) {
+                        if !fits(&actual, expected) {
                             return Err(Rejection::invalid(format!(
                                 "map literal of `{}` holds a `{}`",
                                 self.describe(&map),
@@ -975,7 +1068,7 @@ impl<'db> Env<'_, 'db> {
                 let link_name = info.link_name.clone();
                 for (operand, field_ty) in fields.iter().zip(&field_tys) {
                     let actual = self.operand_ty(operand, Some(field_ty))?;
-                    if !stores(&actual, field_ty) {
+                    if !fits(&actual, field_ty) {
                         return Err(Rejection::invalid(format!(
                             "`{link_name}` literal stores a `{}` in a `{}` field",
                             self.describe(&actual),
@@ -1018,10 +1111,50 @@ impl<'db> Env<'_, 'db> {
                     {
                         Ok(NativeTy::Bool)
                     }
-                    _ => Err(Rejection::unsupported(
-                        "type test other than a literal or `baml.iter.Done`",
-                    )),
+                    // A test on a union or nullable value selects variants.
+                    (_, NativeTy::Union(_) | NativeTy::Option(_)) => {
+                        let decided = self.member_test(&ty, test)?;
+                        self.record_test(site, decided);
+                        Ok(NativeTy::Bool)
+                    }
+                    _ => Err(Rejection::unsupported(format!(
+                        "type test on a `{}` (other than a literal or `baml.iter.Done`)",
+                        self.describe(&ty)
+                    ))),
                 }
+            }
+            Rvalue::IsTypeTag { operand, tag } => {
+                // The coarse tag test lowering emits when the tag alone
+                // decides membership: every variant carrying the tag.
+                let ty = self.operand_ty(operand, None)?;
+                let decided = match &ty {
+                    NativeTy::Union(members) => MemberTest::Variants(tag_variants(members, *tag)),
+                    NativeTy::Option(inner) => {
+                        if *tag == baml_type::typetag::NULL {
+                            MemberTest::Null
+                        } else {
+                            match &**inner {
+                                NativeTy::Union(members) => {
+                                    MemberTest::Variants(tag_variants(members, *tag))
+                                }
+                                single => MemberTest::Variants(
+                                    (member_tag(single) == Some(*tag))
+                                        .then_some(0)
+                                        .into_iter()
+                                        .collect(),
+                                ),
+                            }
+                        }
+                    }
+                    other => {
+                        return Err(Rejection::unsupported(format!(
+                            "type tag test on a `{}`",
+                            self.describe(other)
+                        )));
+                    }
+                };
+                self.record_test(site, decided);
+                Ok(NativeTy::Bool)
             }
             Rvalue::Discriminant(place) => match self.place_ty(place)? {
                 NativeTy::Enum(_) => Ok(NativeTy::Int),
@@ -1044,6 +1177,143 @@ impl<'db> Env<'_, 'db> {
         }
     }
 
+    fn record_test(&mut self, site: Option<TestSite>, decided: MemberTest) {
+        if let Some(site) = site {
+            self.member_tests.insert(site, decided);
+        }
+    }
+
+    /// What `test` decides on a value of the union or nullable type `ty`:
+    /// the variants whose values are members of the tested type. The VM
+    /// asks whether the value's own type is a subtype of the tested one;
+    /// over the closed members here that is which variants the test names.
+    fn member_test(
+        &mut self,
+        ty: &NativeTy<'db>,
+        test: &TypeTest<'db>,
+    ) -> Result<MemberTest, Rejection> {
+        let (members, nullable): (Vec<NativeTy<'db>>, bool) = match ty {
+            NativeTy::Union(members) => (members.clone(), false),
+            NativeTy::Option(inner) => match &**inner {
+                NativeTy::Union(members) => (members.clone(), true),
+                single => (vec![single.clone()], true),
+            },
+            other => {
+                return Err(Rejection::invalid(format!(
+                    "member test on a `{}`",
+                    self.describe(other)
+                )));
+            }
+        };
+        let variants_of = |member: &NativeTy<'db>| -> Vec<usize> {
+            members
+                .iter()
+                .enumerate()
+                .filter(|(_, candidate)| *candidate == member)
+                .map(|(index, _)| index)
+                .collect()
+        };
+        Ok(match test {
+            TypeTest::Class { class, args } if args.is_empty() => {
+                MemberTest::Variants(variants_of(&NativeTy::Class(*class)))
+            }
+            TypeTest::Class { .. } => {
+                return Err(Rejection::unsupported("type test against a generic class"));
+            }
+            TypeTest::Enum(enum_ref) => {
+                MemberTest::Variants(variants_of(&NativeTy::Enum(*enum_ref)))
+            }
+            TypeTest::Template(template) => match template {
+                TyTemplate::Null => {
+                    if nullable {
+                        MemberTest::Null
+                    } else {
+                        MemberTest::Variants(Vec::new())
+                    }
+                }
+                TyTemplate::Literal(literal, _) => {
+                    let primitive = match literal {
+                        Literal::Int(_) => NativeTy::Int,
+                        Literal::Bool(_) => NativeTy::Bool,
+                        Literal::String(_) => NativeTy::Str,
+                        Literal::Float(_) | Literal::Bigint(_) => {
+                            return Err(Rejection::unsupported(
+                                "type test against a float or bigint literal",
+                            ));
+                        }
+                    };
+                    match variants_of(&primitive).as_slice() {
+                        [] => MemberTest::Variants(Vec::new()),
+                        [variant] => MemberTest::Literal {
+                            variant: *variant,
+                            literal: literal.clone(),
+                        },
+                        _ => return Err(Rejection::invalid("a union member twice")),
+                    }
+                }
+                TyTemplate::EnumVariant(head, name) => {
+                    let NativeTy::Enum(enum_ref) =
+                        self.template_ty(&TyTemplate::Enum(head.clone()))?
+                    else {
+                        return Err(Rejection::invalid("variant of a non-enum"));
+                    };
+                    let info = self.classes.enum_info(enum_ref)?;
+                    let index = info
+                        .variants
+                        .iter()
+                        .position(|variant| variant.name == name.as_str())
+                        .ok_or_else(|| {
+                            Rejection::invalid(format!(
+                                "enum `{}` has no variant `{name}`",
+                                info.link_name
+                            ))
+                        })?;
+                    match variants_of(&NativeTy::Enum(enum_ref)).as_slice() {
+                        [] => MemberTest::Variants(Vec::new()),
+                        [variant] => MemberTest::EnumVariant {
+                            variant: *variant,
+                            index,
+                        },
+                        _ => return Err(Rejection::invalid("a union member twice")),
+                    }
+                }
+                // `x is int | float`: the variants of every member.
+                TyTemplate::Union(tested) => {
+                    let mut variants = Vec::new();
+                    for member in tested {
+                        match self.member_test(ty, &TypeTest::Template(member.clone()))? {
+                            MemberTest::Variants(selected) => {
+                                for variant in selected {
+                                    if !variants.contains(&variant) {
+                                        variants.push(variant);
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(Rejection::unsupported(
+                                    "type test against a union with a literal or `null` member",
+                                ));
+                            }
+                        }
+                    }
+                    variants.sort_unstable();
+                    MemberTest::Variants(variants)
+                }
+                other => {
+                    let tested = self
+                        .template_ty(other)
+                        .map_err(|rejection| match rejection {
+                            Rejection::Unsupported(reason) => {
+                                Rejection::unsupported(format!("type test against {reason}"))
+                            }
+                            invalid @ Rejection::Invalid(_) => invalid,
+                        })?;
+                    MemberTest::Variants(variants_of(&tested))
+                }
+            },
+        })
+    }
+
     /// Whether `class` is `baml.iter.Done`, the for-in sentinel.
     fn is_done_class(&self, class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>) -> bool {
         let head = layout::class_head(self.db, class);
@@ -1055,8 +1325,13 @@ impl<'db> Env<'_, 'db> {
 
     /// Type a statement. For an assignment, the result is how the value is
     /// stored into its destination, which the printer applies (a `T` into a
-    /// `T | null` place is wrapped in `Some`).
-    fn statement(&mut self, kind: &StatementKind<'db>) -> Result<Option<Coercion>, Rejection> {
+    /// `T | null` place is wrapped in `Some`), and the value's own type.
+    fn statement(
+        &mut self,
+        block: BlockId,
+        index: usize,
+        kind: &StatementKind<'db>,
+    ) -> Result<Option<(Coercion, NativeTy<'db>)>, Rejection> {
         match kind {
             StatementKind::Assign { destination, value } => {
                 if let Place::Local(local) = destination {
@@ -1085,14 +1360,22 @@ impl<'db> Env<'_, 'db> {
                                 "assignment to a caught error's `baml.errors.Context`",
                             ));
                         }
-                        LocalKind::Tag => {
-                            // `_t = type_tag(_e)` on a thrown value: the
-                            // class's name, which `handler_locals` checked.
-                            let Rvalue::TypeTag(Place::Local(_)) = value else {
+                        LocalKind::Tag(source) => {
+                            // `_t = type_tag(_e)`: on a thrown value the
+                            // class's name, which `handler_locals` checked;
+                            // on a union the local itself (`union_tags`).
+                            let Rvalue::TypeTag(Place::Local(from)) = value else {
                                 return Err(Rejection::invalid(
-                                    "class tag assigned from something other than a type tag",
+                                    "type tag assigned from something other than a type tag",
                                 ));
                             };
+                            if let TagSource::Union(union) = source
+                                && union != from
+                            {
+                                return Err(Rejection::invalid(format!(
+                                    "{local} holds the type tag of two locals"
+                                )));
+                            }
                             return Ok(None);
                         }
                         LocalKind::Value(_) => {}
@@ -1123,14 +1406,20 @@ impl<'db> Env<'_, 'db> {
                 {
                     return Ok(None);
                 }
-                let actual = self.rvalue_ty(value, Some(&expected))?;
+                let actual = self.rvalue_ty(
+                    value,
+                    Some(&expected),
+                    Some(TestSite::Statement(block, index)),
+                )?;
                 let store = coercion(&actual, &expected);
                 let allowed = match store {
-                    Some(Coercion::Identity | Coercion::Wrap | Coercion::Null) => true,
-                    // The for-in element copy: the `unknown` result of `next`,
-                    // now `Option<T>`, into the `T` loop variable after the
-                    // `Done` test.
-                    Some(Coercion::Unwrap) => matches!(value, Rvalue::Use(_)),
+                    Some(store) if store.is_total() => true,
+                    // A value the checker narrowed: the for-in element copy
+                    // (the `unknown` result of `next`, now `Option<T>`, into
+                    // the `T` loop variable after the `Done` test), a union
+                    // read as a member after a type test, a nullable after a
+                    // null test. Only a plain copy reads a value that way.
+                    Some(_) => matches!(value, Rvalue::Use(_)),
                     None => false,
                 };
                 if !allowed {
@@ -1147,7 +1436,7 @@ impl<'db> Env<'_, 'db> {
                         },
                     ));
                 }
-                Ok(store)
+                Ok(store.map(|store| (store, actual)))
             }
             StatementKind::Drop(place) => {
                 self.place_ty(place)?;
@@ -1168,6 +1457,7 @@ impl<'db> Env<'_, 'db> {
 
     fn terminator(
         &mut self,
+        block: BlockId,
         terminator: &Terminator<'db>,
     ) -> Result<(Flow, Option<CallKind<'db>>), Rejection> {
         let flow = match terminator {
@@ -1189,25 +1479,69 @@ impl<'db> Env<'_, 'db> {
                 otherwise,
                 ..
             } => {
-                let on_tag = matches!(
-                    discriminant,
-                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
-                        if matches!(self.kind(*local)?, LocalKind::Tag)
-                );
-                if !on_tag {
+                let tag = match discriminant {
+                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                        match self.kind(*local)? {
+                            LocalKind::Tag(source) => Some(*source),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
+                if tag.is_none() {
                     self.operand_of(discriminant, &NativeTy::Int)?;
                 }
+                // The members of the union a tag switch dispatches on.
+                let union = match tag {
+                    Some(TagSource::Union(local)) => {
+                        let ty = self.local_ty(local)?;
+                        let members = ty.union_members().map(<[NativeTy<'db>]>::to_vec);
+                        Some((members, matches!(ty, NativeTy::Option(_))))
+                    }
+                    _ => None,
+                };
                 let mut targets = Vec::with_capacity(arms.len());
-                for (key, target) in arms {
-                    match (key, on_tag) {
-                        (SwitchKey::Int(_), false) | (SwitchKey::Class(_), true) => {}
-                        (SwitchKey::Class(_), false) => {
+                for (index, (key, target)) in arms.iter().enumerate() {
+                    match (key, tag) {
+                        (SwitchKey::Int(_), None)
+                        | (SwitchKey::Class(_), Some(TagSource::Thrown)) => {}
+                        (SwitchKey::Class(_), None) => {
                             return Err(Rejection::unsupported("switch on a class tag"));
                         }
-                        (SwitchKey::Int(_), true) => {
+                        (SwitchKey::Int(_), Some(TagSource::Thrown)) => {
                             // Primitive types have fixed tags; a thrown
                             // primitive is not native.
                             return Err(Rejection::unsupported("`catch` arm on a primitive type"));
+                        }
+                        (key, Some(TagSource::Union(_))) => {
+                            let (members, nullable) = union.as_ref().expect("a union tag");
+                            let decided = match (key, members) {
+                                (SwitchKey::Int(tag), _) if *tag == baml_type::typetag::NULL => {
+                                    if *nullable {
+                                        MemberTest::Null
+                                    } else {
+                                        MemberTest::Variants(Vec::new())
+                                    }
+                                }
+                                (SwitchKey::Int(tag), Some(members)) => {
+                                    MemberTest::Variants(tag_variants(members, *tag))
+                                }
+                                (SwitchKey::Class(class), Some(members)) => MemberTest::Variants(
+                                    members
+                                        .iter()
+                                        .enumerate()
+                                        .filter(|(_, member)| **member == NativeTy::Class(*class))
+                                        .map(|(index, _)| index)
+                                        .collect(),
+                                ),
+                                (_, None) => {
+                                    return Err(Rejection::invalid(
+                                        "type tag switch on a nullable non-union",
+                                    ));
+                                }
+                            };
+                            self.member_tests
+                                .insert(TestSite::SwitchArm(block, index), decided);
                         }
                     }
                     targets.push(target.0);
@@ -1230,13 +1564,29 @@ impl<'db> Env<'_, 'db> {
                 join,
             } => {
                 if *kind == ShortCircuitKind::Coalesce {
-                    return Err(Rejection::unsupported("`??`"));
-                }
-                self.operand_of(operand, &NativeTy::Bool)?;
-                if self.place_ty(destination)? != NativeTy::Bool {
-                    return Err(Rejection::invalid(
-                        "short-circuit destination is not a bool",
-                    ));
+                    // `a ?? b`: a non-null `a` is the result and skips `b`.
+                    let ty = self.operand_ty(operand, None)?;
+                    let NativeTy::Option(inner) = &ty else {
+                        return Err(Rejection::unsupported(format!(
+                            "`??` on a `{}`",
+                            self.describe(&ty)
+                        )));
+                    };
+                    let result = self.place_ty(destination)?;
+                    if !stores(inner, &result) {
+                        return Err(Rejection::invalid(format!(
+                            "`??` stores a `{}` into a `{}`",
+                            self.describe(inner),
+                            self.describe(&result)
+                        )));
+                    }
+                } else {
+                    self.operand_of(operand, &NativeTy::Bool)?;
+                    if self.place_ty(destination)? != NativeTy::Bool {
+                        return Err(Rejection::invalid(
+                            "short-circuit destination is not a bool",
+                        ));
+                    }
                 }
                 Flow::Branch {
                     then_block: eval_rhs.0,
@@ -1245,25 +1595,54 @@ impl<'db> Env<'_, 'db> {
             }
             Terminator::NarrowBind {
                 source,
+                test,
                 destination,
                 then_block,
                 else_block,
-                ..
             } => {
-                // A `catch` arm binding (`let e: C => ..`): the temporary was
-                // seeded with the caught error and is narrowed in place.
-                if !self.narrows.contains_key(destination) {
-                    return Err(Rejection::unsupported("narrowing pattern"));
-                }
                 let narrows_itself = matches!(
                     source,
                     Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
                         if local == destination
                 );
-                if !narrows_itself {
-                    return Err(Rejection::unsupported(
-                        "`catch` binding narrowed from a value other than its own temporary",
-                    ));
+                if self.narrows.contains_key(destination) {
+                    // A `catch` arm binding (`let e: C => ..`): the temporary
+                    // was seeded with the caught error and is narrowed in
+                    // place.
+                    if !narrows_itself {
+                        return Err(Rejection::unsupported(
+                            "`catch` binding narrowed from a value other than its own temporary",
+                        ));
+                    }
+                } else {
+                    // A binding pattern on a union (`let n: int => ..`): the
+                    // temporary holds the union value and the test decides
+                    // the variant; what follows reads it narrowed.
+                    let source_ty = self.operand_ty(source, None)?;
+                    if source_ty.union_members().is_none()
+                        && !matches!(source_ty, NativeTy::Option(_))
+                    {
+                        return Err(Rejection::unsupported(format!(
+                            "narrowing pattern on a `{}`",
+                            self.describe(&source_ty)
+                        )));
+                    }
+                    let decided = self.member_test(&source_ty, test)?;
+                    if !matches!(decided, MemberTest::Variants(_) | MemberTest::Null) {
+                        return Err(Rejection::unsupported("narrowing pattern with a literal"));
+                    }
+                    self.member_tests
+                        .insert(TestSite::Terminator(block), decided);
+                    if !narrows_itself {
+                        let destination_ty = self.local_ty(*destination)?;
+                        if coercion(&source_ty, &destination_ty).is_none() {
+                            return Err(Rejection::invalid(format!(
+                                "{destination} has type `{}` but is bound from a `{}`",
+                                self.describe(&destination_ty),
+                                self.describe(&source_ty)
+                            )));
+                        }
+                    }
                 }
                 Flow::Branch {
                     then_block: then_block.0,
@@ -1323,13 +1702,15 @@ impl<'db> Env<'_, 'db> {
         }
     }
 
+    /// Check that `operand` can be read as an `expected`: as is, coerced, or
+    /// narrowed as the checker did (the printer coerces it).
     fn operand_of(
         &self,
         operand: &Operand<'db>,
         expected: &NativeTy<'db>,
     ) -> Result<(), Rejection> {
         let actual = self.operand_ty(operand, Some(expected))?;
-        if actual == *expected {
+        if fits(&actual, expected) {
             Ok(())
         } else {
             Err(mismatch(
@@ -1353,6 +1734,17 @@ impl<'db> Env<'_, 'db> {
         terminator: &Terminator<'db>,
     ) -> Result<NativeTy<'db>, Rejection> {
         match terminator {
+            Terminator::ShortCircuit {
+                kind: ShortCircuitKind::Coalesce,
+                operand,
+                ..
+            } => match self.operand_ty(operand, None)? {
+                NativeTy::Option(inner) => Ok(*inner),
+                other => Err(Rejection::unsupported(format!(
+                    "`??` on a `{}`",
+                    self.describe(&other)
+                ))),
+            },
             Terminator::ShortCircuit { .. } => Ok(NativeTy::Bool),
             Terminator::Call { .. } | Terminator::VirtualCall { .. } => {
                 match self.call_target(terminator)? {
@@ -1381,9 +1773,13 @@ impl<'db> Env<'_, 'db> {
             return Err(Rejection::unsupported("call destination is not a local"));
         };
         match (&call, self.kind(*local)?) {
-            (CallKind::Panic(_), LocalKind::Never) => {}
+            // A panic returns before storing anything: its destination may
+            // be the `never` temp or, in tail position, the return place.
+            (CallKind::Panic(_), LocalKind::Never | LocalKind::Value(_)) => {}
             (CallKind::Panic(_), _) => {
-                return Err(Rejection::invalid("panic destination is not `never`"));
+                return Err(Rejection::invalid(
+                    "panic destination is not a value or `never` local",
+                ));
             }
             (_, LocalKind::Never) => {
                 return Err(Rejection::unsupported(
@@ -1393,7 +1789,7 @@ impl<'db> Env<'_, 'db> {
             (_, LocalKind::Type) => {
                 return Err(Rejection::unsupported("call storing a type value"));
             }
-            (_, LocalKind::Context | LocalKind::Tag) => {
+            (_, LocalKind::Context | LocalKind::Tag(_)) => {
                 return Err(Rejection::invalid(
                     "call storing into a handler's context or tag local",
                 ));
@@ -1514,7 +1910,7 @@ impl<'db> Env<'_, 'db> {
                             .map(|_| default.clone().expect("checked")),
                     );
                     let actual = self.operand_ty(arg, Some(param))?;
-                    if !stores(&actual, param) {
+                    if !fits(&actual, param) {
                         return Err(mismatch(
                             &actual,
                             param,
@@ -1639,6 +2035,19 @@ impl<'db> Env<'_, 'db> {
             }
             _ => Err(Rejection::invalid("not a call")),
         }
+    }
+
+    /// The declaration `baml.<namespace>.<name>` of the installed `baml`
+    /// package (`baml.ops.Equals`).
+    fn lang_decl(&self, namespace: &str, name: &str) -> baml_type::DeclName {
+        let root = lang_roots(self.db)
+            .get(LangPackage::Baml)
+            .expect("the `baml` language package is installed");
+        baml_type::DeclName::in_root(
+            root,
+            vec![baml_type::Name::new(namespace)],
+            baml_type::Name::new(name),
+        )
     }
 
     /// Whether `callee` is declared by an installed language package: a
@@ -1923,6 +2332,21 @@ impl<'db> Env<'_, 'db> {
                                 self.describe(&right)
                             )));
                         };
+                        // The VM dispatches an enum's own `Equals.eq`; the
+                        // generated comparison is by variant.
+                        let mut enums = Vec::new();
+                        common.enums(&mut enums);
+                        let equals = self.lang_decl("ops", "Equals");
+                        if let Some(enum_ref) = enums.into_iter().find(|enum_ref| {
+                            self.classes
+                                .has_explicit_impl(TypeDecl::Enum(*enum_ref), &equals)
+                        }) {
+                            return Err(Rejection::unsupported(format!(
+                                "`==` on a `{}`: `{}` implements its own `baml.ops.Equals`",
+                                self.describe(&common),
+                                self.classes.link_name(TypeDecl::Enum(enum_ref))
+                            )));
+                        }
                         return Ok(Some(CallKind::Builtin {
                             builtin: Builtin::Equals(common),
                             result: NativeTy::Bool,
@@ -1945,32 +2369,114 @@ impl<'db> Env<'_, 'db> {
 }
 
 /// Whether a value of type `actual` can be stored into `expected` without
-/// an unwrap.
+/// relying on the checker's narrowing.
 fn stores(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> bool {
     coercion(actual, expected).is_some_and(Coercion::is_total)
 }
 
+/// Whether an operand of type `actual` can be read as an `expected`: stored
+/// as is, or narrowed as the checker did (a union read as a member, a
+/// nullable as its value).
+fn fits(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> bool {
+    coercion(actual, expected).is_some()
+}
+
 /// Whether `ty` implements `bex_aot::BamlEq`, the broad `==`: primitives,
-/// `null` and nullable values of those. Enums compare through their own
-/// `==`; classes, arrays and maps compare structurally on the VM, which the
-/// runtime does not do.
+/// `null`, enums (by variant), unions of those and nullable values of
+/// those. Classes, arrays and maps compare structurally on the VM, which
+/// the runtime does not do.
 fn baml_eq_supported(ty: &NativeTy<'_>) -> bool {
     match ty {
         NativeTy::Int | NativeTy::Bool | NativeTy::Float | NativeTy::Bigint | NativeTy::Str => true,
-        NativeTy::Null => true,
+        NativeTy::Null | NativeTy::Enum(_) => true,
         NativeTy::Option(inner) => baml_eq_supported(inner),
+        NativeTy::Union(members) => members.iter().all(baml_eq_supported),
         NativeTy::Array(_)
         | NativeTy::Map(..)
         | NativeTy::Class(_)
-        | NativeTy::Enum(_)
         | NativeTy::ArrayIter(_)
         | NativeTy::Thrown => false,
     }
 }
 
-/// A `T | null` where a `T` is required is a value the checker narrowed
-/// (after `x != null`, say): valid BAML the subset cannot type, not a MIR
-/// error. Anything else that does not fit is one.
+/// Whether `ty` is a union or a nullable: a value the checker may have
+/// narrowed, which an operand then reads as the narrower type.
+fn narrowable(ty: &NativeTy<'_>) -> bool {
+    matches!(ty, NativeTy::Union(_) | NativeTy::Option(_))
+}
+
+/// The types a binary operation's operands are read as. A union or nullable
+/// operand the checker narrowed is read as the other operand's type, or,
+/// when both sides are narrowed, as the result type `expected` (which an
+/// arithmetic operation shares with its operands). `with_null` is the
+/// `x == null` test, which is not a narrowing. Shared with the printer, so
+/// both sides see one answer.
+pub(crate) fn binop_operand_tys<'db>(
+    op: BinOp,
+    left: NativeTy<'db>,
+    right: NativeTy<'db>,
+    expected: Option<&NativeTy<'db>>,
+    with_null: bool,
+) -> (NativeTy<'db>, NativeTy<'db>) {
+    if with_null {
+        return (left, right);
+    }
+    let narrow = |from: &NativeTy<'db>, to: &NativeTy<'db>| -> Option<NativeTy<'db>> {
+        (narrowable(from) && coercion(from, to).is_some_and(Coercion::narrows)).then(|| to.clone())
+    };
+    match (narrowable(&left), narrowable(&right)) {
+        (true, false) => {
+            let left = narrow(&left, &right).unwrap_or(left);
+            (left, right)
+        }
+        (false, true) => {
+            let right = narrow(&right, &left).unwrap_or(right);
+            (left, right)
+        }
+        (true, true) => {
+            let arithmetic = matches!(
+                op,
+                BinOp::Add
+                    | BinOp::Sub
+                    | BinOp::Mul
+                    | BinOp::Div
+                    | BinOp::Mod
+                    | BinOp::BitAnd
+                    | BinOp::BitOr
+                    | BinOp::BitXor
+                    | BinOp::Shl
+                    | BinOp::Shr
+            );
+            match expected {
+                Some(result) if arithmetic => {
+                    let left = narrow(&left, result).unwrap_or(left);
+                    let right = narrow(&right, result).unwrap_or(right);
+                    (left, right)
+                }
+                _ => (left, right),
+            }
+        }
+        (false, false) => (left, right),
+    }
+}
+
+/// The type a unary operation's operand is read as: a union or nullable
+/// operand the checker narrowed is read as the result type.
+pub(crate) fn unary_operand_ty<'db>(
+    ty: NativeTy<'db>,
+    expected: Option<&NativeTy<'db>>,
+) -> NativeTy<'db> {
+    match expected {
+        Some(result) if narrowable(&ty) && coercion(&ty, result).is_some_and(Coercion::narrows) => {
+            result.clone()
+        }
+        _ => ty,
+    }
+}
+
+/// A caught error read as a type without a class test is valid BAML the
+/// subset cannot type, not a MIR error. Anything else that does not fit is
+/// one.
 fn mismatch<'db>(
     actual: &NativeTy<'db>,
     expected: &NativeTy<'db>,
@@ -1992,15 +2498,7 @@ fn mismatch<'db>(
             ),
         });
     }
-    if coercion(actual, expected) == Some(Coercion::Unwrap) {
-        Rejection::unsupported(format!(
-            "narrowed `{}` used as `{}`",
-            describe(actual),
-            describe(expected)
-        ))
-    } else {
-        Rejection::invalid(what())
-    }
+    Rejection::invalid(what())
 }
 
 fn is_null(operand: &Operand<'_>) -> bool {
@@ -2404,7 +2902,10 @@ fn operand_locals(operand: &Operand<'_>, out: &mut Vec<Local>) {
 /// does not have, whose operands this does not know.
 fn rvalue_locals(value: &Rvalue<'_>, out: &mut Vec<Local>) -> bool {
     match value {
-        Rvalue::Use(operand) | Rvalue::UnaryOp { operand, .. } | Rvalue::IsType { operand, .. } => {
+        Rvalue::Use(operand)
+        | Rvalue::UnaryOp { operand, .. }
+        | Rvalue::IsType { operand, .. }
+        | Rvalue::IsTypeTag { operand, .. } => {
             operand_locals(operand, out);
         }
         Rvalue::BinaryOp { left, right, .. } => {
@@ -2450,7 +2951,10 @@ fn enum_of_constant<'db>(
 /// subset contribute nothing: admission rejects them later.
 fn rvalue_operands<'db>(value: &Rvalue<'db>, f: &mut dyn FnMut(&Operand<'db>)) {
     match value {
-        Rvalue::Use(operand) | Rvalue::UnaryOp { operand, .. } | Rvalue::IsType { operand, .. } => {
+        Rvalue::Use(operand)
+        | Rvalue::UnaryOp { operand, .. }
+        | Rvalue::IsType { operand, .. }
+        | Rvalue::IsTypeTag { operand, .. } => {
             f(operand);
         }
         Rvalue::BinaryOp { left, right, .. } => {

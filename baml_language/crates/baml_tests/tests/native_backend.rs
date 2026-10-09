@@ -1387,10 +1387,88 @@ fn rejects_class_with_a_float_keyed_map_field() {
     );
 }
 
+/// A closed union is a generated enum with a variant per member, in the
+/// type system's canonical member order, so two spellings share one type.
 #[test]
-fn rejects_wide_union() {
-    let rejection = reject("function f(x: int | string) -> int { 1 }", "f");
-    assert_unsupported(&rejection, "union other than `T | null`");
+fn closed_unions_are_generated_enums() {
+    let module = compile_roots(
+        r#"
+class Row { amount: int | float }
+function make(n: int) -> float | int { if (n > 0) { n } else { 1.5 } }
+function kind(x: int | float) -> string { match (x) { int => "int", float => "float" } }
+function bound(x: int | float) -> int { match (x) { let n: int => n, let f: float => f.itrunc() } }
+function tested(x: int | float | null) -> int { if (x != null && x is int) { x + 1 } else { 0 } }
+function four(x: int | float | string | bool) -> int { match (x) { int => 1, float => 2, string => 3, bool => 4 } }
+function same(a: int, b: int) -> bool { make(a) == make(b) && make(a) == 1 }
+function text(r: Row) -> string { r.amount.to_string() + baml.json.to_string(r) }
+function decode(raw: string) -> int | float { baml.json.deserialize<int | float>(raw) }
+function coalesce(x: int | null, d: int) -> int { x ?? d }
+"#,
+        &[
+            "make", "kind", "bound", "tested", "four", "same", "text", "decode", "coalesce",
+        ],
+    );
+    let source = &module.rust_source;
+    assert_contains(source, "pub enum Union_int_or_float {");
+    assert_contains(source, "#[derive(Clone, Copy, Debug)]");
+    assert_contains(
+        source,
+        "pub fn user_make(mut _1: Int63) -> Result<Union_int_or_float, Thrown>",
+    );
+    assert_contains(source, "_0 = Union_int_or_float::int(_1);");
+    assert_contains(source, "_0 = Union_int_or_float::float(1.5_f64);");
+    assert_contains(source, "matches!(& _1, Union_int_or_float::int(_))");
+    assert_contains(source, "Union_int_or_float::int(value) => value,");
+    assert_contains(source, "return Err(Thrown::from(Panic::Unreachable));");
+    assert_contains(source, "matches!(& _1, Some(Union_int_or_float::int(_)))");
+    assert_contains(source, "Some(Union_int_or_float::int(value)) => value,");
+    assert_contains(
+        source,
+        "Union_int_or_float_or_string_or_bool::string(_) => {",
+    );
+    assert_contains(source, "bex_aot::eq::equals(&");
+    assert_contains(source, "&Union_int_or_float::int(int::lit(1)))");
+    assert_contains(source, "impl bex_aot::BamlEq for Union_int_or_float {");
+    assert_contains(source, "pub amount: Union_int_or_float,");
+    assert_contains(source, "bex_aot::json::deserialize_union(");
+    assert_contains(source, "json::deserialize::<Union_int_or_float>(&_1)?");
+    assert_contains(source, "if let Some(value) = _1 {");
+    assert_eq!(module.unions.len(), 2, "{:?}", module.unions);
+    assert_eq!(module.unions[0].link_name, "int | float");
+    assert_eq!(module.unions[0].rust_name, "Union_int_or_float");
+    let make = module
+        .functions
+        .iter()
+        .find(|f| f.link_name == "user.make")
+        .unwrap();
+    assert_eq!(
+        make.ret,
+        NativeTy::Union(vec![NativeTy::Int, NativeTy::Float])
+    );
+}
+
+/// A union with an `unknown`, interface or generic-class member is open:
+/// its values have no closed set of native types.
+#[test]
+fn rejects_open_unions() {
+    let rejection = reject("function f(x: int | unknown) -> int { 1 }", "f");
+    assert_unsupported(&rejection, "unknown");
+    let rejection = reject(
+        r"
+interface Shape { function area(self) -> float throws never }
+function f(x: int | Shape) -> int { 1 }
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "interface (a union member)");
+    let rejection = reject(
+        r"
+class Box<T> { value: T }
+function f(x: int | Box<int>) -> int { 1 }
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "generic class (a union member)");
 }
 
 /// A union of literals of one primitive is that primitive: a match on a
@@ -1730,7 +1808,7 @@ function f(n: int) -> int {
 fn rejects_catch_binding_of_a_class_outside_the_subset() {
     let rejection = reject(
         r"
-class Wide { n: int | string }
+class Wide { n: unknown }
 function f(n: int) -> int {
     (10 / n) catch (e) { let w: Wide => 0 }
 }
@@ -1815,18 +1893,19 @@ function f(n: int) -> int {
 }
 
 #[test]
-fn rejects_narrowing_a_union_value() {
+fn rejects_narrowing_an_interface_value() {
     let rejection = reject(
         r"
-class A { n: int }
-class B { n: int }
-function f(v: A | B) -> int {
-    match (v) { let a: A => a.n, let b: B => b.n }
+interface Shape { function area(self) -> float throws never }
+class Sq { s: float }
+implements Shape for Sq { function area(self) -> float throws never { self.s * self.s } }
+function f(v: Shape) -> float {
+    match (v) { let a: Sq => a.s, _ => 0.0 }
 }
 ",
         "f",
     );
-    assert_unsupported(&rejection, "union other than `T | null`");
+    assert_unsupported(&rejection, "interface");
 }
 
 #[test]

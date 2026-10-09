@@ -145,6 +145,32 @@ pub fn to_string<T: Serialize + ?Sized>(value: &T) -> Result<Str, Thrown> {
     }
 }
 
+/// One member's decoder in a generated union's `Deserialize` impl: the
+/// member's decode, wrapped in the union's variant.
+pub type MemberDecoder<T> = fn(serde_json::Value) -> Result<T, serde_json::Error>;
+
+/// Decode a union value, for the `Deserialize` impl of a generated union
+/// enum: the first member, in the union's member order, that the JSON
+/// decodes as, which is how the VM's typed decode picks a member
+/// (`ty_serde_to_value`, `RealizedTy::Union`: try each member structurally,
+/// first match wins). `members` are the per-variant decoders, each wrapping
+/// its member's decode in the variant.
+pub fn deserialize_union<'de, D, T>(
+    deserializer: D,
+    members: &[MemberDecoder<T>],
+) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = <serde_json::Value as serde::Deserialize>::deserialize(deserializer)?;
+    for member in members {
+        if let Ok(decoded) = member(value.clone()) {
+            return Ok(decoded);
+        }
+    }
+    Err(serde::de::Error::custom("no union member matched"))
+}
+
 /// `baml.json.deserialize<T>(text)`: parse, then decode against `T`. Throws
 /// [`ParseError`] for invalid JSON and [`DecodeError`] for a shape mismatch.
 pub fn deserialize<T: DeserializeOwned>(text: &Str) -> Result<T, Thrown> {
@@ -428,6 +454,78 @@ mod tests {
             ),
             "missing field `tags`"
         );
+    }
+
+    /// The shape the backend generates for `int | float | string`:
+    /// serialized as the member, decoded as the first member that fits.
+    #[derive(Debug, PartialEq)]
+    enum IntFloatStr {
+        Int(Int63),
+        Float(f64),
+        Str(Str),
+    }
+
+    impl Serialize for IntFloatStr {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            match self {
+                Self::Int(value) => value.serialize(serializer),
+                Self::Float(value) => value.serialize(serializer),
+                Self::Str(value) => value.serialize(serializer),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for IntFloatStr {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            deserialize_union(
+                deserializer,
+                &[
+                    |value| Int63::deserialize(value).map(Self::Int),
+                    |value| f64::deserialize(value).map(Self::Float),
+                    |value| Str::deserialize(value).map(Self::Str),
+                ],
+            )
+        }
+    }
+
+    #[test]
+    fn unions_pick_the_first_member_that_decodes() {
+        assert_eq!(
+            deserialize::<IntFloatStr>(&text("1")).unwrap(),
+            IntFloatStr::Int(int(1))
+        );
+        assert_eq!(
+            deserialize::<IntFloatStr>(&text("1.0")).unwrap(),
+            IntFloatStr::Float(1.0)
+        );
+        assert_eq!(
+            deserialize::<IntFloatStr>(&text("-2.5e1")).unwrap(),
+            IntFloatStr::Float(-25.0)
+        );
+        // Past the int range a number is still a float, as on the VM.
+        assert_eq!(
+            deserialize::<IntFloatStr>(&text("4611686018427387904")).unwrap(),
+            IntFloatStr::Float(4_611_686_018_427_387_904.0)
+        );
+        assert_eq!(
+            deserialize::<IntFloatStr>(&text("\"x\"")).unwrap(),
+            IntFloatStr::Str(text("x"))
+        );
+        assert_eq!(
+            decode_message::<IntFloatStr>("true"),
+            "no union member matched"
+        );
+        assert_eq!(
+            decode_message::<IntFloatStr>("null"),
+            "no union member matched"
+        );
+        assert_eq!(
+            deserialize::<Option<IntFloatStr>>(&text("null")).unwrap(),
+            None
+        );
+        let items: Vec<IntFloatStr> = deserialize(&text(r#"[1, 2.5, "s"]"#)).unwrap();
+        assert_eq!(json(&items), r#"[1,2.5,"s"]"#);
+        assert_eq!(json(&IntFloatStr::Float(f64::NAN)), "null");
     }
 
     #[test]

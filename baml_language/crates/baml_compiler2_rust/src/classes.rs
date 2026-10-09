@@ -7,7 +7,8 @@
 //! register further declarations), and remembers the result so a declaration
 //! reachable from several functions is checked and emitted once. A class
 //! whose fields leave the subset rejects every function that touches it,
-//! with the field named.
+//! with the field named. Every closed union a mapped type mentions is
+//! registered too ([`UnionInfo`]), so its generated enum is emitted once.
 
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef},
@@ -96,6 +97,31 @@ enum LiteralSite {
     Field(String),
 }
 
+/// A closed union admitted to the subset: a generated enum with one
+/// variant per member.
+#[derive(Debug, Clone)]
+pub(crate) struct UnionInfo<'db> {
+    /// The members, in the type system's canonical order.
+    pub members: Vec<NativeTy<'db>>,
+    /// The generated enum's identifier, `Union_int_or_float`.
+    pub ident: Ident,
+    /// The variant identifiers, parallel to `members`: each member mangled
+    /// (`int`, `string_array`, `user_A`).
+    pub variants: Vec<Ident>,
+    /// The BAML spelling, `int | float`, with classes by link name.
+    pub described: String,
+}
+
+impl<'db> UnionInfo<'db> {
+    /// The variant holding `member`.
+    pub(crate) fn variant_of(&self, member: &NativeTy<'db>) -> Option<&Ident> {
+        self.members
+            .iter()
+            .position(|candidate| candidate == member)
+            .map(|index| &self.variants[index])
+    }
+}
+
 enum State<'db> {
     /// The class's fields are being mapped; a reference back to it from a
     /// field is fine (it is a `Shared` handle).
@@ -111,6 +137,8 @@ pub(crate) struct ClassTable<'db> {
     order: Vec<ClassRef<'db>>,
     enums: FxHashMap<EnumRef<'db>, Result<EnumInfo<'db>, String>>,
     enum_order: Vec<EnumRef<'db>>,
+    /// Every union a mapped type mentions, in first-seen order.
+    unions: Vec<UnionInfo<'db>>,
 }
 
 impl<'db> Resolver<'db> for ClassTable<'db> {
@@ -142,6 +170,7 @@ impl<'db> ClassTable<'db> {
             order: Vec::new(),
             enums: FxHashMap::default(),
             enum_order: Vec::new(),
+            unions: Vec::new(),
         }
     }
 
@@ -211,7 +240,66 @@ impl<'db> ClassTable<'db> {
     }
 
     fn map(&mut self, ty: &RuntimeTy) -> Result<NativeTy<'db>, Unsupported> {
-        from_runtime_ty(ty, self)
+        let native = from_runtime_ty(ty, self)?;
+        self.register_unions(&native)?;
+        Ok(native)
+    }
+
+    /// Register every union `ty` mentions, naming its variants once.
+    fn register_unions(&mut self, ty: &NativeTy<'db>) -> Result<(), Unsupported> {
+        let mut found = Vec::new();
+        ty.unions(&mut found);
+        for members in found {
+            if self.unions.iter().any(|info| info.members == members) {
+                continue;
+            }
+            let info = self.describe_union(members)?;
+            self.unions.push(info);
+        }
+        Ok(())
+    }
+
+    fn describe_union(&self, members: Vec<NativeTy<'db>>) -> Result<UnionInfo<'db>, Unsupported> {
+        let name = |decl| self.ident(decl);
+        let ident = NativeTy::union_ident(&members, &name);
+        let variants: Vec<Ident> = members
+            .iter()
+            .map(|member| field_ident(&member.mangle(&name)))
+            .collect();
+        let described = NativeTy::Union(members.clone()).describe(&|decl| self.link_name(decl));
+        let mut seen = FxHashMap::default();
+        for (variant, member) in variants.iter().zip(&members) {
+            if let Some(other) = seen.insert(variant.to_string(), member) {
+                return Err(Unsupported(format!(
+                    "union `{described}`: members `{}` and `{}` both need the Rust name `{variant}`",
+                    member.describe(&|decl| self.link_name(decl)),
+                    other.describe(&|decl| self.link_name(decl))
+                )));
+            }
+        }
+        Ok(UnionInfo {
+            members,
+            ident,
+            variants,
+            described,
+        })
+    }
+
+    /// The admitted union with exactly `members`. Every union a mapped type
+    /// mentions is admitted, so a miss is a bug in the caller.
+    pub(crate) fn union_info(
+        &self,
+        members: &[NativeTy<'db>],
+    ) -> Result<&UnionInfo<'db>, Rejection> {
+        self.unions
+            .iter()
+            .find(|info| info.members == members)
+            .ok_or_else(|| {
+                Rejection::invalid(format!(
+                    "union `{}` was used before it was admitted",
+                    NativeTy::Union(members.to_vec()).describe(&|decl| self.link_name(decl))
+                ))
+            })
     }
 
     /// Admit `enum_ref`, naming its variants once.
@@ -396,10 +484,19 @@ impl<'db> ClassTable<'db> {
         }
     }
 
-    /// Every admitted class and enum, each in first-seen order, once no two
-    /// of them need the same item name.
+    /// Every admitted class, enum and union, each in first-seen order, once
+    /// no two of them need the same item name.
     #[allow(clippy::type_complexity)]
-    pub(crate) fn finish(&self) -> Result<(Vec<&ClassInfo<'db>>, Vec<&EnumInfo<'db>>), Rejection> {
+    pub(crate) fn finish(
+        &self,
+    ) -> Result<
+        (
+            Vec<&ClassInfo<'db>>,
+            Vec<&EnumInfo<'db>>,
+            Vec<&UnionInfo<'db>>,
+        ),
+        Rejection,
+    > {
         let mut by_ident: FxHashMap<String, &str> = FxHashMap::default();
         let mut classes = Vec::with_capacity(self.order.len());
         for class in &self.order {
@@ -423,7 +520,17 @@ impl<'db> ClassTable<'db> {
             }
             enums.push(info);
         }
-        Ok((classes, enums))
+        let mut unions = Vec::with_capacity(self.unions.len());
+        for info in &self.unions {
+            if let Some(other) = by_ident.insert(info.ident.to_string(), &info.described) {
+                return Err(Rejection::unsupported(format!(
+                    "union `{}` and `{other}` both need the Rust name `{}`",
+                    info.described, info.ident
+                )));
+            }
+            unions.push(info);
+        }
+        Ok((classes, enums, unions))
     }
 }
 
