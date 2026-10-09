@@ -2321,11 +2321,7 @@ impl<'db> Env<'_, 'db> {
                         // into the wider of the two types first, which
                         // changes nothing (a `T` lifted into `T | null` is
                         // still never equal to `null`).
-                        let common = [(&left, &right), (&right, &left)]
-                            .into_iter()
-                            .find(|(from, to)| stores(from, to))
-                            .map(|(_, to)| to.clone());
-                        let Some(common) = common.filter(baml_eq_supported) else {
+                        let Some(common) = equality_common(&left, &right) else {
                             return Err(Rejection::unsupported(format!(
                                 "`==` on a `{}` and a `{}` (only primitives, enums, nullable values and unions of those compare natively through `baml.ops.equals_equals`)",
                                 self.describe(&left),
@@ -2399,6 +2395,20 @@ fn baml_eq_supported(ty: &NativeTy<'_>) -> bool {
     }
 }
 
+/// The type both sides of an `==` between a union or nullable operand and
+/// another are compared as: the wider of the two, when the other fits it
+/// and the type compares through `bex_aot::BamlEq`.
+pub(crate) fn equality_common<'db>(
+    left: &NativeTy<'db>,
+    right: &NativeTy<'db>,
+) -> Option<NativeTy<'db>> {
+    [(left, right), (right, left)]
+        .into_iter()
+        .find(|(from, to)| stores(from, to))
+        .map(|(_, to)| to.clone())
+        .filter(baml_eq_supported)
+}
+
 /// Whether `ty` is a union or a nullable: a value the checker may have
 /// narrowed, which an operand then reads as the narrower type.
 fn narrowable(ty: &NativeTy<'_>) -> bool {
@@ -2418,7 +2428,12 @@ pub(crate) fn binop_operand_tys<'db>(
     expected: Option<&NativeTy<'db>>,
     with_null: bool,
 ) -> (NativeTy<'db>, NativeTy<'db>) {
-    if with_null {
+    // `x == null` is not a narrowing; neither is `==` / `!=` with a union
+    // or nullable operand, which the VM's comparison opcode decides across
+    // kinds (an `int | Color` against `Color.Red` from a variant pattern is
+    // simply unequal when it holds an int): the printer lifts the other
+    // side into the union and compares the members.
+    if with_null || matches!(op, BinOp::Eq | BinOp::Ne) {
         return (left, right);
     }
     let narrow = |from: &NativeTy<'db>, to: &NativeTy<'db>| -> Option<NativeTy<'db>> {
@@ -2658,6 +2673,12 @@ pub(crate) fn binop_ty<'db>(
             (Bigint, Bigint) => Some(Bool),
             (NativeTy::Enum(l), NativeTy::Enum(r)) if l == r => Some(Bool),
             (Opt(_), Opt(_)) if left == right && with_null => Some(Bool),
+            // A union or nullable operand: the comparison opcode compares the
+            // values whatever they hold, which `bex_aot::BamlEq` does once
+            // the narrower side is lifted into the wider type.
+            (NativeTy::Union(_) | Opt(_), _) | (_, NativeTy::Union(_) | Opt(_)) => {
+                equality_common(left, right).map(|_| Bool)
+            }
             _ => None,
         },
         BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => match (left, right) {
@@ -3237,6 +3258,33 @@ mod tests {
         assert_eq!(binop_ty(BinOp::BitAnd, &Float, &Float, false), None);
         let nullable = NativeTy::Option(Box::new(Int));
         assert_eq!(binop_ty(BinOp::Eq, &nullable, &nullable, true), Some(Bool));
-        assert_eq!(binop_ty(BinOp::Eq, &nullable, &nullable, false), None);
+        // Two nullables compare through `BamlEq`; a nullable against a
+        // value of its type lifts the value.
+        assert_eq!(binop_ty(BinOp::Eq, &nullable, &nullable, false), Some(Bool));
+        assert_eq!(binop_ty(BinOp::Ne, &nullable, &Int, false), Some(Bool));
+        assert_eq!(binop_ty(BinOp::Eq, &nullable, &Str, false), None);
+        let union = NativeTy::Union(vec![Int, Float]);
+        assert_eq!(binop_ty(BinOp::Eq, &union, &Float, false), Some(Bool));
+        assert_eq!(binop_ty(BinOp::Lt, &union, &Int, false), None);
+        assert_eq!(
+            binop_operand_tys(BinOp::Lt, union.clone(), Int, None, false),
+            (Int, Int)
+        );
+        assert_eq!(
+            binop_operand_tys(BinOp::Eq, union.clone(), Int, None, false),
+            (union.clone(), Int)
+        );
+        assert_eq!(
+            binop_operand_tys(
+                BinOp::Add,
+                union.clone(),
+                union.clone(),
+                Some(&Float),
+                false
+            ),
+            (Float, Float)
+        );
+        assert_eq!(unary_operand_ty(union.clone(), Some(&Int)), Int);
+        assert_eq!(unary_operand_ty(union.clone(), Some(&Str)), union);
     }
 }

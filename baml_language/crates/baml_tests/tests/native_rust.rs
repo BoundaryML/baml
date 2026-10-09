@@ -30,6 +30,7 @@ const FIXTURES: &[&str] = &[
     "bitwise",
     "calls",
     "catches",
+    "class_unions",
     "classes",
     "defaults",
     "defers",
@@ -110,6 +111,7 @@ generated_module!(catches, "native/generated/catches.rs");
 generated_module!(defers, "native/generated/defers.rs");
 generated_module!(literal_unions, "native/generated/literal_unions.rs");
 generated_module!(primitive_unions, "native/generated/primitive_unions.rs");
+generated_module!(class_unions, "native/generated/class_unions.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -491,6 +493,84 @@ async fn primitive_unions_match_vm() {
         r#"{"amount": 1}"#,
     ] {
         check!(o, json_rows(raw) => user_json_rows(text(raw)));
+    }
+}
+
+#[tokio::test]
+async fn class_unions_match_vm() {
+    use class_unions::*;
+    let o = Oracle::new("class_unions");
+    for n in [-4, -1, 0, 1, 2, 7] {
+        check!(o, describe(n) => user_describe(int(n)));
+        check!(o, is_ok(n) => user_is_ok(int(n)));
+        check!(o, tested(n) => user_tested(int(n)));
+        check!(o, classify(n) => user_classify(int(n)));
+        check!(o, fields(n) => user_fields(int(n)));
+        check!(o, narrowed_arg(n) => user_narrowed_arg(int(n)));
+        check!(o, label_name(n) => user_label_name(int(n)));
+        check!(o, is_red(n) => user_is_red(int(n)));
+        check!(o, not_big(n) => user_not_big(int(n)));
+        check!(o, variant_arm(n) => user_variant_arm(int(n)));
+        check!(o, literal_arm(n) => user_literal_arm(int(n)));
+        check!(o, render(n) => user_render(int(n)));
+        check!(o, json_out(n) => user_json_out(int(n)));
+        check!(o, carry(n) => user_carry(int(n)));
+        check!(o, count_ok(n) => user_count_ok(int(n)));
+        check!(o, thrown_payload(n) => user_thrown_payload(int(n)));
+    }
+    for (a, b) in [(-1, -2), (-1, 0), (0, 0), (1, 1), (1, 2), (2, 5)] {
+        check!(o, same_label(a, b) => user_same_label(int(a), int(b)));
+    }
+    // A class union decodes as the first member, in the spelled order, the
+    // object fits; an object with both shapes' fields goes to the first.
+    for raw in [
+        r#"{"value": 3}"#,
+        r#"{"message": "m"}"#,
+        r#"{"value": 3, "message": "m"}"#,
+        r#"{"value": "x"}"#,
+        r#"{}"#,
+        r#"[]"#,
+        r#"null"#,
+        r#"nope"#,
+    ] {
+        check!(o, json_in(raw) => user_json_in(text(raw)));
+        check!(o, json_in_reversed(raw) => user_json_in_reversed(text(raw)));
+    }
+    // The same union spelled `Err | Ok` decodes the ambiguous object as
+    // the other member, at a decode site and in a class field alike.
+    for raw in [
+        r#"{"outcome": {"value": 3, "message": "m"}}"#,
+        r#"{"outcome": {"value": 3}}"#,
+        r#"{"outcome": {"message": "m"}}"#,
+    ] {
+        check!(o, json_reversed(raw) => user_json_reversed(text(raw)));
+    }
+    assert_eq!(
+        user_json_in(text(r#"{"value": 3, "message": "m"}"#)).unwrap(),
+        text("ok 3")
+    );
+    assert_eq!(
+        user_json_in_reversed(text(r#"{"value": 3, "message": "m"}"#)).unwrap(),
+        text("err m")
+    );
+    for raw in [
+        r#"{"outcome": {"value": 3}, "label": "Red"}"#,
+        r#"{"outcome": {"message": "m"}, "label": "Big"}"#,
+        r#"{"outcome": {"value": 3, "message": "m"}, "label": "Small"}"#,
+        r#"{"outcome": {"value": 3}, "label": "Purple"}"#,
+        r#"{"outcome": {"value": 3}}"#,
+        r#"{"outcome": {}, "label": "Red"}"#,
+    ] {
+        check!(o, json_report(raw) => user_json_report(text(raw)));
+    }
+    for raw in [
+        r#"{"payload": null}"#,
+        r#"{}"#,
+        r#"{"payload": {"value": 1}}"#,
+        r#"{"payload": {"message": "m"}}"#,
+        r#"{"payload": 5}"#,
+    ] {
+        check!(o, json_carrier(raw) => user_json_carrier(text(raw)));
     }
 }
 

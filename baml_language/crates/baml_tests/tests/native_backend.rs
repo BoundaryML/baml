@@ -1447,6 +1447,124 @@ function coalesce(x: int | null, d: int) -> int { x ?? d }
     );
 }
 
+/// A union of classes and enums: variants hold the handles, a class arm
+/// of a four-way match is a `match` on the variants, a binding reads the
+/// handle, and JSON decodes the first member whose shape fits in the
+/// spelled order, so a class field spelled `Ok | Err` and a signature's
+/// canonical `Err | Ok` are two types, converted at the store.
+#[test]
+fn class_and_enum_unions_are_generated_enums() {
+    let module = compile_roots(
+        r#"
+class Ok { value: int }
+class Err { message: string }
+class Warn { code: int }
+class Skip { }
+enum Color { Red, Green }
+enum Size { Small, Big }
+class Report { outcome: Ok | Err }
+function outcome(n: int) -> Ok | Err { if (n >= 0) { Ok { value: n } } else { Err { message: "neg" } } }
+function describe(o: Ok | Err) -> string { match (o) { let ok: Ok => ok.value.to_string(), let err: Err => err.message } }
+function classify(v: Ok | Err | Warn | Skip) -> int { match (v) { Ok => 1, Err => 2, Warn => 3, Skip => 4 } }
+function label(l: Color | Size) -> bool { l == Color.Red }
+function report(n: int) -> Report { Report { outcome: outcome(n) } }
+function decode(raw: string) -> Report { baml.json.deserialize<Report>(raw) }
+"#,
+        &[
+            "outcome", "describe", "classify", "label", "report", "decode",
+        ],
+    );
+    let source = &module.rust_source;
+    assert_contains(source, "pub enum Union_user_Err_or_user_Ok {");
+    assert_contains(source, "user_Err(Shared<user_Err>),");
+    assert_contains(source, "user_Ok(Shared<user_Ok>),");
+    assert_contains(
+        source,
+        "#[derive(Clone, Debug)]\npub enum Union_user_Err_or_user_Ok",
+    );
+    assert_contains(
+        source,
+        "_0 = Union_user_Err_or_user_Ok::user_Ok(shared(user_Ok { value: _1 }));",
+    );
+    assert_contains(
+        source,
+        "if matches!(& _2, Union_user_Err_or_user_Ok::user_Ok(_)) {",
+    );
+    assert_contains(
+        source,
+        "Union_user_Err_or_user_Ok::user_Ok(value) => value,",
+    );
+    assert_contains(
+        source,
+        "Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn::user_Warn(_) => {",
+    );
+    assert_contains(source, "bex_aot::eq::equals(");
+    assert_contains(
+        source,
+        "&Union_user_Color_or_user_Size::user_Color(user_Color::Red)",
+    );
+    assert_contains(
+        source,
+        "impl bex_aot::BamlEq for Union_user_Color_or_user_Size {",
+    );
+    assert!(
+        !source.contains("impl bex_aot::BamlEq for Union_user_Err_or_user_Ok {"),
+        "class instances compare structurally on the VM, which is not native"
+    );
+    // The field keeps its spelled order, so the store re-tags.
+    assert_contains(source, "pub outcome: Union_user_Ok_or_user_Err,");
+    assert_contains(source, "Union_user_Err_or_user_Ok::user_Err(value) => {");
+    assert_contains(source, "Union_user_Ok_or_user_Err::user_Err(value)");
+    assert_eq!(module.unions.len(), 4, "{:?}", module.unions);
+}
+
+/// Class instances compare structurally on the VM (with a class's own
+/// `baml.ops.Equals` dispatched), which the runtime does not do; an enum
+/// with its own `Equals` is compared by the VM through it.
+#[test]
+fn rejects_equality_on_unions_that_do_not_compare_natively() {
+    let rejection = reject(
+        r"
+class Ok { value: int }
+class Err { message: string }
+function f(a: Ok | Err, b: Ok | Err) -> bool { a == b }
+",
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "`==` on a `user.Err | user.Ok` and a `user.Err | user.Ok`",
+    );
+    let rejection = reject(
+        r"
+enum Odd { X, Y }
+implements baml.ops.Equals for Odd { function eq(self, other: Odd) -> bool throws never { true } }
+function g(a: int | Odd) -> bool { a == Odd.X }
+",
+        "g",
+    );
+    assert_unsupported(
+        &rejection,
+        "`user.Odd` implements its own `baml.ops.Equals`",
+    );
+}
+
+/// A field read through a narrowed union local (`v.n` after `v is A`)
+/// names a slot the MIR does not tie to a class; the binding form is
+/// admitted.
+#[test]
+fn rejects_field_read_on_a_narrowed_union() {
+    let rejection = reject(
+        r"
+class A { n: int }
+class B { s: string }
+function f(v: A | B) -> int { if (v is A) { v.n } else { 0 } }
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "field read on a narrowed `user.A | user.B`");
+}
+
 /// A union with an `unknown`, interface or generic-class member is open:
 /// its values have no closed set of native types.
 #[test]
