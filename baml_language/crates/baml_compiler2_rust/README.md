@@ -43,7 +43,11 @@ A function is admitted when all of the following hold:
   array elements (a map subscript lowers to a `baml.Map` call);
 - its control flow uses `Goto`, `Branch`, `Switch` on `int` keys, `Return`,
   `Unreachable`, `ShortCircuit` (`&&`, `||`), direct `Call` and the
-  `VirtualCall`s of the for-in protocol and `sort`;
+  `VirtualCall`s of the for-in protocol and `sort`; `throw` of a class
+  instance, and `catch` / `defer` in the shapes lowering gives them (unwind
+  edges, landing blocks, `rethrow`, `throw_if_panic`, class tests, class
+  bindings and class-tag switches on the caught value), see
+  [Errors](#errors-throw-catch-defer);
 - every call is either a direct call of a source function in the subset, a
   stdlib builtin from the table below (keyed by link name), or
   `baml.sys.panic` with a string literal.
@@ -70,6 +74,7 @@ the native stack. Functions off every cycle pay nothing.
 | enum `E` | `user_E` | generated fieldless `pub enum user_E { variants in declaration order }`, `Copy`; `E.V` is `user_E::V`, `==` compares variants, `match` switches on `int::lit(e as i64)` (the VM's discriminant), `to_string` and JSON use the variant's BAML name |
 | for-in iterator | `bex_aot::array::Iter<T>` | refined from `virtual_call iter` on a `T[]` |
 | result of `next` | `Option<T>` | refined; `is_type(x, Done)` is `x.is_none()`, the element copy `x.clone().expect(..)` |
+| caught error | `Thrown` | a handler's error local: `bex_aot::Thrown`, a panic or a thrown class instance; its context local has no native form |
 
 Literal types (`0`, `"x"`) map to their primitive, and a variant type
 (`Color.Red`) to its enum. Classes must be non-generic with every field in
@@ -77,7 +82,11 @@ the model. Generated structs derive
 `Serialize` and `Deserialize` through `bex_aot::serde` (`#[serde(rename)]`
 keeps the BAML name when the Rust field had to change, e.g. `type` ->
 `type_`) and implement `ToBaml`, rendering `Name { f: v, .. }` with the
-unqualified class name.
+unqualified class name. Every class and enum also implements
+`bex_aot::Readable` (how the engine prints it inside an uncaught throw:
+the fully qualified name, `user.Inner {n: 1}`), and every class
+`bex_aot::ErrorClass` (its link name and readable fields), so any class can
+be thrown and caught by name; a class that is never thrown pays nothing.
 
 ### Builtins
 
@@ -106,6 +115,57 @@ Any other stdlib function, with or without source, is rejected as
 `` unsupported builtin `<link name>` ``, so the admission report names the next
 builtin to add. A type argument that still mentions a type parameter rejects
 the call.
+
+### Errors: throw, catch, defer
+
+Every generated function returns `Result<T, Thrown>`, so a thrown value is
+an `Err`. Lowering fixes, per basic block, the handler a throw or panic
+anywhere in the block lands in (`BasicBlock::unwind`: the enclosing `catch`
+handler or `defer` landing pad), and a handler block *lands* with the thrown
+value in its error local (`Landing::error_local`). The backend keeps that
+shape:
+
+- `throw v` is `Err(Thrown::error(v))` for a class instance (the handle is
+  boxed as the object, so a `catch` binding sees the same object), or
+  `Err(e)` for a caught error thrown on; `rethrow` carries the caught
+  error as it is. In a block with no handler either is a `return`.
+- A block with a handler reaches it with a `break`: the structurer treats
+  the unwind edge as an ordinary edge (every graph including them is
+  reducible), labels the handler like a merge node, and records the jump
+  (`Structured::unwind_jumps`); the printer wraps every fallible
+  expression in the block (`int::div`, `array::get`, a callee's call, ..)
+  as `match .. { Ok(v) => v, Err(e) => { _err = Thrown::from(e); break
+  'bbN; } }` instead of `?`, and a `throw`, `rethrow`, panic or
+  unreachable exit as the same assignment and jump. The MIR's paths are the
+  output's paths, so rustc's definite-initialization check still proves
+  that the handler reads an assigned error local.
+- A `catch` arm's class test (`is_type(e, C)`) is
+  `bex_aot::thrown::is_class(&e, "<link name>")`, decided by name as the VM
+  decides by class identity (two classes never share a name); a class
+  binding (`let x: C => ..`, a `narrow_bind` into a temporary seeded with
+  the error) is `if let Some(v) = thrown::downcast::<Shared<C>>(&e)`; four
+  or more class arms switch on the error's class tag
+  (`type_tag(e)`, a `&'static str` local holding the name) with a `match`
+  on string literals. The `throw_if_panic` guard lowering puts in front of a
+  wildcard arm is `if thrown::is_panic(&e) { <rethrow> }`, where a panic is
+  a `baml.panics.*` instance by class, as on the VM, so a program-built
+  `baml.panics.Exit { code }` is a panic too (and exits with its code when
+  uncaught). `catch_all_panics` has no guard.
+- `defer` needs nothing of its own: lowering copies the body at every
+  non-throwing exit (fall-through, `return`, `break`, `continue`), in LIFO
+  order, and lands the unwinding path in a pad that runs the body and
+  `rethrow`s, chaining to the next pad. A throw inside a pad replaces the
+  in-flight error, as on the VM. The `shielded` mark on a defer body (no
+  cancellation delivered while it runs) has nothing to act on: native code
+  has no cancellation yet (no async).
+- The `baml.errors.Context` a handler lands with beside the error (stack
+  trace, cause chain) is not materialized: `rethrow` and `throw_if_panic`
+  carry the error alone, and a read of a bound context (`catch (e, ctx)`)
+  is rejected.
+
+The parity contract with the VM is the thrown class, its non-message
+fields and the exit code (`Thrown::exit_code`); message text agrees only
+where the code producing it is shared (`bex_lang`).
 
 ## Emission scheme
 
@@ -253,8 +313,12 @@ class's own `Hash`/`Equals` are not reproduced), unions other than
 interfaces, generic classes, a class with such a field (the field is named),
 and an `unknown` or interface-typed local no definition refines. A `to_string` on a class or enum with its own
 `baml.ToString` implementation is rejected, as the structural rendering
-would be wrong. Constructs: `catch`/`defer` (any block with an unwind,
-landing, handling or shield), `throw`, `spawn`/`await`, sys-ops, closures and
+would be wrong. Constructs: `throw` of a value that is not a class instance
+(`throw "text"`, which BAML allows), a `catch` arm that is not a class test,
+a class binding or a wildcard (`let s: string => ..`), a binding of a
+generic class, of a class outside the model, or of a stdlib error or panic
+class (`let p: baml.panics.IndexOutOfBounds => ..`, see Limitations), a
+read of the bound context of `catch (e, ctx)`, `spawn`/`await`, sys-ops, closures and
 captured locals, `??`, narrowing patterns and values the checker narrowed
 (a `T | null` used as a `T` after a null test), `==` on arrays, maps or
 classes, interface method calls other than `iter`/`next`/`sort`, `sort` on a
@@ -281,9 +345,14 @@ checker has proven that edge dead, so the assignment is emitted as
   into the (usually unused) destination temp.
 - `Rvalue::TraceHookSettings` and stdlib BAML-source bodies are not compiled;
   the stdlib functions the benchmarks need are mapped directly.
-- Error classes for `throw`/`catch` are not generated.
+- A `catch` binding of a stdlib error or panic class
+  (`let e: baml.panics.IndexOutOfBounds => e.index`) is rejected: the
+  runtime raises those as types of its own (`bex_lang::Panic`,
+  `bex_aot::errors`, `bex_aot::json`), which the generated struct of the
+  class would never downcast to. The class test
+  (`baml.panics.IndexOutOfBounds => ..`) is native.
 - The parity contract with the VM is values, control flow, the class and
   non-message fields of a thrown object, and the exit code. The text of a
   message is identical only where the code producing it is shared
-  (`bex_lang`); `catch` is not admitted, so no native program observes a
-  message.
+  (`bex_lang`); a `catch` that reads `e.message` observes each backend's
+  own wording otherwise.
