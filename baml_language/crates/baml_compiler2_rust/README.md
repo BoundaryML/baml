@@ -21,10 +21,14 @@ BAML --> ... --> MIR --+--> emit  --> bytecode --> bex_vm           (existing)
 
 A function is admitted when all of the following hold:
 
-- it is non-generic, has no defaulted parameters, no declared trace hook and
-  no lambdas in its body; it may be a method of a concrete class (declared
-  in the class or an `implements` block), whose receiver is its first
-  parameter; an interface's default method is not admitted;
+- it is non-generic, has no declared trace hook and no lambdas in its body;
+  it may be a method of a concrete class (declared in the class or an
+  `implements` block), whose receiver is its first parameter; an interface's
+  default method is not admitted; a defaulted parameter is admitted when its
+  default is a constant (a literal, possibly negated, `null`, or an enum
+  variant): the constant is passed from every call site that omits the
+  argument, and the callee's prologue test against the omitted-argument
+  sentinel is emitted as the constant `false`;
 - every parameter, local and the return place has a native type (below), or
   is a local whose declared type can be *refined* from its definitions
   (`unknown` and `baml.iter.Iterator<..>` temps of a for-in, the function-typed
@@ -238,10 +242,11 @@ landing, handling or shield), `throw`, `spawn`/`await`, sys-ops, closures and
 captured locals, `??`, narrowing patterns and values the checker narrowed
 (a `T | null` used as a `T` after a null test), map literals and indexing,
 interface method calls other than `iter`/`next`/`sort`, `sort` on a
-non-primitive array, indirect calls, calls with trace attachments, named or
-omitted arguments, or type arguments to a user function, any stdlib function
-not in the table, a `panic` with a computed message, defaulted parameters,
-interface default methods, generic functions and declared trace hooks.
+non-primitive array, indirect calls, calls with trace attachments, an
+omitted argument to a stdlib function, or type arguments to a user function,
+any stdlib function not in the table, a `panic` with a computed message, a
+defaulted parameter whose default is computed (`b: int = a + 1`), interface
+default methods, generic functions and declared trace hooks.
 
 `Rejection::Invalid(reason)` means the MIR violated an invariant a checked
 program must hold (a compiler bug): lowering errors, type mismatches between

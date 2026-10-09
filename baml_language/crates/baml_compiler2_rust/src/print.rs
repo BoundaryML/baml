@@ -15,7 +15,7 @@ use syn::Lifetime;
 use crate::{
     Rejection,
     classes::{ClassInfo, ClassTable},
-    function::{Builtin, CallKind, Candidate, LocalKind, SortKind, is_dead_null_write},
+    function::{Builtin, CallKind, Candidate, LocalKind, SortKind, is_dead_null_write, is_omitted},
     structure::Stmt,
     types::{Coercion, NativeTy, coercion},
 };
@@ -427,16 +427,24 @@ impl<'a, 'db> Printer<'a, 'db> {
                 callee,
                 args: params,
                 result,
-                ..
+                substituted,
             } => {
                 let callee = self
                     .names
                     .get(callee)
                     .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
+                if substituted.len() != args.len() {
+                    return Err(Rejection::invalid("call has fewer arguments than analyzed"));
+                }
                 let args = args
                     .iter()
                     .zip(params)
-                    .map(|(arg, param)| self.operand(arg, Some(param)))
+                    .zip(substituted)
+                    .map(|((arg, param), default)| {
+                        // An omitted argument is the callee's constant default.
+                        let substitute = default.clone().map(Operand::Constant);
+                        self.operand(substitute.as_ref().unwrap_or(arg), Some(param))
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
                 (TokenStream::new(), quote! { #callee(#(#args),*)? }, result)
             }
@@ -635,6 +643,19 @@ impl<'a, 'db> Printer<'a, 'db> {
                 self.operand_value(operand, Some(target))?
             }
             Rvalue::BinaryOp { op, left, right } => {
+                if is_omitted(left) || is_omitted(right) {
+                    // The callee prologue's `param == <omitted>` test: every
+                    // call passes the constant default, so it never holds.
+                    return Ok(match op {
+                        BinOp::Eq => quote! { false },
+                        BinOp::Ne => quote! { true },
+                        _ => {
+                            return Err(Rejection::invalid(format!(
+                                "`{op}` against an omitted argument"
+                            )));
+                        }
+                    });
+                }
                 let left_ty = self.operand_ty(left)?;
                 let right_ty = self.operand_ty_with(right, Some(&left_ty))?;
                 let left_ty = match (&left_ty, &right_ty) {
