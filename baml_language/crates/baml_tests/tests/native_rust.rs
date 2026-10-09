@@ -37,6 +37,7 @@ const FIXTURES: &[&str] = &[
     "defers",
     "enums",
     "floats",
+    "generics",
     "higher_order",
     "lambdas",
     "literal_unions",
@@ -118,6 +119,7 @@ generated_module!(class_unions, "native/generated/class_unions.rs");
 generated_module!(lambdas, "native/generated/lambdas.rs");
 generated_module!(captures, "native/generated/captures.rs");
 generated_module!(higher_order, "native/generated/higher_order.rs");
+generated_module!(generics, "native/generated/generics.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -1184,4 +1186,33 @@ async fn higher_order_matches_vm() {
     for (a, b) in [("a", "b"), ("b", "a"), ("", ""), ("é", "z"), ("Z", "a")] {
         check!(o, cmp_strings(a, b) => user_cmp_strings(text(a), text(b)));
     }
+}
+
+/// Generic functions: every instance the callers reach, compared through
+/// the non-generic functions that call them (the VM erases the type
+/// arguments; the native instances are named by them).
+#[tokio::test]
+async fn generics_match_vm() {
+    use generics::*;
+    let o = Oracle::new("generics");
+    for n in [-3, 0, 1, 7, 100, MAX - 10] {
+        check!(o, use_ints(n) => user_use_ints(int(n)));
+        check!(o, use_classes(n) => user_use_classes(int(n)));
+        check!(o, use_arrays(n) => user_use_arrays(int(n)));
+        check!(o, use_nullable(n) => user_use_nullable(int(n)));
+        check!(o, renders(n) => user_renders(int(n)));
+        check!(o, type_tests(n) => user_type_tests(int(n)));
+    }
+    for s in ["", "a", "zz"] {
+        check!(o, use_strings(s) => user_use_strings(text(s)));
+    }
+    for x in [0.0, -1.5, 2.0, f64::NAN, f64::INFINITY] {
+        check!(o, use_floats(x) => user_use_floats(x));
+    }
+    // An instance is an ordinary function: the same call, natively.
+    assert_eq!(user_identity__int(int(4)).unwrap(), int(4));
+    assert_eq!(
+        user_first__string(user_wrap__string(text("w")).unwrap()).unwrap(),
+        text("w")
+    );
 }

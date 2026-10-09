@@ -117,10 +117,13 @@ fn emit_fixture(name: &str) -> native::NativeModule<'static> {
         std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
     let db: &'static _ = Box::leak(Box::new(setup_test_db(&source)));
     assert_no_user_diagnostic_errors(db);
+    // A generic function is compiled at its call sites, so the roots are
+    // the non-generic declarations; the generic ones must be reached.
     let roots: Vec<_> = db
         .workspace_files()
         .into_iter()
         .flat_map(|file| file_functions(db, file).iter().copied())
+        .filter(|&loc| function_data(db, loc).generic_params.is_empty())
         .collect();
     native::compile_many(db, &roots)
         .unwrap_or_else(|rejection| panic!("fixture {name} was rejected: {rejection}"))
@@ -2526,4 +2529,117 @@ function outer(n: int) -> int { inner({}) + n }
     let loc = function_named(&db, "outer");
     let rejection = compile(&db, loc).expect_err("callee is rejected");
     assert_unsupported(&rejection, "user.outer");
+}
+
+// ── Generics ────────────────────────────────────────────────────────────────
+
+/// A generic function is compiled once per type-argument tuple its callers
+/// reach, named after the arguments, and identical tuples share one
+/// instance.
+#[test]
+fn generic_functions_are_instantiated_per_type_arguments() {
+    let module = compile_roots(
+        r#"
+class Box { n: int }
+function identity<T>(x: T) -> T { x }
+function pair<A, B>(a: A, b: B) -> A[] { [a] }
+function outer<T>(x: T) -> T { identity<T>(x) }
+function g<T>(x: T) -> T[] { let f = identity<T>; [f(x)] }
+function ints(n: int) -> int { identity(n) + identity<int>(n) + outer(n) + g(n)[0] }
+function mixed(n: int) -> int {
+    let s = identity("s");
+    let b = identity(Box { n: n });
+    let xs = pair(n, s);
+    let h = identity<int>;
+    xs[0] + b.n + h(n) + s.length()
+}
+"#,
+        &["ints", "mixed"],
+    );
+    let names: Vec<&str> = module
+        .functions
+        .iter()
+        .map(|function| function.rust_name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "user_identity__int",
+            "user_outer__int",
+            "user_g__int",
+            "user_ints",
+            "user_identity__string",
+            "user_identity__user_Box",
+            "user_pair__int__string",
+            "user_mixed",
+        ],
+        "{names:?}"
+    );
+    let instance = &module.functions[0];
+    assert_eq!(instance.link_name, "user.identity<int>");
+    assert_eq!(instance.type_args, vec![NativeTy::Int]);
+    assert_eq!(instance.params, vec![("x".to_string(), NativeTy::Int)]);
+    let source = &module.rust_source;
+    assert_eq!(source.matches("pub fn user_identity__int(").count(), 1);
+    assert_contains(source, "_0 = user_identity__int(_1)?;");
+    assert_contains(
+        source,
+        "Rc::new(\n            user_identity__int,\n        )",
+    );
+    assert_contains(
+        source,
+        "pub fn user_pair__int__string(\n    mut _1: Int63,\n    mut _2: Str,\n)",
+    );
+    assert!(
+        module
+            .mir_dump
+            .matches("fn user.identity(x: T) -> T")
+            .count()
+            == 1,
+        "the generic MIR is dumped once:\n{}",
+        module.mir_dump
+    );
+    assert_eq!(module.roots, vec![3, 7]);
+}
+
+/// A generic function on its own has no body to emit; it is reached from
+/// its call sites. A type argument the subset has no value for, and a
+/// function instantiating itself at ever larger arguments, are rejected
+/// with the reason.
+#[test]
+fn rejects_generic_instantiations_outside_the_subset() {
+    let db = setup_test_db(
+        r"
+function identity<T>(x: T) -> T { x }
+",
+    );
+    assert_no_user_diagnostic_errors(&db);
+    let rejection = admit(&db, function_named(&db, "identity")).expect_err("no type arguments");
+    assert_unsupported(&rejection, "generic function (compiled at its call sites");
+
+    let rejection = reject(
+        r"
+function identity<T>(x: T) -> T { x }
+function f(n: int) -> int { let v: unknown = n; identity(v); n }
+",
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "type argument `unknown` of `user.identity`: unknown",
+    );
+
+    // Seen only with the callees: `f` itself is fine.
+    let db = setup_test_db(
+        r"
+function nest<T>(x: T, d: int) -> int { if (d == 0) { 0 } else { nest([x], d - 1) + 1 } }
+function f(n: int) -> int { nest(n, 3) }
+",
+    );
+    assert_no_user_diagnostic_errors(&db);
+    let rejection = compile(&db, function_named(&db, "f")).expect_err("instances never close");
+    assert_unsupported(
+        &rejection,
+        "user.nest: instantiated at 16 type arguments along one call path (unbounded polymorphic recursion)",
+    );
 }

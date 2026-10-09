@@ -24,6 +24,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 mod classes;
 mod function;
+mod generics;
 mod print;
 mod project;
 mod structure;
@@ -31,6 +32,7 @@ mod types;
 mod unions;
 
 pub use function::FnId;
+pub use generics::Instance;
 pub use project::{ProjectOptions, write_project};
 pub use types::{NativeTy, TypeDecl};
 
@@ -72,11 +74,14 @@ impl Rejection {
     }
 }
 
-/// One function of a [`NativeModule`].
+/// One function of a [`NativeModule`]: a declaration, or one instance of a
+/// generic declaration.
 #[derive(Debug, Clone)]
 pub struct CompiledFunction<'db> {
     pub loc: FunctionLoc<'db>,
-    /// The BAML link name, e.g. `user.f`.
+    /// The instance's type arguments, empty for a non-generic function.
+    pub type_args: Vec<NativeTy<'db>>,
+    /// The BAML link name, e.g. `user.f`, or `user.f<int>` for an instance.
     pub link_name: String,
     /// The Rust function's identifier in the generated module.
     pub rust_name: String,
@@ -155,8 +160,9 @@ pub fn admit<'db>(
     loc: FunctionLoc<'db>,
 ) -> Result<Admitted<'db>, Rejection> {
     let mut classes = classes::ClassTable::new(db);
-    let candidate = function::analyze(db, loc, &mut classes)
+    let candidate = function::analyze(db, &Instance::plain(loc), &mut classes)
         .map_err(|rejection| rejection.in_function(&link_name(db, loc)))?;
+    classes.finish()?;
     Ok(candidate.admitted())
 }
 
@@ -169,12 +175,13 @@ pub fn admit_closure<'db>(
 ) -> Result<Admitted<'db>, Rejection> {
     let mut classes = classes::ClassTable::new(db);
     let mut graph = CallGraph::new(db);
-    graph.visit(loc, &mut classes)?;
+    let root = Instance::plain(loc);
+    graph.visit(&root, &mut classes)?;
     classes.finish()?;
     let candidate = graph
         .order
         .iter()
-        .find(|candidate| candidate.id == FnId::Declared(loc))
+        .find(|candidate| candidate.id == FnId::Declared(root.clone()))
         .expect("a visited root is in the order");
     Ok(candidate.admitted())
 }
@@ -233,7 +240,7 @@ pub fn compile_many<'db>(
     let mut classes = classes::ClassTable::new(db);
     let mut graph = CallGraph::new(db);
     for &root in roots {
-        graph.visit(root, &mut classes)?;
+        graph.visit(&Instance::plain(root), &mut classes)?;
     }
     let CallGraph {
         mut order,
@@ -266,7 +273,7 @@ pub fn compile_many<'db>(
             else {
                 continue;
             };
-            let callee = &order[index_of[&FnId::Declared(*callee)]];
+            let callee = &order[index_of[&FnId::Declared(callee.clone())]];
             let mismatch = |what: &str| {
                 Rejection::invalid(format!(
                     "{}: call of `{}` in {block} {what}",
@@ -295,22 +302,26 @@ pub fn compile_many<'db>(
         &names,
         &classes,
     )?;
-    // A lambda's MIR is printed with the function that creates it.
+    // A lambda's MIR is printed with the function that creates it, and a
+    // generic function's once, whatever its instances.
+    let mut dumped: FxHashSet<FunctionLoc<'db>> = FxHashSet::default();
     let mir_dump = order
         .iter()
         .filter(|candidate| !candidate.is_lambda())
+        .filter(|candidate| dumped.insert(candidate.id.root().loc))
         .map(|candidate| baml_compiler2_mir::pretty::display_function(db, candidate.mir))
         .collect::<Vec<_>>()
         .join("\n");
     // Lambdas are emitted but have no declaration to list.
     let functions = order
         .iter()
-        .filter_map(|candidate| match candidate.id {
-            FnId::Declared(loc) => Some((loc, candidate)),
+        .filter_map(|candidate| match &candidate.id {
+            FnId::Declared(instance) => Some((instance, candidate)),
             FnId::Lambda { .. } => None,
         })
-        .map(|(loc, candidate)| CompiledFunction {
-            loc,
+        .map(|(instance, candidate)| CompiledFunction {
+            loc: instance.loc,
+            type_args: candidate.type_args.clone(),
             link_name: candidate.link_name.clone(),
             rust_name: names[&candidate.id].to_string(),
             params: candidate
@@ -322,10 +333,11 @@ pub fn compile_many<'db>(
             ret: candidate.return_ty().clone(),
         })
         .collect::<Vec<CompiledFunction<'db>>>();
-    let function_index: FxHashMap<FnId<'db>, usize> = functions
+    let function_index: FxHashMap<FnId<'db>, usize> = order
         .iter()
+        .filter(|candidate| !candidate.is_lambda())
         .enumerate()
-        .map(|(index, function)| (FnId::Declared(function.loc), index))
+        .map(|(index, candidate)| (candidate.id.clone(), index))
         .collect();
     let compiled_classes = class_infos
         .iter()
@@ -357,9 +369,9 @@ pub fn compile_many<'db>(
         unions: compiled_unions,
         roots: roots
             .iter()
-            .map(|root| function_index[&FnId::Declared(*root)])
+            .map(|root| function_index[&FnId::Declared(Instance::plain(*root))])
             .collect(),
-        entry: function_index[&FnId::Declared(*first_root)],
+        entry: function_index[&FnId::Declared(Instance::plain(*first_root))],
     })
 }
 
@@ -375,16 +387,23 @@ enum VisitState {
     Done,
 }
 
+/// How many instances of one generic function may be on the call path at
+/// once: a function that calls itself at a growing type argument
+/// (`f<T>` calling `f<T[]>`) has no finite set of instances, and is
+/// rejected once the path holds this many.
+const INSTANCE_DEPTH_LIMIT: usize = 16;
+
 /// Depth-first traversal of the admitted call graph, callees first (as far
-/// as cycles allow). A declared function used as a value is a callee too;
-/// a lambda is visited with the function that creates it, and its calls
-/// are the creator's.
+/// as cycles allow), over instances: a generic function is visited once per
+/// type-argument tuple it is called at. A declared function used as a value
+/// is a callee too; a lambda is visited with the function that creates it,
+/// and its calls are the creator's.
 struct CallGraph<'db> {
     db: &'db dyn baml_compiler2_mir::Db,
     order: Vec<function::Candidate<'db>>,
-    state: FxHashMap<FunctionLoc<'db>, VisitState>,
-    /// The functions on the current path, outermost first.
-    path: Vec<FunctionLoc<'db>>,
+    state: FxHashMap<Instance<'db>, VisitState>,
+    /// The instances on the current path, outermost first.
+    path: Vec<Instance<'db>>,
     /// Functions on a call cycle: each guards its recursion depth.
     recursive: FxHashSet<FnId<'db>>,
 }
@@ -402,10 +421,10 @@ impl<'db> CallGraph<'db> {
 
     fn visit(
         &mut self,
-        loc: FunctionLoc<'db>,
+        instance: &Instance<'db>,
         classes: &mut classes::ClassTable<'db>,
     ) -> Result<(), Rejection> {
-        match self.state.get(&loc) {
+        match self.state.get(instance) {
             Some(VisitState::Done) => return Ok(()),
             Some(VisitState::Visiting) => {
                 // A call back into the path: every function from there on is
@@ -414,56 +433,83 @@ impl<'db> CallGraph<'db> {
                 let start = self
                     .path
                     .iter()
-                    .position(|on_path| *on_path == loc)
+                    .position(|on_path| on_path == instance)
                     .expect("a function being visited is on the path");
-                self.recursive
-                    .extend(self.path[start..].iter().map(|loc| FnId::Declared(*loc)));
+                self.recursive.extend(
+                    self.path[start..]
+                        .iter()
+                        .map(|instance| FnId::Declared(instance.clone())),
+                );
                 return Ok(());
             }
             None => {}
         }
-        let name = link_name(self.db, loc);
-        self.state.insert(loc, VisitState::Visiting);
-        self.path.push(loc);
-        let candidate = function::analyze(self.db, loc, classes)
+        let name = link_name(self.db, instance.loc);
+        if instance.is_generic()
+            && self
+                .path
+                .iter()
+                .filter(|on_path| on_path.loc == instance.loc)
+                .count()
+                >= INSTANCE_DEPTH_LIMIT
+        {
+            return Err(Rejection::unsupported(format!(
+                "{name}: instantiated at {INSTANCE_DEPTH_LIMIT} type arguments along one call path (unbounded polymorphic recursion)"
+            )));
+        }
+        self.state.insert(instance.clone(), VisitState::Visiting);
+        self.path.push(instance.clone());
+        let candidate = function::analyze(self.db, instance, classes)
             .map_err(|rejection| rejection.in_function(&name))?;
         let tree = candidate.flatten();
-        let mut callees: Vec<FunctionLoc<'db>> = Vec::new();
+        let mut callees: Vec<Instance<'db>> = Vec::new();
         for member in &tree {
             callees.extend(member.calls.iter().filter_map(|(_, call)| match call {
-                function::CallKind::Direct { callee, .. } => Some(*callee),
+                function::CallKind::Direct { callee, .. } => Some(callee.clone()),
                 function::CallKind::Panic(_)
                 | function::CallKind::Builtin { .. }
                 | function::CallKind::Indirect { .. } => None,
             }));
-            callees.extend(member.function_values.keys().copied());
+            callees.extend(member.function_values.keys().cloned());
         }
         for callee in callees {
-            self.visit(callee, classes)?;
+            self.visit(&callee, classes)?;
         }
         self.path.pop();
-        self.state.insert(loc, VisitState::Done);
+        self.state.insert(instance.clone(), VisitState::Done);
         self.order.extend(tree);
         Ok(())
     }
 }
 
-/// Each candidate's [`rust_name`], as an identifier; a lambda is named
-/// after the declaration it is lowered inside and its position
+/// Each candidate's [`rust_name`], as an identifier: an instance of a
+/// generic function carries its type arguments mangled
+/// (`user_identity__int`, `user_first__user_Box__int`), and a lambda is
+/// named after the instance it is lowered inside and its position
 /// (`user_f__lambda0`, nested `user_f__lambda0__lambda1`). A collision
-/// between two link names is reported rather than renamed, so a caller can
-/// predict every name from the link name alone.
+/// between two names is reported rather than renamed, so a caller can
+/// predict every name from the link name and the type arguments alone.
 fn rust_names<'db>(
     db: &dyn baml_compiler2_mir::Db,
     candidates: &[function::Candidate<'db>],
 ) -> Result<FxHashMap<FnId<'db>, proc_macro2::Ident>, Rejection> {
     let mut by_name: FxHashMap<String, String> = FxHashMap::default();
     let mut names = FxHashMap::default();
+    let instance_names: FxHashMap<&Instance<'db>, String> = candidates
+        .iter()
+        .filter_map(|candidate| match &candidate.id {
+            FnId::Declared(instance) => Some((instance, instance_rust_name(db, candidate))),
+            FnId::Lambda { .. } => None,
+        })
+        .collect();
     for candidate in candidates {
         let name = match &candidate.id {
-            FnId::Declared(_) => rust_name(&candidate.link_name),
+            FnId::Declared(instance) => instance_names[instance].clone(),
             FnId::Lambda { root, path } => {
-                let mut name = rust_name(&link_name(db, *root));
+                let mut name = instance_names
+                    .get(root)
+                    .cloned()
+                    .ok_or_else(|| Rejection::invalid("lambda without its creator"))?;
                 for index in path {
                     name.push_str("__lambda");
                     name.push_str(&index.to_string());
@@ -483,4 +529,24 @@ fn rust_names<'db>(
         );
     }
     Ok(names)
+}
+
+/// The Rust name of a declared candidate: its link name sanitized, then
+/// `__` and each type argument mangled.
+fn instance_rust_name(
+    db: &dyn baml_compiler2_mir::Db,
+    candidate: &function::Candidate<'_>,
+) -> String {
+    let mut name = rust_name(&link_name(db, candidate.id.root().loc));
+    for arg in &candidate.type_args {
+        name.push_str("__");
+        name.push_str(&arg.mangle(&|decl| {
+            let link_name = match decl {
+                TypeDecl::Class(class) => baml_compiler2_mir::class_link_name(db, class),
+                TypeDecl::Enum(enum_ref) => baml_compiler2_mir::enum_link_name(db, enum_ref),
+            };
+            proc_macro2::Ident::new(&rust_name(&link_name), proc_macro2::Span::call_site())
+        }));
+    }
+    name
 }

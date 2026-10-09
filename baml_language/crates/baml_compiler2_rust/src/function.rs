@@ -61,8 +61,9 @@ use rustc_hash::FxHashMap;
 use crate::{
     Rejection,
     classes::ClassTable,
+    generics::{Frame, FrameMismatch, Instance, mentions_unknown},
     structure::{Cfg, Flow, Stmt, structurize},
-    types::{Coercion, NativeTy, TypeDecl, coercion},
+    types::{Coercion, NativeTy, TypeDecl, Unsupported, coercion},
     unions::{MemberTest, TestSite, member_tag, tag_variants},
 };
 
@@ -311,9 +312,10 @@ pub(crate) enum Builtin<'db> {
 /// What a `Call` or `VirtualCall` terminator does in the generated code.
 #[derive(Debug, Clone)]
 pub(crate) enum CallKind<'db> {
-    /// A direct call of another source function, admitted separately.
+    /// A direct call of another source function (at the type arguments the
+    /// call site passes, for a generic one), admitted separately.
     Direct {
-        callee: FunctionLoc<'db>,
+        callee: Instance<'db>,
         /// The callee's parameter types; each argument coerces to its own.
         args: Vec<NativeTy<'db>>,
         /// The callee's return type; the destination is it or its `| null`.
@@ -340,31 +342,32 @@ pub(crate) enum CallKind<'db> {
     },
 }
 
-/// The identity of a function the module emits: a declaration, or a
-/// lambda, named by the declaration it is lowered inside and its position
-/// in each enclosing `MirFunction::lambdas` list, outermost first.
+/// The identity of a function the module emits: a declaration at its type
+/// arguments ([`Instance`]), or a lambda, named by the instance it is
+/// lowered inside and its position in each enclosing `MirFunction::lambdas`
+/// list, outermost first.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FnId<'db> {
-    Declared(FunctionLoc<'db>),
+    Declared(Instance<'db>),
     Lambda {
-        root: FunctionLoc<'db>,
+        root: Instance<'db>,
         path: Vec<usize>,
     },
 }
 
 impl<'db> FnId<'db> {
-    /// The declaration this function is, or is lowered inside.
-    pub fn root(&self) -> FunctionLoc<'db> {
+    /// The instance this function is, or is lowered inside.
+    pub fn root(&self) -> &Instance<'db> {
         match self {
-            Self::Declared(loc) | Self::Lambda { root: loc, .. } => *loc,
+            Self::Declared(instance) | Self::Lambda { root: instance, .. } => instance,
         }
     }
 
     /// The lambda at `index` of this function's `lambdas`.
     fn lambda(&self, index: usize) -> Self {
         let (root, mut path) = match self {
-            Self::Declared(loc) => (*loc, Vec::new()),
-            Self::Lambda { root, path } => (*root, path.clone()),
+            Self::Declared(instance) => (instance.clone(), Vec::new()),
+            Self::Lambda { root, path } => (root.clone(), path.clone()),
         };
         path.push(index);
         Self::Lambda { root, path }
@@ -426,9 +429,16 @@ pub(crate) struct Candidate<'db> {
     /// The lambdas' candidates, in `lambda_idx` order, each with its own
     /// nested lambdas; the module emits every one as a function.
     pub lambdas: Vec<Candidate<'db>>,
-    /// Declared functions used as values (`let g = f`), with the function
-    /// type each one has; the call graph admits them as callees.
-    pub function_values: FxHashMap<FunctionLoc<'db>, NativeTy<'db>>,
+    /// Declared functions used as values (`let g = f`, `let h = g<int>`),
+    /// with the function type each one has; the call graph admits them as
+    /// callees.
+    pub function_values: FxHashMap<Instance<'db>, NativeTy<'db>>,
+    /// The instance each `make_generic_function` (a generic function value
+    /// whose type arguments mention the frame) builds, by the function and
+    /// the templates it names.
+    pub generic_values: FxHashMap<(FunctionLoc<'db>, Vec<TyTemplate>), Instance<'db>>,
+    /// The native types of the instance's type arguments, which name it.
+    pub type_args: Vec<NativeTy<'db>>,
     /// Whether the body calls through a function value: such a call can
     /// close a cycle the static call graph does not see, so the function
     /// guards its depth as a recursive one does.
@@ -490,18 +500,16 @@ impl<'db> Candidate<'db> {
     }
 }
 
-/// Decide whether `loc` is in the subset and gather what emitting it needs.
-/// Classes the function touches are registered in `classes`. The lambdas
-/// the body creates are analyzed with it ([`Candidate::lambdas`]).
+/// Decide whether `instance` is in the subset and gather what emitting it
+/// needs. Classes the function touches are registered in `classes`. The
+/// lambdas the body creates are analyzed with it ([`Candidate::lambdas`]).
 pub(crate) fn analyze<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
-    loc: FunctionLoc<'db>,
+    instance: &Instance<'db>,
     classes: &mut ClassTable<'db>,
 ) -> Result<Candidate<'db>, Rejection> {
+    let loc = instance.loc;
     let data = function_data(db, loc);
-    if !data.generic_params.is_empty() {
-        return Err(Rejection::unsupported("generic function"));
-    }
     // A method of a concrete class, declared in the class or in an
     // `implements` block, is a function whose first parameter is the
     // receiver: calls to it are direct. Only an interface's default method,
@@ -509,13 +517,36 @@ pub(crate) fn analyze<'db>(
     if let Some(MethodOwner::Interface(_)) = method_owner(db, loc) {
         return Err(Rejection::unsupported("interface method"));
     }
+    let frame = match Frame::new(db, loc, instance.type_args.clone()) {
+        Ok(frame) => frame,
+        // A generic function is compiled at its call sites, one instance
+        // per type-argument tuple; on its own it has no body to emit.
+        Err(FrameMismatch::Uninstantiated) => {
+            return Err(Rejection::unsupported(
+                "generic function (compiled at its call sites, one instance per type arguments)",
+            ));
+        }
+        Err(FrameMismatch::Arity { expected, given }) => {
+            return Err(Rejection::invalid(format!(
+                "instantiated with {given} type arguments for {expected} parameters"
+            )));
+        }
+    };
+    let mut type_args = Vec::with_capacity(instance.type_args.len());
+    for arg in &instance.type_args {
+        type_args.push(
+            classes
+                .native_ty(&RuntimeTy::from(arg.clone()))
+                .map_err(|rejection| rejection.in_what("type argument"))?,
+        );
+    }
     if baml_compiler2_hir_ty::infer::trace_hooks::declaration_plan(db, loc).is_some() {
         return Err(Rejection::unsupported("declared trace hook"));
     }
     let mir = lower_function(db, loc, OptLevel::One)
         .as_ref()
         .map_err(|error| Rejection::invalid(format!("MIR lowering failed: {error}")))?;
-    let link_name = mir.identity.link_name(db);
+    let link_name = instance_link_name(db, instance, classes);
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         return Err(Rejection::unsupported("builtin function"));
     };
@@ -528,25 +559,49 @@ pub(crate) fn analyze<'db>(
     analyze_body(
         db,
         BodyInput {
-            id: FnId::Declared(loc),
+            id: FnId::Declared(instance.clone()),
             link_name,
             mir,
             body,
             param_names,
             defaulted,
             captures: Vec::new(),
+            frame,
+            type_args,
         },
         classes,
     )
 }
 
+/// The link name of an instance: the function's, with its type arguments
+/// spelled (`user.identity<int>`).
+pub(crate) fn instance_link_name<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    instance: &Instance<'db>,
+    classes: &ClassTable<'db>,
+) -> String {
+    let link_name = function_link_name(db, DeclRef::Source(instance.loc));
+    if instance.type_args.is_empty() {
+        return link_name;
+    }
+    let args = instance
+        .type_args
+        .iter()
+        .map(|arg| classes.spell(&RuntimeTy::from(arg.clone())))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{link_name}<{args}>")
+}
+
 /// Analyze the lambda `mir`, created by a `make_closure` whose captures
-/// have the types `captures`.
+/// have the types `captures`, inside the frame `frame` (its creator's, as
+/// a lambda's type arguments are the enclosing slots forwarded).
 fn analyze_lambda<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     id: FnId<'db>,
     mir: &'db MirFunction<'db>,
     captures: Vec<NativeTy<'db>>,
+    frame: Frame<'db>,
     classes: &mut ClassTable<'db>,
 ) -> Result<Candidate<'db>, Rejection> {
     let link_name = mir.identity.link_name(db);
@@ -556,8 +611,12 @@ fn analyze_lambda<'db>(
     let Some(signature) = &mir.signature else {
         return Err(Rejection::invalid("lambda without a signature"));
     };
-    if !signature.type_param_names.is_empty() {
-        return Err(Rejection::unsupported("lambda in a generic function"));
+    if signature.type_param_names.len() != frame.args().len() {
+        return Err(Rejection::invalid(format!(
+            "lambda has {} type parameters but its creator's frame has {} arguments",
+            signature.type_param_names.len(),
+            frame.args().len()
+        )));
     }
     if signature.param_has_default.iter().any(|has| *has) {
         return Err(Rejection::unsupported("lambda with a defaulted parameter"));
@@ -572,6 +631,8 @@ fn analyze_lambda<'db>(
             param_names: signature.param_names.clone(),
             defaulted: vec![false; signature.param_names.len()],
             captures,
+            frame,
+            type_args: Vec::new(),
         },
         classes,
     )
@@ -589,6 +650,10 @@ struct BodyInput<'db> {
     defaulted: Vec<bool>,
     /// The native types of the captures, for a lambda.
     captures: Vec<NativeTy<'db>>,
+    /// The generic frame the body runs in.
+    frame: Frame<'db>,
+    /// See [`Candidate::type_args`].
+    type_args: Vec<NativeTy<'db>>,
 }
 
 /// Decide whether a lowered body is in the subset and gather what emitting
@@ -606,6 +671,8 @@ fn analyze_body<'db>(
         param_names,
         defaulted,
         captures,
+        frame,
+        type_args,
     } = input;
     // The constructs that define a whole feature area are reported before
     // anything they drag along (a `spawn` body is also a lambda), so the
@@ -664,10 +731,13 @@ fn analyze_body<'db>(
         captures,
         closures: FxHashMap::default(),
         function_values: FxHashMap::default(),
+        generic_values: FxHashMap::default(),
         indirect: false,
+        frame,
     };
     let handler_kinds = env.handler_locals()?;
     let unresolved = env.declare_locals(mir.arity, &handler_kinds)?;
+    env.register_type_values()?;
     env.register_enum_constants()?;
     env.register_function_values()?;
     env.refine(unresolved)?;
@@ -724,7 +794,9 @@ fn analyze_body<'db>(
         captures,
         closures: closure_captures,
         function_values,
+        generic_values,
         indirect,
+        frame,
         ..
     } = env;
 
@@ -740,8 +812,15 @@ fn analyze_body<'db>(
             .get(index)
             .ok_or_else(|| Rejection::invalid(format!("no lambda {index}")))?;
         let lambda_id = id.lambda(index);
-        let candidate = analyze_lambda(db, lambda_id.clone(), lambda, capture_tys, classes)
-            .map_err(|rejection| rejection.in_function(&lambda.identity.link_name(db)))?;
+        let candidate = analyze_lambda(
+            db,
+            lambda_id.clone(),
+            lambda,
+            capture_tys,
+            frame.clone(),
+            classes,
+        )
+        .map_err(|rejection| rejection.in_function(&lambda.identity.link_name(db)))?;
         closures.insert(
             index,
             ClosureSite {
@@ -773,6 +852,8 @@ fn analyze_body<'db>(
         closures,
         lambdas,
         function_values,
+        generic_values,
+        type_args,
         indirect,
     })
 }
@@ -813,9 +894,14 @@ struct Env<'a, 'db> {
     /// The capture types each `make_closure` passes, by `lambda_idx`.
     closures: FxHashMap<usize, Vec<NativeTy<'db>>>,
     /// See [`Candidate::function_values`].
-    function_values: FxHashMap<FunctionLoc<'db>, NativeTy<'db>>,
+    function_values: FxHashMap<Instance<'db>, NativeTy<'db>>,
+    /// See [`Candidate::generic_values`].
+    generic_values: FxHashMap<(FunctionLoc<'db>, Vec<TyTemplate>), Instance<'db>>,
     /// See [`Candidate::indirect`].
     indirect: bool,
+    /// The generic frame the body runs in: every declared type and every
+    /// template is realized against it before it is mapped.
+    frame: Frame<'db>,
 }
 
 impl<'db> Env<'_, 'db> {
@@ -937,7 +1023,7 @@ impl<'db> Env<'_, 'db> {
                 }
                 RuntimeTy::Type if !is_signature => Some(LocalKind::Type),
                 RuntimeTy::Never if !is_signature => Some(LocalKind::Never),
-                ty => match self.classes.native_ty(ty) {
+                ty => match self.native_ty(ty) {
                     Ok(native) if !is_signature && matches!(ty, RuntimeTy::Function { .. }) => {
                         unresolved.push(Unresolved {
                             local: Local(index),
@@ -1157,6 +1243,35 @@ impl<'db> Env<'_, 'db> {
         Ok(())
     }
 
+    /// Record the template every `reflect.Type` local is loaded with, so a
+    /// call's type arguments can be read while its destination is still
+    /// being refined (before the statements are typed in order).
+    fn register_type_values(&mut self) -> Result<(), Rejection> {
+        for block in &self.body.blocks {
+            for statement in &block.statements {
+                let StatementKind::Assign {
+                    destination: Place::Local(local),
+                    value: Rvalue::LoadType(template),
+                } = &statement.kind
+                else {
+                    continue;
+                };
+                if !matches!(self.kind(*local)?, LocalKind::Type) {
+                    continue;
+                }
+                if let Some(previous) = self.type_values.get(local)
+                    && previous != template
+                {
+                    return Err(Rejection::unsupported(
+                        "type local loaded with two different types",
+                    ));
+                }
+                self.type_values.insert(*local, template.clone());
+            }
+        }
+        Ok(())
+    }
+
     /// Admit the enum of every variant constant the body mentions, so a
     /// later `&self` read of the constant finds its enum registered. (A
     /// variant constant always sits beside a local of its enum type, which
@@ -1185,30 +1300,130 @@ impl<'db> Env<'_, 'db> {
     }
 
     /// Type every declared function the body uses as a value (an operand
-    /// other than a call's callee), so a later `&self` read finds it.
+    /// other than a call's callee, or a `make_generic_function`), so a
+    /// later `&self` read finds it.
     fn register_function_values(&mut self) -> Result<(), Rejection> {
-        let mut values = Vec::new();
+        let mut values: Vec<Constant<'db>> = Vec::new();
         let mut record = |operand: &Operand<'db>| {
-            if let Operand::Constant(Constant::Function(callee)) = operand
-                && !values.contains(callee)
+            if let Operand::Constant(
+                constant @ (Constant::Function(_) | Constant::GenericFunction { .. }),
+            ) = operand
+                && !values
+                    .iter()
+                    .any(|known| same_function_constant(known, constant))
             {
-                values.push(*callee);
+                values.push(constant.clone());
             }
         };
+        let mut generic_sites = Vec::new();
         for block in &self.body.blocks {
             for statement in &block.statements {
                 if let StatementKind::Assign { value, .. } = &statement.kind {
                     rvalue_operands(value, &mut record);
+                    if let Rvalue::MakeGenericFunction {
+                        func,
+                        type_arg_templates,
+                    } = value
+                    {
+                        generic_sites.push((*func, type_arg_templates.clone()));
+                    }
                 }
             }
             if let Some(terminator) = &block.terminator {
                 terminator_operands(terminator, &mut record);
             }
         }
-        for callee in values {
-            self.function_value(callee)?;
+        for constant in values {
+            let (callee, type_args) = match &constant {
+                Constant::Function(callee) => (*callee, Vec::new()),
+                Constant::GenericFunction { func, type_args } => (*func, type_args.clone()),
+                _ => unreachable!("only function constants are recorded"),
+            };
+            self.value_callee(callee)?;
+            let instance = self.instance(callee, type_args)?;
+            self.function_value(instance)?;
+        }
+        for (func, templates) in generic_sites {
+            self.value_callee(func)?;
+            let mut type_args = Vec::with_capacity(templates.len());
+            for template in &templates {
+                type_args.push(self.realize_template(template)?);
+            }
+            let instance = self.instance(func, type_args)?;
+            self.function_value(instance.clone())?;
+            let DeclRef::Source(loc) = func else {
+                unreachable!("`instance` admits source functions only");
+            };
+            self.generic_values.insert((loc, templates), instance);
         }
         Ok(())
+    }
+
+    /// Map a declared runtime type through the frame, then to its native
+    /// type. The error reads `` type `T[]`: ... ``.
+    fn native_ty(&mut self, ty: &RuntimeTy) -> Result<NativeTy<'db>, Rejection> {
+        let realized = self.frame.realize(ty).map_err(|Unsupported(reason)| {
+            Rejection::unsupported(format!("type `{}`: {reason}", self.classes.spell(ty)))
+        })?;
+        self.classes.native_ty(&realized)
+    }
+
+    /// A template realized against the frame.
+    fn realize_template(&self, template: &TyTemplate) -> Result<RealizedTy, Rejection> {
+        self.frame
+            .realize_template(template)
+            .map_err(|Unsupported(reason)| Rejection::unsupported(reason))
+    }
+
+    /// The instance of a source function at `type_args`: a declared
+    /// function other than a stdlib one, whose type arguments are native
+    /// (so neither `unknown` nor anything the subset lacks).
+    fn instance(
+        &mut self,
+        callee: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
+        type_args: Vec<RealizedTy>,
+    ) -> Result<Instance<'db>, Rejection> {
+        let link_name = function_link_name(self.db, callee);
+        let callee = match callee {
+            DeclRef::Source(callee) if !self.is_lang_function(callee) => callee,
+            _ => {
+                return Err(Rejection::unsupported(format!(
+                    "unsupported builtin `{link_name}`"
+                )));
+            }
+        };
+        for arg in &type_args {
+            if mentions_unknown(arg) {
+                return Err(Rejection::unsupported(format!(
+                    "type argument `{}` of `{link_name}`: unknown",
+                    self.classes.spell(&RuntimeTy::from(arg.clone()))
+                )));
+            }
+            self.classes
+                .native_ty(&RuntimeTy::from(arg.clone()))
+                .map_err(|rejection| {
+                    rejection.in_what(&format!("type argument of `{link_name}`"))
+                })?;
+        }
+        Ok(Instance {
+            loc: callee,
+            type_args,
+        })
+    }
+
+    /// Whether `callee` may be used as a value: a source function other
+    /// than a stdlib one (a stdlib function's body is never compiled).
+    fn value_callee(
+        &self,
+        callee: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
+    ) -> Result<(), Rejection> {
+        match callee {
+            DeclRef::Source(callee) if !self.is_lang_function(callee) => Ok(()),
+            _ => Err(Rejection::unsupported(format!(
+                "stdlib function `{}` used as a value",
+                function_link_name(self.db, callee)
+            ))),
+        }
     }
 
     fn describe(&self, ty: &NativeTy<'db>) -> String {
@@ -1365,18 +1580,28 @@ impl<'db> Env<'_, 'db> {
                 Constant::OmittedArg => Err(Rejection::unsupported("omitted argument")),
                 Constant::Function(DeclRef::Source(callee)) => self
                     .function_values
-                    .get(callee)
+                    .get(&Instance::plain(*callee))
                     .cloned()
                     .ok_or_else(|| Rejection::invalid("function value was not registered")),
-                Constant::Function(DeclRef::External(callee)) => {
-                    Err(Rejection::unsupported(format!(
-                        "stdlib function `{}` used as a value",
-                        function_link_name(self.db, DeclRef::External(*callee))
-                    )))
-                }
-                Constant::GenericFunction { .. } => {
-                    Err(Rejection::unsupported("generic function used as a value"))
-                }
+                Constant::GenericFunction {
+                    func: DeclRef::Source(callee),
+                    type_args,
+                } => self
+                    .function_values
+                    .get(&Instance {
+                        loc: *callee,
+                        type_args: type_args.clone(),
+                    })
+                    .cloned()
+                    .ok_or_else(|| Rejection::invalid("function value was not registered")),
+                Constant::Function(DeclRef::External(callee))
+                | Constant::GenericFunction {
+                    func: DeclRef::External(callee),
+                    ..
+                } => Err(Rejection::unsupported(format!(
+                    "stdlib function `{}` used as a value",
+                    function_link_name(self.db, DeclRef::External(*callee))
+                ))),
                 Constant::GlobalItem(_) => Err(Rejection::unsupported("top-level let")),
                 Constant::EnumVariant { enum_ref, index } => {
                     let info = self.classes.enum_info(*enum_ref)?;
@@ -1393,11 +1618,10 @@ impl<'db> Env<'_, 'db> {
         }
     }
 
-    /// A fully realized template as a native type: the element type of an
-    /// array literal or the type argument of a generic call.
+    /// A template realized against the frame, as a native type: the element
+    /// type of an array literal or the type argument of a generic call.
     fn template_ty(&mut self, template: &TyTemplate) -> Result<NativeTy<'db>, Rejection> {
-        let realized = RealizedTy::try_from(template)
-            .map_err(|_| Rejection::unsupported("type argument that refers to a type parameter"))?;
+        let realized = self.realize_template(template)?;
         self.classes.native_ty(&RuntimeTy::from(realized))
     }
 
@@ -1413,40 +1637,31 @@ impl<'db> Env<'_, 'db> {
     }
 
     /// The function type of a declared function used as a value (`let g =
-    /// f`, `xs.map(f)`): its own signature, which the call graph then admits
-    /// as a callee. A defaulted parameter is filled by the caller at a
-    /// direct call; a call through the value passes every argument, so such
-    /// a function has no native value.
-    fn function_value(
-        &mut self,
-        callee: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
-    ) -> Result<NativeTy<'db>, Rejection> {
-        let link_name = function_link_name(self.db, callee);
-        let callee = match callee {
-            DeclRef::Source(callee) if !self.is_lang_function(callee) => callee,
-            _ => {
-                return Err(Rejection::unsupported(format!(
-                    "stdlib function `{link_name}` used as a value"
-                )));
-            }
-        };
-        if let Some(ty) = self.function_values.get(&callee) {
+    /// f`, `xs.map(f)`, `let h = g<int>`): its own signature at the
+    /// instance's type arguments, which the call graph then admits as a
+    /// callee. A defaulted parameter is filled by the caller at a direct
+    /// call; a call through the value passes every argument, so such a
+    /// function has no native value.
+    fn function_value(&mut self, instance: Instance<'db>) -> Result<NativeTy<'db>, Rejection> {
+        if let Some(ty) = self.function_values.get(&instance) {
             return Ok(ty.clone());
         }
-        let data = function_data(self.db, callee);
-        if !data.generic_params.is_empty() {
-            return Err(Rejection::unsupported(format!(
-                "generic function `{link_name}` used as a value"
-            )));
-        }
-        let (params, result, defaults) = self.callee_signature(callee, &link_name)?;
+        let link_name = instance_link_name(self.db, &instance, self.classes);
+        let (params, result, defaults) =
+            self.callee_signature(&instance, &link_name)
+                .map_err(|rejection| match rejection {
+                    Rejection::Unsupported(reason) => {
+                        Rejection::Unsupported(format!("{reason} (used as a value)"))
+                    }
+                    invalid @ Rejection::Invalid(_) => invalid,
+                })?;
         if defaults.iter().any(Option::is_some) {
             return Err(Rejection::unsupported(format!(
                 "function `{link_name}` with a defaulted parameter used as a value"
             )));
         }
         let ty = NativeTy::Fn(params, Box::new(result));
-        self.function_values.insert(callee, ty.clone());
+        self.function_values.insert(instance, ty.clone());
         Ok(ty)
     }
 
@@ -1470,13 +1685,11 @@ impl<'db> Env<'_, 'db> {
         let mut params = Vec::with_capacity(lambda.arity);
         for local in &body.locals[1..=lambda.arity] {
             params.push(
-                self.classes
-                    .native_ty(&local.ty)
+                self.native_ty(&local.ty)
                     .map_err(|rejection| rejection.in_what("lambda parameter"))?,
             );
         }
         let result = self
-            .classes
             .native_ty(&body.locals[0].ty)
             .map_err(|rejection| rejection.in_what("lambda return"))?;
         Ok((params, result))
@@ -1730,9 +1943,13 @@ impl<'db> Env<'_, 'db> {
                 captures,
                 type_arg_templates,
             } => {
-                if !type_arg_templates.is_empty() {
-                    return Err(Rejection::unsupported("lambda in a generic function"));
+                // A lambda's type arguments are its creator's slots
+                // forwarded, so its frame is the creator's.
+                let mut lambda_args = Vec::with_capacity(type_arg_templates.len());
+                for template in type_arg_templates {
+                    lambda_args.push(self.realize_template(template)?);
                 }
+                self.frame.for_lambda(&lambda_args)?;
                 let mut capture_tys = Vec::with_capacity(captures.len());
                 for capture in captures {
                     capture_tys.push(self.capture_ty(capture)?);
@@ -1752,6 +1969,22 @@ impl<'db> Env<'_, 'db> {
             )),
             Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::MakeVirtualFunction { .. } => {
                 Err(Rejection::unsupported("interface method used as a value"))
+            }
+            // Registered up front (`register_function_values`): the
+            // instance's function type.
+            Rvalue::MakeGenericFunction {
+                func,
+                type_arg_templates,
+            } => {
+                let instance = match func {
+                    DeclRef::Source(loc) => self
+                        .generic_values
+                        .get(&(*loc, type_arg_templates.clone()))
+                        .cloned(),
+                    DeclRef::External(_) => None,
+                }
+                .ok_or_else(|| Rejection::invalid("generic function value was not registered"))?;
+                self.function_value(instance)
             }
             other => Err(Rejection::unsupported(format!(
                 "rvalue {}",
@@ -2462,10 +2695,12 @@ impl<'db> Env<'_, 'db> {
                 // every slot the call left to a default; the layout the site
                 // was checked against adds nothing here.
                 let _ = argument_layout;
-                let callee = match callee {
-                    Operand::Constant(Constant::Function(callee)) => callee,
-                    Operand::Constant(Constant::GenericFunction { .. }) => {
-                        return Err(Rejection::unsupported("call of a generic function value"));
+                let (callee, baked_type_args) = match callee {
+                    Operand::Constant(Constant::Function(callee)) => (callee, Vec::new()),
+                    // A generic function value called directly: its type
+                    // arguments are baked into the constant.
+                    Operand::Constant(Constant::GenericFunction { func, type_args }) => {
+                        (func, type_args.clone())
                     }
                     Operand::Constant(_) => {
                         return Err(Rejection::invalid("call of a non-function constant"));
@@ -2538,18 +2773,16 @@ impl<'db> Env<'_, 'db> {
                 if let Some(builtin) = self.builtin(&link_name, type_args, value_args)? {
                     return Ok(builtin);
                 }
-                let callee = match callee {
-                    DeclRef::Source(callee) if !self.is_lang_function(*callee) => *callee,
-                    _ => {
-                        return Err(Rejection::unsupported(format!(
-                            "unsupported builtin `{link_name}`"
-                        )));
-                    }
-                };
-                if !type_args.is_empty() {
-                    return Err(Rejection::unsupported("call with type arguments"));
+                // The type arguments the site passes (each a `load_type`,
+                // realized against this frame) instantiate the callee.
+                let mut realized = baked_type_args;
+                for operand in type_args {
+                    let template = self.type_value(operand)?.clone();
+                    realized.push(self.realize_template(&template)?);
                 }
-                let (params, result, defaults) = self.callee_signature(callee, &link_name)?;
+                let callee = self.instance(*callee, realized)?;
+                let link_name = instance_link_name(self.db, &callee, self.classes);
+                let (params, result, defaults) = self.callee_signature(&callee, &link_name)?;
                 if params.len() != value_args.len() {
                     return Err(Rejection::invalid(format!(
                         "call of `{link_name}` passes {} of {} arguments",
@@ -2769,14 +3002,15 @@ impl<'db> Env<'_, 'db> {
         .any(|package| lang.is(package, root))
     }
 
-    /// The native parameter and return types of a source callee, from its
-    /// own lowered signature, and the constant default of each parameter that
+    /// The native parameter and return types of a source callee at the
+    /// instance's type arguments, from its own lowered signature realized
+    /// against its frame, and the constant default of each parameter that
     /// has one. Arguments coerce to the parameters (`int` into `int | null`),
     /// which the VM does implicitly and MIR does not spell.
     #[allow(clippy::type_complexity)]
     fn callee_signature(
         &mut self,
-        callee: FunctionLoc<'db>,
+        instance: &Instance<'db>,
         link_name: &str,
     ) -> Result<
         (
@@ -2786,6 +3020,20 @@ impl<'db> Env<'_, 'db> {
         ),
         Rejection,
     > {
+        let callee = instance.loc;
+        let frame = match Frame::new(self.db, callee, instance.type_args.clone()) {
+            Ok(frame) => frame,
+            Err(FrameMismatch::Uninstantiated) => {
+                return Err(Rejection::unsupported(format!(
+                    "generic function `{link_name}` without type arguments"
+                )));
+            }
+            Err(FrameMismatch::Arity { expected, given }) => {
+                return Err(Rejection::invalid(format!(
+                    "`{link_name}` instantiated with {given} type arguments for {expected} parameters"
+                )));
+            }
+        };
         let mir = lower_function(self.db, callee, OptLevel::One)
             .as_ref()
             .map_err(|error| {
@@ -2802,8 +3050,12 @@ impl<'db> Env<'_, 'db> {
             )));
         }
         let map = |env: &mut Self, ty: &RuntimeTy, what: &str| {
-            env.classes
-                .native_ty(ty)
+            frame
+                .realize(ty)
+                .map_err(|Unsupported(reason)| {
+                    Rejection::unsupported(format!("type `{}`: {reason}", env.classes.spell(ty)))
+                })
+                .and_then(|realized| env.classes.native_ty(&realized))
                 .map_err(|rejection| match rejection {
                     Rejection::Unsupported(reason) => {
                         Rejection::Unsupported(format!("callee `{link_name}` {what} of {reason}"))
@@ -2877,7 +3129,7 @@ impl<'db> Env<'_, 'db> {
                 }
                 // A literal type erases to its primitive natively, so a
                 // decode into one would accept what the VM rejects.
-                if let Ok(realized) = RealizedTy::try_from(&template)
+                if let Ok(realized) = self.realize_template(&template)
                     && let Some(literal) = self.classes.literal_type_in(&RuntimeTy::from(realized))
                 {
                     return Err(Rejection::unsupported(format!(
@@ -3622,6 +3874,25 @@ pub(crate) fn binop_ty<'db>(
 /// the write as unreachable, which the checker guarantees it is.
 pub(crate) fn is_dead_null_write(value: &Rvalue<'_>) -> bool {
     matches!(value, Rvalue::Use(Operand::Constant(Constant::Null)))
+}
+
+/// Whether two function constants name the same function at the same type
+/// arguments.
+fn same_function_constant(a: &Constant<'_>, b: &Constant<'_>) -> bool {
+    match (a, b) {
+        (Constant::Function(x), Constant::Function(y)) => x == y,
+        (
+            Constant::GenericFunction {
+                func: x,
+                type_args: xs,
+            },
+            Constant::GenericFunction {
+                func: y,
+                type_args: ys,
+            },
+        ) => x == y && xs == ys,
+        _ => false,
+    }
 }
 
 fn rvalue_name(value: &Rvalue<'_>) -> &'static str {
