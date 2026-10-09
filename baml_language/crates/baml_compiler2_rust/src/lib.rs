@@ -1,10 +1,11 @@
 //! An ahead-of-time backend that turns BAML MIR into Rust source.
 //!
-//! The subset covers free functions over `int`, `bool`, `float`, `string`,
-//! arrays, non-generic data classes and `T | null`, with structured control
-//! flow, direct calls to other such functions, the for-in iterator protocol
-//! on arrays, and a table of stdlib builtins mapped to the `bex_aot`
-//! runtime. Everything else is reported as [`Rejection::Unsupported`] so the
+//! The subset covers functions over `int`, `bool`, `float`, `bigint`,
+//! `string`, arrays, maps, enums, non-generic data classes and `T | null`,
+//! with structured control flow, direct calls to other such functions
+//! (constant defaults filled at the call site), the for-in iterator
+//! protocol on arrays, and a table of stdlib builtins mapped to the
+//! `bex_aot` runtime. Everything else is reported as [`Rejection::Unsupported`] so the
 //! caller keeps the bytecode. Control flow is emitted structurally (labeled
 //! blocks and loops, never a block dispatcher), which needs a reducible
 //! graph; BAML lowering only produces those, so an irreducible one is

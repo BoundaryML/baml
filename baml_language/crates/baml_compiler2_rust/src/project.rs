@@ -112,6 +112,7 @@ impl ArgParser {
             NativeTy::Float => Some(Self::Float),
             NativeTy::Str => Some(Self::Str),
             NativeTy::Null
+            | NativeTy::Bigint
             | NativeTy::Array(_)
             | NativeTy::Class(_)
             | NativeTy::Enum(_)

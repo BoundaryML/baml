@@ -95,6 +95,17 @@ pub(crate) enum MapOp {
     Clear,
 }
 
+/// Which `bex_aot::bigint` function a `baml.Bigint.*` method becomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BigintOp {
+    Abs,
+    Pow,
+    Isqrt,
+    Ilog,
+    ToInt,
+    Parse,
+}
+
 /// A stdlib function mapped to a `bex_aot` call rather than compiled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Builtin<'db> {
@@ -129,6 +140,8 @@ pub(crate) enum Builtin<'db> {
     Sort(SortKind),
     /// `baml.Map.<op>(m, ..)`.
     Map(MapOp),
+    /// `baml.Bigint.<op>(..)`.
+    Bigint(BigintOp),
 }
 
 /// What a `Call` or `VirtualCall` terminator does in the generated code.
@@ -648,7 +661,7 @@ impl<'db> Env<'_, 'db> {
                     Some(option @ NativeTy::Option(_)) => option.clone(),
                     _ => NativeTy::Null,
                 }),
-                Constant::Bigint(_) => Err(Rejection::unsupported("bigint constant")),
+                Constant::Bigint(_) => Ok(NativeTy::Bigint),
                 Constant::OmittedArg => Err(Rejection::unsupported("omitted argument")),
                 Constant::Function(_) | Constant::GenericFunction { .. } => {
                     Err(Rejection::unsupported("function value"))
@@ -731,6 +744,7 @@ impl<'db> Env<'_, 'db> {
                     (UnaryOp::Not, NativeTy::Bool) => Ok(NativeTy::Bool),
                     (UnaryOp::Neg, NativeTy::Int) => Ok(NativeTy::Int),
                     (UnaryOp::Neg, NativeTy::Float) => Ok(NativeTy::Float),
+                    (UnaryOp::Neg, NativeTy::Bigint) => Ok(NativeTy::Bigint),
                     (UnaryOp::Truthy, NativeTy::Int | NativeTy::Bool) => Ok(NativeTy::Bool),
                     _ => Err(Rejection::unsupported(format!(
                         "`{op}` on `{}`",
@@ -1557,6 +1571,32 @@ impl<'db> Env<'_, 'db> {
                 };
                 (Builtin::Map(op), result)
             }
+            "baml.Bigint.abs" | "baml.Bigint.isqrt" | "baml.Bigint.to_int" => {
+                arity(0, 1)?;
+                self.operand_of(&args[0], &NativeTy::Bigint)?;
+                let (op, result) = match link_name {
+                    "baml.Bigint.abs" => (BigintOp::Abs, NativeTy::Bigint),
+                    "baml.Bigint.isqrt" => (BigintOp::Isqrt, NativeTy::Bigint),
+                    _ => (BigintOp::ToInt, NativeTy::Int),
+                };
+                (Builtin::Bigint(op), result)
+            }
+            "baml.Bigint.pow" | "baml.Bigint.ilog" => {
+                arity(0, 2)?;
+                self.operand_of(&args[0], &NativeTy::Bigint)?;
+                self.operand_of(&args[1], &NativeTy::Bigint)?;
+                let op = if link_name == "baml.Bigint.pow" {
+                    BigintOp::Pow
+                } else {
+                    BigintOp::Ilog
+                };
+                (Builtin::Bigint(op), NativeTy::Bigint)
+            }
+            "baml.Bigint.parse" => {
+                arity(0, 1)?;
+                self.operand_of(&args[0], &NativeTy::Str)?;
+                (Builtin::Bigint(BigintOp::Parse), NativeTy::Bigint)
+            }
             "baml.ops.equals_equals" => {
                 arity(0, 2)?;
                 let operand = match (is_null(&args[0]), is_null(&args[1])) {
@@ -1748,33 +1788,40 @@ pub(crate) fn binop_ty<'db>(
     right: &NativeTy<'db>,
     with_null: bool,
 ) -> Option<NativeTy<'db>> {
-    use NativeTy::{Bool, Float, Int, Null, Option as Opt, Str};
+    use NativeTy::{Bigint, Bool, Float, Int, Null, Option as Opt, Str};
+    // A mixed `int` / `bigint` operation widens the `int`, as the stdlib's
+    // `Add<int> for bigint` and friends declare.
+    let bigint_pair = matches!((left, right), (Bigint, Bigint | Int) | (Int, Bigint));
     match op {
         BinOp::Add => match (left, right) {
             (Int, Int) => Some(Int),
             (Float, Float) => Some(Float),
             (Str, Str) => Some(Str),
+            _ if bigint_pair => Some(Bigint),
             _ => None,
         },
         BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => match (left, right) {
             (Int, Int) => Some(Int),
             (Float, Float) => Some(Float),
+            _ if bigint_pair => Some(Bigint),
             _ => None,
         },
         BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor | BinOp::Shl | BinOp::Shr => {
             match (left, right) {
                 (Int, Int) => Some(Int),
+                _ if bigint_pair => Some(Bigint),
                 _ => None,
             }
         }
         BinOp::Eq | BinOp::Ne => match (left, right) {
             (Int, Int) | (Bool, Bool) | (Float, Float) | (Str, Str) | (Null, Null) => Some(Bool),
+            (Bigint, Bigint) => Some(Bool),
             (NativeTy::Enum(l), NativeTy::Enum(r)) if l == r => Some(Bool),
             (Opt(_), Opt(_)) if left == right && with_null => Some(Bool),
             _ => None,
         },
         BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => match (left, right) {
-            (Int, Int) | (Float, Float) | (Str, Str) => Some(Bool),
+            (Int, Int) | (Float, Float) | (Str, Str) | (Bigint, Bigint) => Some(Bool),
             _ => None,
         },
     }
@@ -2309,8 +2356,14 @@ mod tests {
 
     #[test]
     fn binop_typing() {
-        use NativeTy::{Bool, Float, Int, Str};
+        use NativeTy::{Bigint, Bool, Float, Int, Str};
         assert_eq!(binop_ty(BinOp::Add, &Str, &Str, false), Some(Str));
+        assert_eq!(binop_ty(BinOp::Add, &Bigint, &Bigint, false), Some(Bigint));
+        assert_eq!(binop_ty(BinOp::Mul, &Int, &Bigint, false), Some(Bigint));
+        assert_eq!(binop_ty(BinOp::Shl, &Bigint, &Int, false), Some(Bigint));
+        assert_eq!(binop_ty(BinOp::Lt, &Bigint, &Bigint, false), Some(Bool));
+        assert_eq!(binop_ty(BinOp::Eq, &Bigint, &Int, false), None);
+        assert_eq!(binop_ty(BinOp::Add, &Bigint, &Float, false), None);
         assert_eq!(binop_ty(BinOp::Add, &Float, &Float, false), Some(Float));
         assert_eq!(binop_ty(BinOp::Lt, &Str, &Str, false), Some(Bool));
         assert_eq!(binop_ty(BinOp::Add, &Int, &Float, false), None);

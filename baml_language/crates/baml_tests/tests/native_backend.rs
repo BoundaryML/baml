@@ -1393,10 +1393,52 @@ fn rejects_wide_union() {
     assert_unsupported(&rejection, "union other than `T | null`");
 }
 
+/// `bigint` is a counted pointer passed by reference; a mixed `int`
+/// operand is widened first, and literals come from an `i64` or their
+/// digits.
 #[test]
-fn rejects_bigint() {
-    let rejection = reject("function f(x: bigint) -> bigint { x }", "f");
-    assert_unsupported(&rejection, "bigint");
+fn bigint_operations_widen_ints_and_pass_by_reference() {
+    let module = compile_entry(
+        r"
+function f(x: bigint, n: int) -> string {
+    let big = 123456789012345678901234567890n;
+    let y = (x + n) * big / 3n % -2n;
+    let z = (y << n) >> 1n;
+    let w = (z & x) | (z ^ x);
+    (-y).to_string() + (y < x).to_string() + (y == x).to_string() + w.abs().to_string()
+        + y.to_int().to_string()
+}
+",
+        "f",
+    );
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        "pub fn user_f(mut _1: BigInt, mut _2: Int63) -> Result<Str, Thrown>",
+    );
+    assert_contains(source, "bigint::lit(\"123456789012345678901234567890\")");
+    assert_contains(source, "bigint::add(&_1, &bigint::from_int(_2))");
+    assert_contains(source, "bigint::div(&");
+    assert_contains(source, "bigint::rem(&");
+    assert_contains(source, "bigint::from_i64(3)");
+    assert_contains(source, "bigint::neg(&bigint::from_i64(2))");
+    assert_contains(source, "bigint::shl(&");
+    assert_contains(source, "bigint::shr(&");
+    assert_contains(source, "bigint::bit_and(&");
+    assert_contains(source, "bigint::cmp(&");
+    assert_contains(source, ".is_lt()");
+    assert_contains(source, "bigint::eq(&");
+    assert_contains(source, "bigint::abs(&");
+    assert_contains(source, "bigint::to_int(&");
+    assert_eq!(module.functions[0].params[0].1, NativeTy::Bigint);
+}
+
+#[test]
+fn rejects_bigint_compared_with_an_int() {
+    // The checker admits `==` between any two values; natively a `bigint`
+    // compares only with a `bigint`.
+    let rejection = reject("function f(x: bigint, n: int) -> bool { x == n }", "f");
+    assert_unsupported(&rejection, "`==` on a `bigint` and a `int`");
 }
 
 #[test]

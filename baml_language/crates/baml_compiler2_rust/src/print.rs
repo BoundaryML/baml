@@ -16,7 +16,8 @@ use crate::{
     Rejection,
     classes::{ClassInfo, ClassTable, EnumInfo},
     function::{
-        Builtin, CallKind, Candidate, LocalKind, MapOp, SortKind, is_dead_null_write, is_omitted,
+        BigintOp, Builtin, CallKind, Candidate, LocalKind, MapOp, SortKind, is_dead_null_write,
+        is_omitted,
     },
     structure::Stmt,
     types::{Coercion, NativeTy, coercion},
@@ -59,7 +60,9 @@ pub(crate) fn render_module<'db>(
     table: &ClassTable<'db>,
 ) -> Result<String, Rejection> {
     let mut items = quote! {
-        use bex_aot::{Int63, Map, Panic, Str, Thrown, array, float, int, json, map, string};
+        use bex_aot::{
+            BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, float, int, json, map, string,
+        };
         use bex_aot::handle::{Shared, shared};
         use bex_aot::render::ToBaml;
     };
@@ -577,6 +580,24 @@ impl<'a, 'db> Printer<'a, 'db> {
                         };
                         (quote! { #sort(#array); }, sorted)
                     }
+                    Builtin::Bigint(op) => {
+                        let first = self.operand_ref(arg(0)?)?;
+                        let call = match op {
+                            BigintOp::Abs => quote! { bigint::abs(#first) },
+                            BigintOp::Isqrt => quote! { bigint::isqrt(#first)? },
+                            BigintOp::ToInt => quote! { bigint::to_int(#first)? },
+                            BigintOp::Parse => quote! { bigint::parse(#first)? },
+                            BigintOp::Pow => {
+                                let second = self.operand_ref(arg(1)?)?;
+                                quote! { bigint::pow(#first, #second)? }
+                            }
+                            BigintOp::Ilog => {
+                                let second = self.operand_ref(arg(1)?)?;
+                                quote! { bigint::ilog(#first, #second)? }
+                            }
+                        };
+                        (TokenStream::new(), call)
+                    }
                     Builtin::Map(op) => {
                         let map = self.operand_ref(arg(0)?)?;
                         let (key_ty, value_ty) = match self.operand_ty(arg(0)?)? {
@@ -767,6 +788,10 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
             Rvalue::UnaryOp { op, operand } => {
                 let ty = self.operand_ty(operand)?;
+                if matches!((op, &ty), (UnaryOp::Neg, NativeTy::Bigint)) {
+                    let operand = self.operand_ref(operand)?;
+                    return Ok(quote! { bigint::neg(#operand) });
+                }
                 let operand = self.operand(operand, None)?;
                 match (op, ty) {
                     (UnaryOp::Not, _) => quote! { !#operand },
@@ -885,6 +910,9 @@ impl<'a, 'db> Printer<'a, 'db> {
                 self.describe(right_ty)
             ))
         };
+        if matches!(left_ty, NativeTy::Bigint) || matches!(right_ty, NativeTy::Bigint) {
+            return self.bigint_op(op, left, right, left_ty, right_ty);
+        }
         Ok(match left_ty {
             NativeTy::Int => {
                 let l = self.operand(left, None)?;
@@ -970,12 +998,62 @@ impl<'a, 'db> Printer<'a, 'db> {
                     _ => return Err(unsupported()),
                 }
             }
-            NativeTy::Array(_)
+            // Handled above: a `bigint` on either side takes the bigint path.
+            NativeTy::Bigint
+            | NativeTy::Array(_)
             | NativeTy::Map(..)
             | NativeTy::Class(_)
             | NativeTy::ArrayIter(_) => {
                 return Err(unsupported());
             }
+        })
+    }
+
+    /// A binary operation with a `bigint` on at least one side: the `int`
+    /// side, if any, is widened first, and every operand is passed by
+    /// reference (a `BigInt` is a counted pointer; the operation allocates
+    /// its result).
+    fn bigint_op(
+        &self,
+        op: BinOp,
+        left: &Operand<'db>,
+        right: &Operand<'db>,
+        left_ty: &NativeTy<'db>,
+        right_ty: &NativeTy<'db>,
+    ) -> Result<TokenStream, Rejection> {
+        let side = |operand: &Operand<'db>, ty: &NativeTy<'db>| -> Result<TokenStream, Rejection> {
+            match ty {
+                NativeTy::Bigint => self.operand_ref(operand),
+                NativeTy::Int => {
+                    let value = self.operand(operand, None)?;
+                    Ok(quote! { &bigint::from_int(#value) })
+                }
+                other => Err(Rejection::unsupported(format!(
+                    "`{op}` on `{}` and `{}`",
+                    self.describe(left_ty),
+                    self.describe(other)
+                ))),
+            }
+        };
+        let l = side(left, left_ty)?;
+        let r = side(right, right_ty)?;
+        Ok(match op {
+            BinOp::Add => quote! { bigint::add(#l, #r) },
+            BinOp::Sub => quote! { bigint::sub(#l, #r) },
+            BinOp::Mul => quote! { bigint::mul(#l, #r)? },
+            BinOp::Div => quote! { bigint::div(#l, #r)? },
+            BinOp::Mod => quote! { bigint::rem(#l, #r)? },
+            BinOp::Shl => quote! { bigint::shl(#l, #r)? },
+            BinOp::Shr => quote! { bigint::shr(#l, #r)? },
+            BinOp::BitAnd => quote! { bigint::bit_and(#l, #r) },
+            BinOp::BitOr => quote! { bigint::bit_or(#l, #r) },
+            BinOp::BitXor => quote! { bigint::bit_xor(#l, #r) },
+            BinOp::Eq => quote! { bigint::eq(#l, #r) },
+            BinOp::Ne => quote! { !bigint::eq(#l, #r) },
+            BinOp::Lt => quote! { bigint::cmp(#l, #r).is_lt() },
+            BinOp::Le => quote! { bigint::cmp(#l, #r).is_le() },
+            BinOp::Gt => quote! { bigint::cmp(#l, #r).is_gt() },
+            BinOp::Ge => quote! { bigint::cmp(#l, #r).is_ge() },
         })
     }
 
@@ -1021,6 +1099,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 Constant::Bool(value) => quote! { #value },
                 Constant::Float(value) => float_literal(*value),
                 Constant::String(value) => quote! { string::from_literal(#value) },
+                Constant::Bigint(value) => bigint_literal(value),
                 Constant::Null => match expected {
                     Some(NativeTy::Option(_)) => quote! { None },
                     _ => quote! { () },
@@ -1075,6 +1154,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             Operand::Constant(Constant::Bool(_)) => Ok(NativeTy::Bool),
             Operand::Constant(Constant::Float(_)) => Ok(NativeTy::Float),
             Operand::Constant(Constant::String(_)) => Ok(NativeTy::Str),
+            Operand::Constant(Constant::Bigint(_)) => Ok(NativeTy::Bigint),
             Operand::Constant(Constant::Null) => Ok(match expected {
                 Some(option @ NativeTy::Option(_)) => option.clone(),
                 _ => NativeTy::Null,
@@ -1276,6 +1356,21 @@ fn int_literal(value: i64) -> Result<TokenStream, Rejection> {
     Ok(quote! { int::lit(#literal) })
 }
 
+/// A `bigint` literal: from an `i64` when it fits, else parsed from its
+/// decimal digits.
+fn bigint_literal(value: &num_bigint::BigInt) -> TokenStream {
+    match i64::try_from(value) {
+        Ok(small) => {
+            let literal = proc_macro2::Literal::i64_unsuffixed(small);
+            quote! { bigint::from_i64(#literal) }
+        }
+        Err(_) => {
+            let digits = value.to_string();
+            quote! { bigint::lit(#digits) }
+        }
+    }
+}
+
 /// A `float` literal that round-trips: `{:?}` of the value with an `f64`
 /// suffix, or the `f64` constants for the non-finite values.
 fn float_literal(value: f64) -> TokenStream {
@@ -1302,6 +1397,19 @@ fn float_literal(value: f64) -> TokenStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bigint_literals_prefer_i64() {
+        assert_eq!(
+            bigint_literal(&num_bigint::BigInt::from(-5)).to_string(),
+            "bigint :: from_i64 (- 5)"
+        );
+        let wide: num_bigint::BigInt = "123456789012345678901234567890".parse().unwrap();
+        assert_eq!(
+            bigint_literal(&wide).to_string(),
+            "bigint :: lit (\"123456789012345678901234567890\")"
+        );
+    }
 
     #[test]
     fn float_literals_round_trip() {

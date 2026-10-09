@@ -24,6 +24,8 @@ pub enum NativeTy<'db> {
     Bool,
     /// BAML `float`: `f64`.
     Float,
+    /// BAML `bigint`: `bex_aot::BigInt`, a reference-counted value.
+    Bigint,
     /// BAML `string`: `bex_aot::Str`.
     Str,
     /// BAML `null` (and so `void`, which is `null`): the unit type.
@@ -71,9 +73,12 @@ impl<'db> NativeTy<'db> {
         match self {
             Self::Int | Self::Bool | Self::Float | Self::Null | Self::Enum(_) => true,
             Self::Option(inner) => inner.is_copy(),
-            Self::Str | Self::Array(_) | Self::Map(..) | Self::Class(_) | Self::ArrayIter(_) => {
-                false
-            }
+            Self::Str
+            | Self::Bigint
+            | Self::Array(_)
+            | Self::Map(..)
+            | Self::Class(_)
+            | Self::ArrayIter(_) => false,
         }
     }
 
@@ -95,7 +100,13 @@ impl<'db> NativeTy<'db> {
                 key.classes(out);
                 value.classes(out);
             }
-            Self::Int | Self::Bool | Self::Float | Self::Str | Self::Null | Self::Enum(_) => {}
+            Self::Int
+            | Self::Bool
+            | Self::Float
+            | Self::Bigint
+            | Self::Str
+            | Self::Null
+            | Self::Enum(_) => {}
         }
     }
 
@@ -110,7 +121,13 @@ impl<'db> NativeTy<'db> {
                 key.enums(out);
                 value.enums(out);
             }
-            Self::Int | Self::Bool | Self::Float | Self::Str | Self::Null | Self::Class(_) => {}
+            Self::Int
+            | Self::Bool
+            | Self::Float
+            | Self::Bigint
+            | Self::Str
+            | Self::Null
+            | Self::Class(_) => {}
         }
     }
 
@@ -122,6 +139,7 @@ impl<'db> NativeTy<'db> {
             Self::Int => quote! { Int63 },
             Self::Bool => quote! { bool },
             Self::Float => quote! { f64 },
+            Self::Bigint => quote! { BigInt },
             Self::Str => quote! { Str },
             Self::Null => quote! { () },
             Self::Array(inner) => {
@@ -160,6 +178,7 @@ impl<'db> NativeTy<'db> {
             Self::Int => "int".into(),
             Self::Bool => "bool".into(),
             Self::Float => "float".into(),
+            Self::Bigint => "bigint".into(),
             Self::Str => "string".into(),
             Self::Null => "null".into(),
             Self::Array(inner) => format!("{}[]", inner.describe(class_name)),
@@ -228,9 +247,9 @@ pub(crate) trait Resolver<'db> {
 ///
 /// Rejected here: `unknown` and interface types (they may still be refined
 /// from their defining rvalue by the caller), maps keyed by anything but
-/// `int`, `bool` or `string`, unions other than `T | null`, `bigint`,
-/// `uint8array`, media, functions, futures, type aliases, type variables
-/// and the compiler-only sentinels.
+/// `int`, `bool` or `string`, unions other than `T | null`, `uint8array`,
+/// media, functions, futures, type aliases, type variables and the
+/// compiler-only sentinels.
 pub(crate) fn from_runtime_ty<'db>(
     ty: &RuntimeTy,
     decls: &mut dyn Resolver<'db>,
@@ -247,7 +266,7 @@ pub(crate) fn from_runtime_ty<'db>(
             Literal::Bool(_) => NativeTy::Bool,
             Literal::Float(_) => NativeTy::Float,
             Literal::String(_) => NativeTy::Str,
-            Literal::Bigint(_) => return Err(Unsupported("bigint".into())),
+            Literal::Bigint(_) => NativeTy::Bigint,
         },
         RuntimeTy::List(inner) => NativeTy::Array(Box::new(from_runtime_ty(inner, class)?)),
         RuntimeTy::Class(head, args) => class.class(head, args)?,
@@ -288,7 +307,7 @@ pub(crate) fn from_runtime_ty<'db>(
             let value = from_runtime_ty(value, class)?;
             NativeTy::Map(Box::new(key), Box::new(value))
         }
-        RuntimeTy::Bigint => return Err(Unsupported("bigint".into())),
+        RuntimeTy::Bigint => NativeTy::Bigint,
         RuntimeTy::Uint8Array => return Err(Unsupported("uint8array".into())),
         RuntimeTy::Media(_) => return Err(Unsupported("media".into())),
         RuntimeTy::Function { .. } => return Err(Unsupported("function type".into())),
@@ -423,7 +442,9 @@ mod tests {
 
     #[test]
     fn rejected_types_name_their_construct() {
-        assert_eq!(map(&RuntimeTy::Bigint).unwrap_err().0, "bigint");
+        assert_eq!(map(&RuntimeTy::Bigint).unwrap(), NativeTy::Bigint);
+        assert!(!NativeTy::Bigint.is_copy());
+        assert_eq!(tokens(&NativeTy::Bigint), "BigInt");
         assert_eq!(map(&RuntimeTy::Uint8Array).unwrap_err().0, "uint8array");
         assert_eq!(map(&RuntimeTy::Unknown).unwrap_err().0, "unknown");
         assert_eq!(

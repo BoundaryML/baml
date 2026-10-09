@@ -10,13 +10,14 @@ garbage collector.
 |---|---|---|
 | `int` | `Int63` (from `baml_type`) | re-exported; arithmetic is `bex_lang::int` |
 | `float` | `f64` | `bex_lang::float` re-exported |
+| `bigint` | `BigInt` over `num_bigint::BigInt` | `bigint`: a counted pointer; the VM's checks and messages (`AllocFailure` past `MAX_BIGINT_BITS`, `DivisionByZero`, `NegativeBitShift`), `to_int`, `parse`, `pow`, `isqrt`, `ilog`, JSON as a number with every digit |
 | `string` | `Str` over `bex_str::BexStr` | `string`: literals, `concat`, byte-order `cmp`, code-point `length` |
 | `T[]`, class `C` | `Shared<Vec<T>>`, `Shared<C>` | `handle`: `Rc<RefCell<T>>` with reference semantics; `array`: checked `get`/`set`, `push`, primitive sorts, the for-in cursor `Iter<T>` |
 | `map<K, V>` | `Map<K, V>` | `map`: a handle over an insertion-ordered `IndexMap`, keyed by `string`, `int` or `bool`; `index` raises `MapKeyNotFound`; JSON needs string keys, as on the VM |
 | `T \| null` | `Option<T>` | |
 | `to_string()` | `ToBaml` | `render`: the structural walk, `render::class` for generated structs |
 | `json.*` | serde through `serde_json` | `json`: `to_string`, `deserialize<T>`, the `ParseError` / `DecodeError` classes |
-| `throw`, panics | `Result<T, Thrown>` | `thrown`: a `Panic` or a boxed `ErrorObject` (class name plus rendered fields), `errors::InvalidArgument` |
+| `throw`, panics | `Result<T, Thrown>` | `thrown`: a `Panic` or a boxed `ErrorObject` (class name plus rendered fields), `errors::InvalidArgument` and `errors::ParseError` |
 | recursion | `depth::Guard` | counts frames on call cycles and throws `StackOverflow` at the VM's limit |
 
 Handles are reference counted, not collected: a cycle of handles is never

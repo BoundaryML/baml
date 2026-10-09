@@ -9,11 +9,19 @@ use crate::{Int63, clamp_exit_code};
 /// fields the VM stores when it materializes the panic object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Panic {
-    /// `int` or `bigint` division or remainder by zero. The field is the
-    /// left operand, matching `DivisionByZero { dividend }`.
+    /// `int` division or remainder by zero. The field is the left operand,
+    /// matching `DivisionByZero { dividend }`.
     DivisionByZero {
         /// The left operand of the failing `/` or `%`.
         dividend: Int63,
+    },
+    /// `bigint` division or remainder by zero: the same
+    /// `baml.panics.DivisionByZero` class, whose `dividend` field holds the
+    /// `bigint` operand. Carried as its decimal rendering, which is how the
+    /// field prints; this crate has no `bigint` representation of its own.
+    BigintDivisionByZero {
+        /// The left operand of the failing `/` or `%`, in decimal.
+        dividend: String,
     },
     /// An `int` operation left the i63 range. The message names the
     /// operation, e.g. `"4611686018427387903 + 1 overflows int"`.
@@ -50,6 +58,12 @@ pub enum Panic {
     Unreachable,
     /// The call stack depth limit was exceeded.
     StackOverflow,
+    /// A `bigint` operand or result would exceed the workspace cap
+    /// (`baml_type::MAX_BIGINT_BITS`).
+    AllocFailure {
+        /// Human-readable description, e.g. `"bigint shl: result of 1 << 300000000 would require ~300000001 bits (limit: 268435456)"`.
+        message: String,
+    },
     /// A clean process-termination request from `baml.sys.exit(code)`.
     Exit {
         /// The exit code the user wrote, as a full BAML `int`.
@@ -61,7 +75,7 @@ impl Panic {
     /// Unqualified name of the `baml.panics` class this panic materializes as.
     pub fn class_name(&self) -> &'static str {
         match self {
-            Self::DivisionByZero { .. } => "DivisionByZero",
+            Self::DivisionByZero { .. } | Self::BigintDivisionByZero { .. } => "DivisionByZero",
             Self::IntegerOverflow { .. } => "IntegerOverflow",
             Self::IndexOutOfBounds { .. } => "IndexOutOfBounds",
             Self::MapKeyNotFound => "MapKeyNotFound",
@@ -70,6 +84,7 @@ impl Panic {
             Self::AssertionFailed => "AssertionFailed",
             Self::Unreachable => "Unreachable",
             Self::StackOverflow => "StackOverflow",
+            Self::AllocFailure { .. } => "AllocFailure",
             Self::Exit { .. } => "Exit",
         }
     }
@@ -78,7 +93,9 @@ impl Panic {
     /// `"baml.panics.DivisionByZero"`.
     pub fn class_fqn(&self) -> &'static str {
         match self {
-            Self::DivisionByZero { .. } => "baml.panics.DivisionByZero",
+            Self::DivisionByZero { .. } | Self::BigintDivisionByZero { .. } => {
+                "baml.panics.DivisionByZero"
+            }
             Self::IntegerOverflow { .. } => "baml.panics.IntegerOverflow",
             Self::IndexOutOfBounds { .. } => "baml.panics.IndexOutOfBounds",
             Self::MapKeyNotFound => "baml.panics.MapKeyNotFound",
@@ -87,6 +104,7 @@ impl Panic {
             Self::AssertionFailed => "baml.panics.AssertionFailed",
             Self::Unreachable => "baml.panics.Unreachable",
             Self::StackOverflow => "baml.panics.StackOverflow",
+            Self::AllocFailure { .. } => "baml.panics.AllocFailure",
             Self::Exit { .. } => "baml.panics.Exit",
         }
     }
@@ -108,6 +126,7 @@ impl Panic {
     pub fn fields(&self) -> Vec<(&'static str, String)> {
         match self {
             Self::DivisionByZero { dividend } => vec![("dividend", dividend.get().to_string())],
+            Self::BigintDivisionByZero { dividend } => vec![("dividend", dividend.clone())],
             Self::IndexOutOfBounds { index, length } => {
                 vec![
                     ("index", index.get().to_string()),
@@ -117,6 +136,7 @@ impl Panic {
             Self::MapKeyNotFound => vec![("key", format!("{:?}", "(unknown)"))],
             Self::IntegerOverflow { message }
             | Self::NegativeBitShift { message }
+            | Self::AllocFailure { message }
             | Self::UserPanic { message } => vec![("message", format!("{message:?}"))],
             Self::AssertionFailed | Self::Unreachable | Self::StackOverflow => {
                 let message = self
@@ -154,6 +174,9 @@ impl fmt::Display for Panic {
             Self::DivisionByZero { dividend } => {
                 write!(f, "division of {} by zero", dividend.get())
             }
+            Self::BigintDivisionByZero { dividend } => {
+                write!(f, "division of {dividend} by zero")
+            }
             Self::IndexOutOfBounds { index, length } => {
                 write!(
                     f,
@@ -165,6 +188,7 @@ impl fmt::Display for Panic {
             Self::MapKeyNotFound => f.write_str("key not found in map"),
             Self::IntegerOverflow { message }
             | Self::NegativeBitShift { message }
+            | Self::AllocFailure { message }
             | Self::UserPanic { message } => f.write_str(message),
             Self::AssertionFailed | Self::Unreachable | Self::StackOverflow => f.write_str(
                 self.fixed_message()
@@ -212,6 +236,12 @@ mod tests {
     fn class_names_live_in_the_panics_namespace() {
         let all = [
             Panic::DivisionByZero { dividend: int(1) },
+            Panic::BigintDivisionByZero {
+                dividend: "1".into(),
+            },
+            Panic::AllocFailure {
+                message: String::new(),
+            },
             Panic::IntegerOverflow {
                 message: String::new(),
             },
@@ -267,6 +297,21 @@ mod tests {
             }
             .render_readable(),
             r#"baml.panics.NegativeBitShift {message: "bit shift count is negative: -1"}"#
+        );
+        // A `bigint` dividend prints as its digits, like an `int` one.
+        assert_eq!(
+            Panic::BigintDivisionByZero {
+                dividend: "-123456789012345678901234567890".into()
+            }
+            .render_readable(),
+            "baml.panics.DivisionByZero {dividend: -123456789012345678901234567890}"
+        );
+        assert_eq!(
+            Panic::AllocFailure {
+                message: "too big".into()
+            }
+            .render_readable(),
+            r#"baml.panics.AllocFailure {message: "too big"}"#
         );
         // The VM stores `"(unknown)"` for the key (`panic_to_exception_value`).
         assert_eq!(
