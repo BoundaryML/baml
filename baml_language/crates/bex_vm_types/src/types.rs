@@ -732,28 +732,8 @@ pub fn box_compile_time_floats(
     float_indices
 }
 
-/// Format an f64 to string, following JS/TS conventions for special values
-/// and preserving `.0` for whole-number floats.
-///
-/// - `1.0` → `"1.0"` (not `"1"` — preserves float identity)
-/// - `3.14` → `"3.14"`
-/// - `f64::INFINITY` → `"Infinity"` (JS-style)
-/// - `f64::NEG_INFINITY` → `"-Infinity"` (JS-style)
-/// - `f64::NAN` → `"NaN"` (JS-style)
-pub fn format_float(f: f64) -> String {
-    if f.is_nan() {
-        return "NaN".to_string();
-    }
-    if f.is_infinite() {
-        return if f.is_sign_positive() {
-            "Infinity".to_string()
-        } else {
-            "-Infinity".to_string()
-        };
-    }
-    let s = f.to_string();
-    if s.contains('.') { s } else { format!("{s}.0") }
-}
+/// `float.to_string()`: see [`bex_lang::float::format`].
+pub use bex_lang::float::format as format_float;
 
 // Error class / instance enums — generated from `errors.baml` class definitions.
 // ErrorClass (tag enum), ErrorInstance (with Value fields), associated methods.
@@ -844,7 +824,7 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConstValue, HeapPtr, Instance, Program, Type, Value, format_float};
+    use super::{ConstValue, HeapPtr, Instance, Program, Type, Value};
 
     #[test]
     fn compiled_head_names_require_a_matching_named_declaration() {
@@ -900,26 +880,6 @@ mod tests {
             .validate()
             .expect_err("no package for the root");
         assert!(error.0.contains("the root is package 0 of 0"), "{error}");
-    }
-
-    #[test]
-    fn test_format_float() {
-        // Whole-number floats must include ".0"
-        assert_eq!(format_float(0.0), "0.0");
-        assert_eq!(format_float(1.0), "1.0");
-        assert_eq!(format_float(-1.0), "-1.0");
-        assert_eq!(format_float(100.0), "100.0");
-        assert_eq!(format_float(999_999_999_999_999.0), "999999999999999.0");
-
-        // Fractional floats unchanged
-        assert_eq!(format_float(2.5), "2.5");
-        assert_eq!(format_float(0.1), "0.1");
-        assert_eq!(format_float(-0.001), "-0.001");
-
-        // Non-finite values: JS-style names, no ".0"
-        assert_eq!(format_float(f64::INFINITY), "Infinity");
-        assert_eq!(format_float(f64::NEG_INFINITY), "-Infinity");
-        assert_eq!(format_float(f64::NAN), "NaN");
     }
 
     #[test]
