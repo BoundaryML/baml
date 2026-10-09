@@ -1233,7 +1233,8 @@ impl<'a, 'db> Printer<'a, 'db> {
     }
 
     /// `test` on `operand`, a union or nullable value of type `ty`, as a
-    /// `bool` expression: a `matches!` over the variants it selects.
+    /// `bool` expression: a `matches!` over the variants it selects. On a
+    /// value of one closed type the test is a constant.
     fn member_test_tokens(
         &self,
         operand: &Operand<'db>,
@@ -1242,6 +1243,31 @@ impl<'a, 'db> Printer<'a, 'db> {
     ) -> Result<TokenStream, Rejection> {
         let value = self.operand_borrowed(operand)?;
         let nullable = matches!(ty, NativeTy::Option(_));
+        if !nullable && ty.union_members().is_none() {
+            return Ok(match test {
+                MemberTest::Variants(variants) => {
+                    let holds = !variants.is_empty();
+                    quote! { #holds }
+                }
+                MemberTest::Null => quote! { false },
+                MemberTest::EnumVariant { index, .. } => {
+                    let NativeTy::Enum(enum_ref) = ty else {
+                        return Err(Rejection::invalid("variant test on a non-enum"));
+                    };
+                    let info = self.classes.enum_info(*enum_ref)?;
+                    let name = &info.ident;
+                    let variant = &info
+                        .variants
+                        .get(*index)
+                        .ok_or_else(|| Rejection::invalid("enum variant index out of range"))?
+                        .ident;
+                    quote! { #value == #name::#variant }
+                }
+                MemberTest::Literal { .. } => {
+                    return Err(Rejection::unsupported("type test against a literal"));
+                }
+            });
+        }
         let info = match ty.union_members() {
             Some(members) => Some(self.classes.union_info(members)?),
             None => None,
@@ -1633,15 +1659,15 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let value = self.operand_borrowed(operand)?;
                 quote! { #value.is_none() }
             }
-            (_, NativeTy::Union(_) | NativeTy::Option(_)) => {
-                let test = self.member_test(site)?;
-                self.member_test_tokens(operand, &ty, test)?
-            }
-            _ => {
+            (_, NativeTy::ArrayIter(_) | NativeTy::Thrown) => {
                 return Err(Rejection::unsupported(format!(
                     "type test on a `{}`",
                     self.describe(&ty)
                 )));
+            }
+            _ => {
+                let test = self.member_test(site)?;
+                self.member_test_tokens(operand, &ty, test)?
             }
         })
     }

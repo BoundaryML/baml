@@ -1274,3 +1274,60 @@ pub fn user_flag(mut _1: Int63) -> Result<Str, Thrown> {
     }
     Ok(_0)
 }
+/// BAML function `user.plain_tests`.
+pub fn user_plain_tests(mut _1: Int63) -> Result<Int63, Thrown> {
+    let mut _0: Int63;
+    let mut _2: Shared<Vec<Int63>>;
+    let mut _3: Int63;
+    let mut _4: bool;
+    let mut _5: bool;
+    let mut _6: Int63;
+    let mut _7: bool;
+    let mut _8: bool;
+    let mut _9: Int63;
+    let mut _10: Int63;
+    'bb3: {
+        _2 = array::new::<Int63>(Vec::from([_1]));
+        _3 = int::lit(0);
+        _5 = true;
+        if _5 {
+            _4 = true;
+            break 'bb3;
+        } else {
+            _4 = false;
+            break 'bb3;
+        }
+    }
+    'bb5: {
+        if _4 {
+            _6 = _3;
+            _3 = int::add(_6, int::lit(1))?;
+            break 'bb5;
+        } else {
+            break 'bb5;
+        }
+    }
+    'bb8: {
+        _8 = true;
+        if _8 {
+            _7 = true;
+            break 'bb8;
+        } else {
+            _7 = false;
+            break 'bb8;
+        }
+    }
+    'bb10: {
+        if _7 {
+            _9 = _3;
+            _3 = int::add(_9, int::lit(10))?;
+            break 'bb10;
+        } else {
+            break 'bb10;
+        }
+    }
+    _10 = _3;
+    _3 = int::add(_10, int::lit(1000))?;
+    _0 = _3;
+    Ok(_0)
+}
