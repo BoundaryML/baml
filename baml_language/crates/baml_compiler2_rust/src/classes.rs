@@ -399,6 +399,14 @@ impl<'db> ClassTable<'db> {
                     self.spell(&runtime_ty)
                 )
             })?;
+            // The struct renders, serializes and compares its fields; a
+            // function value does none of that.
+            if native.mentions_fn() {
+                return Err(format!(
+                    "class `{link_name}` field `{name}` of type `{}`: function type (a class field)",
+                    self.spell(&runtime_ty)
+                ));
+            }
             let ident = field_ident(name.as_str());
             fields.push(FieldInfo {
                 name: name.to_string(),
