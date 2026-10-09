@@ -228,6 +228,14 @@ pub(crate) enum Commands {
         hide = true
     )]
     FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
+    // Developer preview of the ahead-of-time Rust backend (MIR -> Rust for a
+    // subset of the language). Hidden until the subset is useful end to end.
+    #[command(
+        name = "__emit-rust",
+        about = "(preview) emit a standalone Rust project for BAML functions",
+        hide = true
+    )]
+    EmitRust(crate::emit_rust_command::EmitRustArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
@@ -384,6 +392,7 @@ impl RuntimeCli {
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
+            Commands::EmitRust(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }
@@ -436,6 +445,7 @@ impl Commands {
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
             Self::Pack(args) => args.from.is_some(),
+            Self::EmitRust(args) => args.from.is_some(),
             Self::Playground(args) => args.from.is_some(),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
@@ -459,6 +469,7 @@ impl Commands {
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
+            Self::EmitRust(args) => args.from = Some(project.clone()),
             Self::Playground(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
