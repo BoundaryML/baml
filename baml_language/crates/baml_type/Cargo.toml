@@ -10,6 +10,12 @@ baml_type_macros = { workspace = true }
 bitflags = { workspace = true }
 borsh = { workspace = true }
 rustc-hash = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[features]
+# `Serialize` (as an integer) and `Deserialize` (an integral JSON number in
+# the i63 range) for `Int63`; used by generated native code.
+serde = [ "dep:serde" ]
 
 [dev-dependencies]
 salsa = { workspace = true }
