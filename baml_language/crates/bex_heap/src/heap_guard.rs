@@ -214,15 +214,31 @@ impl HeapPermitManager {
     /// If a GC is active, will wait for it to complete.
     pub async fn new_permit<T: RootHaver + 'static>(&self, with_roots: T) -> InactiveHeapPermit<T> {
         let mut guard = self.holders.lock().await;
-        debug_assert!(guard.len() < MAX_PERMITS as usize);
+        Self::register_permit(&self.active, &mut guard, with_roots)
+    }
+
+    /// Register roots synchronously while the caller exclusively owns the manager.
+    /// This avoids async locking during construction, including Tokio's
+    /// cooperative yielding on an otherwise uncontended mutex.
+    pub fn new_permit_mut<T: RootHaver + 'static>(
+        &mut self,
+        with_roots: T,
+    ) -> InactiveHeapPermit<T> {
+        Self::register_permit(&self.active, self.holders.get_mut(), with_roots)
+    }
+
+    fn register_permit<T: RootHaver + 'static>(
+        active: &Arc<tokio::sync::Semaphore>,
+        holders: &mut Vec<Weak<PermitCell<dyn RootHaver>>>,
+        with_roots: T,
+    ) -> InactiveHeapPermit<T> {
+        debug_assert!(holders.len() < MAX_PERMITS as usize);
         let holder = Arc::new(PermitCell::new(with_roots));
-        guard.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
-        let permit = InactiveHeapPermit {
-            active: self.active.clone(),
+        holders.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
+        InactiveHeapPermit {
+            active: Arc::clone(active),
             holder,
-        };
-        drop(guard);
-        permit
+        }
     }
     pub async fn request_park(&self) -> HeapGuard<'_> {
         // Drain the semaphore BEFORE taking the holders mutex. The semaphore
@@ -338,3 +354,39 @@ impl<T: ?Sized + RootHaver> PermitCell<T> {
 // holders), or rework the holders Mutex's element type.
 unsafe impl<T: ?Sized + RootHaver> Send for PermitCell<T> {}
 unsafe impl<T: ?Sized + RootHaver> Sync for PermitCell<T> {}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        future::Future,
+        task::{Context, Waker},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn exclusive_registration_works_with_exhausted_cooperative_budget() {
+        let mut manager = HeapPermitManager::new();
+        while tokio::task::coop::has_budget_remaining() {
+            tokio::task::consume_budget().await;
+        }
+        // An uncontended async lock still yields here. A synchronous engine
+        // constructor must not block its Tokio task waiting for that yield.
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(
+            std::pin::pin!(manager.new_permit(()))
+                .poll(&mut context)
+                .is_pending()
+        );
+        let first = manager.new_permit_mut(());
+
+        tokio::task::yield_now().await;
+        let second = manager.new_permit(()).await;
+        let guard = manager.request_park().await;
+        assert_eq!(guard.num_permits(), 2);
+        drop(guard);
+        drop(first);
+        drop(second);
+        assert_eq!(manager.request_park().await.num_permits(), 0);
+    }
+}
