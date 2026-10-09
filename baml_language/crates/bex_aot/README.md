@@ -15,6 +15,7 @@ garbage collector.
 | `T[]`, class `C` | `Shared<Vec<T>>`, `Shared<C>` | `handle`: `Rc<RefCell<T>>` with reference semantics; `array`: checked `get`/`set`, `push`, primitive sorts, the for-in cursor `Iter<T>` |
 | `map<K, V>` | `Map<K, V>` | `map`: a handle over an insertion-ordered `IndexMap`, keyed by `string`, `int` or `bool`; `index` raises `MapKeyNotFound`; JSON needs string keys, as on the VM |
 | `T \| null` | `Option<T>` | |
+| `==` | `BamlEq` | `eq`: the VM's broad `==` for primitives, `null`, nullable values and (through generated impls) unions: different kinds are never equal, `float` by the reflexive order |
 | `to_string()` | `ToBaml` | `render`: the structural walk, `render::class` for generated structs |
 | `json.*` | serde through `serde_json` | `json`: `to_string`, `deserialize<T>`, the `ParseError` / `DecodeError` classes |
 | `throw`, panics | `Result<T, Thrown>` | `thrown`: a `Panic` or a boxed `ErrorObject` (class name plus rendered fields); `Clone`, so a caught error can be tested, bound and thrown on; `is_class` / `class_fqn` / `is_panic` are what a `catch` arm asks, `downcast` recovers the handle a generated class (`ErrorClass`) was thrown as; `errors::InvalidArgument` and `errors::ParseError` |

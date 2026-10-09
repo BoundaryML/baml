@@ -281,17 +281,27 @@ pub(crate) fn from_runtime_ty<'db>(
         RuntimeTy::List(inner) => NativeTy::Array(Box::new(from_runtime_ty(inner, class)?)),
         RuntimeTy::Class(head, args) => class.class(head, args)?,
         RuntimeTy::Union(members) => {
-            let mut value = None;
+            // Members fold to their native types first: every literal of one
+            // primitive is that primitive (`"a" | "b"` is a `string`), a
+            // variant type its enum, so a union of literals erases. `null`
+            // makes the result nullable.
+            let mut nullable = false;
+            let mut distinct: Vec<NativeTy<'db>> = Vec::new();
             for member in members {
-                match member {
-                    RuntimeTy::Null => {}
-                    other if value.is_none() => value = Some(other),
-                    _ => return Err(Unsupported("union other than `T | null`".into())),
+                if matches!(member, RuntimeTy::Null) {
+                    nullable = true;
+                    continue;
+                }
+                let native = from_runtime_ty(member, class)?;
+                if !distinct.contains(&native) {
+                    distinct.push(native);
                 }
             }
-            match value {
-                Some(inner) if members.len() == 2 => {
-                    let inner = from_runtime_ty(inner, class)?;
+            match (distinct.len(), nullable) {
+                (0, true) => NativeTy::Null,
+                (1, false) => distinct.remove(0),
+                (1, true) => {
+                    let inner = distinct.remove(0);
                     if matches!(inner, NativeTy::Option(_)) {
                         return Err(Unsupported("union other than `T | null`".into()));
                     }
@@ -417,6 +427,30 @@ mod tests {
         assert_eq!(map(&wide).unwrap_err().0, "union other than `T | null`");
         let two = RuntimeTy::Union(Box::new([RuntimeTy::Int, RuntimeTy::Float]));
         assert!(map(&two).is_err());
+    }
+
+    #[test]
+    fn literal_unions_erase_to_their_primitive() {
+        let literal =
+            |text: &str| RuntimeTy::Literal(Literal::String(text.into()), Freshness::Regular);
+        let ab = RuntimeTy::Union(Box::new([literal("a"), literal("b")]));
+        assert_eq!(map(&ab).unwrap(), NativeTy::Str);
+        let nullable = RuntimeTy::Union(Box::new([literal("a"), RuntimeTy::Null, literal("b")]));
+        assert_eq!(
+            map(&nullable).unwrap(),
+            NativeTy::Option(Box::new(NativeTy::Str))
+        );
+        let ints = RuntimeTy::Union(Box::new([
+            RuntimeTy::Literal(Literal::Int(1), Freshness::Regular),
+            RuntimeTy::Literal(Literal::Int(2), Freshness::Regular),
+            RuntimeTy::Int,
+        ]));
+        assert_eq!(map(&ints).unwrap(), NativeTy::Int);
+        let mixed = RuntimeTy::Union(Box::new([
+            RuntimeTy::Literal(Literal::Int(1), Freshness::Regular),
+            literal("a"),
+        ]));
+        assert_eq!(map(&mixed).unwrap_err().0, "union other than `T | null`");
     }
 
     #[test]

@@ -88,6 +88,14 @@ pub(crate) struct EnumInfo<'db> {
     _marker: std::marker::PhantomData<EnumRef<'db>>,
 }
 
+/// Where [`ClassTable::literal_type_in`] found a literal type.
+enum LiteralSite {
+    /// In the type itself.
+    Here,
+    /// In a class field, described.
+    Field(String),
+}
+
 enum State<'db> {
     /// The class's fields are being mapped; a reference back to it from a
     /// field is fine (it is a `Shared` handle).
@@ -134,6 +142,57 @@ impl<'db> ClassTable<'db> {
             order: Vec::new(),
             enums: FxHashMap::default(),
             enum_order: Vec::new(),
+        }
+    }
+
+    /// A literal or variant type `ty` mentions, directly or through the
+    /// fields of the classes it names: the native type erases it to its
+    /// primitive (or its enum), which a typed JSON decode must not do, since
+    /// the VM rejects a value outside the literal. The result names the
+    /// type, or the class field, that holds it.
+    pub(crate) fn literal_type_in(&self, ty: &RuntimeTy) -> Option<String> {
+        let mut visited = Vec::new();
+        match self.literal_type_walk(ty, &mut visited)? {
+            LiteralSite::Here => Some(format!("`{}`", self.spell(ty))),
+            LiteralSite::Field(described) => Some(described),
+        }
+    }
+
+    fn literal_type_walk(
+        &self,
+        ty: &RuntimeTy,
+        visited: &mut Vec<ClassRef<'db>>,
+    ) -> Option<LiteralSite> {
+        match ty {
+            RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..) => Some(LiteralSite::Here),
+            RuntimeTy::List(inner) => self.literal_type_walk(inner, visited),
+            RuntimeTy::Map { key, value } => self
+                .literal_type_walk(key, visited)
+                .or_else(|| self.literal_type_walk(value, visited)),
+            RuntimeTy::Union(members) => members
+                .iter()
+                .find_map(|member| self.literal_type_walk(member, visited)),
+            RuntimeTy::Class(head, _) => {
+                let class = layout::class_ref_of(self.db, head)?;
+                if visited.contains(&class) {
+                    return None;
+                }
+                visited.push(class);
+                layout::class_fields(self.db, class)
+                    .iter()
+                    .find_map(|(name, field_ty)| {
+                        let runtime_ty = RuntimeTy::try_from(field_ty).ok()?;
+                        Some(match self.literal_type_walk(&runtime_ty, visited)? {
+                            LiteralSite::Here => LiteralSite::Field(format!(
+                                "`{}` in field `{name}` of class `{}`",
+                                self.spell(&runtime_ty),
+                                class_link_name(self.db, class)
+                            )),
+                            inner @ LiteralSite::Field(_) => inner,
+                        })
+                    })
+            }
+            _ => None,
         }
     }
 
