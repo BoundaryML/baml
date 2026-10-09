@@ -29,6 +29,7 @@ const FIXTURES: &[&str] = &[
     "bigint",
     "bitwise",
     "calls",
+    "catches",
     "classes",
     "defaults",
     "enums",
@@ -102,6 +103,7 @@ generated_module!(enums, "native/generated/enums.rs");
 generated_module!(maps, "native/generated/maps.rs");
 generated_module!(bigint, "native/generated/bigint.rs");
 generated_module!(throws, "native/generated/throws.rs");
+generated_module!(catches, "native/generated/catches.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -780,5 +782,45 @@ async fn throws_match_vm() {
     }
     for x in [0, 2, 3, -1, -4] {
         check!(o, panic_deep(x) => user_panic_deep(int(x)));
+    }
+}
+
+#[tokio::test]
+async fn catches_match_vm() {
+    use catches::*;
+    let o = Oracle::new("catches");
+    for x in [5, 0, -1, -7, 2] {
+        check!(o, catch_class(x) => user_catch_class(int(x)));
+        check!(o, catch_two(x) => user_catch_two(int(x)));
+        check!(o, catch_bind(x) => user_catch_bind(int(x)));
+        check!(o, catch_wild(x) => user_catch_wild(int(x)));
+        check!(o, catch_wild_panic(x) => user_catch_wild_panic(int(x)));
+        check!(o, catch_all_panic(x) => user_catch_all_panic(int(x)));
+        check!(o, catch_all_panics(x) => user_catch_all_panics(int(x)));
+        check!(o, catch_let_wild(x) => user_catch_let_wild(int(x)));
+        check!(o, catch_deep(x) => user_catch_deep(int(x)));
+        check!(o, catch_rethrow(x) => user_catch_rethrow(int(x)));
+        check!(o, catch_throw_in_arm(x) => user_catch_throw_in_arm(int(x)));
+        check!(o, catch_throw_bound(x) => user_catch_throw_bound(int(x)));
+        check!(o, catch_throw_caught(x) => user_catch_throw_caught(int(x)));
+        check!(o, catch_identity(x) => user_catch_identity(int(x)));
+        check!(o, catch_statement(x) => user_catch_statement(int(x)));
+        check!(o, catch_stdlib(x) => user_catch_stdlib(int(x)));
+        check!(o, catch_exit(x) => user_catch_exit(int(x)));
+    }
+    for x in [5, 1, 0, -1, 101, 200, -100] {
+        check!(o, catch_four(x) => user_catch_four(int(x)));
+    }
+    for x in [0, 1, 2, 3, 5, -1, -3, 4] {
+        check!(o, catch_panics(x) => user_catch_panics(int(x)));
+    }
+    for x in [5, 0, -1, -100, -93] {
+        check!(o, catch_nested(x) => user_catch_nested(int(x)));
+    }
+    for n in [5, -1, 0, 2] {
+        check!(o, catch_in_loop(n) => user_catch_in_loop(int(n)));
+    }
+    for n in [0, 2, 5, 10] {
+        check!(o, catch_returns(n) => user_catch_returns(int(n)));
     }
 }

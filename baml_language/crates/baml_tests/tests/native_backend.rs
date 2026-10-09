@@ -1496,6 +1496,113 @@ function f(n: int) -> int {
 }
 
 #[test]
+fn catch_lands_in_a_labeled_block_and_tests_the_class() {
+    let module = compile_entry(
+        r#"
+class Invalid { message: string }
+function risky(n: int) -> int {
+    if (n < 0) { throw Invalid { message: "negative" } }
+    n
+}
+class Coded { code: int }
+function f(n: int) -> int {
+    risky(n) catch (e) { Invalid => -1, let p: Coded => p.code }
+}
+"#,
+        "f",
+    );
+    let source = &module.rust_source;
+    // The call hands its error to the handler's local and leaves for it.
+    assert_contains(
+        source,
+        "Err(error) => {\n                    _2 = Thrown::from(error);\n                    break 'bb1;",
+    );
+    assert_contains(source, "bex_aot::thrown::is_class(&_2, \"user.Invalid\")");
+    // A binding arm recovers the thrown handle.
+    assert_contains(
+        source,
+        "bex_aot::thrown::downcast::<Shared<user_Coded>>(&_2)",
+    );
+    // No arm: the error goes on.
+    assert_contains(source, "return Err(_2.clone());");
+    // The handler's own code is outside the `catch`: its failures propagate.
+    assert_contains(source, "_0 = int::neg(int::lit(1))?;");
+}
+
+#[test]
+fn wildcard_catch_is_guarded_against_panics() {
+    let module = compile_entry(
+        r"
+function f(n: int) -> int {
+    (10 / n) catch (e) { _ => -1 }
+}
+",
+        "f",
+    );
+    let source = &module.rust_source;
+    assert_contains(source, "match int::div(int::lit(10), _1) {");
+    assert_contains(
+        source,
+        "if bex_aot::thrown::is_panic(&_2) {\n            return Err(_2.clone());\n        }",
+    );
+    let module = compile_entry(
+        r"
+function f(n: int) -> int {
+    (10 / n) catch_all_panics (e) { _ => -1 }
+}
+",
+        "f",
+    );
+    assert!(
+        !module.rust_source.contains("is_panic"),
+        "`catch_all_panics` swallows panics:\n{}",
+        module.rust_source
+    );
+}
+
+#[test]
+fn four_class_arms_switch_on_the_class_tag() {
+    let module = compile_entry(
+        r"
+class A { n: int }
+class B { n: int }
+class C { n: int }
+class D { n: int }
+function f(n: int) -> int {
+    (10 / n) catch (e) { A => 1, B => 2, C => 3, D => 4 }
+}
+",
+        "f",
+    );
+    let source = &module.rust_source;
+    assert_contains(source, "let mut _4: &'static str;");
+    assert_contains(source, "_4 = bex_aot::thrown::class_fqn(&_2);");
+    assert_contains(source, "match _4 {\n            \"user.A\" => {");
+    assert_contains(source, "\"user.D\" => {");
+}
+
+#[test]
+fn nested_catch_unwinds_to_the_outer_handler() {
+    let module = compile_entry(
+        r"
+class A { n: int }
+function f(n: int) -> int {
+    ((10 / n) catch (e) { A => 20 / n }) catch (e) { baml.panics.DivisionByZero => -1 }
+}
+",
+        "f",
+    );
+    let source = &module.rust_source;
+    // The inner handler's rethrow lands in the outer handler, not out of
+    // the function.
+    assert_contains(source, "_2 = _4.clone();\n                    break 'bb1;");
+    assert_contains(
+        source,
+        "bex_aot::thrown::is_class(&_2, \"baml.panics.DivisionByZero\")",
+    );
+}
+
+#[test]
 fn rejects_spawn() {
     let rejection = reject(
         r"
