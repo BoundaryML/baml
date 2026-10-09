@@ -58,11 +58,7 @@ func ListEncoder[T any](encode func(T) Input) func([]T) Input {
 		for _, value := range values {
 			inputs = append(inputs, encode(value))
 		}
-		var itemType *BAMLType
-		if inferred, ok := reflectedBAMLType(reflect.TypeOf((*T)(nil)).Elem()); ok {
-			itemType = &inferred
-		}
-		return listInput(inputs, itemType)
+		return listInput(inputs, dynamicElementType(reflect.TypeOf((*T)(nil)).Elem()))
 	}
 }
 
@@ -172,11 +168,7 @@ func MapEncoder[T any](encode func(T) Input) func(map[string]T) Input {
 		for _, key := range keys {
 			inputs = append(inputs, encode(values[key]))
 		}
-		var valueType *BAMLType
-		if inferred, ok := reflectedBAMLType(reflect.TypeOf((*T)(nil)).Elem()); ok {
-			valueType = &inferred
-		}
-		return mapInput(keys, inputs, valueType)
+		return mapInput(keys, inputs, dynamicElementType(reflect.TypeOf((*T)(nil)).Elem()))
 	}
 }
 

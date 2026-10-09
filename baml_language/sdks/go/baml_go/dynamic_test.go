@@ -126,3 +126,38 @@ func TestOrdinaryTypedContainerEncodersRemainMetadataOptional(t *testing.T) {
 		t.Fatalf("schema-driven map unexpectedly added dynamic type metadata")
 	}
 }
+
+func TestAnyStatesUnknownElementsForInterfaceContainers(t *testing.T) {
+	list := Any([]any{int64(1), "two"})
+	if list.err != nil || list.value.GetValueType() == nil {
+		t.Fatalf("any-element list lost its type: %#v, %v", list.value, list.err)
+	}
+	if !(BAMLType{value: list.value.GetValueType()}).Equal(ListBAMLType(UnknownBAMLType())) {
+		t.Fatalf("any-element list got wrong value type: %#v", list.value.GetValueType())
+	}
+
+	mapValue := Any(map[string]any{})
+	if mapValue.err != nil || mapValue.value.GetValueType() == nil {
+		t.Fatalf("any-element map lost its type: %#v, %v", mapValue.value, mapValue.err)
+	}
+	wantMapType := MapBAMLType(PrimitiveBAMLType(StringType), UnknownBAMLType())
+	if !(BAMLType{value: mapValue.value.GetValueType()}).Equal(wantMapType) {
+		t.Fatalf("any-element map got wrong value type: %#v", mapValue.value.GetValueType())
+	}
+}
+
+func TestSelectedUnionInputStatesOnlyArmsThatNameOneType(t *testing.T) {
+	union := UnionBAMLType(PrimitiveBAMLType(IntType), OptionalBAMLType(PrimitiveBAMLType(StringType)))
+
+	integer := SelectedUnionInput(Int64(3), union, PrimitiveBAMLType(IntType))
+	if integer.err != nil || !(BAMLType{value: integer.value.GetValueType()}).Equal(PrimitiveBAMLType(IntType)) {
+		t.Fatalf("int arm was not stated: %#v, %v", integer.value, integer.err)
+	}
+
+	// An optional arm is a union of two types; stating it on a null would
+	// say nothing the null does not, and the engine rejects a union statement.
+	null := SelectedUnionInput(NullInput(Null{}), union, OptionalBAMLType(PrimitiveBAMLType(StringType)))
+	if null.err != nil || null.value.GetValueType() != nil {
+		t.Fatalf("optional arm was stated: %#v, %v", null.value, null.err)
+	}
+}

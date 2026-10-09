@@ -100,7 +100,10 @@ func InvalidInput(message string) Input {
 
 // SelectedUnionInput projects a generated union to its selected payload and
 // attaches that arm's exact node type. The enclosing union stays in the BAML
-// callable's declared type; inbound values never carry a union envelope.
+// callable's declared type; inbound values never carry a union envelope. An
+// arm that is itself a union or optional describes context, not the value, so
+// it is not stated: the payload's own scalar kind or stated container type
+// already says what it is.
 func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
 	if payload.err != nil {
 		return payload
@@ -120,7 +123,7 @@ func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
 			ValueType: value.ValueType,
 			Value:     value.Value,
 		}
-		if annotated.ValueType == nil {
+		if annotated.ValueType == nil && namesOneType(selectedType.value) {
 			annotated.ValueType = selectedType.value
 		}
 		return annotated, nil
@@ -130,6 +133,33 @@ func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
 		return Input{value: value, err: err}
 	}
 	return Input{deferred: &inputEncoder{encode: prepare}}
+}
+
+// namesOneType reports whether a descriptor determines a value's type. A
+// union or optional names several, so stating it on a node says nothing the
+// node's own shape does not.
+func namesOneType(ty *cffi.BamlTy) bool {
+	switch ty.GetTy().(type) {
+	case *cffi.BamlTy_Union, *cffi.BamlTy_Optional:
+		return false
+	default:
+		return true
+	}
+}
+
+// dynamicElementType is the BAML type of a dynamic container's elements: the
+// reflected type when Go's element type has one, `unknown` when the element
+// type is an interface (each element then states its own type), and nothing
+// otherwise.
+func dynamicElementType(typ reflect.Type) *BAMLType {
+	if inferred, ok := reflectedBAMLType(typ); ok {
+		return &inferred
+	}
+	if typ.Kind() == reflect.Interface {
+		unknown := UnknownBAMLType()
+		return &unknown
+	}
+	return nil
 }
 
 // Any converts an ordinary dynamic Go value into the generic ABI value tree.
@@ -391,11 +421,7 @@ func encodeAny(value reflect.Value, active map[visit]bool, path string, depth in
 				return items[index]
 			}
 		}
-		var itemType *BAMLType
-		if inferred, ok := reflectedBAMLType(value.Type().Elem()); ok {
-			itemType = &inferred
-		}
-		return anyList(items, itemType)
+		return anyList(items, dynamicElementType(value.Type().Elem()))
 	case reflect.Map:
 		if value.Type().Key().Kind() != reflect.String {
 			return InvalidInput(fmt.Sprintf("%s: BAML maps require string keys, got %s", path, value.Type().Key()))
@@ -410,11 +436,7 @@ func encodeAny(value reflect.Value, active map[visit]bool, path string, depth in
 			}
 			entries[key] = encoded
 		}
-		var valueType *BAMLType
-		if inferred, ok := reflectedBAMLType(value.Type().Elem()); ok {
-			valueType = &inferred
-		}
-		return anyMap(entries, valueType)
+		return anyMap(entries, dynamicElementType(value.Type().Elem()))
 	case reflect.Struct:
 		if !value.CanInterface() {
 			break

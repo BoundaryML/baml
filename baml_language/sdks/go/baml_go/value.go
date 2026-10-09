@@ -246,6 +246,13 @@ func MetaTypeBAMLType() BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_MetaType{MetaType: &cffi.BamlTyMetaType{}}}}
 }
 
+// UnknownBAMLType describes BAML's top type `unknown`. A dynamic Go container
+// whose elements are `any` is a container of it; each element states its own
+// type.
+func UnknownBAMLType() BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Unknown{Unknown: &cffi.BamlTyUnknown{}}}}
+}
+
 // RustTypeBAMLType describes BAML's opaque `$rust_type` leaf. Values of this
 // type are native-owned handle-table entries and never expose their payload to
 // Go.

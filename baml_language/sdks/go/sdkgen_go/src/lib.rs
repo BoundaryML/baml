@@ -1888,9 +1888,7 @@ fn render_functions(
         {
             let direct_json = key.members().contains(&GoTy::Json);
             for member in key.members() {
-                if !matches!(member, GoTy::Json)
-                    && (direct_json || projected_contains_class(member))
-                {
+                if dynamic_union_arm_is_asserted(member, direct_json) {
                     add_projected_surface_imports(member, package, &import_context, &mut imports);
                 }
             }
@@ -3637,11 +3635,16 @@ fn render_union_codecs(
                 "func {encoder}({value_parameter} any) {runtime}.Input {{"
             );
             let direct_json = key.members().contains(&GoTy::Json);
+            let union_descriptor = baml_type_descriptor(
+                &GoTy::DynamicUnion {
+                    key: key.clone(),
+                    nullable: false,
+                },
+                names,
+            );
             let mut rendered_cases = BTreeSet::new();
             for member in key.members() {
-                if matches!(member, GoTy::Json)
-                    || (!direct_json && !projected_contains_class(member))
-                {
+                if !dynamic_union_arm_is_asserted(member, direct_json) {
                     continue;
                 }
                 let member_type = render_projected_go_type(
@@ -3662,11 +3665,15 @@ fn render_union_codecs(
                     codecs,
                     TypeVarScope::default(),
                 );
+                let selected_descriptor = baml_type_descriptor(member, names);
                 let _ = writeln!(
                     out,
                     "\tif {decoded_local}, {ok_local} := {value_parameter}.({member_type}); {ok_local} {{"
                 );
-                let _ = writeln!(out, "\t\treturn {member_encoder}({decoded_local})\n\t}}");
+                let _ = writeln!(
+                    out,
+                    "\t\treturn {runtime}.SelectedUnionInput({member_encoder}({decoded_local}), {union_descriptor}, {selected_descriptor})\n\t}}"
+                );
             }
             if direct_json {
                 let _ = writeln!(out, "\treturn {runtime}.JSON({value_parameter})\n}}\n");
@@ -3768,6 +3775,26 @@ fn render_union_codecs(
                 "dynamic union"
             );
         }
+    }
+}
+
+/// Whether a dynamic (`any`) union's encoder asserts `member`'s Go type and
+/// sends the value under that arm's declared type. A scalar arm needs no
+/// statement: the value says what it is. A container or class arm is sent
+/// under its declared type, so an empty container or one with `any` elements
+/// is exact. With a JSON arm every other arm is asserted first, so JSON
+/// encoding is the last resort.
+fn dynamic_union_arm_is_asserted(member: &GoTy, direct_json: bool) -> bool {
+    !matches!(member, GoTy::Json)
+        && (direct_json || projected_contains_class(member) || projected_is_container(member))
+}
+
+/// A list or map arm, possibly nullable.
+fn projected_is_container(ty: &GoTy) -> bool {
+    match ty {
+        GoTy::List(_) | GoTy::Map { .. } => true,
+        GoTy::Optional(inner) => projected_is_container(inner),
+        _ => false,
     }
 }
 
