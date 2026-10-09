@@ -66,7 +66,7 @@ fn checked_int(checked: Option<i64>, l: i64, op: char, r: i64) -> Result<i64, Vm
     match checked {
         Some(v) if Value::try_int(v).is_some() => Ok(v),
         _ => Err(VmPanic::IntegerOverflow {
-            message: format!("{l} {op} {r} overflows int"),
+            message: bex_lang::int::overflow_message(l, op, r),
         }
         .into()),
     }
@@ -408,7 +408,7 @@ impl BamlClassOpsNegate_for_int for PackageBamlImpl {
         match Value::try_int(int.wrapping_neg()) {
             Some(_) => Ok(int.wrapping_neg()),
             None => Err(VmPanic::IntegerOverflow {
-                message: format!("-({int}) overflows int"),
+                message: bex_lang::int::neg_overflow_message(int),
             }
             .into()),
         }

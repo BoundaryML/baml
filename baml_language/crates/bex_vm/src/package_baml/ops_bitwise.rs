@@ -54,7 +54,7 @@ use crate::errors::VmRustFnError;
 /// `negative_bit_shift` so operator and method agree.
 fn negative_bit_shift(count: impl std::fmt::Display) -> VmRustFnError {
     VmPanic::NegativeBitShift {
-        message: format!("bit shift count is negative: {count}"),
+        message: bex_lang::int::negative_bit_shift_message(count),
     }
     .into()
 }
