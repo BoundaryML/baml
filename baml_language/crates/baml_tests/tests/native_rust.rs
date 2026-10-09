@@ -29,6 +29,7 @@ const FIXTURES: &[&str] = &[
     "bigint",
     "bitwise",
     "calls",
+    "captures",
     "catches",
     "class_unions",
     "classes",
@@ -114,6 +115,7 @@ generated_module!(literal_unions, "native/generated/literal_unions.rs");
 generated_module!(primitive_unions, "native/generated/primitive_unions.rs");
 generated_module!(class_unions, "native/generated/class_unions.rs");
 generated_module!(lambdas, "native/generated/lambdas.rs");
+generated_module!(captures, "native/generated/captures.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -1107,4 +1109,46 @@ async fn lambdas_match_vm() {
         Observed::from(user_recursion_through_value(int(1_000_000))),
         Observed::thrown("baml.panics.StackOverflow", [])
     );
+}
+
+/// Captures: one value behind every handle, a cell per iteration where the
+/// VM gives one, and closures that outlive their creator.
+#[tokio::test]
+async fn captures_match_vm() {
+    use captures::*;
+    let o = Oracle::new("captures");
+    for n in [0, 1, 3, 10, 1000] {
+        check!(o, counter(n) => user_counter(int(n)));
+        check!(o, two_counters(n) => user_two_counters(int(n)));
+        check!(o, loop_capture(n) => user_loop_capture(int(n)));
+        check!(o, cfor_capture(n) => user_cfor_capture(int(n)));
+        check!(o, while_capture(n) => user_while_capture(int(n)));
+        check!(o, shared_loop_var(n) => user_shared_loop_var(int(n)));
+    }
+    for a in [-7, 0, 1, 42, MAX, MIN] {
+        check!(o, seen_both_ways(a) => user_seen_both_ways(int(a)));
+        check!(o, escaped(a) => user_escaped(int(a)));
+        check!(o, captured_param(a) => user_captured_param(int(a)));
+        check!(o, nested(a) => user_nested(int(a)));
+        check!(o, closure_captures_closure(a) => user_closure_captures_closure(int(a)));
+        check!(o, box_field(a) => user_box_field(int(a)));
+        check!(o, captured_array(a) => user_captured_array(int(a)));
+        check!(o, rebound(a) => user_rebound(int(a)));
+        check!(o, throwing_capture(a) => user_throwing_capture(int(a)));
+        check!(o, with_default(a, 10) => user_with_default(int(a), int(10)));
+    }
+    check!(o, strings("ab") => user_strings(text("ab")));
+    // A closure escaping its creator keeps the cell alive and sees its own
+    // copy of the binding.
+    let add = user_make_adder(int(5)).unwrap();
+    assert_eq!(add(int(1)).unwrap(), int(6));
+    let first = user_make_counter().unwrap();
+    let second = user_make_counter().unwrap();
+    assert_eq!(first().unwrap(), int(1));
+    assert_eq!(first().unwrap(), int(2));
+    assert_eq!(second().unwrap(), int(1));
+    // The class handle a closure captures is the caller's object.
+    let b = bex_aot::shared(user_Box { n: int(1) });
+    assert_eq!(user_mutate_box(b.clone()).unwrap(), int(5));
+    assert_eq!(b.borrow().n, int(5));
 }

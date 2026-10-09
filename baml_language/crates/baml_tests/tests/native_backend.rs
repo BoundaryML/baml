@@ -2292,17 +2292,57 @@ function f(n: int) -> int {
 }
 
 #[test]
-fn rejects_captured_local_in_a_lambda() {
-    let rejection = reject(
+fn captured_locals_live_in_cells() {
+    let module = compile_entry(
         r"
 function f(n: int) -> int {
-    let add = (x: int) -> int { x + n };
-    add(1)
+    let count = 0;
+    let bump = () -> void { count = count + n; };
+    for (let i in [1, 2]) {
+        let j = i;
+        bump();
+        let read = () -> int { j };
+        count = count + read();
+    }
+    count
 }
 ",
         "f",
     );
-    assert_unsupported(&rejection, "captured local");
+    let source = &module.rust_source;
+    // The captured parameter is celled on entry; the captured locals are
+    // cells, fresh at every declaration, and read and written through them.
+    assert_contains(source, "let mut _1: cell::Cell<Int63> = cell::with(_1);");
+    assert_contains(source, "let mut _2: cell::Cell<Int63>;");
+    assert_contains(source, "_2 = cell::fresh();");
+    assert_contains(source, "cell::set(&_2, value);");
+    assert_contains(source, "_0 = cell::get(&_2)?;");
+    // The lambdas borrow their cells; the closure values own clones.
+    assert_contains(source, "pub fn user_f__lambda0(");
+    assert_contains(source, "_c0: &cell::Cell<Int63>,");
+    assert_contains(source, "_c1: &cell::Cell<Int63>,");
+    assert_contains(source, "_1 = cell::get(_c0)?;");
+    assert_contains(source, "cell::set(_c0, value);");
+    assert_contains(source, "let __cell0 = cell::Cell::clone(&_2);");
+    assert_contains(source, "let __cell1 = cell::Cell::clone(&_1);");
+    assert_contains(source, "user_f__lambda0(&__cell0, &__cell1)");
+    // The loop body's binding gets a cell per iteration.
+    assert_eq!(source.matches("cell::fresh()").count(), 2, "{source}");
+}
+
+#[test]
+fn a_c_style_for_header_binding_is_recelled_with_its_value() {
+    let module = compile_entry(
+        r"
+function f() -> int {
+    let fs: (() -> int throws never)[] = [];
+    for (let i = 0; i < 3; i = i + 1) { fs.push(() -> int { i }); }
+    fs.length()
+}
+",
+        "f",
+    );
+    assert_contains(&module.rust_source, "_2 = cell::carry(&_2);");
 }
 
 #[test]
