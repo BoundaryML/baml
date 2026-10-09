@@ -11,9 +11,9 @@
 
 use std::fmt;
 
-use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef};
+use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, InterfaceRef};
 use baml_compiler2_mir::{RealizedTy, RuntimeTy};
-use baml_type::{DeclName, Literal};
+use baml_type::{DeclName, Literal, Name};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
@@ -61,6 +61,13 @@ pub enum NativeTy<'db> {
     /// are not part of the type; a function type with an optional parameter
     /// has no native type.
     Fn(Vec<NativeTy<'db>>, Box<NativeTy<'db>>),
+    /// An interface-typed value: a generated Rust enum with one variant per
+    /// implementor in the whole program (D5: the native program is closed,
+    /// so every `implements` block is known), each holding the
+    /// implementor's native value. Stores, type tests and narrowing are the
+    /// union's ([`NativeTy::Union`]); a method call on one is a `match`
+    /// over the implementors, each arm a static call.
+    Interface(IfaceInst<'db>),
     /// The iterator `iter()` yields on a `T[]`: `bex_aot::array::Iter<T>`.
     /// Never declared in BAML source; a refined type.
     ArrayIter(Box<NativeTy<'db>>),
@@ -126,6 +133,26 @@ fn canonical_arg(ty: RealizedTy) -> RealizedTy {
     }
 }
 
+/// An interface at concrete type arguments, with its implementors: the
+/// unit the module emits an enum for. The implementors are a function of
+/// the program and the interface, carried so a type stands on its own
+/// (what a value of it may hold decides every coercion); two instances with
+/// equal arguments carry equal lists.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IfaceInst<'db> {
+    pub iface: InterfaceRef<'db>,
+    /// One realized type per interface type parameter, in declaration
+    /// order.
+    pub args: Vec<RealizedTy>,
+    /// The interface's associated types, as the type pins them.
+    pub assoc: Vec<(Name, RealizedTy)>,
+    /// Every type with an `implements` block for this interface in the
+    /// program, in the order the blocks are found; each a closed native
+    /// type (a class instance, an enum or a primitive), the enum's
+    /// variants.
+    pub implementors: Vec<NativeTy<'db>>,
+}
+
 /// A declaration a native type names, which the generated module emits as
 /// an item: the key under which [`NativeTy::to_tokens`] and
 /// [`NativeTy::describe`] look its name up.
@@ -133,6 +160,7 @@ fn canonical_arg(ty: RealizedTy) -> RealizedTy {
 pub enum TypeDecl<'db> {
     Class(ClassInst<'db>),
     Enum(EnumRef<'db>),
+    Interface(IfaceInst<'db>),
 }
 
 /// Why a runtime type has no native representation: the construct it uses.
@@ -154,6 +182,7 @@ impl<'db> NativeTy<'db> {
             Self::Option(inner) => inner.is_copy(),
             // The generated enum derives `Copy` exactly when every member is.
             Self::Union(members) => members.iter().all(NativeTy::is_copy),
+            Self::Interface(instance) => instance.implementors.iter().all(NativeTy::is_copy),
             Self::Str
             | Self::Bigint
             | Self::Array(_)
@@ -175,6 +204,7 @@ impl<'db> NativeTy<'db> {
             }
             Self::Map(key, value) => key.mentions_fn() || value.mentions_fn(),
             Self::Union(members) => members.iter().any(NativeTy::mentions_fn),
+            Self::Interface(instance) => instance.implementors.iter().any(NativeTy::mentions_fn),
             Self::Int
             | Self::Bool
             | Self::Float
@@ -187,15 +217,52 @@ impl<'db> NativeTy<'db> {
         }
     }
 
-    /// The members of a union, or of a nullable union.
+    /// Whether this type is, or mentions, an interface: such a value has
+    /// no JSON decoding (the VM has no class to decode into either).
+    pub fn mentions_interface(&self) -> bool {
+        match self {
+            Self::Interface(_) => true,
+            Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
+                inner.mentions_interface()
+            }
+            Self::Map(key, value) => key.mentions_interface() || value.mentions_interface(),
+            Self::Union(members) => members.iter().any(NativeTy::mentions_interface),
+            Self::Fn(params, ret) => {
+                params.iter().any(NativeTy::mentions_interface) || ret.mentions_interface()
+            }
+            Self::Int
+            | Self::Bool
+            | Self::Float
+            | Self::Bigint
+            | Self::Str
+            | Self::Null
+            | Self::Class(_)
+            | Self::Enum(_)
+            | Self::Thrown => false,
+        }
+    }
+
+    /// The variants of a generated enum value: the members of a union, or
+    /// the implementors of an interface, directly or behind `| null`.
     pub fn union_members(&self) -> Option<&[NativeTy<'db>]> {
         match self {
             Self::Union(members) => Some(members),
+            Self::Interface(instance) => Some(&instance.implementors),
             Self::Option(inner) => match &**inner {
                 Self::Union(members) => Some(members),
+                Self::Interface(instance) => Some(&instance.implementors),
                 _ => None,
             },
             _ => None,
+        }
+    }
+
+    /// Whether this is an interface, or a nullable interface.
+    pub fn is_interface(&self) -> bool {
+        match self {
+            Self::Interface(_) => true,
+            Self::Option(inner) => matches!(&**inner, Self::Interface(_)),
+            _ => false,
         }
     }
 
@@ -235,6 +302,7 @@ impl<'db> NativeTy<'db> {
             Self::Enum(enum_ref) => name(TypeDecl::Enum(*enum_ref)).to_string(),
             Self::Option(inner) => format!("{}_or_null", inner.mangle(name)),
             Self::Union(members) => Self::mangle_members(members, name),
+            Self::Interface(instance) => name(TypeDecl::Interface(instance.clone())).to_string(),
             Self::Fn(params, ret) => format!(
                 "fn_{}_to_{}",
                 params
@@ -273,6 +341,52 @@ impl<'db> NativeTy<'db> {
                     param.unions(out);
                 }
                 ret.unions(out);
+            }
+            Self::Interface(instance) => {
+                for implementor in &instance.implementors {
+                    implementor.unions(out);
+                }
+            }
+            Self::Int
+            | Self::Bool
+            | Self::Float
+            | Self::Bigint
+            | Self::Str
+            | Self::Null
+            | Self::Class(_)
+            | Self::Enum(_)
+            | Self::Thrown => {}
+        }
+    }
+
+    /// Every interface this type mentions, innermost first.
+    pub fn interfaces(&self, out: &mut Vec<IfaceInst<'db>>) {
+        match self {
+            Self::Interface(instance) => {
+                for implementor in &instance.implementors {
+                    implementor.interfaces(out);
+                }
+                if !out.contains(instance) {
+                    out.push(instance.clone());
+                }
+            }
+            Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
+                inner.interfaces(out);
+            }
+            Self::Map(key, value) => {
+                key.interfaces(out);
+                value.interfaces(out);
+            }
+            Self::Union(members) => {
+                for member in members {
+                    member.interfaces(out);
+                }
+            }
+            Self::Fn(params, ret) => {
+                for param in params {
+                    param.interfaces(out);
+                }
+                ret.interfaces(out);
             }
             Self::Int
             | Self::Bool
@@ -315,6 +429,11 @@ impl<'db> NativeTy<'db> {
                 }
                 ret.classes(out);
             }
+            Self::Interface(instance) => {
+                for implementor in &instance.implementors {
+                    implementor.classes(out);
+                }
+            }
             Self::Int
             | Self::Bool
             | Self::Float
@@ -347,6 +466,11 @@ impl<'db> NativeTy<'db> {
                     param.enums(out);
                 }
                 ret.enums(out);
+            }
+            Self::Interface(instance) => {
+                for implementor in &instance.implementors {
+                    implementor.enums(out);
+                }
             }
             Self::Int
             | Self::Bool
@@ -400,6 +524,10 @@ impl<'db> NativeTy<'db> {
                 let ret = ret.to_tokens(class_name);
                 quote! { Rc<dyn Fn(#(#params),*) -> Result<#ret, Thrown>> }
             }
+            Self::Interface(instance) => {
+                let name = class_name(TypeDecl::Interface(instance.clone()));
+                quote! { #name }
+            }
             Self::ArrayIter(inner) => {
                 let inner = inner.to_tokens(class_name);
                 quote! { bex_aot::array::Iter<#inner> }
@@ -442,6 +570,7 @@ impl<'db> NativeTy<'db> {
                     .join(", "),
                 ret.describe(class_name)
             ),
+            Self::Interface(instance) => class_name(TypeDecl::Interface(instance.clone())),
             Self::ArrayIter(inner) => {
                 format!("baml.iter.Iterator<Item = {}>", inner.describe(class_name))
             }
@@ -483,6 +612,9 @@ pub(crate) enum Coercion {
     /// A nullable union into one of its members: narrowed by a null test
     /// and a type test.
     UnwrapNarrow,
+    /// A nullable union into a union (or interface) with every member of
+    /// it and more: narrowed by a null test, then re-tagged.
+    UnwrapWiden,
 }
 
 impl Coercion {
@@ -498,7 +630,11 @@ impl Coercion {
     pub(crate) fn narrows(self) -> bool {
         matches!(
             self,
-            Self::Unwrap | Self::Narrow | Self::NarrowUnion | Self::UnwrapNarrow
+            Self::Unwrap
+                | Self::Narrow
+                | Self::NarrowUnion
+                | Self::UnwrapNarrow
+                | Self::UnwrapWiden
         )
     }
 }
@@ -508,9 +644,32 @@ fn subset(inner: &[NativeTy<'_>], outer: &[NativeTy<'_>]) -> bool {
     inner.iter().all(|member| outer.contains(member))
 }
 
+/// The variants of a generated enum type: a union's members or an
+/// interface's implementors. `None` for any other type.
+fn variants<'a, 'db>(ty: &'a NativeTy<'db>) -> Option<&'a [NativeTy<'db>]> {
+    match ty {
+        NativeTy::Union(members) => Some(members),
+        NativeTy::Interface(instance) => Some(&instance.implementors),
+        _ => None,
+    }
+}
+
+/// Whether a value of type `member` is held by one variant of the enum
+/// type with `variants`: directly, or, for an interface among them, by
+/// one of its implementors (the printer injects through that variant).
+pub(crate) fn holds(variants: &[NativeTy<'_>], member: &NativeTy<'_>) -> bool {
+    variants.contains(member)
+        || variants.iter().any(|variant| {
+            matches!(variant, NativeTy::Interface(instance) if instance.implementors.contains(member))
+        })
+}
+
 /// Whether `actual` can be stored into a place of type `expected`, and how.
+/// A union and an interface are both generated enums here: a member (or
+/// an implementor) is injected into its variant, read back by narrowing,
+/// and an enum with a subset of another's variants is re-tagged into it.
 pub(crate) fn coercion(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> Option<Coercion> {
-    use NativeTy::{Null, Option as Opt, Union};
+    use NativeTy::{Null, Option as Opt};
     if actual == expected {
         return Some(Coercion::Identity);
     }
@@ -518,28 +677,28 @@ pub(crate) fn coercion(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> Option
         (_, Opt(inner)) if **inner == *actual => Coercion::Wrap,
         (Null, Opt(_)) => Coercion::Null,
         (Opt(inner), _) if **inner == *expected => Coercion::Unwrap,
-        (Union(from), Union(to)) if subset(from, to) => Coercion::Widen,
-        (Union(from), Union(to)) if subset(to, from) => Coercion::NarrowUnion,
-        (member, Union(members)) if members.contains(member) => Coercion::Inject,
-        (Union(members), member) if members.contains(member) => Coercion::Narrow,
-        (Opt(from), Opt(to)) => match (&**from, &**to) {
-            (Union(from), Union(to)) if subset(from, to) => Coercion::MapWiden,
-            (member, Union(members)) if members.contains(member) => Coercion::MapInject,
+        (Opt(from), Opt(to)) => match (variants(from), variants(to)) {
+            (Some(from), Some(to)) if subset(from, to) => Coercion::MapWiden,
+            (_, Some(members)) if holds(members, from) => Coercion::MapInject,
             _ => return None,
         },
-        (Union(from), Opt(to)) => match &**to {
-            Union(to) if subset(from, to) => Coercion::WidenSome,
+        (_, Opt(to)) => match (variants(actual), variants(to)) {
+            (Some(from), Some(to)) if subset(from, to) => Coercion::WidenSome,
+            (_, Some(members)) if holds(members, actual) => Coercion::InjectSome,
             _ => return None,
         },
-        (member, Opt(to)) => match &**to {
-            Union(members) if members.contains(member) => Coercion::InjectSome,
+        (Opt(from), _) => match (variants(from), variants(expected)) {
+            (Some(from), Some(to)) if subset(from, to) => Coercion::UnwrapWiden,
+            (Some(members), _) if holds(members, expected) => Coercion::UnwrapNarrow,
             _ => return None,
         },
-        (Opt(from), member) => match &**from {
-            Union(members) if members.contains(member) => Coercion::UnwrapNarrow,
+        _ => match (variants(actual), variants(expected)) {
+            (Some(from), Some(to)) if subset(from, to) => Coercion::Widen,
+            (Some(from), Some(to)) if subset(to, from) => Coercion::NarrowUnion,
+            (_, Some(members)) if holds(members, actual) => Coercion::Inject,
+            (Some(members), _) if holds(members, expected) => Coercion::Narrow,
             _ => return None,
         },
-        _ => return None,
     })
 }
 
@@ -549,6 +708,12 @@ pub(crate) fn coercion(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> Option
 pub(crate) trait Resolver<'db> {
     fn class(&mut self, head: &DeclName, args: &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported>;
     fn enum_(&mut self, head: &DeclName) -> Result<NativeTy<'db>, Unsupported>;
+    fn interface(
+        &mut self,
+        head: &DeclName,
+        args: &[RuntimeTy],
+        assoc: &[(Name, RuntimeTy)],
+    ) -> Result<NativeTy<'db>, Unsupported>;
 }
 
 /// Map a runtime type to its native representation, resolving the classes
@@ -677,7 +842,7 @@ pub(crate) fn from_runtime_ty<'db>(
             NativeTy::Fn(native_params, Box::new(from_runtime_ty(ret, class)?))
         }
         RuntimeTy::Future(..) => return Err(Unsupported("future".into())),
-        RuntimeTy::Interface(..) => return Err(Unsupported("interface".into())),
+        RuntimeTy::Interface(head, args, assoc) => class.interface(head, args, assoc)?,
         RuntimeTy::Unknown => return Err(Unsupported("unknown".into())),
         RuntimeTy::Never => return Err(Unsupported("never".into())),
         RuntimeTy::TypeAlias(_) => return Err(Unsupported("type alias".into())),
@@ -717,6 +882,15 @@ mod tests {
 
         fn enum_(&mut self, _: &DeclName) -> Result<NativeTy<'db>, Unsupported> {
             Err(Unsupported("enum".into()))
+        }
+
+        fn interface(
+            &mut self,
+            _: &DeclName,
+            _: &[RuntimeTy],
+            _: &[(Name, RuntimeTy)],
+        ) -> Result<NativeTy<'db>, Unsupported> {
+            Err(Unsupported("interface".into()))
         }
     }
 

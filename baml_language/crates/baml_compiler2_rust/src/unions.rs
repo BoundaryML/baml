@@ -58,6 +58,7 @@ pub(crate) fn member_tag(member: &NativeTy<'_>) -> Option<i64> {
         NativeTy::Class(_)
         | NativeTy::Option(_)
         | NativeTy::Union(_)
+        | NativeTy::Interface(_)
         | NativeTy::Fn(..)
         | NativeTy::ArrayIter(_)
         | NativeTy::Thrown => return None,

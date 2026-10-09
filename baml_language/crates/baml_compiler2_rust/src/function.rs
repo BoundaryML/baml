@@ -44,18 +44,23 @@ use baml_base::LangPackage;
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package::file_package,
-    item_data::{MethodOwner, function_data, method_owner},
+    item_data::{MethodOwner, function_data, function_has_body, interface_data, method_owner},
     loc::{DeclRef, FunctionLoc},
     package::lang_roots,
 };
-use baml_compiler2_hir_ty::layout;
+use baml_compiler2_hir_ty::{
+    impls::{ResolvedImplementation, resolve_implementation},
+    interfaces::resolve_interface_fields,
+    layout,
+    lower::{function_signature, impl_frame, interface_frame},
+};
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, CellId, Constant, IndexKind, IntrinsicOp, Local, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place, RealizedTy, RuntimeTy, Rvalue,
     ShortCircuitKind, Statement, StatementKind, SwitchKey, Terminator, TyTemplate, TypeTest,
     UnaryOp, function_link_name, lower_function,
 };
-use baml_type::{Int63, Literal};
+use baml_type::{Int63, Literal, Name, Ty, interned::InferInterface, unify::substitute_ty};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -63,7 +68,7 @@ use crate::{
     classes::ClassTable,
     generics::{Frame, FrameMismatch, Instance, mentions_unknown},
     structure::{Cfg, Flow, Stmt, structurize},
-    types::{ClassInst, Coercion, NativeTy, TypeDecl, Unsupported, coercion},
+    types::{ClassInst, Coercion, IfaceInst, NativeTy, TypeDecl, Unsupported, coercion},
     unions::{MemberTest, TestSite, member_tag, tag_variants},
 };
 
@@ -167,6 +172,29 @@ pub(crate) enum CmpKind {
     Bool,
 }
 
+/// A `baml.ops.Compare` relation derived from `cmp`, as the interface's
+/// default bodies derive them: `lt` is `cmp == Less`, `le` is `cmp !=
+/// Greater`, `gt` is `cmp == Greater`, `ge` is `cmp != Less`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CompareOp {
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+impl CompareOp {
+    fn from_method(method: &str) -> Option<Self> {
+        Some(match method {
+            "lt" => Self::Lt,
+            "le" => Self::Le,
+            "gt" => Self::Gt,
+            "ge" => Self::Ge,
+            _ => return None,
+        })
+    }
+}
+
 /// A `baml.Array` method that calls back into a function value. Every one
 /// of them walks a snapshot of the array taken before the first callback,
 /// as the VM's continuations do, so a callback that mutates the array is
@@ -259,7 +287,7 @@ impl ArrayCallback {
 }
 
 /// A stdlib function mapped to a `bex_aot` call rather than compiled.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub(crate) enum Builtin<'db> {
     /// `baml.Array.push<T>(ty, arr, v)`; the result is the new length.
     ArrayPush,
@@ -300,6 +328,16 @@ pub(crate) enum Builtin<'db> {
     /// `virtual_call cmp as baml.ops.Compare` on two primitives: the
     /// `baml.ops.Ordering` variant of the language's order.
     Cmp(CmpKind),
+    /// `virtual_call lt/le/gt/ge as baml.ops.Compare` on two primitives:
+    /// the relation over the language's order.
+    CompareOp { op: CompareOp, kind: CmpKind },
+    /// `virtual_call lt/le/gt/ge as baml.ops.Compare` on a class with its
+    /// own `cmp`: the interface's default body, the relation over the
+    /// `baml.ops.Ordering` the class's `cmp` returns.
+    CompareVia {
+        op: CompareOp,
+        cmp: Box<DirectCall<'db>>,
+    },
     /// A `baml.Array` method calling back into a function value. `wanted`
     /// is the function type the runtime calls (the array's element type in
     /// the parameters); the printer adapts the argument's own type to it.
@@ -309,21 +347,40 @@ pub(crate) enum Builtin<'db> {
     },
 }
 
+/// A direct call of another source function (at the type arguments the
+/// call site passes, for a generic one), admitted separately.
+#[derive(Debug, Clone)]
+pub(crate) struct DirectCall<'db> {
+    pub callee: Instance<'db>,
+    /// The callee's parameter types; each argument coerces to its own.
+    pub args: Vec<NativeTy<'db>>,
+    /// The callee's return type; the destination is it or its `| null`.
+    pub result: NativeTy<'db>,
+    /// Per argument, the callee's constant default when the call omits
+    /// that argument: the printer passes the constant instead of the
+    /// `<omitted>` sentinel. See [`default_constants`].
+    pub substituted: Vec<Option<Constant<'db>>>,
+}
+
 /// What a `Call` or `VirtualCall` terminator does in the generated code.
 #[derive(Debug, Clone)]
 pub(crate) enum CallKind<'db> {
-    /// A direct call of another source function (at the type arguments the
-    /// call site passes, for a generic one), admitted separately.
-    Direct {
-        callee: Instance<'db>,
-        /// The callee's parameter types; each argument coerces to its own.
-        args: Vec<NativeTy<'db>>,
-        /// The callee's return type; the destination is it or its `| null`.
+    /// A direct call, including an interface method resolved statically on
+    /// a receiver whose concrete type is known (D5).
+    Direct(DirectCall<'db>),
+    /// An interface method call on an interface-typed receiver: a `match`
+    /// over the implementors, each arm the static call for that
+    /// implementor, every arm's result lifted into `result`.
+    Virtual {
+        /// The receiver's index among the value arguments.
+        receiver: usize,
+        /// The interface type the receiver is read as (its `| null` is
+        /// narrowed away by the checker's null test).
+        receiver_ty: NativeTy<'db>,
+        /// Parallel to the interface's implementors.
+        arms: Vec<DirectCall<'db>>,
+        /// The interface method's return type at `Self` = the interface.
         result: NativeTy<'db>,
-        /// Per argument, the callee's constant default when the call omits
-        /// that argument: the printer passes the constant instead of the
-        /// `<omitted>` sentinel. See [`default_constants`].
-        substituted: Vec<Option<Constant<'db>>>,
     },
     /// `baml.sys.panic("...")`: returns the panic instead of calling.
     Panic(String),
@@ -439,6 +496,11 @@ pub(crate) struct Candidate<'db> {
     pub generic_values: FxHashMap<(FunctionLoc<'db>, Vec<TyTemplate>), Instance<'db>>,
     /// The native types of the instance's type arguments, which name it.
     pub type_args: Vec<NativeTy<'db>>,
+    /// For each interface field read or store (by statement), the struct
+    /// field it reaches in each class the receiver may hold, parallel to
+    /// the receiver's variants (one entry for a class receiver): the
+    /// field the `implements` block links, as the VM's field links do.
+    pub field_links: FxHashMap<(BlockId, usize), Vec<proc_macro2::Ident>>,
     /// Whether the body calls through a function value: such a call can
     /// close a cycle the static call graph does not see, so the function
     /// guards its depth as a recursive one does.
@@ -510,12 +572,20 @@ pub(crate) fn analyze<'db>(
 ) -> Result<Candidate<'db>, Rejection> {
     let loc = instance.loc;
     let data = function_data(db, loc);
-    // A method of a concrete class, declared in the class or in an
-    // `implements` block, is a function whose first parameter is the
-    // receiver: calls to it are direct. Only an interface's default method,
-    // whose receiver is `Self`, needs dispatch the subset lacks.
+    // An interface's default method runs at the implementor it was adopted
+    // for: an instance whose frame opens with that `Self`. On its own it is
+    // reached from no call site.
     if let Some(MethodOwner::Interface(_)) = method_owner(db, loc) {
-        return Err(Rejection::unsupported("interface method"));
+        if instance.type_args.is_empty() {
+            return Err(Rejection::unsupported(
+                "interface default method (compiled per implementor, at its call sites)",
+            ));
+        }
+        if !function_has_body(db, loc) {
+            return Err(Rejection::invalid(
+                "a required interface method was resolved as a callee",
+            ));
+        }
     }
     let frame = match Frame::new(db, loc, instance.type_args.clone()) {
         Ok(frame) => frame,
@@ -732,6 +802,7 @@ fn analyze_body<'db>(
         closures: FxHashMap::default(),
         function_values: FxHashMap::default(),
         generic_values: FxHashMap::default(),
+        field_links: FxHashMap::default(),
         indirect: false,
         frame,
     };
@@ -795,6 +866,7 @@ fn analyze_body<'db>(
         closures: closure_captures,
         function_values,
         generic_values,
+        field_links,
         indirect,
         frame,
         ..
@@ -853,6 +925,7 @@ fn analyze_body<'db>(
         lambdas,
         function_values,
         generic_values,
+        field_links,
         type_args,
         indirect,
     })
@@ -897,6 +970,8 @@ struct Env<'a, 'db> {
     function_values: FxHashMap<Instance<'db>, NativeTy<'db>>,
     /// See [`Candidate::generic_values`].
     generic_values: FxHashMap<(FunctionLoc<'db>, Vec<TyTemplate>), Instance<'db>>,
+    /// See [`Candidate::field_links`].
+    field_links: FxHashMap<(BlockId, usize), Vec<proc_macro2::Ident>>,
     /// See [`Candidate::indirect`].
     indirect: bool,
     /// The generic frame the body runs in: every declared type and every
@@ -1476,10 +1551,12 @@ impl<'db> Env<'_, 'db> {
                 // The checker narrowed the union to one class and lowering
                 // reads the field by its slot in that class, which the MIR
                 // does not name.
-                union @ NativeTy::Union(_) => Err(Rejection::unsupported(format!(
-                    "field read on a narrowed `{}` (bind it with `let x: C =>` to read its fields)",
-                    self.describe(&union)
-                ))),
+                union @ (NativeTy::Union(_) | NativeTy::Interface(_)) => {
+                    Err(Rejection::unsupported(format!(
+                        "field read on a narrowed `{}` (bind it with `let x: C =>` to read its fields)",
+                        self.describe(&union)
+                    )))
+                }
                 NativeTy::Thrown => Err(Rejection::unsupported(
                     "field read on a caught error typed by the checker, without a class test (bind it with `let e: C =>`)",
                 )),
@@ -1896,6 +1973,9 @@ impl<'db> Env<'_, 'db> {
                 let ty = self.operand_ty(operand, None)?;
                 let decided = match &ty {
                     NativeTy::Union(members) => MemberTest::Variants(tag_variants(members, *tag)),
+                    NativeTy::Interface(instance) => {
+                        MemberTest::Variants(tag_variants(&instance.implementors, *tag))
+                    }
                     NativeTy::Option(inner) => {
                         if *tag == baml_type::typetag::NULL {
                             MemberTest::Null
@@ -1903,6 +1983,9 @@ impl<'db> Env<'_, 'db> {
                             match &**inner {
                                 NativeTy::Union(members) => {
                                     MemberTest::Variants(tag_variants(members, *tag))
+                                }
+                                NativeTy::Interface(instance) => {
+                                    MemberTest::Variants(tag_variants(&instance.implementors, *tag))
                                 }
                                 single => MemberTest::Variants(
                                     (member_tag(single) == Some(*tag))
@@ -1976,6 +2059,22 @@ impl<'db> Env<'_, 'db> {
             Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::MakeVirtualFunction { .. } => {
                 Err(Rejection::unsupported("interface method used as a value"))
             }
+            // An interface field read: the field by name of the receiver's
+            // class, or of each implementor when the receiver is the
+            // interface, every one of the field's declared type.
+            Rvalue::VirtualFieldAccess {
+                iface,
+                receiver,
+                field,
+                ..
+            } => {
+                let receiver_ty = self.operand_ty(receiver, None)?;
+                let site = match site {
+                    Some(TestSite::Statement(block, index)) => Some((block, index)),
+                    _ => None,
+                };
+                self.interface_field(iface, &receiver_ty, field, site)
+            }
             // Registered up front (`register_function_values`): the
             // instance's function type.
             Rvalue::MakeGenericFunction {
@@ -1999,6 +2098,99 @@ impl<'db> Env<'_, 'db> {
         }
     }
 
+    /// The type of the interface field `field` read or written through a
+    /// receiver of `receiver_ty`: the field's declared type at the
+    /// interface's arguments, which every implementor's own field must be
+    /// (the checker's implements rule), and which the printer reads from the
+    /// receiver's class or from each implementor.
+    fn interface_field(
+        &mut self,
+        iface: &baml_compiler2_mir::TyTemplateInterface,
+        receiver_ty: &NativeTy<'db>,
+        field: &Name,
+        site: Option<(BlockId, usize)>,
+    ) -> Result<NativeTy<'db>, Rejection> {
+        let instance = self.iface_instance(iface)?;
+        let DeclRef::Source(iface_loc) = instance.iface else {
+            return Err(Rejection::unsupported(
+                "field of a mounted package's interface",
+            ));
+        };
+        let declared = resolve_interface_fields(self.db, iface_loc)
+            .fields
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|(_, ty)| ty.clone())
+            .ok_or_else(|| Rejection::invalid(format!("no interface field `{field}`")))?;
+        let frame = interface_frame(self.db, iface_loc);
+        let mut bindings: FxHashMap<baml_type::ParamTy, Ty> = FxHashMap::default();
+        let mut frame_values = vec![
+            self.plain_ty(&NativeTy::Interface(instance.clone()))
+                .expect("an interface has a type"),
+        ];
+        frame_values.extend(
+            instance
+                .args
+                .iter()
+                .map(|arg| Ty::from(arg.as_runtime_ty())),
+        );
+        for (param, value) in frame.iter().zip(frame_values) {
+            bindings.insert(param.clone(), value);
+        }
+        let runtime = RuntimeTy::try_from(&substitute_ty(&declared, &bindings)).map_err(|_| {
+            Rejection::unsupported(format!(
+                "interface field `{field}` has a compile-time-only type"
+            ))
+        })?;
+        let field_ty = self
+            .native_ty(&runtime)
+            .map_err(|rejection| rejection.in_what(&format!("interface field `{field}`")))?;
+        // Every class the receiver may be has the field, of that type: the
+        // receiver's own class, or each variant of an interface value or a
+        // union of implementors (its `| null` narrowed away by the checker).
+        let narrowed = match receiver_ty {
+            NativeTy::Option(inner) => (**inner).clone(),
+            other => other.clone(),
+        };
+        let classes: Vec<NativeTy<'db>> = narrowed
+            .union_members()
+            .map_or_else(|| vec![narrowed.clone()], <[NativeTy<'db>]>::to_vec);
+        let mut links = Vec::with_capacity(classes.len());
+        for class in &classes {
+            let NativeTy::Class(class) = class else {
+                return Err(Rejection::unsupported(format!(
+                    "interface field `{field}` read through a `{}` (only a class has fields)",
+                    self.describe(class)
+                )));
+            };
+            let Some(linked) = self.classes.field_link(&instance, class, field) else {
+                return Err(Rejection::invalid(format!(
+                    "class `{}` implements the interface but links no field to `{field}`",
+                    self.classes.instance_link_name(class)
+                )));
+            };
+            let info = self.classes.info(class)?;
+            let own = info
+                .fields
+                .iter()
+                .find(|candidate| candidate.ident == linked)
+                .ok_or_else(|| Rejection::invalid(format!("no field `{linked}`")))?;
+            if own.ty != field_ty {
+                return Err(Rejection::unsupported(format!(
+                    "interface field `{field}`: `{}` declares it as `{}`, the interface as `{}`",
+                    info.link_name,
+                    self.describe(&own.ty),
+                    self.describe(&field_ty)
+                )));
+            }
+            links.push(linked);
+        }
+        if let Some(site) = site {
+            self.field_links.insert(site, links);
+        }
+        Ok(field_ty)
+    }
+
     fn record_test(&mut self, site: Option<TestSite>, decided: MemberTest) {
         if let Some(site) = site {
             self.member_tests.insert(site, decided);
@@ -2018,8 +2210,10 @@ impl<'db> Env<'_, 'db> {
     ) -> Result<MemberTest, Rejection> {
         let (members, nullable): (Vec<NativeTy<'db>>, bool) = match ty {
             NativeTy::Union(members) => (members.clone(), false),
+            NativeTy::Interface(instance) => (instance.implementors.clone(), false),
             NativeTy::Option(inner) => match &**inner {
                 NativeTy::Union(members) => (members.clone(), true),
+                NativeTy::Interface(instance) => (instance.implementors.clone(), true),
                 single => (vec![single.clone()], true),
             },
             NativeTy::ArrayIter(_) | NativeTy::Thrown => {
@@ -2030,13 +2224,36 @@ impl<'db> Env<'_, 'db> {
             }
             single => (vec![single.clone()], false),
         };
-        let variants_of = |member: &NativeTy<'db>| -> Vec<usize> {
-            members
+        // A variant holds values of the tested type when it is that type,
+        // or an implementor of it when the tested type is an interface. A
+        // tested type reached only through an interface variant (`u is A`
+        // on an `int | I`, `A` implementing `I`) would need a test inside
+        // that variant, which a variant test does not express.
+        let described = self.describe(ty);
+        // `Err` names the tested type reached only through an interface.
+        let variants_of = |member: &NativeTy<'db>| -> Result<Vec<usize>, NativeTy<'db>> {
+            let direct: Vec<usize> = members
                 .iter()
                 .enumerate()
-                .filter(|(_, candidate)| *candidate == member)
+                .filter(|(_, candidate)| {
+                    *candidate == member
+                        || matches!(member, NativeTy::Interface(instance) if instance.implementors.contains(candidate))
+                })
                 .map(|(index, _)| index)
-                .collect()
+                .collect();
+            let through_interface = members.iter().any(|candidate| {
+                matches!(candidate, NativeTy::Interface(instance) if instance.implementors.contains(member))
+            });
+            if direct.is_empty() && through_interface {
+                return Err(member.clone());
+            }
+            Ok(direct)
+        };
+        let through = |env: &Self, member: NativeTy<'db>| {
+            Rejection::unsupported(format!(
+                "type test against `{}` on a `{described}` (reached only through an interface member; narrow to the interface first)",
+                env.describe(&member)
+            ))
         };
         Ok(match test {
             TypeTest::Class { class, args } => {
@@ -2045,11 +2262,14 @@ impl<'db> Env<'_, 'db> {
                     realized.push(self.realize_template(template)?);
                 }
                 let instance = ClassInst::new(*class, realized);
-                MemberTest::Variants(variants_of(&NativeTy::Class(instance)))
+                MemberTest::Variants(
+                    variants_of(&NativeTy::Class(instance))
+                        .map_err(|member| through(self, member))?,
+                )
             }
-            TypeTest::Enum(enum_ref) => {
-                MemberTest::Variants(variants_of(&NativeTy::Enum(*enum_ref)))
-            }
+            TypeTest::Enum(enum_ref) => MemberTest::Variants(
+                variants_of(&NativeTy::Enum(*enum_ref)).map_err(|member| through(self, member))?,
+            ),
             TypeTest::Template(template) => match template {
                 TyTemplate::Null => {
                     if nullable {
@@ -2069,7 +2289,10 @@ impl<'db> Env<'_, 'db> {
                             ));
                         }
                     };
-                    match variants_of(&primitive).as_slice() {
+                    match variants_of(&primitive)
+                        .map_err(|member| through(self, member))?
+                        .as_slice()
+                    {
                         [] => MemberTest::Variants(Vec::new()),
                         [variant] => MemberTest::Literal {
                             variant: *variant,
@@ -2095,7 +2318,10 @@ impl<'db> Env<'_, 'db> {
                                 info.link_name
                             ))
                         })?;
-                    match variants_of(&NativeTy::Enum(enum_ref)).as_slice() {
+                    match variants_of(&NativeTy::Enum(enum_ref))
+                        .map_err(|member| through(self, member))?
+                        .as_slice()
+                    {
                         [] => MemberTest::Variants(Vec::new()),
                         [variant] => MemberTest::EnumVariant {
                             variant: *variant,
@@ -2135,7 +2361,9 @@ impl<'db> Env<'_, 'db> {
                             }
                             invalid @ Rejection::Invalid(_) => invalid,
                         })?;
-                    MemberTest::Variants(variants_of(&tested))
+                    MemberTest::Variants(
+                        variants_of(&tested).map_err(|member| through(self, member))?,
+                    )
                 }
             },
         })
@@ -2296,8 +2524,32 @@ impl<'db> Env<'_, 'db> {
                 }
                 Ok(None)
             }
-            StatementKind::VirtualFieldStore { .. } => {
-                Err(Rejection::unsupported("interface field store"))
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field,
+                value,
+                ..
+            } => {
+                let receiver_ty = self.operand_ty(receiver, None)?;
+                let field_ty =
+                    self.interface_field(iface, &receiver_ty, field, Some((block, index)))?;
+                let actual = self.operand_ty(value, Some(&field_ty))?;
+                if !stores(&actual, &field_ty) {
+                    return Err(mismatch(
+                        &actual,
+                        &field_ty,
+                        |ty| self.describe(ty),
+                        || {
+                            format!(
+                                "interface field `{field}` of type `{}` is assigned a `{}`",
+                                self.describe(&field_ty),
+                                self.describe(&actual)
+                            )
+                        },
+                    ));
+                }
+                Ok(None)
             }
         }
     }
@@ -2616,8 +2868,9 @@ impl<'db> Env<'_, 'db> {
             Terminator::Call { .. } | Terminator::VirtualCall { .. } => {
                 match self.call_target(terminator)? {
                     CallKind::Builtin { result, .. }
-                    | CallKind::Direct { result, .. }
-                    | CallKind::Indirect { result, .. } => Ok(result),
+                    | CallKind::Direct(DirectCall { result, .. })
+                    | CallKind::Indirect { result, .. }
+                    | CallKind::Virtual { result, .. } => Ok(result),
                     CallKind::Panic(_) => Err(Rejection::unsupported("read of a `never` local")),
                 }
             }
@@ -2663,8 +2916,9 @@ impl<'db> Env<'_, 'db> {
             }
             (
                 CallKind::Builtin { result, .. }
-                | CallKind::Direct { result, .. }
-                | CallKind::Indirect { result, .. },
+                | CallKind::Direct(DirectCall { result, .. })
+                | CallKind::Indirect { result, .. }
+                | CallKind::Virtual { result, .. },
                 LocalKind::Value(ty),
             ) if !stores(result, ty) => {
                 return Err(Rejection::invalid(format!(
@@ -2858,12 +3112,12 @@ impl<'db> Env<'_, 'db> {
                 if !matches!(destination, Place::Local(_)) {
                     return Err(Rejection::unsupported("call destination is not a local"));
                 }
-                Ok(CallKind::Direct {
+                Ok(CallKind::Direct(DirectCall {
                     callee,
                     args: params,
                     result,
                     substituted,
-                })
+                }))
             }
             Terminator::VirtualCall {
                 has_trace,
@@ -2873,6 +3127,7 @@ impl<'db> Env<'_, 'db> {
                 args,
                 ntypeargs,
                 self_arg,
+                destination,
                 unwind,
                 ..
             } => {
@@ -2880,6 +3135,31 @@ impl<'db> Env<'_, 'db> {
                     return Err(Rejection::unsupported("call with a trace attachment"));
                 }
                 let _ = unwind;
+                let (type_args, args) = args.split_at(*ntypeargs);
+                let iface_name = baml_compiler2_hir::package::spelling(self.db)
+                    .wire(&iface.name)
+                    .to_string();
+                let receiver = args.get(*self_arg).ok_or_else(|| {
+                    Rejection::invalid("virtual call receiver index is out of range")
+                })?;
+                let receiver_ty = self.operand_ty(receiver, None)?;
+                // A user interface (or a stdlib one with source
+                // implementations) dispatches on the receiver's type: a
+                // static call when it is concrete, a `match` over the
+                // implementors when it is the interface.
+                if !self.is_lang_interface(&iface.name) {
+                    if !matches!(destination, Place::Local(_)) {
+                        return Err(Rejection::unsupported("call destination is not a local"));
+                    }
+                    return self.interface_call(
+                        iface,
+                        method,
+                        type_args,
+                        args,
+                        *self_arg,
+                        &receiver_ty,
+                    );
+                }
                 if *ntypeargs != 0 {
                     return Err(Rejection::unsupported(
                         "interface method call with type arguments",
@@ -2892,13 +3172,6 @@ impl<'db> Env<'_, 'db> {
                         "call with named or omitted arguments",
                     ));
                 }
-                let iface_name = baml_compiler2_hir::package::spelling(self.db)
-                    .wire(&iface.name)
-                    .to_string();
-                let receiver = args.get(*self_arg).ok_or_else(|| {
-                    Rejection::invalid("virtual call receiver index is out of range")
-                })?;
-                let receiver_ty = self.operand_ty(receiver, None)?;
                 let (builtin, result) = match (iface_name.as_str(), method.as_str(), &receiver_ty) {
                     ("baml.iter.Iterable", "iter", NativeTy::Array(element)) if args.len() == 1 => {
                         (Builtin::Iter, NativeTy::ArrayIter(element.clone()))
@@ -2943,23 +3216,66 @@ impl<'db> Env<'_, 'db> {
                         }
                         (Builtin::ToStringDefault, NativeTy::Str)
                     }
+                    // A class with an explicit `implements Compare` (or
+                    // `Equals`): the block's own method, statically.
+                    ("baml.ops.Compare", "cmp", NativeTy::Class(_))
+                    | ("baml.ops.Equals", "eq", NativeTy::Class(_))
+                        if args.len() == 2 =>
+                    {
+                        if !matches!(destination, Place::Local(_)) {
+                            return Err(Rejection::unsupported("call destination is not a local"));
+                        }
+                        let target =
+                            self.static_target(&receiver_ty, iface, method, &[], args, *self_arg)?;
+                        return Ok(CallKind::Direct(target));
+                    }
                     ("baml.ops.Compare", "cmp", receiver_ty) if args.len() == 2 => {
-                        let kind = match receiver_ty {
-                            NativeTy::Int => CmpKind::Int,
-                            NativeTy::Float => CmpKind::Float,
-                            NativeTy::Str => CmpKind::Str,
-                            NativeTy::Bigint => CmpKind::Bigint,
-                            NativeTy::Bool => CmpKind::Bool,
-                            other => {
-                                return Err(Rejection::unsupported(format!(
-                                    "`cmp` on a `{}` (only primitives compare natively)",
-                                    self.describe(other)
-                                )));
-                            }
+                        let Some(kind) = cmp_kind(receiver_ty) else {
+                            return Err(Rejection::unsupported(format!(
+                                "`cmp` on a `{}` (only primitives compare natively)",
+                                self.describe(receiver_ty)
+                            )));
                         };
                         self.operand_of(&args[1], receiver_ty)?;
                         let ordering = self.ordering_enum()?;
                         (Builtin::Cmp(kind), ordering)
+                    }
+                    // The relations the interface derives from `cmp`: over
+                    // the language's order for a primitive, over the class's
+                    // own `cmp` otherwise.
+                    ("baml.ops.Compare", "lt" | "le" | "gt" | "ge", receiver_ty)
+                        if args.len() == 2 =>
+                    {
+                        let op = CompareOp::from_method(method).expect("matched");
+                        match cmp_kind(receiver_ty) {
+                            Some(kind) => {
+                                self.operand_of(&args[1], receiver_ty)?;
+                                (Builtin::CompareOp { op, kind }, NativeTy::Bool)
+                            }
+                            None if matches!(receiver_ty, NativeTy::Class(_)) => {
+                                let cmp = self.static_target(
+                                    receiver_ty,
+                                    iface,
+                                    "cmp",
+                                    &[],
+                                    args,
+                                    *self_arg,
+                                )?;
+                                (
+                                    Builtin::CompareVia {
+                                        op,
+                                        cmp: Box::new(cmp),
+                                    },
+                                    NativeTy::Bool,
+                                )
+                            }
+                            None => {
+                                return Err(Rejection::unsupported(format!(
+                                    "`{method}` on a `{}` (only primitives and classes with their own `cmp` compare natively)",
+                                    self.describe(receiver_ty)
+                                )));
+                            }
+                        }
                     }
                     ("baml.Sortable", "sort", NativeTy::Array(element)) if args.len() == 1 => {
                         let kind = match **element {
@@ -2986,6 +3302,465 @@ impl<'db> Env<'_, 'db> {
             }
             _ => Err(Rejection::invalid("not a call")),
         }
+    }
+
+    /// Whether `interface` is declared by an installed language package:
+    /// its methods are mapped by the table, never compiled from source.
+    fn is_lang_interface(&self, interface: &baml_type::DeclName) -> bool {
+        let lang = lang_roots(self.db);
+        [
+            LangPackage::Baml,
+            LangPackage::Reflect,
+            LangPackage::Ai,
+            LangPackage::Log,
+            LangPackage::Trace,
+        ]
+        .into_iter()
+        .any(|package| lang.is(package, interface.root()))
+    }
+
+    /// The interface a virtual call names, at its arguments realized against
+    /// the frame, as a native type: the enum its values are.
+    fn iface_instance(
+        &mut self,
+        iface: &baml_compiler2_mir::TyTemplateInterface,
+    ) -> Result<IfaceInst<'db>, Rejection> {
+        let template = iface.to_template();
+        let native = self.template_ty(&template)?;
+        match native {
+            NativeTy::Interface(instance) => Ok(instance),
+            other => Err(Rejection::invalid(format!(
+                "interface `{}` maps to `{}`",
+                self.classes
+                    .spell(&RuntimeTy::from(template.substitute_symbolic(&[]))),
+                self.describe(&other)
+            ))),
+        }
+    }
+
+    /// An interface method call: resolved statically when the receiver's
+    /// type is concrete, dispatched over the implementors when it is the
+    /// interface itself.
+    fn interface_call(
+        &mut self,
+        iface: &baml_compiler2_mir::TyTemplateInterface,
+        method: &str,
+        type_args: &[Operand<'db>],
+        args: &[Operand<'db>],
+        self_arg: usize,
+        receiver_ty: &NativeTy<'db>,
+    ) -> Result<CallKind<'db>, Rejection> {
+        let mut method_args = Vec::with_capacity(type_args.len());
+        for operand in type_args {
+            let template = self.type_value(operand)?.clone();
+            method_args.push(self.realize_template(&template)?);
+        }
+        let iface_inst = self.iface_instance(iface);
+        // The receiver as the checker narrowed it: a null test strips the
+        // `| null`; what is left is one concrete type, or a generated enum
+        // (an interface value, or a union of implementors) whose variants
+        // are each a concrete receiver of their own.
+        let narrowed = match receiver_ty {
+            NativeTy::Option(inner) => (**inner).clone(),
+            other => other.clone(),
+        };
+        let Some(variants) = narrowed.union_members().map(<[NativeTy<'db>]>::to_vec) else {
+            // A concrete receiver: one static target.
+            let target =
+                self.static_target(&narrowed, iface, method, &method_args, args, self_arg)?;
+            return Ok(CallKind::Direct(target));
+        };
+        let iface_inst = iface_inst?;
+        let (wanted, result) = self.iface_method_signature(&iface_inst, method, &method_args)?;
+        let mut arms = Vec::with_capacity(variants.len());
+        for implementor in &variants {
+            let target =
+                self.static_target(implementor, iface, method, &method_args, args, self_arg)?;
+            if !stores(&target.result, &result) {
+                return Err(Rejection::unsupported(format!(
+                    "interface method `{}.{method}` on a `{}`: the implementation for `{}` returns a `{}`, not a `{}`",
+                    self.classes.spell(&RuntimeTy::from(
+                        iface.to_template().substitute_symbolic(&[])
+                    )),
+                    self.describe(receiver_ty),
+                    self.describe(implementor),
+                    self.describe(&target.result),
+                    self.describe(&result)
+                )));
+            }
+            for (index, (param, wanted_param)) in target.args.iter().zip(&wanted).enumerate() {
+                if index == self_arg {
+                    continue;
+                }
+                // Every other argument is passed to each arm as it is, so
+                // its arm's parameter must take what the interface's does.
+                if !stores(wanted_param, param) {
+                    return Err(Rejection::unsupported(format!(
+                        "interface method `{method}` on a `{}`: a `Self`-typed parameter (`{}` for `{}`)",
+                        self.describe(receiver_ty),
+                        self.describe(param),
+                        self.describe(implementor)
+                    )));
+                }
+            }
+            arms.push(target);
+        }
+        Ok(CallKind::Virtual {
+            receiver: self_arg,
+            receiver_ty: narrowed,
+            arms,
+            result,
+        })
+    }
+
+    /// The implementation of `iface`'s `method` for a receiver of the
+    /// concrete type `receiver_ty`, as the VM resolves it at run time from
+    /// the value's type: the `implements` block's own method, or the
+    /// interface's default body at `Self` = the receiver's type.
+    fn static_target(
+        &mut self,
+        receiver_ty: &NativeTy<'db>,
+        iface: &baml_compiler2_mir::TyTemplateInterface,
+        method: &str,
+        method_args: &[RealizedTy],
+        args: &[Operand<'db>],
+        self_arg: usize,
+    ) -> Result<DirectCall<'db>, Rejection> {
+        let iface_name = self.classes.spell(&RuntimeTy::from(
+            iface.to_template().substitute_symbolic(&[]),
+        ));
+        let described = format!(
+            "interface method `{iface_name}.{method}` on a `{}`",
+            self.describe(receiver_ty)
+        );
+        let concrete = self.plain_ty(receiver_ty).ok_or_else(|| {
+            Rejection::unsupported(format!("{described}: the receiver has no declared type"))
+        })?;
+        let mut generics = Vec::with_capacity(iface.generics.len());
+        for template in &iface.generics {
+            generics.push(baml_type::interned::Ty::from_plain(&Ty::from(
+                self.realize_template(template)?.as_runtime_ty(),
+            )));
+        }
+        let mut assoc = Vec::with_capacity(iface.associated_types.len());
+        for (name, template) in &iface.associated_types {
+            assoc.push((
+                name.clone(),
+                baml_type::interned::Ty::from_plain(&Ty::from(
+                    self.realize_template(template)?.as_runtime_ty(),
+                )),
+            ));
+        }
+        let wanted = InferInterface::new(
+            iface.name.clone(),
+            generics.into_boxed_slice(),
+            assoc.into_boxed_slice(),
+        );
+        let resolved = resolve_implementation(
+            self.db,
+            &baml_type::interned::Ty::from_plain(&concrete),
+            &wanted,
+        );
+        let callee = match resolved {
+            None => {
+                return Err(Rejection::invalid(format!(
+                    "{described}: no implementation (the checker admitted the call)"
+                )));
+            }
+            Some(ResolvedImplementation::StructuralDefault(_)) => {
+                return Err(Rejection::unsupported(format!(
+                    "{described} (the language's structural default)"
+                )));
+            }
+            Some(ResolvedImplementation::Explicit(implementation)) => {
+                match implementation.provided_method(self.db, &Name::new(method)) {
+                    Some(DeclRef::Source(loc)) => {
+                        // The block's generics, bound by matching the
+                        // receiver against its `for` type, open the
+                        // method's frame.
+                        let block = match implementation.block() {
+                            DeclRef::Source(block) => block,
+                            DeclRef::External(_) => {
+                                return Err(Rejection::unsupported(format!(
+                                    "{described} (implemented by a mounted package)"
+                                )));
+                            }
+                        };
+                        let mut type_args = Vec::new();
+                        for param in impl_frame(self.db, block) {
+                            let bound = implementation.bindings.get(&param).ok_or_else(|| {
+                                Rejection::invalid(format!(
+                                    "{described}: the implementation leaves `{param}` unbound"
+                                ))
+                            })?;
+                            let bound = baml_type::interned::ClosedTy::try_from(bound)
+                                .map_err(|_| {
+                                    Rejection::invalid(format!(
+                                        "{described}: the implementation binds `{param}` to an open type"
+                                    ))
+                                })?
+                                .to_plain();
+                            type_args.push(Self::realized_of_plain(&bound, &described)?);
+                        }
+                        type_args.extend(method_args.iter().cloned());
+                        self.instance(DeclRef::Source(loc), type_args)?
+                    }
+                    Some(DeclRef::External(_)) => {
+                        return Err(Rejection::unsupported(format!(
+                            "{described} (implemented by a mounted package)"
+                        )));
+                    }
+                    // The block adopts the interface's default body, which
+                    // runs at `Self` = the receiver's type.
+                    None => {
+                        let DeclRef::Source(iface_loc) =
+                            layout::interface_ref_of(self.db, &iface.name).ok_or_else(|| {
+                                Rejection::invalid(format!("{described}: no such interface"))
+                            })?
+                        else {
+                            return Err(Rejection::unsupported(format!(
+                                "{described} (a default of a mounted package's interface)"
+                            )));
+                        };
+                        let default = interface_data(self.db, iface_loc)
+                            .methods
+                            .iter()
+                            .copied()
+                            .find(|&candidate| {
+                                function_data(self.db, candidate).name.as_str() == method
+                            })
+                            .ok_or_else(|| {
+                                Rejection::invalid(format!("{described}: no such method"))
+                            })?;
+                        if !function_has_body(self.db, default) {
+                            return Err(Rejection::invalid(format!(
+                                "{described}: the block provides no body and the interface has no default"
+                            )));
+                        }
+                        let mut type_args = vec![Self::realized_of_plain(&concrete, &described)?];
+                        for template in &iface.generics {
+                            type_args.push(self.realize_template(template)?);
+                        }
+                        type_args.extend(method_args.iter().cloned());
+                        self.instance(DeclRef::Source(default), type_args)?
+                    }
+                }
+            }
+        };
+        let link_name = instance_link_name(self.db, &callee, self.classes);
+        let (params, result, defaults) = self.callee_signature(&callee, &link_name)?;
+        // An implementation may declare defaulted parameters past the
+        // interface's: the call passes what the interface declares, and
+        // the VM's callee prologue fills the rest, which here the call
+        // site does with the constants.
+        if params.len() < args.len() {
+            return Err(Rejection::invalid(format!(
+                "{described}: `{link_name}` takes {} arguments, {} passed",
+                params.len(),
+                args.len()
+            )));
+        }
+        let omitted = Operand::Constant(Constant::OmittedArg);
+        let mut substituted = Vec::with_capacity(params.len());
+        for (index, (param, default)) in params.iter().zip(&defaults).enumerate() {
+            let arg = args.get(index).unwrap_or(&omitted);
+            let substitute = if is_omitted(arg) {
+                let Some(constant) = default else {
+                    return Err(Rejection::invalid(format!(
+                        "{described}: an argument is omitted for a parameter without a default"
+                    )));
+                };
+                Some(Operand::Constant(constant.clone()))
+            } else {
+                None
+            };
+            substituted.push(
+                substitute
+                    .as_ref()
+                    .map(|_| default.clone().expect("checked")),
+            );
+            let arg = substitute.as_ref().unwrap_or(arg);
+            // The receiver is the implementor's value (or the interface
+            // value itself, for a default body); every other argument is
+            // read as the parameter.
+            let actual = if index == self_arg {
+                receiver_ty.clone()
+            } else {
+                self.operand_ty(arg, Some(param))?
+            };
+            if !fits(&actual, param) {
+                return Err(mismatch(
+                    &actual,
+                    param,
+                    |ty| self.describe(ty),
+                    || {
+                        format!(
+                            "{described}: `{link_name}` takes a `{}`, a `{}` is passed",
+                            self.describe(param),
+                            self.describe(&actual)
+                        )
+                    },
+                ));
+            }
+        }
+        Ok(DirectCall {
+            callee,
+            args: params,
+            result,
+            substituted,
+        })
+    }
+
+    /// `iface`'s `method` as declared, at `Self` = the interface and its
+    /// arguments bound: the parameter types every arm is called with and
+    /// the result every arm's return lifts into.
+    fn iface_method_signature(
+        &mut self,
+        iface: &IfaceInst<'db>,
+        method: &str,
+        method_args: &[RealizedTy],
+    ) -> Result<(Vec<NativeTy<'db>>, NativeTy<'db>), Rejection> {
+        let DeclRef::Source(iface_loc) = iface.iface else {
+            return Err(Rejection::unsupported(
+                "interface method of a mounted package's interface",
+            ));
+        };
+        let declared = interface_data(self.db, iface_loc)
+            .methods
+            .iter()
+            .copied()
+            .find(|&candidate| function_data(self.db, candidate).name.as_str() == method)
+            .ok_or_else(|| Rejection::invalid(format!("no interface method `{method}`")))?;
+        let signature = function_signature(self.db, declared);
+        // `Self`, the interface's parameters, then the method's own.
+        let frame = interface_frame(self.db, iface_loc);
+        let self_ty = Ty::Interface(
+            layout::interface_head(self.db, iface.iface),
+            iface
+                .args
+                .iter()
+                .map(|arg| Ty::from(arg.as_runtime_ty()))
+                .collect(),
+            iface
+                .assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), Ty::from(ty.as_runtime_ty())))
+                .collect(),
+        );
+        let mut bindings: FxHashMap<baml_type::ParamTy, Ty> = FxHashMap::default();
+        let mut frame_values = vec![self_ty];
+        frame_values.extend(iface.args.iter().map(|arg| Ty::from(arg.as_runtime_ty())));
+        for (param, value) in frame.iter().zip(frame_values) {
+            bindings.insert(param.clone(), value);
+        }
+        let own: Vec<_> = signature
+            .generic_params
+            .iter()
+            .filter(|param| !frame.contains(param))
+            .cloned()
+            .collect();
+        if own.len() != method_args.len() {
+            return Err(Rejection::invalid(format!(
+                "interface method `{method}` takes {} type arguments, {} passed",
+                own.len(),
+                method_args.len()
+            )));
+        }
+        for (param, value) in own.iter().zip(method_args) {
+            bindings.insert(param.clone(), Ty::from(value.as_runtime_ty()));
+        }
+        let mut map = |ty: &Ty, what: &str| -> Result<NativeTy<'db>, Rejection> {
+            let substituted = substitute_ty(ty, &bindings);
+            let runtime = RuntimeTy::try_from(&substituted).map_err(|_| {
+                Rejection::unsupported(format!(
+                    "interface method `{method}` {what} has a compile-time-only type"
+                ))
+            })?;
+            self.native_ty(&runtime).map_err(|rejection| {
+                rejection.in_what(&format!("interface method `{method}` {what}"))
+            })
+        };
+        let mut params = Vec::with_capacity(signature.params.len());
+        for param in &signature.params {
+            params.push(map(&param.ty, "parameter")?);
+        }
+        let result = map(&signature.ret, "return")?;
+        Ok((params, result))
+    }
+
+    /// The compiler's type for a native type, to ask the impl registry
+    /// about: `None` for a native-only type (an iterator, a caught error).
+    fn plain_ty(&self, ty: &NativeTy<'db>) -> Option<Ty> {
+        Some(match ty {
+            NativeTy::Int => Ty::Int,
+            NativeTy::Bool => Ty::Bool,
+            NativeTy::Float => Ty::Float,
+            NativeTy::Bigint => Ty::Bigint,
+            NativeTy::Str => Ty::String,
+            NativeTy::Null => Ty::Null,
+            NativeTy::Array(inner) => Ty::List(Box::new(self.plain_ty(inner)?)),
+            NativeTy::Map(key, value) => Ty::Map {
+                key: Box::new(self.plain_ty(key)?),
+                value: Box::new(self.plain_ty(value)?),
+            },
+            NativeTy::Class(instance) => Ty::Class(
+                layout::class_head(self.db, instance.class),
+                instance
+                    .args
+                    .iter()
+                    .map(|arg| Ty::from(arg.as_runtime_ty()))
+                    .collect(),
+            ),
+            NativeTy::Enum(enum_ref) => Ty::Enum(layout::enum_head(self.db, *enum_ref)),
+            NativeTy::Option(inner) => Ty::Union(Box::new([self.plain_ty(inner)?, Ty::Null])),
+            NativeTy::Union(members) => Ty::Union(
+                members
+                    .iter()
+                    .map(|member| self.plain_ty(member))
+                    .collect::<Option<_>>()?,
+            ),
+            NativeTy::Interface(instance) => Ty::Interface(
+                layout::interface_head(self.db, instance.iface),
+                instance
+                    .args
+                    .iter()
+                    .map(|arg| Ty::from(arg.as_runtime_ty()))
+                    .collect(),
+                instance
+                    .assoc
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), Ty::from(ty.as_runtime_ty())))
+                    .collect(),
+            ),
+            NativeTy::Fn(params, ret) => Ty::Function {
+                params: params
+                    .iter()
+                    .map(|param| {
+                        Some(baml_type::FunctionParamTy::required(
+                            None,
+                            self.plain_ty(param)?,
+                        ))
+                    })
+                    .collect::<Option<_>>()?,
+                ret: Box::new(self.plain_ty(ret)?),
+                throws: Box::new(Ty::Never),
+            },
+            NativeTy::ArrayIter(_) | NativeTy::Thrown => return None,
+        })
+    }
+
+    /// A compiler type as a realized type argument (an implementation's
+    /// binding, a receiver as `Self`).
+    fn realized_of_plain(ty: &Ty, described: &str) -> Result<RealizedTy, Rejection> {
+        RealizedTy::try_from(ty).map_err(|error| {
+            Rejection::unsupported(format!(
+                "{described}: the implementation binds a {}",
+                match error.variant {
+                    "TypeVar" => "type variable",
+                    _ => "compile-time-only type",
+                }
+            ))
+        })
     }
 
     /// The declaration `baml.<namespace>.<name>` of the installed `baml`
@@ -3154,6 +3929,11 @@ impl<'db> Env<'_, 'db> {
                 let target = self.template_ty(&template)?;
                 if target.mentions_fn() {
                     return Err(Rejection::unsupported("JSON decode into a function type"));
+                }
+                if target.mentions_interface() {
+                    return Err(Rejection::unsupported(
+                        "JSON decode into an interface (the VM has no class to decode into either)",
+                    ));
                 }
                 // A literal type erases to its primitive natively, so a
                 // decode into one would accept what the VM rejects.
@@ -3585,6 +4365,7 @@ fn baml_eq_supported(ty: &NativeTy<'_>) -> bool {
         NativeTy::Array(_)
         | NativeTy::Map(..)
         | NativeTy::Class(_)
+        | NativeTy::Interface(_)
         | NativeTy::Fn(..)
         | NativeTy::ArrayIter(_)
         | NativeTy::Thrown => false,
@@ -3608,7 +4389,10 @@ pub(crate) fn equality_common<'db>(
 /// Whether `ty` is a union or a nullable: a value the checker may have
 /// narrowed, which an operand then reads as the narrower type.
 fn narrowable(ty: &NativeTy<'_>) -> bool {
-    matches!(ty, NativeTy::Union(_) | NativeTy::Option(_))
+    matches!(
+        ty,
+        NativeTy::Union(_) | NativeTy::Option(_) | NativeTy::Interface(_)
+    )
 }
 
 /// The types a binary operation's operands are read as. A union or nullable
@@ -3723,6 +4507,18 @@ fn mismatch<'db>(
 
 fn is_null(operand: &Operand<'_>) -> bool {
     matches!(operand, Operand::Constant(Constant::Null))
+}
+
+/// The primitive order a value of `ty` compares by, if it is a primitive.
+fn cmp_kind(ty: &NativeTy<'_>) -> Option<CmpKind> {
+    Some(match ty {
+        NativeTy::Int => CmpKind::Int,
+        NativeTy::Float => CmpKind::Float,
+        NativeTy::Str => CmpKind::Str,
+        NativeTy::Bigint => CmpKind::Bigint,
+        NativeTy::Bool => CmpKind::Bool,
+        _ => return None,
+    })
 }
 
 /// Whether `operand` is the `<omitted>` sentinel of a defaulted argument.
@@ -4183,7 +4979,8 @@ fn rvalue_locals(value: &Rvalue<'_>, out: &mut Vec<Local>) -> bool {
                 operand_locals(capture, out);
             }
         }
-        Rvalue::LoadType(_) => {}
+        Rvalue::VirtualFieldAccess { receiver, .. } => operand_locals(receiver, out),
+        Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {}
         _ => return false,
     }
     true
@@ -4264,7 +5061,13 @@ fn statement_locals(kind: &StatementKind<'_>, out: &mut Vec<Local>) -> bool {
             out.push(*local);
             true
         }
-        StatementKind::VirtualFieldStore { .. } => false,
+        StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => {
+            operand_locals(receiver, out);
+            operand_locals(value, out);
+            true
+        }
     }
 }
 

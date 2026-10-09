@@ -117,9 +117,9 @@ fn emit_fixture(name: &str) -> native::NativeModule<'static> {
         std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
     let db: &'static _ = Box::leak(Box::new(setup_test_db(&source)));
     assert_no_user_diagnostic_errors(db);
-    // A generic function (or a method of a generic class) is compiled at
-    // its call sites, so the roots are the other declarations; the generic
-    // ones must be reached from them.
+    // A generic function (or a method of a generic class, or an
+    // interface's default method) is compiled at its call sites, so the
+    // roots are the other declarations; those must be reached from them.
     let roots: Vec<_> = db
         .workspace_files()
         .into_iter()
@@ -127,7 +127,7 @@ fn emit_fixture(name: &str) -> native::NativeModule<'static> {
         .filter(|&loc| {
             !matches!(
                 admit(db, loc),
-                Err(Rejection::Unsupported(reason)) if reason.contains("generic function (compiled at its call sites")
+                Err(Rejection::Unsupported(reason)) if reason.contains("(compiled")
             )
         })
         .collect();
@@ -1617,7 +1617,10 @@ function f(x: int | Shape) -> int { 1 }
 ",
         "f",
     );
-    assert_unsupported(&rejection, "interface (a union member)");
+    assert_unsupported(
+        &rejection,
+        "interface `user.Shape` has no implementor in the program (a union member)",
+    );
     let rejection = reject(
         r"
 class Box<T> { value: T }
@@ -2052,9 +2055,11 @@ function f(n: int) -> int {
     assert_unsupported(&rejection, "`catch` arm on a primitive type");
 }
 
+/// Narrowing an interface value to an implementor is a variant test on
+/// the generated enum, as on a union.
 #[test]
-fn rejects_narrowing_an_interface_value() {
-    let rejection = reject(
+fn narrows_an_interface_value_to_an_implementor() {
+    let module = compile_entry(
         r"
 interface Shape { function area(self) -> float throws never }
 class Sq { s: float }
@@ -2065,7 +2070,11 @@ function f(v: Shape) -> float {
 ",
         "f",
     );
-    assert_unsupported(&rejection, "interface");
+    assert_contains(
+        &module.rust_source,
+        "matches!(& _2, user_Shape::user_Sq(_))",
+    );
+    assert_contains(&module.rust_source, "user_Shape::user_Sq(value) => value,");
 }
 
 #[test]
@@ -2190,8 +2199,11 @@ interface Named {
     );
     assert_no_user_diagnostic_errors(&db);
     let loc = function_named(&db, "greet");
-    let rejection = admit(&db, loc).expect_err("a default method is outside the subset");
-    assert_unsupported(&rejection, "interface method");
+    let rejection = admit(&db, loc).expect_err("a default method has no root instance");
+    assert_unsupported(
+        &rejection,
+        "interface default method (compiled per implementor, at its call sites)",
+    );
 }
 
 /// Recursion is admitted; every function on a call cycle counts its frame
@@ -2426,11 +2438,15 @@ function f(xs: int[]) -> int[] {{
         "f",
     );
     assert_unsupported(&rejection, "`sort_by_key` with a `user.Key` key");
-    let rejection = reject(
+    // `cmp` on a class with its own implementation is that implementation.
+    let module = compile_entry(
         &format!("{KEY}\nfunction f(a: Key, b: Key) -> baml.ops.Ordering {{ a.cmp(b) }}\n"),
         "f",
     );
-    assert_unsupported(&rejection, "`cmp` on a `user.Key`");
+    assert_contains(
+        &module.rust_source,
+        "_0 = user___user_Key_as_baml_ops_Compare___cmp(_1.clone(), _2.clone())?;",
+    );
 }
 
 #[test]
@@ -2795,5 +2811,181 @@ function f() -> string { split<string>(Cell<int> { v: 1 }) }
     assert_unsupported(
         &rejection,
         "a read the checker typed through a narrowing on a type parameter",
+    );
+}
+
+// ── Interfaces ──────────────────────────────────────────────────────────────
+
+/// An interface-typed value is an enum over the program's implementors; a
+/// call on a concrete receiver is the implementation's function, a call on
+/// an interface value a `match` with one such call per arm, and an adopted
+/// default body an instance per implementor.
+#[test]
+fn interfaces_dispatch_closed_world() {
+    let module = compile_roots(
+        r#"
+interface Shape {
+    function area(self) -> int throws never
+    function label(self) -> string throws never { "shape " + self.area().to_string() }
+}
+class Sq { s: int }
+class Rc { w: int, h: int }
+implement Shape for Sq { function area(self) -> int { self.s * self.s } }
+implement Shape for Rc {
+    function area(self) -> int { self.w * self.h }
+    function label(self) -> string { "rect" }
+}
+function on_value(s: Shape) -> string { s.label() + s.area().to_string() }
+function on_class(n: int) -> string { Sq { s: n }.label() + Rc { w: n, h: 1 }.label() }
+function from_class(n: int) -> string { on_value(Sq { s: n }) }
+"#,
+        &["on_value", "on_class", "from_class"],
+    );
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        "pub enum user_Shape {\n    user_Sq(Shared<user_Sq>),\n    user_Rc(Shared<user_Rc>),\n}",
+    );
+    assert_eq!(module.interfaces.len(), 1);
+    assert_eq!(module.interfaces[0].link_name, "user.Shape");
+    assert_eq!(module.interfaces[0].rust_name, "user_Shape");
+    // The implementations' functions, and the default body at each `Self`.
+    let names: Vec<&str> = module
+        .functions
+        .iter()
+        .map(|function| function.rust_name.as_str())
+        .collect();
+    assert!(
+        names.contains(&"user___user_Sq_as_user_Shape___area")
+            && names.contains(&"user___user_Rc_as_user_Shape___label")
+            && names.contains(&"user_Shape_label__user_Sq"),
+        "{names:?}"
+    );
+    assert!(!names.contains(&"user_Shape_label__user_Rc"), "{names:?}");
+    // A call on the interface value matches over the implementors.
+    assert_contains(source, "match &_1 {");
+    assert_contains(
+        source,
+        "user_Shape::user_Sq(__value) => user_Shape_label__user_Sq(_1.clone())?,",
+    );
+    assert_contains(
+        source,
+        "user_Shape::user_Rc(__value) => {\n                user___user_Rc_as_user_Shape___label(__value.clone())?\n            }",
+    );
+    // A call on a concrete receiver is static.
+    assert_contains(
+        source,
+        "user_Shape_label__user_Sq(user_Shape::user_Sq(_3.clone()))?",
+    );
+    assert_contains(source, "user___user_Rc_as_user_Shape___label(_5.clone())?");
+    // A class passed where the interface is expected is lifted into its variant.
+    assert_contains(source, "user_on_value(user_Shape::user_Sq(_2.clone()))?");
+    // The default body's `self` is the interface value, dispatching again.
+    assert_contains(
+        source,
+        "pub fn user_Shape_label__user_Sq(mut _1: user_Shape) -> Result<Str, Thrown>",
+    );
+}
+
+/// What stays outside: an interface every type implements, one with a
+/// generic implementation, one with no implementor, and JSON decoding into
+/// one.
+#[test]
+fn rejects_open_interfaces() {
+    let rejection = reject(
+        r"
+function f(x: baml.ToString) -> string { x.to_string() }
+",
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "interface `baml.ToString` (every type implements it",
+    );
+
+    let rejection = reject(
+        r#"
+interface Named { function name(self) -> string throws never }
+class Box<T> { v: T }
+implement<T> Named for Box<T> { function name(self) -> string { "box" } }
+function f(x: Named) -> string { x.name() }
+"#,
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "interface `user.Named` has a generic implementation",
+    );
+
+    let rejection = reject(
+        r"
+interface Named { function name(self) -> string throws never }
+function f(x: Named) -> string { x.name() }
+",
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "interface `user.Named` has no implementor in the program",
+    );
+
+    let rejection = reject(
+        r#"
+interface Named { function name(self) -> string throws never }
+class Dog { n: string }
+implement Named for Dog { function name(self) -> string { self.n } }
+function f(s: string) -> string { baml.json.deserialize<Named>(s).name() }
+"#,
+        "f",
+    );
+    assert_unsupported(&rejection, "JSON decode into an interface");
+
+    // A generic implementation is fine on a concrete receiver: the
+    // instance is known.
+    let module = compile_entry(
+        r#"
+interface Named { function name(self) -> string throws never }
+class Box<T> { v: T }
+implement<T> Named for Box<T> { function name(self) -> string { "box" } }
+function f(n: int) -> string { Box<int> { v: n }.name() }
+"#,
+        "f",
+    );
+    assert_contains(
+        &module.rust_source,
+        "pub fn user___user_Box__0__as_user_Named___name__int(",
+    );
+}
+
+/// A type test against an implementor reached only through an interface
+/// member of a union needs a test inside that variant, which a variant
+/// test does not express; narrowing to the interface first is admitted.
+#[test]
+fn rejects_implementor_tests_through_an_interface_member() {
+    let rejection = reject(
+        r#"
+interface Named { function name(self) -> string throws never }
+class Dog { n: string }
+implement Named for Dog { function name(self) -> string { self.n } }
+function f(u: int | Named) -> bool { u is Dog }
+"#,
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "type test against `user.Dog` on a `int | user.Named` (reached only through an interface member",
+    );
+    let module = compile_entry(
+        r#"
+interface Named { function name(self) -> string throws never }
+class Dog { n: string }
+implement Named for Dog { function name(self) -> string { self.n } }
+function f(u: int | Named) -> string { match u { let n: Named => n.name(), let i: int => "int" } }
+"#,
+        "f",
+    );
+    assert_contains(
+        &module.rust_source,
+        "Union_int_or_user_Named::user_Named(_)",
     );
 }
