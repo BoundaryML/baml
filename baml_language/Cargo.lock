@@ -1474,6 +1474,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_lang"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+]
+
+[[package]]
 name = "bex_project"
 version = "0.0.0-beta"
 dependencies = [
