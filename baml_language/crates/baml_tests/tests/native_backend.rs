@@ -1219,19 +1219,78 @@ function run(state: State) -> string {{
 
 // ── Rejections ──────────────────────────────────────────────────────────────
 
+/// A map is a `Map<K, V>` handle; its literal, subscripts and methods are
+/// `bex_aot::map` calls, and `length()` is the `len` rvalue.
 #[test]
-fn rejects_map() {
-    let rejection = reject("function f(m: map<string, int>) -> int { m.length() }", "f");
-    assert_unsupported(&rejection, "parameter of type `map<string, int>`: map");
+fn maps_literal_subscript_and_methods() {
+    let module = compile_entry(
+        r#"
+function f(m: map<string, int>) -> int {
+    let n: map<int, bool> = { 1: true };
+    m["k"] = 2;
+    n[3] = false;
+    let x = m["k"] + m.length() + n.length();
+    if (m.has("k") && m.get("k") != null && n[1]) { m.delete("k"); }
+    m.keys().length() + m.values().length() + m.get_or_insert("z", x)
+}
+"#,
+        "f",
+    );
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        "pub fn user_f(mut _1: Map<Str, Int63>) -> Result<Int63, Thrown>",
+    );
+    assert_contains(source, "let mut _2: Map<Int63, bool>;");
+    assert_contains(source, "map::new::<Int63, bool>(Vec::new())");
+    assert_contains(
+        source,
+        "map::set(&_1, string::from_literal(\"k\"), int::lit(2))",
+    );
+    assert_contains(source, "map::index(&_1, &string::from_literal(\"k\"))?");
+    assert_contains(source, "map::len(&_1)");
+    assert_contains(source, "map::has(&_1, &string::from_literal(\"k\"))");
+    assert_contains(source, "map::get(&_1, &string::from_literal(\"k\"))");
+    assert_contains(source, "map::delete(&_1, &string::from_literal(\"k\"))");
+    assert_contains(source, "map::keys(&_1)");
+    assert_contains(source, "map::values(&_1)");
+    assert_contains(
+        source,
+        "map::get_or_insert(&_1, string::from_literal(\"z\"),",
+    );
+    assert_eq!(
+        module.functions[0].params,
+        vec![(
+            "m".to_string(),
+            NativeTy::Map(Box::new(NativeTy::Str), Box::new(NativeTy::Int))
+        )]
+    );
 }
 
 #[test]
-fn rejects_map_local() {
+fn rejects_map_with_a_float_key() {
+    let rejection = reject("function f(m: map<float, int>) -> int { m.length() }", "f");
+    assert_unsupported(
+        &rejection,
+        "parameter of type `map<float, int>`: map key type float",
+    );
     let rejection = reject(
-        r#"function f() -> int { let m: map<string, int> = { "a": 1 }; m.length() }"#,
+        "class K { n: int }\nfunction f() -> int { let m: map<K, int> = {}; m.length() }",
         "f",
     );
-    assert_unsupported(&rejection, "map");
+    assert_unsupported(&rejection, "map key type user.K");
+}
+
+#[test]
+fn rejects_equality_on_maps() {
+    let rejection = reject(
+        "function f(a: map<string, int>, b: map<string, int>) -> bool { a == b }",
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "`==` on a `map<string, int>` and a `map<string, int>`",
+    );
 }
 
 /// An enum is a generated fieldless Rust enum in declaration order: a
@@ -1317,14 +1376,14 @@ fn rejects_generic_class() {
 }
 
 #[test]
-fn rejects_class_with_a_map_field() {
+fn rejects_class_with_a_float_keyed_map_field() {
     let rejection = reject(
-        "class S { m: map<string, int> }\nfunction f(s: S) -> int { 1 }",
+        "class S { m: map<float, int> }\nfunction f(s: S) -> int { 1 }",
         "f",
     );
     assert_unsupported(
         &rejection,
-        "class `user.S` field `m` of type `map<string, int>`: map",
+        "class `user.S` field `m` of type `map<float, int>`: map key type float",
     );
 }
 
@@ -1596,7 +1655,7 @@ function f(n: int) -> int {
 #[test]
 fn rejects_callee_outside_the_subset() {
     let source = r"
-function inner(m: map<string, int>) -> int { m.length() }
+function inner(m: map<float, int>) -> int { m.length() }
 function outer(n: int) -> int { inner({}) + n }
 ";
     let db = setup_test_db(source);

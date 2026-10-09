@@ -11,6 +11,7 @@ description = "Runtime for BAML programs compiled ahead of time to native Rust"
 baml_type = { workspace = true, features = [ "serde" ] }
 bex_lang = { workspace = true }
 bex_str = { workspace = true }
+indexmap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

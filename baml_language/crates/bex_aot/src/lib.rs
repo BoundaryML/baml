@@ -3,7 +3,8 @@
 //! The Rust backend (`baml_compiler2_rust`) turns a BAML function into an
 //! ordinary Rust function over the value types defined here: `int` is
 //! [`Int63`], `string` is [`Str`], arrays and class instances are [`Shared`]
-//! handles with reference semantics, `T | null` is `Option<T>`, and every
+//! handles with reference semantics, `map<K, V>` is a [`Map`] handle over an
+//! insertion-ordered table, `T | null` is `Option<T>`, and every
 //! function returns `Result<T, Thrown>` so a `throw` or a panic unwinds as an
 //! error value. The language rules both backends must agree on come from
 //! [`bex_lang`]; this crate adds only what native code
@@ -22,6 +23,7 @@ pub mod depth;
 pub mod errors;
 pub mod handle;
 pub mod json;
+pub mod map;
 pub mod render;
 pub mod string;
 mod thrown;
@@ -29,6 +31,7 @@ mod thrown;
 pub use baml_type::Int63;
 pub use bex_lang::{Error, Panic, float, int};
 pub use handle::{Shared, ptr_eq, shared};
+pub use map::Map;
 pub use render::ToBaml;
 pub use string::Str;
 pub use thrown::{ErrorObject, Thrown, render_object};

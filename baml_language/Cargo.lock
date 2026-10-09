@@ -1372,6 +1372,7 @@ dependencies = [
  "baml_type",
  "bex_lang",
  "bex_str",
+ "indexmap",
  "serde",
  "serde_json",
 ]
