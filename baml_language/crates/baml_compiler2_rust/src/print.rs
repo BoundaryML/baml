@@ -22,6 +22,7 @@ use crate::{
         SortKind, TagSource, binop_operand_tys, binop_ty, equality_common, is_dead_null_write,
         is_omitted, unary_operand_ty,
     },
+    generics::Instance,
     structure::Stmt,
     types::{Coercion, NativeTy, TypeDecl, coercion},
     unions::{MemberTest, TestSite},
@@ -963,7 +964,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             } => {
                 let callee = self
                     .names
-                    .get(&FnId::Declared(*callee))
+                    .get(&FnId::Declared(callee.clone()))
                     .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
                 if substituted.len() != args.len() {
                     return Err(Rejection::invalid("call has fewer arguments than analyzed"));
@@ -1338,11 +1339,11 @@ impl<'a, 'db> Printer<'a, 'db> {
         };
         // A declared function is borrowed as the function item it is; a
         // function value is borrowed through its pointer.
-        let function = match callback {
-            Operand::Constant(Constant::Function(DeclRef::Source(loc))) => {
+        let function = match function_constant(callback) {
+            Some(instance) => {
                 let name = self
                     .names
-                    .get(&FnId::Declared(*loc))
+                    .get(&FnId::Declared(instance))
                     .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
                 quote! { &#name }
             }
@@ -2024,8 +2025,48 @@ impl<'a, 'db> Printer<'a, 'db> {
                     ty,
                 )
             }
+            // A generic function value whose type arguments mention the
+            // frame: the instance the analyzer recorded for this statement.
+            Rvalue::MakeGenericFunction {
+                func,
+                type_arg_templates,
+            } => {
+                let instance = match func {
+                    DeclRef::Source(loc) => self
+                        .candidate
+                        .generic_values
+                        .get(&(*loc, type_arg_templates.clone())),
+                    DeclRef::External(_) => None,
+                }
+                .ok_or_else(|| Rejection::invalid("generic function value was not analyzed"))?;
+                let ty = self
+                    .candidate
+                    .function_values
+                    .get(instance)
+                    .cloned()
+                    .ok_or_else(|| Rejection::invalid("function value was not analyzed"))?;
+                (self.function_value(instance, &ty)?, ty)
+            }
             other => return Err(Rejection::unsupported(format!("rvalue {other:?}"))),
         })
+    }
+
+    /// The function item of `instance` behind a counted pointer, as a
+    /// value of the function type `ty`.
+    fn function_value(
+        &self,
+        instance: &Instance<'db>,
+        ty: &NativeTy<'db>,
+    ) -> Result<TokenStream, Rejection> {
+        let name = self
+            .names
+            .get(&FnId::Declared(instance.clone()))
+            .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
+        let fn_ty = self.ty(ty);
+        Ok(quote! {{
+            let __function: #fn_ty = Rc::new(#name);
+            __function
+        }})
     }
 
     /// `is_type(operand, test)`.
@@ -2350,18 +2391,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                     let variant = &variant.ident;
                     quote! { #name::#variant }
                 }
-                // A declared function as a value: its function item behind
-                // a counted pointer.
-                Constant::Function(DeclRef::Source(loc)) => {
-                    let name = self
-                        .names
-                        .get(&FnId::Declared(*loc))
-                        .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
-                    let fn_ty = self.ty(&ty);
-                    quote! {{
-                        let __function: #fn_ty = Rc::new(#name);
-                        __function
-                    }}
+                // A declared function as a value (at its type arguments, for
+                // a generic one): its function item behind a counted pointer.
+                Constant::Function(DeclRef::Source(_)) | Constant::GenericFunction { .. } => {
+                    let instance = function_constant(operand)
+                        .ok_or_else(|| Rejection::unsupported("stdlib function used as a value"))?;
+                    self.function_value(&instance, &ty)?
                 }
                 other => return Err(Rejection::unsupported(format!("constant {other:?}"))),
             },
@@ -2406,12 +2441,17 @@ impl<'a, 'db> Printer<'a, 'db> {
             Operand::Constant(Constant::EnumVariant { enum_ref, .. }) => {
                 Ok(NativeTy::Enum(*enum_ref))
             }
-            Operand::Constant(Constant::Function(DeclRef::Source(loc))) => self
-                .candidate
-                .function_values
-                .get(loc)
-                .cloned()
-                .ok_or_else(|| Rejection::invalid("function value was not analyzed")),
+            Operand::Constant(
+                Constant::Function(DeclRef::Source(_)) | Constant::GenericFunction { .. },
+            ) => {
+                let instance = function_constant(operand)
+                    .ok_or_else(|| Rejection::unsupported("stdlib function used as a value"))?;
+                self.candidate
+                    .function_values
+                    .get(&instance)
+                    .cloned()
+                    .ok_or_else(|| Rejection::invalid("function value was not analyzed"))
+            }
             other @ Operand::Constant(_) => {
                 Err(Rejection::unsupported(format!("operand {other:?}")))
             }
@@ -2639,6 +2679,23 @@ fn collect_loop_headers(stmts: &[Stmt], out: &mut FxHashSet<usize>) {
             | Stmt::Continue(_)
             | Stmt::Exit(_) => {}
         }
+    }
+}
+
+/// The instance a source-function constant names: a declared function at
+/// no type arguments, or a generic one at the arguments baked into the
+/// constant. `None` for a stdlib function.
+fn function_constant<'db>(operand: &Operand<'db>) -> Option<Instance<'db>> {
+    match operand {
+        Operand::Constant(Constant::Function(DeclRef::Source(loc))) => Some(Instance::plain(*loc)),
+        Operand::Constant(Constant::GenericFunction {
+            func: DeclRef::Source(loc),
+            type_args,
+        }) => Some(Instance {
+            loc: *loc,
+            type_args: type_args.clone(),
+        }),
+        _ => None,
     }
 }
 
