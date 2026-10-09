@@ -941,7 +941,7 @@ export type WebSocketInMessage =
       requestId: number;
       project: string;
       functionName: string;
-      argsBytes: string;
+      args: string;
     }
   | {
       type: 'startPreviewRun';
@@ -950,7 +950,7 @@ export type WebSocketInMessage =
       parentFunctionName: string;
       helper: string;
       functionName: string;
-      argsBytes: string;
+      args: string;
     }
   | {
       type: 'startTestRun';
@@ -1130,7 +1130,7 @@ export type WorkerInMessage =
       requestId: number;
       project: string;
       functionName: string;
-      argsBytes: Uint8Array;
+      args: string;
     }
   | {
       type: 'startPreviewRun';
@@ -1139,7 +1139,7 @@ export type WorkerInMessage =
       parentFunctionName: string;
       helper: string;
       functionName: string;
-      argsBytes: Uint8Array;
+      args: string;
     }
   | {
       type: 'startTestRun';

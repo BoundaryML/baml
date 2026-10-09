@@ -1,5 +1,3 @@
-import type { InboundValue } from './generated/baml_bridge/cffi/v1/baml_inbound';
-
 export type BamlJsValue<T = unknown> =
   | string
   | number
@@ -16,7 +14,9 @@ export type BamlJsValue<T = unknown> =
 
 export type BamlJsMap<T = unknown> = { [key: string]: BamlJsValue<T> };
 export type BamlJsHandle<T> = { $baml: { type: '$handle' }; handle: T };
-export type BamlJsClass<T = unknown> = { $baml: { type: string } } & BamlJsMap<T>;
+export type BamlJsClass<T = unknown> = {
+  $baml: { type: string };
+} & BamlJsMap<T>;
 
 export type BamlJsMedia = {
   $baml: { type: '$media' };
@@ -28,7 +28,9 @@ export type BamlJsMedia = {
   | { content_type: 'file'; file: string }
 );
 
-export type BamlJsPromptAstSimple = { $baml: { type: '$prompt_ast_simple' } } & (
+export type BamlJsPromptAstSimple = {
+  $baml: { type: '$prompt_ast_simple' };
+} & (
   | { content_type: 'string'; value: string }
   | { content_type: 'media'; value: BamlJsMedia }
   | { content_type: 'multiple'; value: BamlJsPromptAstSimple[] }
@@ -54,8 +56,3 @@ export type PlainHandleDescriptor = {
   handle_type: number;
   type_name: string;
 };
-
-/** Implemented by objects that need custom BAML serialization. */
-export interface BamlSerializable {
-  toBaml(): InboundValue;
-}

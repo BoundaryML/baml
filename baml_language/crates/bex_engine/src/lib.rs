@@ -78,12 +78,14 @@ pub use future::LeakedFuture;
 mod host_instrumentation;
 mod inbound_config;
 mod invocation;
+mod json_arguments;
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_snapshot::host::HostValue as HostCapture;
 #[cfg(not(target_arch = "wasm32"))]
 pub use host_instrumentation::{
     CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation,
 };
+pub use json_arguments::JsonArgumentsError;
 pub mod logger;
 #[cfg(not(target_arch = "wasm32"))]
 mod telemetry;

@@ -58,7 +58,7 @@ function compatibleHello(socket: FakeWebSocket): void {
 
 function startRunMessage(requestId: number) {
   return {
-    argsBytes: new Uint8Array([1]),
+    args: '{}',
     functionName: 'Extract',
     project: '/project',
     requestId,
@@ -67,7 +67,7 @@ function startRunMessage(requestId: number) {
 }
 
 const SENT_START_RUN = (requestId: number) => ({
-  argsBytes: 'AQ==',
+  args: '{}',
   functionName: 'Extract',
   project: '/project',
   requestId,

@@ -33,7 +33,6 @@ use bex_events::{
         ValueRef, ValueWriteOutcome, ValueWriter,
     },
 };
-use bridge_ctypes::{HANDLE_TABLE, playground_run_args_to_bex_values};
 use js_sys::Function;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
@@ -606,6 +605,30 @@ fn send_log_loss_diagnostic(
     }
 }
 
+/// The arguments of a run as the JavaScript side sends them: one JSON object
+/// keyed by parameter name. Only the syntax is checked here, before the run
+/// exists; the engine hydrates each field against its declared type once the
+/// run is under way, because that is an engine call.
+fn arguments_object(args: &str) -> Result<String, JsValue> {
+    match serde_json::from_str::<serde_json::Value>(args) {
+        Ok(serde_json::Value::Object(_)) => Ok(args.to_string()),
+        Ok(_) => {
+            Err(JsError::new("arguments must be a JSON object keyed by parameter name").into())
+        }
+        Err(e) => Err(JsError::new(&format!("arguments are not valid JSON: {e}")).into()),
+    }
+}
+
+/// The outcome of a run whose arguments the engine could not hydrate.
+fn invalid_arguments_outcome(error: &impl std::fmt::Display) -> RunOutcome {
+    error_outcome(
+        format!("Invalid arguments: {error}"),
+        RunErrorClass::Validation,
+        None,
+        None,
+    )
+}
+
 fn runtime_error_outcome_with_ref(
     error: &impl std::fmt::Display,
     value_ref: Option<ValueRef>,
@@ -639,10 +662,9 @@ impl BamlWasmRuntime {
         request_id: u32,
         project: String,
         name: &str,
-        args_bytes: &[u8],
+        args: &str,
     ) -> Result<(), JsValue> {
-        let kwargs = playground_run_args_to_bex_values(args_bytes, &HANDLE_TABLE)
-            .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
+        let args = arguments_object(args)?;
         let call_id = next_wasm_call_id()?;
         let host_call_id = HostCallId::Wasm(
             u32::try_from(call_id.0)
@@ -700,6 +722,28 @@ impl BamlWasmRuntime {
             .with_logger(logger.clone())
             .build();
         wasm_bindgen_futures::spawn_local(async move {
+            // The engine hydrates each argument against the parameter type
+            // the function declares; a value that does not fit ends the run.
+            let kwargs = match bex
+                .json_arguments(&function_name, &args, |type_args| {
+                    bex_project::FunctionCallContextBuilder::new(call_id)
+                        .with_type_args(type_args)
+                        .build()
+                })
+                .await
+            {
+                Ok(kwargs) => kwargs,
+                Err(e) => {
+                    complete_wasm_run(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        boundary_id,
+                        invalid_arguments_outcome(&e),
+                    );
+                    return;
+                }
+            };
             match bex_project::Bex::call_function_with_outcome(
                 bex,
                 &function_name,
@@ -759,10 +803,9 @@ impl BamlWasmRuntime {
         parent_function_name: &str,
         helper: &str,
         function_name: &str,
-        args_bytes: &[u8],
+        args: &str,
     ) -> Result<(), JsValue> {
-        let kwargs = playground_run_args_to_bex_values(args_bytes, &HANDLE_TABLE)
-            .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
+        let args = arguments_object(args)?;
         let call_id = next_wasm_call_id()?;
         let host_call_id = HostCallId::Wasm(
             u32::try_from(call_id.0)
@@ -821,6 +864,28 @@ impl BamlWasmRuntime {
             .with_logger(logger.clone())
             .build();
         wasm_bindgen_futures::spawn_local(async move {
+            // The engine hydrates each argument against the parameter type
+            // the function declares; a value that does not fit ends the run.
+            let kwargs = match bex
+                .json_arguments(&function_name, &args, |type_args| {
+                    bex_project::FunctionCallContextBuilder::new(call_id)
+                        .with_type_args(type_args)
+                        .build()
+                })
+                .await
+            {
+                Ok(kwargs) => kwargs,
+                Err(e) => {
+                    complete_wasm_run(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        boundary_id,
+                        invalid_arguments_outcome(&e),
+                    );
+                    return;
+                }
+            };
             match bex_project::Bex::call_function_with_outcome(
                 bex,
                 &function_name,
