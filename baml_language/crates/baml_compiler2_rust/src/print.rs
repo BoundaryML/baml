@@ -1,6 +1,8 @@
 //! Rust source for admitted functions and classes, built as tokens and
 //! pretty-printed.
 
+use std::cell::RefCell;
+
 use baml_compiler2_hir::loc::FunctionLoc;
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, Constant, IndexKind, Local, Operand, Place, Rvalue,
@@ -8,7 +10,7 @@ use baml_compiler2_mir::{
 };
 use baml_type::Literal;
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote};
+use quote::{ToTokens, format_ident, quote};
 use rustc_hash::{FxHashMap, FxHashSet};
 use syn::Lifetime;
 
@@ -20,7 +22,7 @@ use crate::{
         is_omitted,
     },
     structure::Stmt,
-    types::{Coercion, NativeTy, coercion},
+    types::{Coercion, NativeTy, TypeDecl, coercion},
 };
 
 /// The comment and crate attributes above the generated items. Token streams
@@ -109,15 +111,24 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
         }
     });
     let display_name = &class.display_name;
+    let link_name = &class.link_name;
     let expecting = format!("expected JSON object for class `{}`", class.json_name);
     let rendered = class.fields.iter().map(|field| {
         let ident = &field.ident;
         let baml_name = &field.name;
         quote! { (#baml_name, &self.#ident as &dyn ToBaml) }
     });
+    let readable = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        let baml_name = &field.name;
+        quote! { (#baml_name, bex_aot::Readable::readable(&self.#ident)) }
+    });
+    // Every class can be thrown (`throw C { .. }`) and caught by name, and
+    // prints inside an uncaught throw as the engine does, so each one is an
+    // `ErrorClass`; the trait costs nothing when the class is never thrown.
     quote! {
         #[doc = #doc]
-        #[derive(bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+        #[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
         #[serde(crate = "bex_aot::serde", expecting = #expecting)]
         pub struct #name {
             #(#fields)*
@@ -126,6 +137,23 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
         impl ToBaml for #name {
             fn render(&self, out: &mut String, _nested: bool) {
                 bex_aot::render::class(out, #display_name, &[#(#rendered),*]);
+            }
+        }
+
+        impl bex_aot::ErrorClass for #name {
+            const CLASS_FQN: &'static str = #link_name;
+
+            fn readable_fields(&self) -> Vec<(&'static str, String)> {
+                Vec::from([#(#readable),*])
+            }
+        }
+
+        impl bex_aot::Readable for #name {
+            fn readable(&self) -> String {
+                bex_aot::readable::class(
+                    <Self as bex_aot::ErrorClass>::CLASS_FQN,
+                    &bex_aot::ErrorClass::readable_fields(self),
+                )
             }
         }
     }
@@ -173,7 +201,20 @@ fn render_enum(info: &EnumInfo<'_>) -> TokenStream {
                 out.push_str(Self::NAMES[*self as usize]);
             }
         }
+
+        impl bex_aot::Readable for #name {
+            fn readable(&self) -> String {
+                Self::NAMES[*self as usize].to_string()
+            }
+        }
     }
+}
+
+/// Where a throw or panic in the block being printed goes: the handler's
+/// error local takes the value, then the jump leaves for the handler.
+struct UnwindSite {
+    error: Ident,
+    jump: TokenStream,
 }
 
 struct Printer<'a, 'db> {
@@ -182,6 +223,10 @@ struct Printer<'a, 'db> {
     classes: &'a ClassTable<'db>,
     /// Blocks that head a loop, whose merge label (if any) needs its own name.
     loop_headers: FxHashSet<usize>,
+    /// The unwind site of the block whose code is being printed, if it has a
+    /// handler; `None` between blocks and in a block that unwinds out of the
+    /// function.
+    unwind: RefCell<Option<UnwindSite>>,
 }
 
 impl<'a, 'db> Printer<'a, 'db> {
@@ -197,11 +242,87 @@ impl<'a, 'db> Printer<'a, 'db> {
             names,
             classes,
             loop_headers,
+            unwind: RefCell::new(None),
         }
     }
 
     fn ty(&self, ty: &NativeTy<'db>) -> TokenStream {
         ty.to_tokens(&|decl| self.classes.ident(decl))
+    }
+
+    /// The unwind site of `block`: the error local of its handler and the
+    /// jump the structurer gave it.
+    fn unwind_site(&self, block: BlockId) -> Result<Option<UnwindSite>, Rejection> {
+        let body = self.candidate.body;
+        let Some(handler) = body.block(block).unwind else {
+            return Ok(None);
+        };
+        let landing = body
+            .blocks
+            .get(handler.0)
+            .and_then(|handler| handler.landing)
+            .ok_or_else(|| {
+                Rejection::invalid(format!("{block} unwinds to {handler}, which lands nothing"))
+            })?;
+        let jump = self
+            .candidate
+            .unwind_jumps
+            .get(block.0)
+            .ok_or_else(|| Rejection::invalid(format!("{block} has no unwind jump")))?;
+        if jump.is_empty() {
+            return Err(Rejection::invalid(format!(
+                "{block} unwinds to {handler} but the structurer gave it no jump"
+            )));
+        }
+        let jump = self.stmts(jump)?;
+        Ok(Some(UnwindSite {
+            error: local_ident(landing.error_local),
+            jump: quote! { #(#jump)* },
+        }))
+    }
+
+    /// Print `f` with the unwind site of `block` in force.
+    fn in_block<T>(
+        &self,
+        block: BlockId,
+        f: impl FnOnce() -> Result<T, Rejection>,
+    ) -> Result<T, Rejection> {
+        let site = self.unwind_site(block)?;
+        let previous = self.unwind.replace(site);
+        let result = f();
+        *self.unwind.borrow_mut() = previous;
+        result
+    }
+
+    /// `expr`, a `Result`, unwrapped: `expr?` when the block has no handler,
+    /// else a `match` that hands the error to the handler and leaves for it.
+    fn fallible(&self, expr: &TokenStream) -> TokenStream {
+        match &*self.unwind.borrow() {
+            None => quote! { #expr? },
+            Some(UnwindSite { error, jump }) => quote! {
+                match #expr {
+                    Ok(value) => value,
+                    Err(error) => {
+                        #error = Thrown::from(error);
+                        #jump
+                    }
+                }
+            },
+        }
+    }
+
+    /// Raise `thrown` (an expression of type `Thrown`) from the block being
+    /// printed: into its handler, or out of the function (`Err(..)` in tail
+    /// position, else `return Err(..);`).
+    fn raise(&self, thrown: &TokenStream, tail: bool) -> TokenStream {
+        match (&*self.unwind.borrow(), tail) {
+            (Some(UnwindSite { error, jump }), _) => quote! {{
+                #error = #thrown;
+                #jump
+            }},
+            (None, true) => quote! { Err(#thrown) },
+            (None, false) => quote! { return Err(#thrown); },
+        }
     }
 
     fn function(&self) -> Result<TokenStream, Rejection> {
@@ -231,9 +352,12 @@ impl<'a, 'db> Printer<'a, 'db> {
             .filter(|(index, _)| !(1..=candidate.arity()).contains(index))
             .filter(|(index, _)| !candidate.aliases.contains_key(&Local(*index)))
             .filter_map(|(index, kind)| {
-                let ty = kind.value()?;
                 let ident = local_ident(Local(index));
-                let tokens = self.ty(ty);
+                let tokens = match kind {
+                    LocalKind::Value(ty) => self.ty(ty),
+                    LocalKind::Tag => quote! { &'static str },
+                    LocalKind::Type | LocalKind::Never | LocalKind::Context => return None,
+                };
                 Some(quote! { let mut #ident: #tokens; })
             });
         // A function on a call cycle counts its frame, so runaway recursion
@@ -308,6 +432,30 @@ impl<'a, 'db> Printer<'a, 'db> {
                             if #condition { #(#then_branch)* } else { #(#else_branch)* }
                         }
                     }
+                    // A `catch` arm binding: the caught error narrowed to the
+                    // arm's class, as the handle it was thrown as.
+                    Terminator::NarrowBind { destination, .. } => {
+                        let source = self
+                            .candidate
+                            .narrow_sources
+                            .get(destination)
+                            .ok_or_else(|| {
+                                Rejection::invalid(format!(
+                                    "{destination} is narrowed but was never seeded with a caught error"
+                                ))
+                            })?;
+                        let source = local_ident(*source);
+                        let target = self.ty(&self.local_ty(*destination)?);
+                        let destination = local_ident(*destination);
+                        quote! {
+                            if let Some(value) = bex_aot::thrown::downcast::<#target>(&#source) {
+                                #destination = value;
+                                #(#then_branch)*
+                            } else {
+                                #(#else_branch)*
+                            }
+                        }
+                    }
                     // `then_branch` is the right-hand side, `else_branch` the
                     // join. On the short edge the result is the operand's
                     // value, which the test just decided.
@@ -357,23 +505,62 @@ impl<'a, 'db> Printer<'a, 'db> {
                 else {
                     return Err(Rejection::invalid("multi-way branch without a switch"));
                 };
-                let discriminant = self.operand(discriminant, None)?;
-                let mut seen = FxHashSet::default();
+                // A multi-arm `catch` switches on the caught error's class
+                // tag: its fully qualified name, matched as a string.
+                let tag = match discriminant {
+                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
+                        if matches!(self.kind(*local)?, LocalKind::Tag) =>
+                    {
+                        Some(local_ident(*local))
+                    }
+                    _ => None,
+                };
+                let on_tag = tag.is_some();
+                let discriminant = match tag {
+                    Some(tag) => quote! { #tag },
+                    None => {
+                        let value = self.operand(discriminant, None)?;
+                        quote! { #value.get() }
+                    }
+                };
+                let mut seen: FxHashSet<String> = FxHashSet::default();
                 let mut match_arms = Vec::with_capacity(arms.len());
                 for (indices, body) in arms {
                     let mut patterns = Vec::new();
                     for index in indices {
-                        let Some((SwitchKey::Int(key), _)) = keys.get(*index) else {
-                            return Err(Rejection::invalid("switch arm is not an int key"));
+                        let Some((key, _)) = keys.get(*index) else {
+                            return Err(Rejection::invalid("switch arm index is out of range"));
                         };
                         // A repeated key can never fire: the VM takes the arm
                         // where it first appears, which may be one folded into
                         // `_`, so the key is emitted at its first index only.
-                        let first = keys
-                            .iter()
-                            .position(|(k, _)| matches!(k, SwitchKey::Int(k) if k == key));
-                        if first == Some(*index) && seen.insert(*key) {
-                            patterns.push(proc_macro2::Literal::i64_suffixed(*key));
+                        let first = keys.iter().position(|(k, _)| k == key);
+                        if first != Some(*index) {
+                            continue;
+                        }
+                        match (key, on_tag) {
+                            (SwitchKey::Int(key), false) => {
+                                if seen.insert(key.to_string()) {
+                                    patterns.push(
+                                        proc_macro2::Literal::i64_suffixed(*key)
+                                            .into_token_stream(),
+                                    );
+                                }
+                            }
+                            (SwitchKey::Class(class), true) => {
+                                let fqn = self.classes.link_name(TypeDecl::Class(*class));
+                                if seen.insert(fqn.clone()) {
+                                    patterns.push(quote! { #fqn });
+                                }
+                            }
+                            (SwitchKey::Class(_), false) => {
+                                return Err(Rejection::unsupported("switch on a class tag"));
+                            }
+                            (SwitchKey::Int(_), true) => {
+                                return Err(Rejection::unsupported(
+                                    "`catch` arm on a primitive type",
+                                ));
+                            }
                         }
                     }
                     if patterns.is_empty() {
@@ -384,7 +571,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 }
                 let otherwise = self.body(otherwise, tail)?;
                 quote! {
-                    match #discriminant.get() {
+                    match #discriminant {
                         #(#match_arms)*
                         _ => { #(#otherwise)* }
                     }
@@ -402,26 +589,48 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let label = loop_label(*label);
                 quote! { continue #label; }
             }
-            Stmt::Exit(block) => match (self.terminator(BlockId(*block))?, tail) {
-                (Terminator::Return, true) => quote! { Ok(_0) },
-                (Terminator::Return, false) => quote! { return Ok(_0); },
-                (Terminator::Unreachable, true) => {
-                    quote! { Err(Thrown::from(Panic::Unreachable)) }
+            Stmt::Exit(block) => {
+                let block = BlockId(*block);
+                match (self.terminator(block)?, tail) {
+                    (Terminator::Return, true) => quote! { Ok(_0) },
+                    (Terminator::Return, false) => quote! { return Ok(_0); },
+                    (Terminator::Unreachable, _) => self.in_block(block, || {
+                        Ok(self.raise(&quote! { Thrown::from(Panic::Unreachable) }, tail))
+                    })?,
+                    // `throw v`: a class instance becomes a thrown object; a
+                    // caught error thrown on goes as it is. `rethrow` carries
+                    // the caught error; its context has no native form.
+                    (Terminator::Throw { value }, _) => self.in_block(block, || {
+                        let ty = self.operand_ty(value)?;
+                        let value = self.operand(value, None)?;
+                        let thrown = match ty {
+                            NativeTy::Thrown => value,
+                            _ => quote! { Thrown::error(#value) },
+                        };
+                        Ok(self.raise(&thrown, tail))
+                    })?,
+                    (Terminator::Rethrow { value, .. }, _) => self.in_block(block, || {
+                        let value = self.operand(value, None)?;
+                        Ok(self.raise(&value, tail))
+                    })?,
+                    _ => return Err(Rejection::invalid("exit without a return")),
                 }
-                (Terminator::Unreachable, false) => {
-                    quote! { return Err(Thrown::from(Panic::Unreachable)); }
-                }
-                _ => return Err(Rejection::invalid("exit without a return")),
-            },
+            }
         })
     }
 
-    /// A block's statements, then what its terminator computes.
+    /// A block's statements, then what its terminator computes, with the
+    /// block's unwind site in force.
     fn leaf(&self, block: BlockId) -> Result<Vec<TokenStream>, Rejection> {
         let body = self.candidate.body;
         if block.0 >= body.blocks.len() {
             return Err(Rejection::invalid(format!("{block} does not exist")));
         }
+        self.in_block(block, || self.leaf_lines(block))
+    }
+
+    fn leaf_lines(&self, block: BlockId) -> Result<Vec<TokenStream>, Rejection> {
+        let body = self.candidate.body;
         let mut lines = Vec::new();
         let stores = self
             .candidate
@@ -455,6 +664,15 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
                 lines.push(self.call(call, args, destination)?);
             }
+            // The guard in front of a wildcard `catch` arm: a panic is not
+            // for the wildcard and goes on to the next handler.
+            Terminator::ThrowIfPanic { value, .. } => {
+                let thrown = self.operand_borrowed(value)?;
+                let raise = self.raise(&quote! { #thrown.clone() }, false);
+                lines.push(quote! {
+                    if bex_aot::thrown::is_panic(&#thrown) { #raise }
+                });
+            }
             _ => {}
         }
         Ok(lines)
@@ -473,9 +691,10 @@ impl<'a, 'db> Printer<'a, 'db> {
         // Statements run before the store, then the stored value.
         let (prelude, value, result) = match call {
             CallKind::Panic(message) => {
-                return Ok(quote! {
-                    return Err(Thrown::from(Panic::UserPanic { message: String::from(#message) }));
-                });
+                return Ok(self.raise(
+                    &quote! { Thrown::from(Panic::UserPanic { message: String::from(#message) }) },
+                    false,
+                ));
             }
             CallKind::Direct {
                 callee,
@@ -500,7 +719,11 @@ impl<'a, 'db> Printer<'a, 'db> {
                         self.operand(substitute.as_ref().unwrap_or(arg), Some(param))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                (TokenStream::new(), quote! { #callee(#(#args),*)? }, result)
+                (
+                    TokenStream::new(),
+                    self.fallible(&quote! { #callee(#(#args),*) }),
+                    result,
+                )
             }
             CallKind::Builtin { builtin, result } => {
                 let (prelude, value) = match builtin {
@@ -521,12 +744,15 @@ impl<'a, 'db> Printer<'a, 'db> {
                         let text = self.operand_ref(arg(0)?)?;
                         (
                             TokenStream::new(),
-                            quote! { json::deserialize::<#target>(#text)? },
+                            self.fallible(&quote! { json::deserialize::<#target>(#text) }),
                         )
                     }
                     Builtin::JsonToString => {
                         let value = self.operand_ref(arg(0)?)?;
-                        (TokenStream::new(), quote! { json::to_string(#value)? })
+                        (
+                            TokenStream::new(),
+                            self.fallible(&quote! { json::to_string(#value) }),
+                        )
                     }
                     Builtin::ToStringDefault => {
                         let value = self.operand_ref(arg(0)?)?;
@@ -546,7 +772,10 @@ impl<'a, 'db> Printer<'a, 'db> {
                     }
                     Builtin::FloatItrunc => {
                         let value = self.operand(arg(0)?, None)?;
-                        (TokenStream::new(), quote! { float::itrunc(#value)? })
+                        (
+                            TokenStream::new(),
+                            self.fallible(&quote! { float::itrunc(#value) }),
+                        )
                     }
                     Builtin::IsNull { operand } => {
                         let value = self.operand_borrowed(arg(*operand)?)?;
@@ -584,16 +813,16 @@ impl<'a, 'db> Printer<'a, 'db> {
                         let first = self.operand_ref(arg(0)?)?;
                         let call = match op {
                             BigintOp::Abs => quote! { bigint::abs(#first) },
-                            BigintOp::Isqrt => quote! { bigint::isqrt(#first)? },
-                            BigintOp::ToInt => quote! { bigint::to_int(#first)? },
-                            BigintOp::Parse => quote! { bigint::parse(#first)? },
+                            BigintOp::Isqrt => self.fallible(&quote! { bigint::isqrt(#first) }),
+                            BigintOp::ToInt => self.fallible(&quote! { bigint::to_int(#first) }),
+                            BigintOp::Parse => self.fallible(&quote! { bigint::parse(#first) }),
                             BigintOp::Pow => {
                                 let second = self.operand_ref(arg(1)?)?;
-                                quote! { bigint::pow(#first, #second)? }
+                                self.fallible(&quote! { bigint::pow(#first, #second) })
                             }
                             BigintOp::Ilog => {
                                 let second = self.operand_ref(arg(1)?)?;
-                                quote! { bigint::ilog(#first, #second)? }
+                                self.fallible(&quote! { bigint::ilog(#first, #second) })
                             }
                         };
                         (TokenStream::new(), call)
@@ -621,7 +850,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                             }
                             MapOp::Index => {
                                 let key = key_ref()?;
-                                quote! { map::index(#map, #key)? }
+                                self.fallible(&quote! { map::index(#map, #key) })
                             }
                             MapOp::Set => {
                                 let key = key()?;
@@ -675,8 +904,29 @@ impl<'a, 'db> Printer<'a, 'db> {
                         // call site is monomorphized.
                         return Ok(None);
                     }
+                    if matches!(self.kind(*local)?, LocalKind::Tag) {
+                        // `_t = type_tag(_e)`: the caught error's class name.
+                        let Rvalue::TypeTag(place) = value else {
+                            return Err(Rejection::invalid("class tag from a non-tag value"));
+                        };
+                        let thrown = self.place(place)?;
+                        let ident = local_ident(*local);
+                        return Ok(Some(
+                            quote! { #ident = bex_aot::thrown::class_fqn(&#thrown); },
+                        ));
+                    }
                     if self.candidate.aliases.contains_key(local) {
                         // Reads of the alias go through its source.
+                        return Ok(None);
+                    }
+                    if let Some(source) = self.candidate.narrow_sources.get(local)
+                        && let Rvalue::Use(
+                            Operand::Copy(Place::Local(from)) | Operand::Move(Place::Local(from)),
+                        ) = value
+                        && from == source
+                    {
+                        // The seed of a `narrow_bind` temporary: the
+                        // `narrow_bind` downcasts the error local itself.
                         return Ok(None);
                     }
                 }
@@ -685,7 +935,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     && !matches!(target_ty, NativeTy::Null | NativeTy::Option(_))
                 {
                     return Ok(Some(
-                        quote! { return Err(Thrown::from(Panic::Unreachable)); },
+                        self.raise(&quote! { Thrown::from(Panic::Unreachable) }, false),
                     ));
                 }
                 let value = self.rvalue(value, &target_ty)?;
@@ -718,9 +968,10 @@ impl<'a, 'db> Printer<'a, 'db> {
                         }
                         let base = self.place(base)?;
                         let index = local_ident(*index);
+                        let set = self.fallible(&quote! { array::set(&#base, #index, value) });
                         quote! {{
                             let value = #value;
-                            array::set(&#base, #index, value)?;
+                            #set;
                         }}
                     }
                     Place::Capture(_) | Place::Deref(_) => {
@@ -796,7 +1047,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 match (op, ty) {
                     (UnaryOp::Not, _) => quote! { !#operand },
                     (UnaryOp::Neg, NativeTy::Float) => quote! { -#operand },
-                    (UnaryOp::Neg, _) => quote! { int::neg(#operand)? },
+                    (UnaryOp::Neg, _) => self.fallible(&quote! { int::neg(#operand) }),
                     (UnaryOp::Truthy, NativeTy::Int) => quote! { #operand != int::ZERO },
                     (UnaryOp::Truthy, _) => operand,
                 }
@@ -884,12 +1135,18 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
             Rvalue::IsType {
                 operand,
-                test: TypeTest::Class { .. },
+                test: TypeTest::Class { class, .. },
             } => {
-                // Admission only accepts the `baml.iter.Done` test on an
-                // `Option`.
-                let option = self.operand_borrowed(operand)?;
-                quote! { #option.is_none() }
+                let value = self.operand_borrowed(operand)?;
+                if self.operand_ty(operand)? == NativeTy::Thrown {
+                    // A `catch` arm's class test, by the class's name.
+                    let fqn = self.classes.link_name(TypeDecl::Class(*class));
+                    quote! { bex_aot::thrown::is_class(&#value, #fqn) }
+                } else {
+                    // Admission only accepts the `baml.iter.Done` test on an
+                    // `Option` otherwise.
+                    quote! { #value.is_none() }
+                }
             }
             other => return Err(Rejection::unsupported(format!("rvalue {other:?}"))),
         })
@@ -918,13 +1175,13 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let l = self.operand(left, None)?;
                 let r = self.operand(right, None)?;
                 match op {
-                    BinOp::Add => quote! { int::add(#l, #r)? },
-                    BinOp::Sub => quote! { int::sub(#l, #r)? },
-                    BinOp::Mul => quote! { int::mul(#l, #r)? },
-                    BinOp::Div => quote! { int::div(#l, #r)? },
-                    BinOp::Mod => quote! { int::rem(#l, #r)? },
-                    BinOp::Shl => quote! { int::shl(#l, #r)? },
-                    BinOp::Shr => quote! { int::shr(#l, #r)? },
+                    BinOp::Add => self.fallible(&quote! { int::add(#l, #r) }),
+                    BinOp::Sub => self.fallible(&quote! { int::sub(#l, #r) }),
+                    BinOp::Mul => self.fallible(&quote! { int::mul(#l, #r) }),
+                    BinOp::Div => self.fallible(&quote! { int::div(#l, #r) }),
+                    BinOp::Mod => self.fallible(&quote! { int::rem(#l, #r) }),
+                    BinOp::Shl => self.fallible(&quote! { int::shl(#l, #r) }),
+                    BinOp::Shr => self.fallible(&quote! { int::shr(#l, #r) }),
                     BinOp::BitAnd => quote! { int::bit_and(#l, #r) },
                     BinOp::BitOr => quote! { int::bit_or(#l, #r) },
                     BinOp::BitXor => quote! { int::bit_xor(#l, #r) },
@@ -1003,7 +1260,8 @@ impl<'a, 'db> Printer<'a, 'db> {
             | NativeTy::Array(_)
             | NativeTy::Map(..)
             | NativeTy::Class(_)
-            | NativeTy::ArrayIter(_) => {
+            | NativeTy::ArrayIter(_)
+            | NativeTy::Thrown => {
                 return Err(unsupported());
             }
         })
@@ -1040,11 +1298,11 @@ impl<'a, 'db> Printer<'a, 'db> {
         Ok(match op {
             BinOp::Add => quote! { bigint::add(#l, #r) },
             BinOp::Sub => quote! { bigint::sub(#l, #r) },
-            BinOp::Mul => quote! { bigint::mul(#l, #r)? },
-            BinOp::Div => quote! { bigint::div(#l, #r)? },
-            BinOp::Mod => quote! { bigint::rem(#l, #r)? },
-            BinOp::Shl => quote! { bigint::shl(#l, #r)? },
-            BinOp::Shr => quote! { bigint::shr(#l, #r)? },
+            BinOp::Mul => self.fallible(&quote! { bigint::mul(#l, #r) }),
+            BinOp::Div => self.fallible(&quote! { bigint::div(#l, #r) }),
+            BinOp::Mod => self.fallible(&quote! { bigint::rem(#l, #r) }),
+            BinOp::Shl => self.fallible(&quote! { bigint::shl(#l, #r) }),
+            BinOp::Shr => self.fallible(&quote! { bigint::shr(#l, #r) }),
             BinOp::BitAnd => quote! { bigint::bit_and(#l, #r) },
             BinOp::BitOr => quote! { bigint::bit_or(#l, #r) },
             BinOp::BitXor => quote! { bigint::bit_xor(#l, #r) },
@@ -1180,6 +1438,10 @@ impl<'a, 'db> Printer<'a, 'db> {
             LocalKind::Value(ty) => Ok(ty.clone()),
             LocalKind::Never => Err(Rejection::unsupported("read of a `never` local")),
             LocalKind::Type => Err(Rejection::unsupported("type value used as a value")),
+            LocalKind::Context => Err(Rejection::unsupported(
+                "read of a caught error's `baml.errors.Context` (`catch (e, ctx)`)",
+            )),
+            LocalKind::Tag => Err(Rejection::unsupported("class tag used as a value")),
         }
     }
 
@@ -1232,7 +1494,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 }
                 let base = self.place(base)?;
                 let index = local_ident(*index);
-                Ok(quote! { array::get(&#base, #index)? })
+                Ok(self.fallible(&quote! { array::get(&#base, #index) }))
             }
             Place::Capture(_) | Place::Deref(_) => Err(Rejection::unsupported("captured local")),
         }

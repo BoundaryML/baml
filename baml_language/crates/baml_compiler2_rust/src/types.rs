@@ -45,6 +45,11 @@ pub enum NativeTy<'db> {
     /// The iterator `iter()` yields on a `T[]`: `bex_aot::array::Iter<T>`.
     /// Never declared in BAML source; a refined type.
     ArrayIter(Box<NativeTy<'db>>),
+    /// The value a `catch` handler lands with: `bex_aot::Thrown`, a panic or
+    /// a thrown class instance. Only a handler's error local and the
+    /// temporaries a `catch` arm narrows from it have this type; never a
+    /// parameter, a return or a field.
+    Thrown,
 }
 
 /// A declaration a native type names, which the generated module emits as
@@ -78,7 +83,8 @@ impl<'db> NativeTy<'db> {
             | Self::Array(_)
             | Self::Map(..)
             | Self::Class(_)
-            | Self::ArrayIter(_) => false,
+            | Self::ArrayIter(_)
+            | Self::Thrown => false,
         }
     }
 
@@ -106,7 +112,8 @@ impl<'db> NativeTy<'db> {
             | Self::Bigint
             | Self::Str
             | Self::Null
-            | Self::Enum(_) => {}
+            | Self::Enum(_)
+            | Self::Thrown => {}
         }
     }
 
@@ -127,7 +134,8 @@ impl<'db> NativeTy<'db> {
             | Self::Bigint
             | Self::Str
             | Self::Null
-            | Self::Class(_) => {}
+            | Self::Class(_)
+            | Self::Thrown => {}
         }
     }
 
@@ -167,6 +175,7 @@ impl<'db> NativeTy<'db> {
                 let inner = inner.to_tokens(class_name);
                 quote! { bex_aot::array::Iter<#inner> }
             }
+            Self::Thrown => quote! { Thrown },
         }
     }
 
@@ -193,6 +202,7 @@ impl<'db> NativeTy<'db> {
             Self::ArrayIter(inner) => {
                 format!("baml.iter.Iterator<Item = {}>", inner.describe(class_name))
             }
+            Self::Thrown => "thrown value".into(),
         }
     }
 }

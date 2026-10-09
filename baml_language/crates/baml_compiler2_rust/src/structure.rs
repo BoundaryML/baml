@@ -11,11 +11,18 @@
 //! duplicates a block and never needs a state variable: every reachable
 //! block appears exactly once in the output.
 //!
+//! A block under a `catch` or `defer` has an *unwind* edge to its handler,
+//! taken by any throw or panic in the block (a call's `Err`, a checked
+//! operation's panic, a `throw`). The edge is an ordinary edge of the graph
+//! here, and its target is always labeled (a forced merge node) so the block
+//! can leave for it from the middle of its code with a `break`; the jump each
+//! block uses is recorded in [`Structured::unwind_jumps`].
+//!
 //! The structurizer sees only the graph's shape ([`Flow`]), so it can be unit
 //! tested on hand-built graphs; the printer fills each [`Stmt::Leaf`] from
 //! the MIR block it names.
 
-use std::fmt;
+use std::{cell::RefCell, fmt};
 
 /// How a block hands control to its successors. Everything the terminator
 /// computes (a call, a short-circuit assignment) belongs to the block's leaf;
@@ -62,11 +69,44 @@ impl Flow {
     }
 }
 
-/// A control-flow graph by shape: `flows[i]` is block `i`'s terminator.
+/// A control-flow graph by shape: `flows[i]` is block `i`'s terminator and
+/// `unwinds[i]` the handler a throw anywhere in block `i` lands in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Cfg {
     pub entry: usize,
     pub flows: Vec<Flow>,
+    pub unwinds: Vec<Option<usize>>,
+}
+
+impl Cfg {
+    /// Successors in terminator order, then the unwind edge, so a depth-first
+    /// search lays the normal path out before the handler.
+    fn successors(&self, block: usize) -> Vec<usize> {
+        let mut out = self.flows[block].successors();
+        out.extend(self.unwinds[block]);
+        out
+    }
+
+    /// [`Self::successors`] without repeats.
+    fn distinct_successors(&self, block: usize) -> Vec<usize> {
+        let mut out = self.flows[block].distinct_successors();
+        if let Some(handler) = self.unwinds[block]
+            && !out.contains(&handler)
+        {
+            out.push(handler);
+        }
+        out
+    }
+}
+
+/// The structured program, with the jump each block takes to its handler.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Structured {
+    pub stmts: Vec<Stmt>,
+    /// Per block, the statements that leave for its unwind handler (a
+    /// `break` to the handler's label); empty for a block without one or an
+    /// unreachable block.
+    pub unwind_jumps: Vec<Vec<Stmt>>,
 }
 
 /// One statement of the structured program.
@@ -151,13 +191,19 @@ struct Analysis<'a> {
     loop_members: Vec<Option<Vec<bool>>>,
     /// For a block that is the natural exit of a loop, that loop's header.
     natural_exit_of: Vec<Option<usize>>,
+    /// Filled as each leaf is emitted: the jump to its unwind handler.
+    unwind_jumps: RefCell<Vec<Vec<Stmt>>>,
 }
 
 /// Structure `cfg` into a statement sequence. Unreachable blocks are dropped.
-pub(crate) fn structurize(cfg: &Cfg) -> Result<Vec<Stmt>, StructureError> {
+pub(crate) fn structurize(cfg: &Cfg) -> Result<Structured, StructureError> {
     let analysis = Analysis::new(cfg)?;
     let mut context = Vec::new();
-    analysis.do_tree(cfg.entry, &mut context)
+    let stmts = analysis.do_tree(cfg.entry, &mut context)?;
+    Ok(Structured {
+        stmts,
+        unwind_jumps: analysis.unwind_jumps.into_inner(),
+    })
 }
 
 impl<'a> Analysis<'a> {
@@ -166,8 +212,9 @@ impl<'a> Analysis<'a> {
         if cfg.entry >= n {
             return Err(StructureError::MissingEntry(cfg.entry));
         }
-        for (from, flow) in cfg.flows.iter().enumerate() {
-            if let Some(to) = flow.successors().into_iter().find(|&to| to >= n) {
+        debug_assert_eq!(cfg.unwinds.len(), n, "one unwind slot per block");
+        for from in 0..n {
+            if let Some(to) = cfg.successors(from).into_iter().find(|&to| to >= n) {
                 return Err(StructureError::UnknownBlock { from, to });
             }
         }
@@ -178,12 +225,12 @@ impl<'a> Analysis<'a> {
         let mut visited = vec![false; n];
         let mut stack: Vec<(usize, std::vec::IntoIter<usize>)> = Vec::new();
         visited[cfg.entry] = true;
-        stack.push((cfg.entry, cfg.flows[cfg.entry].successors().into_iter()));
+        stack.push((cfg.entry, cfg.successors(cfg.entry).into_iter()));
         while let Some((block, successors)) = stack.last_mut() {
             match successors.next() {
                 Some(next) if !visited[next] => {
                     visited[next] = true;
-                    stack.push((next, cfg.flows[next].successors().into_iter()));
+                    stack.push((next, cfg.successors(next).into_iter()));
                 }
                 Some(_) => {}
                 None => {
@@ -204,7 +251,7 @@ impl<'a> Analysis<'a> {
         // Predecessors of reachable blocks, with edge multiplicity.
         let mut preds: Vec<Vec<usize>> = vec![Vec::new(); n];
         for &block in &by_rpo {
-            for succ in cfg.flows[block].successors() {
+            for succ in cfg.successors(block) {
                 preds[succ].push(block);
             }
         }
@@ -258,7 +305,7 @@ impl<'a> Analysis<'a> {
         let mut is_loop_header = vec![false; n];
         let mut forward_in = vec![0usize; n];
         for &block in &by_rpo {
-            for succ in cfg.flows[block].distinct_successors() {
+            for succ in cfg.distinct_successors(block) {
                 if rpo[succ] <= rpo[block] {
                     if !dominates(succ, block) {
                         return Err(StructureError::Irreducible {
@@ -274,6 +321,13 @@ impl<'a> Analysis<'a> {
         }
         for block in 0..n {
             is_merge[block] = forward_in[block] >= 2;
+        }
+        // A handler is always labeled: the blocks under it leave for it from
+        // the middle of their code, which only a `break` can do.
+        for &block in &by_rpo {
+            if let Some(handler) = cfg.unwinds[block] {
+                is_merge[handler] = true;
+            }
         }
 
         let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
@@ -334,6 +388,7 @@ impl<'a> Analysis<'a> {
             is_merge,
             loop_members,
             natural_exit_of,
+            unwind_jumps: RefCell::new(vec![Vec::new(); n]),
         })
     }
 
@@ -406,6 +461,10 @@ impl<'a> Analysis<'a> {
             return Ok(out);
         }
         let mut out = vec![Stmt::Leaf(block)];
+        if let Some(handler) = self.cfg.unwinds[block] {
+            let jump = self.do_branch(block, handler, context)?;
+            self.unwind_jumps.borrow_mut()[block] = jump;
+        }
         match &self.cfg.flows[block] {
             Flow::Goto(target) => out.extend(self.do_branch(block, *target, context)?),
             Flow::Branch {
@@ -503,7 +562,16 @@ mod tests {
     use super::*;
 
     fn cfg(entry: usize, flows: Vec<Flow>) -> Cfg {
-        Cfg { entry, flows }
+        let unwinds = vec![None; flows.len()];
+        Cfg {
+            entry,
+            flows,
+            unwinds,
+        }
+    }
+
+    fn structurize(cfg: &Cfg) -> Result<Vec<Stmt>, StructureError> {
+        super::structurize(cfg).map(|structured| structured.stmts)
     }
 
     fn branch(then_block: usize, else_block: usize) -> Flow {
@@ -944,6 +1012,64 @@ mod tests {
             structurize(&g),
             Err(StructureError::Irreducible { .. })
         ));
+    }
+
+    #[test]
+    fn unwind_edges_label_their_handler() {
+        // 0: call -> 1, unwind 2; 1: goto 3; 2 (handler): branch 3 / 4; 3: exit; 4: exit (rethrow)
+        let mut g = cfg(
+            0,
+            vec![
+                Flow::Goto(1),
+                Flow::Goto(3),
+                branch(3, 4),
+                Flow::Exit,
+                Flow::Exit,
+            ],
+        );
+        g.unwinds[0] = Some(2);
+        let structured = super::structurize(&g).unwrap();
+        assert_each_block_once(&structured.stmts, &[0, 1, 2, 3, 4]);
+        let Stmt::Block { label: 3, body } = &structured.stmts[0] else {
+            panic!("{structured:?}");
+        };
+        let Stmt::Block {
+            label: 2,
+            body: inner,
+        } = &body[0]
+        else {
+            panic!("the handler is labeled though it has one predecessor: {body:?}");
+        };
+        assert_eq!(inner[..], [Stmt::Leaf(0), Stmt::Leaf(1), Stmt::Break(3)]);
+        assert_eq!(body[1], Stmt::Leaf(2), "the handler follows its block");
+        assert_eq!(structured.unwind_jumps[0], vec![Stmt::Break(2)]);
+        assert!(structured.unwind_jumps[1].is_empty());
+        assert_eq!(structured.stmts[1..], [Stmt::Leaf(3), Stmt::Exit(3)]);
+    }
+
+    #[test]
+    fn unwind_to_a_handler_inside_a_loop() {
+        // 0 -> 1 (header): branch 2 / 5; 2: call -> 4, unwind 3; 3 (handler): goto 1 (continue);
+        // 4: goto 1; 5: exit
+        let mut g = cfg(
+            0,
+            vec![
+                Flow::Goto(1),
+                branch(2, 5),
+                Flow::Goto(4),
+                Flow::Goto(1),
+                Flow::Goto(1),
+                Flow::Exit,
+            ],
+        );
+        g.unwinds[2] = Some(3);
+        let structured = super::structurize(&g).unwrap();
+        assert_each_block_once(&structured.stmts, &[0, 1, 2, 3, 4, 5]);
+        assert_eq!(structured.unwind_jumps[2], vec![Stmt::Break(3)]);
+        let (mut blocks, mut loops) = (Vec::new(), Vec::new());
+        labels(&structured.stmts, &mut blocks, &mut loops);
+        assert_eq!(loops, vec![1]);
+        assert_eq!(blocks, vec![3], "the handler's block opens inside the loop");
     }
 
     #[test]

@@ -48,6 +48,14 @@ impl ErrorObject for ParseError {
     fn fields(&self) -> Vec<(&'static str, String)> {
         vec![("message", format!("{:?}", self.message))]
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn ErrorObject> {
+        Box::new(self.clone())
+    }
 }
 
 /// `baml.json.DecodeError { message, path }`: valid JSON of the wrong shape.
@@ -77,6 +85,14 @@ impl ErrorObject for DecodeError {
             ("path", format!("{:?}", self.path)),
         ]
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn ErrorObject> {
+        Box::new(self.clone())
+    }
 }
 
 /// `baml.json.SerializationError { message, path, reason }`: a value with no
@@ -103,6 +119,14 @@ impl ErrorObject for SerializationError {
             ("path", format!("{:?}", self.path)),
             ("reason", format!("{:?}", self.reason)),
         ]
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn ErrorObject> {
+        Box::new(self.clone())
     }
 }
 

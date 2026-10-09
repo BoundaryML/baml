@@ -26,7 +26,7 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Node`.
-#[derive(bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
 #[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Node`")]
 pub struct user_Node {
     pub value: Int63,
@@ -39,6 +39,23 @@ impl ToBaml for user_Node {
             "Node",
             &[("value", &self.value as &dyn ToBaml), ("next", &self.next as &dyn ToBaml)],
         );
+    }
+}
+impl bex_aot::ErrorClass for user_Node {
+    const CLASS_FQN: &'static str = "user.Node";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("value", bex_aot::Readable::readable(&self.value)),
+            ("next", bex_aot::Readable::readable(&self.next)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Node {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
     }
 }
 /// BAML function `user.pick`.

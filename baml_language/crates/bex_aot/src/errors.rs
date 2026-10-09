@@ -18,6 +18,14 @@ impl ErrorObject for InvalidArgument {
     fn fields(&self) -> Vec<(&'static str, String)> {
         vec![("message", format!("{:?}", self.message))]
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn ErrorObject> {
+        Box::new(self.clone())
+    }
 }
 
 /// `baml.errors.ParseError { message }`: text that does not parse as the
@@ -36,6 +44,14 @@ impl ErrorObject for ParseError {
 
     fn fields(&self) -> Vec<(&'static str, String)> {
         vec![("message", format!("{:?}", self.message))]
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn ErrorObject> {
+        Box::new(self.clone())
     }
 }
 

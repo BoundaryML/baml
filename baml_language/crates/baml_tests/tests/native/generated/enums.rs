@@ -51,8 +51,13 @@ impl ToBaml for user_Color {
         out.push_str(Self::NAMES[*self as usize]);
     }
 }
+impl bex_aot::Readable for user_Color {
+    fn readable(&self) -> String {
+        Self::NAMES[*self as usize].to_string()
+    }
+}
 /// BAML class `user.Pixel`.
-#[derive(bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
 #[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Pixel`")]
 pub struct user_Pixel {
     pub color: user_Color,
@@ -68,6 +73,23 @@ impl ToBaml for user_Pixel {
                 ("weight", &self.weight as &dyn ToBaml),
             ],
         );
+    }
+}
+impl bex_aot::ErrorClass for user_Pixel {
+    const CLASS_FQN: &'static str = "user.Pixel";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("color", bex_aot::Readable::readable(&self.color)),
+            ("weight", bex_aot::Readable::readable(&self.weight)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Pixel {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
     }
 }
 /// BAML function `user.pick`.

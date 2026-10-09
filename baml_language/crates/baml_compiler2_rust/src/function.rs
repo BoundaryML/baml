@@ -16,6 +16,14 @@
 //! through it (`_8 = copy _1; _7 = _8[_9]`) is an *alias* of its source: the
 //! printer reads `_1` directly and never declares `_8`, so an array element
 //! read costs no reference-count traffic ([`find_aliases`]).
+//!
+//! A `catch` or `defer` handler block *lands* with the thrown value in its
+//! error local, which is typed [`NativeTy::Thrown`]; the companion
+//! `baml.errors.Context` local is never materialized ([`LocalKind::Context`]).
+//! A class arm narrows the error into a temporary of the class
+//! (`narrow_bind`), which is typed as the class and remembers which error
+//! local it narrows ([`Candidate::narrow_sources`]); a multi-arm `catch`
+//! switches on the error's class tag ([`LocalKind::Tag`]).
 
 use baml_base::LangPackage;
 use baml_compiler2_hir::{
@@ -48,6 +56,11 @@ const PANIC_LINK_NAME: &str = "baml.sys.panic";
 /// The marker an unresolved local's read reports during refinement.
 const UNRESOLVED: &str = "unresolved local";
 
+/// The namespaces of the classes the native runtime raises as types of its
+/// own (`bex_lang::Panic`, `bex_aot::errors`, `bex_aot::json`), so a
+/// `catch` binding of one cannot recover a generated instance.
+const RUNTIME_ERROR_NAMESPACES: &[&str] = &["baml.panics.", "baml.errors.", "baml.json."];
+
 /// The native representation of a MIR local.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LocalKind<'db> {
@@ -59,13 +72,22 @@ pub(crate) enum LocalKind<'db> {
     /// `never`: only ever the destination of a `baml.sys.panic` call, which
     /// returns before anything is assigned. Not declared in the output.
     Never,
+    /// The `baml.errors.Context` a handler lands with beside the error: its
+    /// stack trace and cause chain, which native code does not keep. Read
+    /// only by `rethrow` and `throw_if_panic`, which carry the error alone;
+    /// any other read is outside the subset. Not declared in the output.
+    Context,
+    /// The class tag of a caught error (`type_tag` of a thrown value): the
+    /// class's fully qualified name, switched on by a multi-arm `catch`.
+    /// Declared as `&'static str`.
+    Tag,
 }
 
 impl<'db> LocalKind<'db> {
     pub(crate) fn value(&self) -> Option<&NativeTy<'db>> {
         match self {
             Self::Value(ty) => Some(ty),
-            Self::Type | Self::Never => None,
+            Self::Type | Self::Never | Self::Context | Self::Tag => None,
         }
     }
 }
@@ -188,6 +210,14 @@ pub(crate) struct Candidate<'db> {
     /// declaring and assigning; see [`find_aliases`].
     pub aliases: FxHashMap<Local, Place>,
     pub structured: Vec<Stmt>,
+    /// Per block, the jump to its unwind handler (`break` to the handler's
+    /// label), for every throw or panic the block's code can raise; empty
+    /// for a block with no handler. See [`crate::structure`].
+    pub unwind_jumps: Vec<Vec<Stmt>>,
+    /// For each `narrow_bind` temporary (typed as the class it narrows to),
+    /// the handler error local it narrows: the printer downcasts that local
+    /// and never emits the `copy` that seeded the temporary.
+    pub narrow_sources: FxHashMap<Local, Local>,
     /// Whether the function is on a call cycle, so its body runs under a
     /// depth guard. Set by the call graph, not by [`analyze`].
     pub recursive: bool,
@@ -263,18 +293,12 @@ pub(crate) fn analyze<'db>(
     // anything they drag along (a `spawn` body is also a lambda), so the
     // admission report names the feature.
     for block in &body.blocks {
-        if block.unwind.is_some() || block.landing.is_some() || block.handling.is_some() {
-            return Err(Rejection::unsupported("catch or defer"));
-        }
         match &block.terminator {
             Some(Terminator::Spawn { .. }) => return Err(Rejection::unsupported("spawn")),
             Some(Terminator::Await { .. } | Terminator::AwaitAny { .. }) => {
                 return Err(Rejection::unsupported("await"));
             }
             Some(Terminator::SysOp { .. }) => return Err(Rejection::unsupported("sys-op call")),
-            Some(Terminator::Throw { .. } | Terminator::Rethrow { .. }) => {
-                return Err(Rejection::unsupported("throw"));
-            }
             _ => {}
         }
     }
@@ -295,9 +319,9 @@ pub(crate) fn analyze<'db>(
                 block.id
             )));
         }
-        if block.shielded {
-            return Err(Rejection::unsupported("defer body"));
-        }
+        // `shielded` marks a `defer` body, which the VM runs shielded from
+        // cancellation; native code has no cancellation, so the mark is
+        // nothing to act on.
         if block.terminator.is_none() {
             return Err(Rejection::invalid(format!(
                 "{} has no terminator",
@@ -324,8 +348,11 @@ pub(crate) fn analyze<'db>(
         kinds: Vec::with_capacity(body.locals.len()),
         type_values: FxHashMap::default(),
         classes,
+        narrows: FxHashMap::default(),
+        narrow_sources: FxHashMap::default(),
     };
-    let unresolved = env.declare_locals(mir.arity)?;
+    let handler_kinds = env.handler_locals()?;
+    let unresolved = env.declare_locals(mir.arity, &handler_kinds)?;
     env.register_enum_constants()?;
     env.refine(unresolved)?;
     let kinds: Vec<LocalKind<'db>> = env
@@ -361,9 +388,15 @@ pub(crate) fn analyze<'db>(
     let cfg = Cfg {
         entry: body.entry.0,
         flows,
+        unwinds: body
+            .blocks
+            .iter()
+            .map(|block| block.unwind.map(|handler| handler.0))
+            .collect(),
     };
     let structured = structurize(&cfg).map_err(|error| Rejection::invalid(error.to_string()))?;
     let aliases = find_aliases(body, mir.arity, &kinds, &stores);
+    let narrow_sources = env.narrow_sources;
 
     Ok(Candidate {
         loc,
@@ -375,7 +408,9 @@ pub(crate) fn analyze<'db>(
         calls,
         stores,
         aliases,
-        structured,
+        structured: structured.stmts,
+        unwind_jumps: structured.unwind_jumps,
+        narrow_sources,
         recursive: false,
     })
 }
@@ -395,13 +430,116 @@ struct Env<'a, 'db> {
     /// The template each `reflect.Type` local is loaded with.
     type_values: FxHashMap<Local, TyTemplate>,
     classes: &'a mut ClassTable<'db>,
+    /// The class each `narrow_bind` temporary narrows to.
+    narrows: FxHashMap<Local, baml_compiler2_hir_ty::extern_loc::ClassRef<'db>>,
+    /// See [`Candidate::narrow_sources`].
+    narrow_sources: FxHashMap<Local, Local>,
 }
 
 impl<'db> Env<'_, 'db> {
+    /// The kinds of the locals `catch` and `defer` handlers use, which their
+    /// declarations (`unknown`, or `int` for a tag) do not say: a handler's
+    /// error local holds the thrown value and its context local nothing
+    /// native, a `narrow_bind` temporary is the class it narrows the error
+    /// to, and the `type_tag` of a thrown value is its class tag.
+    fn handler_locals(&mut self) -> Result<FxHashMap<Local, LocalKind<'db>>, Rejection> {
+        let mut kinds = FxHashMap::default();
+        for (_, landing) in self.body.handlers() {
+            kinds.insert(landing.error_local, LocalKind::Value(NativeTy::Thrown));
+            kinds.insert(landing.context_local, LocalKind::Context);
+        }
+        let is_thrown = |kinds: &FxHashMap<Local, LocalKind<'db>>, local: &Local| {
+            kinds.get(local) == Some(&LocalKind::Value(NativeTy::Thrown))
+        };
+        // A `narrow_bind` temporary seeded with a caught error (`_t = copy
+        // _e` in the handler) is a `catch` arm binding; any other
+        // `narrow_bind` is a narrowing pattern on a union or an interface,
+        // which the subset does not have.
+        let mut seeded: Vec<Local> = Vec::new();
+        for block in &self.body.blocks {
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    destination: Place::Local(destination),
+                    value:
+                        Rvalue::Use(
+                            Operand::Copy(Place::Local(source))
+                            | Operand::Move(Place::Local(source)),
+                        ),
+                } = &statement.kind
+                    && is_thrown(&kinds, source)
+                {
+                    seeded.push(*destination);
+                }
+            }
+        }
+        for block in &self.body.blocks {
+            let Some(Terminator::NarrowBind {
+                test, destination, ..
+            }) = &block.terminator
+            else {
+                continue;
+            };
+            if !seeded.contains(destination) {
+                continue;
+            }
+            let class = match test {
+                TypeTest::Class { class, args } if args.is_empty() => *class,
+                TypeTest::Class { .. } => {
+                    return Err(Rejection::unsupported("`catch` binding of a generic class"));
+                }
+                TypeTest::Enum(_) | TypeTest::Template(_) => {
+                    return Err(Rejection::unsupported(
+                        "`catch` binding of a type other than a class",
+                    ));
+                }
+            };
+            // The runtime raises the stdlib's own errors and panics as its
+            // own types, which the generated struct of the class would never
+            // downcast to; the class test still matches.
+            let link_name = baml_compiler2_mir::class_link_name(self.db, class);
+            if RUNTIME_ERROR_NAMESPACES
+                .iter()
+                .any(|namespace| link_name.starts_with(namespace))
+            {
+                return Err(Rejection::unsupported(format!(
+                    "`catch` binding of the stdlib class `{link_name}` (only its class test is native)"
+                )));
+            }
+            self.classes
+                .check(class)
+                .map_err(|reason| Rejection::unsupported(reason.0))?;
+            if let Some(previous) = self.narrows.insert(*destination, class)
+                && previous != class
+            {
+                return Err(Rejection::invalid(format!(
+                    "{destination} is narrowed to two classes"
+                )));
+            }
+            kinds.insert(*destination, LocalKind::Value(NativeTy::Class(class)));
+        }
+        for block in &self.body.blocks {
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    destination: Place::Local(destination),
+                    value: Rvalue::TypeTag(Place::Local(source)),
+                } = &statement.kind
+                    && is_thrown(&kinds, source)
+                {
+                    kinds.insert(*destination, LocalKind::Tag);
+                }
+            }
+        }
+        Ok(kinds)
+    }
+
     /// Type every local from its declaration. Locals whose declared type has
     /// no native representation are returned (with the reason) for
     /// refinement; a parameter or the return place must be representable.
-    fn declare_locals(&mut self, arity: usize) -> Result<Vec<(Local, Rejection)>, Rejection> {
+    fn declare_locals(
+        &mut self,
+        arity: usize,
+        handler_kinds: &FxHashMap<Local, LocalKind<'db>>,
+    ) -> Result<Vec<(Local, Rejection)>, Rejection> {
         let mut unresolved = Vec::new();
         for (index, local) in self.body.locals.iter().enumerate() {
             if local.is_captured {
@@ -410,6 +548,9 @@ impl<'db> Env<'_, 'db> {
             let is_param = (1..=arity).contains(&index);
             let is_signature = is_param || index == 0;
             let kind = match &local.ty {
+                _ if handler_kinds.contains_key(&Local(index)) && !is_signature => {
+                    Some(handler_kinds[&Local(index)].clone())
+                }
                 RuntimeTy::Type if !is_signature => Some(LocalKind::Type),
                 RuntimeTy::Never if !is_signature => Some(LocalKind::Never),
                 ty => match self.classes.native_ty(ty) {
@@ -468,11 +609,8 @@ impl<'db> Env<'_, 'db> {
                     | Terminator::ShortCircuit { destination, .. }
                     | Terminator::SysOp { destination, .. }
                     | Terminator::Await { destination, .. } => Some(destination),
-                    Terminator::NarrowBind { destination, .. } => {
-                        return Err(Rejection::unsupported(format!(
-                            "narrowing pattern into {destination}"
-                        )));
-                    }
+                    // A `narrow_bind` temporary is typed by `handler_locals`.
+                    Terminator::NarrowBind { .. } => None,
                     _ => None,
                 };
                 if let Some(Place::Local(local)) = destination {
@@ -584,6 +722,10 @@ impl<'db> Env<'_, 'db> {
             LocalKind::Value(ty) => Ok(ty.clone()),
             LocalKind::Never => Err(Rejection::unsupported("read of a `never` local")),
             LocalKind::Type => Err(Rejection::unsupported("type value used as a value")),
+            LocalKind::Context => Err(Rejection::unsupported(
+                "read of a caught error's `baml.errors.Context` (`catch (e, ctx)`)",
+            )),
+            LocalKind::Tag => Err(Rejection::unsupported("class tag used as a value")),
         }
     }
 
@@ -606,6 +748,9 @@ impl<'db> Env<'_, 'db> {
                 NativeTy::Option(_) => {
                     Err(Rejection::unsupported("field access on a nullable value"))
                 }
+                NativeTy::Thrown => Err(Rejection::unsupported(
+                    "field read on a caught error typed by the checker, without a class test (bind it with `let e: C =>`)",
+                )),
                 other => Err(Rejection::invalid(format!(
                     "field access on a `{}`",
                     self.describe(&other)
@@ -839,6 +984,19 @@ impl<'db> Env<'_, 'db> {
             }
             Rvalue::IsType { operand, test } => {
                 let ty = self.operand_ty(operand, None)?;
+                if ty == NativeTy::Thrown {
+                    // A `catch` arm's class test: decided by the class's
+                    // name, which needs no native representation of it.
+                    return match test {
+                        TypeTest::Class { args, .. } if args.is_empty() => Ok(NativeTy::Bool),
+                        TypeTest::Class { .. } => {
+                            Err(Rejection::unsupported("`catch` arm on a generic class"))
+                        }
+                        TypeTest::Enum(_) | TypeTest::Template(_) => Err(Rejection::unsupported(
+                            "`catch` arm pattern other than a class",
+                        )),
+                    };
+                }
                 match (test, &ty) {
                     (
                         TypeTest::Template(TyTemplate::Literal(Literal::Int(_), _)),
@@ -868,6 +1026,10 @@ impl<'db> Env<'_, 'db> {
             Rvalue::LoadType(_) => {
                 Err(Rejection::unsupported("type value stored in a value local"))
             }
+            Rvalue::TypeTag(place) => Err(Rejection::unsupported(format!(
+                "type tag of a `{}`",
+                self.describe(&self.place_ty(place)?)
+            ))),
             other => Err(Rejection::unsupported(format!(
                 "rvalue {}",
                 rvalue_name(other)
@@ -911,7 +1073,41 @@ impl<'db> Env<'_, 'db> {
                         LocalKind::Never => {
                             return Err(Rejection::unsupported("assignment to a `never` local"));
                         }
+                        LocalKind::Context => {
+                            return Err(Rejection::unsupported(
+                                "assignment to a caught error's `baml.errors.Context`",
+                            ));
+                        }
+                        LocalKind::Tag => {
+                            // `_t = type_tag(_e)` on a thrown value: the
+                            // class's name, which `handler_locals` checked.
+                            let Rvalue::TypeTag(Place::Local(_)) = value else {
+                                return Err(Rejection::invalid(
+                                    "class tag assigned from something other than a type tag",
+                                ));
+                            };
+                            return Ok(None);
+                        }
                         LocalKind::Value(_) => {}
+                    }
+                    // The `copy` that seeds a `narrow_bind` temporary with
+                    // the caught error: the printer downcasts the error local
+                    // in the `narrow_bind` itself and emits no copy.
+                    if self.narrows.contains_key(local)
+                        && let Rvalue::Use(
+                            Operand::Copy(Place::Local(source))
+                            | Operand::Move(Place::Local(source)),
+                        ) = value
+                        && self.local_ty(*source)? == NativeTy::Thrown
+                    {
+                        if let Some(previous) = self.narrow_sources.insert(*local, *source)
+                            && previous != *source
+                        {
+                            return Err(Rejection::invalid(format!(
+                                "{local} narrows two different caught errors"
+                            )));
+                        }
+                        return Ok(None);
                     }
                 }
                 let expected = self.place_ty(destination)?;
@@ -986,12 +1182,27 @@ impl<'db> Env<'_, 'db> {
                 otherwise,
                 ..
             } => {
-                self.operand_of(discriminant, &NativeTy::Int)?;
+                let on_tag = matches!(
+                    discriminant,
+                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
+                        if matches!(self.kind(*local)?, LocalKind::Tag)
+                );
+                if !on_tag {
+                    self.operand_of(discriminant, &NativeTy::Int)?;
+                }
                 let mut targets = Vec::with_capacity(arms.len());
                 for (key, target) in arms {
-                    let SwitchKey::Int(_) = key else {
-                        return Err(Rejection::unsupported("switch on a class tag"));
-                    };
+                    match (key, on_tag) {
+                        (SwitchKey::Int(_), false) | (SwitchKey::Class(_), true) => {}
+                        (SwitchKey::Class(_), false) => {
+                            return Err(Rejection::unsupported("switch on a class tag"));
+                        }
+                        (SwitchKey::Int(_), true) => {
+                            // Primitive types have fixed tags; a thrown
+                            // primitive is not native.
+                            return Err(Rejection::unsupported("`catch` arm on a primitive type"));
+                        }
+                    }
                     targets.push(target.0);
                 }
                 Flow::Switch {
@@ -1025,20 +1236,84 @@ impl<'db> Env<'_, 'db> {
                     else_block: join.0,
                 }
             }
-            Terminator::NarrowBind { .. } => {
-                return Err(Rejection::unsupported("narrowing pattern"));
+            Terminator::NarrowBind {
+                source,
+                destination,
+                then_block,
+                else_block,
+                ..
+            } => {
+                // A `catch` arm binding (`let e: C => ..`): the temporary was
+                // seeded with the caught error and is narrowed in place.
+                if !self.narrows.contains_key(destination) {
+                    return Err(Rejection::unsupported("narrowing pattern"));
+                }
+                let narrows_itself = matches!(
+                    source,
+                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
+                        if local == destination
+                );
+                if !narrows_itself {
+                    return Err(Rejection::unsupported(
+                        "`catch` binding narrowed from a value other than its own temporary",
+                    ));
+                }
+                Flow::Branch {
+                    then_block: then_block.0,
+                    else_block: else_block.0,
+                }
             }
             Terminator::SysOp { .. } => return Err(Rejection::unsupported("sys-op call")),
             Terminator::Spawn { .. } => return Err(Rejection::unsupported("spawn")),
             Terminator::Await { .. } | Terminator::AwaitAny { .. } => {
                 return Err(Rejection::unsupported("await"));
             }
-            Terminator::Throw { .. } | Terminator::Rethrow { .. } => {
-                return Err(Rejection::unsupported("throw"));
+            Terminator::Throw { value } => {
+                // A class instance, or a caught error thrown on. The VM
+                // throws any value; a native throw is always an object.
+                let ty = self.operand_ty(value, None)?;
+                match ty {
+                    NativeTy::Class(_) | NativeTy::Thrown => {}
+                    other => {
+                        return Err(Rejection::unsupported(format!(
+                            "`throw` of a `{}` (only a class instance is thrown natively)",
+                            self.describe(&other)
+                        )));
+                    }
+                }
+                Flow::Exit
             }
-            Terminator::ThrowIfPanic { .. } => return Err(Rejection::unsupported("catch")),
+            Terminator::Rethrow { value, context } => {
+                self.operand_of(value, &NativeTy::Thrown)?;
+                self.context_operand(context)?;
+                Flow::Exit
+            }
+            Terminator::ThrowIfPanic {
+                value,
+                context,
+                otherwise,
+            } => {
+                self.operand_of(value, &NativeTy::Thrown)?;
+                self.context_operand(context)?;
+                Flow::Goto(otherwise.0)
+            }
         };
         Ok((flow, None))
+    }
+
+    /// The context operand of a `rethrow` or `throw_if_panic`: the landing's
+    /// context local, which native code carries nowhere.
+    fn context_operand(&self, operand: &Operand<'db>) -> Result<(), Rejection> {
+        match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
+                if matches!(self.kind(*local)?, LocalKind::Context) =>
+            {
+                Ok(())
+            }
+            _ => Err(Rejection::invalid(
+                "rethrow context is not a handler's context local",
+            )),
+        }
     }
 
     fn operand_of(
@@ -1111,6 +1386,11 @@ impl<'db> Env<'_, 'db> {
             (_, LocalKind::Type) => {
                 return Err(Rejection::unsupported("call storing a type value"));
             }
+            (_, LocalKind::Context | LocalKind::Tag) => {
+                return Err(Rejection::invalid(
+                    "call storing into a handler's context or tag local",
+                ));
+            }
             (
                 CallKind::Builtin { result, .. } | CallKind::Direct { result, .. },
                 LocalKind::Value(ty),
@@ -1161,9 +1441,9 @@ impl<'db> Env<'_, 'db> {
                 if *has_trace {
                     return Err(Rejection::unsupported("call with a trace attachment"));
                 }
-                if unwind.is_some() {
-                    return Err(Rejection::unsupported("call inside a catch"));
-                }
+                // The unwind edge is the block's (`BasicBlock::unwind`), which
+                // the structurer makes explicit.
+                let _ = unwind;
                 // Lowering has already laid the arguments out in the callee's
                 // declared order, named ones included, with `<omitted>` in
                 // every slot the call left to a default; the layout the site
@@ -1266,9 +1546,7 @@ impl<'db> Env<'_, 'db> {
                 if *has_trace {
                     return Err(Rejection::unsupported("call with a trace attachment"));
                 }
-                if unwind.is_some() {
-                    return Err(Rejection::unsupported("call inside a catch"));
-                }
+                let _ = unwind;
                 if *ntypeargs != 0 {
                     return Err(Rejection::unsupported(
                         "interface method call with type arguments",
@@ -1650,6 +1928,21 @@ fn mismatch<'db>(
     describe: impl Fn(&NativeTy<'db>) -> String,
     what: impl FnOnce() -> String,
 ) -> Rejection {
+    if *actual == NativeTy::Thrown {
+        // The checker typed the caught error from the try body's `throws`
+        // and lowering reads it as that type without a test. The class is
+        // not in the MIR, and a thrown non-class value is not native.
+        return Rejection::unsupported(match expected {
+            NativeTy::Class(_) => format!(
+                "caught error read as a `{0}` without a class test (bind it with `let e: {0} =>`)",
+                describe(expected)
+            ),
+            _ => format!(
+                "caught error used as a `{}` (only a class instance is thrown natively)",
+                describe(expected)
+            ),
+        });
+    }
     if coercion(actual, expected) == Some(Coercion::Unwrap) {
         Rejection::unsupported(format!(
             "narrowed `{}` used as `{}`",
@@ -1877,8 +2170,9 @@ fn terminator_name(terminator: &Terminator<'_>) -> &'static str {
         Terminator::Spawn { .. } => "spawn",
         Terminator::Await { .. } | Terminator::AwaitAny { .. } => "await",
         Terminator::ShortCircuit { .. } => "short-circuit",
-        Terminator::Throw { .. } | Terminator::Rethrow { .. } => "throw",
-        Terminator::ThrowIfPanic { .. } => "catch",
+        Terminator::Throw { .. } => "throw",
+        Terminator::Rethrow { .. } => "rethrow",
+        Terminator::ThrowIfPanic { .. } => "throw-if-panic",
     }
 }
 
@@ -1943,6 +2237,9 @@ pub(crate) fn find_aliases(
             {
                 defs[local.0] += 1;
             }
+            if let Terminator::NarrowBind { destination, .. } = terminator {
+                defs[destination.0] += 1;
+            }
             if !terminator_locals(terminator, &mut locals) {
                 return FxHashMap::default();
             }
@@ -1981,7 +2278,7 @@ pub(crate) fn find_aliases(
             let Some(LocalKind::Value(ty)) = kinds.get(temp.0) else {
                 continue;
             };
-            if ty.is_copy() || matches!(ty, NativeTy::ArrayIter(_)) {
+            if ty.is_copy() || matches!(ty, NativeTy::ArrayIter(_) | NativeTy::Thrown) {
                 continue;
             }
             let (base, is_field) = match source {
@@ -2079,7 +2376,9 @@ fn rvalue_locals(value: &Rvalue<'_>, out: &mut Vec<Local>) -> bool {
                 operand_locals(value, out);
             }
         }
-        Rvalue::Len(place) | Rvalue::Discriminant(place) => place_locals(place, out),
+        Rvalue::Len(place) | Rvalue::Discriminant(place) | Rvalue::TypeTag(place) => {
+            place_locals(place, out);
+        }
         Rvalue::LoadType(_) => {}
         _ => return false,
     }
@@ -2132,6 +2431,7 @@ fn terminator_operands<'db>(terminator: &Terminator<'db>, f: &mut dyn FnMut(&Ope
             args.iter().for_each(f);
         }
         Terminator::ShortCircuit { operand, .. } => f(operand),
+        Terminator::Throw { value } => f(value),
         _ => {}
     }
 }
@@ -2189,6 +2489,20 @@ fn terminator_locals(terminator: &Terminator<'_>, out: &mut Vec<Local>) -> bool 
         } => {
             operand_locals(operand, out);
             place_locals(destination, out);
+        }
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => {
+            operand_locals(source, out);
+            out.push(*destination);
+        }
+        Terminator::Throw { value } => operand_locals(value, out),
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            operand_locals(value, out);
+            operand_locals(context, out);
         }
         _ => return false,
     }

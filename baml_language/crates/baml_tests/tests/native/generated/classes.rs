@@ -26,7 +26,7 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Point`.
-#[derive(bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
 #[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Point`")]
 pub struct user_Point {
     pub x: Int63,
@@ -41,8 +41,25 @@ impl ToBaml for user_Point {
         );
     }
 }
+impl bex_aot::ErrorClass for user_Point {
+    const CLASS_FQN: &'static str = "user.Point";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("x", bex_aot::Readable::readable(&self.x)),
+            ("y", bex_aot::Readable::readable(&self.y)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Point {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
+    }
+}
 /// BAML class `user.Box`.
-#[derive(bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
 #[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Box`")]
 pub struct user_Box {
     pub name: Str,
@@ -62,6 +79,25 @@ impl ToBaml for user_Box {
                 ("weights", &self.weights as &dyn ToBaml),
             ],
         );
+    }
+}
+impl bex_aot::ErrorClass for user_Box {
+    const CLASS_FQN: &'static str = "user.Box";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("name", bex_aot::Readable::readable(&self.name)),
+            ("corner", bex_aot::Readable::readable(&self.corner)),
+            ("tag", bex_aot::Readable::readable(&self.tag)),
+            ("weights", bex_aot::Readable::readable(&self.weights)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Box {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
     }
 }
 /// BAML function `user.area`.

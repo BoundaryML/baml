@@ -41,6 +41,7 @@ const FIXTURES: &[&str] = &[
     "recursion",
     "strings",
     "switches",
+    "throws",
 ];
 
 fn fixture_source(name: &str) -> String {
@@ -100,6 +101,7 @@ generated_module!(defaults, "native/generated/defaults.rs");
 generated_module!(enums, "native/generated/enums.rs");
 generated_module!(maps, "native/generated/maps.rs");
 generated_module!(bigint, "native/generated/bigint.rs");
+generated_module!(throws, "native/generated/throws.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -251,6 +253,11 @@ impl Oracle {
                     ),
                     other => panic!("{entry}: VM threw a non-class value {other:?}"),
                 }
+            }
+            // An uncaught `baml.panics.Exit { code }` is the engine's clean
+            // termination: observed as the thrown class it is.
+            Err(EngineError::Exit { code }) => {
+                Observed::thrown("baml.panics.Exit", [("code".to_string(), code.to_string())])
             }
             Err(err) => panic!("{entry}: VM error is not a throw: {err}"),
         }
@@ -753,5 +760,25 @@ async fn bigint_matches_vm() {
         "nope",
     ] {
         check!(o, json_in(raw) => user_json_in(text(raw)));
+    }
+}
+
+#[tokio::test]
+async fn throws_match_vm() {
+    use throws::*;
+    let o = Oracle::new("throws");
+    for x in [3, 0, -1, -2] {
+        check!(o, throw_if_negative(x) => user_throw_if_negative(int(x)));
+        check!(o, throw_coded(x) => user_throw_coded(int(x)));
+        check!(o, throw_local(x) => user_throw_local(int(x)));
+        check!(o, throw_stdlib(x) => user_throw_stdlib(int(x)));
+        check!(o, throw_panic_class(x) => user_throw_panic_class(int(x)));
+        check!(o, throw_deep(x) => user_throw_deep(int(x)));
+    }
+    for n in [0, 1, 2, 3] {
+        check!(o, throw_in_loop(n) => user_throw_in_loop(int(n)));
+    }
+    for x in [0, 2, 3, -1, -4] {
+        check!(o, panic_deep(x) => user_panic_deep(int(x)));
     }
 }
