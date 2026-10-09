@@ -180,3 +180,14 @@ function flag(n: int) -> string {
         let i: int => i.to_string(),
     }
 }
+
+function plain_tests(n: int) -> int {
+    let xs = [n];
+    let total = 0;
+    if (n is int) { total = total + 1; }
+    if (xs is int[]) { total = total + 10; }
+    match (xs) {
+        int[] => { total = total + 1000; }
+    }
+    total
+}

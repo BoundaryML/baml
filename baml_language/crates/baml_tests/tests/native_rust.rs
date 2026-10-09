@@ -438,6 +438,7 @@ async fn primitive_unions_match_vm() {
         check!(o, coalesce_union(n) => user_coalesce_union(int(n)));
         check!(o, big(n) => user_big(int(n)));
         check!(o, flag(n) => user_flag(int(n)));
+        check!(o, plain_tests(n) => user_plain_tests(int(n)));
     }
     for x in [0.0, 1.5, -2.5, 1e18, f64::NAN, f64::INFINITY] {
         let member = Union_int_or_float::float(x);

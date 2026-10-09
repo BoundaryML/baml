@@ -38,16 +38,19 @@ A function is admitted when all of the following hold:
   may only be the destination of `baml.sys.panic`;
 - its body uses `Assign`, `Drop`, `Nop` and trace-hook intrinsics (no-ops) over
   `Use`, `BinaryOp`, `UnaryOp`, `Array`, `Map`, `Len` of an array or a map,
-  `Aggregate` of a class, `Discriminant` of an enum, literal `IsType` and
-  the `baml.iter.Done` test, reading and writing locals, class fields and
-  array elements (a map subscript lowers to a `baml.Map` call);
-- its control flow uses `Goto`, `Branch`, `Switch` on `int` keys, `Return`,
-  `Unreachable`, `ShortCircuit` (`&&`, `||`), direct `Call` and the
+  `Aggregate` of a class, `Discriminant` of an enum, `IsType` and
+  `IsTypeTag` on a union, nullable or closed value (and the literal tests and
+  the `baml.iter.Done` test), `TypeTag` of a union, reading and writing
+  locals, class fields and array elements (a map subscript lowers to a
+  `baml.Map` call);
+- its control flow uses `Goto`, `Branch`, `Switch` on `int` keys or on a
+  union's type tag, `Return`, `Unreachable`, `ShortCircuit` (`&&`, `||`,
+  `??`), `NarrowBind` on a union or nullable value, direct `Call` and the
   `VirtualCall`s of the for-in protocol and `sort`; `throw` of a class
   instance, and `catch` / `defer` in the shapes lowering gives them (unwind
   edges, landing blocks, `rethrow`, `throw_if_panic`, class tests, class
   bindings and class-tag switches on the caught value), see
-  [Errors](#errors-throw-catch-defer);
+  [Errors](#errors-throw-catch-defer) and [Unions](#unions-and-narrowing);
 - every call is either a direct call of a source function in the subset, a
   stdlib builtin from the table below (keyed by link name), or
   `baml.sys.panic` with a string literal.
@@ -67,7 +70,8 @@ the native stack. Functions off every cycle pay nothing.
 | `bigint` | `BigInt` | `bex_aot::bigint::BigInt`, a counted pointer passed by reference: `+ - & \| ^` are `bigint::add(&a, &b)` and friends, `* / % << >>` the checked `bigint::mul(&a, &b)?` etc. (`AllocFailure` past the workspace cap, `DivisionByZero`, `NegativeBitShift`), comparisons `bigint::eq` / `bigint::cmp(..).is_lt()`; a mixed `int` operand is widened with `bigint::from_int`; literals `bigint::from_i64(n)` or `bigint::lit("digits")` |
 | `string` | `Str` | `+` `string::concat`, `==` `string::eq`, `<` etc. `string::cmp(..).is_lt()`; literals `string::from_literal("..")` |
 | `null`, `void` | `()` | |
-| `T \| null` | `Option<T>` | the only union shape; `null` is `None`, a `T` stored into it is `Some(v)`, `x == null` is `x.is_none()` |
+| `T \| null` | `Option<T>` | `null` is `None`, a `T` stored into it is `Some(v)`, `x == null` is `x.is_none()` |
+| `A \| B \| ..` | `Union_A_or_B` | a closed union (every member a known class, enum or primitive, or an array or map of those): a generated `pub enum Union_int_or_float { int(Int63), float(f64) }` with one variant per member in the order the type carries, `Copy` when every member is; `A \| B \| null` is `Option<Union_A_or_B>`; a member stored into it is its variant, `x is int` a `matches!`, see [Unions](#unions-and-narrowing) |
 | `T[]` | `Shared<Vec<T>>` | `Shared<T> = Rc<RefCell<T>>`: reference semantics; `[a, b]` is `array::new::<T>(Vec::from([..]))`, `xs[i]` `array::get(&xs, i)?`, `xs[i] = v` `array::set(&xs, i, v)?`, `.length()` `array::len(&xs)` |
 | class `C` | `Shared<user_C>` | generated `pub struct user_C { fields in declaration order }`; `C { .. }` is `shared(user_C { .., unspecified: None })`, `c.f` `c.borrow().f.clone()`, `c.f = v` `c.borrow_mut().f = v` |
 | `map<K, V>` | `Map<K, V>` | `bex_aot::map::Map`: a `Shared` handle over an insertion-ordered table; `K` is `int`, `bool` or `string`; `{ k: v }` is `map::new::<K, V>(Vec::from([..]))`, `m[k]` `map::index(&m, &k)?` (`MapKeyNotFound` when absent), `m[k] = v` `map::set(&m, k, v)`, `.length()` `map::len(&m)` |
@@ -77,8 +81,10 @@ the native stack. Functions off every cycle pay nothing.
 | caught error | `Thrown` | a handler's error local: `bex_aot::Thrown`, a panic or a thrown class instance; its context local has no native form |
 
 Literal types (`0`, `"x"`) map to their primitive, and a variant type
-(`Color.Red`) to its enum. Classes must be non-generic with every field in
-the model. Generated structs derive
+(`Color.Red`) to its enum, so a union of literals of one primitive
+(`"a" | "b"`, `1 | 2 | int`) erases to that primitive and `"a" | "b" | null`
+is `Option<Str>`; a `match` on a string literal is a `string::eq`. Classes
+must be non-generic with every field in the model. Generated structs derive
 `Serialize` and `Deserialize` through `bex_aot::serde` (`#[serde(rename)]`
 keeps the BAML name when the Rust field had to change, e.g. `type` ->
 `type_`) and implement `ToBaml`, rendering `Name { f: v, .. }` with the
@@ -101,6 +107,7 @@ be thrown and caught by name; a class that is never thrown pays nothing.
 | `baml.Float.floor` / `itrunc` | `float::floor(x)` / `float::itrunc(x)?` |
 | `baml.ops.equals_equals(x, null)` | `x.is_none()` (`x: T \| null`) |
 | `baml.ops.equals_equals(a, b)` on one enum | `a == b` |
+| `baml.ops.equals_equals(a, b)` on primitives, nullables, unions of those | `bex_aot::eq::equals(&a, &b)` (`BamlEq`, the VM's broad `==`), the narrower side lifted into the wider type |
 | `baml.Map.has` / `get` / `index` / `delete` (`m, k`) | `map::has(&m, &k)` / `map::get(&m, &k)` (`V \| null`) / `map::index(&m, &k)?` / `map::delete(&m, &k)` (the removed `V \| null`) |
 | `baml.Map.set` / `get_or_insert` (`m, k, v`) | `map::set(&m, k, v)` (the previous `V \| null`) / `map::get_or_insert(&m, k, v)` |
 | `baml.Bigint.abs` / `isqrt` / `to_int` / `parse` (`x`) | `bigint::abs(&x)` / `bigint::isqrt(&x)?` / `bigint::to_int(&x)?` / `bigint::parse(&s)?` |
@@ -115,6 +122,60 @@ Any other stdlib function, with or without source, is rejected as
 `` unsupported builtin `<link name>` ``, so the admission report names the next
 builtin to add. A type argument that still mentions a type parameter rejects
 the call.
+
+### Unions and narrowing
+
+A closed union is a generated Rust enum ([`NativeTy::Union`]), one per
+distinct member list the program mentions, with `ToBaml`, `Readable`,
+`Serialize` and `Deserialize` delegating to the member held, and `BamlEq`
+when every member compares natively. The member order is the one the type
+carries: the type system canonicalizes signatures and locals (a `float |
+int` parameter is `int | float`), but a `load_type` template
+(`deserialize<Ok | Err>`) and a class field keep their spelled order, and
+the VM decodes JSON in that order (the first member the text decodes as),
+so `Ok | Err` and `Err | Ok` are two native types, converted at a store by
+a `match` that re-tags each variant. The same conversion widens a union
+into one with more members. JSON decoding is `bex_aot::json::deserialize_union`
+over the variants in order; the error is a `DecodeError` as on the VM.
+
+Lowering reads a union as one of its members wherever the checker narrowed
+it (after `x is int`, in the arms of a `match`, after `x != null` on a
+nullable union), with the union-typed local as it is. The analyzer admits
+such a read as a `Coercion::Narrow` (`Unwrap` for a nullable, `UnwrapNarrow`
+for both) in a plain copy, a binary or unary operand (read as the other
+operand's type, or the result's when both sides are narrowed), a call or
+builtin argument, an array element or a class field; the printer emits
+`match x { Union::int(value) => value, _ => <raise Unreachable> }`, so a
+narrowing the checker got wrong is a panic, never a miscompile. A field read
+through a narrowed union local (`v.n` after `v is A`) is rejected: the slot
+belongs to the narrowed class, which the MIR does not name; the binding
+form (`let a: A => a.n`) is admitted.
+
+Type tests are resolved once by the analyzer to the variants they select
+(`Candidate::member_tests`) and printed as `matches!`: `is_type(x, int)` is
+`matches!(&x, Union::int(_))`, `x is int | float` lists both, a class or
+enum test names its variant, a literal test adds a guard
+(`Union::int(value) if *value == int::lit(1)`), `is_type_tag` (lowering's
+coarse container test) selects every variant carrying the tag, and on a
+nullable the patterns are wrapped in `Some(..)` with the `null` test
+`is_none()`. A binding pattern (`let n: int => ..`) lowers to a
+`narrow_bind` on a temporary seeded with the union; it prints as the same
+test, the binding being the value itself read narrowed afterwards. Four or
+more type arms lower to `type_tag` and a `Switch` with the VM's tag numbers
+and class keys; the tag local is never declared and the switch prints as a
+`match` on the union value with one pattern per selected variant. A type
+test on a value of one closed type (`x is int` on an `int`, `xs is int[]`)
+is the constant the static type decides, and `c is Color.Red` on an enum
+is `c == Color::Red`.
+
+`==` and `!=` with a union or nullable operand, other than against `null`,
+lift the other side into the wider type and compare through
+`bex_aot::BamlEq` (false across kinds, `float` by the reflexive order, enums
+by variant), which is what the VM's comparison opcode decides for the
+values it holds and what a variant pattern on a union (`Color.Red =>` on an
+`int | Color`) lowers to. `baml.ops.equals_equals` on two such values is
+the same comparison. `a ?? b` is `if let Some(value) = a { .. } else {
+<b> }`.
 
 ### Errors: throw, catch, defer
 
@@ -197,8 +258,10 @@ call.
 
 The analyzer records how each assignment's value fits its destination
 (`Candidate::stores`: identity, `Some(..)` for a `T` into `T | null`, `None`
-for a `null` into one) and the printer applies it; the printer never
-re-derives an rvalue's type.
+for a `null` into one, a variant for a member into a union, a re-tagging
+`match` between unions, a narrowing `match` for a union read as a member)
+and the value's own type (`Candidate::values`), and the printer applies
+them; the printer never re-derives an rvalue's type.
 
 Control flow is structured, never a `loop { match block { .. } }` dispatcher.
 `structure.rs` implements the Stackifier / "Beyond Relooper" scheme over a
@@ -308,25 +371,34 @@ first one it can call), and marks library-only functions in its report.
 `Rejection::Unsupported(reason)` means the function is outside the subset.
 Types: a map keyed by anything but `int`, `bool` or `string` (keys of
 those types compare by value on both backends; a `float` key's NaN and a
-class's own `Hash`/`Equals` are not reproduced), unions other than
-`T | null`, `uint8array`, media, function and future types,
-interfaces, generic classes, a class with such a field (the field is named),
-and an `unknown` or interface-typed local no definition refines. A `to_string` on a class or enum with its own
-`baml.ToString` implementation is rejected, as the structural rendering
-would be wrong. Constructs: `throw` of a value that is not a class instance
-(`throw "text"`, which BAML allows), a `catch` arm that is not a class test,
-a class binding or a wildcard (`let s: string => ..`), a binding of a
-generic class, of a class outside the model, or of a stdlib error or panic
-class (`let p: baml.panics.IndexOutOfBounds => ..`, see Limitations), a
-read of the bound context of `catch (e, ctx)`, `spawn`/`await`, sys-ops, closures and
-captured locals, `??`, narrowing patterns and values the checker narrowed
-(a `T | null` used as a `T` after a null test), `==` on arrays, maps or
-classes, interface method calls other than `iter`/`next`/`sort`, `sort` on a
-non-primitive array, indirect calls, calls with trace attachments, an
-omitted argument to a stdlib function, or type arguments to a user function,
-any stdlib function not in the table, a `panic` with a computed message, a
-defaulted parameter whose default is computed (`b: int = a + 1`), interface
-default methods, generic functions and declared trace hooks.
+class's own `Hash`/`Equals` are not reproduced), an open union (a member
+that is `unknown`, an interface, a generic class, a type alias, a function
+or media: the reason names the member, `interface (a union member)`),
+`uint8array`, media, function and future types, interfaces, generic
+classes, a class with such a field (the field is named), and an `unknown`
+or interface-typed local no definition refines. A `to_string` on a class or
+enum with its own `baml.ToString` implementation is rejected, as the
+structural rendering would be wrong; so is `==` on an enum, or a union with
+one, that implements its own `baml.ops.Equals`, which the VM dispatches.
+Constructs: `throw` of a value that is not a class instance (`throw
+"text"`, which BAML allows), a `catch` arm that is not a class test, a class
+binding or a wildcard (`let s: string => ..`), a binding of a generic class,
+of a class outside the model, or of a stdlib error or panic class (`let p:
+baml.panics.IndexOutOfBounds => ..`, see Limitations), a read of the bound
+context of `catch (e, ctx)`, `spawn`/`await`, sys-ops, closures and captured
+locals, a field read through a narrowed union (`v.n` after `v is A`; bind it
+instead), a type test against a float or bigint literal, `==` on arrays,
+maps, classes or a union with such a member (the VM compares class
+instances structurally, with the class's own `Equals` when it has one; the
+runtime does not), a JSON decode into a type that mentions a literal type
+(the VM rejects a value outside the literal, which the erased primitive
+would accept; the field is named), interface method calls other than
+`iter`/`next`/`sort`, `sort` on a non-primitive array, indirect calls, calls
+with trace attachments, an omitted argument to a stdlib function, or type
+arguments to a user function, any stdlib function not in the table, a
+`panic` with a computed message, a defaulted parameter whose default is
+computed (`b: int = a + 1`), interface default methods, generic functions
+and declared trace hooks.
 
 `Rejection::Invalid(reason)` means the MIR violated an invariant a checked
 program must hold (a compiler bug): lowering errors, type mismatches between
@@ -334,10 +406,12 @@ an assignment and its place, between an array literal and its elements, or
 between a call and its callee, a call argument that is not a local, an
 irreducible CFG, unknown block ids, or generated tokens that do not parse.
 
-One MIR quirk is handled deliberately: the fall-through edge of
-`while (true) { .. }` assigns `null` to a non-nullable return place. The
-checker has proven that edge dead, so the assignment is emitted as
-`return Err(Thrown::from(Panic::Unreachable))` rather than rejected.
+Two MIR quirks are handled deliberately: the fall-through edge of
+`while (true) { .. }` assigns `null` to a non-nullable return place, which
+the checker has proven dead, so the assignment is emitted as
+`return Err(Thrown::from(Panic::Unreachable))` rather than rejected; and a
+`baml.sys.panic` in tail position of a `void` function has the return place
+as its destination, which it never stores to.
 
 ## Limitations
 
@@ -356,3 +430,10 @@ checker has proven that edge dead, so the assignment is emitted as
   message is identical only where the code producing it is shared
   (`bex_lang`); a `catch` that reads `e.message` observes each backend's
   own wording otherwise.
+- A union spelled in two member orders is two native types (see
+  [Unions](#unions-and-narrowing)): the VM's JSON decode is order-sensitive
+  per site, and the conversion between the two is a re-tagging `match` at
+  every store across them. One type with per-site decoders is the
+  alternative, not taken yet.
+- A union's class members compare structurally on the VM; natively `==` on
+  such a union is rejected, as `==` on a class is.

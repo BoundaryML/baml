@@ -427,7 +427,8 @@ pub(crate) trait Resolver<'db> {
 ///
 /// Rejected here: `unknown` and interface types (they may still be refined
 /// from their defining rvalue by the caller), maps keyed by anything but
-/// `int`, `bool` or `string`, unions other than `T | null`, `uint8array`,
+/// `int`, `bool` or `string`, open unions (a member that has no native
+/// type, with the reason naming it), `uint8array`,
 /// media, functions, futures, type aliases, type variables and the
 /// compiler-only sentinels.
 pub(crate) fn from_runtime_ty<'db>(

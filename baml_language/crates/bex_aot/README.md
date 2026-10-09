@@ -15,6 +15,7 @@ garbage collector.
 | `T[]`, class `C` | `Shared<Vec<T>>`, `Shared<C>` | `handle`: `Rc<RefCell<T>>` with reference semantics; `array`: checked `get`/`set`, `push`, primitive sorts, the for-in cursor `Iter<T>` |
 | `map<K, V>` | `Map<K, V>` | `map`: a handle over an insertion-ordered `IndexMap`, keyed by `string`, `int` or `bool`; `index` raises `MapKeyNotFound`; JSON needs string keys, as on the VM |
 | `T \| null` | `Option<T>` | |
+| `A \| B` | a generated enum | one variant per member; `json::deserialize_union` decodes the first member the text fits, in the union's member order, as the VM's typed decode does |
 | `==` | `BamlEq` | `eq`: the VM's broad `==` for primitives, `null`, nullable values and (through generated impls) unions: different kinds are never equal, `float` by the reflexive order |
 | `to_string()` | `ToBaml` | `render`: the structural walk, `render::class` for generated structs |
 | `json.*` | serde through `serde_json` | `json`: `to_string`, `deserialize<T>`, the `ParseError` / `DecodeError` classes |

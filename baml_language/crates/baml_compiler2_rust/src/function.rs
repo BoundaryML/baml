@@ -1111,16 +1111,17 @@ impl<'db> Env<'_, 'db> {
                     {
                         Ok(NativeTy::Bool)
                     }
-                    // A test on a union or nullable value selects variants.
-                    (_, NativeTy::Union(_) | NativeTy::Option(_)) => {
+                    (_, NativeTy::ArrayIter(_) | NativeTy::Thrown) => Err(Rejection::unsupported(
+                        format!("type test on a `{}`", self.describe(&ty)),
+                    )),
+                    // A test on a union or nullable value selects variants;
+                    // on a value of one closed type it is a constant, since
+                    // the static type of such a value is exact.
+                    _ => {
                         let decided = self.member_test(&ty, test)?;
                         self.record_test(site, decided);
                         Ok(NativeTy::Bool)
                     }
-                    _ => Err(Rejection::unsupported(format!(
-                        "type test on a `{}` (other than a literal or `baml.iter.Done`)",
-                        self.describe(&ty)
-                    ))),
                 }
             }
             Rvalue::IsTypeTag { operand, tag } => {
@@ -1146,12 +1147,19 @@ impl<'db> Env<'_, 'db> {
                             }
                         }
                     }
-                    other => {
+                    other @ (NativeTy::ArrayIter(_) | NativeTy::Thrown) => {
                         return Err(Rejection::unsupported(format!(
                             "type tag test on a `{}`",
                             self.describe(other)
                         )));
                     }
+                    // A value of one closed type: the tag is the type's.
+                    single => MemberTest::Variants(
+                        (member_tag(single) == Some(*tag))
+                            .then_some(0)
+                            .into_iter()
+                            .collect(),
+                    ),
                 };
                 self.record_test(site, decided);
                 Ok(NativeTy::Bool)
@@ -1187,6 +1195,8 @@ impl<'db> Env<'_, 'db> {
     /// the variants whose values are members of the tested type. The VM
     /// asks whether the value's own type is a subtype of the tested one;
     /// over the closed members here that is which variants the test names.
+    /// On a value of one closed type (a one-member "union" with the index
+    /// 0) the answer is a constant.
     fn member_test(
         &mut self,
         ty: &NativeTy<'db>,
@@ -1198,12 +1208,13 @@ impl<'db> Env<'_, 'db> {
                 NativeTy::Union(members) => (members.clone(), true),
                 single => (vec![single.clone()], true),
             },
-            other => {
+            NativeTy::ArrayIter(_) | NativeTy::Thrown => {
                 return Err(Rejection::invalid(format!(
                     "member test on a `{}`",
-                    self.describe(other)
+                    self.describe(ty)
                 )));
             }
+            single => (vec![single.clone()], false),
         };
         let variants_of = |member: &NativeTy<'db>| -> Vec<usize> {
             members

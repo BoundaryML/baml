@@ -1565,6 +1565,33 @@ function f(v: A | B) -> int { if (v is A) { v.n } else { 0 } }
     assert_unsupported(&rejection, "field read on a narrowed `user.A | user.B`");
 }
 
+/// A type test on a value of one closed type is a constant: the static
+/// type of such a value is exact.
+#[test]
+fn type_tests_on_closed_values_are_constants() {
+    let module = compile_roots(
+        r"
+class A { n: int }
+enum Color { Red, Green }
+function f(x: int, xs: int[], a: A, c: Color) -> int {
+    let total = 0;
+    if (x is int) { total = total + 1; }
+    if (a is A) { total = total + 100; }
+    if (c is Color.Red) { total = total + 1000; }
+    match (xs) { int[] => { total = total + 10000; } }
+    total
+}
+",
+        &["f"],
+    );
+    let source = &module.rust_source;
+    // `x is int`, `a is A` and the `int[]` arm are the constant `true`.
+    assert!(source.contains("= true;"), "{source}");
+    assert!(!source.contains("matches!("), "{source}");
+    assert!(!source.contains("is_type"), "{source}");
+    assert_contains(source, "= _4 == user_Color::Red;");
+}
+
 /// A union with an `unknown`, interface or generic-class member is open:
 /// its values have no closed set of native types.
 #[test]
