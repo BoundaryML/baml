@@ -22,15 +22,18 @@ BAML --> ... --> MIR --+--> emit  --> bytecode --> bex_vm           (existing)
 
 A function is admitted when all of the following hold:
 
-- it is non-generic and has no declared trace hook; it may be a method of a
-  concrete class (declared in the class or an `implements` block), whose
-  receiver is its first parameter; an interface's default method is not
-  admitted; a defaulted parameter is admitted when its default is a
-  constant (a literal, possibly negated, `null`, or an enum variant): the
-  constant is passed from every call site that omits the argument, and the
-  callee's prologue test against the omitted-argument sentinel is emitted
-  as the constant `false`; the lambdas in its body are functions of their
-  own, admitted with it, see [Function values](#function-values-and-closures);
+- it has no declared trace hook; it may be a method of a class (declared
+  in the class or an `implements` block), whose receiver is its first
+  parameter; a generic function, a method of a generic class and an
+  interface's default method are compiled at their call sites, one
+  instance per type-argument tuple (per implementor for a default method),
+  never on their own, see [Generics](#generics); a defaulted parameter is
+  admitted when its default is a constant (a literal, possibly negated,
+  `null`, or an enum variant): the constant is passed from every call site
+  that omits the argument, and the callee's prologue test against the
+  omitted-argument sentinel is emitted as the constant `false`; the lambdas
+  in its body are functions of their own, admitted with it, see
+  [Function values](#function-values-and-closures);
 - every parameter, local and the return place has a native type (below), or
   is a local whose declared type can be *refined* from its definitions
   (`unknown` and `baml.iter.Iterator<..>` temps of a for-in, the function-typed
@@ -46,14 +49,18 @@ A function is admitted when all of the following hold:
   (a map subscript lowers to a `baml.Map` call) and the cells of captured
   locals;
 - its control flow uses `Goto`, `Branch`, `Switch` on `int` keys or on a
-  union's type tag, `Return`, `Unreachable`, `ShortCircuit` (`&&`, `||`,
-  `??`), `NarrowBind` on a union or nullable value, direct `Call`, `Call`
-  through a function value, and the `VirtualCall`s of the for-in protocol,
-  `sort` and `cmp`; `throw` of a class instance, and `catch` / `defer` in
-  the shapes lowering gives them (unwind edges, landing blocks, `rethrow`,
+  union's or interface's type tag, `Return`, `Unreachable`, `ShortCircuit`
+  (`&&`, `||`, `??`), `NarrowBind` on a union, interface or nullable value,
+  direct `Call` (with type arguments, for a generic callee), `Call` through
+  a function value, `VirtualCall` of a user interface's method (resolved
+  statically on a concrete receiver, dispatched over the implementors on an
+  interface or union receiver), interface field reads and stores, and the
+  `VirtualCall`s of the for-in protocol, `sort`, `cmp` and the `Compare`
+  relations; `throw` of a class instance, and `catch` / `defer` in the
+  shapes lowering gives them (unwind edges, landing blocks, `rethrow`,
   `throw_if_panic`, class tests, class bindings and class-tag switches on
-  the caught value), see [Errors](#errors-throw-catch-defer) and
-  [Unions](#unions-and-narrowing);
+  the caught value), see [Errors](#errors-throw-catch-defer),
+  [Unions](#unions-and-narrowing) and [Interfaces](#interfaces);
 - every call is either a direct call of a source function in the subset, a
   call through a function value, a stdlib builtin from the table below
   (keyed by link name), or `baml.sys.panic` with a string literal; a source
@@ -82,6 +89,8 @@ nothing.
 | `A \| B \| ..` | `Union_A_or_B` | a closed union (every member a known class, enum or primitive, or an array or map of those): a generated `pub enum Union_int_or_float { int(Int63), float(f64) }` with one variant per member in the order the type carries, `Copy` when every member is; `A \| B \| null` is `Option<Union_A_or_B>`; a member stored into it is its variant, `x is int` a `matches!`, see [Unions](#unions-and-narrowing) |
 | `T[]` | `Shared<Vec<T>>` | `Shared<T> = Rc<RefCell<T>>`: reference semantics; `[a, b]` is `array::new::<T>(Vec::from([..]))`, `xs[i]` `array::get(&xs, i)?`, `xs[i] = v` `array::set(&xs, i, v)?`, `.length()` `array::len(&xs)` |
 | class `C` | `Shared<user_C>` | generated `pub struct user_C { fields in declaration order }`; `C { .. }` is `shared(user_C { .., unspecified: None })`, `c.f` `c.borrow().f.clone()`, `c.f = v` `c.borrow_mut().f = v` |
+| class `Box<int>` | `Shared<user_Box__int>` | one struct per instantiation, its fields' types realized at the arguments; `Box<int> { .. }` names its instance; a union among the arguments is put in one canonical member order, see [Generics](#generics) |
+| interface `I` | `user_I` | a generated `pub enum user_I { user_A(Shared<user_A>), int(Int63), .. }` with one variant per implementor in the program (every `implements` block for `I`), in the order the blocks are found; an implementor stored into it is its variant, `x is A` a `matches!`, `x.m()` a `match`, see [Interfaces](#interfaces) |
 | `map<K, V>` | `Map<K, V>` | `bex_aot::map::Map`: a `Shared` handle over an insertion-ordered table; `K` is `int`, `bool` or `string`; `{ k: v }` is `map::new::<K, V>(Vec::from([..]))`, `m[k]` `map::index(&m, &k)?` (`MapKeyNotFound` when absent), `m[k] = v` `map::set(&m, k, v)`, `.length()` `map::len(&m)` |
 | enum `E` | `user_E` | generated fieldless `pub enum user_E { variants in declaration order }`, `Copy`; `E.V` is `user_E::V`, `==` compares variants, `match` switches on `int::lit(e as i64)` (the VM's discriminant), `to_string` and JSON use the variant's BAML name |
 | `(A, B) -> R throws E` | `Rc<dyn Fn(A, B) -> Result<R, Thrown>>` | a counted pointer to a closure, shared by reference; the `throws` clause has no native form; `f(a, b)` is `(f)(a, b)?`; a function type with an optional parameter, a class field of function type, a union member of function type, `==`, `to_string` and JSON of a function value have no native form, see [Function values](#function-values-and-closures) |
@@ -94,7 +103,7 @@ Literal types (`0`, `"x"`) map to their primitive, and a variant type
 (`Color.Red`) to its enum, so a union of literals of one primitive
 (`"a" | "b"`, `1 | 2 | int`) erases to that primitive and `"a" | "b" | null`
 is `Option<Str>`; a `match` on a string literal is a `string::eq`. Classes
-must be non-generic with every field in the model. Generated structs derive
+must have every field in the model. Generated structs derive
 `Serialize` and `Deserialize` through `bex_aot::serde` (`#[serde(rename)]`
 keeps the BAML name when the Rust field had to change, e.g. `type` ->
 `type_`) and implement `ToBaml`, rendering `Name { f: v, .. }` with the
@@ -127,6 +136,10 @@ be thrown and caught by name; a class that is never thrown pays nothing.
 | `virtual_call next as baml.iter.Iterator` on `Iter<T>` | `array::next(&mut it)` |
 | `virtual_call sort as baml.Sortable` on `int[]`/`float[]`/`string[]` | `array::sort_int(&xs)` etc. |
 | `virtual_call cmp as baml.ops.Compare` on `int`/`float`/`string`/`bigint`/`bool` | the language's order (`Ord::cmp`, `float::cmp`, `string::cmp`, `bigint::cmp`) as a `baml_ops_Ordering` variant |
+| `virtual_call lt/le/gt/ge as baml.ops.Compare` on a primitive | the relation over that order (`Ord::cmp(..).is_lt()`, ..) |
+| `virtual_call lt/le/gt/ge as baml.ops.Compare` on a class with its own `cmp` | the interface's default body over the class's `cmp` (`matches!(user_C_cmp(a, b)?, Ordering::Less)`, `!matches!(.., Greater)`, ..) |
+| `virtual_call cmp as baml.ops.Compare` / `eq as baml.ops.Equals` on a class with its own implementation | that implementation's function, called directly |
+| `virtual_call m as I` on a user interface `I` | the implementation's function on a concrete receiver; a `match` over the implementors on an interface or union receiver, see [Interfaces](#interfaces) |
 | `baml.Array.map` / `filter` / `filter_map` / `for_each` / `some` / `every` / `find` / `find_index` / `find_last` / `find_last_index` / `flat_map` (`xs, f`), `reduce` (`xs, f, init`) | `array::map(&xs, &*f)?` etc., over a snapshot of the array, see [Function values](#function-values-and-closures) |
 | `baml.Array.sort_by` (`xs, cmp`) / `sort_by_key` (`xs, key`) | `array::sort_by(&xs, &\|l, r\| ..)?` (the comparator's `Greater`) / `array::sort_by_key(&xs, &*key, &\|l, r\| <order>)?` in place, then `xs.clone()`; a `sort_by_key` key must be a primitive |
 | `baml.sys.panic("..")` | `return Err(Thrown::from(Panic::UserPanic { .. }))` |
@@ -135,6 +148,94 @@ Any other stdlib function, with or without source, is rejected as
 `` unsupported builtin `<link name>` ``, so the admission report names the next
 builtin to add. A type argument that still mentions a type parameter rejects
 the call.
+
+### Generics
+
+The VM erases generics: a generic function has one body, a call passes its
+type arguments as values, and the body reads them through `load_type(#n)`.
+Native code has no type values, so a generic function is compiled once per
+*instance* ([`Instance`]): the declaration at the concrete type arguments
+the checker recorded at a call site (the `load_type` operands of the call,
+realized against the caller's own frame), named after them
+(`user_identity__int`, `user_pair__int__user_Box__string`); identical
+argument tuples share one instance (D4). The body is analyzed under a
+[`Frame`] that realizes every declared type and every template before it is
+mapped: a type variable becomes its argument, a `TypeArgRef` its slot, an
+associated type projection over a now-concrete base the impl's binding. A
+generic function on its own is not a root (`admit` reports it as compiled
+at its call sites); a generic function value (`identity<int>`, or
+`identity<T>` inside a generic body) is the instance's function item behind
+the pointer; a lambda in a generic function takes its creator's frame. A
+type argument that is `unknown` or has no native type rejects the call
+(D3), and a function instantiating itself at ever larger arguments is
+rejected once sixteen instances of it are on one call path.
+
+A generic class is one struct per instantiation ([`ClassInst`]):
+`user_Box__int` for `Box<int>`, its fields' types realized at the arguments
+and a projection over them reduced. A class literal names its instance
+through its templates; a method of a generic class is an instance whose
+frame opens with the class's arguments (lowering types its `self` as the
+bare class, which the frame fills); a type test against `Box<T>` realizes
+its arguments too. A union among the arguments is put in one canonical
+member order (the checker spells `Box<int | string>` and `Box<string |
+int>` per site while treating them as one type). `to_string` and the
+readable rendering keep the bare class name, as the VM's do; a `catch`
+binding of a generic class stays rejected (its class test decides by name
+alone). A type mismatch inside an instance is a read the checker typed
+through a narrowing on a type parameter (`c is Cell<T>` on a `Cell<int>`,
+then `c.v` read as `T`, sound on the VM where the test fails at every other
+instantiation); it is reported as unsupported, not as invalid MIR.
+
+The cost is code size: every instance is a full copy of the body. The
+instances of one body are not shared, so a default method adopted by five
+implementors is emitted five times.
+
+### Interfaces
+
+The native program is whole-program, so every `implements` block for an
+interface is known (D5). An interface-typed value is a generated enum
+([`NativeTy::Interface`]) with one variant per implementor the program's
+package can see (`impls_naming_interface`): a class instance, an enum or a
+primitive (`implement I for int`), in the order the blocks are found.
+Stores, type tests, narrowing and `switch` arms are the union's
+([Unions](#unions-and-narrowing)): an implementor stored into the interface
+is injected into its variant, also through a union that has the interface
+as a member (`Union_int_or_user_I::user_I(user_I::user_A(v))`); a union of
+implementors stored into the interface is re-tagged; `x is A` is a
+`matches!`; `x is I` on a union holding implementors selects them.
+`to_string` and JSON render the implementor the value holds, as the VM
+renders the concrete object (rejected when an implementor has its own
+`baml.ToString`); `==` on interface values is rejected as `==` on classes
+is; JSON decoding into an interface is rejected (the VM has no class to
+decode into either).
+
+A method call resolves as the VM resolves it at run time from the value's
+concrete type, through the same `resolve_implementation`: on a concrete
+receiver (a class, an instance of a generic class, a primitive, or a
+bounded type parameter after monomorphization) it is a direct call of the
+`implements` block's method (`user___user_Dog_as_user_Named___greet`), or
+of the interface's default body when the block adopts it, compiled as an
+instance at `Self` = the receiver's type (`user_Named_shout__user_Dog`; its
+`self` is the interface value, so the calls inside it dispatch again). On
+an interface value, or on a union of implementors, the call is a `match`
+over the variants, each arm the static call for that variant with the
+variant's value as the receiver, every arm's result lifted into the
+method's declared result (`-> Self` is the interface). An implementation's
+defaulted parameters past the interface's take their constants at the call
+site. A method whose other parameters are `Self`-typed cannot be called on
+an interface value (each arm would need its own argument). Interface fields
+are read and written through the `implements` block's links (`implements I
+{ name as my_name }`): directly on a concrete receiver, in a `match` arm
+per variant otherwise.
+
+Outside the subset: an interface every type implements (`baml.ToString`,
+`baml.ops.Equals`: their implementors are not a closed set) as a *type*,
+one with a generic implementation (`implement<T> I for Box<T>`, a blanket
+impl: the generic receiver path still resolves it statically), one declared
+by a mounted package, one with associated types, one with no implementor
+in the program, an interface method used as a value, and the stdlib
+interfaces' methods other than those in the table (`baml.iter.Iterator`
+on anything but an array, `baml.ToJson.to_json`, `reflect.AnyClass`).
 
 ### Function values and closures
 
@@ -460,12 +561,13 @@ first one it can call), and marks library-only functions in its report.
 Types: a map keyed by anything but `int`, `bool` or `string` (keys of
 those types compare by value on both backends; a `float` key's NaN and a
 class's own `Hash`/`Equals` are not reproduced), an open union (a member
-that is `unknown`, an interface, a generic class, a type alias, a function
-or media: the reason names the member, `interface (a union member)`),
-`uint8array`, media and future types, a function type with an optional
-parameter, a class field of function type, interfaces, generic classes, a
-class with such a field (the field is named), and an `unknown` or
-interface-typed local no definition refines. A `to_string` on a class or
+that is `unknown`, a type alias, a function or media: the reason names the
+member, `unknown (a union member)`), `uint8array`, media and future types,
+a function type with an optional parameter, a class field of function
+type, an interface that is not a closed set (see [Interfaces](#interfaces)),
+a class with such a field (the field is named), a type argument that is
+`unknown` or has no native type, and an `unknown` or open-typed local no
+definition refines. A `to_string` on a class or
 enum with its own `baml.ToString` implementation is rejected, as the
 structural rendering would be wrong; so is `==` on an enum, or a union with
 one, that implements its own `baml.ops.Equals`, which the VM dispatches.
@@ -484,16 +586,21 @@ as a value, a stdlib or generic function used as a value, a function with
 a defaulted parameter used as a value, a lambda in a generic function, a
 function value stored where a wider function type is expected, an omitted
 argument in a call through a function value, a `sort_by_key` key or a
-`cmp` receiver that is not a primitive, an array callback whose type the
-runtime cannot call, a JSON decode into a type that mentions a literal type
-(the VM rejects a value outside the literal, which the erased primitive
-would accept; the field is named), interface method calls other than
-`iter`/`next`/`sort`/`cmp`, `sort` on a non-primitive array, calls with
-trace attachments, an omitted argument to a stdlib function, or type
-arguments to a user function, any stdlib function not in the table, a
-`panic` with a computed message, a defaulted parameter whose default is
-computed (`b: int = a + 1`), interface default methods, generic functions
-and declared trace hooks.
+`cmp` receiver that is neither a primitive nor a class with its own
+`cmp`, an array callback whose type the runtime cannot call, a JSON decode
+into a type that mentions a literal type (the VM rejects a value outside
+the literal, which the erased primitive would accept; the field is named)
+or an interface, stdlib interface method calls other than those in the
+table, a user interface method with a `Self`-typed parameter called on an
+interface value, `sort` on a non-primitive array, calls with trace
+attachments, an omitted argument to a stdlib function, any stdlib function
+not in the table, a `panic` with a computed message, a defaulted parameter
+whose default is computed (`b: int = a + 1`), a generic function, a
+method of a generic class or an interface default method as a root (they
+are compiled at their call sites), a function instantiating itself without
+bound (sixteen instances on one call path), a read inside an instance that
+the checker typed through a narrowing on a type parameter, and declared
+trace hooks.
 
 `Rejection::Invalid(reason)` means the MIR violated an invariant a checked
 program must hold (a compiler bug): lowering errors, type mismatches between
@@ -541,3 +648,18 @@ as its destination, which it never stores to.
 - A function value never crosses a function-type boundary with an adapter
   outside the array methods: `(int) -> int` passed as `(int) -> int | null`
   is rejected rather than wrapped.
+- Instances are not shared across type arguments that erase alike: an
+  interface's default body is one instance per implementor, and
+  `identity<int | null>` and `identity<null | int>` are two (they are two
+  realized tuples). Instances are keyed by the checker's realized type
+  arguments, so a literal type argument (`identity<"a">`) is its own
+  instance, named like `identity<string>`'s and rejected as a collision.
+- An interface's implementors are the `implements` blocks the program's
+  package can see; a program compiled from a package whose dependency
+  implements the interface for a type of its own sees that block too, but
+  nothing outside the dependency closure.
+- An interface method call on a union of implementors, or on a union with
+  the interface as a member narrowed to it, dispatches; a type test on
+  such a union against an implementor reached only through the interface
+  (`u is A` on an `int | I`, `A` implementing `I`) is rejected: a variant
+  test does not look inside the interface's variant.
