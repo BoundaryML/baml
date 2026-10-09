@@ -1,9 +1,9 @@
+use bex_lang::index::{resolve_index, resolve_slice_bound};
 use bex_vm_types::Value;
 
 use super::{BamlClassUint8Array, PackageBamlImpl};
 use crate::{
     VmPanic,
-    array_index::{resolve_index, resolve_slice_bound},
     errors::{VmBamlError, VmRustFnError},
 };
 
