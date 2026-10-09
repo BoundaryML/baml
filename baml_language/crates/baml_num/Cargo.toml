@@ -1,0 +1,20 @@
+[package]
+name = "baml_num"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "BAML's 63-bit int, with no dependencies"
+
+[dependencies]
+serde = { workspace = true, optional = true }
+
+[features]
+default = [  ]
+# `Serialize` (as an integer) and `Deserialize` (an integral JSON number in
+# the i63 range) for `Int63`, for generated native code and hosts.
+serde = [ "dep:serde" ]
+
+[lints]
+workspace = true

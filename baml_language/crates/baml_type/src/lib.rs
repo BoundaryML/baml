@@ -39,7 +39,6 @@ mod declaration_name;
 mod defs;
 mod family;
 mod head;
-mod int;
 pub mod interned;
 mod names;
 pub mod normalize;
@@ -59,41 +58,18 @@ pub mod typetag;
 pub mod unify;
 pub mod user_facing;
 pub mod wire;
+pub use baml_num::{Int63, IntShiftError, MAX_BIGINT_BITS, MAX_BIGINT_DECIMAL_DIGITS};
 pub use call_layout::{CallLayout, LayoutMismatch};
 pub use declaration_name::DeclarationName;
 pub use defs::*;
 pub use family::*;
 pub use head::{Head, TaggedTypeName};
-pub use int::{Int63, IntShiftError};
 pub use names::*;
 pub use param::*;
 pub use primitive::*;
 pub use runtime_ty::*;
 pub use structural_interface::StructuralInterface;
 pub use template::SubstituteError;
-
-/// Upper bound on the bit-length of a `bigint` value we are willing to
-/// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
-/// MiB of digits. Operations that would produce a larger result raise
-/// `baml.panics.AllocFailure` instead of either succeeding (and starving the
-/// rest of the runtime) or aborting the process outright.
-///
-/// Shared by the VM's allocation guard (`bex_vm::package_baml::bigint`),
-/// the FFI decoder's pre-allocation cap
-/// (`bridge_ctypes::value_decode::MAX_BIGINT_HEX_LEN`), and TIR's
-/// constant-folding refusal threshold.
-pub const MAX_BIGINT_BITS: u64 = 1 << 28;
-
-/// Permissive upper bound on the number of base-ten digits a `bigint` may
-/// have before it cannot possibly fit in [`MAX_BIGINT_BITS`].
-///
-/// Each base-ten digit carries `log2(10) ≈ 3.32` bits, so any decimal string
-/// longer than `MAX_BIGINT_BITS / 3 + 2` is guaranteed to overflow the cap.
-/// Used as a cheap pre-flight reject before `BigInt::parse_bytes`; callers
-/// follow up with an exact `bits()` check for borderline inputs. Shared by
-/// SAP deserialization, the jsonish number visitor, and `bigint.parse`.
-#[allow(clippy::cast_possible_truncation)] // MAX_BIGINT_BITS is 2^28; fits in usize on 32/64-bit
-pub const MAX_BIGINT_DECIMAL_DIGITS: usize = (MAX_BIGINT_BITS / 3 + 2) as usize;
 
 /// The wire's qualified name: a declaration by the spelling an artifact gives
 /// its package ([`Package`]). The compiler's counterpart is [`DeclName`].

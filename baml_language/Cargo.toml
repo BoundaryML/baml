@@ -81,6 +81,7 @@ baml_base = { path = "crates/baml_base" }
 baml_artifact = { path = "crates/baml_artifact" }
 baml_linker = { path = "crates/baml_linker" }
 baml_linker_types = { path = "crates/baml_linker_types" }
+baml_num = { path = "crates/baml_num" }
 baml_type = { path = "crates/baml_type" }
 baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
@@ -477,6 +478,9 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.baml_type]
+opt-level = 3
+
+[profile.dev.package.baml_num]
 opt-level = 3
 
 # Salsa is the compiler's query engine: it only recompiles on a lockfile or
