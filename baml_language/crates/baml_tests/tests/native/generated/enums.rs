@@ -6,6 +6,7 @@
     unused_labels,
     unused_imports,
     unreachable_code,
+    unreachable_patterns,
     non_camel_case_types,
     non_snake_case,
     clippy::bool_comparison,
@@ -16,6 +17,7 @@
     clippy::needless_return,
     clippy::needless_borrow,
     clippy::redundant_clone,
+    clippy::clone_on_copy,
     clippy::let_and_return,
     clippy::unit_arg,
     clippy::let_unit_value
@@ -54,6 +56,11 @@ impl ToBaml for user_Color {
 impl bex_aot::Readable for user_Color {
     fn readable(&self) -> String {
         Self::NAMES[*self as usize].to_string()
+    }
+}
+impl bex_aot::BamlEq for user_Color {
+    fn baml_eq(&self, other: &Self) -> bool {
+        self == other
     }
 }
 /// BAML class `user.Pixel`.

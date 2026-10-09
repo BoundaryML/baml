@@ -41,6 +41,7 @@ const FIXTURES: &[&str] = &[
     "matching",
     "methods",
     "nullable",
+    "primitive_unions",
     "recursion",
     "strings",
     "switches",
@@ -108,6 +109,7 @@ generated_module!(throws, "native/generated/throws.rs");
 generated_module!(catches, "native/generated/catches.rs");
 generated_module!(defers, "native/generated/defers.rs");
 generated_module!(literal_unions, "native/generated/literal_unions.rs");
+generated_module!(primitive_unions, "native/generated/primitive_unions.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -383,6 +385,112 @@ async fn literal_unions_match_vm() {
     }
     for (a, b) in [(1, 2), (1, 20), (30, 40)] {
         check!(o, same_tag(a, b) => user_same_tag(int(a), int(b)));
+    }
+}
+
+/// A union-typed native result observes as the member it holds, as the VM's
+/// union value does once unwrapped.
+impl NativeValue for primitive_unions::Union_int_or_float {
+    fn observe(self) -> Observed {
+        match self {
+            Self::int(value) => Observed::Int(value.get()),
+            Self::float(value) => Observed::float(value),
+        }
+    }
+}
+
+impl NativeValue for Option<primitive_unions::Union_int_or_float> {
+    fn observe(self) -> Observed {
+        match self {
+            Some(value) => value.observe(),
+            None => Observed::Void,
+        }
+    }
+}
+
+#[tokio::test]
+async fn primitive_unions_match_vm() {
+    use primitive_unions::*;
+    let o = Oracle::new("primitive_unions");
+    for n in [-3, 0, 1, 2, 5, 12] {
+        check!(o, make(n) => user_make(int(n)));
+        check!(o, make_null(n) => user_make_null(int(n)));
+        check!(o, reassign(n) => user_reassign(int(n)));
+        // A union parameter takes a member value on both sides.
+        let member = Union_int_or_float::int(int(n));
+        check!(o, kind(n) => user_kind(member));
+        check!(o, bound(n) => user_bound(member));
+        check!(o, tested(n) => user_tested(member));
+        check!(o, narrowed(n) => user_narrowed(member));
+        check!(o, four_of(n) => user_four_of(int(n)));
+        check!(o, wide_match(n) => user_wide_match(int(n)));
+        check!(o, nullable_kind(n) => user_nullable_kind(int(n)));
+        check!(o, nullable_narrow(n) => user_nullable_narrow(int(n)));
+        check!(o, is_three(n) => user_is_three(int(n)));
+        check!(o, is_half(n) => user_is_half(int(n)));
+        check!(o, render(n) => user_render(int(n)));
+        check!(o, json_out(n) => user_json_out(int(n)));
+        check!(o, sum(n) => user_sum(int(n)));
+        check!(o, doubled(n) => user_doubled(int(n)));
+        check!(o, coalesce(n) => user_coalesce(int(n)));
+        check!(o, coalesce_union(n) => user_coalesce_union(int(n)));
+        check!(o, big(n) => user_big(int(n)));
+        check!(o, flag(n) => user_flag(int(n)));
+    }
+    for x in [0.0, 1.5, -2.5, 1e18, f64::NAN, f64::INFINITY] {
+        let member = Union_int_or_float::float(x);
+        check!(o, kind(x) => user_kind(member));
+        check!(o, bound(x) => user_bound(member));
+        check!(o, tested(x) => user_tested(member));
+        check!(o, narrowed(x) => user_narrowed(member));
+    }
+    for (a, b) in [(2, 2), (2, 4), (1, 1), (1, 3), (0, 1), (0, 0), (3, 6)] {
+        check!(o, same(a, b) => user_same(int(a), int(b)));
+        check!(o, differ(a, b) => user_differ(int(a), int(b)));
+        check!(o, nullable_same(a, b) => user_nullable_same(int(a), int(b)));
+    }
+    for (value, expected) in [
+        (Union_int_or_float::int(int(1)), true),
+        (Union_int_or_float::float(2.5), true),
+    ] {
+        // `is_number` takes a three-member union; the two-member value is
+        // widened natively as the checker would.
+        let widened = match value {
+            Union_int_or_float::int(v) => Union_int_or_float_or_string::int(v),
+            Union_int_or_float::float(v) => Union_int_or_float_or_string::float(v),
+        };
+        assert_eq!(user_is_number(widened).unwrap(), expected);
+    }
+    assert!(!user_is_number(Union_int_or_float_or_string::string(text("s"))).unwrap());
+    for n in [0, 7] {
+        check!(o, is_number(n) => user_is_number(Union_int_or_float_or_string::int(int(n))));
+    }
+    for s in ["", "x"] {
+        check!(o, is_number(s) => user_is_number(Union_int_or_float_or_string::string(text(s))));
+    }
+    for raw in [
+        "1",
+        "1.0",
+        "2.5",
+        "-7",
+        "\"x\"",
+        "4611686018427387904",
+        "null",
+        "true",
+        "[1]",
+        "nope",
+    ] {
+        check!(o, json_in(raw) => user_json_in(text(raw)));
+    }
+    for raw in [
+        r#"[{"amount": 1, "note": null}, {"amount": 2.5, "note": "n"}]"#,
+        r#"[{"amount": 1.0}]"#,
+        r#"[]"#,
+        r#"[{"amount": "x", "note": null}]"#,
+        r#"[{"note": null}]"#,
+        r#"{"amount": 1}"#,
+    ] {
+        check!(o, json_rows(raw) => user_json_rows(text(raw)));
     }
 }
 

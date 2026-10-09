@@ -25,6 +25,7 @@ mod print;
 mod project;
 mod structure;
 mod types;
+mod unions;
 
 pub use project::{ProjectOptions, write_project};
 pub use types::{NativeTy, TypeDecl};
@@ -98,8 +99,9 @@ impl Admitted<'_> {
     }
 }
 
-/// One class of a [`NativeModule`], emitted as a struct, or one enum,
-/// emitted as a fieldless Rust enum.
+/// One class of a [`NativeModule`], emitted as a struct, one enum, emitted
+/// as a fieldless Rust enum, or one union, emitted as a Rust enum over its
+/// members.
 #[derive(Debug, Clone)]
 pub struct CompiledClass {
     /// The BAML link name, e.g. `user.State`.
@@ -122,6 +124,9 @@ pub struct NativeModule<'db> {
     pub classes: Vec<CompiledClass>,
     /// Every enum the functions touch, in first-use order.
     pub enums: Vec<CompiledClass>,
+    /// Every closed union the functions touch, in first-use order, each a
+    /// generated enum; `link_name` is the BAML spelling (`int | float`).
+    pub unions: Vec<CompiledClass>,
     /// Indices into `functions` of the requested roots, in request order.
     pub roots: Vec<usize>,
     /// Index of the entry function in `functions`: the root [`compile`] was
@@ -263,8 +268,15 @@ pub fn compile_many<'db>(
     }
 
     let names = rust_names(&order)?;
-    let (class_infos, enum_infos) = classes.finish()?;
-    let rust_source = print::render_module(&class_infos, &enum_infos, &order, &names, &classes)?;
+    let (class_infos, enum_infos, union_infos) = classes.finish()?;
+    let rust_source = print::render_module(
+        &class_infos,
+        &enum_infos,
+        &union_infos,
+        &order,
+        &names,
+        &classes,
+    )?;
     let mir_dump = order
         .iter()
         .map(|candidate| baml_compiler2_mir::pretty::display_function(db, candidate.mir))
@@ -299,12 +311,20 @@ pub fn compile_many<'db>(
             rust_name: info.ident.to_string(),
         })
         .collect();
+    let compiled_unions = union_infos
+        .iter()
+        .map(|info| CompiledClass {
+            link_name: info.described.clone(),
+            rust_name: info.ident.to_string(),
+        })
+        .collect();
     Ok(NativeModule {
         rust_source,
         mir_dump,
         functions,
         classes: compiled_classes,
         enums: compiled_enums,
+        unions: compiled_unions,
         roots: roots.iter().map(|root| index_of[root]).collect(),
         entry: index_of[first_root],
     })
