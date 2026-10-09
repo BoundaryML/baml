@@ -20,6 +20,25 @@ impl ErrorObject for InvalidArgument {
     }
 }
 
+/// `baml.errors.ParseError { message }`: text that does not parse as the
+/// requested value. Raised here by `bigint.parse`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseError {
+    /// Human-readable description, e.g.
+    /// `"bigint.parse: cannot parse \"12a\" as bigint"`.
+    pub message: String,
+}
+
+impl ErrorObject for ParseError {
+    fn class_fqn(&self) -> &'static str {
+        "baml.errors.ParseError"
+    }
+
+    fn fields(&self) -> Vec<(&'static str, String)> {
+        vec![("message", format!("{:?}", self.message))]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -33,6 +52,14 @@ mod tests {
         assert_eq!(
             error.render_readable(),
             r#"baml.errors.InvalidArgument {message: "bad \"arg\""}"#
+        );
+        let error = ParseError {
+            message: "no".into(),
+        };
+        assert_eq!(error.class_fqn(), "baml.errors.ParseError");
+        assert_eq!(
+            error.render_readable(),
+            r#"baml.errors.ParseError {message: "no"}"#
         );
     }
 }

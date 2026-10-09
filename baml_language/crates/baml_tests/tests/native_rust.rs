@@ -26,6 +26,7 @@ const FIXTURES: &[&str] = &[
     "arith",
     "arrays",
     "benchmarks",
+    "bigint",
     "bitwise",
     "calls",
     "classes",
@@ -98,6 +99,7 @@ generated_module!(benchmarks, "native/generated/benchmarks.rs");
 generated_module!(defaults, "native/generated/defaults.rs");
 generated_module!(enums, "native/generated/enums.rs");
 generated_module!(maps, "native/generated/maps.rs");
+generated_module!(bigint, "native/generated/bigint.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -285,6 +287,21 @@ impl IntoExternal for f64 {
         BexExternalValue::Float(self)
     }
 }
+impl IntoExternal for num_bigint::BigInt {
+    fn into_external(self) -> BexExternalValue {
+        BexExternalValue::Bigint(self)
+    }
+}
+
+/// A `bigint` argument for the VM, from its decimal digits.
+fn vm_big(digits: &str) -> num_bigint::BigInt {
+    digits.parse().expect("decimal digits")
+}
+
+/// The same `bigint` argument for native code.
+fn big(digits: &str) -> bex_aot::BigInt {
+    bex_aot::BigInt::from(vm_big(digits))
+}
 
 /// Run one case natively and on the VM and compare. Arguments are positional
 /// and listed in the fixture's declaration order.
@@ -299,7 +316,7 @@ macro_rules! check {
             observed_vm,
             "{}({}) native (left) vs VM (right)",
             stringify!($f),
-            vec![$( format!("{:?}", $val) ),*].join(", ")
+            Vec::<String>::from([$( format!("{:?}", $val) ),*]).join(", ")
         );
     }};
 }
@@ -647,5 +664,94 @@ async fn maps_match_vm() {
     }
     for raw in [r#"{"1": 1}"#, "{}", "[]"] {
         check!(o, json_int_keys_in(raw) => user_json_int_keys_in(text(raw)));
+    }
+}
+
+/// Arbitrary-precision arithmetic, comparison, bit operations, `int`
+/// widening and narrowing, the methods, and JSON, including every panic and
+/// error class the operations raise.
+#[tokio::test]
+async fn bigint_matches_vm() {
+    use bigint::*;
+    let o = Oracle::new("bigint");
+    let values = [
+        "0",
+        "1",
+        "-1",
+        "7",
+        "-7",
+        "4611686018427387904",
+        "-4611686018427387905",
+        "123456789012345678901234567890",
+        "-99999999999999999999999999999999",
+    ];
+    for a in values {
+        for b in values {
+            check!(o, arith(vm_big(a), vm_big(b)) => user_arith(big(a), big(b)));
+            check!(o, divide(vm_big(a), vm_big(b)) => user_divide(big(a), big(b)));
+            check!(o, compare(vm_big(a), vm_big(b)) => user_compare(big(a), big(b)));
+            check!(o, bits(vm_big(a), vm_big(b)) => user_bits(big(a), big(b)));
+        }
+        for n in [0, 1, -3, 62, MAX, MIN] {
+            check!(o, mixed(vm_big(a), n) => user_mixed(big(a), int(n)));
+        }
+        check!(o, narrow(vm_big(a)) => user_narrow(big(a)));
+        check!(o, negate(vm_big(a)) => user_negate(big(a)));
+        check!(o, json_out(vm_big(a)) => user_json_out(big(a)));
+    }
+    for (a, b) in [
+        ("2", "10"),
+        ("2", "0"),
+        ("0", "0"),
+        ("-2", "3"),
+        ("10", "-1"),
+        ("1000", "10"),
+        ("1024", "2"),
+        ("1", "10"),
+        ("0", "10"),
+        ("10", "1"),
+        ("-4", "2"),
+        ("2", "300000000"),
+        ("2", "99999999999999999999"),
+    ] {
+        check!(o, methods(vm_big(a), vm_big(b)) => user_methods(big(a), big(b)));
+    }
+    for n in [0, 1, -5, MAX, MIN] {
+        check!(o, widen(n) => user_widen(int(n)));
+    }
+    for n in [0, 100, -1, 300_000_000] {
+        check!(o, shift_wide(n) => user_shift_wide(int(n)));
+    }
+    check!(o, literal() => user_literal());
+    for s in [
+        "42",
+        "-7",
+        "+0",
+        "99999999999999999999",
+        "",
+        "12a",
+        "0x2a",
+        "1_000",
+        " 5 ",
+    ] {
+        check!(o, parse(s) => user_parse(text(s)));
+    }
+    for raw in [
+        "42",
+        "-42",
+        "18446744073709551616",
+        "-123456789012345678901234567890",
+        "\"42\"",
+        "\"-99999999999999999999\"",
+        "12.5",
+        "1e3",
+        "1.0",
+        "\"12.5\"",
+        "\" 42\"",
+        "true",
+        "[1]",
+        "nope",
+    ] {
+        check!(o, json_in(raw) => user_json_in(text(raw)));
     }
 }

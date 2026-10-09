@@ -2,7 +2,8 @@
 //!
 //! The Rust backend (`baml_compiler2_rust`) turns a BAML function into an
 //! ordinary Rust function over the value types defined here: `int` is
-//! [`Int63`], `string` is [`Str`], arrays and class instances are [`Shared`]
+//! [`Int63`], `bigint` is [`BigInt`], `string` is [`Str`], arrays and class
+//! instances are [`Shared`]
 //! handles with reference semantics, `map<K, V>` is a [`Map`] handle over an
 //! insertion-ordered table, `T | null` is `Option<T>`, and every
 //! function returns `Result<T, Thrown>` so a `throw` or a panic unwinds as an
@@ -19,6 +20,7 @@ pub use serde;
 pub use serde_json;
 
 pub mod array;
+pub mod bigint;
 pub mod depth;
 pub mod errors;
 pub mod handle;
@@ -30,6 +32,7 @@ mod thrown;
 
 pub use baml_type::Int63;
 pub use bex_lang::{Error, Panic, float, int};
+pub use bigint::BigInt;
 pub use handle::{Shared, ptr_eq, shared};
 pub use map::Map;
 pub use render::ToBaml;

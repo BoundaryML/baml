@@ -847,6 +847,7 @@ dependencies = [
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
  "baml_type",
+ "num-bigint",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -1373,6 +1374,7 @@ dependencies = [
  "bex_lang",
  "bex_str",
  "indexmap",
+ "num-bigint",
  "serde",
  "serde_json",
 ]

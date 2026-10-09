@@ -2,7 +2,8 @@
 
 An ahead-of-time backend that turns BAML MIR into Rust source. It compiles
 root functions and every function they transitively call into one Rust
-module, together with a struct for every class that code touches, and can
+module, together with a struct for every class and an enum for every enum
+that code touches, and can
 wrap the module in a standalone Cargo project with a host binary. Anything
 outside the subset is rejected with a reason; nothing falls back to the VM.
 
@@ -59,6 +60,7 @@ the native stack. Functions off every cycle pay nothing.
 | `int` | `Int63` | `+ - * / %` are `int::add(..)?` and friends, `<< >>` `int::shl/shr`, bitwise and comparisons direct; literals `int::lit(n)` |
 | `bool` | `bool` | |
 | `float` | `f64` | arithmetic native; `== != < <= > >=` through `float::eq` etc. (total order) |
+| `bigint` | `BigInt` | `bex_aot::bigint::BigInt`, a counted pointer passed by reference: `+ - & \| ^` are `bigint::add(&a, &b)` and friends, `* / % << >>` the checked `bigint::mul(&a, &b)?` etc. (`AllocFailure` past the workspace cap, `DivisionByZero`, `NegativeBitShift`), comparisons `bigint::eq` / `bigint::cmp(..).is_lt()`; a mixed `int` operand is widened with `bigint::from_int`; literals `bigint::from_i64(n)` or `bigint::lit("digits")` |
 | `string` | `Str` | `+` `string::concat`, `==` `string::eq`, `<` etc. `string::cmp(..).is_lt()`; literals `string::from_literal("..")` |
 | `null`, `void` | `()` | |
 | `T \| null` | `Option<T>` | the only union shape; `null` is `None`, a `T` stored into it is `Some(v)`, `x == null` is `x.is_none()` |
@@ -92,6 +94,8 @@ unqualified class name.
 | `baml.ops.equals_equals(a, b)` on one enum | `a == b` |
 | `baml.Map.has` / `get` / `index` / `delete` (`m, k`) | `map::has(&m, &k)` / `map::get(&m, &k)` (`V \| null`) / `map::index(&m, &k)?` / `map::delete(&m, &k)` (the removed `V \| null`) |
 | `baml.Map.set` / `get_or_insert` (`m, k, v`) | `map::set(&m, k, v)` (the previous `V \| null`) / `map::get_or_insert(&m, k, v)` |
+| `baml.Bigint.abs` / `isqrt` / `to_int` / `parse` (`x`) | `bigint::abs(&x)` / `bigint::isqrt(&x)?` / `bigint::to_int(&x)?` / `bigint::parse(&s)?` |
+| `baml.Bigint.pow` / `ilog` (`x, y`) | `bigint::pow(&x, &y)?` / `bigint::ilog(&x, &y)?` |
 | `baml.Map.keys` / `values` / `length` / `clear` | `map::keys(&m)` / `map::values(&m)` (fresh arrays) / `map::len(&m)` / `map::clear(&m)` |
 | `virtual_call iter as baml.iter.Iterable` on `T[]` | `array::iter(&xs)` |
 | `virtual_call next as baml.iter.Iterator` on `Iter<T>` | `array::next(&mut it)` |
@@ -245,7 +249,7 @@ first one it can call), and marks library-only functions in its report.
 Types: a map keyed by anything but `int`, `bool` or `string` (keys of
 those types compare by value on both backends; a `float` key's NaN and a
 class's own `Hash`/`Equals` are not reproduced), unions other than
-`T | null`, `bigint`, `uint8array`, media, function and future types,
+`T | null`, `uint8array`, media, function and future types,
 interfaces, generic classes, a class with such a field (the field is named),
 and an `unknown` or interface-typed local no definition refines. A `to_string` on a class or enum with its own
 `baml.ToString` implementation is rejected, as the structural rendering
