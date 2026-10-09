@@ -29,8 +29,8 @@ use baml_compiler2_hir_ty::layout;
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place, RealizedTy, RuntimeTy, Rvalue,
-    ShortCircuitKind, StatementKind, SwitchKey, Terminator, TyTemplate, TypeTest, UnaryOp,
-    function_link_name, lower_function,
+    ShortCircuitKind, Statement, StatementKind, SwitchKey, Terminator, TyTemplate, TypeTest,
+    UnaryOp, function_link_name, lower_function,
 };
 use baml_type::{Int63, Literal};
 use rustc_hash::FxHashMap;
@@ -119,6 +119,10 @@ pub(crate) enum CallKind<'db> {
         args: Vec<NativeTy<'db>>,
         /// The callee's return type; the destination is it or its `| null`.
         result: NativeTy<'db>,
+        /// Per argument, the callee's constant default when the call omits
+        /// that argument: the printer passes the constant instead of the
+        /// `<omitted>` sentinel. See [`default_constants`].
+        substituted: Vec<Option<Constant<'db>>>,
     },
     /// `baml.sys.panic("...")`: returns the panic instead of calling.
     Panic(String),
@@ -203,11 +207,6 @@ pub(crate) fn analyze<'db>(
     if !data.generic_params.is_empty() {
         return Err(Rejection::unsupported("generic function"));
     }
-    if data.params.iter().any(|param| param.has_default) {
-        return Err(Rejection::unsupported(
-            "default parameter (the callee prologue fills omitted arguments)",
-        ));
-    }
     // A method of a concrete class, declared in the class or in an
     // `implements` block, is a function whose first parameter is the
     // receiver: calls to it are direct. Only an interface's default method,
@@ -281,6 +280,8 @@ pub(crate) fn analyze<'db>(
             "parameter list disagrees with MIR arity",
         ));
     }
+    let defaulted: Vec<bool> = data.params.iter().map(|param| param.has_default).collect();
+    default_constants(body, &param_names, &defaulted)?;
 
     let mut env = Env {
         db,
@@ -635,6 +636,17 @@ impl<'db> Env<'_, 'db> {
         match value {
             Rvalue::Use(operand) => self.operand_ty(operand, expected),
             Rvalue::BinaryOp { op, left, right } => {
+                if is_omitted(left) || is_omitted(right) {
+                    // The callee prologue's `param == <omitted>` test. Every
+                    // call site passes the constant default instead of the
+                    // sentinel, so the test is a constant `false`.
+                    return match op {
+                        BinOp::Eq | BinOp::Ne => Ok(NativeTy::Bool),
+                        _ => Err(Rejection::invalid(format!(
+                            "`{op}` against an omitted argument"
+                        ))),
+                    };
+                }
                 let left_ty = self.operand_ty(left, None)?;
                 let right_ty = self.operand_ty(right, Some(&left_ty))?;
                 let left_ty = match (&left_ty, &right_ty) {
@@ -1046,13 +1058,11 @@ impl<'db> Env<'_, 'db> {
                 if unwind.is_some() {
                     return Err(Rejection::unsupported("call inside a catch"));
                 }
-                if argument_layout.as_ref().is_some_and(|layout| {
-                    layout.0.len() != args.len() - ntypeargs || layout.0.iter().any(Option::is_some)
-                }) {
-                    return Err(Rejection::unsupported(
-                        "call with named or omitted arguments",
-                    ));
-                }
+                // Lowering has already laid the arguments out in the callee's
+                // declared order, named ones included, with `<omitted>` in
+                // every slot the call left to a default; the layout the site
+                // was checked against adds nothing here.
+                let _ = argument_layout;
                 let Operand::Constant(Constant::Function(callee)) = callee else {
                     return Err(Rejection::unsupported("indirect call"));
                 };
@@ -1081,7 +1091,7 @@ impl<'db> Env<'_, 'db> {
                 if !type_args.is_empty() {
                     return Err(Rejection::unsupported("call with type arguments"));
                 }
-                let (params, result) = self.callee_signature(callee, &link_name)?;
+                let (params, result, defaults) = self.callee_signature(callee, &link_name)?;
                 if params.len() != value_args.len() {
                     return Err(Rejection::invalid(format!(
                         "call of `{link_name}` passes {} of {} arguments",
@@ -1089,7 +1099,27 @@ impl<'db> Env<'_, 'db> {
                         params.len()
                     )));
                 }
-                for (arg, param) in value_args.iter().zip(&params) {
+                let mut substituted = Vec::with_capacity(value_args.len());
+                for ((arg, param), default) in value_args.iter().zip(&params).zip(&defaults) {
+                    // An omitted argument is the callee's constant default,
+                    // passed from here: the callee's own prologue never sees
+                    // the sentinel (see `default_constants`).
+                    let substitute = if is_omitted(arg) {
+                        let Some(constant) = default else {
+                            return Err(Rejection::invalid(format!(
+                                "call of `{link_name}` omits an argument for a parameter without a default"
+                            )));
+                        };
+                        Some(Operand::Constant(constant.clone()))
+                    } else {
+                        None
+                    };
+                    let arg = substitute.as_ref().unwrap_or(arg);
+                    substituted.push(
+                        substitute
+                            .as_ref()
+                            .map(|_| default.clone().expect("checked")),
+                    );
                     let actual = self.operand_ty(arg, Some(param))?;
                     if !stores(&actual, param) {
                         return Err(mismatch(
@@ -1113,6 +1143,7 @@ impl<'db> Env<'_, 'db> {
                     callee,
                     args: params,
                     result,
+                    substituted,
                 })
             }
             Terminator::VirtualCall {
@@ -1231,13 +1262,22 @@ impl<'db> Env<'_, 'db> {
     }
 
     /// The native parameter and return types of a source callee, from its
-    /// own lowered signature. Arguments coerce to the parameters (`int` into
-    /// `int | null`), which the VM does implicitly and MIR does not spell.
+    /// own lowered signature, and the constant default of each parameter that
+    /// has one. Arguments coerce to the parameters (`int` into `int | null`),
+    /// which the VM does implicitly and MIR does not spell.
+    #[allow(clippy::type_complexity)]
     fn callee_signature(
         &mut self,
         callee: FunctionLoc<'db>,
         link_name: &str,
-    ) -> Result<(Vec<NativeTy<'db>>, NativeTy<'db>), Rejection> {
+    ) -> Result<
+        (
+            Vec<NativeTy<'db>>,
+            NativeTy<'db>,
+            Vec<Option<Constant<'db>>>,
+        ),
+        Rejection,
+    > {
         let mir = lower_function(self.db, callee, OptLevel::One)
             .as_ref()
             .map_err(|error| {
@@ -1268,7 +1308,26 @@ impl<'db> Env<'_, 'db> {
             params.push(map(self, &local.ty, "parameter")?);
         }
         let result = map(self, &body.locals[0].ty, "return")?;
-        Ok((params, result))
+        let data = function_data(self.db, callee);
+        let names: Vec<String> = data
+            .params
+            .iter()
+            .map(|param| param.name.to_string())
+            .collect();
+        let defaulted: Vec<bool> = data.params.iter().map(|param| param.has_default).collect();
+        if names.len() != mir.arity {
+            return Err(Rejection::invalid(format!(
+                "`{link_name}` parameter list disagrees with its MIR arity"
+            )));
+        }
+        let defaults =
+            default_constants(body, &names, &defaulted).map_err(|rejection| match rejection {
+                Rejection::Unsupported(reason) => {
+                    Rejection::Unsupported(format!("callee `{link_name}` {reason}"))
+                }
+                invalid @ Rejection::Invalid(_) => invalid,
+            })?;
+        Ok((params, result, defaults))
     }
 
     /// The `bex_aot` mapping of the stdlib function `link_name`, if it has
@@ -1397,6 +1456,121 @@ fn mismatch<'db>(
 
 fn is_null(operand: &Operand<'_>) -> bool {
     matches!(operand, Operand::Constant(Constant::Null))
+}
+
+/// Whether `operand` is the `<omitted>` sentinel of a defaulted argument.
+pub(crate) fn is_omitted(operand: &Operand<'_>) -> bool {
+    matches!(operand, Operand::Constant(Constant::OmittedArg))
+}
+
+fn is_omitted_constant(constant: &Constant<'_>) -> bool {
+    matches!(constant, Constant::OmittedArg)
+}
+
+/// The constant default of each parameter, parallel to `_1..=arity`; `None`
+/// for a parameter without one.
+///
+/// The VM fills an omitted argument in the callee: a call passes the
+/// `<omitted>` sentinel and the callee's prologue tests each defaulted
+/// parameter against it (`_t = _k == <omitted>; branch _t -> [fill, next]`,
+/// with `fill` storing the default and falling into `next`). Native code has
+/// no sentinel value, so the default is passed from the call site instead,
+/// which needs it to be a constant: the `fill` block must be a single store
+/// of a constant. The prologue stays in the callee, where its test is the
+/// constant `false`. A default that is computed (`b: int = a + 1`) is outside
+/// the subset, with the parameter named.
+pub(crate) fn default_constants<'db>(
+    body: &'db MirFunctionBody<'db>,
+    param_names: &[String],
+    defaulted: &[bool],
+) -> Result<Vec<Option<Constant<'db>>>, Rejection> {
+    let mut defaults = vec![None; param_names.len()];
+    for block in &body.blocks {
+        let Some(Terminator::Branch {
+            condition: Operand::Copy(Place::Local(test)) | Operand::Move(Place::Local(test)),
+            then_block,
+            else_block,
+        }) = &block.terminator
+        else {
+            continue;
+        };
+        let param =
+            block
+                .statements
+                .iter()
+                .find_map(|statement| match &statement.kind {
+                    StatementKind::Assign {
+                        destination: Place::Local(destination),
+                        value:
+                            Rvalue::BinaryOp {
+                                op: BinOp::Eq,
+                                left:
+                                    Operand::Copy(Place::Local(param))
+                                    | Operand::Move(Place::Local(param)),
+                                right,
+                            },
+                    } if destination == test && is_omitted(right) => Some(*param),
+                    _ => None,
+                });
+        let Some(param) = param else {
+            continue;
+        };
+        let Some(name) = param
+            .0
+            .checked_sub(1)
+            .and_then(|index| param_names.get(index))
+        else {
+            return Err(Rejection::invalid(format!(
+                "{param} is tested against an omitted argument but is not a parameter"
+            )));
+        };
+        let not_constant = || {
+            Rejection::unsupported(format!(
+                "default of parameter `{name}` is not a constant (the callee prologue computes it)"
+            ))
+        };
+        let fill = body.block(*then_block);
+        let constant = match (fill.statements.as_slice(), &fill.terminator) {
+            (
+                [
+                    Statement {
+                        kind:
+                            StatementKind::Assign {
+                                destination: Place::Local(destination),
+                                value,
+                            },
+                        ..
+                    },
+                ],
+                Some(Terminator::Goto { target }),
+            ) if destination == &param && target == else_block => match value {
+                Rvalue::Use(Operand::Constant(constant)) if !is_omitted_constant(constant) => {
+                    constant.clone()
+                }
+                // A negative literal lowers as the negation of a constant.
+                Rvalue::UnaryOp {
+                    op: UnaryOp::Neg,
+                    operand: Operand::Constant(constant),
+                } => match constant {
+                    Constant::Int(value) => Constant::Int(value.wrapping_neg()),
+                    Constant::Float(value) => Constant::Float(-value),
+                    Constant::Bigint(value) => Constant::Bigint(-value),
+                    _ => return Err(not_constant()),
+                },
+                _ => return Err(not_constant()),
+            },
+            _ => return Err(not_constant()),
+        };
+        defaults[param.0 - 1] = Some(constant);
+    }
+    for (index, (name, has_default)) in param_names.iter().zip(defaulted).enumerate() {
+        if *has_default && defaults[index].is_none() {
+            return Err(Rejection::invalid(format!(
+                "parameter `{name}` has a default but no prologue fills it"
+            )));
+        }
+    }
+    Ok(defaults)
 }
 
 /// The result type of a binary operation on native operands, if the subset

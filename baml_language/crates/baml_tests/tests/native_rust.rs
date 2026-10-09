@@ -29,6 +29,7 @@ const FIXTURES: &[&str] = &[
     "bitwise",
     "calls",
     "classes",
+    "defaults",
     "floats",
     "loops",
     "matching",
@@ -92,6 +93,7 @@ generated_module!(methods, "native/generated/methods.rs");
 generated_module!(recursion, "native/generated/recursion.rs");
 generated_module!(classes, "native/generated/classes.rs");
 generated_module!(benchmarks, "native/generated/benchmarks.rs");
+generated_module!(defaults, "native/generated/defaults.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -561,4 +563,23 @@ async fn recursion_matches_vm() {
     for n in [0, 1, 2, 10, 20] {
         check!(o, fib(n) => user_fib(int(n)));
     }
+}
+
+/// Omitted arguments take the callee's constant default at the call site;
+/// the VM fills them in the callee's prologue.
+#[tokio::test]
+async fn defaults_match_vm() {
+    use defaults::*;
+    let o = Oracle::new("defaults");
+    for n in [0, 1, 7, -4, MAX] {
+        check!(o, use_defaults(n) => user_use_defaults(int(n)));
+        check!(o, use_named(n) => user_use_named(int(n)));
+        check!(o, use_method(n) => user_use_method(int(n)));
+    }
+    for x in [0.0, 1.5, -8.0, f64::INFINITY, f64::NAN] {
+        check!(o, use_float(x) => user_use_float(x));
+    }
+    // Explicit arguments still reach a defaulted parameter unchanged.
+    check!(o, scale(5, 2, 1) => user_scale(int(5), int(2), int(1)));
+    check!(o, label("x", "hey", true) => user_label(text("x"), text("hey"), true));
 }

@@ -1342,10 +1342,47 @@ function f(n: int) -> int {
     assert_unsupported(&rejection, "spawn");
 }
 
+/// A constant default is passed from the call site; the callee's prologue
+/// test against the omitted-argument sentinel becomes a constant `false`.
 #[test]
-fn rejects_default_parameter() {
-    let rejection = reject("function f(n: int = 1) -> int { n }", "f");
-    assert_unsupported(&rejection, "default parameter");
+fn constant_defaults_are_substituted_at_the_call_site() {
+    let module = compile_entry(
+        r#"
+function f(n: int, by: int = -2, tag: string = "t", opt: int | null = null) -> int { n * by }
+function g(n: int) -> int { f(n) + f(n, by = 4) + f(n, opt = 1) }
+"#,
+        "g",
+    );
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        r#"user_f(_1, int::lit(-2), string::from_literal("t"), None)?"#,
+    );
+    assert_contains(
+        source,
+        r#"user_f(_1, int::lit(4), string::from_literal("t"), None)?"#,
+    );
+    assert_contains(
+        source,
+        r#"user_f(_1, int::lit(-2), string::from_literal("t"), Some(int::lit(1)))?"#,
+    );
+    assert_contains(source, "= false;");
+    assert!(!source.contains("omitted"), "{source}");
+}
+
+#[test]
+fn rejects_computed_default() {
+    let rejection = reject(
+        "function f(a: int, b: int = a + 1) -> int { a + b }
+function g(a: int) -> int { f(a) }",
+        "g",
+    );
+    assert_unsupported(
+        &rejection,
+        "callee `user.f` default of parameter `b` is not a constant",
+    );
+    let rejection = reject("function f(a: int, b: int = a + 1) -> int { a + b }", "f");
+    assert_unsupported(&rejection, "default of parameter `b` is not a constant");
 }
 
 #[test]
