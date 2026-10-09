@@ -37,6 +37,7 @@ const FIXTURES: &[&str] = &[
     "defers",
     "enums",
     "floats",
+    "generic_classes",
     "generics",
     "higher_order",
     "lambdas",
@@ -120,6 +121,7 @@ generated_module!(lambdas, "native/generated/lambdas.rs");
 generated_module!(captures, "native/generated/captures.rs");
 generated_module!(higher_order, "native/generated/higher_order.rs");
 generated_module!(generics, "native/generated/generics.rs");
+generated_module!(generic_classes, "native/generated/generic_classes.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -1215,4 +1217,28 @@ async fn generics_match_vm() {
         user_first__string(user_wrap__string(text("w")).unwrap()).unwrap(),
         text("w")
     );
+}
+
+/// Generic classes: one struct per instantiation, its methods instantiated
+/// with it, compared through the functions that build them (the VM has one
+/// class carrying its type arguments per instance).
+#[tokio::test]
+async fn generic_classes_match_vm() {
+    use generic_classes::*;
+    let o = Oracle::new("generic_classes");
+    for n in [-2, 0, 1, 5, 40, MAX / 4] {
+        check!(o, boxes(n) => user_boxes(int(n)));
+        check!(o, stacks(n.min(50)) => user_stacks(int(n.min(50))));
+        check!(o, nested(n) => user_nested(int(n)));
+        check!(o, renders(n) => user_renders(int(n)));
+        check!(o, type_tests(n) => user_type_tests(int(n)));
+        check!(o, nullable_boxes(n) => user_nullable_boxes(int(n)));
+    }
+    for (n, s) in [(0, ""), (3, "x"), (-9, "long text")] {
+        check!(o, pairs(n, s) => user_pairs(int(n), text(s)));
+    }
+    // An instance's methods are ordinary functions over its struct.
+    let b = user_make_box__int(int(2)).unwrap();
+    user_Box_set__int(b.clone(), int(7)).unwrap();
+    assert_eq!(user_Box_get__int(b).unwrap(), int(7));
 }

@@ -34,7 +34,7 @@ mod unions;
 pub use function::FnId;
 pub use generics::Instance;
 pub use project::{ProjectOptions, write_project};
-pub use types::{NativeTy, TypeDecl};
+pub use types::{ClassInst, NativeTy, TypeDecl};
 
 /// Why a function was not compiled.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -220,10 +220,8 @@ pub fn rust_name(link_name: &str) -> String {
 /// A BAML-flavoured description of `ty`, with classes and enums by link
 /// name.
 pub fn describe_ty(db: &dyn baml_compiler2_mir::Db, ty: &NativeTy<'_>) -> String {
-    ty.describe(&|decl| match decl {
-        TypeDecl::Class(class) => baml_compiler2_mir::class_link_name(db, class),
-        TypeDecl::Enum(enum_ref) => baml_compiler2_mir::enum_link_name(db, enum_ref),
-    })
+    let classes = classes::ClassTable::new(db);
+    ty.describe(&|decl| classes.link_name(decl))
 }
 
 /// Compile every function in `roots` and every function they transitively
@@ -292,7 +290,7 @@ pub fn compile_many<'db>(
         }
     }
 
-    let names = rust_names(db, &order)?;
+    let names = rust_names(db, &order, &classes)?;
     let (class_infos, enum_infos, union_infos) = classes.finish()?;
     let rust_source = print::render_module(
         &class_infos,
@@ -492,13 +490,16 @@ impl<'db> CallGraph<'db> {
 fn rust_names<'db>(
     db: &dyn baml_compiler2_mir::Db,
     candidates: &[function::Candidate<'db>],
+    classes: &classes::ClassTable<'db>,
 ) -> Result<FxHashMap<FnId<'db>, proc_macro2::Ident>, Rejection> {
     let mut by_name: FxHashMap<String, String> = FxHashMap::default();
     let mut names = FxHashMap::default();
     let instance_names: FxHashMap<&Instance<'db>, String> = candidates
         .iter()
         .filter_map(|candidate| match &candidate.id {
-            FnId::Declared(instance) => Some((instance, instance_rust_name(db, candidate))),
+            FnId::Declared(instance) => {
+                Some((instance, instance_rust_name(db, candidate, classes)))
+            }
             FnId::Lambda { .. } => None,
         })
         .collect();
@@ -533,20 +534,15 @@ fn rust_names<'db>(
 
 /// The Rust name of a declared candidate: its link name sanitized, then
 /// `__` and each type argument mangled.
-fn instance_rust_name(
+fn instance_rust_name<'db>(
     db: &dyn baml_compiler2_mir::Db,
-    candidate: &function::Candidate<'_>,
+    candidate: &function::Candidate<'db>,
+    classes: &classes::ClassTable<'db>,
 ) -> String {
     let mut name = rust_name(&link_name(db, candidate.id.root().loc));
     for arg in &candidate.type_args {
         name.push_str("__");
-        name.push_str(&arg.mangle(&|decl| {
-            let link_name = match decl {
-                TypeDecl::Class(class) => baml_compiler2_mir::class_link_name(db, class),
-                TypeDecl::Enum(enum_ref) => baml_compiler2_mir::enum_link_name(db, enum_ref),
-            };
-            proc_macro2::Ident::new(&rust_name(&link_name), proc_macro2::Span::call_site())
-        }));
+        name.push_str(&arg.mangle(&|decl| classes.ident(decl)));
     }
     name
 }

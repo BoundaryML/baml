@@ -24,7 +24,7 @@ use crate::{
     },
     generics::Instance,
     structure::Stmt,
-    types::{Coercion, NativeTy, TypeDecl, coercion},
+    types::{ClassInst, Coercion, NativeTy, coercion},
     unions::{MemberTest, TestSite},
 };
 
@@ -122,7 +122,7 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
         }
     });
     let display_name = &class.display_name;
-    let link_name = &class.link_name;
+    let link_name = &class.class_fqn;
     let expecting = format!("expected JSON object for class `{}`", class.json_name);
     let rendered = class.fields.iter().map(|field| {
         let ident = &field.ident;
@@ -766,7 +766,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                                 }
                             }
                             (SwitchKey::Class(class), Some(TagSource::Thrown)) => {
-                                let fqn = self.classes.link_name(TypeDecl::Class(*class));
+                                let fqn = self.classes.class_fqn(*class);
                                 if seen.insert(fqn.clone()) {
                                     patterns.push(quote! { #fqn });
                                 }
@@ -1758,7 +1758,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     // `borrow_mut()` of the store.
                     Place::Field { base, field } => {
                         let class = base_ty(self, base)?;
-                        let field = self.field_ident(class, *field)?;
+                        let field = self.field_ident(&class, *field)?;
                         let base = self.place(base)?;
                         quote! {{
                             let value = #value;
@@ -1937,11 +1937,15 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let place = self.place(place)?;
                 (quote! { int::lit(#place as i64) }, NativeTy::Int)
             }
+            // The instance the analyzer found (its arguments realized).
             Rvalue::Aggregate {
-                kind: AggregateKind::Class { class, .. },
+                kind: AggregateKind::Class { .. },
                 fields,
             } => {
-                let info = self.classes.info(*class)?;
+                let NativeTy::Class(class) = literal_ty else {
+                    return Err(Rejection::invalid("class literal stored in a non-class"));
+                };
+                let info = self.classes.info(class)?;
                 let name = &info.ident;
                 let fields = fields
                     .iter()
@@ -1954,7 +1958,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .collect::<Result<Vec<_>, Rejection>>()?;
                 (
                     quote! { shared(#name { #(#fields),* }) },
-                    NativeTy::Class(*class),
+                    NativeTy::Class(class.clone()),
                 )
             }
             Rvalue::IsType { operand, test } => {
@@ -2081,7 +2085,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             // A `catch` arm's class test, by the class's name.
             (TypeTest::Class { class, .. }, NativeTy::Thrown) => {
                 let value = self.operand_borrowed(operand)?;
-                let fqn = self.classes.link_name(TypeDecl::Class(*class));
+                let fqn = self.classes.class_fqn(*class);
                 quote! { bex_aot::thrown::is_class(&#value, #fqn) }
             }
             // Membership in a literal type is exact equality with the
@@ -2482,7 +2486,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             Place::Local(local) => self.local_ty(*local),
             Place::Field { base, field } => {
                 let class = base_ty(self, base)?;
-                let info = self.classes.info(class)?;
+                let info = self.classes.info(&class)?;
                 info.fields
                     .get(*field)
                     .map(|f| f.ty.clone())
@@ -2524,7 +2528,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
             Place::Field { base, field } => {
                 let class = base_ty(self, base)?;
-                let field = self.field_ident(class, *field)?;
+                let field = self.field_ident(&class, *field)?;
                 let base = self.place(base)?;
                 Ok(quote! { #base.borrow().#field })
             }
@@ -2563,11 +2567,7 @@ impl<'a, 'db> Printer<'a, 'db> {
         }
     }
 
-    fn field_ident(
-        &self,
-        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
-        field: usize,
-    ) -> Result<Ident, Rejection> {
+    fn field_ident(&self, class: &ClassInst<'db>, field: usize) -> Result<Ident, Rejection> {
         let info = self.classes.info(class)?;
         info.fields
             .get(field)
@@ -2599,11 +2599,8 @@ impl<'a, 'db> Printer<'a, 'db> {
     }
 }
 
-/// The class a field place's base holds.
-fn base_ty<'db>(
-    printer: &Printer<'_, 'db>,
-    base: &Place,
-) -> Result<baml_compiler2_hir_ty::extern_loc::ClassRef<'db>, Rejection> {
+/// The class instance a field place's base holds.
+fn base_ty<'db>(printer: &Printer<'_, 'db>, base: &Place) -> Result<ClassInst<'db>, Rejection> {
     match printer.place_ty(base)? {
         NativeTy::Class(class) => Ok(class),
         other => Err(Rejection::invalid(format!(

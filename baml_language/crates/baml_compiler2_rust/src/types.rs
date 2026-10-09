@@ -12,7 +12,7 @@
 use std::fmt;
 
 use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef};
-use baml_compiler2_mir::RuntimeTy;
+use baml_compiler2_mir::{RealizedTy, RuntimeTy};
 use baml_type::{DeclName, Literal};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -34,8 +34,10 @@ pub enum NativeTy<'db> {
     Null,
     /// BAML `T[]`: `Shared<Vec<T>>`.
     Array(Box<NativeTy<'db>>),
-    /// A non-generic class: `Shared<Struct>` over a generated struct.
-    Class(ClassRef<'db>),
+    /// A class at its type arguments (none for a non-generic one):
+    /// `Shared<Struct>` over a generated struct, one per instantiation
+    /// (`user_Box__int`), with the fields' types realized.
+    Class(ClassInst<'db>),
     /// A BAML enum: a generated fieldless Rust enum, one variant per BAML
     /// variant in declaration order, so the discriminant is the VM's.
     Enum(EnumRef<'db>),
@@ -69,12 +71,67 @@ pub enum NativeTy<'db> {
     Thrown,
 }
 
+/// A class at concrete type arguments: the unit the module emits a struct
+/// for. A non-generic class is the instance with no arguments.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ClassInst<'db> {
+    pub class: ClassRef<'db>,
+    /// One realized type per class type parameter, in declaration order.
+    pub args: Vec<RealizedTy>,
+}
+
+impl<'db> ClassInst<'db> {
+    /// The instance of a class that takes no type arguments.
+    pub fn plain(class: ClassRef<'db>) -> Self {
+        Self {
+            class,
+            args: Vec::new(),
+        }
+    }
+
+    /// The instance of `class` at `args`, with every union among the
+    /// arguments in one canonical member order: the checker spells a
+    /// union argument as written at each site (`Box<int | string>` and
+    /// `Box<string | int>` are one type to it), and one struct must stand
+    /// for both.
+    pub fn new(class: ClassRef<'db>, args: Vec<RealizedTy>) -> Self {
+        Self {
+            class,
+            args: args.into_iter().map(canonical_arg).collect(),
+        }
+    }
+}
+
+/// `ty` with every union it mentions sorted into the realized types' total
+/// order, so two spellings of one union argument name one instance.
+fn canonical_arg(ty: RealizedTy) -> RealizedTy {
+    match ty {
+        RealizedTy::Union(members) => {
+            let mut members: Vec<RealizedTy> =
+                members.into_vec().into_iter().map(canonical_arg).collect();
+            members.sort();
+            members.dedup();
+            RealizedTy::Union(members.into_boxed_slice())
+        }
+        RealizedTy::List(inner) => RealizedTy::List(Box::new(canonical_arg(*inner))),
+        RealizedTy::Map { key, value } => RealizedTy::Map {
+            key: Box::new(canonical_arg(*key)),
+            value: Box::new(canonical_arg(*value)),
+        },
+        RealizedTy::Class(head, args) => RealizedTy::Class(
+            head,
+            args.into_vec().into_iter().map(canonical_arg).collect(),
+        ),
+        other => other,
+    }
+}
+
 /// A declaration a native type names, which the generated module emits as
 /// an item: the key under which [`NativeTy::to_tokens`] and
 /// [`NativeTy::describe`] look its name up.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeDecl<'db> {
-    Class(ClassRef<'db>),
+    Class(ClassInst<'db>),
     Enum(EnumRef<'db>),
 }
 
@@ -174,7 +231,7 @@ impl<'db> NativeTy<'db> {
             Self::Null => "null".into(),
             Self::Array(inner) => format!("{}_array", inner.mangle(name)),
             Self::Map(key, value) => format!("map_{}_{}", key.mangle(name), value.mangle(name)),
-            Self::Class(class) => name(TypeDecl::Class(*class)).to_string(),
+            Self::Class(class) => name(TypeDecl::Class(class.clone())).to_string(),
             Self::Enum(enum_ref) => name(TypeDecl::Enum(*enum_ref)).to_string(),
             Self::Option(inner) => format!("{}_or_null", inner.mangle(name)),
             Self::Union(members) => Self::mangle_members(members, name),
@@ -236,10 +293,10 @@ impl<'db> NativeTy<'db> {
         matches!(self, Self::Int | Self::Bool | Self::Float | Self::Str)
     }
 
-    /// Every class this type mentions, outermost first.
-    pub fn classes(&self, out: &mut Vec<ClassRef<'db>>) {
+    /// Every class instance this type mentions, outermost first.
+    pub fn classes(&self, out: &mut Vec<ClassInst<'db>>) {
         match self {
-            Self::Class(class) => out.push(*class),
+            Self::Class(class) => out.push(class.clone()),
             Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
                 inner.classes(out);
             }
@@ -323,7 +380,7 @@ impl<'db> NativeTy<'db> {
                 quote! { Map<#key, #value> }
             }
             Self::Class(class) => {
-                let name = class_name(TypeDecl::Class(*class));
+                let name = class_name(TypeDecl::Class(class.clone()));
                 quote! { Shared<#name> }
             }
             Self::Enum(enum_ref) => {
@@ -368,7 +425,7 @@ impl<'db> NativeTy<'db> {
                 key.describe(class_name),
                 value.describe(class_name)
             ),
-            Self::Class(class) => class_name(TypeDecl::Class(*class)),
+            Self::Class(class) => class_name(TypeDecl::Class(class.clone())),
             Self::Enum(enum_ref) => class_name(TypeDecl::Enum(*enum_ref)),
             Self::Option(inner) => format!("{} | null", inner.describe(class_name)),
             Self::Union(members) => members
@@ -486,8 +543,8 @@ pub(crate) fn coercion(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> Option
     })
 }
 
-/// Resolves the declarations a runtime type names: a class head (with its
-/// type arguments) to a [`NativeTy::Class`] and an enum head to a
+/// Resolves the declarations a runtime type names: a class head with its
+/// (realized) type arguments to a [`NativeTy::Class`] and an enum head to a
 /// [`NativeTy::Enum`], or explains why the declaration is outside the subset.
 pub(crate) trait Resolver<'db> {
     fn class(&mut self, head: &DeclName, args: &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported>;

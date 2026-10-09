@@ -63,7 +63,7 @@ use crate::{
     classes::ClassTable,
     generics::{Frame, FrameMismatch, Instance, mentions_unknown},
     structure::{Cfg, Flow, Stmt, structurize},
-    types::{Coercion, NativeTy, TypeDecl, Unsupported, coercion},
+    types::{ClassInst, Coercion, NativeTy, TypeDecl, Unsupported, coercion},
     unions::{MemberTest, TestSite, member_tag, tag_variants},
 };
 
@@ -882,7 +882,7 @@ struct Env<'a, 'db> {
     type_values: FxHashMap<Local, TyTemplate>,
     classes: &'a mut ClassTable<'db>,
     /// The class each `narrow_bind` temporary narrows to.
-    narrows: FxHashMap<Local, baml_compiler2_hir_ty::extern_loc::ClassRef<'db>>,
+    narrows: FxHashMap<Local, ClassInst<'db>>,
     /// See [`Candidate::narrow_sources`].
     narrow_sources: FxHashMap<Local, Local>,
     /// See [`Candidate::member_tests`].
@@ -951,7 +951,7 @@ impl<'db> Env<'_, 'db> {
                 continue;
             }
             let class = match test {
-                TypeTest::Class { class, args } if args.is_empty() => *class,
+                TypeTest::Class { class, args } if args.is_empty() => ClassInst::plain(*class),
                 TypeTest::Class { .. } => {
                     return Err(Rejection::unsupported("`catch` binding of a generic class"));
                 }
@@ -964,7 +964,7 @@ impl<'db> Env<'_, 'db> {
             // The runtime raises the stdlib's own errors and panics as its
             // own types, which the generated struct of the class would never
             // downcast to; the class test still matches.
-            let link_name = baml_compiler2_mir::class_link_name(self.db, class);
+            let link_name = self.classes.class_fqn(class.class);
             if RUNTIME_ERROR_NAMESPACES
                 .iter()
                 .any(|namespace| link_name.starts_with(namespace))
@@ -974,9 +974,9 @@ impl<'db> Env<'_, 'db> {
                 )));
             }
             self.classes
-                .check(class)
+                .check(&class)
                 .map_err(|reason| Rejection::unsupported(reason.0))?;
-            if let Some(previous) = self.narrows.insert(*destination, class)
+            if let Some(previous) = self.narrows.insert(*destination, class.clone())
                 && previous != class
             {
                 return Err(Rejection::invalid(format!(
@@ -1256,7 +1256,9 @@ impl<'db> Env<'_, 'db> {
                 else {
                     continue;
                 };
-                if !matches!(self.kind(*local)?, LocalKind::Type) {
+                // A `load_type` into a value local (`let v: reflect.Type |
+                // int = ..`) is typed, and rejected, with the statement.
+                if !matches!(self.kinds.get(local.0), Some(Some(LocalKind::Type))) {
                     continue;
                 }
                 if let Some(previous) = self.type_values.get(local)
@@ -1457,7 +1459,7 @@ impl<'db> Env<'_, 'db> {
             Place::Local(local) => self.local_ty(*local),
             Place::Field { base, field } => match self.place_ty(base)? {
                 NativeTy::Class(class) => {
-                    let info = self.classes.info(class)?;
+                    let info = self.classes.info(&class)?;
                     info.fields
                         .get(*field)
                         .map(|f| f.ty.clone())
@@ -1808,13 +1810,17 @@ impl<'db> Env<'_, 'db> {
                 else {
                     return Err(Rejection::unsupported("array aggregate"));
                 };
-                if !type_arg_templates.is_empty() {
-                    return Err(Rejection::unsupported("generic class instance"));
+                // A generic class literal names its arguments as templates
+                // over the frame: the instance they realize to.
+                let mut args = Vec::with_capacity(type_arg_templates.len());
+                for template in type_arg_templates {
+                    args.push(self.realize_template(template)?);
                 }
+                let class = ClassInst::new(*class, args);
                 self.classes
-                    .check(*class)
+                    .check(&class)
                     .map_err(|reason| Rejection::unsupported(reason.0))?;
-                let info = self.classes.info(*class)?;
+                let info = self.classes.info(&class)?;
                 if fields.len() != info.fields.len() {
                     return Err(Rejection::invalid(format!(
                         "`{}` literal with {} of {} fields",
@@ -1836,7 +1842,7 @@ impl<'db> Env<'_, 'db> {
                         )));
                     }
                 }
-                Ok(NativeTy::Class(*class))
+                Ok(NativeTy::Class(class))
             }
             Rvalue::IsType { operand, test } => {
                 let ty = self.operand_ty(operand, None)?;
@@ -2033,11 +2039,13 @@ impl<'db> Env<'_, 'db> {
                 .collect()
         };
         Ok(match test {
-            TypeTest::Class { class, args } if args.is_empty() => {
-                MemberTest::Variants(variants_of(&NativeTy::Class(*class)))
-            }
-            TypeTest::Class { .. } => {
-                return Err(Rejection::unsupported("type test against a generic class"));
+            TypeTest::Class { class, args } => {
+                let mut realized = Vec::with_capacity(args.len());
+                for template in args {
+                    realized.push(self.realize_template(template)?);
+                }
+                let instance = ClassInst::new(*class, realized);
+                MemberTest::Variants(variants_of(&NativeTy::Class(instance)))
             }
             TypeTest::Enum(enum_ref) => {
                 MemberTest::Variants(variants_of(&NativeTy::Enum(*enum_ref)))
@@ -2242,7 +2250,7 @@ impl<'db> Env<'_, 'db> {
                     None => false,
                 };
                 if !allowed {
-                    return Err(mismatch(
+                    return Err(self.in_instance(mismatch(
                         &actual,
                         &expected,
                         |ty| self.describe(ty),
@@ -2253,7 +2261,7 @@ impl<'db> Env<'_, 'db> {
                                 self.describe(&actual)
                             )
                         },
-                    ));
+                    )));
                 }
                 Ok(store.map(|store| (store, actual)))
             }
@@ -2365,11 +2373,15 @@ impl<'db> Env<'_, 'db> {
                                 (SwitchKey::Int(tag), Some(members)) => {
                                     MemberTest::Variants(tag_variants(members, *tag))
                                 }
+                                // A class key names the declaration: every
+                                // instance of it among the members.
                                 (SwitchKey::Class(class), Some(members)) => MemberTest::Variants(
                                     members
                                         .iter()
                                         .enumerate()
-                                        .filter(|(_, member)| **member == NativeTy::Class(*class))
+                                        .filter(|(_, member)| {
+                                            matches!(member, NativeTy::Class(instance) if instance.class == *class)
+                                        })
                                         .map(|(index, _)| index)
                                         .collect(),
                                 ),
@@ -2538,6 +2550,22 @@ impl<'db> Env<'_, 'db> {
             _ => Err(Rejection::invalid(
                 "rethrow context is not a handler's context local",
             )),
+        }
+    }
+
+    /// A type mismatch inside a generic instance is a read the checker typed
+    /// through a narrowing on a type parameter (`c is Cell<T>` on a
+    /// `Cell<int>`, then `c.v` read as `T`): sound on the VM, where the
+    /// test fails at every other instantiation, and outside the subset
+    /// here, where each instance is typed on its own.
+    fn in_instance(&self, rejection: Rejection) -> Rejection {
+        match rejection {
+            Rejection::Invalid(reason) if !self.frame.args().is_empty() => {
+                Rejection::unsupported(format!(
+                    "{reason} (a read the checker typed through a narrowing on a type parameter)"
+                ))
+            }
+            other => other,
         }
     }
 
@@ -2905,7 +2933,7 @@ impl<'db> Env<'_, 'db> {
                             .chain(enums.into_iter().map(TypeDecl::Enum));
                         if let Some(decl) = decls
                             .into_iter()
-                            .find(|decl| self.classes.has_explicit_impl(*decl, &iface.name))
+                            .find(|decl| self.classes.has_explicit_impl(decl.clone(), &iface.name))
                         {
                             return Err(Rejection::unsupported(format!(
                                 "`to_string` on a `{}`: `{}` implements its own `baml.ToString`",
