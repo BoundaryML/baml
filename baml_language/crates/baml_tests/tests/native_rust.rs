@@ -35,6 +35,7 @@ const FIXTURES: &[&str] = &[
     "defers",
     "enums",
     "floats",
+    "literal_unions",
     "loops",
     "maps",
     "matching",
@@ -106,6 +107,7 @@ generated_module!(bigint, "native/generated/bigint.rs");
 generated_module!(throws, "native/generated/throws.rs");
 generated_module!(catches, "native/generated/catches.rs");
 generated_module!(defers, "native/generated/defers.rs");
+generated_module!(literal_unions, "native/generated/literal_unions.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -233,6 +235,13 @@ impl Oracle {
                 true,
             )
             .await;
+        // A union-typed return wraps the member value in its union.
+        let result = result.map(|mut value| {
+            while let BexExternalValue::Union { value: inner, .. } = value {
+                value = *inner;
+            }
+            value
+        });
         match result {
             Ok(BexExternalValue::Int(v)) => Observed::Int(v),
             Ok(BexExternalValue::Bool(v)) => Observed::Bool(v),
@@ -351,6 +360,29 @@ async fn arith_matches_vm() {
     for (x, lo, hi) in [(5, 1, 10), (1, 1, 10), (10, 1, 10), (0, 1, 10), (11, 1, 10)] {
         check!(o, in_range(x, lo, hi) => user_in_range(int(x), int(lo), int(hi)));
         check!(o, is_edge(x, lo, hi) => user_is_edge(int(x), int(lo), int(hi)));
+    }
+}
+
+#[tokio::test]
+async fn literal_unions_match_vm() {
+    use literal_unions::*;
+    let o = Oracle::new("literal_unions");
+    for n in [-3, 0, 4, 10, 25] {
+        check!(o, pick(n) => user_pick(int(n)));
+        check!(o, level(n) => user_level(int(n)));
+        check!(o, describe(n) => user_describe(int(n)));
+        check!(o, level_name(n) => user_level_name(int(n)));
+        check!(o, tag_is_hi(n) => user_tag_is_hi(int(n)));
+        check!(o, is_lo(n) => user_is_lo(int(n)));
+        check!(o, maybe_text(n) => user_maybe_text(int(n)));
+        check!(o, flag(n) => user_flag(int(n)));
+        check!(o, width(n) => user_width(int(n)));
+        check!(o, render(n) => user_render(int(n)));
+        check!(o, json_out(n) => user_json_out(int(n)));
+        check!(o, count_lo(n) => user_count_lo(int(n)));
+    }
+    for (a, b) in [(1, 2), (1, 20), (30, 40)] {
+        check!(o, same_tag(a, b) => user_same_tag(int(a), int(b)));
     }
 }
 

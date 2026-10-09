@@ -154,6 +154,9 @@ pub(crate) enum Builtin<'db> {
     /// `baml.ops.equals_equals(a, b)` on two values of one enum: the
     /// variants are the same.
     EnumEq,
+    /// `baml.ops.equals_equals(a, b)` on two values that both fit this
+    /// type, which implements `bex_aot::BamlEq`: `bex_aot::eq::equals`.
+    Equals(NativeTy<'db>),
     /// `virtual_call iter as baml.iter.Iterable` on an array.
     Iter,
     /// `virtual_call next as baml.iter.Iterator` on an array iterator.
@@ -1005,6 +1008,10 @@ impl<'db> Env<'_, 'db> {
                     | (
                         TypeTest::Template(TyTemplate::Literal(Literal::Bool(_), _)),
                         NativeTy::Bool,
+                    )
+                    | (
+                        TypeTest::Template(TyTemplate::Literal(Literal::String(_), _)),
+                        NativeTy::Str,
                     ) => Ok(NativeTy::Bool),
                     (TypeTest::Class { class, args }, NativeTy::Option(_))
                         if args.is_empty() && self.is_done_class(*class) =>
@@ -1754,6 +1761,15 @@ impl<'db> Env<'_, 'db> {
                 self.operand_of(&args[0], &NativeTy::Str)?;
                 let template = self.type_value(&type_args[0])?.clone();
                 let target = self.template_ty(&template)?;
+                // A literal type erases to its primitive natively, so a
+                // decode into one would accept what the VM rejects.
+                if let Ok(realized) = RealizedTy::try_from(&template)
+                    && let Some(literal) = self.classes.literal_type_in(&RuntimeTy::from(realized))
+                {
+                    return Err(Rejection::unsupported(format!(
+                        "JSON decode into a literal type {literal} (the VM rejects a value outside the literal; the native type is the erased primitive)"
+                    )));
+                }
                 (Builtin::JsonDeserialize(target.clone()), target)
             }
             "baml.json.to_string" => {
@@ -1891,11 +1907,26 @@ impl<'db> Env<'_, 'db> {
                                 result: NativeTy::Bool,
                             }));
                         }
-                        return Err(Rejection::unsupported(format!(
-                            "`==` on a `{}` and a `{}` (only enums and `null` tests compare natively through `baml.ops.equals_equals`)",
-                            self.describe(&left),
-                            self.describe(&right)
-                        )));
+                        // The VM compares the two runtime values whatever
+                        // their static types; natively both sides are lifted
+                        // into the wider of the two types first, which
+                        // changes nothing (a `T` lifted into `T | null` is
+                        // still never equal to `null`).
+                        let common = [(&left, &right), (&right, &left)]
+                            .into_iter()
+                            .find(|(from, to)| stores(from, to))
+                            .map(|(_, to)| to.clone());
+                        let Some(common) = common.filter(baml_eq_supported) else {
+                            return Err(Rejection::unsupported(format!(
+                                "`==` on a `{}` and a `{}` (only primitives, enums, nullable values and unions of those compare natively through `baml.ops.equals_equals`)",
+                                self.describe(&left),
+                                self.describe(&right)
+                            )));
+                        };
+                        return Ok(Some(CallKind::Builtin {
+                            builtin: Builtin::Equals(common),
+                            result: NativeTy::Bool,
+                        }));
                     }
                 };
                 let ty = self.operand_ty(&args[operand], None)?;
@@ -1917,6 +1948,24 @@ impl<'db> Env<'_, 'db> {
 /// an unwrap.
 fn stores(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> bool {
     coercion(actual, expected).is_some_and(Coercion::is_total)
+}
+
+/// Whether `ty` implements `bex_aot::BamlEq`, the broad `==`: primitives,
+/// `null` and nullable values of those. Enums compare through their own
+/// `==`; classes, arrays and maps compare structurally on the VM, which the
+/// runtime does not do.
+fn baml_eq_supported(ty: &NativeTy<'_>) -> bool {
+    match ty {
+        NativeTy::Int | NativeTy::Bool | NativeTy::Float | NativeTy::Bigint | NativeTy::Str => true,
+        NativeTy::Null => true,
+        NativeTy::Option(inner) => baml_eq_supported(inner),
+        NativeTy::Array(_)
+        | NativeTy::Map(..)
+        | NativeTy::Class(_)
+        | NativeTy::Enum(_)
+        | NativeTy::ArrayIter(_)
+        | NativeTy::Thrown => false,
+    }
 }
 
 /// A `T | null` where a `T` is required is a value the checker narrowed

@@ -786,6 +786,14 @@ impl<'a, 'db> Printer<'a, 'db> {
                         let right = self.operand(arg(1)?, None)?;
                         (TokenStream::new(), quote! { #left == #right })
                     }
+                    Builtin::Equals(common) => {
+                        let left = self.operand(arg(0)?, Some(common))?;
+                        let right = self.operand(arg(1)?, Some(common))?;
+                        (
+                            TokenStream::new(),
+                            quote! { bex_aot::eq::equals(&#left, &#right) },
+                        )
+                    }
                     Builtin::Iter => {
                         let array = self.operand_ref(arg(0)?)?;
                         (TokenStream::new(), quote! { array::iter(#array) })
@@ -1122,14 +1130,23 @@ impl<'a, 'db> Printer<'a, 'db> {
                 operand,
                 test: TypeTest::Template(TyTemplate::Literal(literal, _)),
             } => {
-                let value = self.operand(operand, None)?;
+                // Membership in a literal type is exact equality with the
+                // value, which for these primitives is `==`.
                 match literal {
                     Literal::Int(value_lit) => {
+                        let value = self.operand(operand, None)?;
                         let expected = int_literal(*value_lit)?;
                         quote! { #value == #expected }
                     }
-                    Literal::Bool(true) => value,
-                    Literal::Bool(false) => quote! { !#value },
+                    Literal::Bool(true) => self.operand(operand, None)?,
+                    Literal::Bool(false) => {
+                        let value = self.operand(operand, None)?;
+                        quote! { !#value }
+                    }
+                    Literal::String(text) => {
+                        let value = self.operand_ref(operand)?;
+                        quote! { string::eq(#value, &string::from_literal(#text)) }
+                    }
                     _ => return Err(Rejection::unsupported("type test other than a literal")),
                 }
             }

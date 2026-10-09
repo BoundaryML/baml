@@ -1393,6 +1393,78 @@ fn rejects_wide_union() {
     assert_unsupported(&rejection, "union other than `T | null`");
 }
 
+/// A union of literals of one primitive is that primitive: a match on a
+/// string literal is a string comparison, an int literal a switch key.
+#[test]
+fn literal_unions_erase_to_their_primitive() {
+    let module = compile_roots(
+        r#"
+class Tagged { tag: "lo" | "hi", level: 1 | 2 }
+function pick(n: int) -> "lo" | "hi" { if (n < 10) { "lo" } else { "hi" } }
+function describe(n: int) -> string { match (pick(n)) { "lo" => "low", "hi" => "high" } }
+function level(t: Tagged) -> string { match (t.level) { 1 => "one", 2 => "two" } }
+function maybe(n: int) -> "x" | null { if (n > 0) { "x" } else { null } }
+"#,
+        &["pick", "describe", "level", "maybe"],
+    );
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        "pub fn user_pick(mut _1: Int63) -> Result<Str, Thrown>",
+    );
+    assert_contains(source, "string::eq(&_2, &string::from_literal(\"lo\"))");
+    assert_contains(source, "pub tag: Str,");
+    assert_contains(source, "pub level: Int63,");
+    assert_contains(source, "1i64 => {");
+    assert_contains(
+        source,
+        "pub fn user_maybe(mut _1: Int63) -> Result<Option<Str>, Thrown>",
+    );
+    let pick = module
+        .functions
+        .iter()
+        .find(|f| f.link_name == "user.pick")
+        .unwrap();
+    assert_eq!(pick.ret, NativeTy::Str);
+}
+
+/// The erased primitive would accept a value outside the literal, which the
+/// VM's typed decode rejects; the decode is rejected rather than widened.
+#[test]
+fn rejects_json_decode_into_a_literal_type() {
+    let rejection = reject(
+        r#"
+class Tagged { tag: "lo" | "hi" }
+function f(raw: string) -> string { baml.json.deserialize<Tagged>(raw).tag }
+"#,
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "JSON decode into a literal type `\"lo\" | \"hi\"` in field `tag` of class `user.Tagged`",
+    );
+    let rejection = reject(
+        r#"
+enum Color { Red, Blue }
+class Pinned { color: Color.Red }
+function g(raw: string) -> Pinned[] { baml.json.deserialize<Pinned[]>(raw) }
+"#,
+        "g",
+    );
+    assert_unsupported(
+        &rejection,
+        "JSON decode into a literal type `Color.Red` in field `color` of class `user.Pinned`",
+    );
+    let rejection = reject(
+        r#"function h(raw: string) -> string { baml.json.deserialize<"a" | "b">(raw) }"#,
+        "h",
+    );
+    assert_unsupported(
+        &rejection,
+        "JSON decode into a literal type `\"a\" | \"b\"` (",
+    );
+}
+
 /// `bigint` is a counted pointer passed by reference; a mixed `int`
 /// operand is widened first, and literals come from an `i64` or their
 /// digits.
