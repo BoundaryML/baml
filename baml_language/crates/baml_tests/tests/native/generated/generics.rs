@@ -259,15 +259,13 @@ pub fn user_via_value__int(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
     _2 = {
         let __function: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(
             user_identity__int,
         );
         __function
     };
-    _3 = _2.clone();
-    _0 = (_3)(_1)?;
+    _0 = (_2)(_1)?;
     Ok(_0)
 }
 /// BAML lambda `.<lambda(use_ints, 0)>`.
@@ -548,15 +546,13 @@ pub fn user_via_value__string(mut _1: Str) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Rc<dyn Fn(Str) -> Result<Str, Thrown>>;
-    let mut _3: Rc<dyn Fn(Str) -> Result<Str, Thrown>>;
     _2 = {
         let __function: Rc<dyn Fn(Str) -> Result<Str, Thrown>> = Rc::new(
             user_identity__string,
         );
         __function
     };
-    _3 = _2.clone();
-    _0 = (_3)(_1.clone())?;
+    _0 = (_2)(_1.clone())?;
     Ok(_0)
 }
 /// BAML lambda `.<lambda(use_strings, 0)>`.

@@ -1,18 +1,21 @@
 //! An ahead-of-time backend that turns BAML MIR into Rust source.
 //!
 //! The subset covers functions over `int`, `bool`, `float`, `bigint`,
-//! `string`, arrays, maps, enums, non-generic data classes, `T | null`,
-//! closed unions of those (generated enums, with the narrowing the checker
-//! does) and function values (lambdas with captures, declared functions as
-//! values, calls through either), with structured control flow, direct
-//! calls to other such functions (constant defaults filled at the call
-//! site), the for-in iterator protocol on arrays, and a table of stdlib
-//! builtins mapped to the `bex_aot` runtime, the array methods that take a
-//! callback among them. Everything else is reported as [`Rejection::Unsupported`] so the
-//! caller keeps the bytecode. Control flow is emitted structurally (labeled
-//! blocks and loops, never a block dispatcher), which needs a reducible
-//! graph; BAML lowering only produces those, so an irreducible one is
-//! [`Rejection::Invalid`].
+//! `string`, arrays, maps, enums, data classes (generic ones as one struct
+//! per instantiation), `T | null`, closed unions of those (generated enums,
+//! with the narrowing the checker does), interface-typed values (generated
+//! enums over the program's implementors, dispatched by `match`; a call on a
+//! concrete receiver is static) and function values (lambdas with captures,
+//! declared functions as values, calls through either), with structured
+//! control flow, direct calls to other such functions (constant defaults
+//! filled at the call site; a generic callee compiled once per
+//! type-argument tuple), the for-in iterator protocol on arrays, and a
+//! table of stdlib builtins mapped to the `bex_aot` runtime, the array
+//! methods that take a callback among them. Everything else is reported as
+//! [`Rejection::Unsupported`] so the caller keeps the bytecode. Control flow
+//! is emitted structurally (labeled blocks and loops, never a block
+//! dispatcher), which needs a reducible graph; BAML lowering only produces
+//! those, so an irreducible one is [`Rejection::Invalid`].
 //!
 //! The generated code links the `bex_aot` runtime crate for value
 //! semantics and panic payloads; this crate only names its paths.
@@ -144,6 +147,9 @@ pub struct NativeModule<'db> {
     /// Every closed union the functions touch, in first-use order, each a
     /// generated enum; `link_name` is the BAML spelling (`int | float`).
     pub unions: Vec<CompiledClass>,
+    /// Every interface the functions touch, in first-use order, each a
+    /// generated enum over its implementors.
+    pub interfaces: Vec<CompiledClass>,
     /// Indices into `functions` of the requested roots, in request order.
     pub roots: Vec<usize>,
     /// Index of the entry function in `functions`: the root [`compile`] was
@@ -159,11 +165,21 @@ pub fn admit<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     loc: FunctionLoc<'db>,
 ) -> Result<Admitted<'db>, Rejection> {
-    let mut classes = classes::ClassTable::new(db);
+    let mut classes = classes::ClassTable::new(db, Some(program_root(db, loc)));
     let candidate = function::analyze(db, &Instance::plain(loc), &mut classes)
         .map_err(|rejection| rejection.in_function(&link_name(db, loc)))?;
     classes.finish()?;
     Ok(candidate.admitted())
+}
+
+/// The package `loc` is compiled from: what decides which `implements`
+/// blocks the program can see.
+fn program_root(db: &dyn baml_compiler2_mir::Db, loc: FunctionLoc<'_>) -> baml_base::SourceRoot {
+    baml_compiler2_hir::file_package::file_package(
+        db,
+        baml_compiler2_hir::contributions::Definition::Function(loc).file(db),
+    )
+    .root
 }
 
 /// Whether `loc` and every function it transitively calls are in the
@@ -173,7 +189,7 @@ pub fn admit_closure<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     loc: FunctionLoc<'db>,
 ) -> Result<Admitted<'db>, Rejection> {
-    let mut classes = classes::ClassTable::new(db);
+    let mut classes = classes::ClassTable::new(db, Some(program_root(db, loc)));
     let mut graph = CallGraph::new(db);
     let root = Instance::plain(loc);
     graph.visit(&root, &mut classes)?;
@@ -220,7 +236,7 @@ pub fn rust_name(link_name: &str) -> String {
 /// A BAML-flavoured description of `ty`, with classes and enums by link
 /// name.
 pub fn describe_ty(db: &dyn baml_compiler2_mir::Db, ty: &NativeTy<'_>) -> String {
-    let classes = classes::ClassTable::new(db);
+    let classes = classes::ClassTable::new(db, None);
     ty.describe(&|decl| classes.link_name(decl))
 }
 
@@ -235,7 +251,7 @@ pub fn compile_many<'db>(
     let [first_root, ..] = roots else {
         return Err(Rejection::unsupported("no root function to compile"));
     };
-    let mut classes = classes::ClassTable::new(db);
+    let mut classes = classes::ClassTable::new(db, Some(program_root(db, *first_root)));
     let mut graph = CallGraph::new(db);
     for &root in roots {
         graph.visit(&Instance::plain(root), &mut classes)?;
@@ -262,40 +278,51 @@ pub fn compile_many<'db>(
         .collect();
     for candidate in &order {
         for (block, call) in &candidate.calls {
-            let function::CallKind::Direct {
+            let targets: Vec<&function::DirectCall<'db>> = match call {
+                function::CallKind::Direct(target) => vec![target],
+                function::CallKind::Virtual { arms, .. } => arms.iter().collect(),
+                function::CallKind::Builtin {
+                    builtin: function::Builtin::CompareVia { cmp, .. },
+                    ..
+                } => vec![cmp],
+                function::CallKind::Panic(_)
+                | function::CallKind::Builtin { .. }
+                | function::CallKind::Indirect { .. } => continue,
+            };
+            for function::DirectCall {
                 callee,
                 args,
                 result,
                 ..
-            } = call
-            else {
-                continue;
-            };
-            let callee = &order[index_of[&FnId::Declared(callee.clone())]];
-            let mismatch = |what: &str| {
-                Rejection::invalid(format!(
-                    "{}: call of `{}` in {block} {what}",
-                    candidate.link_name, callee.link_name
-                ))
-            };
-            if args.len() != callee.arity() {
-                return Err(mismatch("passes the wrong number of arguments"));
-            }
-            if args.iter().collect::<Vec<_>>() != callee.param_tys() {
-                return Err(mismatch("passes arguments of the wrong type"));
-            }
-            if result != callee.return_ty() {
-                return Err(mismatch("expects a result of the wrong type"));
+            } in targets
+            {
+                let callee = &order[index_of[&FnId::Declared(callee.clone())]];
+                let mismatch = |what: &str| {
+                    Rejection::invalid(format!(
+                        "{}: call of `{}` in {block} {what}",
+                        candidate.link_name, callee.link_name
+                    ))
+                };
+                if args.len() != callee.arity() {
+                    return Err(mismatch("passes the wrong number of arguments"));
+                }
+                if args.iter().collect::<Vec<_>>() != callee.param_tys() {
+                    return Err(mismatch("passes arguments of the wrong type"));
+                }
+                if result != callee.return_ty() {
+                    return Err(mismatch("expects a result of the wrong type"));
+                }
             }
         }
     }
 
     let names = rust_names(db, &order, &classes)?;
-    let (class_infos, enum_infos, union_infos) = classes.finish()?;
+    let (class_infos, enum_infos, union_infos, iface_infos) = classes.finish()?;
     let rust_source = print::render_module(
         &class_infos,
         &enum_infos,
         &union_infos,
+        &iface_infos,
         &order,
         &names,
         &classes,
@@ -358,6 +385,13 @@ pub fn compile_many<'db>(
             rust_name: info.ident.to_string(),
         })
         .collect();
+    let compiled_interfaces = iface_infos
+        .iter()
+        .map(|info| CompiledClass {
+            link_name: info.link_name.clone(),
+            rust_name: info.union.ident.to_string(),
+        })
+        .collect();
     Ok(NativeModule {
         rust_source,
         mir_dump,
@@ -365,6 +399,7 @@ pub fn compile_many<'db>(
         classes: compiled_classes,
         enums: compiled_enums,
         unions: compiled_unions,
+        interfaces: compiled_interfaces,
         roots: roots
             .iter()
             .map(|root| function_index[&FnId::Declared(Instance::plain(*root))])
@@ -462,12 +497,21 @@ impl<'db> CallGraph<'db> {
         let tree = candidate.flatten();
         let mut callees: Vec<Instance<'db>> = Vec::new();
         for member in &tree {
-            callees.extend(member.calls.iter().filter_map(|(_, call)| match call {
-                function::CallKind::Direct { callee, .. } => Some(callee.clone()),
-                function::CallKind::Panic(_)
-                | function::CallKind::Builtin { .. }
-                | function::CallKind::Indirect { .. } => None,
-            }));
+            for (_, call) in &member.calls {
+                match call {
+                    function::CallKind::Direct(target) => callees.push(target.callee.clone()),
+                    function::CallKind::Virtual { arms, .. } => {
+                        callees.extend(arms.iter().map(|arm| arm.callee.clone()));
+                    }
+                    function::CallKind::Builtin {
+                        builtin: function::Builtin::CompareVia { cmp, .. },
+                        ..
+                    } => callees.push(cmp.callee.clone()),
+                    function::CallKind::Panic(_)
+                    | function::CallKind::Builtin { .. }
+                    | function::CallKind::Indirect { .. } => {}
+                }
+            }
             callees.extend(member.function_values.keys().cloned());
         }
         for callee in callees {

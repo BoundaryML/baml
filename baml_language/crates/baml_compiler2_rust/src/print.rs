@@ -16,11 +16,11 @@ use syn::Lifetime;
 
 use crate::{
     Rejection,
-    classes::{ClassInfo, ClassTable, EnumInfo, UnionInfo},
+    classes::{ClassInfo, ClassTable, EnumInfo, IfaceInfo, UnionInfo},
     function::{
-        ArrayCallback, BigintOp, Builtin, CallKind, Candidate, CmpKind, FnId, LocalKind, MapOp,
-        SortKind, TagSource, binop_operand_tys, binop_ty, equality_common, is_dead_null_write,
-        is_omitted, unary_operand_ty,
+        ArrayCallback, BigintOp, Builtin, CallKind, Candidate, CmpKind, CompareOp, DirectCall,
+        FnId, LocalKind, MapOp, SortKind, TagSource, binop_operand_tys, binop_ty, equality_common,
+        is_dead_null_write, is_omitted, unary_operand_ty,
     },
     generics::Instance,
     structure::Stmt,
@@ -63,6 +63,7 @@ pub(crate) fn render_module<'db>(
     classes: &[&ClassInfo<'db>],
     enums: &[&EnumInfo<'db>],
     unions: &[&UnionInfo<'db>],
+    interfaces: &[&IfaceInfo<'db>],
     candidates: &[Candidate<'db>],
     names: &FxHashMap<FnId<'db>, Ident>,
     table: &ClassTable<'db>,
@@ -84,6 +85,9 @@ pub(crate) fn render_module<'db>(
     }
     for union in unions {
         items.extend(render_union(union, table));
+    }
+    for interface in interfaces {
+        items.extend(render_iface(interface, table));
     }
     for candidate in candidates {
         items.extend(Printer::new(candidate, names, table).function()?);
@@ -326,6 +330,75 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
         }
 
         #equals
+    }
+}
+
+/// The Rust enum for an interface: one variant per implementor, holding
+/// the implementor's value, shaped and rendered like a union's (`to_string`
+/// and JSON render the implementor the value holds, as the VM renders the
+/// concrete object). JSON decoding into an interface has no VM form and is
+/// rejected at the call; the impl exists so a struct with such a field
+/// derives, and errors if it is ever reached.
+fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStream {
+    let class_ident = |decl| table.ident(decl);
+    let doc = format!(" BAML interface `{}`.", info.link_name);
+    let name = &info.union.ident;
+    let variants = info
+        .union
+        .variants
+        .iter()
+        .zip(&info.union.members)
+        .map(|(variant, member)| {
+            let ty = member.to_tokens(&class_ident);
+            quote! { #variant(#ty), }
+        });
+    let copy = info
+        .union
+        .members
+        .iter()
+        .all(NativeTy::is_copy)
+        .then(|| quote! { Copy, });
+    let variant_names = &info.union.variants;
+    let expecting = format!(
+        "a value of the interface `{}` cannot be decoded from JSON",
+        info.link_name
+    );
+    quote! {
+        #[doc = #doc]
+        #[derive(Clone, #copy Debug)]
+        pub enum #name {
+            #(#variants)*
+        }
+
+        impl ToBaml for #name {
+            fn render(&self, out: &mut String, nested: bool) {
+                match self {
+                    #(Self::#variant_names(value) => value.render(out, nested),)*
+                }
+            }
+        }
+
+        impl bex_aot::Readable for #name {
+            fn readable(&self) -> String {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::Readable::readable(value),)*
+                }
+            }
+        }
+
+        impl bex_aot::serde::Serialize for #name {
+            fn serialize<S: bex_aot::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::serde::Serialize::serialize(value, serializer),)*
+                }
+            }
+        }
+
+        impl<'de> bex_aot::serde::Deserialize<'de> for #name {
+            fn deserialize<D: bex_aot::serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+                Err(<D::Error as bex_aot::serde::de::Error>::custom(#expecting))
+            }
+        }
     }
 }
 
@@ -718,11 +791,10 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let union = match tag {
                     Some((_, TagSource::Union(source))) => {
                         let ty = self.local_ty(source)?;
-                        let members = ty
-                            .union_members()
-                            .map(<[NativeTy<'db>]>::to_vec)
-                            .ok_or_else(|| Rejection::invalid("type tag of a non-union"))?;
-                        let info = self.classes.union_info(&members)?;
+                        if ty.union_members().is_none() {
+                            return Err(Rejection::invalid("type tag of a non-union"));
+                        }
+                        let info = self.classes.variants_of(&ty)?;
                         Some((source, info, matches!(ty, NativeTy::Option(_))))
                     }
                     _ => None,
@@ -899,13 +971,16 @@ impl<'a, 'db> Printer<'a, 'db> {
                 lines.push(self.call(block, call, &args[*ntypeargs..], destination)?);
             }
             Terminator::VirtualCall {
-                args, destination, ..
+                args,
+                ntypeargs,
+                destination,
+                ..
             } => {
                 let call = self
                     .candidate
                     .call(block)
                     .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
-                lines.push(self.call(block, call, args, destination)?);
+                lines.push(self.call(block, call, &args[*ntypeargs..], destination)?);
             }
             // The guard in front of a wildcard `catch` arm: a panic is not
             // for the wildcard and goes on to the next handler.
@@ -956,32 +1031,60 @@ impl<'a, 'db> Printer<'a, 'db> {
                     result,
                 )
             }
-            CallKind::Direct {
-                callee,
-                args: params,
+            CallKind::Direct(target) => {
+                let value = self.direct_call(target, args, None)?;
+                (TokenStream::new(), value, &target.result)
+            }
+            // The receiver, read as the interface, matched over its
+            // implementors: each arm the static call for that implementor
+            // with the variant's value as the receiver, its result lifted
+            // into the method's declared result.
+            CallKind::Virtual {
+                receiver,
+                receiver_ty,
+                arms,
                 result,
-                substituted,
             } => {
-                let callee = self
-                    .names
-                    .get(&FnId::Declared(callee.clone()))
-                    .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
-                if substituted.len() != args.len() {
-                    return Err(Rejection::invalid("call has fewer arguments than analyzed"));
+                let receiver_operand = arg(*receiver)?;
+                // The receiver's place, or, when the checker narrowed it
+                // (`x?.m()` after a null test), the value read as the
+                // interface.
+                let (prelude, receiver_expr) = if self.operand_ty(receiver_operand)? == *receiver_ty
+                {
+                    (TokenStream::new(), self.operand_borrowed(receiver_operand)?)
+                } else {
+                    let value = self.operand(receiver_operand, Some(receiver_ty))?;
+                    (quote! { let __receiver = #value; }, quote! { __receiver })
+                };
+                let info = self.classes.variants_of(receiver_ty)?;
+                let enum_name = info.ident.clone();
+                if arms.len() != info.variants.len() {
+                    return Err(Rejection::invalid(
+                        "virtual call arms do not match the implementors",
+                    ));
                 }
-                let args = args
-                    .iter()
-                    .zip(params)
-                    .zip(substituted)
-                    .map(|((arg, param), default)| {
-                        // An omitted argument is the callee's constant default.
-                        let substitute = default.clone().map(Operand::Constant);
-                        self.operand(substitute.as_ref().unwrap_or(arg), Some(param))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+                let mut match_arms = Vec::with_capacity(arms.len());
+                for ((variant, member), target) in info.variants.iter().zip(&info.members).zip(arms)
+                {
+                    let call = self.direct_call(
+                        target,
+                        args,
+                        Some((*receiver, member, receiver_ty, &receiver_expr)),
+                    )?;
+                    let store = coercion(&target.result, result).ok_or_else(|| {
+                        Rejection::invalid("virtual call arm result does not fit the method's")
+                    })?;
+                    let lifted = self.coerce(call, &target.result, result, store)?;
+                    match_arms.push(quote! { #enum_name::#variant(__value) => { #lifted } });
+                }
                 (
                     TokenStream::new(),
-                    self.fallible(&quote! { #callee(#(#args),*) }),
+                    quote! {{
+                        #prelude
+                        match &#receiver_expr {
+                            #(#match_arms)*
+                        }
+                    }},
                     result,
                 )
             }
@@ -1152,32 +1255,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                         };
                         let (less, equal, greater) = self.ordering_variants(*ordering)?;
                         let ordering = self.ty(result);
-                        let compared = match kind {
-                            CmpKind::Int | CmpKind::Bool => {
-                                let ty = match kind {
-                                    CmpKind::Int => NativeTy::Int,
-                                    _ => NativeTy::Bool,
-                                };
-                                let left = self.operand(arg(0)?, Some(&ty))?;
-                                let right = self.operand(arg(1)?, Some(&ty))?;
-                                quote! { Ord::cmp(&#left, &#right) }
-                            }
-                            CmpKind::Float => {
-                                let left = self.operand(arg(0)?, Some(&NativeTy::Float))?;
-                                let right = self.operand(arg(1)?, Some(&NativeTy::Float))?;
-                                quote! { float::cmp(#left, #right) }
-                            }
-                            CmpKind::Str => {
-                                let left = self.operand_ref_as(arg(0)?, &NativeTy::Str)?;
-                                let right = self.operand_ref_as(arg(1)?, &NativeTy::Str)?;
-                                quote! { string::cmp(#left, #right) }
-                            }
-                            CmpKind::Bigint => {
-                                let left = self.operand_ref_as(arg(0)?, &NativeTy::Bigint)?;
-                                let right = self.operand_ref_as(arg(1)?, &NativeTy::Bigint)?;
-                                quote! { bigint::cmp(#left, #right) }
-                            }
-                        };
+                        let compared = self.primitive_cmp(*kind, arg(0)?, arg(1)?)?;
                         (
                             TokenStream::new(),
                             quote! {
@@ -1188,6 +1266,34 @@ impl<'a, 'db> Printer<'a, 'db> {
                                 }
                             },
                         )
+                    }
+                    Builtin::CompareOp { op, kind } => {
+                        let compared = self.primitive_cmp(*kind, arg(0)?, arg(1)?)?;
+                        let relation = match op {
+                            CompareOp::Lt => quote! { is_lt },
+                            CompareOp::Le => quote! { is_le },
+                            CompareOp::Gt => quote! { is_gt },
+                            CompareOp::Ge => quote! { is_ge },
+                        };
+                        (TokenStream::new(), quote! { #compared.#relation() })
+                    }
+                    // The default body's test on the class's own `cmp`.
+                    Builtin::CompareVia { op, cmp } => {
+                        let NativeTy::Enum(ordering) = &cmp.result else {
+                            return Err(Rejection::invalid(
+                                "`cmp` result is not the ordering enum",
+                            ));
+                        };
+                        let (less, _, greater) = self.ordering_variants(*ordering)?;
+                        let ordering = self.ty(&cmp.result);
+                        let compared = self.direct_call(cmp, args, None)?;
+                        let value = match op {
+                            CompareOp::Lt => quote! { matches!(#compared, #ordering::#less) },
+                            CompareOp::Le => quote! { !matches!(#compared, #ordering::#greater) },
+                            CompareOp::Gt => quote! { matches!(#compared, #ordering::#greater) },
+                            CompareOp::Ge => quote! { !matches!(#compared, #ordering::#less) },
+                        };
+                        (TokenStream::new(), value)
                     }
                     Builtin::ArrayCallback { op, wanted } => {
                         self.array_callback(*op, wanted, arg(0)?, arg(1)?, args.get(2), result)?
@@ -1207,6 +1313,104 @@ impl<'a, 'db> Printer<'a, 'db> {
         Ok(quote! {
             #prelude
             #target = #value;
+        })
+    }
+
+    /// A direct call of `target` with `args` (the terminator's value
+    /// operands), as an expression yielding the callee's result. Inside a
+    /// virtual call's arm, `receiver` names the receiver argument's index,
+    /// the implementor the arm is for (whose value is `__value`), the
+    /// interface type (whose value is the given expression) and that
+    /// expression: the receiver parameter takes whichever of the two it is
+    /// typed as.
+    fn direct_call(
+        &self,
+        target: &DirectCall<'db>,
+        args: &[Operand<'db>],
+        receiver: Option<(usize, &NativeTy<'db>, &NativeTy<'db>, &TokenStream)>,
+    ) -> Result<TokenStream, Rejection> {
+        let DirectCall {
+            callee,
+            args: params,
+            result: _,
+            substituted,
+        } = target;
+        let callee = self
+            .names
+            .get(&FnId::Declared(callee.clone()))
+            .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
+        if substituted.len() != params.len() || args.len() > params.len() {
+            return Err(Rejection::invalid("call has fewer arguments than analyzed"));
+        }
+        // An interface method call passes what the interface declares; an
+        // implementation's further parameters take their defaults.
+        let omitted = Operand::Constant(Constant::OmittedArg);
+        let args = (0..params.len())
+            .map(|index| args.get(index).unwrap_or(&omitted))
+            .zip(params)
+            .zip(substituted)
+            .enumerate()
+            .map(|(index, ((arg, param), default))| {
+                if let Some((receiver_index, member, iface_ty, iface_value)) = receiver
+                    && index == receiver_index
+                {
+                    // The implementor's value, or, for the interface's own
+                    // default body, the interface value as it is.
+                    return if param == iface_ty {
+                        Ok(quote! { #iface_value.clone() })
+                    } else {
+                        let store = coercion(member, param).ok_or_else(|| {
+                            Rejection::invalid("virtual call receiver does not fit its arm")
+                        })?;
+                        let value = if member.is_copy() {
+                            quote! { *__value }
+                        } else {
+                            quote! { __value.clone() }
+                        };
+                        self.coerce(value, member, param, store)
+                    };
+                }
+                // An omitted argument is the callee's constant default.
+                let substitute = default.clone().map(Operand::Constant);
+                self.operand(substitute.as_ref().unwrap_or(arg), Some(param))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(self.fallible(&quote! { #callee(#(#args),*) }))
+    }
+
+    /// Two primitives compared by the language's order, as a
+    /// `std::cmp::Ordering` expression.
+    fn primitive_cmp(
+        &self,
+        kind: CmpKind,
+        left: &Operand<'db>,
+        right: &Operand<'db>,
+    ) -> Result<TokenStream, Rejection> {
+        Ok(match kind {
+            CmpKind::Int | CmpKind::Bool => {
+                let ty = match kind {
+                    CmpKind::Int => NativeTy::Int,
+                    _ => NativeTy::Bool,
+                };
+                let left = self.operand(left, Some(&ty))?;
+                let right = self.operand(right, Some(&ty))?;
+                quote! { Ord::cmp(&#left, &#right) }
+            }
+            CmpKind::Float => {
+                let left = self.operand(left, Some(&NativeTy::Float))?;
+                let right = self.operand(right, Some(&NativeTy::Float))?;
+                quote! { float::cmp(#left, #right) }
+            }
+            CmpKind::Str => {
+                let left = self.operand_ref_as(left, &NativeTy::Str)?;
+                let right = self.operand_ref_as(right, &NativeTy::Str)?;
+                quote! { string::cmp(#left, #right) }
+            }
+            CmpKind::Bigint => {
+                let left = self.operand_ref_as(left, &NativeTy::Bigint)?;
+                let right = self.operand_ref_as(right, &NativeTy::Bigint)?;
+                quote! { bigint::cmp(#left, #right) }
+            }
         })
     }
 
@@ -1468,23 +1672,62 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
         };
         let union = |ty: &NativeTy<'db>| -> Result<&UnionInfo<'db>, Rejection> {
-            let members = ty
-                .union_members()
-                .ok_or_else(|| Rejection::invalid("union coercion on a non-union"))?;
-            self.classes.union_info(members)
+            self.classes.variants_of(ty)
         };
-        // `U::v(expr)` for the variant of `target` holding `member`.
+        // `U::v(expr)` for the variant of `target` holding `member`: the
+        // member's own, or, through an interface variant, that interface's
+        // variant for the member (`Union::Named(Iface::Dog(expr))`).
         let inject = |expr: TokenStream, member: &NativeTy<'db>, target: &NativeTy<'db>| {
             let info = union(target)?;
             let name = &info.ident;
-            let variant = info.variant_of(member).ok_or_else(|| {
-                Rejection::invalid(format!(
-                    "`{}` is not a member of `{}`",
-                    self.describe(member),
-                    info.described
-                ))
-            })?;
-            Ok::<_, Rejection>(quote! { #name::#variant(#expr) })
+            if let Some(variant) = info.variant_of(member) {
+                return Ok::<_, Rejection>(quote! { #name::#variant(#expr) });
+            }
+            let via = info
+                .members
+                .iter()
+                .zip(&info.variants)
+                .find(|(candidate, _)| {
+                    matches!(candidate, NativeTy::Interface(instance) if instance.implementors.contains(member))
+                })
+                .ok_or_else(|| {
+                    Rejection::invalid(format!(
+                        "`{}` is not a member of `{}`",
+                        self.describe(member),
+                        info.described
+                    ))
+                })?;
+            let (iface_ty, variant) = via;
+            let inner = union(iface_ty)?;
+            let inner_name = &inner.ident;
+            let inner_variant = inner
+                .variant_of(member)
+                .ok_or_else(|| Rejection::invalid("implementor without a variant"))?;
+            Ok(quote! { #name::#variant(#inner_name::#inner_variant(#expr)) })
+        };
+        // The pattern of `target`'s variant holding `member`, binding the
+        // value as `value`; nested through an interface variant.
+        let narrow_pattern = |member: &NativeTy<'db>, target: &NativeTy<'db>| {
+            let info = union(target)?;
+            let name = &info.ident;
+            if let Some(variant) = info.variant_of(member) {
+                return Ok::<_, Rejection>(quote! { #name::#variant(value) });
+            }
+            let via = info
+                .members
+                .iter()
+                .zip(&info.variants)
+                .find(|(candidate, _)| {
+                    matches!(candidate, NativeTy::Interface(instance) if instance.implementors.contains(member))
+                })
+                .ok_or_else(|| Rejection::invalid("narrowed to a type that is not a member"))?;
+            let (iface_ty, variant) = via;
+            let inner = union(iface_ty)?;
+            let inner_name = &inner.ident;
+            let inner_variant = inner
+                .variant_of(member)
+                .ok_or_else(|| Rejection::invalid("implementor without a variant"))?;
+            Ok(quote! { #name::#variant(#inner_name::#inner_variant(value)) })
         };
         // Re-tag every variant of `from` that `to` has; the others raise.
         let retag = |expr: TokenStream, from: &NativeTy<'db>, to: &NativeTy<'db>| {
@@ -1528,29 +1771,30 @@ impl<'a, 'db> Printer<'a, 'db> {
                 quote! { #expr.map(|value| #widened) }
             }
             Coercion::Narrow => {
-                let info = union(actual)?;
-                let name = &info.ident;
-                let variant = info
-                    .variant_of(expected)
-                    .ok_or_else(|| Rejection::invalid("narrowed to a type that is not a member"))?;
+                let pattern = narrow_pattern(expected, actual)?;
                 quote! {
                     match #expr {
-                        #name::#variant(value) => value,
+                        #pattern => value,
                         _ => { #unreachable }
                     }
                 }
             }
             Coercion::NarrowUnion => retag(expr, actual, expected)?,
             Coercion::UnwrapNarrow => {
-                let info = union(actual)?;
-                let name = &info.ident;
-                let variant = info
-                    .variant_of(expected)
-                    .ok_or_else(|| Rejection::invalid("narrowed to a type that is not a member"))?;
+                let pattern = narrow_pattern(expected, &inner(actual))?;
                 quote! {
                     match #expr {
-                        Some(#name::#variant(value)) => value,
+                        Some(#pattern) => value,
                         _ => { #unreachable }
+                    }
+                }
+            }
+            Coercion::UnwrapWiden => {
+                let widened = retag(quote! { value }, &inner(actual), expected)?;
+                quote! {
+                    match #expr {
+                        Some(value) => #widened,
+                        None => { #unreachable }
                     }
                 }
             }
@@ -1602,7 +1846,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             });
         }
         let info = match ty.union_members() {
-            Some(members) => Some(self.classes.union_info(members)?),
+            Some(_) => Some(self.classes.variants_of(ty)?),
             None => None,
         };
         // The pattern for one variant, binding its value as `value` when
@@ -1807,8 +2051,32 @@ impl<'a, 'db> Printer<'a, 'db> {
                     quote! { #ident = cell::fresh(); }
                 }))
             }
-            other @ StatementKind::VirtualFieldStore { .. } => {
-                Err(Rejection::unsupported(format!("statement {other:?}")))
+            // The field by name of the receiver's class, or of each
+            // implementor's; the value is computed first, as for any field
+            // store.
+            StatementKind::VirtualFieldStore {
+                receiver,
+                field,
+                value,
+                ..
+            } => {
+                let receiver_ty = self.operand_ty(receiver)?;
+                let links = self.field_links(block, index)?;
+                let field_ty = self.virtual_field_ty(&receiver_ty, links)?;
+                let value = self.operand(value, Some(&field_ty))?;
+                let store = self.virtual_field_access(
+                    &receiver_ty,
+                    receiver,
+                    field,
+                    links,
+                    |class_value, field_ident| {
+                        quote! { #class_value.borrow_mut().#field_ident = value; }
+                    },
+                )?;
+                Ok(Some(quote! {{
+                    let value = #value;
+                    #store
+                }}))
             }
         }
     }
@@ -2029,6 +2297,35 @@ impl<'a, 'db> Printer<'a, 'db> {
                     ty,
                 )
             }
+            // An interface field read: the field by name of the receiver's
+            // class, or of each implementor's.
+            Rvalue::VirtualFieldAccess {
+                receiver, field, ..
+            } => {
+                let TestSite::Statement(block, index) = site else {
+                    return Err(Rejection::invalid(
+                        "interface field read outside a statement",
+                    ));
+                };
+                let receiver_ty = self.operand_ty(receiver)?;
+                let links = self.field_links(block, index)?;
+                let field_ty = self.virtual_field_ty(&receiver_ty, links)?;
+                let clone = if field_ty.is_copy() {
+                    TokenStream::new()
+                } else {
+                    quote! { .clone() }
+                };
+                let read = self.virtual_field_access(
+                    &receiver_ty,
+                    receiver,
+                    field,
+                    links,
+                    |class_value, field_ident| {
+                        quote! { #class_value.borrow().#field_ident #clone }
+                    },
+                )?;
+                (read, field_ty)
+            }
             // A generic function value whose type arguments mention the
             // frame: the instance the analyzer recorded for this statement.
             Rvalue::MakeGenericFunction {
@@ -2053,6 +2350,96 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
             other => return Err(Rejection::unsupported(format!("rvalue {other:?}"))),
         })
+    }
+
+    /// The struct fields the interface field at statement `index` of
+    /// `block` reaches, one per class the receiver may hold.
+    fn field_links(&self, block: BlockId, index: usize) -> Result<&'a [Ident], Rejection> {
+        self.candidate
+            .field_links
+            .get(&(block, index))
+            .map(Vec::as_slice)
+            .ok_or_else(|| Rejection::invalid("interface field access was not analyzed"))
+    }
+
+    /// The type of the interface field linked as `links` on a receiver of
+    /// `receiver_ty`: its type in the receiver's class, or in the first
+    /// class the receiver may hold (the analyzer checked they agree).
+    fn virtual_field_ty(
+        &self,
+        receiver_ty: &NativeTy<'db>,
+        links: &[Ident],
+    ) -> Result<NativeTy<'db>, Rejection> {
+        let class = match receiver_ty {
+            NativeTy::Class(class) => class.clone(),
+            NativeTy::Option(inner) => return self.virtual_field_ty(inner, links),
+            other => match other.union_members().and_then(<[NativeTy<'db>]>::first) {
+                Some(NativeTy::Class(class)) => class.clone(),
+                _ => {
+                    return Err(Rejection::invalid(format!(
+                        "interface field on a `{}`",
+                        self.describe(other)
+                    )));
+                }
+            },
+        };
+        let linked = links
+            .first()
+            .ok_or_else(|| Rejection::invalid("interface field without a link"))?;
+        let info = self.classes.info(&class)?;
+        info.fields
+            .iter()
+            .find(|candidate| candidate.ident == *linked)
+            .map(|candidate| candidate.ty.clone())
+            .ok_or_else(|| Rejection::invalid(format!("no field `{linked}`")))
+    }
+
+    /// `access(class_value, field)` on the receiver's class value and the
+    /// struct field linked to the interface field there: directly for a
+    /// class receiver, in a `match` arm per variant for an interface or
+    /// union one (the receiver read as that enum).
+    fn virtual_field_access(
+        &self,
+        receiver_ty: &NativeTy<'db>,
+        receiver: &Operand<'db>,
+        field: &baml_type::Name,
+        links: &[Ident],
+        access: impl Fn(&TokenStream, &Ident) -> TokenStream,
+    ) -> Result<TokenStream, Rejection> {
+        let iface_ty = match receiver_ty {
+            NativeTy::Option(inner) => (**inner).clone(),
+            other => other.clone(),
+        };
+        if iface_ty.union_members().is_none() {
+            let value = self.operand_borrowed(receiver)?;
+            let linked = links
+                .first()
+                .ok_or_else(|| Rejection::invalid("interface field without a link"))?;
+            return Ok(access(&value, linked));
+        }
+        let info = self.classes.variants_of(&iface_ty)?;
+        if info.variants.len() != links.len() {
+            return Err(Rejection::invalid(format!(
+                "interface field `{field}` links do not match the receiver's variants"
+            )));
+        }
+        let enum_name = &info.ident;
+        let (prelude, receiver_expr) = if self.operand_ty(receiver)? == iface_ty {
+            (TokenStream::new(), self.operand_borrowed(receiver)?)
+        } else {
+            let value = self.operand(receiver, Some(&iface_ty))?;
+            (quote! { let __receiver = #value; }, quote! { __receiver })
+        };
+        let arms = info.variants.iter().zip(links).map(|(variant, linked)| {
+            let body = access(&quote! { __value }, linked);
+            quote! { #enum_name::#variant(__value) => { #body } }
+        });
+        Ok(quote! {{
+            #prelude
+            match &#receiver_expr {
+                #(#arms)*
+            }
+        }})
     }
 
     /// The function item of `instance` behind a counted pointer, as a
@@ -2261,6 +2648,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             | NativeTy::Map(..)
             | NativeTy::Class(_)
             | NativeTy::Union(_)
+            | NativeTy::Interface(_)
             | NativeTy::Fn(..)
             | NativeTy::ArrayIter(_)
             | NativeTy::Thrown => {

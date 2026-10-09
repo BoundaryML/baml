@@ -40,6 +40,7 @@ const FIXTURES: &[&str] = &[
     "generic_classes",
     "generics",
     "higher_order",
+    "interfaces",
     "lambdas",
     "literal_unions",
     "loops",
@@ -122,6 +123,7 @@ generated_module!(captures, "native/generated/captures.rs");
 generated_module!(higher_order, "native/generated/higher_order.rs");
 generated_module!(generics, "native/generated/generics.rs");
 generated_module!(generic_classes, "native/generated/generic_classes.rs");
+generated_module!(interfaces, "native/generated/interfaces.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -1241,4 +1243,44 @@ async fn generic_classes_match_vm() {
     let b = user_make_box__int(int(2)).unwrap();
     user_Box_set__int(b.clone(), int(7)).unwrap();
     assert_eq!(user_Box_get__int(b).unwrap(), int(7));
+}
+
+/// Interfaces: static calls on concrete receivers, a match over the
+/// implementors on interface values, default bodies, interface fields,
+/// primitive implementors, narrowing, rendering and JSON, all compared
+/// with the VM's run-time resolution.
+#[tokio::test]
+async fn interfaces_match_vm() {
+    use interfaces::*;
+    let o = Oracle::new("interfaces");
+    for n in [-3, 0, 1, 2, 5, 40] {
+        check!(o, static_calls(n) => user_static_calls(int(n)));
+        check!(o, shapes(n) => user_shapes(int(n)));
+        check!(o, narrowing(n) => user_narrowing(int(n)));
+        check!(o, switch_arms(n) => user_switch_arms(int(n)));
+        check!(o, bounded_calls(n) => user_bounded_calls(int(n)));
+        check!(o, fields(n) => user_fields(int(n)));
+        check!(o, nullable(n) => user_nullable(int(n)));
+        check!(o, renders(n) => user_renders(int(n)));
+        check!(o, in_union(n) => user_in_union(int(n)));
+        check!(o, in_field(n) => user_in_field(int(n)));
+        check!(o, union_receivers(n) => user_union_receivers(int(n)));
+    }
+    for (n, s) in [(0, ""), (3, "abc"), (-2, "x")] {
+        check!(o, primitives(n, s) => user_primitives(int(n), text(s)));
+    }
+    for (a, b) in [(1, 2), (2, 2), (3, -1), (0, 0), (MAX, MIN)] {
+        check!(o, comparisons(a, b) => user_comparisons(int(a), int(b)));
+    }
+    // An interface value is its implementor's value in a variant; the
+    // method on it is the implementor's.
+    let shape = user_Shape::user_Square(bex_aot::handle::shared(user_Square { side: int(3) }));
+    assert_eq!(
+        user_total(bex_aot::array::new::<user_Shape>(vec![
+            shape.clone(),
+            shape
+        ]))
+        .unwrap(),
+        int(18)
+    );
 }

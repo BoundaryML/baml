@@ -13,19 +13,22 @@
 //! mentions is registered too ([`UnionInfo`]), so its generated enum is
 //! emitted once.
 
+use baml_base::SourceRoot;
+use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
-    extern_loc::{ClassRef, EnumRef},
+    extern_loc::{ClassRef, EnumRef, InterfaceRef},
+    impls::{impl_facts, impls_naming_interface, structural_interface},
     layout,
     package_interface::reduce_ground_projections,
 };
 use baml_compiler2_mir::{RealizedTy, RuntimeTy, class_link_name, enum_link_name};
-use baml_type::{DeclName, Ty, unify::substitute_ty};
+use baml_type::{DeclName, Name, Ty, unify::substitute_ty};
 use proc_macro2::{Ident, Span};
 use rustc_hash::FxHashMap;
 
 use crate::{
     Rejection, rust_name,
-    types::{ClassInst, NativeTy, Resolver, TypeDecl, Unsupported, from_runtime_ty},
+    types::{ClassInst, IfaceInst, NativeTy, Resolver, TypeDecl, Unsupported, from_runtime_ty},
 };
 
 /// How many associated type projections may reduce through one another
@@ -136,6 +139,27 @@ impl<'db> UnionInfo<'db> {
     }
 }
 
+/// An interface admitted to the subset: a generated enum with one variant
+/// per implementor, shaped like a union's.
+#[derive(Debug, Clone)]
+pub(crate) struct IfaceInfo<'db> {
+    /// The BAML link name, `user.Named`, with type arguments when the
+    /// interface has them.
+    pub link_name: String,
+    /// The enum: ident `user_Named`, the implementors as members, their
+    /// mangled names as variants.
+    pub union: UnionInfo<'db>,
+}
+
+/// The key of an interface's registry entry: the interface at its
+/// arguments, without the implementor list it is about to compute.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct IfaceKey<'db> {
+    iface: InterfaceRef<'db>,
+    args: Vec<RealizedTy>,
+    assoc: Vec<(Name, RealizedTy)>,
+}
+
 enum State<'db> {
     /// The class's fields are being mapped; a reference back to it from a
     /// field is fine (it is a `Shared` handle).
@@ -147,17 +171,29 @@ enum State<'db> {
 /// order.
 pub(crate) struct ClassTable<'db> {
     db: &'db dyn baml_compiler2_mir::Db,
+    /// The package the program is compiled from: the implementors of an
+    /// interface are the `implements` blocks it can see.
+    viewer: Option<SourceRoot>,
     states: FxHashMap<ClassInst<'db>, State<'db>>,
     order: Vec<ClassInst<'db>>,
     enums: FxHashMap<EnumRef<'db>, Result<EnumInfo<'db>, String>>,
     enum_order: Vec<EnumRef<'db>>,
     /// Every union a mapped type mentions, in first-seen order.
     unions: Vec<UnionInfo<'db>>,
+    /// Every interface a mapped type mentions, with its implementors, in
+    /// first-seen order; `None` while the implementors are being checked.
+    ifaces: FxHashMap<IfaceKey<'db>, Option<Result<IfaceInfo<'db>, String>>>,
+    iface_order: Vec<IfaceKey<'db>>,
 }
 
 impl<'db> Resolver<'db> for ClassTable<'db> {
     fn class(&mut self, head: &DeclName, args: &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported> {
         let Some(class) = layout::class_ref_of(self.db, head) else {
+            // An interface's default method reads `self` as the interface
+            // spelled like a class: the interface it is.
+            if layout::interface_ref_of(self.db, head).is_some() {
+                return self.interface(head, args, &[]);
+            }
             return Err(Unsupported("class without a declaration".into()));
         };
         let params = layout::class_generic_params(self.db, class);
@@ -192,17 +228,362 @@ impl<'db> Resolver<'db> for ClassTable<'db> {
         self.check_enum(enum_ref)?;
         Ok(NativeTy::Enum(enum_ref))
     }
+
+    fn interface(
+        &mut self,
+        head: &DeclName,
+        args: &[RuntimeTy],
+        assoc: &[(Name, RuntimeTy)],
+    ) -> Result<NativeTy<'db>, Unsupported> {
+        let Some(iface) = layout::interface_ref_of(self.db, head) else {
+            return Err(Unsupported("interface without a declaration".into()));
+        };
+        let realize = |ty: &RuntimeTy| {
+            RealizedTy::try_from(ty).map_err(|error| {
+                Unsupported(match error.variant {
+                    "TypeVar" => "type variable (an interface type argument)".to_string(),
+                    _ => "associated type projection (an interface type argument)".to_string(),
+                })
+            })
+        };
+        let key = IfaceKey {
+            iface,
+            args: args.iter().map(realize).collect::<Result<_, _>>()?,
+            assoc: assoc
+                .iter()
+                .map(|(name, ty)| Ok((name.clone(), realize(ty)?)))
+                .collect::<Result<_, Unsupported>>()?,
+        };
+        self.check_iface(&key)
+    }
 }
 
 impl<'db> ClassTable<'db> {
-    pub(crate) fn new(db: &'db dyn baml_compiler2_mir::Db) -> Self {
+    /// A table for the program compiled from `viewer`'s package; without a
+    /// viewer no interface is admitted (its implementors are the blocks a
+    /// package can see).
+    pub(crate) fn new(db: &'db dyn baml_compiler2_mir::Db, viewer: Option<SourceRoot>) -> Self {
         Self {
             db,
+            viewer,
             states: FxHashMap::default(),
             order: Vec::new(),
             enums: FxHashMap::default(),
             enum_order: Vec::new(),
             unions: Vec::new(),
+            ifaces: FxHashMap::default(),
+            iface_order: Vec::new(),
+        }
+    }
+
+    /// Admit the interface `key`, enumerating its implementors once: every
+    /// `implements` block for it the program can see, each for a closed
+    /// type (a class instance, an enum or a primitive). A generic
+    /// implementation (`implement<T> I for Box<T>`, a blanket impl) makes
+    /// the interface open; so does a stdlib interface every type satisfies
+    /// (`baml.ToString`), or one declared by a mounted package. The
+    /// implementor classes are checked after the entry is recorded, so a
+    /// class whose field names the interface finds it.
+    fn check_iface(&mut self, key: &IfaceKey<'db>) -> Result<NativeTy<'db>, Unsupported> {
+        let instance_of = |info: &IfaceInfo<'db>| {
+            NativeTy::Interface(IfaceInst {
+                iface: key.iface,
+                args: key.args.clone(),
+                assoc: key.assoc.clone(),
+                implementors: info.union.members.clone(),
+            })
+        };
+        match self.ifaces.get(key) {
+            Some(Some(Ok(info))) => return Ok(instance_of(info)),
+            Some(Some(Err(reason))) => return Err(Unsupported(reason.clone())),
+            // Re-entered while its implementors are being checked: the
+            // entry is the one being built, which the caller's class will
+            // find complete once that check returns.
+            Some(None) => {
+                return Err(Unsupported(format!(
+                    "interface `{}` reached while its implementors are being admitted",
+                    self.iface_link_name(key)
+                )));
+            }
+            None => {}
+        }
+        let result = self.describe_iface(key);
+        let outcome = match &result {
+            Ok(info) => Ok(instance_of(info)),
+            Err(reason) => Err(Unsupported(reason.clone())),
+        };
+        self.ifaces.insert(key.clone(), Some(result));
+        self.iface_order.push(key.clone());
+        // Now the implementor classes, which may mention the interface.
+        if let Ok(ty) = &outcome
+            && let NativeTy::Interface(instance) = ty
+        {
+            for implementor in &instance.implementors {
+                if let NativeTy::Class(class) = implementor
+                    && let Err(Unsupported(reason)) = self.check(class)
+                {
+                    let reason = format!(
+                        "interface `{}` implementor `{}`: {reason}",
+                        self.iface_link_name(key),
+                        self.instance_link_name(class)
+                    );
+                    self.ifaces.insert(key.clone(), Some(Err(reason.clone())));
+                    return Err(Unsupported(reason));
+                }
+            }
+        }
+        outcome
+    }
+
+    /// The link name of an interface at its arguments, `user.Named`.
+    fn iface_link_name(&self, key: &IfaceKey<'db>) -> String {
+        let link_name = baml_compiler2_mir::definition_link_name(
+            self.db,
+            match key.iface {
+                DeclRef::Source(loc) => {
+                    baml_compiler2_hir::contributions::Definition::Interface(loc)
+                }
+                DeclRef::External(_) => {
+                    return self.spell(&RuntimeTy::Interface(
+                        layout::interface_head(self.db, key.iface),
+                        key.args.iter().cloned().map(RuntimeTy::from).collect(),
+                        key.assoc
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), RuntimeTy::from(ty.clone())))
+                            .collect(),
+                    ));
+                }
+            },
+        );
+        if key.args.is_empty() {
+            return link_name;
+        }
+        let args = key
+            .args
+            .iter()
+            .map(|arg| self.spell(&RuntimeTy::from(arg.clone())))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{link_name}<{args}>")
+    }
+
+    fn describe_iface(&mut self, key: &IfaceKey<'db>) -> Result<IfaceInfo<'db>, String> {
+        let link_name = self.iface_link_name(key);
+        let head = layout::interface_head(self.db, key.iface);
+        if structural_interface(self.db, &head).is_some() {
+            return Err(format!(
+                "interface `{link_name}` (every type implements it, so its implementors are not a closed set)"
+            ));
+        }
+        let DeclRef::Source(iface_loc) = key.iface else {
+            return Err(format!(
+                "interface `{link_name}` declared by a mounted package (its implementors are not in the program)"
+            ));
+        };
+        let Some(viewer) = self.viewer else {
+            return Err(format!(
+                "interface `{link_name}` (no program to enumerate its implementors in)"
+            ));
+        };
+        if !key.assoc.is_empty() {
+            return Err(format!("interface `{link_name}` with associated types"));
+        }
+        let wanted_args: Vec<Ty> = key
+            .args
+            .iter()
+            .map(|arg| Ty::from(arg.as_runtime_ty()))
+            .collect();
+        let mut members: Vec<NativeTy<'db>> = Vec::new();
+        for &block in impls_naming_interface(self.db, viewer, iface_loc) {
+            let Some(facts) = impl_facts(self.db, block).resolved() else {
+                continue;
+            };
+            let implemented = facts.interface.to_plain();
+            // Another instantiation of a generic interface: not this one's.
+            if implemented.generics.len() != wanted_args.len()
+                || implemented
+                    .generics
+                    .iter()
+                    .zip(&wanted_args)
+                    .any(|(have, want)| have != want)
+            {
+                if facts.generic_params.is_empty() {
+                    continue;
+                }
+                // A generic block may match this instantiation; its
+                // implementors are not a closed set either way.
+                return Err(format!(
+                    "interface `{link_name}` has a generic implementation (`implement<..> .. for ..`)"
+                ));
+            }
+            if !facts.generic_params.is_empty() {
+                return Err(format!(
+                    "interface `{link_name}` has a generic implementation (`implement<..> .. for ..`)"
+                ));
+            }
+            let for_ty = facts.for_ty_pattern.to_plain();
+            let runtime_ty = RuntimeTy::try_from(&for_ty).map_err(|_| {
+                format!(
+                    "interface `{link_name}` implementor `{}` has a compile-time-only type",
+                    self.spell_plain(&for_ty)
+                )
+            })?;
+            let member = self.shallow(&runtime_ty).map_err(|Unsupported(reason)| {
+                format!(
+                    "interface `{link_name}` implementor `{}`: {reason}",
+                    self.spell(&runtime_ty)
+                )
+            })?;
+            if !members.contains(&member) {
+                members.push(member);
+            }
+        }
+        if members.is_empty() {
+            return Err(format!(
+                "interface `{link_name}` has no implementor in the program"
+            ));
+        }
+        let ident = rust_name(&link_name.replace(['<', '>', ' ', ','], "_"));
+        let mut union = self
+            .describe_union(members)
+            .map_err(|Unsupported(reason)| reason)?;
+        union.ident = Ident::new(&ident, Span::call_site());
+        union.described.clone_from(&link_name);
+        Ok(IfaceInfo { link_name, union })
+    }
+
+    /// The native type an implementor's for-type names, without checking
+    /// the class it names (its fields are checked once the interface's
+    /// entry is recorded): a class instance, an enum or a primitive.
+    fn shallow(&mut self, ty: &RuntimeTy) -> Result<NativeTy<'db>, Unsupported> {
+        match ty {
+            RuntimeTy::Class(head, args) => {
+                let Some(class) = layout::class_ref_of(self.db, head) else {
+                    return Err(Unsupported("class without a declaration".into()));
+                };
+                let mut realized = Vec::with_capacity(args.len());
+                for arg in args {
+                    realized.push(RealizedTy::try_from(arg).map_err(|_| {
+                        Unsupported("type variable (a class type argument)".into())
+                    })?);
+                }
+                Ok(NativeTy::Class(ClassInst::new(class, realized)))
+            }
+            RuntimeTy::Enum(head) => self.enum_(head),
+            RuntimeTy::Int
+            | RuntimeTy::Bool
+            | RuntimeTy::Float
+            | RuntimeTy::String
+            | RuntimeTy::Bigint
+            | RuntimeTy::Null => self.map(ty),
+            _ => Err(Unsupported(format!(
+                "implementor type `{}` (only a class, an enum or a primitive may implement an admitted interface)",
+                self.spell(ty)
+            ))),
+        }
+    }
+
+    /// The BAML spelling of a compiler type, for messages.
+    fn spell_plain(&self, ty: &Ty) -> String {
+        let spelling = baml_compiler2_hir::package::spelling(self.db);
+        ty.map_heads(&mut |decl| spelling.wire(decl)).to_string()
+    }
+
+    /// The admitted interface `instance`'s enum. Every interface a mapped
+    /// type mentions is admitted, so a miss is a bug in the caller.
+    pub(crate) fn iface_info(
+        &self,
+        instance: &IfaceInst<'db>,
+    ) -> Result<&IfaceInfo<'db>, Rejection> {
+        let key = IfaceKey {
+            iface: instance.iface,
+            args: instance.args.clone(),
+            assoc: instance.assoc.clone(),
+        };
+        match self.ifaces.get(&key) {
+            Some(Some(Ok(info))) => Ok(info),
+            Some(Some(Err(reason))) => Err(Rejection::unsupported(reason.clone())),
+            Some(None) | None => Err(Rejection::invalid(format!(
+                "interface `{}` was used before it was admitted",
+                self.iface_link_name(&key)
+            ))),
+        }
+    }
+
+    /// The struct field the interface field `field` of `iface` is linked
+    /// to in the implementor `class`: the field the block names
+    /// (`implements I { name as my_name }`), else the same-named field, as
+    /// the VM's `field_links` map it. `None` when the class has no such
+    /// field or no explicit implementation.
+    pub(crate) fn field_link(
+        &self,
+        iface: &IfaceInst<'db>,
+        class: &ClassInst<'db>,
+        field: &Name,
+    ) -> Option<Ident> {
+        use baml_compiler2_hir::item_data::impl_block_data;
+        use baml_compiler2_hir_ty::impls::{ResolvedImplementation, resolve_implementation};
+        use baml_type::interned::{InferInterface, Ty as InternedTy};
+        let concrete = Ty::Class(
+            layout::class_head(self.db, class.class),
+            class
+                .args
+                .iter()
+                .map(|arg| Ty::from(arg.as_runtime_ty()))
+                .collect(),
+        );
+        let interface = InferInterface::new(
+            layout::interface_head(self.db, iface.iface),
+            iface
+                .args
+                .iter()
+                .map(|arg| InternedTy::from_plain(&Ty::from(arg.as_runtime_ty())))
+                .collect(),
+            iface
+                .assoc
+                .iter()
+                .map(|(name, ty)| {
+                    (
+                        name.clone(),
+                        InternedTy::from_plain(&Ty::from(ty.as_runtime_ty())),
+                    )
+                })
+                .collect(),
+        );
+        let Some(ResolvedImplementation::Explicit(implementation)) =
+            resolve_implementation(self.db, &InternedTy::from_plain(&concrete), &interface)
+        else {
+            return None;
+        };
+        let DeclRef::Source(block) = implementation.block() else {
+            return None;
+        };
+        let linked = impl_block_data(self.db, block)
+            .field_links
+            .iter()
+            .find(|link| link.interface_field == *field)
+            .map_or_else(|| field.clone(), |link| link.class_field.clone());
+        let info = self.info(class).ok()?;
+        info.fields
+            .iter()
+            .find(|candidate| candidate.name == linked.as_str())
+            .map(|candidate| candidate.ident.clone())
+    }
+
+    /// The generated enum a union or an interface value is: its variants
+    /// and the member each holds. `ty` may be nullable.
+    pub(crate) fn variants_of(&self, ty: &NativeTy<'db>) -> Result<&UnionInfo<'db>, Rejection> {
+        let inner = match ty {
+            NativeTy::Option(inner) => &**inner,
+            other => other,
+        };
+        match inner {
+            NativeTy::Union(members) => self.union_info(members),
+            NativeTy::Interface(instance) => Ok(&self.iface_info(instance)?.union),
+            other => Err(Rejection::invalid(format!(
+                "`{}` is neither a union nor an interface",
+                other.describe(&|decl| self.link_name(decl))
+            ))),
         }
     }
 
@@ -564,6 +945,13 @@ impl<'db> ClassTable<'db> {
                     Span::call_site(),
                 ),
             },
+            TypeDecl::Interface(instance) => match self.iface_info(&instance) {
+                Ok(info) => info.union.ident.clone(),
+                Err(_) => Ident::new(
+                    &rust_name(&self.link_name(TypeDecl::Interface(instance.clone()))),
+                    Span::call_site(),
+                ),
+            },
         }
     }
 
@@ -583,6 +971,9 @@ impl<'db> ClassTable<'db> {
                     .collect(),
             ),
             TypeDecl::Enum(enum_ref) => baml_type::Ty::Enum(layout::enum_head(self.db, enum_ref)),
+            // An interface value's explicit implementations are its
+            // implementors' (`NativeTy::classes` lists them).
+            TypeDecl::Interface(_) => return false,
         };
         let interface = InferInterface::new(interface.clone(), Box::new([]), Box::new([]));
         matches!(
@@ -596,11 +987,16 @@ impl<'db> ClassTable<'db> {
         match decl {
             TypeDecl::Class(instance) => self.instance_link_name(&instance),
             TypeDecl::Enum(enum_ref) => enum_link_name(self.db, enum_ref),
+            TypeDecl::Interface(instance) => self.iface_link_name(&IfaceKey {
+                iface: instance.iface,
+                args: instance.args,
+                assoc: instance.assoc,
+            }),
         }
     }
 
-    /// Every admitted class, enum and union, each in first-seen order, once
-    /// no two of them need the same item name.
+    /// Every admitted class, enum, union and interface, each in first-seen
+    /// order, once no two of them need the same item name.
     #[allow(clippy::type_complexity)]
     pub(crate) fn finish(
         &self,
@@ -609,6 +1005,7 @@ impl<'db> ClassTable<'db> {
             Vec<&ClassInfo<'db>>,
             Vec<&EnumInfo<'db>>,
             Vec<&UnionInfo<'db>>,
+            Vec<&IfaceInfo<'db>>,
         ),
         Rejection,
     > {
@@ -645,7 +1042,29 @@ impl<'db> ClassTable<'db> {
             }
             unions.push(info);
         }
-        Ok((classes, enums, unions))
+        let mut ifaces = Vec::with_capacity(self.iface_order.len());
+        for key in &self.iface_order {
+            let info = match self.ifaces.get(key) {
+                Some(Some(Ok(info))) => info,
+                // Probed by a local's declared type and refined away (the
+                // for-in iterator); no admitted type names it.
+                Some(Some(Err(_))) => continue,
+                Some(None) | None => {
+                    return Err(Rejection::invalid(format!(
+                        "interface `{}` was never admitted",
+                        self.iface_link_name(key)
+                    )));
+                }
+            };
+            if let Some(other) = by_ident.insert(info.union.ident.to_string(), &info.link_name) {
+                return Err(Rejection::unsupported(format!(
+                    "interface `{}` and `{other}` both need the Rust name `{}`",
+                    info.link_name, info.union.ident
+                )));
+            }
+            ifaces.push(info);
+        }
+        Ok((classes, enums, unions, ifaces))
     }
 }
 
