@@ -104,6 +104,18 @@ pub fn to_source_code(
     to_source_code_internal(pool, baml_bytecode, None, naming_convention)
 }
 
+/// One generated class's `TypeRegistry.registerClass` call: the BAML FQN, the
+/// Java binary name, field names and descriptor expressions in declaration
+/// order, and the type parameter names of a generic class.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ClassRegistration {
+    fqn: String,
+    java_name: String,
+    fields: Vec<String>,
+    descriptors: Vec<String>,
+    type_params: Vec<String>,
+}
+
 fn to_source_code_internal(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
@@ -156,7 +168,7 @@ fn to_source_code_internal(
     // getDeclaredFields() order and the decoder constructs via the
     // canonical constructor positionally. Classes also carry a parallel
     // per-field decode-descriptor array (same order as the field idents).
-    let mut class_registry: Vec<(String, String, Vec<String>, Vec<String>)> = Vec::new();
+    let mut class_registry: Vec<ClassRegistration> = Vec::new();
     let mut enum_registry: Vec<EnumRegistration> = Vec::new();
     let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
@@ -192,15 +204,15 @@ fn to_source_code_internal(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
-                class_registry.push((
-                    symbol_fqn.clone(),
-                    format!("{}.{}", pkg.java_package(), ident),
-                    class
+                class_registry.push(ClassRegistration {
+                    fqn: symbol_fqn.clone(),
+                    java_name: format!("{}.{}", pkg.java_package(), ident),
+                    fields: class
                         .properties
                         .iter()
                         .map(|prop| java_identifier(prop.name.as_str()))
                         .collect(),
-                    class
+                    descriptors: class
                         .properties
                         .iter()
                         .map(|prop| {
@@ -208,7 +220,12 @@ fn to_source_code_internal(
                                 .unwrap_or_else(|| "null".to_string())
                         })
                         .collect(),
-                ));
+                    type_params: class
+                        .generic_params
+                        .iter()
+                        .map(|param| param.as_str().to_string())
+                        .collect(),
+                });
                 type_files.push((
                     pkg,
                     ident,
@@ -385,12 +402,33 @@ fn to_source_code_internal(
             )),
         }
     }
-    for (fqn, java_name, fields, descriptors) in &class_registry {
+    for ClassRegistration {
+        fqn,
+        java_name,
+        fields,
+        descriptors,
+        type_params,
+    } in &class_registry
+    {
         let field_list: Vec<String> = fields.iter().map(|f| format!("{f:?}")).collect();
         // Field descriptors are BamlType builder expressions (or the literal
-        // `null` for a wire-driven field) — emitted raw.
+        // `null` for a wire-driven field) — emitted raw. A generic class also
+        // names its type parameters, so the encoder can substitute an
+        // instance's bound arguments into the descriptors that mention them.
+        let type_param_list = if type_params.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", new java.lang.String[] {{{}}}",
+                type_params
+                    .iter()
+                    .map(|p| format!("{p:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
         registrations.push_str(&format!(
-            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}});\n",
+            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}}{type_param_list});\n",
             field_list.join(", "),
             descriptors.join(", ")
         ));

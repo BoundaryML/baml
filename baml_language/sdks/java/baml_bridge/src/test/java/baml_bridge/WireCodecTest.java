@@ -473,6 +473,10 @@ class WireCodecTest {
     private static final String RESUME_FQN = "user.lorem.Resume";
     private static final String SENTIMENT_FQN = "user.ipsum.Sentiment";
     private static final String BOX_FQN = "user.test.Box";
+    private static final String SHAPES_FQN = "user.test.Shapes";
+
+    /** A generic class `Shapes<T> { items T[] }` as the generator would emit it. */
+    record Shapes(List<?> items) {}
 
     @BeforeAll
     static void registerFixtures() {
@@ -486,6 +490,12 @@ class WireCodecTest {
                 Box.class.getName(),
                 new String[] {"payload"},
                 new BamlType[] {BamlType.union(BamlType.INT, BamlType.STRING)});
+        TypeRegistry.registerClass(
+                SHAPES_FQN,
+                Shapes.class.getName(),
+                new String[] {"items"},
+                new BamlType[] {BamlType.list(BamlType.typeVar("T"))},
+                new String[] {"T"});
         TypeRegistry.registerEnum(
                 SENTIMENT_FQN,
                 Sentiment.class.getName(),
@@ -825,6 +835,120 @@ class WireCodecTest {
         expected.writeMessage(1, BamlType.list(BamlType.INT).toWireTy());
         expected.writeMessage(6, new byte[0]);
         assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    /** The {@code InboundValue.value_type} (=1) bytes of an encoded value, or null. */
+    private static byte[] valueTypeOf(byte[] inbound) {
+        baml_bridge.internal.WireReader r = new baml_bridge.internal.WireReader(inbound);
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            if (baml_bridge.internal.WireReader.fieldOf(tag) == 1) {
+                return r.readBytes();
+            }
+            r.skipField(baml_bridge.internal.WireReader.wireOf(tag));
+        }
+        return null;
+    }
+
+    /**
+     * A container under a slot that fixes nothing (no type, {@code unknown}, a
+     * type variable) states the type it has: its elements' type, with an empty
+     * container's element type being {@code never}.
+     */
+    @Test
+    void encode_container_under_open_slot_states_its_natural_type() {
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(1L, 2L))));
+        assertArrayEquals(
+                BamlType.list(BamlType.NEVER).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of())));
+        assertArrayEquals(
+                BamlType.list(BamlType.union(BamlType.INT, BamlType.STRING)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(1L, "a", 2L))));
+        assertArrayEquals(
+                BamlType.list(BamlType.optional(BamlType.STRING)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(java.util.Arrays.asList("a", null))));
+        assertArrayEquals(
+                BamlType.map(BamlType.STRING, BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(Map.of("a", 1L))));
+        assertArrayEquals(
+                BamlType.list(BamlType.list(BamlType.FLOAT)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(List.of(1.5)))));
+
+        // A type variable fixes nothing either: the stated type is what binds it.
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(1L), BamlType.list(BamlType.typeVar("T"))))));
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(1L), BamlType.UNKNOWN))));
+    }
+
+    /** A slot that fixes the container down to its elements leaves the node unstated. */
+    @Test
+    void encode_container_under_exact_slot_states_nothing() {
+        assertNull(valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                List.of(1L), BamlType.list(BamlType.INT)))));
+        assertNull(valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                Map.of("a", 1L), BamlType.map(BamlType.STRING, BamlType.INT)))));
+    }
+
+    /** The {@code value_type} of the first field of an encoded class value, or null. */
+    private static byte[] firstFieldValueTypeOf(byte[] inbound) {
+        baml_bridge.internal.WireReader r = new baml_bridge.internal.WireReader(inbound);
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            if (baml_bridge.internal.WireReader.fieldOf(tag) != 8) {
+                r.skipField(baml_bridge.internal.WireReader.wireOf(tag));
+                continue;
+            }
+            baml_bridge.internal.WireReader cls = r.readMessage();
+            while (cls.hasRemaining()) {
+                int fieldTag = cls.readTag();
+                if (baml_bridge.internal.WireReader.fieldOf(fieldTag) != 2) {
+                    cls.skipField(baml_bridge.internal.WireReader.wireOf(fieldTag));
+                    continue;
+                }
+                baml_bridge.internal.WireReader entry = cls.readMessage();
+                while (entry.hasRemaining()) {
+                    int entryTag = entry.readTag();
+                    if (baml_bridge.internal.WireReader.fieldOf(entryTag) == 6) {
+                        return valueTypeOf(entry.readBytes());
+                    }
+                    entry.skipField(baml_bridge.internal.WireReader.wireOf(entryTag));
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A generic class's bound type arguments are substituted into its field
+     * descriptors: `T[]` is `int[]` for a `Shapes<int>`, which fixes the field,
+     * so an empty list there states nothing. Unbound, the field's slot is open
+     * and the list states what it is.
+     */
+    @Test
+    void encode_generic_class_fields_are_typed_by_the_bound_arguments() {
+        Shapes bound = new Shapes(List.of());
+        TypeRegistry.bindTypeArgs(bound, List.of(BamlType.INT));
+        assertNull(firstFieldValueTypeOf(ProtoWriter.encodeInboundValue(bound)));
+
+        Shapes unbound = new Shapes(List.of());
+        assertArrayEquals(
+                BamlType.list(BamlType.NEVER).toWireTy(),
+                firstFieldValueTypeOf(ProtoWriter.encodeInboundValue(unbound)));
+    }
+
+    /** A registered class instance names its class; a mixed-value map states the union. */
+    @Test
+    void encode_natural_type_names_registered_classes() {
+        assertArrayEquals(
+                BamlType.list(BamlType.classByFqn(RESUME_FQN)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(new Resume("Alice", 30L)))));
     }
 
     /** (e) A null inner value decodes to null (no wrapper record). */

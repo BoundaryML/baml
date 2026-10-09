@@ -113,6 +113,24 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(list.values.isEmpty)
     }
 
+    /// A Swift array or dictionary knows its element type statically and
+    /// states it, so an empty container or one under an `unknown` or generic
+    /// parameter leaves the engine nothing to infer.
+    func testContainersStateTheirStaticElementType() {
+        let list = [Int]()._bamlEncode().raw
+        guard case .list(let listType)? = list.valueType.ty else {
+            return XCTFail("expected a list value_type")
+        }
+        XCTAssertEqual(listType.item.primitive.kind, .bamlTyPrimitiveInt)
+
+        let map = ["a": "b"]._bamlEncode().raw
+        guard case .map(let mapType)? = map.valueType.ty else {
+            return XCTFail("expected a map value_type")
+        }
+        XCTAssertEqual(mapType.key.primitive.kind, .bamlTyPrimitiveString)
+        XCTAssertEqual(mapType.value.primitive.kind, .bamlTyPrimitiveString)
+    }
+
     func testClassIdentityUsesNodeLocalValueType() {
         let encoded = BamlInboundValue.baml_class(
             "user.Box",

@@ -260,6 +260,10 @@ extension Array: BamlEncodable where Element: BamlEncodable {
         // is empty — the Swift equivalent of Python's `SetInParent()`,
         // so `[]` arrives as an empty list, not null.
         v.listValue = list
+        // The static element type is the list's type; stating it means an
+        // empty list, or one under an `unknown` or generic parameter, needs
+        // nothing inferred by the engine.
+        if let type = Self._bamlType { v.valueType = type.raw }
         return BamlInboundValue(v)
     }
 }
@@ -279,6 +283,7 @@ extension Dictionary: BamlEncodable where Key == String, Value: BamlEncodable {
         }
         var v = BamlBridge_Cffi_V1_InboundValue()
         v.mapValue = mapValue // presence even when empty, as above
+        if let type = Self._bamlType { v.valueType = type.raw }
         return BamlInboundValue(v)
     }
 }

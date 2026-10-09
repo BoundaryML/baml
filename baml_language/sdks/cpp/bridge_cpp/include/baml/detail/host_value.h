@@ -201,18 +201,37 @@ inline std::string build_host_callable_inbound(const std::string& class_name,
   return value_msg.SerializeAsString();
 }
 
-// Re-encodes an outbound value as an InboundValue message: the propagation
-// path for a baml::error caught from a nested BAML call and rethrown out
-// of a host callable (the analog of Python re-encoding `BamlError.value`).
-// Class identity round-trips, so the BAML caller's typed catch still
-// matches.
+// Re-encodes an outbound value as an InboundValue message: a received
+// `baml::value` passed back as an argument, and the propagation path for a
+// baml::error caught from a nested BAML call and rethrown out of a host
+// callable (the analog of Python re-encoding `BamlError.value`). The value
+// goes back under the types the engine gave it: a container states its
+// element types, a literal its literal type, a class its identity, and a
+// scalar inside a union envelope the member the engine selected. The engine
+// then takes it as it is; nothing is left for it to infer.
 inline void transcode_outbound_to_inbound(pb::InboundValue& out,
-                                          const pb::BamlOutboundValue& raw) {
-  const pb::BamlOutboundValue& v = unwrap(raw);
+                                          const pb::BamlOutboundValue& v) {
   switch (v.value_case()) {
     case pb::BamlOutboundValue::VALUE_NOT_SET:
     case pb::BamlOutboundValue::kNullValue:
       return;  // absent oneof = null
+    case pb::BamlOutboundValue::kUnionVariantValue: {
+      const pb::BamlValueUnionVariant& variant = v.union_variant_value();
+      if (variant.has_value()) {
+        transcode_outbound_to_inbound(out, variant.value());
+      }
+      // The envelope's selected member types a node that has no type of
+      // its own; a container or class already stated one above.
+      if (!out.has_value_type() && variant.has_selected_option_index() &&
+          variant.has_self_type() && variant.self_type().has_union_()) {
+        const auto& options = variant.self_type().union_().options();
+        const int index = static_cast<int>(variant.selected_option_index());
+        if (index >= 0 && index < options.size()) {
+          out.mutable_value_type()->CopyFrom(options.Get(index));
+        }
+      }
+      return;
+    }
     case pb::BamlOutboundValue::kStringValue:
       out.set_string_value(v.string_value());
       return;
@@ -225,27 +244,38 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
     case pb::BamlOutboundValue::kBoolValue:
       out.set_bool_value(v.bool_value());
       return;
-    case pb::BamlOutboundValue::kLiteralValue:
+    case pb::BamlOutboundValue::kLiteralValue: {
+      pb::BamlTyLiteral* literal_ty =
+          out.mutable_value_type()->mutable_literal();
       switch (v.literal_value().literal_case()) {
         case pb::BamlLiteralValue::kStringValue:
           out.set_string_value(v.literal_value().string_value());
+          literal_ty->set_string_value(v.literal_value().string_value());
           return;
         case pb::BamlLiteralValue::kIntValue:
           out.set_int_value(v.literal_value().int_value());
+          literal_ty->set_int_value(v.literal_value().int_value());
           return;
         case pb::BamlLiteralValue::kBoolValue:
           out.set_bool_value(v.literal_value().bool_value());
+          literal_ty->set_bool_value(v.literal_value().bool_value());
           return;
         case pb::BamlLiteralValue::kBigintValue:
           out.set_bigint_value(v.literal_value().bigint_value());
+          literal_ty->set_bigint_value(v.literal_value().bigint_value());
           return;
         default:
           throw error("cannot transcode this literal value back inbound");
       }
+    }
     case pb::BamlOutboundValue::kListValue: {
       pb::InboundListValue* list = out.mutable_list_value();
       for (const pb::BamlOutboundValue& item : v.list_value().items()) {
         transcode_outbound_to_inbound(*list->add_values(), item);
+      }
+      if (v.list_value().has_item_type()) {
+        out.mutable_value_type()->mutable_list()->mutable_item()->CopyFrom(
+            v.list_value().item_type());
       }
       return;
     }
@@ -255,6 +285,11 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
         pb::InboundMapEntry* entry = map->add_entries();
         entry->set_string_key(e.key());
         transcode_outbound_to_inbound(*entry->mutable_value(), e.value());
+      }
+      if (v.map_value().has_key_type() && v.map_value().has_value_type()) {
+        pb::BamlTyMap* map_ty = out.mutable_value_type()->mutable_map();
+        map_ty->mutable_key()->CopyFrom(v.map_value().key_type());
+        map_ty->mutable_value()->CopyFrom(v.map_value().value_type());
       }
       return;
     }

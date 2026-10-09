@@ -308,6 +308,8 @@ public final class ProtoWriter {
                     && contextualType != null
                     && contextualType.kind() == BamlType.Kind.LIST) {
                 exactNodeType = contextualType;
+            } else if (!fixesContainer(contextualType, BamlType.Kind.LIST)) {
+                exactNodeType = naturalType(list);
             }
         } else if (value instanceof Map<?, ?> map) {
             BamlType valueType = contextualType != null && contextualType.kind() == BamlType.Kind.MAP
@@ -318,6 +320,8 @@ public final class ProtoWriter {
                     && contextualType != null
                     && contextualType.kind() == BamlType.Kind.MAP) {
                 exactNodeType = contextualType;
+            } else if (!fixesContainer(contextualType, BamlType.Kind.MAP)) {
+                exactNodeType = naturalType(map);
             }
         } else if (value instanceof Enum<?> constant) {
             // Any Java enum: encode it only if its type is a registered generated
@@ -398,12 +402,13 @@ public final class ProtoWriter {
             if (cw == null) {
                 throw unsupported(value);
             }
+            List<BamlType> typeArgs = TypeRegistry.typeArgsOf(value);
             if (contextualType != null && contextualType.kind() == BamlType.Kind.CLASS) {
                 w.writeMessage(IV_VALUE_TYPE, contextualType.toWireTy());
             } else {
-                writeClassType(w, cw.fqn, TypeRegistry.typeArgsOf(value));
+                writeClassType(w, cw.fqn, typeArgs);
             }
-            w.writeMessage(IV_CLASS, encodeClass(cw));
+            w.writeMessage(IV_CLASS, encodeClass(cw, typeArgs));
             alreadyTyped = true;
         }
         if (!alreadyTyped
@@ -429,6 +434,113 @@ public final class ProtoWriter {
         return w.toByteArray();
     }
 
+    /**
+     * Whether the slot's declared type fixes a container of {@code kind} down to
+     * every element, so the node needs no statement of its own. A slot that is
+     * absent, {@code unknown}, a type variable, a union, or a container whose
+     * element type mentions one of those fixes nothing, and the node then states
+     * the type it has (see {@link #naturalType}).
+     */
+    private static boolean fixesContainer(BamlType contextualType, BamlType.Kind kind) {
+        return contextualType != null && contextualType.kind() == kind && isExact(contextualType);
+    }
+
+    /**
+     * No {@code TYPEVAR} or {@code UNKNOWN} anywhere in the token: exactly the
+     * tokens the wire can spell.
+     */
+    private static boolean isExact(BamlType type) {
+        try {
+            type.toWireTy();
+            return true;
+        } catch (IllegalStateException decodeOnlyType) {
+            return false;
+        }
+    }
+
+    /**
+     * The BAML type a Java value has on its own, as the engine would see it: the
+     * concrete type of a value under a slot that fixes nothing. A container's
+     * element type is the union of its elements' types (duplicates collapsed,
+     * one element's type as is), and an empty container has element type
+     * {@code never}. {@code null} when some part of the value has no BAML type
+     * the token grammar can spell (bytes, media, handles); the node is then left
+     * unstated, as before.
+     */
+    private static BamlType naturalType(Object value) {
+        if (value instanceof Boolean) {
+            return BamlType.BOOL;
+        }
+        if (value instanceof Long || value instanceof Integer || value instanceof Short || value instanceof Byte) {
+            return BamlType.INT;
+        }
+        if (value instanceof BigInteger bi) {
+            return bi.compareTo(LONG_MIN) >= 0 && bi.compareTo(LONG_MAX) <= 0 ? BamlType.INT : BamlType.BIGINT;
+        }
+        if (value instanceof Double || value instanceof Float) {
+            return BamlType.FLOAT;
+        }
+        if (value instanceof String) {
+            return BamlType.STRING;
+        }
+        if (value instanceof List<?> list) {
+            BamlType item = naturalElementType(list);
+            return item == null ? null : BamlType.list(item);
+        }
+        if (value instanceof Map<?, ?> map) {
+            BamlType item = naturalElementType(map.values());
+            return item == null ? null : BamlType.map(BamlType.STRING, item);
+        }
+        if (value instanceof Enum<?> constant) {
+            TypeRegistry.EnumWire ew = TypeRegistry.enumWire(constant);
+            return ew == null ? null : BamlType.of(constant.getDeclaringClass());
+        }
+        if (value instanceof baml_bridge.BamlUnion) {
+            return naturalType(unwrapGenericUnion(value));
+        }
+        if (TypeRegistry.isUnionRecord(value)) {
+            // A record of a declared alias (`baml.json.json`) has the alias as
+            // its type; a record of an anonymous union has its inner value's.
+            String alias = TypeRegistry.unionAliasFqn(value);
+            return alias != null ? BamlType.typeAlias(alias) : naturalType(TypeRegistry.unionRecordInner(value));
+        }
+        TypeRegistry.ClassWire cw = value == null ? null : TypeRegistry.classWire(value);
+        if (cw != null) {
+            return BamlType.classByFqn(cw.fqn, TypeRegistry.typeArgsOf(value).toArray(new BamlType[0]));
+        }
+        return null;
+    }
+
+    /**
+     * The one type every element of a container inhabits: a null element is
+     * {@code null}'s type folded in as an optional, several element types form a
+     * union in first-seen order, and no elements give {@code never}.
+     */
+    private static BamlType naturalElementType(java.util.Collection<?> elements) {
+        java.util.LinkedHashSet<BamlType> types = new java.util.LinkedHashSet<>();
+        boolean nullable = false;
+        for (Object element : elements) {
+            if (element == null) {
+                nullable = true;
+                continue;
+            }
+            BamlType type = naturalType(element);
+            if (type == null) {
+                return null;
+            }
+            types.add(type);
+        }
+        BamlType item;
+        if (types.isEmpty()) {
+            item = BamlType.NEVER;
+        } else if (types.size() == 1) {
+            item = types.iterator().next();
+        } else {
+            item = BamlType.union(types.toArray(new BamlType[0]));
+        }
+        return nullable ? BamlType.optional(item) : item;
+    }
+
     private static int genericUnionArmIndex(Object value) {
         String simpleName = value.getClass().getSimpleName();
         if (!simpleName.startsWith("Arm")) {
@@ -447,10 +559,23 @@ public final class ProtoWriter {
      * {@link #encodeInboundValue}). Nominal identity is carried by the enclosing
      * {@code InboundValue.value_type}, never by this payload.
      */
-    private static byte[] encodeClass(TypeRegistry.ClassWire cw) {
+    private static byte[] encodeClass(TypeRegistry.ClassWire cw, List<BamlType> typeArgs) {
+        // A field declared in terms of the class's type parameters is encoded
+        // under the type the instance's bound arguments make of it: `T[]` is
+        // `int[]` for a `Box<int>`, so the field needs no statement of its own.
+        Map<String, BamlType> bindings = Map.of();
+        if (cw.typeParams != null && typeArgs.size() == cw.typeParams.length) {
+            bindings = new java.util.HashMap<>();
+            for (int i = 0; i < cw.typeParams.length; i++) {
+                bindings.put(cw.typeParams[i], typeArgs.get(i));
+            }
+        }
         WireWriter w = new WireWriter();
         for (int i = 0; i < cw.fieldNames.length; i++) {
             BamlType fieldDesc = cw.fieldDescs == null ? null : cw.fieldDescs[i];
+            if (fieldDesc != null && !bindings.isEmpty()) {
+                fieldDesc = fieldDesc.substitute(bindings);
+            }
             w.writeMessage(
                     CLASS_FIELDS,
                     encodeMapEntry(cw.fieldNames[i], cw.fieldValues[i], fieldDesc));

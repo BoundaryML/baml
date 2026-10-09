@@ -307,6 +307,62 @@ static void TestTyDefReportsUnsupportedReflection() {
           "BEP-066 reflection");
 }
 
+static void TestTranscodeKeepsTheTypesTheEngineGave() {
+  namespace pb = baml::detail::pb;
+  pb::BamlOutboundValue list;
+  list.mutable_list_value()->mutable_item_type()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_INT);
+  list.mutable_list_value()->add_items()->set_int_value(1);
+  pb::InboundValue inbound_list;
+  baml::detail::transcode_outbound_to_inbound(inbound_list, list);
+  Require(inbound_list.has_value_type() && inbound_list.value_type().has_list(),
+          "list lost its element type");
+  Require(inbound_list.value_type().list().item().primitive().kind() ==
+              pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_INT,
+          "list stated the wrong element type");
+
+  pb::BamlOutboundValue map;
+  map.mutable_map_value()->mutable_key_type()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_STRING);
+  map.mutable_map_value()->mutable_value_type()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_BOOL);
+  pb::InboundValue inbound_map;
+  baml::detail::transcode_outbound_to_inbound(inbound_map, map);
+  Require(inbound_map.has_value_type() && inbound_map.value_type().has_map(),
+          "map lost its key and value types");
+
+  // A scalar inside a union envelope goes back as the member the engine
+  // selected; a container keeps its own type instead.
+  pb::BamlOutboundValue variant;
+  pb::BamlValueUnionVariant* envelope = variant.mutable_union_variant_value();
+  envelope->mutable_self_type()
+      ->mutable_union_()
+      ->add_options()
+      ->mutable_primitive()
+      ->set_kind(pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_INT);
+  envelope->mutable_self_type()
+      ->mutable_union_()
+      ->add_options()
+      ->mutable_primitive()
+      ->set_kind(pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_STRING);
+  envelope->set_selected_option_index(1);
+  envelope->mutable_value()->set_string_value("x");
+  pb::InboundValue inbound_variant;
+  baml::detail::transcode_outbound_to_inbound(inbound_variant, variant);
+  Require(inbound_variant.string_value() == "x", "union payload changed");
+  Require(inbound_variant.value_type().primitive().kind() ==
+              pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_STRING,
+          "selected union member was not stated");
+
+  pb::BamlOutboundValue literal;
+  literal.mutable_literal_value()->set_int_value(7);
+  pb::InboundValue inbound_literal;
+  baml::detail::transcode_outbound_to_inbound(inbound_literal, literal);
+  Require(inbound_literal.int_value() == 7, "literal payload changed");
+  Require(inbound_literal.value_type().literal().int_value() == 7,
+          "literal type was not stated");
+}
+
 static void RunTest(const char* name, void (*test)()) {
   std::fprintf(stderr, "running %s\n", name);
   std::fflush(stderr);
@@ -322,6 +378,8 @@ int main() {
   RunTest("argument states", TestArgTwoState);
   RunTest("owned buffer move", TestOwnedBufferMove);
   RunTest("bigint codec", TestBigintCodec);
+  RunTest("transcode keeps engine types",
+          TestTranscodeKeepsTheTypesTheEngineGave);
   RunTest("portable prompt and media",
           TestPortableValuesTranscodeWithoutHandles);
   RunTest("typed spec, stream, prompt, and media codecs",

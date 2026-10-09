@@ -6,6 +6,7 @@ import baml_bridge.internal.WireWriter;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -81,6 +82,9 @@ public final class BamlType implements Comparable<BamlType> {
     private static final int TY_OPTIONAL = 6;
     private static final int TY_UNION = 7;
     private static final int TY_LITERAL = 8;
+    private static final int TY_TYPE_ALIAS = 9;
+    private static final int TY_NEVER = 24;
+    private static final int TYPE_ALIAS_NAME = 1;
 
     // Sub-message field numbers.
     private static final int PRIM_KIND = 1; // BamlTyPrimitive.kind
@@ -121,6 +125,10 @@ public final class BamlType implements Comparable<BamlType> {
         OPTIONAL,
         UNION,
         LITERAL,
+        /** A named type alias (FQN in {@link #fqn}), such as {@code baml.json.json}. */
+        TYPE_ALIAS,
+        /** The empty type: the element type of an empty container whose slot fixes none. */
+        NEVER,
         /** A bound TypeVar's decode placeholder (name in {@link #fqn}); wildcard in matching. */
         TYPEVAR,
         /** Decode-this-value-wire-driven; a wildcard that matches any arm. */
@@ -132,6 +140,8 @@ public final class BamlType implements Comparable<BamlType> {
     public static final BamlType BIGINT = primitive(PRIM_BIGINT);
     public static final BamlType BOOL = primitive(PRIM_BOOL);
     public static final BamlType FLOAT = primitive(PRIM_FLOAT);
+    /** BAML {@code never}, the type with no values. */
+    public static final BamlType NEVER = new BamlType(Kind.NEVER, 0, null, List.of(), 0, null);
 
     /**
      * The decode-only "decode wire-driven / match any arm" hint. Never encodes
@@ -241,6 +251,30 @@ public final class BamlType implements Comparable<BamlType> {
     public static BamlType typeVar(String name) {
         Objects.requireNonNull(name, "name");
         return new BamlType(Kind.TYPEVAR, 0, name, List.of(), 0, null);
+    }
+
+    /** A type-alias token naming a declared alias by its BAML FQN. */
+    public static BamlType typeAlias(String bamlFqn) {
+        Objects.requireNonNull(bamlFqn, "bamlFqn");
+        return new BamlType(Kind.TYPE_ALIAS, 0, bamlFqn, List.of(), 0, null);
+    }
+
+    /**
+     * This token with every type variable {@code bindings} names replaced by its
+     * binding. A variable not in {@code bindings} stays as it is.
+     */
+    public BamlType substitute(Map<String, BamlType> bindings) {
+        return switch (kind) {
+            case TYPEVAR -> bindings.getOrDefault(fqn, this);
+            case PRIMITIVE, ENUM, LITERAL, NEVER, TYPE_ALIAS, UNKNOWN -> this;
+            case CLASS, LIST, MAP, OPTIONAL, UNION -> {
+                List<BamlType> mapped = new ArrayList<>(children.size());
+                for (BamlType child : children) {
+                    mapped.add(child.substitute(bindings));
+                }
+                yield new BamlType(kind, primitiveKind, fqn, List.copyOf(mapped), literalArm, literalValue);
+            }
+        };
     }
 
     /** A list type token {@code T[]} carrying its element token. */
@@ -367,6 +401,12 @@ public final class BamlType implements Comparable<BamlType> {
                 ty.writeMessage(TY_UNION, un.toByteArray());
             }
             case LITERAL -> ty.writeMessage(TY_LITERAL, literalToWire());
+            case TYPE_ALIAS -> {
+                WireWriter alias = new WireWriter();
+                alias.writeString(TYPE_ALIAS_NAME, fqn);
+                ty.writeMessage(TY_TYPE_ALIAS, alias.toByteArray());
+            }
+            case NEVER -> ty.writeMessage(TY_NEVER, new byte[0]);
             case TYPEVAR, UNKNOWN -> throw new IllegalStateException(
                     "cannot encode a decode-only BamlType to the wire: " + this
                             + " (" + kind + " is a host-side decode hint, never an encoded value)");
@@ -413,10 +453,28 @@ public final class BamlType implements Comparable<BamlType> {
                 case TY_OPTIONAL -> result = optionalFromWire(r.readMessage());
                 case TY_UNION -> result = unionFromWire(r.readMessage());
                 case TY_LITERAL -> result = literalFromWire(r.readMessage());
+                case TY_TYPE_ALIAS -> result = typeAliasFromWire(r.readMessage());
+                case TY_NEVER -> {
+                    r.readBytes();
+                    result = NEVER;
+                }
                 default -> r.skipField(wire);
             }
         }
         return result;
+    }
+
+    private static BamlType typeAliasFromWire(WireReader msg) {
+        String name = null;
+        while (msg.hasRemaining()) {
+            int tag = msg.readTag();
+            if (WireReader.fieldOf(tag) == TYPE_ALIAS_NAME) {
+                name = msg.readString();
+            } else {
+                msg.skipField(WireReader.wireOf(tag));
+            }
+        }
+        return name == null ? null : typeAlias(name);
     }
 
     private static BamlType primitiveFromWire(WireReader msg) {
@@ -701,6 +759,8 @@ public final class BamlType implements Comparable<BamlType> {
             case LITERAL -> literalArm == LIT_STRING
                     ? "\"" + literalValue + "\""
                     : String.valueOf(literalValue);
+            case TYPE_ALIAS -> fqn;
+            case NEVER -> "never";
             case TYPEVAR -> fqn;
             case UNKNOWN -> "unknown";
         };

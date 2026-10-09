@@ -76,6 +76,7 @@ public final class TypeRegistry {
     private static final ConcurrentHashMap<String, UnionEntry> unionsByFqn = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, UnionRecordEntry> unionRecordsByJavaName =
             new ConcurrentHashMap<>();
+    private static final Map<String, String> unionAliasFqnByRecordName = new ConcurrentHashMap<>();
 
     static {
         // Runtime-owned stdlib types the emitter deliberately does NOT generate
@@ -121,12 +122,28 @@ public final class TypeRegistry {
      */
     public static void registerClass(
             String bamlFqn, String javaClassName, String[] fieldOrder, BamlType[] fieldDescs) {
+        registerClass(bamlFqn, javaClassName, fieldOrder, fieldDescs, null);
+    }
+
+    /**
+     * Register a generated generic class: as above, plus its type parameter
+     * names in declaration order, the order {@link #bindTypeArgs} takes the
+     * arguments in. The encoder substitutes an instance's bound arguments into
+     * the field descriptors that mention them, so a field declared {@code T[]}
+     * is encoded under {@code int[]} once {@code T} is bound.
+     */
+    public static void registerClass(
+            String bamlFqn,
+            String javaClassName,
+            String[] fieldOrder,
+            BamlType[] fieldDescs,
+            String[] typeParams) {
         if (fieldDescs != null && fieldDescs.length != fieldOrder.length) {
             throw new IllegalArgumentException(
                     "class field descriptor length mismatch for " + bamlFqn + ": "
                             + fieldOrder.length + " fields vs " + fieldDescs.length + " descriptors");
         }
-        ClassEntry entry = new ClassEntry(bamlFqn, javaClassName, fieldOrder, fieldDescs);
+        ClassEntry entry = new ClassEntry(bamlFqn, javaClassName, fieldOrder, fieldDescs, typeParams);
         if (classesByFqn.putIfAbsent(bamlFqn, entry) == null) {
             classesByJavaName.putIfAbsent(javaClassName, entry);
         }
@@ -187,6 +204,19 @@ public final class TypeRegistry {
             String aliasFqn, String sealedInterfaceName, BamlType[] armTokens, String[] recordNames) {
         UnionEntry entry = newUnionEntry(sealedInterfaceName, armTokens, recordNames);
         putUnion(unionsByFqn, aliasFqn, entry);
+        for (String recordName : recordNames) {
+            unionAliasFqnByRecordName.putIfAbsent(recordName, aliasFqn);
+        }
+    }
+
+    /**
+     * The FQN of the declared alias a union wrapper record belongs to, or
+     * {@code null} for a record of an anonymous union. An alias record's value
+     * has the alias as its type ({@code baml.json.json}), not the structural
+     * type of what it happens to hold.
+     */
+    public static String unionAliasFqn(Object record) {
+        return unionAliasFqnByRecordName.get(record.getClass().getName());
     }
 
     /** Build a {@link UnionEntry} and register its records (unconditional — encode must unwrap any). */
@@ -523,12 +553,20 @@ public final class TypeRegistry {
         public final Object[] fieldValues;
         /** Declared field descriptors, parallel to the names, or {@code null}. */
         public final BamlType[] fieldDescs;
+        /** The class's type parameter names in declaration order, or {@code null}. */
+        public final String[] typeParams;
 
-        ClassWire(String fqn, String[] fieldNames, Object[] fieldValues, BamlType[] fieldDescs) {
+        ClassWire(
+                String fqn,
+                String[] fieldNames,
+                Object[] fieldValues,
+                BamlType[] fieldDescs,
+                String[] typeParams) {
             this.fqn = fqn;
             this.fieldNames = fieldNames;
             this.fieldValues = fieldValues;
             this.fieldDescs = fieldDescs;
+            this.typeParams = typeParams;
         }
     }
 
@@ -555,6 +593,8 @@ public final class TypeRegistry {
         // null when the class was registered without them (wire-driven decode). An
         // individual entry may be null (that field is decoded wire-driven).
         final BamlType[] fieldDescs;
+        // Type parameter names in declaration order, or null for a non-generic class.
+        final String[] typeParams;
 
         // Lazily resolved (decode/encode reflection). Benign races only re-resolve
         // to the same value; volatile publishes the resolved object safely.
@@ -562,11 +602,17 @@ public final class TypeRegistry {
         private volatile Constructor<?> ctor;
         private volatile Method[] accessors;
 
-        ClassEntry(String bamlFqn, String javaClassName, String[] fieldOrder, BamlType[] fieldDescs) {
+        ClassEntry(
+                String bamlFqn,
+                String javaClassName,
+                String[] fieldOrder,
+                BamlType[] fieldDescs,
+                String[] typeParams) {
             this.bamlFqn = bamlFqn;
             this.javaClassName = javaClassName;
             this.fieldOrder = fieldOrder;
             this.fieldDescs = fieldDescs;
+            this.typeParams = typeParams;
         }
 
         private Class<?> javaClass() {
@@ -636,7 +682,7 @@ public final class TypeRegistry {
                             "failed to read field " + fieldOrder[i] + "() on " + javaClassName, e);
                 }
             }
-            return new ClassWire(bamlFqn, fieldOrder, values, fieldDescs);
+            return new ClassWire(bamlFqn, fieldOrder, values, fieldDescs, typeParams);
         }
 
         private Method[] accessors() {
