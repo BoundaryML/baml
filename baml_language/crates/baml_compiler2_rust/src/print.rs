@@ -19,7 +19,8 @@ use crate::{
     classes::{ClassInfo, ClassTable, EnumInfo, UnionInfo},
     function::{
         BigintOp, Builtin, CallKind, Candidate, LocalKind, MapOp, SortKind, TagSource,
-        binop_operand_tys, binop_ty, is_dead_null_write, is_omitted, unary_operand_ty,
+        binop_operand_tys, binop_ty, equality_common, is_dead_null_write, is_omitted,
+        unary_operand_ty,
     },
     structure::Stmt,
     types::{Coercion, NativeTy, TypeDecl, coercion},
@@ -1662,6 +1663,24 @@ impl<'a, 'db> Printer<'a, 'db> {
         };
         if matches!(left_ty, NativeTy::Bigint) || matches!(right_ty, NativeTy::Bigint) {
             return self.bigint_op(op, left, right, left_ty, right_ty);
+        }
+        // `==` with a union or nullable operand (other than against `null`):
+        // both sides lifted into the wider type and compared as the VM's
+        // comparison opcode compares values, false across kinds.
+        let with_null = matches!(left, Operand::Constant(Constant::Null))
+            || matches!(right, Operand::Constant(Constant::Null));
+        if matches!(op, BinOp::Eq | BinOp::Ne)
+            && !with_null
+            && (matches!(left_ty, NativeTy::Union(_) | NativeTy::Option(_))
+                || matches!(right_ty, NativeTy::Union(_) | NativeTy::Option(_)))
+        {
+            let common = equality_common(left_ty, right_ty).ok_or_else(unsupported)?;
+            let l = self.operand(left, Some(&common))?;
+            let r = self.operand(right, Some(&common))?;
+            return Ok(match op {
+                BinOp::Eq => quote! { bex_aot::eq::equals(&#l, &#r) },
+                _ => quote! { !bex_aot::eq::equals(&#l, &#r) },
+            });
         }
         // The operand types are the narrowed ones (`binop_operand_tys`), so
         // each operand is read as its type.
