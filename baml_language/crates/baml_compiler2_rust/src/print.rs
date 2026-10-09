@@ -14,7 +14,7 @@ use syn::Lifetime;
 
 use crate::{
     Rejection,
-    classes::{ClassInfo, ClassTable},
+    classes::{ClassInfo, ClassTable, EnumInfo},
     function::{Builtin, CallKind, Candidate, LocalKind, SortKind, is_dead_null_write, is_omitted},
     structure::Stmt,
     types::{Coercion, NativeTy, coercion},
@@ -47,10 +47,11 @@ const HEADER: &str = "\
 )]
 ";
 
-/// Render every class and candidate as one Rust module. `names` gives each
-/// function's Rust identifier, callees included.
+/// Render every enum, class and candidate as one Rust module. `names` gives
+/// each function's Rust identifier, callees included.
 pub(crate) fn render_module<'db>(
     classes: &[&ClassInfo<'db>],
+    enums: &[&EnumInfo<'db>],
     candidates: &[Candidate<'db>],
     names: &FxHashMap<FunctionLoc<'db>, Ident>,
     table: &ClassTable<'db>,
@@ -60,6 +61,9 @@ pub(crate) fn render_module<'db>(
         use bex_aot::handle::{Shared, shared};
         use bex_aot::render::ToBaml;
     };
+    for info in enums {
+        items.extend(render_enum(info));
+    }
     for class in classes {
         items.extend(render_class(class, table));
     }
@@ -84,7 +88,7 @@ pub(crate) fn render_rust_file(header: &str, tokens: TokenStream) -> Result<Stri
 /// (through `bex_aot`'s re-export), and the `ToBaml` rendering
 /// `Name { f: v, .. }`.
 fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenStream {
-    let class_ident = |class| table.ident(class);
+    let class_ident = |decl| table.ident(decl);
     let doc = format!(" BAML class `{}`.", class.link_name);
     let name = &class.ident;
     let fields = class.fields.iter().map(|field| {
@@ -122,6 +126,51 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
     }
 }
 
+/// The Rust enum for a BAML enum: fieldless, one variant per BAML variant
+/// in declaration order (so `as i64` is the VM's discriminant), `Copy`,
+/// compared by variant, serialized as the variant's name (through
+/// `bex_aot`'s serde re-export, renamed where the Rust identifier had to
+/// change) and rendered by `to_string` as the bare name, nested or not.
+fn render_enum(info: &EnumInfo<'_>) -> TokenStream {
+    let doc = format!(" BAML enum `{}`.", info.link_name);
+    let name = &info.ident;
+    let variants = info.variants.iter().map(|variant| {
+        let ident = &variant.ident;
+        let rename = variant.renamed().then(|| {
+            let baml_name = &variant.name;
+            quote! { #[serde(rename = #baml_name)] }
+        });
+        quote! {
+            #rename
+            #ident,
+        }
+    });
+    let names = info.variants.iter().map(|variant| &variant.name);
+    let count = info.variants.len();
+    quote! {
+        #[doc = #doc]
+        #[derive(
+            Clone, Copy, PartialEq, Eq, Hash, Debug,
+            bex_aot::serde::Serialize, bex_aot::serde::Deserialize
+        )]
+        #[serde(crate = "bex_aot::serde", expecting = "expected enum variant string")]
+        pub enum #name {
+            #(#variants)*
+        }
+
+        impl #name {
+            /// The BAML variant names, by discriminant.
+            pub const NAMES: [&'static str; #count] = [#(#names),*];
+        }
+
+        impl ToBaml for #name {
+            fn render(&self, out: &mut String, _nested: bool) {
+                out.push_str(Self::NAMES[*self as usize]);
+            }
+        }
+    }
+}
+
 struct Printer<'a, 'db> {
     candidate: &'a Candidate<'db>,
     names: &'a FxHashMap<FunctionLoc<'db>, Ident>,
@@ -147,7 +196,7 @@ impl<'a, 'db> Printer<'a, 'db> {
     }
 
     fn ty(&self, ty: &NativeTy<'db>) -> TokenStream {
-        ty.to_tokens(&|class| self.classes.ident(class))
+        ty.to_tokens(&|decl| self.classes.ident(decl))
     }
 
     fn function(&self) -> Result<TokenStream, Rejection> {
@@ -498,6 +547,11 @@ impl<'a, 'db> Printer<'a, 'db> {
                         let value = self.operand_borrowed(arg(*operand)?)?;
                         (TokenStream::new(), quote! { #value.is_none() })
                     }
+                    Builtin::EnumEq => {
+                        let left = self.operand(arg(0)?, None)?;
+                        let right = self.operand(arg(1)?, None)?;
+                        (TokenStream::new(), quote! { #left == #right })
+                    }
                     Builtin::Iter => {
                         let array = self.operand_ref(arg(0)?)?;
                         (TokenStream::new(), quote! { array::iter(#array) })
@@ -694,6 +748,11 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let place = self.place(place)?;
                 quote! { array::len(&#place) }
             }
+            // Variants are declared in discriminant order.
+            Rvalue::Discriminant(place) => {
+                let place = self.place(place)?;
+                quote! { int::lit(#place as i64) }
+            }
             Rvalue::Aggregate {
                 kind: AggregateKind::Class { class, .. },
                 fields,
@@ -811,7 +870,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     _ => return Err(unsupported()),
                 }
             }
-            NativeTy::Bool => {
+            NativeTy::Bool | NativeTy::Enum(_) => {
                 let l = self.operand(left, None)?;
                 let r = self.operand(right, None)?;
                 match op {
@@ -891,6 +950,21 @@ impl<'a, 'db> Printer<'a, 'db> {
                     Some(NativeTy::Option(_)) => quote! { None },
                     _ => quote! { () },
                 },
+                Constant::EnumVariant { enum_ref, index } => {
+                    let info = self.classes.enum_info(*enum_ref)?;
+                    let variant = usize::try_from(*index)
+                        .ok()
+                        .and_then(|index| info.variants.get(index))
+                        .ok_or_else(|| {
+                            Rejection::invalid(format!(
+                                "enum `{}` has no variant {index}",
+                                info.link_name
+                            ))
+                        })?;
+                    let name = &info.ident;
+                    let variant = &variant.ident;
+                    quote! { #name::#variant }
+                }
                 other => return Err(Rejection::unsupported(format!("constant {other:?}"))),
             },
         })
@@ -930,6 +1004,9 @@ impl<'a, 'db> Printer<'a, 'db> {
                 Some(option @ NativeTy::Option(_)) => option.clone(),
                 _ => NativeTy::Null,
             }),
+            Operand::Constant(Constant::EnumVariant { enum_ref, .. }) => {
+                Ok(NativeTy::Enum(*enum_ref))
+            }
             other @ Operand::Constant(_) => {
                 Err(Rejection::unsupported(format!("operand {other:?}")))
             }
@@ -1034,7 +1111,7 @@ impl<'a, 'db> Printer<'a, 'db> {
     }
 
     fn describe(&self, ty: &NativeTy<'db>) -> String {
-        ty.describe(&|class| self.classes.link_name(class))
+        ty.describe(&|decl| self.classes.link_name(decl))
     }
 
     fn terminator(&self, block: BlockId) -> Result<&'a Terminator<'db>, Rejection> {

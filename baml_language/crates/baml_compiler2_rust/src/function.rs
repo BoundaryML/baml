@@ -39,7 +39,7 @@ use crate::{
     Rejection,
     classes::ClassTable,
     structure::{Cfg, Flow, Stmt, structurize},
-    types::{Coercion, NativeTy, coercion},
+    types::{Coercion, NativeTy, TypeDecl, coercion},
 };
 
 /// The link name of the stdlib function whose call is emitted as a panic.
@@ -101,6 +101,9 @@ pub(crate) enum Builtin<'db> {
     /// `baml.ops.equals_equals(x, null)`: `operand` indexes the value
     /// argument that is the `Option`.
     IsNull { operand: usize },
+    /// `baml.ops.equals_equals(a, b)` on two values of one enum: the
+    /// variants are the same.
+    EnumEq,
     /// `virtual_call iter as baml.iter.Iterable` on an array.
     Iter,
     /// `virtual_call next as baml.iter.Iterator` on an array iterator.
@@ -291,6 +294,7 @@ pub(crate) fn analyze<'db>(
         classes,
     };
     let unresolved = env.declare_locals(mir.arity)?;
+    env.register_enum_constants()?;
     env.refine(unresolved)?;
     let kinds: Vec<LocalKind<'db>> = env
         .kinds
@@ -502,8 +506,35 @@ impl<'db> Env<'_, 'db> {
         }
     }
 
+    /// Admit the enum of every variant constant the body mentions, so a
+    /// later `&self` read of the constant finds its enum registered. (A
+    /// variant constant always sits beside a local of its enum type, which
+    /// `declare_locals` registered; this makes that an invariant rather
+    /// than an assumption.)
+    fn register_enum_constants(&mut self) -> Result<(), Rejection> {
+        let mut enums = Vec::new();
+        for block in &self.body.blocks {
+            for statement in &block.statements {
+                if let StatementKind::Assign { value, .. } = &statement.kind {
+                    rvalue_operands(value, &mut |operand| enum_of_constant(operand, &mut enums));
+                }
+            }
+            if let Some(terminator) = &block.terminator {
+                terminator_operands(terminator, &mut |operand| {
+                    enum_of_constant(operand, &mut enums);
+                });
+            }
+        }
+        for enum_ref in enums {
+            self.classes
+                .check_enum(enum_ref)
+                .map_err(|reason| Rejection::unsupported(reason.0))?;
+        }
+        Ok(())
+    }
+
     fn describe(&self, ty: &NativeTy<'db>) -> String {
-        ty.describe(&|class| self.classes.link_name(class))
+        ty.describe(&|decl| self.classes.link_name(decl))
     }
 
     fn kind(&self, local: Local) -> Result<&LocalKind<'db>, Rejection> {
@@ -604,7 +635,17 @@ impl<'db> Env<'_, 'db> {
                     Err(Rejection::unsupported("function value"))
                 }
                 Constant::GlobalItem(_) => Err(Rejection::unsupported("top-level let")),
-                Constant::EnumVariant { .. } => Err(Rejection::unsupported("enum value")),
+                Constant::EnumVariant { enum_ref, index } => {
+                    let info = self.classes.enum_info(*enum_ref)?;
+                    if usize::try_from(*index).is_ok_and(|index| index < info.variants.len()) {
+                        Ok(NativeTy::Enum(*enum_ref))
+                    } else {
+                        Err(Rejection::invalid(format!(
+                            "enum `{}` has no variant {index}",
+                            info.link_name
+                        )))
+                    }
+                }
             },
         }
     }
@@ -759,6 +800,13 @@ impl<'db> Env<'_, 'db> {
                     )),
                 }
             }
+            Rvalue::Discriminant(place) => match self.place_ty(place)? {
+                NativeTy::Enum(_) => Ok(NativeTy::Int),
+                other => Err(Rejection::unsupported(format!(
+                    "discriminant of a `{}`",
+                    self.describe(&other)
+                ))),
+            },
             Rvalue::LoadType(_) => {
                 Err(Rejection::unsupported("type value stored in a value local"))
             }
@@ -1205,14 +1253,20 @@ impl<'db> Env<'_, 'db> {
                         }
                         let mut classes = Vec::new();
                         ty.classes(&mut classes);
-                        if let Some(class) = classes
+                        let mut enums = Vec::new();
+                        ty.enums(&mut enums);
+                        let decls = classes
                             .into_iter()
-                            .find(|class| self.classes.has_explicit_impl(*class, &iface.name))
+                            .map(TypeDecl::Class)
+                            .chain(enums.into_iter().map(TypeDecl::Enum));
+                        if let Some(decl) = decls
+                            .into_iter()
+                            .find(|decl| self.classes.has_explicit_impl(*decl, &iface.name))
                         {
                             return Err(Rejection::unsupported(format!(
-                                "`to_string` on a `{}`: class `{}` implements its own `baml.ToString`",
+                                "`to_string` on a `{}`: `{}` implements its own `baml.ToString`",
                                 self.describe(&receiver_ty),
-                                self.classes.link_name(class)
+                                self.classes.link_name(decl)
                             )));
                         }
                         (Builtin::ToStringDefault, NativeTy::Str)
@@ -1408,9 +1462,21 @@ impl<'db> Env<'_, 'db> {
                     (false, true) => 0,
                     (true, false) => 1,
                     _ => {
-                        return Err(Rejection::unsupported(
-                            "`baml.ops.equals_equals` other than a comparison with `null`",
-                        ));
+                        let left = self.operand_ty(&args[0], None)?;
+                        let right = self.operand_ty(&args[1], None)?;
+                        if let (NativeTy::Enum(l), NativeTy::Enum(r)) = (&left, &right)
+                            && l == r
+                        {
+                            return Ok(Some(CallKind::Builtin {
+                                builtin: Builtin::EnumEq,
+                                result: NativeTy::Bool,
+                            }));
+                        }
+                        return Err(Rejection::unsupported(format!(
+                            "`==` on a `{}` and a `{}` (only enums and `null` tests compare natively through `baml.ops.equals_equals`)",
+                            self.describe(&left),
+                            self.describe(&right)
+                        )));
                     }
                 };
                 let ty = self.operand_ty(&args[operand], None)?;
@@ -1602,6 +1668,7 @@ pub(crate) fn binop_ty<'db>(
         }
         BinOp::Eq | BinOp::Ne => match (left, right) {
             (Int, Int) | (Bool, Bool) | (Float, Float) | (Str, Str) | (Null, Null) => Some(Bool),
+            (NativeTy::Enum(l), NativeTy::Enum(r)) if l == r => Some(Bool),
             (Opt(_), Opt(_)) if left == right && with_null => Some(Bool),
             _ => None,
         },
@@ -1858,11 +1925,61 @@ fn rvalue_locals(value: &Rvalue<'_>, out: &mut Vec<Local>) -> bool {
                 operand_locals(element, out);
             }
         }
-        Rvalue::Len(place) => place_locals(place, out),
+        Rvalue::Len(place) | Rvalue::Discriminant(place) => place_locals(place, out),
         Rvalue::LoadType(_) => {}
         _ => return false,
     }
     true
+}
+
+/// Record the enum of a variant constant.
+fn enum_of_constant<'db>(
+    operand: &Operand<'db>,
+    out: &mut Vec<baml_compiler2_hir_ty::extern_loc::EnumRef<'db>>,
+) {
+    if let Operand::Constant(Constant::EnumVariant { enum_ref, .. }) = operand
+        && !out.contains(enum_ref)
+    {
+        out.push(*enum_ref);
+    }
+}
+
+/// Every operand an rvalue the subset may admit reads. Kinds outside the
+/// subset contribute nothing: admission rejects them later.
+fn rvalue_operands<'db>(value: &Rvalue<'db>, f: &mut dyn FnMut(&Operand<'db>)) {
+    match value {
+        Rvalue::Use(operand) | Rvalue::UnaryOp { operand, .. } | Rvalue::IsType { operand, .. } => {
+            f(operand);
+        }
+        Rvalue::BinaryOp { left, right, .. } => {
+            f(left);
+            f(right);
+        }
+        Rvalue::Array(_, elements)
+        | Rvalue::Aggregate {
+            fields: elements, ..
+        } => elements.iter().for_each(f),
+        Rvalue::Map(_, _, entries) => {
+            for (key, value) in entries {
+                f(key);
+                f(value);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Every operand a terminator the subset may admit reads.
+fn terminator_operands<'db>(terminator: &Terminator<'db>, f: &mut dyn FnMut(&Operand<'db>)) {
+    match terminator {
+        Terminator::Branch { condition, .. } => f(condition),
+        Terminator::Switch { discriminant, .. } => f(discriminant),
+        Terminator::Call { args, .. } | Terminator::VirtualCall { args, .. } => {
+            args.iter().for_each(f);
+        }
+        Terminator::ShortCircuit { operand, .. } => f(operand),
+        _ => {}
+    }
 }
 
 fn statement_locals(kind: &StatementKind<'_>, out: &mut Vec<Local>) -> bool {

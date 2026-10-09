@@ -30,6 +30,7 @@ const FIXTURES: &[&str] = &[
     "calls",
     "classes",
     "defaults",
+    "enums",
     "floats",
     "loops",
     "matching",
@@ -94,6 +95,7 @@ generated_module!(recursion, "native/generated/recursion.rs");
 generated_module!(classes, "native/generated/classes.rs");
 generated_module!(benchmarks, "native/generated/benchmarks.rs");
 generated_module!(defaults, "native/generated/defaults.rs");
+generated_module!(enums, "native/generated/enums.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -582,4 +584,32 @@ async fn defaults_match_vm() {
     // Explicit arguments still reach a defaulted parameter unchanged.
     check!(o, scale(5, 2, 1) => user_scale(int(5), int(2), int(1)));
     check!(o, label("x", "hey", true) => user_label(text("x"), text("hey"), true));
+}
+
+/// Enum values, matches on them, equality, rendering and JSON both ways.
+#[tokio::test]
+async fn enums_match_vm() {
+    use enums::*;
+    let o = Oracle::new("enums");
+    for n in [0, 1, 2, 3, 7, -1, -2] {
+        check!(o, render(n) => user_render(int(n)));
+        check!(o, json_out(n) => user_json_out(int(n)));
+        check!(o, count_red(n) => user_count_red(int(n)));
+        check!(o, tinted(n) => user_tinted(int(n)));
+        check!(o, nullable(n) => user_nullable(int(n)));
+        for m in [0, 1, 2] {
+            check!(o, same(n, m) => user_same(int(n), int(m)));
+            check!(o, differ(n, m) => user_differ(int(n), int(m)));
+        }
+    }
+    for raw in [
+        r#"{"color": "Red", "weight": 1}"#,
+        r#"{"weight": -3, "color": "Blue"}"#,
+        r#"{"color": "Purple", "weight": 1}"#,
+        r#"{"color": 2, "weight": 1}"#,
+        r#"{"weight": 1}"#,
+        r#"["Red"]"#,
+    ] {
+        check!(o, json_in(raw) => user_json_in(text(raw)));
+    }
 }

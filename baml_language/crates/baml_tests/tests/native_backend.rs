@@ -1234,13 +1234,77 @@ fn rejects_map_local() {
     assert_unsupported(&rejection, "map");
 }
 
+/// An enum is a generated fieldless Rust enum in declaration order: a
+/// `match` switches on `as i64`, `==` compares variants, and serde and
+/// `ToBaml` use the variant names.
 #[test]
-fn rejects_enum() {
-    let rejection = reject(
-        "enum Color { Red, Blue }\nfunction f(c: Color) -> bool { c == Color.Red }",
+fn enums_are_generated_fieldless_enums() {
+    let module = compile_entry(
+        r#"
+enum Color { Red, Blue }
+function f(c: Color) -> bool { c == Color.Red }
+function g(c: Color) -> int {
+    match (c) {
+        Color.Red => 1,
+        Color.Blue => 2,
+    }
+}
+function h(n: int) -> string {
+    let c = if (f(Color.Blue)) { Color.Red } else { Color.Blue };
+    c.to_string() + baml.json.to_string(c) + g(c).to_string()
+}
+"#,
+        "h",
+    );
+    let source = &module.rust_source;
+    assert_contains(source, "pub enum user_Color {");
+    assert_contains(
+        source,
+        "pub const NAMES: [&'static str; 2usize] = [\"Red\", \"Blue\"];",
+    );
+    assert_contains(
+        source,
+        "pub fn user_f(mut _1: user_Color) -> Result<bool, Thrown>",
+    );
+    assert_contains(source, "= _1 == user_Color::Red;");
+    assert_contains(source, "= int::lit(_1 as i64);");
+    assert_contains(source, "match _2.get() {");
+    assert_contains(source, "0i64 =>");
+    assert_eq!(module.enums.len(), 1);
+    assert_eq!(module.enums[0].link_name, "user.Color");
+    assert_eq!(module.enums[0].rust_name, "user_Color");
+    assert!(module.classes.is_empty());
+}
+
+#[test]
+fn enum_variants_named_like_keywords_are_renamed_for_serde() {
+    let module = compile_entry(
+        "enum Mode { type, Self, Plain }\nfunction f() -> Mode { Mode.type }",
         "f",
     );
-    assert_unsupported(&rejection, "parameter of type `Color`: enum");
+    let source = &module.rust_source;
+    assert_contains(source, "#[serde(rename = \"type\")]");
+    assert_contains(source, "type_,");
+    assert_contains(source, "#[serde(rename = \"Self\")]");
+    assert_contains(source, "Self_,");
+    assert_contains(source, "user_Mode::type_");
+    assert_contains(source, "[\"type\", \"Self\", \"Plain\"]");
+}
+
+#[test]
+fn rejects_to_string_on_an_enum_with_its_own_to_string() {
+    let rejection = reject(
+        r#"
+enum Color { Red, Blue }
+implement baml.ToString for Color { function to_string(self) -> string { "c" } }
+function f(c: Color) -> string { c.to_string() }
+"#,
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "`to_string` on a `user.Color`: `user.Color` implements its own `baml.ToString`",
+    );
 }
 
 #[test]
