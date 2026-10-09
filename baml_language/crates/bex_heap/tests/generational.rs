@@ -140,7 +140,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             other: IndexMap::new(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::Package(package_ptr),
@@ -1250,7 +1250,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         other: IndexMap::new(),
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
-        has_cleanup: false,
+        cleanup: None,
         methods: IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
@@ -1483,7 +1483,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
         other: IndexMap::new(),
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
-        has_cleanup: false,
+        cleanup: None,
         methods,
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::Package(package_ptr),
@@ -1579,7 +1579,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         other: IndexMap::new(),
         stream_done: false,
         type_tag,
-        has_cleanup: false,
+        cleanup: None,
         methods: IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
@@ -1746,7 +1746,16 @@ fn test_survivor_payload_is_dropped_exactly_once() {
     assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
 
-fn class_with_cleanup(name: &str) -> Class {
+/// A class whose `cleanup` method is the function at `cleanup`.
+fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
+    let mut methods = IndexMap::new();
+    methods.insert(
+        Name::new(baml_base::CLEANUP_METHOD),
+        bex_vm_types::types::ClassMethodDef {
+            function: bex_vm_types::ObjectIndex::from_raw(0),
+            function_ptr: cleanup,
+        },
+    );
     Class {
         name: bex_vm_types::DeclarationName::Declared(QualifiedTypeName::local(Name::new(name))),
         fields: Vec::new(),
@@ -1756,8 +1765,8 @@ fn class_with_cleanup(name: &str) -> Class {
         other: IndexMap::new(),
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
-        has_cleanup: true,
-        methods: IndexMap::new(),
+        cleanup: Some(0),
+        methods,
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
     }
@@ -1769,16 +1778,28 @@ fn class_with_cleanup(name: &str) -> Class {
 #[test]
 fn test_finalizer_is_queued_when_its_runtime_class_was_evacuated() {
     for level in [CollectionLevel::Minor, CollectionLevel::Major] {
-        // A compile-time class with `cleanup` is what turns the finalizer scan on.
-        let heap = BexHeap::new(vec![Object::Class(Box::new(class_with_cleanup("Static")))]);
+        // A compile-time class with `cleanup` is what turns the finalizer scan
+        // on; its method body sits in the pool beside it.
+        let heap = BexHeap::new(vec![
+            Object::String("static cleanup".into()),
+            Object::Class(Box::new(class_with_cleanup(
+                "Static",
+                bex_vm_types::HeapPtr::null(),
+            ))),
+        ]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let class = tlab.alloc(Object::Class(Box::new(class_with_cleanup("Runtime"))));
+        // The runtime class's `cleanup` body is a runtime object too: a method
+        // body stand-in that the collection moves.
+        let cleanup = tlab.alloc_string("runtime cleanup".to_string());
+        let class = tlab.alloc(Object::Class(Box::new(class_with_cleanup(
+            "Runtime", cleanup,
+        ))));
         let dead_instance = tlab.alloc_instance(class, Vec::new());
 
-        // Root only the class: it is evacuated by the trace, before the scan
-        // that discovers the unreachable instance.
-        let (_, roots, _) = unsafe { heap.collect_garbage_generational(&[class], level) };
+        // Root the class and its method body: both are evacuated by the
+        // trace, before the scan that discovers the unreachable instance.
+        let (_, roots, _) = unsafe { heap.collect_garbage_generational(&[class, cleanup], level) };
         tlab.invalidate();
         assert_ne!(roots[0], class, "a {level:?} collection moves the class");
 
@@ -1788,11 +1809,11 @@ fn test_finalizer_is_queued_when_its_runtime_class_was_evacuated() {
             1,
             "a {level:?} collection must queue the dead instance"
         );
-        let (kept_alive, cleanup_fn) = &pending[0];
+        let (kept_alive, queued_cleanup) = &pending[0];
         assert_ne!(*kept_alive, dead_instance);
-        assert!(
-            cleanup_fn.ends_with("Runtime.cleanup"),
-            "unexpected finalizer {cleanup_fn}"
+        assert_eq!(
+            *queued_cleanup, roots[1],
+            "the queued finalizer is the class's relocated `cleanup` body"
         );
         let Object::Instance(instance) = (unsafe { kept_alive.get() }) else {
             panic!("the queued pointer is not an instance")

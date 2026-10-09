@@ -12,7 +12,11 @@ use baml_compiler2_hir::{
     },
     loc::{DeclRef, FunctionLoc, LetLoc},
 };
-use baml_compiler2_hir_ty::{lower::qualify_def, package_interface::export_interface};
+use baml_compiler2_hir_ty::{
+    cleanup::{CleanupMethod, cleanup_method},
+    lower::qualify_def,
+    package_interface::export_interface,
+};
 use baml_compiler2_mir::{RuntimeLowering, definition_link_name};
 use baml_linker_types::{
     CompilationUnit, EmittedPackage, ExportTable, InitTail, LocalRef, PackageRecord,
@@ -187,7 +191,9 @@ fn fill_interface_defaults<'db>(
     }
 }
 
-/// Each class's inherent method table, over the bodies this unit compiled.
+/// Each class's inherent method table, over the bodies this unit compiled,
+/// and the position of its BEP-042 finalizer in that table — the checker
+/// decides which method is the finalizer; this records where it sits.
 fn fill_class_methods<'db>(
     db: &'db dyn crate::Db,
     files: &[SourceFile],
@@ -203,15 +209,23 @@ fn fill_class_methods<'db>(
             };
             for &method in &class_data(db, class).methods {
                 let Some(function) = placed.get(method) else {
+                    debug_assert!(
+                        cleanup_method(db, method) != Some(CleanupMethod::Finalizer),
+                        "a class's finalizer is a method this unit placed"
+                    );
                     continue;
                 };
-                object.methods.insert(
+                let (position, _) = object.methods.insert_full(
                     function_data(db, method).name.clone(),
                     ClassMethodDef {
                         function,
                         function_ptr: bex_vm_types::HeapPtr::null(),
                     },
                 );
+                if cleanup_method(db, method) == Some(CleanupMethod::Finalizer) {
+                    debug_assert!(object.cleanup.is_none(), "a class has one finalizer");
+                    object.cleanup = Some(position);
+                }
             }
         }
     }

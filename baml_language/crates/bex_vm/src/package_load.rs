@@ -578,11 +578,10 @@ pub enum TimeClass {
 }
 
 /// The stdlib declarations the runtime recognizes structurally — the CSV
-/// cell classes, the JSON media wrappers, the `json` alias, the prompt cache
-/// delimiter, and the live
-/// capabilities a host proxies — resolved to heads once from the loaded
-/// packages and shared by every VM the engine spawns, like the error and
-/// panic class tables.
+/// cell classes, the JSON media wrappers, the `json` alias, the classes whose
+/// instances it reads by shape, and the live capabilities a host proxies —
+/// resolved to heads once from the loaded packages and shared by every VM
+/// the engine spawns, like the error and panic class tables.
 ///
 /// A program that does not load one of them (no stdlib) has no value of that
 /// type, so the entry is absent and nothing matches it.
@@ -591,8 +590,56 @@ pub struct StdlibHeads {
     time: Vec<(TimeClass, TypeHead)>,
     media: Vec<(MediaKind, TypeHead)>,
     json: Option<TypeHead>,
-    cache_delimiter: Option<TypeHead>,
+    classes: Vec<(StdlibClass, TypeHead)>,
     capabilities: Vec<(StdlibCapability, TypeHead)>,
+}
+
+/// A stdlib class the runtime reads by shape: native code knows an
+/// instance's fields, so it must know the instance is the stdlib's own class
+/// and not one that merely renders under the same name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StdlibClass {
+    /// `ai.Role`.
+    PromptRole,
+    /// `ai.Prompt`.
+    Prompt,
+    /// `reflect.interface.Implementation`.
+    InterfaceImplementation,
+    /// `reflect.WithMeta`.
+    WithMeta,
+    /// `reflect.enum.Value`.
+    EnumValue,
+    /// `reflect.Meta`.
+    Meta,
+    /// `ai.CacheDelimiter`, the value `${cache(args)}` interpolates into a
+    /// prompt.
+    CacheDelimiter,
+}
+
+impl StdlibClass {
+    const ALL: [Self; 7] = [
+        Self::PromptRole,
+        Self::Prompt,
+        Self::InterfaceImplementation,
+        Self::WithMeta,
+        Self::EnumValue,
+        Self::Meta,
+        Self::CacheDelimiter,
+    ];
+
+    /// The class as the root reaches it: its package under the prelude's
+    /// fixed name, then its path there. Read once, at load.
+    const fn fqn(self) -> &'static str {
+        match self {
+            Self::PromptRole => "ai.Role",
+            Self::Prompt => "ai.Prompt",
+            Self::InterfaceImplementation => "reflect.interface.Implementation",
+            Self::WithMeta => "reflect.WithMeta",
+            Self::EnumValue => "reflect.enum.Value",
+            Self::Meta => "reflect.Meta",
+            Self::CacheDelimiter => "ai.CacheDelimiter",
+        }
+    }
 }
 
 /// A live stdlib capability a host reaches through a proxy rather than a
@@ -644,11 +691,15 @@ impl StdlibHeads {
         .into_iter()
         .filter_map(|(capability, fqn)| Some((capability, head(fqn)?)))
         .collect();
+        let classes = StdlibClass::ALL
+            .into_iter()
+            .filter_map(|class| Some((class, head(class.fqn())?)))
+            .collect();
         Self {
             time,
             media,
             json: head("baml.json.json"),
-            cache_delimiter: head("ai.CacheDelimiter"),
+            classes,
             capabilities,
         }
     }
@@ -678,12 +729,6 @@ impl StdlibHeads {
             .map(|(kind, _)| *kind)
     }
 
-    /// Whether `head` is `ai.CacheDelimiter`, the value `${cache(args)}`
-    /// interpolates into a prompt.
-    pub fn is_cache_delimiter(&self, head: TypeHead) -> bool {
-        self.cache_delimiter == Some(head)
-    }
-
     /// The recursive `baml.json.json` alias, if the program loads it.
     pub fn json_alias(&self) -> Option<TypeHead> {
         self.json
@@ -692,6 +737,14 @@ impl StdlibHeads {
     /// Whether `head` is the recursive `baml.json.json` alias.
     pub fn is_json_alias(&self, head: TypeHead) -> bool {
         self.json == Some(head)
+    }
+
+    /// Whether the declaration tagged `tag` is the stdlib's own `class` — by
+    /// identity, never a class that merely renders the same.
+    pub fn is_class(&self, class: StdlibClass, tag: baml_type::typetag::TypeTag) -> bool {
+        self.classes
+            .iter()
+            .any(|(known, head)| *known == class && head.tag() == tag)
     }
 }
 

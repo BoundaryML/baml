@@ -82,7 +82,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 17: BEP-079's unit type. The type family lost `Void` (Borsh
 /// discriminant 22, now reserved): `void` is a spelling of `null`, and an
 /// artifact carrying the retired discriminant no longer decodes.
-pub const FORMAT_VERSION: u32 = 17;
+///
+/// Version 18: a pooled `Class` carries its finalizer as a position in its
+/// method table (`cleanup: Option<usize>`) where it carried a `has_cleanup`
+/// flag, so the collector reads the method off the class and resolves no name.
+pub const FORMAT_VERSION: u32 = 18;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

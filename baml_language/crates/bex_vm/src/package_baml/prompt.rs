@@ -15,6 +15,7 @@ use crate::{
     package_ai::{
         BamlClassPrompt, BamlNamespaceInternal, BamlPackageAi, PackageAiImpl, view as ai_view,
     },
+    package_load::StdlibClass,
 };
 
 #[derive(Default)]
@@ -109,11 +110,13 @@ fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
         Object::Instance(instance) => (instance.class, instance.fields.first()?.load()),
         _ => return None,
     };
-    let head = match vm.get_object(class) {
-        Object::Class(c) => bex_vm_types::TypeHead::new(class, c.type_tag),
-        _ => return None,
+    let is_delimiter = match vm.get_object(class) {
+        Object::Class(c) => vm
+            .stdlib_heads()
+            .is_class(StdlibClass::CacheDelimiter, c.type_tag),
+        _ => false,
     };
-    if !vm.stdlib_heads().is_cache_delimiter(head) {
+    if !is_delimiter {
         return None;
     }
     Some(super::json::json_value_to_serde(vm, args))
@@ -199,10 +202,9 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
     };
     let (name_index, metadata_index) = match vm.get_object(class_ptr) {
         Object::Class(class)
-            if class
-                .name
-                .declared()
-                .is_some_and(|qtn| qtn.render_dotted(false) == "ai.Role") =>
+            if vm
+                .stdlib_heads()
+                .is_class(StdlibClass::PromptRole, class.type_tag) =>
         {
             (
                 class.fields.iter().position(|field| field.name == "name")?,

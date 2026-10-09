@@ -314,12 +314,6 @@ impl QualifiedTypeName<Package> {
         self.package().as_str() == "reflect" && self.is_root_item(name)
     }
 
-    /// Returns `true` if this type lives in the `baml.panics` namespace
-    /// (i.e. it is a panic class or the `Panic` type alias).
-    pub fn is_panic_type(&self) -> bool {
-        baml_base::is_panic_namespace(self.package().as_str(), &self.namespace)
-    }
-
     /// The flat `[package, ...namespace]` path, matching the legacy
     /// `TypeName::module_path` representation that fused package and namespace
     /// into one `Vec`. Allocates — prefer [`package`](Self::package) /

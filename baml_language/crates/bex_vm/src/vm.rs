@@ -1170,7 +1170,7 @@ pub(crate) mod tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag: tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -1235,7 +1235,7 @@ pub(crate) mod tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag: tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -1292,7 +1292,7 @@ pub(crate) mod tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag: tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -3082,6 +3082,31 @@ impl BexVm {
     /// The stdlib declarations the runtime recognizes structurally.
     pub fn stdlib_heads(&self) -> &crate::package_load::StdlibHeads {
         &self.stdlib_heads
+    }
+
+    /// Whether `value` is a panic: an instance of one of the `baml.panics`
+    /// classes, decided by the class it points at — the stdlib's own
+    /// declaration, never one that merely renders under the same name.
+    pub fn is_panic(&self, value: Value) -> bool {
+        value.as_object_ptr().is_some_and(|ptr| {
+            matches!(
+                self.get_object(ptr),
+                Object::Instance(instance) if self.panic_class_ptrs.contains(&instance.class)
+            )
+        })
+    }
+
+    /// Whether `value` is the cancellation panic, `baml.panics.Cancelled`,
+    /// by its class's identity.
+    pub fn is_cancelled_panic(&self, value: Value) -> bool {
+        value.as_object_ptr().is_some_and(|ptr| {
+            matches!(
+                self.get_object(ptr),
+                Object::Instance(instance)
+                    if self.panic_class_ptrs.get(PanicClass::Cancelled as usize)
+                        == Some(&instance.class)
+            )
+        })
     }
 
     /// The head for the declaration `qtn` names — its tag and its pointer, both
@@ -9973,16 +9998,7 @@ impl BexVm {
                     OpCode::ThrowIfPanic => {
                         let context = self.stack.ensure_pop();
                         let value = self.stack.ensure_pop();
-                        let is_panic = match value.as_object_ptr() {
-                            Some(ptr) => match self.get_object(ptr) {
-                                Object::Instance(instance) => {
-                                    self.panic_class_ptrs.contains(&instance.class)
-                                }
-                                _ => false,
-                            },
-                            None => false,
-                        };
-                        if is_panic {
+                        if self.is_panic(value) {
                             // Save pc before unwinding (handler lookup needs it).
                             if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                                 bf.instruction_ptr = *pc;

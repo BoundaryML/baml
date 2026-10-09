@@ -179,7 +179,7 @@ mod tests {
             other: IndexMap::new(),
             stream_done: false,
             type_tag: TypeTag::fresh_dynamic(),
-            has_cleanup: false,
+            cleanup: None,
             generic_param_count: 0,
             owner: Owner::anonymous(),
             methods: IndexMap::new(),

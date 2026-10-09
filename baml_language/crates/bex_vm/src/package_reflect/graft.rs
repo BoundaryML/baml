@@ -530,6 +530,14 @@ fn place_objects<'a>(
     for object in owned {
         let mut object = object.clone();
         adopt(&mut object, package_ptr);
+        // A class with a finalizer joins the heap: the collector's
+        // finalizer scan must run from now on, whatever the host's classes
+        // declare.
+        if let Object::Class(class) = &object
+            && class.cleanup.is_some()
+        {
+            vm.heap.note_finalizable_class();
+        }
         // A runtime function takes its telemetry identity at allocation.
         let ptr = vm
             .alloc_runtime_object(object)

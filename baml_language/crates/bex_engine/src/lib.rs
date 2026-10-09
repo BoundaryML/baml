@@ -1372,17 +1372,13 @@ fn enforce_host_throw_contract(
     if matches!(contract, RuntimeTy::Unknown) {
         return value;
     }
-    let runtime_ty = value_runtime_baml_ty(value, thread.proof());
     // Panics propagate as panics regardless of `E` — they're an
     // engine-level failure mode, not something the user's callable opts
     // into via `throws`.
-    if let Some(bex_vm_types::RuntimeTy::Class(head, _)) = runtime_ty.as_ref()
-        && head
-            .declared_name()
-            .is_some_and(|name| name.is_panic_type())
-    {
+    if thread.vm.is_panic(value) {
         return value;
     }
+    let runtime_ty = value_runtime_baml_ty(value, thread.proof());
     // The contract arrives in the wire's spelling; anchor it so both operands
     // and the context share the runtime's head before asking the algebra.
     let Ok(anchored_contract) = crate::conversion::anchor_wire_ty(&thread.vm, contract) else {
@@ -4800,32 +4796,51 @@ impl BexEngine {
     /// A throwing `cleanup` is logged and swallowed — there is no caller to
     /// propagate to on the GC path, and a bad finalizer must not break the GC
     /// (BEP-042; matches Python's `__del__`).
+    // BUG: a drain takes the WHOLE pending queue, then runs it with an
+    // `await` per finalizer, so overlapping collections break
+    // `baml.sys.collect_garbage`'s promise to run queued finalizers before
+    // returning: when one collection's drain has taken an instance's finalizer
+    // and not yet run it, a second `collect_garbage` finds the queue empty and
+    // returns first. Seen in the shared-engine corpus (any test that forces a
+    // collection, e.g. `ns_cleanup`, is exposed). The fix is for
+    // `collect_garbage` to wait for every finalizer taken up to the end of its
+    // own collection — without a `cleanup` that itself collects waiting on its
+    // own batch.
     async fn drain_finalizers(self: &Arc<Self>) {
         // Root the entire queue into handles BEFORE the first `await`. The queued
         // pointers are raw `HeapPtr`s; if a `cleanup` body yields and a nested or
         // concurrent collection runs (possible when `collect_garbage` is called
         // directly, where `checking_gc` is not held), the not-yet-processed
         // pointers would be moved. Handles are GC roots and are fixed up across a
-        // collection, so converting up front keeps every pending instance valid.
+        // collection, so converting up front keeps every pending instance — and
+        // the finalizer of a class declared at run time — valid.
         let pending: Vec<_> = self
             .heap
             .take_pending_finalizers()
             .into_iter()
-            .map(|(ptr, cleanup_fn)| (self.heap.create_handle(ptr), cleanup_fn))
+            .map(|(instance, cleanup)| {
+                (
+                    self.heap.create_handle(instance),
+                    self.heap.create_handle(cleanup),
+                )
+            })
             .collect();
-        for (handle, cleanup_fn) in pending {
+        for (instance, cleanup) in pending {
             let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+            // The finalizer is called as the function it is: the collector
+            // read it off the instance's class, so no name is resolved — a
+            // class no host name reaches is finalized like any other.
             // `Box::pin` breaks the async-recursion cycle: a `cleanup` body can
             // allocate and trigger another collection, which re-enters this
             // drain — boxing erases the otherwise-infinite future size.
-            let call = Box::pin(self.call_function(
-                &cleanup_fn,
-                vec![BexExternalValue::Handle(handle)],
+            let call = Box::pin(self.call_callable(
+                cleanup,
+                vec![BexExternalValue::Handle(instance)],
                 ctx,
                 /* copy_objects = */ false,
             ));
             if let Err(e) = call.await {
-                tracing::warn!("BEP-042 cleanup finalizer `{cleanup_fn}` failed: {e}");
+                tracing::warn!("BEP-042 cleanup finalizer failed: {e}");
             }
         }
     }
@@ -4961,7 +4976,7 @@ impl BexEngine {
     ) -> Result<ThreadOutcome, EngineError> {
         if let Some(future_id) = thread.vm_thread_settles_future() {
             let is_cancel_panic =
-                thread.vm_thread_cancel().is_cancelled() && self.is_cancelled_panic(value);
+                thread.vm_thread_cancel().is_cancelled() && thread.vm.is_cancelled_panic(value);
             if is_cancel_panic {
                 self.settle_child_cancelled(thread, future_id).await?;
                 // Cancellation settlement does not carry a child stack trace.
@@ -4985,10 +5000,7 @@ impl BexEngine {
         // `baml.panics.*` instance and would surface an internal
         // `TypeMismatch` leak instead of the clean panic. This mirrors the
         // panic bypass in [`enforce_host_throw_contract`].
-        let value_is_panic = value_runtime_baml_ty(value, thread.proof()).is_some_and(|rt| {
-            matches!(&rt, bex_vm_types::RuntimeTy::Class(head, _)
-                    if head.declared_name().is_some_and(|n| n.is_panic_type()))
-        });
+        let value_is_panic = thread.vm.is_panic(value);
         let external = match throws_type {
             Some(ty) if !value_is_panic => {
                 self.convert_vm_value_to_external_with_type(value, ty, &thread.vm, thread.proof())?
@@ -5252,25 +5264,6 @@ impl BexEngine {
             Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
                 Err(EngineError::TracedVmInternalError { source, trace })
             }
-        }
-    }
-
-    /// True if `value` is an `Object::Instance` whose class is
-    /// `baml.panics.Cancelled`. Used to differentiate cancellation panics
-    /// from regular errors when settling a spawned thread that unwound.
-    fn is_cancelled_panic(&self, value: Value) -> bool {
-        let Some(ptr) = value.as_object_ptr() else {
-            return false;
-        };
-        let Some(&cancelled_class_ptr) = self.resolved_class_names.get(CANCELLED_PANIC_CLASS)
-        else {
-            return false;
-        };
-        // SAFETY: a Value::Object that escaped a VM exec step is alive on
-        // the heap; this read is gated by the caller's active heap permit.
-        match unsafe { ptr.get() } {
-            Object::Instance(instance) => instance.class == cancelled_class_ptr,
-            _ => false,
         }
     }
 

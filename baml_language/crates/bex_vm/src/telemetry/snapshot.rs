@@ -796,7 +796,7 @@ mod tests {
             other: indexmap::IndexMap::default(),
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             stream_done: false,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 1,
             owner: bex_vm_types::types::Owner::anonymous(),

@@ -31,7 +31,7 @@ use super::{
     BamlNamespacePrimitiveReflect, BamlNamespaceUnion, BamlNamespaceUnionReflect,
     PackageReflectImpl, copy,
 };
-use crate::BexVm;
+use crate::{BexVm, package_load::StdlibClass};
 
 impl BexVm {
     /// Create the declarations a host asked for, and return the type naming them.
@@ -69,7 +69,7 @@ impl BexVm {
                 // Host type definitions carry no streaming behaviour.
                 stream_done: false,
                 type_tag,
-                has_cleanup: false,
+                cleanup: None,
                 methods: IndexMap::new(),
                 generic_param_count: class.generic_param_count,
                 owner: bex_vm_types::types::Owner::anonymous(),
@@ -200,7 +200,10 @@ fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
     let Object::Class(class) = vm.get_object(instance.class) else {
         unreachable!("Instance.class must point to Object::Class")
     };
-    if class.name.to_string() != "reflect.interface.Implementation" {
+    if !vm
+        .stdlib_heads()
+        .is_class(StdlibClass::InterfaceImplementation, class.type_tag)
+    {
         return Err("implementations must contain reflect.interface.Implementation values".into());
     }
     vm.as_rust_data::<InterfaceWitness>(&instance.load_field(0))
@@ -528,7 +531,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
             other: IndexMap::new(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -1148,7 +1151,10 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
     let Object::Class(class) = vm.get_object(instance.class) else {
         unreachable!("Instance.class must point to Object::Class")
     };
-    if class.name.to_string() != "reflect.WithMeta" {
+    if !vm
+        .stdlib_heads()
+        .is_class(StdlibClass::WithMeta, class.type_tag)
+    {
         return None;
     }
     let optional_string = |index| {
@@ -1565,7 +1571,10 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             let Object::Class(class) = vm.get_object(instance.class) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
-            if class.name.to_string() != "reflect.enum.Value" {
+            if !vm
+                .stdlib_heads()
+                .is_class(StdlibClass::EnumValue, class.type_tag)
+            {
                 return Err(
                     "reflect.enum.new values must be strings or reflect.enum.Value rows".into(),
                 );
@@ -1584,7 +1593,10 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             let Object::Class(meta_class) = vm.get_object(meta.class) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
-            if meta_class.name.to_string() != "reflect.Meta" {
+            if !vm
+                .stdlib_heads()
+                .is_class(StdlibClass::Meta, meta_class.type_tag)
+            {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             }
             let optional_string = |index| {

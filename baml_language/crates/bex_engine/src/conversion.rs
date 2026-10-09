@@ -778,7 +778,10 @@ impl BexEngine {
                 // on the wire. Hosts reconstruct fresh wrapper objects from
                 // these portable payloads; neither media nor a rendered prompt
                 // is a live engine capability.
-                if class.name.to_string() == "ai.Prompt" {
+                if self
+                    .stdlib_heads
+                    .is_class(bex_vm::package_load::StdlibClass::Prompt, class.type_tag)
+                {
                     if let Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(arc))) =
                         fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
                     {
@@ -786,10 +789,11 @@ impl BexEngine {
                     }
                 }
 
-                if matches!(
-                    class.name.to_string().as_str(),
-                    "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
-                ) {
+                if self
+                    .stdlib_heads
+                    .media_kind(bex_vm_types::TypeHead::new(instance.class, class.type_tag))
+                    .is_some()
+                {
                     if let Some(BexExternalValue::Adt(BexExternalAdt::Media(arc))) =
                         fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
                     {
@@ -5677,7 +5681,7 @@ mod union_container_selection_tests {
                 other: indexmap::IndexMap::new(),
                 stream_done: false,
                 type_tag,
-                has_cleanup: false,
+                cleanup: None,
                 methods: indexmap::IndexMap::new(),
                 generic_param_count: 0,
                 owner: bex_vm_types::types::Owner::anonymous(),

@@ -30,12 +30,11 @@
 //! return type exactly as any other body is, and a diagnostic about it speaks
 //! of the code the user wrote, not of a branch they did not.
 
+/// The reserved magic-method name for the BEP-042 finalizer.
+pub use baml_base::CLEANUP_METHOD;
 use baml_base::Name;
 
 use crate::ast::{CallArg, ClassDef, Expr, FunctionBodyDef, FunctionDef, Stmt, UnaryOp};
-
-/// The reserved magic-method name for the BEP-042 finalizer.
-pub const CLEANUP_METHOD: &str = "cleanup";
 
 /// Whether `func` reads as a class's finalizer: it is named `cleanup` and
 /// takes `self` alone, the receiver the run-once guard latches on. Whether it

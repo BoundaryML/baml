@@ -22,6 +22,7 @@ tracing = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
 
 [dev-dependencies]
+baml_base = { workspace = true }
 baml_type = { workspace = true }
 tokio = { workspace = true, features = [ "macros", "rt-multi-thread", "time" ] }
 

@@ -79,23 +79,12 @@ fn runtime_fields<'a>(class: &'a ClassData<'_>) -> Vec<&'a FieldData> {
         .collect()
 }
 
-/// BEP-042: does the class define a `cleanup` finalizer? The checker
-/// decides what one is; the `{class_fqn}.cleanup` the collector resolves is
-/// that method.
-fn has_cleanup(db: &dyn baml_compiler2_mir::Db, class: &ClassData<'_>) -> bool {
-    use baml_compiler2_hir_ty::cleanup::{CleanupMethod, cleanup_method};
-    class
-        .methods
-        .iter()
-        .any(|&method| cleanup_method(db, method) == Some(CleanupMethod::Finalizer))
-}
-
 /// One class's pooled `Object::Class` from its declaration: the runtime
 /// field layout (typed both erased, for codegen, and as templates, for the
-/// typed runtime walk), the BEP-042 `cleanup` shape, and under `type_tag`
-/// the declaration's own operand, which the linker or grafter replaces with
-/// the tag it assigns. The inherent method table is the caller's to fill
-/// once the bodies are pooled.
+/// typed runtime walk) and under `type_tag` the declaration's own operand,
+/// which the linker or grafter replaces with the tag it assigns. The inherent
+/// method table — and with it the BEP-042 finalizer's position — is the
+/// caller's to fill once the bodies are pooled.
 pub(crate) fn build_class_object<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     class_loc: ClassLoc<'db>,
@@ -167,7 +156,7 @@ pub(crate) fn build_class_object<'db>(
         other: indexmap::IndexMap::new(),
         stream_done: class.attrs.stream_done,
         type_tag,
-        has_cleanup: has_cleanup(db, class),
+        cleanup: None,
         methods: indexmap::IndexMap::new(),
         generic_param_count: class.generic_params.len(),
         owner: bex_vm_types::types::Owner::anonymous(),

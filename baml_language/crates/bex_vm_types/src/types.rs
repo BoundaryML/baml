@@ -198,6 +198,18 @@ impl Program {
                 }
             };
 
+        for (index, pooled) in self.objects.iter().enumerate() {
+            if let Object::Class(class) = pooled
+                && let Some(position) = class.cleanup
+                && position >= class.methods.len()
+            {
+                return Err(invalid(format!(
+                    "class object {index} places its finalizer at method {position} of {}",
+                    class.methods.len()
+                )));
+            }
+        }
+
         let package_count = self.packages.len();
         if self.root as usize >= package_count {
             return Err(invalid(format!(

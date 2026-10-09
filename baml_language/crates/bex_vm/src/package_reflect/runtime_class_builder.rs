@@ -890,7 +890,7 @@ fn build_group(
             // the builder's metadata surface has no slot for it.
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),

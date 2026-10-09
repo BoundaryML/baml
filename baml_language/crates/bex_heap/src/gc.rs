@@ -154,11 +154,12 @@ impl BexHeap {
     /// Returns `(GcStats, remapped_roots, forwarding_map)`.
     /// BEP-042: scan the given from-space generations for instances that died
     /// this collection (not in `forwarding`), are not already cleaned, and
-    /// whose class defines a `cleanup` finalizer. Returns their (old) HeapPtrs
-    /// — the keep-alive seeds for finalization.
+    /// whose class defines a `cleanup` finalizer. Returns each (old) instance
+    /// pointer with its class's finalizer — the keep-alive seeds for
+    /// finalization.
     ///
     /// Cheap: most objects are not instances, and most instances belong to
-    /// classes without `cleanup` (a single `has_cleanup` flag read). Only the
+    /// classes without `cleanup` (one `Class::cleanup` read). Only the
     /// dead-and-finalizable minority is collected.
     ///
     /// SAFETY: call only at a GC safepoint, after the root trace has populated
@@ -168,10 +169,13 @@ impl BexHeap {
         &self,
         forwarding: &HashMap<HeapPtr, HeapPtr>,
         gens: &[&ChunkedVec<Object>],
-    ) -> Vec<(HeapPtr, String)> {
+    ) -> Vec<(HeapPtr, HeapPtr)> {
         // Fast path: if no class defines `cleanup`, no instance can ever be
         // finalizable, so skip the O(heap) from-space walk on every collection.
-        if !self.has_finalizable_classes {
+        if !self
+            .has_finalizable_classes
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Vec::new();
         }
         let mut seeds = Vec::new();
@@ -199,16 +203,12 @@ impl BexHeap {
                 let Object::Class(class) = (unsafe { class_ptr.get() }) else {
                     continue;
                 };
-                if class.has_cleanup {
-                    // Resolve the `cleanup` function name here, while the class
-                    // is in hand: methods register as `{class_fqn}.cleanup`
-                    // (matching `make_to_json_callee`'s `{fqn}.to_json`). Only
-                    // emit sets `has_cleanup`, so the class is always declared.
-                    let qtn = class.name.declared().unwrap_or_else(|| {
-                        unreachable!("`has_cleanup` on an anonymous class: only emit sets it")
-                    });
-                    let cleanup_fn = format!("{}.cleanup", qtn.render_dotted(false));
-                    seeds.push((ptr, cleanup_fn));
+                // The finalizer is the class's own method, taken while the
+                // class is in hand. The instance keeps its class alive and the
+                // class its methods, so the closure copied from the seed
+                // carries the function along.
+                if let Some(cleanup) = class.cleanup() {
+                    seeds.push((ptr, cleanup));
                 }
             }
         }
@@ -216,7 +216,7 @@ impl BexHeap {
     }
 
     /// BEP-042 (major GC): keep alive every dead, not-yet-cleaned instance of a
-    /// `has_cleanup` class (and its transitive closure) by copying it into the
+    /// class with a finalizer (and its transitive closure) by copying it into the
     /// inactive space, and queue it for finalization. The copy loop mirrors the
     /// root trace in [`copy_collection`]; queued pointers are the post-copy
     /// locations, valid until the engine drains them at this same safepoint.
@@ -232,7 +232,14 @@ impl BexHeap {
         if seeds.is_empty() {
             return;
         }
-        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        // Both halves of a seed are kept alive explicitly: the finalizer is
+        // reachable from its instance through the class, but seeding it means
+        // the closure below places it in `forwarding` whatever generation the
+        // class sits in.
+        let mut worklist: Vec<HeapPtr> = seeds
+            .iter()
+            .flat_map(|(instance, cleanup)| [*instance, *cleanup])
+            .collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
                 continue;
@@ -246,9 +253,9 @@ impl BexHeap {
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
         }
-        for (old_ptr, cleanup_fn) in seeds {
-            // Every seed was copied above, so it is now in `forwarding`.
-            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        for (instance, cleanup) in seeds {
+            // Both were seeded above, so both are now in `forwarding`.
+            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
         }
     }
 
@@ -268,7 +275,14 @@ impl BexHeap {
         if seeds.is_empty() {
             return;
         }
-        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        // Both halves of a seed are kept alive explicitly: the finalizer is
+        // reachable from its instance through the class, but seeding it means
+        // the closure below places it in `forwarding` whatever generation the
+        // class sits in.
+        let mut worklist: Vec<HeapPtr> = seeds
+            .iter()
+            .flat_map(|(instance, cleanup)| [*instance, *cleanup])
+            .collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
                 continue;
@@ -292,8 +306,10 @@ impl BexHeap {
                 }
             }
         }
-        for (old_ptr, cleanup_fn) in seeds {
-            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        for (instance, cleanup) in seeds {
+            // Both were seeded above, so both are now in `forwarding` — at
+            // their own address if this collection did not move them.
+            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
         }
     }
 
@@ -1896,7 +1912,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -2549,7 +2565,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -2798,7 +2814,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(42),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -2941,7 +2957,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -3370,7 +3386,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),

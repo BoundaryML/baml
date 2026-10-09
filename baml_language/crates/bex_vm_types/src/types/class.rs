@@ -72,11 +72,12 @@ pub struct Class {
     /// the identity a `TypeHead` referring to this class compares by.
     pub type_tag: baml_type::typetag::TypeTag,
 
-    /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`
-    /// finalizer. Set at emit time. The GC checks this bit to decide whether an
-    /// instance is finalizable — so the common case (no `cleanup`) is a single
-    /// flag read and never enters finalization.
-    pub has_cleanup: bool,
+    /// The class's finalizer (BEP-042), as its position in [`methods`](Self::methods),
+    /// or `None` for a class without one. The checker decides which method is
+    /// the finalizer; emit records where it placed that method. The position
+    /// is validated against the table at load (`Program::validate`), so reading
+    /// it needs no name and cannot miss.
+    pub cleanup: Option<usize>,
 
     /// Number of generic params the class itself declares (`GenericBox<T>` ⇒ 1,
     /// non-generic ⇒ 0). A method's `display_type_params` are De Bruijn-ordered
@@ -116,6 +117,17 @@ pub struct ClassMethodDef {
     /// pointers are runtime-only. A GC edge like `default_fn`.
     #[borsh(skip)]
     pub function_ptr: HeapPtr,
+}
+
+impl Class {
+    /// This class's finalizer, if it declares one: the method at the recorded
+    /// position of its method table. The class is the identity here — nothing
+    /// renders a name to find the function.
+    #[must_use]
+    pub fn cleanup(&self) -> Option<HeapPtr> {
+        self.cleanup
+            .map(|position| self.methods[position].function_ptr)
+    }
 }
 
 impl std::fmt::Display for Class {
