@@ -37,6 +37,7 @@ const FIXTURES: &[&str] = &[
     "defers",
     "enums",
     "floats",
+    "higher_order",
     "lambdas",
     "literal_unions",
     "loops",
@@ -116,6 +117,7 @@ generated_module!(primitive_unions, "native/generated/primitive_unions.rs");
 generated_module!(class_unions, "native/generated/class_unions.rs");
 generated_module!(lambdas, "native/generated/lambdas.rs");
 generated_module!(captures, "native/generated/captures.rs");
+generated_module!(higher_order, "native/generated/higher_order.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -1151,4 +1153,35 @@ async fn captures_match_vm() {
     let b = bex_aot::shared(user_Box { n: int(1) });
     assert_eq!(user_mutate_box(b.clone()).unwrap(), int(5));
     assert_eq!(b.borrow().n, int(5));
+}
+
+/// The array methods that call back into a function value: every one walks
+/// a snapshot, `sort_by` is the VM's merge sort comparison for comparison
+/// (the logged sequence agrees), a throwing comparator or key leaves the
+/// array as it was, a mutating one has its changes overwritten.
+#[tokio::test]
+async fn higher_order_matches_vm() {
+    use higher_order::*;
+    let o = Oracle::new("higher_order");
+    for n in [0, 1, 2, 3] {
+        check!(o, suite(n) => user_suite(int(n)));
+        check!(o, render_items(n) => user_render_items(int(n)));
+    }
+    for (a, b) in [(1, 2), (2, 2), (3, 2), (MIN, MAX)] {
+        check!(o, cmp_ints(a, b) => user_cmp_ints(int(a), int(b)));
+    }
+    for (a, b) in [
+        (1.0, 2.0),
+        (2.0, 2.0),
+        (f64::NAN, 1.0),
+        (1.0, f64::NAN),
+        (f64::NAN, f64::NAN),
+        (-0.0, 0.0),
+        (f64::NEG_INFINITY, -1e300),
+    ] {
+        check!(o, cmp_floats(a, b) => user_cmp_floats(a, b));
+    }
+    for (a, b) in [("a", "b"), ("b", "a"), ("", ""), ("é", "z"), ("Z", "a")] {
+        check!(o, cmp_strings(a, b) => user_cmp_strings(text(a), text(b)));
+    }
 }
