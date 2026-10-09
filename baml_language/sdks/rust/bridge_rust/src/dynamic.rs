@@ -147,10 +147,13 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
                     .collect(),
             }))
         }
+        // A container states the type the engine gave it. The engine always
+        // sends one; a value that arrived without is sent back unannotated
+        // rather than under a type with a hole in it.
         Some(Out::ListValue(list)) => {
-            value_type = Some(wire::BamlTy {
+            value_type = list.item_type.map(|item| wire::BamlTy {
                 ty: Some(wire::baml_ty::Ty::List(Box::new(wire::BamlTyList {
-                    item: list.item_type.map(Box::new),
+                    item: Some(Box::new(item)),
                 }))),
             });
             Some(In::ListValue(wire::InboundListValue {
@@ -159,12 +162,15 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
         }
         Some(Out::MapValue(map)) => {
             let key_type = map.key_type.clone();
-            value_type = Some(wire::BamlTy {
-                ty: Some(wire::baml_ty::Ty::Map(Box::new(wire::BamlTyMap {
-                    key: map.key_type.map(Box::new),
-                    value: map.value_type.map(Box::new),
-                }))),
-            });
+            value_type = map
+                .key_type
+                .zip(map.value_type)
+                .map(|(key, value)| wire::BamlTy {
+                    ty: Some(wire::baml_ty::Ty::Map(Box::new(wire::BamlTyMap {
+                        key: Some(Box::new(key)),
+                        value: Some(Box::new(value)),
+                    }))),
+                });
             Some(In::MapValue(wire::InboundMapValue {
                 entries: map
                     .entries
@@ -307,4 +313,121 @@ pub async fn invoke_async(
     let result = crate::decode::decode_result(&receiver.wait().await);
     drop(target);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use wire::{baml_outbound_value::Value as Out, baml_ty::Ty, inbound_value::Value as In};
+
+    use super::*;
+
+    fn int_ty() -> wire::BamlTy {
+        wire::BamlTy {
+            ty: Some(Ty::Primitive(wire::BamlTyPrimitive {
+                kind: wire::BamlTyPrimitiveKind::BamlTyPrimitiveInt as i32,
+            })),
+        }
+    }
+
+    fn string_ty() -> wire::BamlTy {
+        wire::BamlTy {
+            ty: Some(Ty::Primitive(wire::BamlTyPrimitive {
+                kind: wire::BamlTyPrimitiveKind::BamlTyPrimitiveString as i32,
+            })),
+        }
+    }
+
+    fn out(value: Out) -> wire::BamlOutboundValue {
+        wire::BamlOutboundValue { value: Some(value) }
+    }
+
+    /// A list or map goes back under the type the engine gave it.
+    #[test]
+    fn containers_state_the_type_they_arrived_with() {
+        let list = outbound_to_inbound(out(Out::ListValue(wire::BamlValueList {
+            item_type: Some(int_ty()),
+            items: vec![out(Out::IntValue(1))],
+        })));
+        assert!(matches!(
+            list.value_type.as_ref().and_then(|ty| ty.ty.as_ref()),
+            Some(Ty::List(inner)) if inner.item.as_deref() == Some(&int_ty())
+        ));
+        assert!(matches!(list.value, Some(In::ListValue(_))));
+
+        let map = outbound_to_inbound(out(Out::MapValue(wire::BamlValueMap {
+            key_type: Some(string_ty()),
+            value_type: Some(int_ty()),
+            entries: vec![wire::BamlOutboundMapEntry {
+                key: "a".into(),
+                value: Some(out(Out::IntValue(1))),
+            }],
+        })));
+        assert!(matches!(
+            map.value_type.as_ref().and_then(|ty| ty.ty.as_ref()),
+            Some(Ty::Map(inner))
+                if inner.key.as_deref() == Some(&string_ty()) && inner.value.as_deref() == Some(&int_ty())
+        ));
+    }
+
+    /// A container the engine did not type is sent back without a statement,
+    /// never under a type with a hole in it.
+    #[test]
+    fn untyped_containers_state_nothing() {
+        let list = outbound_to_inbound(out(Out::ListValue(wire::BamlValueList {
+            item_type: None,
+            items: vec![],
+        })));
+        assert!(list.value_type.is_none());
+        assert!(matches!(list.value, Some(In::ListValue(_))));
+
+        let map = outbound_to_inbound(out(Out::MapValue(wire::BamlValueMap {
+            key_type: Some(string_ty()),
+            value_type: None,
+            entries: vec![],
+        })));
+        assert!(map.value_type.is_none());
+    }
+
+    /// A union envelope contributes the selected member to a scalar that
+    /// would otherwise carry no type, and defers to a container's own.
+    #[test]
+    fn union_envelopes_state_the_selected_member() {
+        let union_ty = wire::BamlTy {
+            ty: Some(Ty::Union(wire::BamlTyUnion {
+                options: vec![int_ty(), string_ty()],
+            })),
+        };
+        let scalar = outbound_to_inbound(out(Out::UnionVariantValue(Box::new(
+            wire::BamlValueUnionVariant {
+                self_type: Some(union_ty),
+                selected_option_index: Some(1),
+                value: Some(Box::new(out(Out::StringValue("x".into())))),
+                ..Default::default()
+            },
+        ))));
+        assert_eq!(scalar.value_type, Some(string_ty()));
+        assert!(matches!(scalar.value, Some(In::StringValue(ref s)) if s == "x"));
+
+        let list_ty = wire::BamlTy {
+            ty: Some(Ty::List(Box::new(wire::BamlTyList {
+                item: Some(Box::new(int_ty())),
+            }))),
+        };
+        let list = outbound_to_inbound(out(Out::UnionVariantValue(Box::new(
+            wire::BamlValueUnionVariant {
+                self_type: Some(wire::BamlTy {
+                    ty: Some(Ty::Union(wire::BamlTyUnion {
+                        options: vec![list_ty.clone(), string_ty()],
+                    })),
+                }),
+                selected_option_index: Some(0),
+                value: Some(Box::new(out(Out::ListValue(wire::BamlValueList {
+                    item_type: Some(int_ty()),
+                    items: vec![],
+                })))),
+                ..Default::default()
+            },
+        ))));
+        assert_eq!(list.value_type, Some(list_ty));
+    }
 }
