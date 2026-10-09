@@ -22,43 +22,51 @@ BAML --> ... --> MIR --+--> emit  --> bytecode --> bex_vm           (existing)
 
 A function is admitted when all of the following hold:
 
-- it is non-generic, has no declared trace hook and no lambdas in its body;
-  it may be a method of a concrete class (declared in the class or an
-  `implements` block), whose receiver is its first parameter; an interface's
-  default method is not admitted; a defaulted parameter is admitted when its
-  default is a constant (a literal, possibly negated, `null`, or an enum
-  variant): the constant is passed from every call site that omits the
-  argument, and the callee's prologue test against the omitted-argument
-  sentinel is emitted as the constant `false`;
+- it is non-generic and has no declared trace hook; it may be a method of a
+  concrete class (declared in the class or an `implements` block), whose
+  receiver is its first parameter; an interface's default method is not
+  admitted; a defaulted parameter is admitted when its default is a
+  constant (a literal, possibly negated, `null`, or an enum variant): the
+  constant is passed from every call site that omits the argument, and the
+  callee's prologue test against the omitted-argument sentinel is emitted
+  as the constant `false`; the lambdas in its body are functions of their
+  own, admitted with it, see [Function values](#function-values-and-closures);
 - every parameter, local and the return place has a native type (below), or
   is a local whose declared type can be *refined* from its definitions
   (`unknown` and `baml.iter.Iterator<..>` temps of a for-in, the function-typed
   receiver temp lowering sometimes emits for `.length()`); `reflect.Type`
   locals may only hold a `load_type` feeding a generic builtin, and `never`
   may only be the destination of `baml.sys.panic`;
-- its body uses `Assign`, `Drop`, `Nop` and trace-hook intrinsics (no-ops) over
-  `Use`, `BinaryOp`, `UnaryOp`, `Array`, `Map`, `Len` of an array or a map,
-  `Aggregate` of a class, `Discriminant` of an enum, `IsType` and
-  `IsTypeTag` on a union, nullable or closed value (and the literal tests and
-  the `baml.iter.Done` test), `TypeTag` of a union, reading and writing
-  locals, class fields and array elements (a map subscript lowers to a
-  `baml.Map` call);
+- its body uses `Assign`, `Drop`, `Nop`, `FreshCell` and trace-hook
+  intrinsics (no-ops) over `Use`, `BinaryOp`, `UnaryOp`, `Array`, `Map`,
+  `Len` of an array or a map, `Aggregate` of a class, `Discriminant` of an
+  enum, `IsType` and `IsTypeTag` on a union, nullable or closed value (and
+  the literal tests and the `baml.iter.Done` test), `TypeTag` of a union,
+  `MakeClosure`, reading and writing locals, class fields, array elements
+  (a map subscript lowers to a `baml.Map` call) and the cells of captured
+  locals;
 - its control flow uses `Goto`, `Branch`, `Switch` on `int` keys or on a
   union's type tag, `Return`, `Unreachable`, `ShortCircuit` (`&&`, `||`,
-  `??`), `NarrowBind` on a union or nullable value, direct `Call` and the
-  `VirtualCall`s of the for-in protocol and `sort`; `throw` of a class
-  instance, and `catch` / `defer` in the shapes lowering gives them (unwind
-  edges, landing blocks, `rethrow`, `throw_if_panic`, class tests, class
-  bindings and class-tag switches on the caught value), see
-  [Errors](#errors-throw-catch-defer) and [Unions](#unions-and-narrowing);
+  `??`), `NarrowBind` on a union or nullable value, direct `Call`, `Call`
+  through a function value, and the `VirtualCall`s of the for-in protocol,
+  `sort` and `cmp`; `throw` of a class instance, and `catch` / `defer` in
+  the shapes lowering gives them (unwind edges, landing blocks, `rethrow`,
+  `throw_if_panic`, class tests, class bindings and class-tag switches on
+  the caught value), see [Errors](#errors-throw-catch-defer) and
+  [Unions](#unions-and-narrowing);
 - every call is either a direct call of a source function in the subset, a
-  stdlib builtin from the table below (keyed by link name), or
-  `baml.sys.panic` with a string literal.
+  call through a function value, a stdlib builtin from the table below
+  (keyed by link name), or `baml.sys.panic` with a string literal; a source
+  function used as a value is admitted like a callee.
 
 Recursion is admitted: every function on a call cycle holds a
 `bex_aot::depth::Guard` for its duration, so unbounded recursion throws
 `baml.panics.StackOverflow` at the VM's frame limit instead of overflowing
-the native stack. Functions off every cycle pay nothing.
+the native stack. A cycle closed through a function value is not in the
+static call graph, so every lambda and every function that calls through
+a function value holds the guard too (every such cycle passes through one
+of them). Functions off every cycle that call nothing indirectly pay
+nothing.
 
 ### Value model
 
@@ -76,6 +84,8 @@ the native stack. Functions off every cycle pay nothing.
 | class `C` | `Shared<user_C>` | generated `pub struct user_C { fields in declaration order }`; `C { .. }` is `shared(user_C { .., unspecified: None })`, `c.f` `c.borrow().f.clone()`, `c.f = v` `c.borrow_mut().f = v` |
 | `map<K, V>` | `Map<K, V>` | `bex_aot::map::Map`: a `Shared` handle over an insertion-ordered table; `K` is `int`, `bool` or `string`; `{ k: v }` is `map::new::<K, V>(Vec::from([..]))`, `m[k]` `map::index(&m, &k)?` (`MapKeyNotFound` when absent), `m[k] = v` `map::set(&m, k, v)`, `.length()` `map::len(&m)` |
 | enum `E` | `user_E` | generated fieldless `pub enum user_E { variants in declaration order }`, `Copy`; `E.V` is `user_E::V`, `==` compares variants, `match` switches on `int::lit(e as i64)` (the VM's discriminant), `to_string` and JSON use the variant's BAML name |
+| `(A, B) -> R throws E` | `Rc<dyn Fn(A, B) -> Result<R, Thrown>>` | a counted pointer to a closure, shared by reference; the `throws` clause has no native form; `f(a, b)` is `(f)(a, b)?`; a function type with an optional parameter, a class field of function type, a union member of function type, `==`, `to_string` and JSON of a function value have no native form, see [Function values](#function-values-and-closures) |
+| a captured local | `cell::Cell<T>` | `bex_aot::cell::Cell<T>`, a counted pointer to the value, held by the local's slot and cloned into every closure capturing it; `fresh_cell` is `cell::fresh()` / `cell::carry(&c)`, reads `cell::get(&c)?`, writes `cell::set(&c, v)` |
 | for-in iterator | `bex_aot::array::Iter<T>` | refined from `virtual_call iter` on a `T[]` |
 | result of `next` | `Option<T>` | refined; `is_type(x, Done)` is `x.is_none()`, the element copy `x.clone().expect(..)` |
 | caught error | `Thrown` | a handler's error local: `bex_aot::Thrown`, a panic or a thrown class instance; its context local has no native form |
@@ -116,12 +126,90 @@ be thrown and caught by name; a class that is never thrown pays nothing.
 | `virtual_call iter as baml.iter.Iterable` on `T[]` | `array::iter(&xs)` |
 | `virtual_call next as baml.iter.Iterator` on `Iter<T>` | `array::next(&mut it)` |
 | `virtual_call sort as baml.Sortable` on `int[]`/`float[]`/`string[]` | `array::sort_int(&xs)` etc. |
+| `virtual_call cmp as baml.ops.Compare` on `int`/`float`/`string`/`bigint`/`bool` | the language's order (`Ord::cmp`, `float::cmp`, `string::cmp`, `bigint::cmp`) as a `baml_ops_Ordering` variant |
+| `baml.Array.map` / `filter` / `filter_map` / `for_each` / `some` / `every` / `find` / `find_index` / `find_last` / `find_last_index` / `flat_map` (`xs, f`), `reduce` (`xs, f, init`) | `array::map(&xs, &*f)?` etc., over a snapshot of the array, see [Function values](#function-values-and-closures) |
+| `baml.Array.sort_by` (`xs, cmp`) / `sort_by_key` (`xs, key`) | `array::sort_by(&xs, &\|l, r\| ..)?` (the comparator's `Greater`) / `array::sort_by_key(&xs, &*key, &\|l, r\| <order>)?` in place, then `xs.clone()`; a `sort_by_key` key must be a primitive |
 | `baml.sys.panic("..")` | `return Err(Thrown::from(Panic::UserPanic { .. }))` |
 
 Any other stdlib function, with or without source, is rejected as
 `` unsupported builtin `<link name>` ``, so the admission report names the next
 builtin to add. A type argument that still mentions a type parameter rejects
 the call.
+
+### Function values and closures
+
+A function type `(A, B) -> R throws E` is `Rc<dyn Fn(A, B) -> Result<R,
+Thrown>>` ([`NativeTy::Fn`]): a counted pointer to a closure, cloned where
+a handle would be, passed to a callee as a value. A call through one is
+`(f)(a, b)?` ([`CallKind::Indirect`]); every argument must be given, as a
+function type with an optional parameter has no native type. A declared
+function used as a value (`let g = f`, `xs.map(f)`) is its function item
+behind the pointer (`Rc::new(user_f)`) and is admitted like a callee; one
+with a defaulted parameter is not, since the default is filled at direct
+call sites only.
+
+A lambda is a function of its own ([`FnId::Lambda`]), analyzed from the
+`make_closure` that creates it once the enclosing function's locals are
+typed, and emitted as `pub fn user_f__lambda0(..)` (nested:
+`user_f__lambda0__lambda1`) beside its creator. The closure value is a
+Rust closure calling it: `Rc::new(move |a| user_f__lambda0(&cell0, a))`.
+Lambdas are never listed in `NativeModule::functions`; they have no
+declaration.
+
+A local a closure captures (`LocalDecl::is_captured`) holds a
+`bex_aot::cell::Cell<T>` where the VM's slot holds an `Object::Cell`: a
+counted pointer to the value, read and written through `Place::Deref`
+(`cell::get(&c)?`, `cell::set(&c, v)`), cloned into every closure that
+captures it, and lent to the lambda's function on every call as a leading
+`_c0: &cell::Cell<T>` parameter (a nested lambda forwards `_c0` by cloning
+it). A captured parameter is celled on entry with the value the caller
+passed (`let mut _1: cell::Cell<T> = cell::with(_1);`), as the VM's frame
+preamble cells it. `fresh_cell(_n)` replaces the cell (`cell::fresh()`,
+or `cell::carry(&_n)` for a C-style `for` header binding copied into the
+next iteration), which is what gives a binding declared in a loop body a
+cell per iteration: closures created in different iterations see different
+cells, and closures created in one iteration, or anywhere else over one
+binding, see one value. Mutation through a capture is therefore visible to
+the enclosing scope and vice versa, a closure returned from its creator
+keeps its cells alive, and a cell read as a call argument copies the value
+out before the call, so no borrow is live across it. A read of a cell no
+store has reached is the `Unreachable` panic (the checker should have
+rejected the program; the VM would read `null`).
+
+The `baml.Array` methods that call back into a function value map to
+`bex_aot::array` functions that take the callback as a `&dyn Fn`. Every one
+walks a snapshot of the array taken before the first callback, as the VM's
+continuations do, so a callback that pushes to the array is not observed by
+the walk and no `RefCell` borrow is held while a callback runs. `sort_by`
+is the VM's bottom-up merge sort over the snapshot, comparison for
+comparison (a comparator with side effects sees the same sequence of
+calls), written back only once every comparison has returned: a throwing
+comparator leaves the array as it was, a comparator that reads the array
+sees it unsorted, and one that mutates it has the changes overwritten.
+`sort_by_key` computes every key once, left to right, then orders by the
+key's primitive order with the same stable sort. A callback whose type is
+not the one the runtime calls is adapted at the call site when every
+argument stores into its parameter and its result stores into what the
+runtime reads: `&move |a| { let value = f(Some(a))?; Ok(value) }`, with
+a `filter_map` callback that never returns `null` wrapped in `Some` and a
+`for_each` callback's result discarded. The result type of `map`,
+`filter_map`, `flat_map`, `reduce` and the key type of `sort_by_key` come
+from the call's type arguments, so `(int | null)[]` from a `map` whose
+callback returns `int` is a `Wrap` in the adapter. `cmp` on a primitive is
+the language's order as a `baml.ops.Ordering` variant, which is what a
+comparator usually returns.
+
+A function value has no rendering (`to_string`), no JSON form, no `==`
+(the VM compares closures by identity and pools declared functions, which
+a fresh `Rc` per use would not reproduce), and cannot be a class field or
+a union member: the generated struct and enum render, serialize and
+compare their members. `(T) -> R | null` is `Option<Rc<..>>` as any
+nullable. A method used as a value (`obj.m` without a call,
+`make_bound_method`) is rejected with that reason: the corpus has 19 such
+functions. A function value of one type stored where a wider function type
+is expected (a callback returning `int` passed as `(int) -> int | null`
+outside the array methods) is rejected: the VM passes the value as it is,
+and native code has no adapter there yet.
 
 ### Unions and narrowing
 
@@ -374,9 +462,10 @@ those types compare by value on both backends; a `float` key's NaN and a
 class's own `Hash`/`Equals` are not reproduced), an open union (a member
 that is `unknown`, an interface, a generic class, a type alias, a function
 or media: the reason names the member, `interface (a union member)`),
-`uint8array`, media, function and future types, interfaces, generic
-classes, a class with such a field (the field is named), and an `unknown`
-or interface-typed local no definition refines. A `to_string` on a class or
+`uint8array`, media and future types, a function type with an optional
+parameter, a class field of function type, interfaces, generic classes, a
+class with such a field (the field is named), and an `unknown` or
+interface-typed local no definition refines. A `to_string` on a class or
 enum with its own `baml.ToString` implementation is rejected, as the
 structural rendering would be wrong; so is `==` on an enum, or a union with
 one, that implements its own `baml.ops.Equals`, which the VM dispatches.
@@ -385,16 +474,22 @@ Constructs: `throw` of a value that is not a class instance (`throw
 binding or a wildcard (`let s: string => ..`), a binding of a generic class,
 of a class outside the model, or of a stdlib error or panic class (`let p:
 baml.panics.IndexOutOfBounds => ..`, see Limitations), a read of the bound
-context of `catch (e, ctx)`, `spawn`/`await`, sys-ops, closures and captured
-locals, a field read through a narrowed union (`v.n` after `v is A`; bind it
-instead), a type test against a float or bigint literal, `==` on arrays,
-maps, classes or a union with such a member (the VM compares class
+context of `catch (e, ctx)`, `spawn`/`await`, sys-ops, a field read
+through a narrowed union (`v.n` after `v is A`; bind it instead), a type
+test against a float or bigint literal, `==` on arrays, maps, classes,
+function values or a union with such a member (the VM compares class
 instances structurally, with the class's own `Equals` when it has one; the
-runtime does not), a JSON decode into a type that mentions a literal type
+runtime does not), `to_string` or JSON of a function value, a method used
+as a value, a stdlib or generic function used as a value, a function with
+a defaulted parameter used as a value, a lambda in a generic function, a
+function value stored where a wider function type is expected, an omitted
+argument in a call through a function value, a `sort_by_key` key or a
+`cmp` receiver that is not a primitive, an array callback whose type the
+runtime cannot call, a JSON decode into a type that mentions a literal type
 (the VM rejects a value outside the literal, which the erased primitive
 would accept; the field is named), interface method calls other than
-`iter`/`next`/`sort`, `sort` on a non-primitive array, indirect calls, calls
-with trace attachments, an omitted argument to a stdlib function, or type
+`iter`/`next`/`sort`/`cmp`, `sort` on a non-primitive array, calls with
+trace attachments, an omitted argument to a stdlib function, or type
 arguments to a user function, any stdlib function not in the table, a
 `panic` with a computed message, a defaulted parameter whose default is
 computed (`b: int = a + 1`), interface default methods, generic functions
@@ -418,7 +513,8 @@ as its destination, which it never stores to.
 - `Array.push` returns the array's length, so the emitted call re-reads it
   into the (usually unused) destination temp.
 - `Rvalue::TraceHookSettings` and stdlib BAML-source bodies are not compiled;
-  the stdlib functions the benchmarks need are mapped directly.
+  the stdlib functions the benchmarks need are mapped directly, including
+  `for_each`, `filter_map` and `sort_by_key`, whose BAML bodies the VM runs.
 - A `catch` binding of a stdlib error or panic class
   (`let e: baml.panics.IndexOutOfBounds => e.index`) is rejected: the
   runtime raises those as types of its own (`bex_lang::Panic`,
@@ -437,3 +533,11 @@ as its destination, which it never stores to.
   alternative, not taken yet.
 - A union's class members compare structurally on the VM; natively `==` on
   such a union is rejected, as `==` on a class is.
+- A cycle through a closure (a closure stored in a cell it captures, or in
+  a field of an object it captures) is never freed, like a cycle through
+  class fields: handles are counted, not collected (D2). A closure that
+  captures nothing, or only values the cycle does not pass through, is
+  freed with its last pointer.
+- A function value never crosses a function-type boundary with an adapter
+  outside the array methods: `(int) -> int` passed as `(int) -> int | null`
+  is rejected rather than wrapped.

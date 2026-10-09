@@ -2419,6 +2419,20 @@ function f(xs: int[]) -> int[] {{
 }
 
 #[test]
+fn rejects_a_function_value_where_a_wider_function_type_is_expected() {
+    let rejection = reject(
+        r"
+function take(f: (int) -> int | null throws never) -> int | null { f(1) }
+function f() -> int | null {
+    take((x: int) -> int { x })
+}
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "no adapter between function types");
+}
+
+#[test]
 fn rejects_function_values_without_a_native_form() {
     let rejection = reject(
         r"
