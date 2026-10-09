@@ -80,8 +80,8 @@ impl ErrorObject for DecodeError {
 }
 
 /// `baml.json.SerializationError { message, path, reason }`: a value with no
-/// JSON form. Unreachable for the types this crate serializes; raised only
-/// when a hand-written `Serialize` impl fails.
+/// JSON form, which among the types this crate serializes is a map keyed by
+/// `int` or `bool` ([`crate::map::STRING_MAP_REQUIRED`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SerializationError {
     /// Prose description.
@@ -107,6 +107,9 @@ impl ErrorObject for SerializationError {
 }
 
 /// `baml.json.to_string(value)`: compact JSON, as `serde_json::to_string`.
+/// A value with no JSON form (a map keyed by `int` or `bool`) throws
+/// [`SerializationError`] with the reason `"unserializable"`, as the VM's
+/// untyped rendering does.
 pub fn to_string<T: Serialize + ?Sized>(value: &T) -> Result<Str, Thrown> {
     match serde_json::to_string(value) {
         Ok(text) => Ok(Str::from(text)),

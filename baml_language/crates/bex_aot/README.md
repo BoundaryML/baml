@@ -12,6 +12,7 @@ garbage collector.
 | `float` | `f64` | `bex_lang::float` re-exported |
 | `string` | `Str` over `bex_str::BexStr` | `string`: literals, `concat`, byte-order `cmp`, code-point `length` |
 | `T[]`, class `C` | `Shared<Vec<T>>`, `Shared<C>` | `handle`: `Rc<RefCell<T>>` with reference semantics; `array`: checked `get`/`set`, `push`, primitive sorts, the for-in cursor `Iter<T>` |
+| `map<K, V>` | `Map<K, V>` | `map`: a handle over an insertion-ordered `IndexMap`, keyed by `string`, `int` or `bool`; `index` raises `MapKeyNotFound`; JSON needs string keys, as on the VM |
 | `T \| null` | `Option<T>` | |
 | `to_string()` | `ToBaml` | `render`: the structural walk, `render::class` for generated structs |
 | `json.*` | serde through `serde_json` | `json`: `to_string`, `deserialize<T>`, the `ParseError` / `DecodeError` classes |

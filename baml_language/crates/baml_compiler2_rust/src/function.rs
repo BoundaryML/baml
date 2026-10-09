@@ -78,6 +78,23 @@ pub(crate) enum SortKind {
     Str,
 }
 
+/// Which `bex_aot::map` function a `baml.Map.*` call becomes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MapOp {
+    /// `m.length()` called as a method (the subscript-free `len` rvalue is
+    /// the usual lowering).
+    Length,
+    Has,
+    Get,
+    Index,
+    Set,
+    Delete,
+    Keys,
+    Values,
+    GetOrInsert,
+    Clear,
+}
+
 /// A stdlib function mapped to a `bex_aot` call rather than compiled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Builtin<'db> {
@@ -110,6 +127,8 @@ pub(crate) enum Builtin<'db> {
     Next,
     /// `virtual_call sort as baml.Sortable` on a primitive array.
     Sort(SortKind),
+    /// `baml.Map.<op>(m, ..)`.
+    Map(MapOp),
 }
 
 /// What a `Call` or `VirtualCall` terminator does in the generated code.
@@ -733,8 +752,33 @@ impl<'db> Env<'_, 'db> {
                 }
                 Ok(NativeTy::Array(Box::new(element)))
             }
+            Rvalue::Map(key_template, value_template, entries) => {
+                let key = self.template_ty(key_template)?;
+                let value = self.template_ty(value_template)?;
+                let map = NativeTy::Map(Box::new(key.clone()), Box::new(value.clone()));
+                if !matches!(key, NativeTy::Int | NativeTy::Bool | NativeTy::Str) {
+                    return Err(Rejection::unsupported(format!(
+                        "type `{}`: map key type {}",
+                        self.describe(&map),
+                        self.describe(&key)
+                    )));
+                }
+                for (key_operand, value_operand) in entries {
+                    for (operand, expected) in [(key_operand, &key), (value_operand, &value)] {
+                        let actual = self.operand_ty(operand, Some(expected))?;
+                        if !stores(&actual, expected) {
+                            return Err(Rejection::invalid(format!(
+                                "map literal of `{}` holds a `{}`",
+                                self.describe(&map),
+                                self.describe(&actual)
+                            )));
+                        }
+                    }
+                }
+                Ok(map)
+            }
             Rvalue::Len(place) => match self.place_ty(place)? {
-                NativeTy::Array(_) => Ok(NativeTy::Int),
+                NativeTy::Array(_) | NativeTy::Map(..) => Ok(NativeTy::Int),
                 NativeTy::Str => Err(Rejection::unsupported("length of a string place")),
                 other => Err(Rejection::unsupported(format!(
                     "length of a `{}`",
@@ -1456,6 +1500,63 @@ impl<'db> Env<'_, 'db> {
                 self.operand_of(&args[0], &NativeTy::Float)?;
                 (Builtin::FloatItrunc, NativeTy::Int)
             }
+            "baml.Map.length"
+            | "baml.Map.has"
+            | "baml.Map.get"
+            | "baml.Map.index"
+            | "baml.Map.set"
+            | "baml.Map.delete"
+            | "baml.Map.keys"
+            | "baml.Map.values"
+            | "baml.Map.get_or_insert"
+            | "baml.Map.clear" => {
+                let op = match link_name.strip_prefix("baml.Map.") {
+                    Some("length") => MapOp::Length,
+                    Some("has") => MapOp::Has,
+                    Some("get") => MapOp::Get,
+                    Some("index") => MapOp::Index,
+                    Some("set") => MapOp::Set,
+                    Some("delete") => MapOp::Delete,
+                    Some("keys") => MapOp::Keys,
+                    Some("values") => MapOp::Values,
+                    Some("get_or_insert") => MapOp::GetOrInsert,
+                    Some("clear") => MapOp::Clear,
+                    _ => unreachable!("matched above"),
+                };
+                let value_count = match op {
+                    MapOp::Length | MapOp::Keys | MapOp::Values | MapOp::Clear => 1,
+                    MapOp::Has | MapOp::Get | MapOp::Index | MapOp::Delete => 2,
+                    MapOp::Set | MapOp::GetOrInsert => 3,
+                };
+                // A method call carries `<K, V>`; the `set` lowering emits
+                // for a map literal's entries carries none.
+                if !(type_args.is_empty() || type_args.len() == 2) || args.len() != value_count {
+                    return Err(Rejection::invalid(format!(
+                        "`{link_name}` called with {} type and {} value arguments",
+                        type_args.len(),
+                        args.len()
+                    )));
+                }
+                let NativeTy::Map(key, value) = self.operand_ty(&args[0], None)? else {
+                    return Err(Rejection::invalid(format!("`{link_name}` on a non-map")));
+                };
+                if value_count >= 2 {
+                    self.operand_of(&args[1], &key)?;
+                }
+                if value_count == 3 {
+                    self.operand_of(&args[2], &value)?;
+                }
+                let result = match op {
+                    MapOp::Length => NativeTy::Int,
+                    MapOp::Has => NativeTy::Bool,
+                    MapOp::Get | MapOp::Set | MapOp::Delete => NativeTy::Option(value),
+                    MapOp::Index | MapOp::GetOrInsert => *value,
+                    MapOp::Keys => NativeTy::Array(key),
+                    MapOp::Values => NativeTy::Array(value),
+                    MapOp::Clear => NativeTy::Null,
+                };
+                (Builtin::Map(op), result)
+            }
             "baml.ops.equals_equals" => {
                 arity(0, 2)?;
                 let operand = match (is_null(&args[0]), is_null(&args[1])) {
@@ -1923,6 +2024,12 @@ fn rvalue_locals(value: &Rvalue<'_>, out: &mut Vec<Local>) -> bool {
         } => {
             for element in elements {
                 operand_locals(element, out);
+            }
+        }
+        Rvalue::Map(_, _, entries) => {
+            for (key, value) in entries {
+                operand_locals(key, out);
+                operand_locals(value, out);
             }
         }
         Rvalue::Len(place) | Rvalue::Discriminant(place) => place_locals(place, out),

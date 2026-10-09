@@ -35,6 +35,9 @@ pub enum NativeTy<'db> {
     /// A BAML enum: a generated fieldless Rust enum, one variant per BAML
     /// variant in declaration order, so the discriminant is the VM's.
     Enum(EnumRef<'db>),
+    /// BAML `map<K, V>`: `bex_aot::map::Map<K, V>`, a handle over an
+    /// insertion-ordered table. `K` is `int`, `bool` or `string`.
+    Map(Box<NativeTy<'db>>, Box<NativeTy<'db>>),
     /// BAML `T | null`: `Option<T>`.
     Option(Box<NativeTy<'db>>),
     /// The iterator `iter()` yields on a `T[]`: `bex_aot::array::Iter<T>`.
@@ -68,7 +71,9 @@ impl<'db> NativeTy<'db> {
         match self {
             Self::Int | Self::Bool | Self::Float | Self::Null | Self::Enum(_) => true,
             Self::Option(inner) => inner.is_copy(),
-            Self::Str | Self::Array(_) | Self::Class(_) | Self::ArrayIter(_) => false,
+            Self::Str | Self::Array(_) | Self::Map(..) | Self::Class(_) | Self::ArrayIter(_) => {
+                false
+            }
         }
     }
 
@@ -86,6 +91,10 @@ impl<'db> NativeTy<'db> {
             Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
                 inner.classes(out);
             }
+            Self::Map(key, value) => {
+                key.classes(out);
+                value.classes(out);
+            }
             Self::Int | Self::Bool | Self::Float | Self::Str | Self::Null | Self::Enum(_) => {}
         }
     }
@@ -96,6 +105,10 @@ impl<'db> NativeTy<'db> {
             Self::Enum(enum_ref) => out.push(*enum_ref),
             Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
                 inner.enums(out);
+            }
+            Self::Map(key, value) => {
+                key.enums(out);
+                value.enums(out);
             }
             Self::Int | Self::Bool | Self::Float | Self::Str | Self::Null | Self::Class(_) => {}
         }
@@ -114,6 +127,11 @@ impl<'db> NativeTy<'db> {
             Self::Array(inner) => {
                 let inner = inner.to_tokens(class_name);
                 quote! { Shared<Vec<#inner>> }
+            }
+            Self::Map(key, value) => {
+                let key = key.to_tokens(class_name);
+                let value = value.to_tokens(class_name);
+                quote! { Map<#key, #value> }
             }
             Self::Class(class) => {
                 let name = class_name(TypeDecl::Class(*class));
@@ -145,6 +163,11 @@ impl<'db> NativeTy<'db> {
             Self::Str => "string".into(),
             Self::Null => "null".into(),
             Self::Array(inner) => format!("{}[]", inner.describe(class_name)),
+            Self::Map(key, value) => format!(
+                "map<{}, {}>",
+                key.describe(class_name),
+                value.describe(class_name)
+            ),
             Self::Class(class) => class_name(TypeDecl::Class(*class)),
             Self::Enum(enum_ref) => class_name(TypeDecl::Enum(*enum_ref)),
             Self::Option(inner) => format!("{} | null", inner.describe(class_name)),
@@ -204,9 +227,10 @@ pub(crate) trait Resolver<'db> {
 /// and enums it names through `decls`.
 ///
 /// Rejected here: `unknown` and interface types (they may still be refined
-/// from their defining rvalue by the caller), maps, unions other than
-/// `T | null`, `bigint`, `uint8array`, media, functions, futures, type
-/// aliases, type variables and the compiler-only sentinels.
+/// from their defining rvalue by the caller), maps keyed by anything but
+/// `int`, `bool` or `string`, unions other than `T | null`, `bigint`,
+/// `uint8array`, media, functions, futures, type aliases, type variables
+/// and the compiler-only sentinels.
 pub(crate) fn from_runtime_ty<'db>(
     ty: &RuntimeTy,
     decls: &mut dyn Resolver<'db>,
@@ -250,7 +274,20 @@ pub(crate) fn from_runtime_ty<'db>(
         // A variant type (`Color.Red`) is a literal type: its value is the
         // enum's.
         RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) => class.enum_(head)?,
-        RuntimeTy::Map { .. } => return Err(Unsupported("map".into())),
+        RuntimeTy::Map { key, value } => {
+            let key = from_runtime_ty(key, class)?;
+            if !matches!(key, NativeTy::Int | NativeTy::Bool | NativeTy::Str) {
+                // Keys compare by value on both backends only for these;
+                // a `float` key's NaN handling, a class's `Hash` and
+                // `Equals`, are not reproduced natively.
+                return Err(Unsupported(format!(
+                    "map key type {}",
+                    key.describe(&|_| "class".into())
+                )));
+            }
+            let value = from_runtime_ty(value, class)?;
+            NativeTy::Map(Box::new(key), Box::new(value))
+        }
         RuntimeTy::Bigint => return Err(Unsupported("bigint".into())),
         RuntimeTy::Uint8Array => return Err(Unsupported("uint8array".into())),
         RuntimeTy::Media(_) => return Err(Unsupported("media".into())),
@@ -354,12 +391,38 @@ mod tests {
     }
 
     #[test]
-    fn rejected_types_name_their_construct() {
-        let map_ty = RuntimeTy::Map {
-            key: Box::new(RuntimeTy::String),
+    fn maps_take_string_int_and_bool_keys() {
+        let map_ty = |key: RuntimeTy| RuntimeTy::Map {
+            key: Box::new(key),
             value: Box::new(RuntimeTy::Int),
         };
-        assert_eq!(map(&map_ty).unwrap_err().0, "map");
+        assert_eq!(
+            map(&map_ty(RuntimeTy::String)).unwrap(),
+            NativeTy::Map(Box::new(NativeTy::Str), Box::new(NativeTy::Int))
+        );
+        assert!(map(&map_ty(RuntimeTy::Int)).is_ok());
+        assert!(map(&map_ty(RuntimeTy::Bool)).is_ok());
+        assert_eq!(
+            map(&map_ty(RuntimeTy::Float)).unwrap_err().0,
+            "map key type float"
+        );
+        assert_eq!(
+            map(&map_ty(RuntimeTy::List(Box::new(RuntimeTy::Int))))
+                .unwrap_err()
+                .0,
+            "map key type int[]"
+        );
+        let nested = NativeTy::Map(
+            Box::new(NativeTy::Str),
+            Box::new(NativeTy::Array(Box::new(NativeTy::Bool))),
+        );
+        assert_eq!(tokens(&nested), "Map<Str,Shared<Vec<bool>>>");
+        assert_eq!(describe(&nested), "map<string, bool[]>");
+        assert!(!nested.is_copy());
+    }
+
+    #[test]
+    fn rejected_types_name_their_construct() {
         assert_eq!(map(&RuntimeTy::Bigint).unwrap_err().0, "bigint");
         assert_eq!(map(&RuntimeTy::Uint8Array).unwrap_err().0, "uint8array");
         assert_eq!(map(&RuntimeTy::Unknown).unwrap_err().0, "unknown");

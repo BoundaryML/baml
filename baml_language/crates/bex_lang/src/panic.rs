@@ -30,6 +30,10 @@ pub enum Panic {
         /// The length of the sequence at the time of the access.
         length: Int63,
     },
+    /// A map subscript (`m[k]`) named a key the map does not hold. The VM
+    /// materializes the class with its `key` field set to `"(unknown)"`
+    /// rather than the key, and so does native code.
+    MapKeyNotFound,
     /// The right operand of `<<` or `>>` was negative.
     NegativeBitShift {
         /// Human-readable description, e.g. `"bit shift count is negative: -1"`.
@@ -60,6 +64,7 @@ impl Panic {
             Self::DivisionByZero { .. } => "DivisionByZero",
             Self::IntegerOverflow { .. } => "IntegerOverflow",
             Self::IndexOutOfBounds { .. } => "IndexOutOfBounds",
+            Self::MapKeyNotFound => "MapKeyNotFound",
             Self::NegativeBitShift { .. } => "NegativeBitShift",
             Self::UserPanic { .. } => "UserPanic",
             Self::AssertionFailed => "AssertionFailed",
@@ -76,6 +81,7 @@ impl Panic {
             Self::DivisionByZero { .. } => "baml.panics.DivisionByZero",
             Self::IntegerOverflow { .. } => "baml.panics.IntegerOverflow",
             Self::IndexOutOfBounds { .. } => "baml.panics.IndexOutOfBounds",
+            Self::MapKeyNotFound => "baml.panics.MapKeyNotFound",
             Self::NegativeBitShift { .. } => "baml.panics.NegativeBitShift",
             Self::UserPanic { .. } => "baml.panics.UserPanic",
             Self::AssertionFailed => "baml.panics.AssertionFailed",
@@ -108,6 +114,7 @@ impl Panic {
                     ("length", length.get().to_string()),
                 ]
             }
+            Self::MapKeyNotFound => vec![("key", format!("{:?}", "(unknown)"))],
             Self::IntegerOverflow { message }
             | Self::NegativeBitShift { message }
             | Self::UserPanic { message } => vec![("message", format!("{message:?}"))],
@@ -155,6 +162,7 @@ impl fmt::Display for Panic {
                     length.get()
                 )
             }
+            Self::MapKeyNotFound => f.write_str("key not found in map"),
             Self::IntegerOverflow { message }
             | Self::NegativeBitShift { message }
             | Self::UserPanic { message } => f.write_str(message),
@@ -211,6 +219,7 @@ mod tests {
                 index: int(5),
                 length: int(3),
             },
+            Panic::MapKeyNotFound,
             Panic::NegativeBitShift {
                 message: String::new(),
             },
@@ -259,6 +268,11 @@ mod tests {
             .render_readable(),
             r#"baml.panics.NegativeBitShift {message: "bit shift count is negative: -1"}"#
         );
+        // The VM stores `"(unknown)"` for the key (`panic_to_exception_value`).
+        assert_eq!(
+            Panic::MapKeyNotFound.render_readable(),
+            r#"baml.panics.MapKeyNotFound {key: "(unknown)"}"#
+        );
         assert_eq!(
             Panic::UserPanic {
                 message: "say \"hi\"\n".into()
@@ -306,6 +320,7 @@ mod tests {
             "index 5 out of bounds for length 3"
         );
         assert_eq!(Panic::AssertionFailed.to_string(), "assertion failed");
+        assert_eq!(Panic::MapKeyNotFound.to_string(), "key not found in map");
         assert_eq!(Panic::StackOverflow.to_string(), "stack overflow");
         assert_eq!(
             Panic::Exit { code: int(42) }.to_string(),

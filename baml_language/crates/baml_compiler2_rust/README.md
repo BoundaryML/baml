@@ -36,9 +36,10 @@ A function is admitted when all of the following hold:
   locals may only hold a `load_type` feeding a generic builtin, and `never`
   may only be the destination of `baml.sys.panic`;
 - its body uses `Assign`, `Drop`, `Nop` and trace-hook intrinsics (no-ops) over
-  `Use`, `BinaryOp`, `UnaryOp`, `Array`, `Len`, `Aggregate` of a class,
-  `Discriminant` of an enum, literal `IsType` and the `baml.iter.Done` test,
-  reading and writing locals, class fields and array elements;
+  `Use`, `BinaryOp`, `UnaryOp`, `Array`, `Map`, `Len` of an array or a map,
+  `Aggregate` of a class, `Discriminant` of an enum, literal `IsType` and
+  the `baml.iter.Done` test, reading and writing locals, class fields and
+  array elements (a map subscript lowers to a `baml.Map` call);
 - its control flow uses `Goto`, `Branch`, `Switch` on `int` keys, `Return`,
   `Unreachable`, `ShortCircuit` (`&&`, `||`), direct `Call` and the
   `VirtualCall`s of the for-in protocol and `sort`;
@@ -63,6 +64,7 @@ the native stack. Functions off every cycle pay nothing.
 | `T \| null` | `Option<T>` | the only union shape; `null` is `None`, a `T` stored into it is `Some(v)`, `x == null` is `x.is_none()` |
 | `T[]` | `Shared<Vec<T>>` | `Shared<T> = Rc<RefCell<T>>`: reference semantics; `[a, b]` is `array::new::<T>(Vec::from([..]))`, `xs[i]` `array::get(&xs, i)?`, `xs[i] = v` `array::set(&xs, i, v)?`, `.length()` `array::len(&xs)` |
 | class `C` | `Shared<user_C>` | generated `pub struct user_C { fields in declaration order }`; `C { .. }` is `shared(user_C { .., unspecified: None })`, `c.f` `c.borrow().f.clone()`, `c.f = v` `c.borrow_mut().f = v` |
+| `map<K, V>` | `Map<K, V>` | `bex_aot::map::Map`: a `Shared` handle over an insertion-ordered table; `K` is `int`, `bool` or `string`; `{ k: v }` is `map::new::<K, V>(Vec::from([..]))`, `m[k]` `map::index(&m, &k)?` (`MapKeyNotFound` when absent), `m[k] = v` `map::set(&m, k, v)`, `.length()` `map::len(&m)` |
 | enum `E` | `user_E` | generated fieldless `pub enum user_E { variants in declaration order }`, `Copy`; `E.V` is `user_E::V`, `==` compares variants, `match` switches on `int::lit(e as i64)` (the VM's discriminant), `to_string` and JSON use the variant's BAML name |
 | for-in iterator | `bex_aot::array::Iter<T>` | refined from `virtual_call iter` on a `T[]` |
 | result of `next` | `Option<T>` | refined; `is_type(x, Done)` is `x.is_none()`, the element copy `x.clone().expect(..)` |
@@ -88,6 +90,9 @@ unqualified class name.
 | `baml.Float.floor` / `itrunc` | `float::floor(x)` / `float::itrunc(x)?` |
 | `baml.ops.equals_equals(x, null)` | `x.is_none()` (`x: T \| null`) |
 | `baml.ops.equals_equals(a, b)` on one enum | `a == b` |
+| `baml.Map.has` / `get` / `index` / `delete` (`m, k`) | `map::has(&m, &k)` / `map::get(&m, &k)` (`V \| null`) / `map::index(&m, &k)?` / `map::delete(&m, &k)` (the removed `V \| null`) |
+| `baml.Map.set` / `get_or_insert` (`m, k, v`) | `map::set(&m, k, v)` (the previous `V \| null`) / `map::get_or_insert(&m, k, v)` |
+| `baml.Map.keys` / `values` / `length` / `clear` | `map::keys(&m)` / `map::values(&m)` (fresh arrays) / `map::len(&m)` / `map::clear(&m)` |
 | `virtual_call iter as baml.iter.Iterable` on `T[]` | `array::iter(&xs)` |
 | `virtual_call next as baml.iter.Iterator` on `Iter<T>` | `array::next(&mut it)` |
 | `virtual_call sort as baml.Sortable` on `int[]`/`float[]`/`string[]` | `array::sort_int(&xs)` etc. |
@@ -237,16 +242,18 @@ first one it can call), and marks library-only functions in its report.
 ## Rejections
 
 `Rejection::Unsupported(reason)` means the function is outside the subset.
-Types: maps, unions other than `T | null`, `bigint`, `uint8array`,
-media, function and future types, interfaces, generic classes, a class with
-such a field (the field is named), and an `unknown` or interface-typed local
-no definition refines. A `to_string` on a class or enum with its own
+Types: a map keyed by anything but `int`, `bool` or `string` (keys of
+those types compare by value on both backends; a `float` key's NaN and a
+class's own `Hash`/`Equals` are not reproduced), unions other than
+`T | null`, `bigint`, `uint8array`, media, function and future types,
+interfaces, generic classes, a class with such a field (the field is named),
+and an `unknown` or interface-typed local no definition refines. A `to_string` on a class or enum with its own
 `baml.ToString` implementation is rejected, as the structural rendering
 would be wrong. Constructs: `catch`/`defer` (any block with an unwind,
 landing, handling or shield), `throw`, `spawn`/`await`, sys-ops, closures and
 captured locals, `??`, narrowing patterns and values the checker narrowed
-(a `T | null` used as a `T` after a null test), map literals and indexing,
-interface method calls other than `iter`/`next`/`sort`, `sort` on a
+(a `T | null` used as a `T` after a null test), `==` on arrays, maps or
+classes, interface method calls other than `iter`/`next`/`sort`, `sort` on a
 non-primitive array, indirect calls, calls with trace attachments, an
 omitted argument to a stdlib function, or type arguments to a user function,
 any stdlib function not in the table, a `panic` with a computed message, a

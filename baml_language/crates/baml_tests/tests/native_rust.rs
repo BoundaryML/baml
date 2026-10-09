@@ -33,6 +33,7 @@ const FIXTURES: &[&str] = &[
     "enums",
     "floats",
     "loops",
+    "maps",
     "matching",
     "methods",
     "nullable",
@@ -96,6 +97,7 @@ generated_module!(classes, "native/generated/classes.rs");
 generated_module!(benchmarks, "native/generated/benchmarks.rs");
 generated_module!(defaults, "native/generated/defaults.rs");
 generated_module!(enums, "native/generated/enums.rs");
+generated_module!(maps, "native/generated/maps.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -611,5 +613,39 @@ async fn enums_match_vm() {
         r#"["Red"]"#,
     ] {
         check!(o, json_in(raw) => user_json_in(text(raw)));
+    }
+}
+
+/// Maps keep insertion order through writes and deletes, share one table
+/// between handles, panic on an absent subscript like the VM, and take the
+/// VM's JSON rules (string keys only, by declared key type).
+#[tokio::test]
+async fn maps_match_vm() {
+    use maps::*;
+    let o = Oracle::new("maps");
+    for n in [0, 1, 5, -7, MAX] {
+        check!(o, tally(n) => user_tally(int(n)));
+        check!(o, json_out(n) => user_json_out(int(n)));
+        check!(o, get_or_insert(n) => user_get_or_insert(int(n)));
+        check!(o, alias(n) => user_alias(int(n)));
+        check!(o, json_int_keys(n) => user_json_int_keys(int(n)));
+    }
+    for n in [1, 2, -1, 0, 3] {
+        check!(o, lookup(n) => user_lookup(int(n)));
+    }
+    for b in [true, false] {
+        check!(o, flags(b) => user_flags(b));
+    }
+    for raw in [
+        r#"{"stock": {"b": 2, "a": 1}, "name": "n"}"#,
+        r#"{"name": "n", "stock": {}}"#,
+        r#"{"name": "n", "stock": {"a": "1"}}"#,
+        r#"{"name": "n", "stock": [1]}"#,
+        r#"{"name": "n"}"#,
+    ] {
+        check!(o, json_in(raw) => user_json_in(text(raw)));
+    }
+    for raw in [r#"{"1": 1}"#, "{}", "[]"] {
+        check!(o, json_int_keys_in(raw) => user_json_int_keys_in(text(raw)));
     }
 }

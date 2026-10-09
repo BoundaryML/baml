@@ -15,7 +15,9 @@ use syn::Lifetime;
 use crate::{
     Rejection,
     classes::{ClassInfo, ClassTable, EnumInfo},
-    function::{Builtin, CallKind, Candidate, LocalKind, SortKind, is_dead_null_write, is_omitted},
+    function::{
+        Builtin, CallKind, Candidate, LocalKind, MapOp, SortKind, is_dead_null_write, is_omitted,
+    },
     structure::Stmt,
     types::{Coercion, NativeTy, coercion},
 };
@@ -57,7 +59,7 @@ pub(crate) fn render_module<'db>(
     table: &ClassTable<'db>,
 ) -> Result<String, Rejection> {
     let mut items = quote! {
-        use bex_aot::{Int63, Panic, Str, Thrown, array, float, int, json, string};
+        use bex_aot::{Int63, Map, Panic, Str, Thrown, array, float, int, json, map, string};
         use bex_aot::handle::{Shared, shared};
         use bex_aot::render::ToBaml;
     };
@@ -575,6 +577,51 @@ impl<'a, 'db> Printer<'a, 'db> {
                         };
                         (quote! { #sort(#array); }, sorted)
                     }
+                    Builtin::Map(op) => {
+                        let map = self.operand_ref(arg(0)?)?;
+                        let (key_ty, value_ty) = match self.operand_ty(arg(0)?)? {
+                            NativeTy::Map(key, value) => (*key, *value),
+                            _ => return Err(Rejection::invalid("map operation on a non-map")),
+                        };
+                        // Keys are borrowed by the reads and owned by the
+                        // inserts, the values always owned.
+                        let key_ref = || self.operand_ref(arg(1)?);
+                        let key = || self.operand(arg(1)?, Some(&key_ty));
+                        let value = || self.operand(arg(2)?, Some(&value_ty));
+                        let call = match op {
+                            MapOp::Length => quote! { map::len(#map) },
+                            MapOp::Has => {
+                                let key = key_ref()?;
+                                quote! { map::has(#map, #key) }
+                            }
+                            MapOp::Get => {
+                                let key = key_ref()?;
+                                quote! { map::get(#map, #key) }
+                            }
+                            MapOp::Index => {
+                                let key = key_ref()?;
+                                quote! { map::index(#map, #key)? }
+                            }
+                            MapOp::Set => {
+                                let key = key()?;
+                                let value = value()?;
+                                quote! { map::set(#map, #key, #value) }
+                            }
+                            MapOp::Delete => {
+                                let key = key_ref()?;
+                                quote! { map::delete(#map, #key) }
+                            }
+                            MapOp::Keys => quote! { map::keys(#map) },
+                            MapOp::Values => quote! { map::values(#map) },
+                            MapOp::GetOrInsert => {
+                                let key = key()?;
+                                let value = value()?;
+                                quote! { map::get_or_insert(#map, #key, #value) }
+                            }
+                            MapOp::Clear => quote! { map::clear(#map) },
+                        };
+                        (TokenStream::new(), call)
+                    }
                 };
                 (prelude, value, result)
             }
@@ -745,8 +792,33 @@ impl<'a, 'db> Printer<'a, 'db> {
                 }
             }
             Rvalue::Len(place) => {
+                let is_map = matches!(self.place_ty(place)?, NativeTy::Map(..));
                 let place = self.place(place)?;
-                quote! { array::len(&#place) }
+                if is_map {
+                    quote! { map::len(&#place) }
+                } else {
+                    quote! { array::len(&#place) }
+                }
+            }
+            Rvalue::Map(_, _, entries) => {
+                let NativeTy::Map(key_ty, value_ty) = target else {
+                    return Err(Rejection::invalid("map literal stored in a non-map"));
+                };
+                let key_tokens = self.ty(key_ty);
+                let value_tokens = self.ty(value_ty);
+                let entries = entries
+                    .iter()
+                    .map(|(key, value)| {
+                        let key = self.operand(key, Some(key_ty))?;
+                        let value = self.operand(value, Some(value_ty))?;
+                        Ok(quote! { (#key, #value) })
+                    })
+                    .collect::<Result<Vec<_>, Rejection>>()?;
+                if entries.is_empty() {
+                    quote! { map::new::<#key_tokens, #value_tokens>(Vec::new()) }
+                } else {
+                    quote! { map::new::<#key_tokens, #value_tokens>(Vec::from([#(#entries),*])) }
+                }
             }
             // Variants are declared in discriminant order.
             Rvalue::Discriminant(place) => {
@@ -898,7 +970,10 @@ impl<'a, 'db> Printer<'a, 'db> {
                     _ => return Err(unsupported()),
                 }
             }
-            NativeTy::Array(_) | NativeTy::Class(_) | NativeTy::ArrayIter(_) => {
+            NativeTy::Array(_)
+            | NativeTy::Map(..)
+            | NativeTy::Class(_)
+            | NativeTy::ArrayIter(_) => {
                 return Err(unsupported());
             }
         })

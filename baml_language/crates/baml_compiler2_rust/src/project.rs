@@ -115,6 +115,7 @@ impl ArgParser {
             | NativeTy::Array(_)
             | NativeTy::Class(_)
             | NativeTy::Enum(_)
+            | NativeTy::Map(..)
             | NativeTy::Option(_)
             | NativeTy::ArrayIter(_) => None,
         }
