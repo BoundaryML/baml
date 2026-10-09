@@ -17,7 +17,8 @@ garbage collector.
 | `T \| null` | `Option<T>` | |
 | `to_string()` | `ToBaml` | `render`: the structural walk, `render::class` for generated structs |
 | `json.*` | serde through `serde_json` | `json`: `to_string`, `deserialize<T>`, the `ParseError` / `DecodeError` classes |
-| `throw`, panics | `Result<T, Thrown>` | `thrown`: a `Panic` or a boxed `ErrorObject` (class name plus rendered fields), `errors::InvalidArgument` and `errors::ParseError` |
+| `throw`, panics | `Result<T, Thrown>` | `thrown`: a `Panic` or a boxed `ErrorObject` (class name plus rendered fields); `Clone`, so a caught error can be tested, bound and thrown on; `is_class` / `class_fqn` / `is_panic` are what a `catch` arm asks, `downcast` recovers the handle a generated class (`ErrorClass`) was thrown as; `errors::InvalidArgument` and `errors::ParseError` |
+| fields of an uncaught throw | `Readable` | `readable`: the engine's `render_readable` for every value above (strings quoted, floats with `.0`, classes by fully qualified name) |
 | recursion | `depth::Guard` | counts frames on call cycles and throws `StackOverflow` at the VM's limit |
 
 Handles are reference counted, not collected: a cycle of handles is never

@@ -1626,6 +1626,155 @@ function f(log: string[], n: int) -> int {
 }
 
 #[test]
+fn rejects_reading_the_catch_context() {
+    let rejection = reject(
+        r"
+function f(n: int) -> string {
+    (10 / n).to_string() catch (e, ctx) { _ => ctx.to_string() }
+}
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "`baml.errors.Context`");
+}
+
+#[test]
+fn rejects_catch_binding_of_a_stdlib_class() {
+    let rejection = reject(
+        r"
+function f(n: int) -> int {
+    (10 / n) catch (e) { let p: baml.panics.DivisionByZero => 0 }
+}
+",
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "`catch` binding of the stdlib class `baml.panics.DivisionByZero`",
+    );
+}
+
+#[test]
+fn rejects_catch_binding_of_a_class_outside_the_subset() {
+    let rejection = reject(
+        r"
+class Wide { n: int | string }
+function f(n: int) -> int {
+    (10 / n) catch (e) { let w: Wide => 0 }
+}
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "class `user.Wide` field `n`");
+}
+
+#[test]
+fn rejects_a_caught_error_typed_by_the_checker() {
+    let rejection = reject(
+        r#"
+class Coded { code: int }
+function risky(n: int) -> int throws Coded {
+    if (n < 0) { throw Coded { code: n } }
+    n
+}
+function f(n: int) -> int {
+    risky(n) catch (e) { _ => e.code }
+}
+"#,
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "field read on a caught error typed by the checker",
+    );
+    let rejection = reject(
+        r#"
+class Coded { code: int }
+function risky(n: int) -> int throws Coded {
+    if (n < 0) { throw Coded { code: n } }
+    n
+}
+function code_of(c: Coded) -> int { c.code }
+function f(n: int) -> int {
+    risky(n) catch (e) { _ => code_of(e) }
+}
+"#,
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "caught error read as a `user.Coded` without a class test",
+    );
+}
+
+#[test]
+fn rejects_a_caught_non_class_value() {
+    let rejection = reject(
+        r#"
+function g(n: int) -> int throws string {
+    if (n < 0) { throw "neg" }
+    n
+}
+function f(n: int) -> int {
+    g(n) catch (e) { _ => e.length() }
+}
+"#,
+        "f",
+    );
+    assert_unsupported(&rejection, "caught error used as a `string`");
+}
+
+#[test]
+fn rejects_catch_arm_on_a_primitive_type() {
+    let rejection = reject(
+        r#"
+class A { n: int }
+function g(n: int) -> int throws int | string | float | A {
+    if (n < 0) { throw "neg" }
+    n
+}
+function f(n: int) -> int {
+    g(n) catch (e) { int => 1, string => 2, float => 3, A => 4 }
+}
+"#,
+        "f",
+    );
+    assert_unsupported(&rejection, "`catch` arm on a primitive type");
+}
+
+#[test]
+fn rejects_narrowing_a_union_value() {
+    let rejection = reject(
+        r"
+class A { n: int }
+class B { n: int }
+function f(v: A | B) -> int {
+    match (v) { let a: A => a.n, let b: B => b.n }
+}
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "union other than `T | null`");
+}
+
+#[test]
+fn rejects_catch_arm_on_a_non_class_pattern() {
+    let rejection = reject(
+        r#"
+function g(n: int) -> int throws string {
+    if (n < 0) { throw "neg" }
+    n
+}
+function f(n: int) -> int {
+    g(n) catch (e) { let s: string => 0 }
+}
+"#,
+        "f",
+    );
+    assert_unsupported(&rejection, "binding of a type other than a class");
+}
+
+#[test]
 fn rejects_spawn() {
     let rejection = reject(
         r"
