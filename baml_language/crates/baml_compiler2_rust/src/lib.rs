@@ -26,7 +26,7 @@ mod structure;
 mod types;
 
 pub use project::{ProjectOptions, write_project};
-pub use types::NativeTy;
+pub use types::{NativeTy, TypeDecl};
 
 /// Why a function was not compiled.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -97,12 +97,13 @@ impl Admitted<'_> {
     }
 }
 
-/// One class of a [`NativeModule`], emitted as a struct.
+/// One class of a [`NativeModule`], emitted as a struct, or one enum,
+/// emitted as a fieldless Rust enum.
 #[derive(Debug, Clone)]
 pub struct CompiledClass {
     /// The BAML link name, e.g. `user.State`.
     pub link_name: String,
-    /// The generated struct's identifier.
+    /// The generated item's identifier.
     pub rust_name: String,
 }
 
@@ -118,6 +119,8 @@ pub struct NativeModule<'db> {
     pub functions: Vec<CompiledFunction<'db>>,
     /// Every class the functions touch, in first-use order.
     pub classes: Vec<CompiledClass>,
+    /// Every enum the functions touch, in first-use order.
+    pub enums: Vec<CompiledClass>,
     /// Indices into `functions` of the requested roots, in request order.
     pub roots: Vec<usize>,
     /// Index of the entry function in `functions`: the root [`compile`] was
@@ -189,9 +192,13 @@ pub fn rust_name(link_name: &str) -> String {
     name
 }
 
-/// A BAML-flavoured description of `ty`, with classes by link name.
+/// A BAML-flavoured description of `ty`, with classes and enums by link
+/// name.
 pub fn describe_ty(db: &dyn baml_compiler2_mir::Db, ty: &NativeTy<'_>) -> String {
-    ty.describe(&|class| baml_compiler2_mir::class_link_name(db, class))
+    ty.describe(&|decl| match decl {
+        TypeDecl::Class(class) => baml_compiler2_mir::class_link_name(db, class),
+        TypeDecl::Enum(enum_ref) => baml_compiler2_mir::enum_link_name(db, enum_ref),
+    })
 }
 
 /// Compile every function in `roots` and every function they transitively
@@ -255,8 +262,8 @@ pub fn compile_many<'db>(
     }
 
     let names = rust_names(&order)?;
-    let class_infos = classes.finish()?;
-    let rust_source = print::render_module(&class_infos, &order, &names, &classes)?;
+    let (class_infos, enum_infos) = classes.finish()?;
+    let rust_source = print::render_module(&class_infos, &enum_infos, &order, &names, &classes)?;
     let mir_dump = order
         .iter()
         .map(|candidate| baml_compiler2_mir::pretty::display_function(db, candidate.mir))
@@ -284,11 +291,19 @@ pub fn compile_many<'db>(
             rust_name: info.ident.to_string(),
         })
         .collect();
+    let compiled_enums = enum_infos
+        .iter()
+        .map(|info| CompiledClass {
+            link_name: info.link_name.clone(),
+            rust_name: info.ident.to_string(),
+        })
+        .collect();
     Ok(NativeModule {
         rust_source,
         mir_dump,
         functions,
         classes: compiled_classes,
+        enums: compiled_enums,
         roots: roots.iter().map(|root| index_of[root]).collect(),
         entry: index_of[first_root],
     })

@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-use baml_compiler2_hir_ty::extern_loc::ClassRef;
+use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef};
 use baml_compiler2_mir::RuntimeTy;
 use baml_type::{DeclName, Literal};
 use proc_macro2::{Ident, TokenStream};
@@ -32,11 +32,23 @@ pub enum NativeTy<'db> {
     Array(Box<NativeTy<'db>>),
     /// A non-generic class: `Shared<Struct>` over a generated struct.
     Class(ClassRef<'db>),
+    /// A BAML enum: a generated fieldless Rust enum, one variant per BAML
+    /// variant in declaration order, so the discriminant is the VM's.
+    Enum(EnumRef<'db>),
     /// BAML `T | null`: `Option<T>`.
     Option(Box<NativeTy<'db>>),
     /// The iterator `iter()` yields on a `T[]`: `bex_aot::array::Iter<T>`.
     /// Never declared in BAML source; a refined type.
     ArrayIter(Box<NativeTy<'db>>),
+}
+
+/// A declaration a native type names, which the generated module emits as
+/// an item: the key under which [`NativeTy::to_tokens`] and
+/// [`NativeTy::describe`] look its name up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TypeDecl<'db> {
+    Class(ClassRef<'db>),
+    Enum(EnumRef<'db>),
 }
 
 /// Why a runtime type has no native representation: the construct it uses.
@@ -54,7 +66,7 @@ impl<'db> NativeTy<'db> {
     /// read needs no `.clone()`.
     pub fn is_copy(&self) -> bool {
         match self {
-            Self::Int | Self::Bool | Self::Float | Self::Null => true,
+            Self::Int | Self::Bool | Self::Float | Self::Null | Self::Enum(_) => true,
             Self::Option(inner) => inner.is_copy(),
             Self::Str | Self::Array(_) | Self::Class(_) | Self::ArrayIter(_) => false,
         }
@@ -74,13 +86,25 @@ impl<'db> NativeTy<'db> {
             Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
                 inner.classes(out);
             }
-            Self::Int | Self::Bool | Self::Float | Self::Str | Self::Null => {}
+            Self::Int | Self::Bool | Self::Float | Self::Str | Self::Null | Self::Enum(_) => {}
         }
     }
 
-    /// The Rust spelling of this type. `class_name` gives each class's
-    /// generated struct identifier.
-    pub fn to_tokens(&self, class_name: &dyn Fn(ClassRef<'db>) -> Ident) -> TokenStream {
+    /// Every enum this type mentions, outermost first.
+    pub fn enums(&self, out: &mut Vec<EnumRef<'db>>) {
+        match self {
+            Self::Enum(enum_ref) => out.push(*enum_ref),
+            Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
+                inner.enums(out);
+            }
+            Self::Int | Self::Bool | Self::Float | Self::Str | Self::Null | Self::Class(_) => {}
+        }
+    }
+
+    /// The Rust spelling of this type. `name` gives each class's generated
+    /// struct identifier and each enum's generated enum identifier.
+    pub fn to_tokens(&self, name: &dyn Fn(TypeDecl<'db>) -> Ident) -> TokenStream {
+        let class_name = name;
         match self {
             Self::Int => quote! { Int63 },
             Self::Bool => quote! { bool },
@@ -92,8 +116,12 @@ impl<'db> NativeTy<'db> {
                 quote! { Shared<Vec<#inner>> }
             }
             Self::Class(class) => {
-                let name = class_name(*class);
+                let name = class_name(TypeDecl::Class(*class));
                 quote! { Shared<#name> }
+            }
+            Self::Enum(enum_ref) => {
+                let name = class_name(TypeDecl::Enum(*enum_ref));
+                quote! { #name }
             }
             Self::Option(inner) => {
                 let inner = inner.to_tokens(class_name);
@@ -106,8 +134,10 @@ impl<'db> NativeTy<'db> {
         }
     }
 
-    /// A BAML-flavoured description, with classes rendered by `class_name`.
-    pub fn describe(&self, class_name: &dyn Fn(ClassRef<'db>) -> String) -> String {
+    /// A BAML-flavoured description, with classes and enums rendered by
+    /// `name`.
+    pub fn describe(&self, name: &dyn Fn(TypeDecl<'db>) -> String) -> String {
+        let class_name = name;
         match self {
             Self::Int => "int".into(),
             Self::Bool => "bool".into(),
@@ -115,7 +145,8 @@ impl<'db> NativeTy<'db> {
             Self::Str => "string".into(),
             Self::Null => "null".into(),
             Self::Array(inner) => format!("{}[]", inner.describe(class_name)),
-            Self::Class(class) => class_name(*class),
+            Self::Class(class) => class_name(TypeDecl::Class(*class)),
+            Self::Enum(enum_ref) => class_name(TypeDecl::Enum(*enum_ref)),
             Self::Option(inner) => format!("{} | null", inner.describe(class_name)),
             Self::ArrayIter(inner) => {
                 format!("baml.iter.Iterator<Item = {}>", inner.describe(class_name))
@@ -161,23 +192,26 @@ pub(crate) fn coercion(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> Option
     }
 }
 
-/// Resolves a class head (with its type arguments) to a [`NativeTy::Class`],
-/// or explains why the class is outside the subset.
-pub(crate) type ClassResolver<'a, 'db> =
-    dyn FnMut(&DeclName, &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported> + 'a;
+/// Resolves the declarations a runtime type names: a class head (with its
+/// type arguments) to a [`NativeTy::Class`] and an enum head to a
+/// [`NativeTy::Enum`], or explains why the declaration is outside the subset.
+pub(crate) trait Resolver<'db> {
+    fn class(&mut self, head: &DeclName, args: &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported>;
+    fn enum_(&mut self, head: &DeclName) -> Result<NativeTy<'db>, Unsupported>;
+}
 
-/// Map a runtime type to its native representation. `class` resolves a class
-/// head (with its type arguments) to a [`NativeTy::Class`], or explains why
-/// the class is outside the subset.
+/// Map a runtime type to its native representation, resolving the classes
+/// and enums it names through `decls`.
 ///
 /// Rejected here: `unknown` and interface types (they may still be refined
-/// from their defining rvalue by the caller), enums, maps, unions other than
+/// from their defining rvalue by the caller), maps, unions other than
 /// `T | null`, `bigint`, `uint8array`, media, functions, futures, type
 /// aliases, type variables and the compiler-only sentinels.
 pub(crate) fn from_runtime_ty<'db>(
     ty: &RuntimeTy,
-    class: &mut ClassResolver<'_, 'db>,
+    decls: &mut dyn Resolver<'db>,
 ) -> Result<NativeTy<'db>, Unsupported> {
+    let class = decls;
     Ok(match ty {
         RuntimeTy::Int => NativeTy::Int,
         RuntimeTy::Bool => NativeTy::Bool,
@@ -192,7 +226,7 @@ pub(crate) fn from_runtime_ty<'db>(
             Literal::Bigint(_) => return Err(Unsupported("bigint".into())),
         },
         RuntimeTy::List(inner) => NativeTy::Array(Box::new(from_runtime_ty(inner, class)?)),
-        RuntimeTy::Class(head, args) => class(head, args)?,
+        RuntimeTy::Class(head, args) => class.class(head, args)?,
         RuntimeTy::Union(members) => {
             let mut value = None;
             for member in members {
@@ -213,9 +247,9 @@ pub(crate) fn from_runtime_ty<'db>(
                 _ => return Err(Unsupported("union other than `T | null`".into())),
             }
         }
-        RuntimeTy::Enum(_) | RuntimeTy::EnumVariant(..) => {
-            return Err(Unsupported("enum".into()));
-        }
+        // A variant type (`Color.Red`) is a literal type: its value is the
+        // enum's.
+        RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) => class.enum_(head)?,
         RuntimeTy::Map { .. } => return Err(Unsupported("map".into())),
         RuntimeTy::Bigint => return Err(Unsupported("bigint".into())),
         RuntimeTy::Uint8Array => return Err(Unsupported("uint8array".into())),
@@ -243,12 +277,20 @@ mod tests {
 
     use super::*;
 
-    fn no_classes<'db>(_: &DeclName, _: &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported> {
-        Err(Unsupported("class".into()))
+    struct NoDecls;
+
+    impl<'db> Resolver<'db> for NoDecls {
+        fn class(&mut self, _: &DeclName, _: &[RuntimeTy]) -> Result<NativeTy<'db>, Unsupported> {
+            Err(Unsupported("class".into()))
+        }
+
+        fn enum_(&mut self, _: &DeclName) -> Result<NativeTy<'db>, Unsupported> {
+            Err(Unsupported("enum".into()))
+        }
     }
 
     fn map<'db>(ty: &RuntimeTy) -> Result<NativeTy<'db>, Unsupported> {
-        from_runtime_ty(ty, &mut no_classes)
+        from_runtime_ty(ty, &mut NoDecls)
     }
 
     fn describe(ty: &NativeTy<'_>) -> String {

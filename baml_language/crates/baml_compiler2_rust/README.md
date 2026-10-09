@@ -37,8 +37,8 @@ A function is admitted when all of the following hold:
   may only be the destination of `baml.sys.panic`;
 - its body uses `Assign`, `Drop`, `Nop` and trace-hook intrinsics (no-ops) over
   `Use`, `BinaryOp`, `UnaryOp`, `Array`, `Len`, `Aggregate` of a class,
-  literal `IsType` and the `baml.iter.Done` test, reading and writing
-  locals, class fields and array elements;
+  `Discriminant` of an enum, literal `IsType` and the `baml.iter.Done` test,
+  reading and writing locals, class fields and array elements;
 - its control flow uses `Goto`, `Branch`, `Switch` on `int` keys, `Return`,
   `Unreachable`, `ShortCircuit` (`&&`, `||`), direct `Call` and the
   `VirtualCall`s of the for-in protocol and `sort`;
@@ -63,11 +63,13 @@ the native stack. Functions off every cycle pay nothing.
 | `T \| null` | `Option<T>` | the only union shape; `null` is `None`, a `T` stored into it is `Some(v)`, `x == null` is `x.is_none()` |
 | `T[]` | `Shared<Vec<T>>` | `Shared<T> = Rc<RefCell<T>>`: reference semantics; `[a, b]` is `array::new::<T>(Vec::from([..]))`, `xs[i]` `array::get(&xs, i)?`, `xs[i] = v` `array::set(&xs, i, v)?`, `.length()` `array::len(&xs)` |
 | class `C` | `Shared<user_C>` | generated `pub struct user_C { fields in declaration order }`; `C { .. }` is `shared(user_C { .., unspecified: None })`, `c.f` `c.borrow().f.clone()`, `c.f = v` `c.borrow_mut().f = v` |
+| enum `E` | `user_E` | generated fieldless `pub enum user_E { variants in declaration order }`, `Copy`; `E.V` is `user_E::V`, `==` compares variants, `match` switches on `int::lit(e as i64)` (the VM's discriminant), `to_string` and JSON use the variant's BAML name |
 | for-in iterator | `bex_aot::array::Iter<T>` | refined from `virtual_call iter` on a `T[]` |
 | result of `next` | `Option<T>` | refined; `is_type(x, Done)` is `x.is_none()`, the element copy `x.clone().expect(..)` |
 
-Literal types (`0`, `"x"`) map to their primitive. Classes must be
-non-generic with every field in the model. Generated structs derive
+Literal types (`0`, `"x"`) map to their primitive, and a variant type
+(`Color.Red`) to its enum. Classes must be non-generic with every field in
+the model. Generated structs derive
 `Serialize` and `Deserialize` through `bex_aot::serde` (`#[serde(rename)]`
 keeps the BAML name when the Rust field had to change, e.g. `type` ->
 `type_`) and implement `ToBaml`, rendering `Name { f: v, .. }` with the
@@ -85,6 +87,7 @@ unqualified class name.
 | `baml.String.is_ascii` | `string::is_ascii(&s)` |
 | `baml.Float.floor` / `itrunc` | `float::floor(x)` / `float::itrunc(x)?` |
 | `baml.ops.equals_equals(x, null)` | `x.is_none()` (`x: T \| null`) |
+| `baml.ops.equals_equals(a, b)` on one enum | `a == b` |
 | `virtual_call iter as baml.iter.Iterable` on `T[]` | `array::iter(&xs)` |
 | `virtual_call next as baml.iter.Iterator` on `Iter<T>` | `array::next(&mut it)` |
 | `virtual_call sort as baml.Sortable` on `int[]`/`float[]`/`string[]` | `array::sort_int(&xs)` etc. |
@@ -234,10 +237,12 @@ first one it can call), and marks library-only functions in its report.
 ## Rejections
 
 `Rejection::Unsupported(reason)` means the function is outside the subset.
-Types: enums, maps, unions other than `T | null`, `bigint`, `uint8array`,
+Types: maps, unions other than `T | null`, `bigint`, `uint8array`,
 media, function and future types, interfaces, generic classes, a class with
 such a field (the field is named), and an `unknown` or interface-typed local
-no definition refines. Constructs: `catch`/`defer` (any block with an unwind,
+no definition refines. A `to_string` on a class or enum with its own
+`baml.ToString` implementation is rejected, as the structural rendering
+would be wrong. Constructs: `catch`/`defer` (any block with an unwind,
 landing, handling or shield), `throw`, `spawn`/`await`, sys-ops, closures and
 captured locals, `??`, narrowing patterns and values the checker narrowed
 (a `T | null` used as a `T` after a null test), map literals and indexing,
