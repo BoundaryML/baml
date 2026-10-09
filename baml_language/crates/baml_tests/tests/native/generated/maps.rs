@@ -26,7 +26,7 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Inventory`.
-#[derive(bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
 #[serde(
     crate = "bex_aot::serde",
     expecting = "expected JSON object for class `Inventory`"
@@ -42,6 +42,23 @@ impl ToBaml for user_Inventory {
             "Inventory",
             &[("stock", &self.stock as &dyn ToBaml), ("name", &self.name as &dyn ToBaml)],
         );
+    }
+}
+impl bex_aot::ErrorClass for user_Inventory {
+    const CLASS_FQN: &'static str = "user.Inventory";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("stock", bex_aot::Readable::readable(&self.stock)),
+            ("name", bex_aot::Readable::readable(&self.name)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Inventory {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
     }
 }
 /// BAML function `user.tally`.

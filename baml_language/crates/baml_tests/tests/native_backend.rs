@@ -1460,36 +1460,39 @@ function f(xs: C[]) -> int { xs.sort(); xs.length() }
     assert_unsupported(&rejection, "`sort` on a `user.C[]`");
 }
 
+// ── Errors: throw, catch, defer ─────────────────────────────────────────────
+
 #[test]
-fn rejects_catch() {
-    let rejection = reject(
+fn throw_of_a_class_returns_the_error() {
+    let module = compile_entry(
         r#"
+class Invalid { message: string, code: int }
 function f(n: int) -> int {
-    {
-        if (n < 0) { baml.sys.panic("negative"); }
-        n
-    } catch (error) {
-        let error: baml.panics.UserPanic => 0
-    }
+    if (n < 0) { throw Invalid { message: "negative", code: n } }
+    n
 }
 "#,
         "f",
     );
-    assert_unsupported(&rejection, "catch");
+    let source = &module.rust_source;
+    assert_contains(source, "Err(Thrown::error(_3.clone()))");
+    assert_contains(source, "impl bex_aot::ErrorClass for user_Invalid");
+    assert_contains(source, "const CLASS_FQN: &'static str = \"user.Invalid\";");
+    assert_contains(source, "bex_aot::Readable::readable(&self.code)");
 }
 
 #[test]
-fn rejects_defer() {
+fn rejects_throw_of_a_non_class_value() {
     let rejection = reject(
-        r"
+        r#"
 function f(n: int) -> int {
-    defer { let x = 1; }
+    if (n < 0) { throw "negative" }
     n
 }
-",
+"#,
         "f",
     );
-    assert_unsupported(&rejection, "defer");
+    assert_unsupported(&rejection, "`throw` of a `string`");
 }
 
 #[test]

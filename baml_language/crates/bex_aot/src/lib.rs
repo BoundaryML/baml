@@ -26,18 +26,20 @@ pub mod errors;
 pub mod handle;
 pub mod json;
 pub mod map;
+pub mod readable;
 pub mod render;
 pub mod string;
-mod thrown;
+pub mod thrown;
 
 pub use baml_type::Int63;
 pub use bex_lang::{Error, Panic, float, int};
 pub use bigint::BigInt;
 pub use handle::{Shared, ptr_eq, shared};
 pub use map::Map;
+pub use readable::Readable;
 pub use render::ToBaml;
 pub use string::Str;
-pub use thrown::{ErrorObject, Thrown, render_object};
+pub use thrown::{ErrorClass, ErrorObject, Thrown, render_object};
 
 /// Narrow a container length to a BAML `int`. Lengths are bounded by
 /// `isize::MAX`, which exceeds the i63 range only on a 128-bit target; the

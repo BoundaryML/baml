@@ -26,7 +26,7 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.State`.
-#[derive(bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
 #[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `State`")]
 pub struct user_State {
     pub count: Int63,
@@ -39,6 +39,23 @@ impl ToBaml for user_State {
             "State",
             &[("count", &self.count as &dyn ToBaml), ("seed", &self.seed as &dyn ToBaml)],
         );
+    }
+}
+impl bex_aot::ErrorClass for user_State {
+    const CLASS_FQN: &'static str = "user.State";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("count", bex_aot::Readable::readable(&self.count)),
+            ("seed", bex_aot::Readable::readable(&self.seed)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_State {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
     }
 }
 /// BAML function `user.prepare`.
