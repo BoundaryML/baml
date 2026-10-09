@@ -1258,7 +1258,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let sorted = self.operand(receiver, Some(result))?;
                 let sort = self.fallible(&quote! {
                     array::sort_by(#array, &|left, right| {
-                        Ok(matches!(__callback(left, right)?, #ordering::#greater))
+                        let ordering = __callback(left, right)?;
+                        Ok(matches!(ordering, #ordering::#greater))
                     })
                 });
                 (

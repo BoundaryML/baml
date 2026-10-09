@@ -2346,6 +2346,79 @@ function f() -> int {
 }
 
 #[test]
+fn array_callbacks_are_runtime_calls_over_adapted_functions() {
+    let module = compile_entry(
+        r#"
+function square(x: int) -> int { x * x }
+function f(xs: int[], k: int) -> string {
+    let ys = xs.map((x: int) -> int { x + k });
+    let zs = xs.map(square);
+    let ws = xs.filter_map((x: int) -> int { x });
+    let vs = xs.map((x: int) -> int | null { x });
+    let us = xs.map((x: int | null) -> string { "x" });
+    let count = 0;
+    xs.for_each((x: int) -> void { count = count + x; });
+    xs.sort_by((a: int, b: int) -> baml.ops.Ordering { a.cmp(b) });
+    xs.sort_by_key((x: int) -> string { x.to_string() });
+    ys.to_string() + zs.to_string() + ws.to_string() + vs.to_string() + count.to_string() + us.to_string()
+}
+"#,
+        "f",
+    );
+    let source = &module.rust_source;
+    // A callback of the type the runtime calls is borrowed as it is.
+    assert_contains(source, "let __callback = &*_4;");
+    assert_contains(source, "array::map(&_1, __callback)");
+    assert_contains(source, "let __callback = &user_square;");
+    // A callback that never returns `null` is adapted for `filter_map`; one
+    // taking a wider parameter has each element lifted.
+    assert_contains(source, "Ok(Some(value))");
+    assert_contains(source, "array::filter_map(&_1, __callback)");
+    assert_contains(source, "__function(Some(__arg0))?;");
+    assert_contains(source, "array::for_each(&_1, __callback)");
+    // The comparator decides `Greater`; the key's order is the string one.
+    assert_contains(source, "let ordering = __callback(left, right)?;");
+    assert_contains(source, "Ok(matches!(ordering, baml_ops_Ordering::Greater))");
+    assert_contains(
+        source,
+        "array::sort_by_key(&_1, __callback, &|left, right| string::cmp(left, right))",
+    );
+    assert_contains(
+        source,
+        "std::cmp::Ordering::Less => baml_ops_Ordering::Less,",
+    );
+}
+
+#[test]
+fn rejects_array_callbacks_without_a_native_form() {
+    const KEY: &str = r"
+class Key { n: int }
+implement baml.ops.Equals for Key {
+    function eq(self, other: Self) -> bool throws never { self.n == other.n }
+}
+implement baml.ops.Compare for Key {
+    function cmp(self, other: Self) -> baml.ops.Ordering throws never { self.n.cmp(other.n) }
+}
+";
+    let rejection = reject(
+        &format!(
+            "{KEY}
+function f(xs: int[]) -> int[] {{
+    xs.sort_by_key((x: int) -> Key {{ Key {{ n: x }} }})
+}}
+"
+        ),
+        "f",
+    );
+    assert_unsupported(&rejection, "`sort_by_key` with a `user.Key` key");
+    let rejection = reject(
+        &format!("{KEY}\nfunction f(a: Key, b: Key) -> baml.ops.Ordering {{ a.cmp(b) }}\n"),
+        "f",
+    );
+    assert_unsupported(&rejection, "`cmp` on a `user.Key`");
+}
+
+#[test]
 fn rejects_function_values_without_a_native_form() {
     let rejection = reject(
         r"
