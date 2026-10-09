@@ -203,3 +203,295 @@ test "empty_implementor_is_rejected" {
         "from_json",
     )
 }
+
+// ─── nesting depth ────────────────────────────────────────────────────────────
+
+// A structural decode walks as deep as the document nests: the decoder keeps
+// the containers it is inside on a stack of its own, so nesting costs no call
+// frames. 127 levels is the deepest document `baml.json.parse` accepts.
+class DeepLink {
+    next: DeepLink?,
+}
+
+function deep_link_document(depth: int) -> string {
+    let open = "";
+    let close = "";
+    let i = 0;
+    while (i < depth) {
+        open = open + "{\"next\":";
+        close = close + "}";
+        i = i + 1;
+    }
+    open + "null" + close
+}
+
+function decode_nests_as_deep_as_the_document_fn(
+    depth: int
+) -> int throws baml.json.ParseError | baml.json.DecodeError {
+    let link = baml.json.to<DeepLink>(baml.json.parse(deep_link_document(depth)));
+    let links = 1;
+    let next = link.next;
+    while (next != null) {
+        links = links + 1;
+        next = next.next;
+    }
+    links
+}
+
+test "decode_nests_as_deep_as_the_document" {
+    assert.equal(decode_nests_as_deep_as_the_document_fn(127), 127)
+}
+
+// ─── a provided `from_json` wins wherever the walk meets its type ─────────────
+// `to<T>` mirrors `==`: a provided `baml.FromJson` wins and anything else
+// decodes structurally, recursively. An enum's override is honored in every
+// position a class's is — root, field, generic field, optional, list, map.
+
+enum Shade {
+    Light,
+    Dark,
+}
+
+// Reads any string as `Dark`: the structural reading of `"Light"` is `Light`.
+implements baml.FromJson for Shade {
+    function from_json(j: baml.json.json) -> Self throws never {
+        Shade.Dark
+    }
+}
+
+class Paint {
+    shade: Shade,
+}
+
+class Crate<T> {
+    item: T,
+}
+
+class Palette {
+    main: Shade?,
+    all: Shade[],
+    named: map<string, Shade>,
+    paints: Paint[],
+}
+
+function enum_override_at_root_fn() -> Shade throws baml.json.DecodeError {
+    baml.json.to<Shade>("Light")
+}
+
+test "enum_override_at_root" {
+    assert.equal(enum_override_at_root_fn(), Shade.Dark)
+}
+
+function enum_override_in_field_fn() -> Shade throws baml.json.DecodeError {
+    baml.json.to<Paint>({ "shade": "Light" }).shade
+}
+
+test "enum_override_in_field" {
+    assert.equal(enum_override_in_field_fn(), Shade.Dark)
+}
+
+function enum_override_in_generic_field_fn() -> Shade throws baml.json.DecodeError {
+    baml.json.to<Crate<Shade>>({ "item": "Light" }).item
+}
+
+test "enum_override_in_generic_field" {
+    assert.equal(enum_override_in_generic_field_fn(), Shade.Dark)
+}
+
+function enum_override_in_containers_fn() -> string throws baml.json.DecodeError {
+    let palette = baml.json.to<Palette>({
+        "main": "Light",
+        "all": ["Light"],
+        "named": { "k": "Light" },
+        "paints": [{ "shade": "Light" }],
+    });
+    string.from(palette.main) + "|" + string.from(palette.all) + "|"
+        + string.from(palette.named["k"]) + "|" + string.from(palette.paints[0].shade)
+}
+
+test "enum_override_in_containers" {
+    assert.equal(enum_override_in_containers_fn(), "Dark|[Dark]|Dark|Dark")
+}
+
+// An absent optional is `null`, never handed to the override.
+function enum_override_absent_optional_fn() -> Shade? throws baml.json.DecodeError {
+    baml.json.to<Palette>({ "all": [], "named": {}, "paints": [] }).main
+}
+
+test "enum_override_absent_optional" {
+    assert.equal(enum_override_absent_optional_fn(), null)
+}
+
+// Every override-honoring entry is the same walk: `from_json<T>`,
+// `deserialize<T>`, and the `T.from_json(j)` sugar.
+function enum_override_through_every_entry_fn() -> string throws baml.json.DecodeError | baml.json.ParseError {
+    let a = baml.json.from_json<Paint>({ "shade": "Light" }).shade;
+    let b = baml.json.deserialize<Paint>("{\"shade\": \"Light\"}").shade;
+    let c = Paint.from_json({ "shade": "Light" }).shade;
+    string.from(a) + string.from(b) + string.from(c)
+}
+
+test "enum_override_through_every_entry" {
+    assert.equal(enum_override_through_every_entry_fn(), "DarkDarkDark")
+}
+
+// ─── a union member is chosen by shape, then decoded by the rule ──────────────
+// A provided `from_json` that throws unwinds the whole walk, so a member
+// cannot be tried through its override and fallen through to the next. The
+// first member the value fits structurally is the one; it then decodes
+// through the override-honoring walk.
+
+function union_member_then_override_fn() -> string throws baml.json.DecodeError {
+    // `"Light"` fits `Shade` structurally; the chosen member's override runs.
+    string.from(baml.json.to<Shade | int>("Light")) + "|" + string.from(baml.json.to<Shade | int>(3))
+}
+
+test "union_member_then_override" {
+    assert.equal(union_member_then_override_fn(), "Dark|3")
+}
+
+// `Temp`'s override reads `"c"`, but its shape is `{ celsius }`: inside a
+// union the override's reading does not make `Temp` the member.
+function union_membership_is_structural_fn() -> string {
+    {
+        let t = baml.json.to<Temp | int>({ "c": 20.5 });
+        "decoded"
+    } catch (e) {
+        baml.json.DecodeError => "no member: " + e.message,
+    }
+}
+
+test "union_membership_is_structural" {
+    assert.equal(union_membership_is_structural_fn(), "no member: no union member matched")
+}
+
+// ─── a value that contains itself ─────────────────────────────────────────────
+// The walk refuses a JSON object or array it already has open instead of
+// descending into it forever.
+
+class Link {
+    next: Link?,
+    name: string,
+}
+
+class Ring {
+    items: Ring[],
+}
+
+function cyclic_object_is_refused_fn() -> string {
+    let m: map<string, baml.json.json> = { "name": "a" };
+    m["next"] = m;
+    {
+        let link = baml.json.to<Link>(m);
+        "decoded " + link.name
+    } catch (e) {
+        baml.json.DecodeError => e.message,
+    }
+}
+
+test "cyclic_object_is_refused" {
+    assert.equal(cyclic_object_is_refused_fn(), "cyclic json value: the document contains itself")
+}
+
+function cyclic_array_is_refused_fn() -> string {
+    let items: baml.json.json[] = [];
+    let m: map<string, baml.json.json> = { "items": items };
+    items.push(m);
+    {
+        let ring = baml.json.to<Ring>(m);
+        "decoded " + string.from(ring.items.length())
+    } catch (e) {
+        baml.json.DecodeError => e.message,
+    }
+}
+
+test "cyclic_array_is_refused" {
+    assert.equal(cyclic_array_is_refused_fn(), "cyclic json value: the document contains itself")
+}
+
+// The refusal does not depend on the position the cycle is met in: a union
+// candidate and a `json`-typed leaf are converted whole, and the conversion
+// refuses a container it is already inside, at that place.
+function cyclic_union_candidate_is_refused_fn() -> string {
+    let m: map<string, baml.json.json> = { "name": "a" };
+    m["next"] = m;
+    {
+        let value = baml.json.to<Link | int>(m);
+        "decoded"
+    } catch (e) {
+        baml.json.DecodeError => e.message,
+    }
+}
+
+test "cyclic_union_candidate_is_refused" {
+    assert.equal(cyclic_union_candidate_is_refused_fn(), "cyclic json value: the document contains itself")
+}
+
+class JsonHolder {
+    data: baml.json.json,
+}
+
+function cyclic_json_leaf_is_refused_fn() -> string {
+    let m: map<string, baml.json.json> = { "name": "a" };
+    m["next"] = m;
+    let doc: map<string, baml.json.json> = { "data": m };
+    {
+        let holder = baml.json.to<JsonHolder>(doc);
+        "decoded"
+    } catch (e) {
+        baml.json.DecodeError => e.message + " at " + e.path,
+    }
+}
+
+test "cyclic_json_leaf_is_refused_at_its_path" {
+    assert.equal(
+        cyclic_json_leaf_is_refused_fn(),
+        "cyclic json value: the document contains itself at .data[\"next\"]"
+    )
+}
+
+// ─── error paths ──────────────────────────────────────────────────────────────
+// A decode error names where it happened, from the root: the class whose
+// field is missing, or the leaf whose value has the wrong shape.
+
+class PathInner {
+    items: Link[],
+}
+
+class PathOuter {
+    inner: PathInner,
+}
+
+function nested_decode_error_path(doc: map<string, baml.json.json>) -> string {
+    {
+        let outer = baml.json.to<PathOuter>(doc);
+        "decoded"
+    } catch (e) {
+        baml.json.DecodeError => e.message + " at " + e.path,
+    }
+}
+
+test "missing_field_error_names_the_class_path" {
+    let doc: map<string, baml.json.json> = {
+        "inner": { "items": [{ "name": "a", "next": null }, { "next": null }] },
+    };
+    assert.equal(nested_decode_error_path(doc), "missing required field `name` at .inner.items[1]")
+}
+
+test "wrong_leaf_error_names_the_leaf_path" {
+    let doc: map<string, baml.json.json> = {
+        "inner": { "items": [{ "name": "a", "next": null }, { "name": 5, "next": null }] },
+    };
+    assert.is_true(nested_decode_error_path(doc).ends_with(" at .inner.items[1].name"))
+}
+
+// A document that merely repeats one object (a DAG, not a cycle) decodes.
+function shared_object_is_not_a_cycle_fn() -> int throws baml.json.DecodeError {
+    let leaf: map<string, baml.json.json> = { "next": null, "name": "leaf" };
+    let m: map<string, baml.json.json> = { "items": [leaf, leaf] };
+    baml.json.to<map<string, Link[]>>(m)["items"].length()
+}
+
+test "shared_object_is_not_a_cycle" {
+    assert.equal(shared_object_is_not_a_cycle_fn(), 2)
+}

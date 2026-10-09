@@ -5434,31 +5434,6 @@ impl BexVm {
             .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
     }
 
-    /// Look up a function by its fully-qualified name by scanning `vm.globals`.
-    ///
-    /// Returns `Some(ptr)` for the first `Object::Function` whose `name` matches,
-    /// or `None` if no such function exists in the global pool.
-    ///
-    /// This is O(globals) and intended for use in native methods that need to
-    /// dispatch to a dynamically resolved FREE stdlib function (e.g.
-    /// `baml.json.to`). Not suitable for hot paths; callers that need repeated
-    /// lookups should cache the result. Interface-machinery bodies are
-    /// excluded: a body's `name` is display-only (its identity is the
-    /// implements relation), so this scan must never become a name→body
-    /// channel.
-    pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
-        for v in self.globals.as_slice(self.proof()) {
-            if let Some(ptr) = v.as_object_ptr() {
-                if let Object::Function(f) = self.get_object(ptr) {
-                    if f.name == name && !f.is_interface_body {
-                        return Some(ptr);
-                    }
-                }
-            }
-        }
-        None
-    }
-
     fn allocate_real_locals_for_frame(
         &mut self,
         function_ptr: HeapPtr,
