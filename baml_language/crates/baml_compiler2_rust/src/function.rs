@@ -929,9 +929,6 @@ impl<'db> Env<'_, 'db> {
     ) -> Result<Vec<Unresolved<'db>>, Rejection> {
         let mut unresolved = Vec::new();
         for (index, local) in self.body.locals.iter().enumerate() {
-            if local.is_captured {
-                return Err(Rejection::unsupported("captured local"));
-            }
             let is_param = (1..=arity).contains(&index);
             let is_signature = is_param || index == 0;
             let kind = match &local.ty {
@@ -2426,13 +2423,15 @@ impl<'db> Env<'_, 'db> {
         // Lowering evaluates every argument into a local before the call, so
         // no `RefCell` borrow taken for an argument is live across it. The
         // generated code's `borrow_mut` safety rests on this, so it is
-        // checked rather than assumed.
+        // checked rather than assumed. A captured local is read through its
+        // cell as an argument directly; the read copies the value out before
+        // the call, so the same holds.
         if let Terminator::Call { args, .. } | Terminator::VirtualCall { args, .. } = terminator
             && let Some(argument) = args.iter().find(|argument| {
                 !matches!(
                     argument,
-                    Operand::Copy(Place::Local(_))
-                        | Operand::Move(Place::Local(_))
+                    Operand::Copy(Place::Local(_) | Place::Deref(_))
+                        | Operand::Move(Place::Local(_) | Place::Deref(_))
                         | Operand::Constant(_)
                 )
             })
