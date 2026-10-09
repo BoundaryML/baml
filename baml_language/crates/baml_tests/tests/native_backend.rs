@@ -2244,7 +2244,55 @@ function f(xs: (int | null)[]) -> int | null {
 }
 
 #[test]
-fn rejects_lambda() {
+fn lambdas_are_functions_behind_counted_pointers() {
+    let module = compile_entry(
+        r"
+function plain(x: int) -> int { x + 1 }
+function f(n: int) -> int {
+    let double = (x: int) -> int { x * 2 };
+    let g = plain;
+    double(n) + g(n)
+}
+",
+        "f",
+    );
+    let source = &module.rust_source;
+    // The lambda is a function named after its creator, called through a
+    // closure that owns nothing.
+    assert_contains(
+        source,
+        "pub fn user_f__lambda0(mut _1: Int63) -> Result<Int63, Thrown>",
+    );
+    assert_contains(
+        source,
+        "let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(",
+    );
+    assert_contains(source, "user_f__lambda0(__arg0)");
+    // A declared function as a value is its function item.
+    assert_contains(source, "= Rc::new(user_plain)");
+    // Calls through either are indirect.
+    assert_contains(source, "_4 = (_2)(_1)?;");
+    assert_contains(source, "_6 = (_3)(_1)?;");
+    // Lambdas and functions calling through a value guard their depth: a
+    // cycle closed through a function value is not in the static graph.
+    assert_eq!(
+        source.matches("bex_aot::depth::Guard::enter()?").count(),
+        2,
+        "the lambda and `f` are guarded, `plain` is not:\n{source}"
+    );
+    assert_eq!(
+        module
+            .functions
+            .iter()
+            .map(|f| f.rust_name.as_str())
+            .collect::<Vec<_>>(),
+        ["user_plain", "user_f"],
+        "a lambda is emitted but not listed"
+    );
+}
+
+#[test]
+fn rejects_captured_local_in_a_lambda() {
     let rejection = reject(
         r"
 function f(n: int) -> int {
@@ -2254,7 +2302,75 @@ function f(n: int) -> int {
 ",
         "f",
     );
-    assert_unsupported(&rejection, "lambda");
+    assert_unsupported(&rejection, "captured local");
+}
+
+#[test]
+fn rejects_function_values_without_a_native_form() {
+    let rejection = reject(
+        r"
+function f(xs: string[]) -> int[] {
+    xs.map(baml.String.length)
+}
+",
+        "f",
+    );
+    assert_unsupported(
+        &rejection,
+        "stdlib function `baml.String.length` used as a value",
+    );
+    let rejection = reject(
+        r"
+function g(a: int, b: int = 2) -> int { a + b }
+function f(n: int) -> int {
+    let hs = [g];
+    hs.length() + g(n)
+}
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "with a defaulted parameter used as a value");
+    let rejection = reject(
+        r"
+function f(a: (int) -> int throws never, b: (int) -> int throws never) -> bool { a == b }
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "`==` on a `(int) -> int` and a `(int) -> int`");
+    let rejection = reject(
+        r"
+function f(a: (int) -> int throws never) -> string { a.to_string() }
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "`to_string` of a function value");
+    let rejection = reject(
+        r"
+class Holder { callback: (int) -> int throws never }
+function f(h: Holder) -> int { h.callback(1) }
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "field `callback`");
+    assert_unsupported(&rejection, "function type (a class field)");
+    let rejection = reject(
+        r"
+class C { n: int, function get(self) -> int { self.n } }
+function f(c: C) -> int {
+    let g = c.get;
+    g()
+}
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "method used as a value");
+    let rejection = reject(
+        r"
+function f(x: int | ((int) -> int throws never)) -> int { 1 }
+",
+        "f",
+    );
+    assert_unsupported(&rejection, "function type (a union member)");
 }
 
 #[test]

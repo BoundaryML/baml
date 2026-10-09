@@ -36,6 +36,7 @@ const FIXTURES: &[&str] = &[
     "defers",
     "enums",
     "floats",
+    "lambdas",
     "literal_unions",
     "loops",
     "maps",
@@ -112,6 +113,7 @@ generated_module!(defers, "native/generated/defers.rs");
 generated_module!(literal_unions, "native/generated/literal_unions.rs");
 generated_module!(primitive_unions, "native/generated/primitive_unions.rs");
 generated_module!(class_unions, "native/generated/class_unions.rs");
+generated_module!(lambdas, "native/generated/lambdas.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -1070,4 +1072,39 @@ async fn defers_match_vm() {
         check!(o, defer_throw_uncaught(x) => user_defer_throw_uncaught(int(x)));
         check!(o, defer_in_handler(x) => user_defer_in_handler(int(x)));
     }
+}
+
+/// A function-typed native result is called natively; the VM's value is
+/// observed through what it computes, as the fixture's `chosen` does.
+#[tokio::test]
+async fn lambdas_match_vm() {
+    use lambdas::*;
+    let o = Oracle::new("lambdas");
+    for n in [-3, 0, 1, 7, 100, MAX] {
+        check!(o, direct(n) => user_direct(int(n)));
+        check!(o, named_value(n) => user_named_value(int(n)));
+        check!(o, passed(n) => user_passed(int(n)));
+        check!(o, void_lambda(n) => user_void_lambda(int(n)));
+        check!(o, throwing(n) => user_throwing(int(n)));
+        check!(o, caught(n) => user_caught(int(n)));
+        check!(o, in_array(n) => user_in_array(int(n)));
+        check!(o, recursion_through_value(n.min(50)) => user_recursion_through_value(int(n.min(50))));
+    }
+    for (which, a) in [(0, 3), (1, 3), (2, -4), (0, MAX)] {
+        check!(o, chosen(which, a) => user_chosen(int(which), int(a)));
+        check!(o, nullable_fn(which, a) => user_nullable_fn(int(which), int(a)));
+    }
+    for (a, b) in [(1, 2), (MIN, 1), (MAX, -1)] {
+        check!(o, two_args(a, b) => user_two_args(int(a), int(b)));
+    }
+    check!(o, strings("hi") => user_strings(text("hi")));
+    // A function value is called like any other: `returned` is observed
+    // through `chosen`; its own result has no VM-side observation.
+    assert_eq!((user_returned(int(1)).unwrap())(int(9)).unwrap(), int(81));
+    // Runaway recursion through a function value throws `StackOverflow`
+    // instead of overflowing the native stack.
+    assert_eq!(
+        Observed::from(user_recursion_through_value(int(1_000_000))),
+        Observed::thrown("baml.panics.StackOverflow", [])
+    );
 }

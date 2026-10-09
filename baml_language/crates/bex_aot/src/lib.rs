@@ -7,7 +7,8 @@
 //! handles with reference semantics, `map<K, V>` is a [`Map`] handle over an
 //! insertion-ordered table, `T | null` is `Option<T>`, and every
 //! function returns `Result<T, Thrown>` so a `throw` or a panic unwinds as an
-//! error value. The language rules both backends must agree on come from
+//! error value. A function value is an `Rc<dyn Fn(..) -> Result<R, Thrown>>`
+//! and a local a closure captures lives in a [`cell::Cell`]. The language rules both backends must agree on come from
 //! [`bex_lang`]; this crate adds only what native code
 //! needs and the VM never does: the handle, rendering, JSON through serde,
 //! the thrown-value type and the recursion guard. The binary links no VM
@@ -21,6 +22,7 @@ pub use serde_json;
 
 pub mod array;
 pub mod bigint;
+pub mod cell;
 pub mod depth;
 pub mod eq;
 pub mod errors;

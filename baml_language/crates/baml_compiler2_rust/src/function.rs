@@ -31,6 +31,14 @@
 //! and a read of a union as one of its members, which lowering emits where
 //! the checker narrowed the value, is a [`Coercion::Narrow`] the printer
 //! turns into a `match` whose other arms are unreachable.
+//!
+//! A lambda is a function of its own ([`FnId::Lambda`]), analyzed from the
+//! `make_closure` that creates it once the enclosing function's locals are
+//! typed, since the types of its captures are the enclosing function's
+//! ([`Candidate::lambdas`]). A captured local holds a cell
+//! (`bex_aot::cell::Cell<T>`) and is read and written through
+//! `Place::Deref`; a closure captures the cells it needs, and a call through
+//! a function value is a [`CallKind::Indirect`].
 
 use baml_base::LangPackage;
 use baml_compiler2_hir::{
@@ -42,7 +50,7 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_hir_ty::layout;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, MirFunction,
+    AggregateKind, BinOp, BlockId, CellId, Constant, IndexKind, IntrinsicOp, Local, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place, RealizedTy, RuntimeTy, Rvalue,
     ShortCircuitKind, Statement, StatementKind, SwitchKey, Terminator, TyTemplate, TypeTest,
     UnaryOp, function_link_name, lower_function,
@@ -147,6 +155,108 @@ pub(crate) enum BigintOp {
     Parse,
 }
 
+/// Which primitive order a `baml.ops.Compare.cmp` or a `sort_by_key` key
+/// uses: the language's total orders, as `bex_lang` / `bex_aot` spell them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CmpKind {
+    Int,
+    Float,
+    Str,
+    Bigint,
+    Bool,
+}
+
+/// A `baml.Array` method that calls back into a function value. Every one
+/// of them walks a snapshot of the array taken before the first callback,
+/// as the VM's continuations do, so a callback that mutates the array is
+/// not observed by the walk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ArrayCallback {
+    Map,
+    Filter,
+    /// `filter_map`: the callback's `null` results are dropped. The runtime
+    /// takes an `Option` of the element; the printer adapts a callback that
+    /// never returns `null` by wrapping its result.
+    FilterMap,
+    ForEach,
+    Some,
+    Every,
+    Find,
+    FindIndex,
+    FindLast,
+    FindLastIndex,
+    Reduce,
+    FlatMap,
+    /// `sort_by`: the VM's bottom-up merge sort over a copy, written back
+    /// only when every comparison returned; the comparator is a
+    /// `baml.ops.Ordering`, of which only `Greater` moves an element.
+    SortBy,
+    /// `sort_by_key`: every key computed once, left to right, then the
+    /// same stable sort by the keys' primitive order.
+    SortByKey(CmpKind),
+}
+
+impl ArrayCallback {
+    pub(crate) fn link_name(self) -> &'static str {
+        match self {
+            Self::Map => "baml.Array.map",
+            Self::Filter => "baml.Array.filter",
+            Self::FilterMap => "baml.Array.filter_map",
+            Self::ForEach => "baml.Array.for_each",
+            Self::Some => "baml.Array.some",
+            Self::Every => "baml.Array.every",
+            Self::Find => "baml.Array.find",
+            Self::FindIndex => "baml.Array.find_index",
+            Self::FindLast => "baml.Array.find_last",
+            Self::FindLastIndex => "baml.Array.find_last_index",
+            Self::Reduce => "baml.Array.reduce",
+            Self::FlatMap => "baml.Array.flat_map",
+            Self::SortBy => "baml.Array.sort_by",
+            Self::SortByKey(_) => "baml.Array.sort_by_key",
+        }
+    }
+
+    /// The `bex_aot::array` function.
+    pub(crate) fn runtime_name(self) -> &'static str {
+        match self {
+            Self::Map => "map",
+            Self::Filter => "filter",
+            Self::FilterMap => "filter_map",
+            Self::ForEach => "for_each",
+            Self::Some => "some",
+            Self::Every => "every",
+            Self::Find => "find",
+            Self::FindIndex => "find_index",
+            Self::FindLast => "find_last",
+            Self::FindLastIndex => "find_last_index",
+            Self::Reduce => "reduce",
+            Self::FlatMap => "flat_map",
+            Self::SortBy => "sort_by",
+            Self::SortByKey(_) => "sort_by_key",
+        }
+    }
+
+    fn from_link_name(link_name: &str) -> Option<Self> {
+        Some(match link_name {
+            "baml.Array.map" => Self::Map,
+            "baml.Array.filter" => Self::Filter,
+            "baml.Array.filter_map" => Self::FilterMap,
+            "baml.Array.for_each" => Self::ForEach,
+            "baml.Array.some" => Self::Some,
+            "baml.Array.every" => Self::Every,
+            "baml.Array.find" => Self::Find,
+            "baml.Array.find_index" => Self::FindIndex,
+            "baml.Array.find_last" => Self::FindLast,
+            "baml.Array.find_last_index" => Self::FindLastIndex,
+            "baml.Array.reduce" => Self::Reduce,
+            "baml.Array.flat_map" => Self::FlatMap,
+            "baml.Array.sort_by" => Self::SortBy,
+            "baml.Array.sort_by_key" => Self::SortByKey(CmpKind::Int),
+            _ => return None,
+        })
+    }
+}
+
 /// A stdlib function mapped to a `bex_aot` call rather than compiled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Builtin<'db> {
@@ -186,6 +296,16 @@ pub(crate) enum Builtin<'db> {
     Map(MapOp),
     /// `baml.Bigint.<op>(..)`.
     Bigint(BigintOp),
+    /// `virtual_call cmp as baml.ops.Compare` on two primitives: the
+    /// `baml.ops.Ordering` variant of the language's order.
+    Cmp(CmpKind),
+    /// A `baml.Array` method calling back into a function value. `wanted`
+    /// is the function type the runtime calls (the array's element type in
+    /// the parameters); the printer adapts the argument's own type to it.
+    ArrayCallback {
+        op: ArrayCallback,
+        wanted: NativeTy<'db>,
+    },
 }
 
 /// What a `Call` or `VirtualCall` terminator does in the generated code.
@@ -205,6 +325,14 @@ pub(crate) enum CallKind<'db> {
     },
     /// `baml.sys.panic("...")`: returns the panic instead of calling.
     Panic(String),
+    /// A call through a function value (a local, a captured cell, a field):
+    /// `(f)(args)`.
+    Indirect {
+        /// The function type's parameters; each argument coerces to its own.
+        params: Vec<NativeTy<'db>>,
+        /// The function type's return type.
+        result: NativeTy<'db>,
+    },
     /// A `bex_aot` call; `result` is the destination's type.
     Builtin {
         builtin: Builtin<'db>,
@@ -212,9 +340,49 @@ pub(crate) enum CallKind<'db> {
     },
 }
 
+/// The identity of a function the module emits: a declaration, or a
+/// lambda, named by the declaration it is lowered inside and its position
+/// in each enclosing `MirFunction::lambdas` list, outermost first.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FnId<'db> {
+    Declared(FunctionLoc<'db>),
+    Lambda {
+        root: FunctionLoc<'db>,
+        path: Vec<usize>,
+    },
+}
+
+impl<'db> FnId<'db> {
+    /// The declaration this function is, or is lowered inside.
+    pub fn root(&self) -> FunctionLoc<'db> {
+        match self {
+            Self::Declared(loc) | Self::Lambda { root: loc, .. } => *loc,
+        }
+    }
+
+    /// The lambda at `index` of this function's `lambdas`.
+    fn lambda(&self, index: usize) -> Self {
+        let (root, mut path) = match self {
+            Self::Declared(loc) => (*loc, Vec::new()),
+            Self::Lambda { root, path } => (*root, path.clone()),
+        };
+        path.push(index);
+        Self::Lambda { root, path }
+    }
+}
+
+/// A `make_closure` site: the lambda it instantiates and the function type
+/// of the value it builds.
+#[derive(Debug, Clone)]
+pub(crate) struct ClosureSite<'db> {
+    pub id: FnId<'db>,
+    pub params: Vec<NativeTy<'db>>,
+    pub ret: NativeTy<'db>,
+}
+
 /// A function admitted to the subset, with everything the printer reads.
 pub(crate) struct Candidate<'db> {
-    pub loc: FunctionLoc<'db>,
+    pub id: FnId<'db>,
     pub link_name: String,
     pub mir: &'db MirFunction<'db>,
     pub body: &'db MirFunctionBody<'db>,
@@ -249,9 +417,42 @@ pub(crate) struct Candidate<'db> {
     /// Whether the function is on a call cycle, so its body runs under a
     /// depth guard. Set by the call graph, not by [`analyze`].
     pub recursive: bool,
+    /// The native types of a lambda's captures, parallel to
+    /// `Place::Capture(..)`; empty for a declared function.
+    pub captures: Vec<NativeTy<'db>>,
+    /// The lambdas this body creates, by `lambda_idx`, each analyzed with
+    /// the capture types its `make_closure` passes.
+    pub closures: FxHashMap<usize, ClosureSite<'db>>,
+    /// The lambdas' candidates, in `lambda_idx` order, each with its own
+    /// nested lambdas; the module emits every one as a function.
+    pub lambdas: Vec<Candidate<'db>>,
+    /// Declared functions used as values (`let g = f`), with the function
+    /// type each one has; the call graph admits them as callees.
+    pub function_values: FxHashMap<FunctionLoc<'db>, NativeTy<'db>>,
+    /// Whether the body calls through a function value: such a call can
+    /// close a cycle the static call graph does not see, so the function
+    /// guards its depth as a recursive one does.
+    pub indirect: bool,
 }
 
 impl<'db> Candidate<'db> {
+    /// Whether this is a lambda rather than a declaration.
+    pub(crate) fn is_lambda(&self) -> bool {
+        matches!(self.id, FnId::Lambda { .. })
+    }
+
+    /// Every candidate in this one's tree, lambdas first (innermost first),
+    /// then itself.
+    pub(crate) fn flatten(self) -> Vec<Candidate<'db>> {
+        let mut out = Vec::new();
+        let mut this = self;
+        for lambda in std::mem::take(&mut this.lambdas) {
+            out.extend(lambda.flatten());
+        }
+        out.push(this);
+        out
+    }
+
     pub(crate) fn arity(&self) -> usize {
         self.mir.arity
     }
@@ -290,7 +491,8 @@ impl<'db> Candidate<'db> {
 }
 
 /// Decide whether `loc` is in the subset and gather what emitting it needs.
-/// Classes the function touches are registered in `classes`.
+/// Classes the function touches are registered in `classes`. The lambdas
+/// the body creates are analyzed with it ([`Candidate::lambdas`]).
 pub(crate) fn analyze<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     loc: FunctionLoc<'db>,
@@ -317,6 +519,94 @@ pub(crate) fn analyze<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         return Err(Rejection::unsupported("builtin function"));
     };
+    let param_names = data
+        .params
+        .iter()
+        .map(|param| param.name.to_string())
+        .collect::<Vec<_>>();
+    let defaulted: Vec<bool> = data.params.iter().map(|param| param.has_default).collect();
+    analyze_body(
+        db,
+        BodyInput {
+            id: FnId::Declared(loc),
+            link_name,
+            mir,
+            body,
+            param_names,
+            defaulted,
+            captures: Vec::new(),
+        },
+        classes,
+    )
+}
+
+/// Analyze the lambda `mir`, created by a `make_closure` whose captures
+/// have the types `captures`.
+fn analyze_lambda<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    id: FnId<'db>,
+    mir: &'db MirFunction<'db>,
+    captures: Vec<NativeTy<'db>>,
+    classes: &mut ClassTable<'db>,
+) -> Result<Candidate<'db>, Rejection> {
+    let link_name = mir.identity.link_name(db);
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        return Err(Rejection::invalid("lambda without a body"));
+    };
+    let Some(signature) = &mir.signature else {
+        return Err(Rejection::invalid("lambda without a signature"));
+    };
+    if !signature.type_param_names.is_empty() {
+        return Err(Rejection::unsupported("lambda in a generic function"));
+    }
+    if signature.param_has_default.iter().any(|has| *has) {
+        return Err(Rejection::unsupported("lambda with a defaulted parameter"));
+    }
+    analyze_body(
+        db,
+        BodyInput {
+            id,
+            link_name,
+            mir,
+            body,
+            param_names: signature.param_names.clone(),
+            defaulted: vec![false; signature.param_names.len()],
+            captures,
+        },
+        classes,
+    )
+}
+
+/// What [`analyze_body`] needs of a declaration or a lambda.
+struct BodyInput<'db> {
+    id: FnId<'db>,
+    link_name: String,
+    mir: &'db MirFunction<'db>,
+    body: &'db MirFunctionBody<'db>,
+    /// BAML parameter names, parallel to `_1..=arity`.
+    param_names: Vec<String>,
+    /// Whether each parameter has a default.
+    defaulted: Vec<bool>,
+    /// The native types of the captures, for a lambda.
+    captures: Vec<NativeTy<'db>>,
+}
+
+/// Decide whether a lowered body is in the subset and gather what emitting
+/// it needs.
+fn analyze_body<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    input: BodyInput<'db>,
+    classes: &mut ClassTable<'db>,
+) -> Result<Candidate<'db>, Rejection> {
+    let BodyInput {
+        id,
+        link_name,
+        mir,
+        body,
+        param_names,
+        defaulted,
+        captures,
+    } = input;
     // The constructs that define a whole feature area are reported before
     // anything they drag along (a `spawn` body is also a lambda), so the
     // admission report names the feature.
@@ -329,9 +619,6 @@ pub(crate) fn analyze<'db>(
             Some(Terminator::SysOp { .. }) => return Err(Rejection::unsupported("sys-op call")),
             _ => {}
         }
-    }
-    if !mir.lambdas.is_empty() {
-        return Err(Rejection::unsupported("lambda"));
     }
     if body.locals.len() <= mir.arity {
         return Err(Rejection::invalid("fewer locals than parameters"));
@@ -357,17 +644,11 @@ pub(crate) fn analyze<'db>(
             )));
         }
     }
-    let param_names = data
-        .params
-        .iter()
-        .map(|param| param.name.to_string())
-        .collect::<Vec<_>>();
     if param_names.len() != mir.arity {
         return Err(Rejection::invalid(
             "parameter list disagrees with MIR arity",
         ));
     }
-    let defaulted: Vec<bool> = data.params.iter().map(|param| param.has_default).collect();
     default_constants(body, &param_names, &defaulted)?;
 
     let mut env = Env {
@@ -379,10 +660,16 @@ pub(crate) fn analyze<'db>(
         narrows: FxHashMap::default(),
         narrow_sources: FxHashMap::default(),
         member_tests: FxHashMap::default(),
+        lambdas: &mir.lambdas,
+        captures,
+        closures: FxHashMap::default(),
+        function_values: FxHashMap::default(),
+        indirect: false,
     };
     let handler_kinds = env.handler_locals()?;
     let unresolved = env.declare_locals(mir.arity, &handler_kinds)?;
     env.register_enum_constants()?;
+    env.register_function_values()?;
     env.refine(unresolved)?;
     env.union_tags()?;
     let kinds: Vec<LocalKind<'db>> = env
@@ -431,11 +718,43 @@ pub(crate) fn analyze<'db>(
     };
     let structured = structurize(&cfg).map_err(|error| Rejection::invalid(error.to_string()))?;
     let aliases = find_aliases(body, mir.arity, &kinds, &stores);
-    let narrow_sources = env.narrow_sources;
-    let member_tests = env.member_tests;
+    let Env {
+        narrow_sources,
+        member_tests,
+        captures,
+        closures: closure_captures,
+        function_values,
+        indirect,
+        ..
+    } = env;
+
+    // The lambdas, now that the types of their captures are known. A
+    // lambda no `make_closure` names is dead and emitted nowhere.
+    let mut sites: Vec<(usize, Vec<NativeTy<'db>>)> = closure_captures.into_iter().collect();
+    sites.sort_by_key(|(index, _)| *index);
+    let mut closures = FxHashMap::default();
+    let mut lambdas = Vec::with_capacity(sites.len());
+    for (index, capture_tys) in sites {
+        let lambda = mir
+            .lambdas
+            .get(index)
+            .ok_or_else(|| Rejection::invalid(format!("no lambda {index}")))?;
+        let lambda_id = id.lambda(index);
+        let candidate = analyze_lambda(db, lambda_id.clone(), lambda, capture_tys, classes)
+            .map_err(|rejection| rejection.in_function(&lambda.identity.link_name(db)))?;
+        closures.insert(
+            index,
+            ClosureSite {
+                id: lambda_id,
+                params: candidate.param_tys().into_iter().cloned().collect(),
+                ret: candidate.return_ty().clone(),
+            },
+        );
+        lambdas.push(candidate);
+    }
 
     Ok(Candidate {
-        loc,
+        id,
         link_name,
         mir,
         body,
@@ -450,7 +769,20 @@ pub(crate) fn analyze<'db>(
         narrow_sources,
         member_tests,
         recursive: false,
+        captures,
+        closures,
+        lambdas,
+        function_values,
+        indirect,
     })
+}
+
+/// A local awaiting refinement: why its declaration gave no type, and the
+/// type to keep when nothing defines it.
+struct Unresolved<'db> {
+    local: Local,
+    reason: Rejection,
+    fallback: Option<NativeTy<'db>>,
 }
 
 /// A definition of a local, for refinement.
@@ -474,6 +806,16 @@ struct Env<'a, 'db> {
     narrow_sources: FxHashMap<Local, Local>,
     /// See [`Candidate::member_tests`].
     member_tests: FxHashMap<TestSite, MemberTest>,
+    /// The lambdas of the body, by `lambda_idx`.
+    lambdas: &'db [MirFunction<'db>],
+    /// See [`Candidate::captures`].
+    captures: Vec<NativeTy<'db>>,
+    /// The capture types each `make_closure` passes, by `lambda_idx`.
+    closures: FxHashMap<usize, Vec<NativeTy<'db>>>,
+    /// See [`Candidate::function_values`].
+    function_values: FxHashMap<FunctionLoc<'db>, NativeTy<'db>>,
+    /// See [`Candidate::indirect`].
+    indirect: bool,
 }
 
 impl<'db> Env<'_, 'db> {
@@ -575,11 +917,16 @@ impl<'db> Env<'_, 'db> {
     /// Type every local from its declaration. Locals whose declared type has
     /// no native representation are returned (with the reason) for
     /// refinement; a parameter or the return place must be representable.
+    /// A local declared with a function type is refined too, keeping the
+    /// declared type when nothing defines it: lowering sometimes declares
+    /// the receiver temporary of a method call with the method's type and
+    /// stores the receiver into it (`_13: (map<string, int>) -> int` holding
+    /// a map, then `len(_13)`).
     fn declare_locals(
         &mut self,
         arity: usize,
         handler_kinds: &FxHashMap<Local, LocalKind<'db>>,
-    ) -> Result<Vec<(Local, Rejection)>, Rejection> {
+    ) -> Result<Vec<Unresolved<'db>>, Rejection> {
         let mut unresolved = Vec::new();
         for (index, local) in self.body.locals.iter().enumerate() {
             if local.is_captured {
@@ -594,6 +941,14 @@ impl<'db> Env<'_, 'db> {
                 RuntimeTy::Type if !is_signature => Some(LocalKind::Type),
                 RuntimeTy::Never if !is_signature => Some(LocalKind::Never),
                 ty => match self.classes.native_ty(ty) {
+                    Ok(native) if !is_signature && matches!(ty, RuntimeTy::Function { .. }) => {
+                        unresolved.push(Unresolved {
+                            local: Local(index),
+                            reason: Rejection::unsupported("function-typed local"),
+                            fallback: Some(native),
+                        });
+                        None
+                    }
                     Ok(native) => Some(LocalKind::Value(native)),
                     Err(rejection) => {
                         let what = if is_param {
@@ -614,7 +969,11 @@ impl<'db> Env<'_, 'db> {
                         if is_signature {
                             return Err(rejection);
                         }
-                        unresolved.push((Local(index), rejection));
+                        unresolved.push(Unresolved {
+                            local: Local(index),
+                            reason: rejection,
+                            fallback: None,
+                        });
                         None
                     }
                 },
@@ -625,9 +984,10 @@ impl<'db> Env<'_, 'db> {
     }
 
     /// Give each unresolved local the native type of its definitions, as long
-    /// as they agree. Definitions may depend on other unresolved locals, so
-    /// this iterates to a fixpoint.
-    fn refine(&mut self, mut unresolved: Vec<(Local, Rejection)>) -> Result<(), Rejection> {
+    /// as they agree, or its fallback when nothing defines it. Definitions
+    /// may depend on other unresolved locals, so this iterates to a
+    /// fixpoint.
+    fn refine(&mut self, mut unresolved: Vec<Unresolved<'db>>) -> Result<(), Rejection> {
         if unresolved.is_empty() {
             return Ok(());
         }
@@ -663,12 +1023,27 @@ impl<'db> Env<'_, 'db> {
         loop {
             let mut progress = false;
             let mut remaining = Vec::with_capacity(unresolved.len());
-            for (local, reason) in unresolved {
+            for entry in unresolved {
+                let Unresolved {
+                    local,
+                    reason,
+                    fallback,
+                } = entry;
                 let Some(local_defs) = defs.get(&local) else {
-                    remaining.push((local, reason));
+                    match fallback {
+                        Some(ty) => {
+                            self.kinds[local.0] = Some(LocalKind::Value(ty));
+                            progress = true;
+                        }
+                        None => remaining.push(Unresolved {
+                            local,
+                            reason,
+                            fallback,
+                        }),
+                    }
                     continue;
                 };
-                let mut agreed: Option<NativeTy<'db>> = None;
+                let mut def_tys: Vec<NativeTy<'db>> = Vec::with_capacity(local_defs.len());
                 let mut blocked = false;
                 for def in local_defs {
                     let ty = match def {
@@ -676,28 +1051,55 @@ impl<'db> Env<'_, 'db> {
                         Def::Terminator(terminator) => self.terminator_result_ty(terminator),
                     };
                     match ty {
-                        Ok(ty) => match &agreed {
-                            Some(previous) if *previous != ty => {
-                                return Err(Rejection::unsupported(format!(
-                                    "{local} is defined with the native types `{}` and `{}`",
-                                    self.describe(previous),
-                                    self.describe(&ty)
-                                )));
-                            }
-                            _ => agreed = Some(ty),
-                        },
+                        Ok(ty) => def_tys.push(ty),
                         Err(Rejection::Invalid(message)) if message.starts_with(UNRESOLVED) => {
                             blocked = true;
                         }
                         Err(other) => return Err(other),
                     }
                 }
-                match agreed {
-                    Some(ty) if !blocked => {
+                if blocked {
+                    remaining.push(Unresolved {
+                        local,
+                        reason,
+                        fallback,
+                    });
+                    continue;
+                }
+                // The declared type stands when every definition fits it
+                // (a function value, or a nullable one the checker narrowed);
+                // otherwise the definitions say what the local holds.
+                let resolved = match &fallback {
+                    Some(declared) if def_tys.iter().all(|ty| fits(ty, declared)) => {
+                        Some(declared.clone())
+                    }
+                    _ => {
+                        let mut agreed: Option<NativeTy<'db>> = None;
+                        for ty in def_tys {
+                            match &agreed {
+                                Some(previous) if *previous != ty => {
+                                    return Err(Rejection::unsupported(format!(
+                                        "{local} is defined with the native types `{}` and `{}`",
+                                        self.describe(previous),
+                                        self.describe(&ty)
+                                    )));
+                                }
+                                _ => agreed = Some(ty),
+                            }
+                        }
+                        agreed
+                    }
+                };
+                match resolved {
+                    Some(ty) => {
                         self.kinds[local.0] = Some(LocalKind::Value(ty));
                         progress = true;
                     }
-                    _ => remaining.push((local, reason)),
+                    _ => remaining.push(Unresolved {
+                        local,
+                        reason,
+                        fallback,
+                    }),
                 }
             }
             unresolved = remaining;
@@ -705,7 +1107,7 @@ impl<'db> Env<'_, 'db> {
                 return Ok(());
             }
             if !progress {
-                let (local, reason) = unresolved.swap_remove(0);
+                let Unresolved { local, reason, .. } = unresolved.swap_remove(0);
                 return Err(match reason {
                     Rejection::Unsupported(reason) => Rejection::Unsupported(format!(
                         "{reason} (no definition of {local} refines it)"
@@ -781,6 +1183,33 @@ impl<'db> Env<'_, 'db> {
             self.classes
                 .check_enum(enum_ref)
                 .map_err(|reason| Rejection::unsupported(reason.0))?;
+        }
+        Ok(())
+    }
+
+    /// Type every declared function the body uses as a value (an operand
+    /// other than a call's callee), so a later `&self` read finds it.
+    fn register_function_values(&mut self) -> Result<(), Rejection> {
+        let mut values = Vec::new();
+        let mut record = |operand: &Operand<'db>| {
+            if let Operand::Constant(Constant::Function(callee)) = operand
+                && !values.contains(callee)
+            {
+                values.push(*callee);
+            }
+        };
+        for block in &self.body.blocks {
+            for statement in &block.statements {
+                if let StatementKind::Assign { value, .. } = &statement.kind {
+                    rvalue_operands(value, &mut record);
+                }
+            }
+            if let Some(terminator) = &block.terminator {
+                terminator_operands(terminator, &mut record);
+            }
+        }
+        for callee in values {
+            self.function_value(callee)?;
         }
         Ok(())
     }
@@ -866,7 +1295,47 @@ impl<'db> Env<'_, 'db> {
                 }
                 Ok(element)
             }
-            Place::Capture(_) | Place::Deref(_) => Err(Rejection::unsupported("captured local")),
+            // The value behind a cell: the captured local's own type, or the
+            // capture's.
+            Place::Deref(cell) => self.cell_ty(*cell),
+            // The cell pointer itself is only ever a `make_closure` capture
+            // operand, which reads it directly.
+            Place::Capture(index) => Err(Rejection::invalid(format!(
+                "cell pointer capture[{index}] read as a value"
+            ))),
+        }
+    }
+
+    /// The type of the value a cell holds.
+    fn cell_ty(&self, cell: CellId) -> Result<NativeTy<'db>, Rejection> {
+        match cell {
+            CellId::Local(local) => {
+                if !self.body.local(local).is_captured {
+                    return Err(Rejection::invalid(format!(
+                        "deref of {local}, which no closure captures"
+                    )));
+                }
+                self.local_ty(local)
+            }
+            CellId::Capture(index) => self.captures.get(index).cloned().ok_or_else(|| {
+                Rejection::invalid(format!("capture[{index}] is not a capture of this lambda"))
+            }),
+        }
+    }
+
+    /// The type of the cell a `make_closure` capture operand names: a
+    /// captured local's, or one of this lambda's own captures forwarded.
+    fn capture_ty(&self, operand: &Operand<'db>) -> Result<NativeTy<'db>, Rejection> {
+        match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                self.cell_ty(CellId::Local(*local))
+            }
+            Operand::Copy(Place::Capture(index)) | Operand::Move(Place::Capture(index)) => {
+                self.cell_ty(CellId::Capture(*index))
+            }
+            other => Err(Rejection::invalid(format!(
+                "closure capture `{other:?}` is not a cell pointer"
+            ))),
         }
     }
 
@@ -897,8 +1366,19 @@ impl<'db> Env<'_, 'db> {
                 }),
                 Constant::Bigint(_) => Ok(NativeTy::Bigint),
                 Constant::OmittedArg => Err(Rejection::unsupported("omitted argument")),
-                Constant::Function(_) | Constant::GenericFunction { .. } => {
-                    Err(Rejection::unsupported("function value"))
+                Constant::Function(DeclRef::Source(callee)) => self
+                    .function_values
+                    .get(callee)
+                    .cloned()
+                    .ok_or_else(|| Rejection::invalid("function value was not registered")),
+                Constant::Function(DeclRef::External(callee)) => {
+                    Err(Rejection::unsupported(format!(
+                        "stdlib function `{}` used as a value",
+                        function_link_name(self.db, DeclRef::External(*callee))
+                    )))
+                }
+                Constant::GenericFunction { .. } => {
+                    Err(Rejection::unsupported("generic function used as a value"))
                 }
                 Constant::GlobalItem(_) => Err(Rejection::unsupported("top-level let")),
                 Constant::EnumVariant { enum_ref, index } => {
@@ -933,6 +1413,76 @@ impl<'db> Env<'_, 'db> {
         self.type_values.get(local).ok_or_else(|| {
             Rejection::unsupported(format!("type argument {local} is not a `load_type`"))
         })
+    }
+
+    /// The function type of a declared function used as a value (`let g =
+    /// f`, `xs.map(f)`): its own signature, which the call graph then admits
+    /// as a callee. A defaulted parameter is filled by the caller at a
+    /// direct call; a call through the value passes every argument, so such
+    /// a function has no native value.
+    fn function_value(
+        &mut self,
+        callee: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
+    ) -> Result<NativeTy<'db>, Rejection> {
+        let link_name = function_link_name(self.db, callee);
+        let callee = match callee {
+            DeclRef::Source(callee) if !self.is_lang_function(callee) => callee,
+            _ => {
+                return Err(Rejection::unsupported(format!(
+                    "stdlib function `{link_name}` used as a value"
+                )));
+            }
+        };
+        if let Some(ty) = self.function_values.get(&callee) {
+            return Ok(ty.clone());
+        }
+        let data = function_data(self.db, callee);
+        if !data.generic_params.is_empty() {
+            return Err(Rejection::unsupported(format!(
+                "generic function `{link_name}` used as a value"
+            )));
+        }
+        let (params, result, defaults) = self.callee_signature(callee, &link_name)?;
+        if defaults.iter().any(Option::is_some) {
+            return Err(Rejection::unsupported(format!(
+                "function `{link_name}` with a defaulted parameter used as a value"
+            )));
+        }
+        let ty = NativeTy::Fn(params, Box::new(result));
+        self.function_values.insert(callee, ty.clone());
+        Ok(ty)
+    }
+
+    /// The parameter and return types of the lambda `index` of this body.
+    fn lambda_signature(
+        &mut self,
+        index: usize,
+    ) -> Result<(Vec<NativeTy<'db>>, NativeTy<'db>), Rejection> {
+        let lambda = self
+            .lambdas
+            .get(index)
+            .ok_or_else(|| Rejection::invalid(format!("no lambda {index}")))?;
+        let MirFunctionKind::Bytecode(body) = &lambda.kind else {
+            return Err(Rejection::invalid("lambda without a body"));
+        };
+        if body.locals.len() <= lambda.arity {
+            return Err(Rejection::invalid(
+                "lambda has fewer locals than parameters",
+            ));
+        }
+        let mut params = Vec::with_capacity(lambda.arity);
+        for local in &body.locals[1..=lambda.arity] {
+            params.push(
+                self.classes
+                    .native_ty(&local.ty)
+                    .map_err(|rejection| rejection.in_what("lambda parameter"))?,
+            );
+        }
+        let result = self
+            .classes
+            .native_ty(&body.locals[0].ty)
+            .map_err(|rejection| rejection.in_what("lambda return"))?;
+        Ok((params, result))
     }
 
     /// The type of an rvalue. `expected` is the destination's type, which
@@ -1178,6 +1728,34 @@ impl<'db> Env<'_, 'db> {
                 "type tag of a `{}`",
                 self.describe(&self.place_ty(place)?)
             ))),
+            Rvalue::MakeClosure {
+                lambda_idx,
+                captures,
+                type_arg_templates,
+            } => {
+                if !type_arg_templates.is_empty() {
+                    return Err(Rejection::unsupported("lambda in a generic function"));
+                }
+                let mut capture_tys = Vec::with_capacity(captures.len());
+                for capture in captures {
+                    capture_tys.push(self.capture_ty(capture)?);
+                }
+                if let Some(previous) = self.closures.insert(*lambda_idx, capture_tys.clone())
+                    && previous != capture_tys
+                {
+                    return Err(Rejection::invalid(format!(
+                        "lambda {lambda_idx} is instantiated with captures of two types"
+                    )));
+                }
+                let (params, result) = self.lambda_signature(*lambda_idx)?;
+                Ok(NativeTy::Fn(params, Box::new(result)))
+            }
+            Rvalue::MakeBoundMethod { .. } => Err(Rejection::unsupported(
+                "method used as a value (`obj.m` without a call)",
+            )),
+            Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::MakeVirtualFunction { .. } => {
+                Err(Rejection::unsupported("interface method used as a value"))
+            }
             other => Err(Rejection::unsupported(format!(
                 "rvalue {}",
                 rvalue_name(other)
@@ -1449,6 +2027,12 @@ impl<'db> Env<'_, 'db> {
                 }
                 Ok(store.map(|store| (store, actual)))
             }
+            // Dropping early changes nothing observable; a captured local's
+            // drop names its cell pointer, which is not a value.
+            StatementKind::Drop(Place::Local(local)) => {
+                self.kind(*local)?;
+                Ok(None)
+            }
             StatementKind::Drop(place) => {
                 self.place_ty(place)?;
                 Ok(None)
@@ -1459,7 +2043,21 @@ impl<'db> Env<'_, 'db> {
                 ..
             } => Ok(None),
             StatementKind::Intrinsic { .. } => Err(Rejection::unsupported("compiler intrinsic")),
-            StatementKind::FreshCell { .. } => Err(Rejection::unsupported("captured local")),
+            // A new cell for a captured local, holding nothing or the value
+            // of the cell it replaces.
+            StatementKind::FreshCell { local, .. } => {
+                if !self.body.local(*local).is_captured {
+                    return Err(Rejection::invalid(format!(
+                        "fresh cell for {local}, which no closure captures"
+                    )));
+                }
+                if !matches!(self.kind(*local)?, LocalKind::Value(_)) {
+                    return Err(Rejection::invalid(format!(
+                        "fresh cell for {local}, which holds no value"
+                    )));
+                }
+                Ok(None)
+            }
             StatementKind::VirtualFieldStore { .. } => {
                 Err(Rejection::unsupported("interface field store"))
             }
@@ -1759,9 +2357,9 @@ impl<'db> Env<'_, 'db> {
             Terminator::ShortCircuit { .. } => Ok(NativeTy::Bool),
             Terminator::Call { .. } | Terminator::VirtualCall { .. } => {
                 match self.call_target(terminator)? {
-                    CallKind::Builtin { result, .. } | CallKind::Direct { result, .. } => {
-                        Ok(result)
-                    }
+                    CallKind::Builtin { result, .. }
+                    | CallKind::Direct { result, .. }
+                    | CallKind::Indirect { result, .. } => Ok(result),
                     CallKind::Panic(_) => Err(Rejection::unsupported("read of a `never` local")),
                 }
             }
@@ -1806,7 +2404,9 @@ impl<'db> Env<'_, 'db> {
                 ));
             }
             (
-                CallKind::Builtin { result, .. } | CallKind::Direct { result, .. },
+                CallKind::Builtin { result, .. }
+                | CallKind::Direct { result, .. }
+                | CallKind::Indirect { result, .. },
                 LocalKind::Value(ty),
             ) if !stores(result, ty) => {
                 return Err(Rejection::invalid(format!(
@@ -1863,8 +2463,67 @@ impl<'db> Env<'_, 'db> {
                 // every slot the call left to a default; the layout the site
                 // was checked against adds nothing here.
                 let _ = argument_layout;
-                let Operand::Constant(Constant::Function(callee)) = callee else {
-                    return Err(Rejection::unsupported("indirect call"));
+                let callee = match callee {
+                    Operand::Constant(Constant::Function(callee)) => callee,
+                    Operand::Constant(Constant::GenericFunction { .. }) => {
+                        return Err(Rejection::unsupported("call of a generic function value"));
+                    }
+                    Operand::Constant(_) => {
+                        return Err(Rejection::invalid("call of a non-function constant"));
+                    }
+                    // A call through a function value: a local (or a copy
+                    // of one), a captured cell, a field.
+                    Operand::Copy(_) | Operand::Move(_) => {
+                        if *ntypeargs != 0 {
+                            return Err(Rejection::unsupported(
+                                "call through a function value with type arguments",
+                            ));
+                        }
+                        let callee_ty = self.operand_ty(callee, None)?;
+                        let NativeTy::Fn(params, result) = callee_ty else {
+                            return Err(Rejection::unsupported(format!(
+                                "call through a `{}`",
+                                self.describe(&callee_ty)
+                            )));
+                        };
+                        if params.len() != args.len() {
+                            return Err(Rejection::invalid(format!(
+                                "call through a function value passes {} of {} arguments",
+                                args.len(),
+                                params.len()
+                            )));
+                        }
+                        for (arg, param) in args.iter().zip(&params) {
+                            if is_omitted(arg) {
+                                return Err(Rejection::unsupported(
+                                    "omitted argument in a call through a function value",
+                                ));
+                            }
+                            let actual = self.operand_ty(arg, Some(param))?;
+                            if !fits(&actual, param) {
+                                return Err(mismatch(
+                                    &actual,
+                                    param,
+                                    |ty| self.describe(ty),
+                                    || {
+                                        format!(
+                                            "call through a function value passes a `{}` for a `{}` parameter",
+                                            self.describe(&actual),
+                                            self.describe(param)
+                                        )
+                                    },
+                                ));
+                            }
+                        }
+                        if !matches!(destination, Place::Local(_)) {
+                            return Err(Rejection::unsupported("call destination is not a local"));
+                        }
+                        self.indirect = true;
+                        return Ok(CallKind::Indirect {
+                            params,
+                            result: *result,
+                        });
+                    }
                 };
                 if *ntypeargs > args.len() {
                     return Err(Rejection::invalid("more type arguments than arguments"));
@@ -2001,6 +2660,9 @@ impl<'db> Env<'_, 'db> {
                         if matches!(ty, NativeTy::ArrayIter(_)) {
                             return Err(Rejection::unsupported("`to_string` of an iterator"));
                         }
+                        if ty.mentions_fn() {
+                            return Err(Rejection::unsupported("`to_string` of a function value"));
+                        }
                         let mut classes = Vec::new();
                         ty.classes(&mut classes);
                         let mut enums = Vec::new();
@@ -2020,6 +2682,24 @@ impl<'db> Env<'_, 'db> {
                             )));
                         }
                         (Builtin::ToStringDefault, NativeTy::Str)
+                    }
+                    ("baml.ops.Compare", "cmp", receiver_ty) if args.len() == 2 => {
+                        let kind = match receiver_ty {
+                            NativeTy::Int => CmpKind::Int,
+                            NativeTy::Float => CmpKind::Float,
+                            NativeTy::Str => CmpKind::Str,
+                            NativeTy::Bigint => CmpKind::Bigint,
+                            NativeTy::Bool => CmpKind::Bool,
+                            other => {
+                                return Err(Rejection::unsupported(format!(
+                                    "`cmp` on a `{}` (only primitives compare natively)",
+                                    self.describe(other)
+                                )));
+                            }
+                        };
+                        self.operand_of(&args[1], receiver_ty)?;
+                        let ordering = self.ordering_enum()?;
+                        (Builtin::Cmp(kind), ordering)
                     }
                     ("baml.Sortable", "sort", NativeTy::Array(element)) if args.len() == 1 => {
                         let kind = match **element {
@@ -2059,6 +2739,18 @@ impl<'db> Env<'_, 'db> {
             vec![baml_type::Name::new(namespace)],
             baml_type::Name::new(name),
         )
+    }
+
+    /// `baml.ops.Ordering`, the result of `cmp` and of a `sort_by`
+    /// comparator, admitted as an enum.
+    fn ordering_enum(&mut self) -> Result<NativeTy<'db>, Rejection> {
+        let decl = self.lang_decl("ops", "Ordering");
+        let enum_ref = layout::enum_ref_of(self.db, &decl)
+            .ok_or_else(|| Rejection::invalid("`baml.ops.Ordering` is not an enum"))?;
+        self.classes
+            .check_enum(enum_ref)
+            .map_err(|reason| Rejection::unsupported(reason.0))?;
+        Ok(NativeTy::Enum(enum_ref))
     }
 
     /// Whether `callee` is declared by an installed language package: a
@@ -2181,6 +2873,9 @@ impl<'db> Env<'_, 'db> {
                 self.operand_of(&args[0], &NativeTy::Str)?;
                 let template = self.type_value(&type_args[0])?.clone();
                 let target = self.template_ty(&template)?;
+                if target.mentions_fn() {
+                    return Err(Rejection::unsupported("JSON decode into a function type"));
+                }
                 // A literal type erases to its primitive natively, so a
                 // decode into one would accept what the VM rejects.
                 if let Ok(realized) = RealizedTy::try_from(&template)
@@ -2198,6 +2893,9 @@ impl<'db> Env<'_, 'db> {
                 if matches!(ty, NativeTy::ArrayIter(_)) {
                     return Err(Rejection::unsupported("JSON of an iterator"));
                 }
+                if ty.mentions_fn() {
+                    return Err(Rejection::unsupported("JSON of a function value"));
+                }
                 (Builtin::JsonToString, NativeTy::Str)
             }
             "baml._to_string_default" => {
@@ -2205,6 +2903,9 @@ impl<'db> Env<'_, 'db> {
                 let ty = self.operand_ty(&args[0], None)?;
                 if matches!(ty, NativeTy::ArrayIter(_)) {
                     return Err(Rejection::unsupported("`to_string` of an iterator"));
+                }
+                if ty.mentions_fn() {
+                    return Err(Rejection::unsupported("`to_string` of a function value"));
                 }
                 (Builtin::ToStringDefault, NativeTy::Str)
             }
@@ -2311,6 +3012,10 @@ impl<'db> Env<'_, 'db> {
                 self.operand_of(&args[0], &NativeTy::Str)?;
                 (Builtin::Bigint(BigintOp::Parse), NativeTy::Bigint)
             }
+            _ if ArrayCallback::from_link_name(link_name).is_some() => {
+                let op = ArrayCallback::from_link_name(link_name).expect("matched");
+                return self.array_callback(op, type_args, args).map(Some);
+            }
             "baml.ops.equals_equals" => {
                 arity(0, 2)?;
                 let operand = match (is_null(&args[0]), is_null(&args[1])) {
@@ -2375,6 +3080,206 @@ impl<'db> Env<'_, 'db> {
     }
 }
 
+impl<'db> Env<'_, 'db> {
+    /// A `baml.Array` method that calls back into a function value: the
+    /// receiver's element type, the type arguments the call carries
+    /// (`map<U, E>` is called with `<T, U, E>`, the receiver's element type
+    /// prepended), and the callback's own type decide the function type the
+    /// runtime calls and the result.
+    fn array_callback(
+        &mut self,
+        op: ArrayCallback,
+        type_args: &[Operand<'db>],
+        args: &[Operand<'db>],
+    ) -> Result<CallKind<'db>, Rejection> {
+        let link_name = op.link_name();
+        let short = link_name.strip_prefix("baml.Array.").unwrap_or(link_name);
+        let value_count = match op {
+            ArrayCallback::Reduce => 3,
+            _ => 2,
+        };
+        if args.len() != value_count {
+            return Err(Rejection::invalid(format!(
+                "`{link_name}` called with {} value arguments",
+                args.len()
+            )));
+        }
+        let NativeTy::Array(element) = self.operand_ty(&args[0], None)? else {
+            return Err(Rejection::invalid(format!("`{link_name}` on a non-array")));
+        };
+        let element = *element;
+        let callback = self.operand_ty(&args[1], None)?;
+        let NativeTy::Fn(actual_params, actual_ret) = &callback else {
+            return Err(Rejection::unsupported(format!(
+                "`{short}` with a `{}` where a function is expected",
+                self.describe(&callback)
+            )));
+        };
+        // The method's own type argument, counted from the back: the
+        // receiver's element type may or may not be prepended.
+        let own_type_arg = |env: &mut Self, from_back: usize| -> Result<NativeTy<'db>, Rejection> {
+            let index = type_args.len().checked_sub(from_back).ok_or_else(|| {
+                Rejection::invalid(format!("`{link_name}` called with too few type arguments"))
+            })?;
+            let template = env.type_value(&type_args[index])?.clone();
+            env.template_ty(&template)
+                .map_err(|rejection| match rejection {
+                    Rejection::Unsupported(reason) => Rejection::unsupported(format!(
+                        "`{short}` with a type argument that is {reason}"
+                    )),
+                    invalid @ Rejection::Invalid(_) => invalid,
+                })
+        };
+        let (wanted_params, wanted_ret, result, op) = match op {
+            ArrayCallback::Map => {
+                let u = own_type_arg(self, 2)?;
+                (
+                    vec![element.clone()],
+                    u.clone(),
+                    NativeTy::Array(Box::new(u)),
+                    op,
+                )
+            }
+            ArrayCallback::Filter => (
+                vec![element.clone()],
+                NativeTy::Bool,
+                NativeTy::Array(Box::new(element.clone())),
+                op,
+            ),
+            ArrayCallback::FilterMap => {
+                let u = own_type_arg(self, 2)?;
+                (
+                    vec![element.clone()],
+                    NativeTy::Option(Box::new(u.clone())),
+                    NativeTy::Array(Box::new(u)),
+                    op,
+                )
+            }
+            // The callback's result is discarded, whatever it is.
+            ArrayCallback::ForEach => (
+                vec![element.clone()],
+                (**actual_ret).clone(),
+                NativeTy::Null,
+                op,
+            ),
+            ArrayCallback::Some | ArrayCallback::Every => {
+                (vec![element.clone()], NativeTy::Bool, NativeTy::Bool, op)
+            }
+            ArrayCallback::Find | ArrayCallback::FindLast => (
+                vec![element.clone()],
+                NativeTy::Bool,
+                NativeTy::Option(Box::new(element.clone())),
+                op,
+            ),
+            ArrayCallback::FindIndex | ArrayCallback::FindLastIndex => (
+                vec![element.clone()],
+                NativeTy::Bool,
+                NativeTy::Option(Box::new(NativeTy::Int)),
+                op,
+            ),
+            ArrayCallback::Reduce => {
+                let accumulator = own_type_arg(self, 2)?;
+                self.operand_of(&args[2], &accumulator)?;
+                (
+                    vec![accumulator.clone(), element.clone()],
+                    accumulator.clone(),
+                    accumulator,
+                    op,
+                )
+            }
+            ArrayCallback::FlatMap => {
+                let u = own_type_arg(self, 2)?;
+                let array = NativeTy::Array(Box::new(u));
+                (vec![element.clone()], array.clone(), array, op)
+            }
+            ArrayCallback::SortBy => {
+                let ordering = self.ordering_enum()?;
+                (
+                    vec![element.clone(), element.clone()],
+                    ordering,
+                    NativeTy::Array(Box::new(element.clone())),
+                    op,
+                )
+            }
+            ArrayCallback::SortByKey(_) => {
+                let key = own_type_arg(self, 2)?;
+                let kind = match key {
+                    NativeTy::Int => CmpKind::Int,
+                    NativeTy::Float => CmpKind::Float,
+                    NativeTy::Str => CmpKind::Str,
+                    NativeTy::Bigint => CmpKind::Bigint,
+                    NativeTy::Bool => CmpKind::Bool,
+                    other => {
+                        return Err(Rejection::unsupported(format!(
+                            "`sort_by_key` with a `{}` key (only primitive keys order natively)",
+                            self.describe(&other)
+                        )));
+                    }
+                };
+                (
+                    vec![element.clone()],
+                    key,
+                    NativeTy::Array(Box::new(element.clone())),
+                    ArrayCallback::SortByKey(kind),
+                )
+            }
+        };
+        if !callback_fits(op, actual_params, actual_ret, &wanted_params, &wanted_ret) {
+            return Err(Rejection::unsupported(format!(
+                "`{short}` on a `{}[]` with a `{}` callback (a `{}` is expected)",
+                self.describe(&element),
+                self.describe(&callback),
+                self.describe(&NativeTy::Fn(wanted_params, Box::new(wanted_ret)))
+            )));
+        }
+        Ok(CallKind::Builtin {
+            builtin: Builtin::ArrayCallback {
+                op,
+                wanted: NativeTy::Fn(wanted_params, Box::new(wanted_ret)),
+            },
+            result,
+        })
+    }
+}
+
+/// Whether a callback of type `(actual_params) -> actual_ret` can stand in
+/// for the `(wanted_params) -> wanted_ret` a `baml.Array` method calls:
+/// each argument the runtime passes stores into the callback's parameter,
+/// and the callback's result stores into what the runtime reads (through an
+/// adapter the printer emits where the types differ). `filter_map` reads an
+/// `Option` the callback may or may not produce; `for_each` reads nothing.
+pub(crate) fn callback_fits(
+    op: ArrayCallback,
+    actual_params: &[NativeTy<'_>],
+    actual_ret: &NativeTy<'_>,
+    wanted_params: &[NativeTy<'_>],
+    wanted_ret: &NativeTy<'_>,
+) -> bool {
+    if actual_params.len() != wanted_params.len() {
+        return false;
+    }
+    if !wanted_params
+        .iter()
+        .zip(actual_params)
+        .all(|(wanted, actual)| stores(wanted, actual))
+    {
+        return false;
+    }
+    match op {
+        ArrayCallback::ForEach => true,
+        ArrayCallback::FilterMap => {
+            let NativeTy::Option(inner) = wanted_ret else {
+                return false;
+            };
+            match actual_ret {
+                NativeTy::Option(produced) => stores(produced, inner),
+                produced => stores(produced, inner),
+            }
+        }
+        _ => stores(actual_ret, wanted_ret),
+    }
+}
+
 /// Whether a value of type `actual` can be stored into `expected` without
 /// relying on the checker's narrowing.
 fn stores(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> bool {
@@ -2401,6 +3306,7 @@ fn baml_eq_supported(ty: &NativeTy<'_>) -> bool {
         NativeTy::Array(_)
         | NativeTy::Map(..)
         | NativeTy::Class(_)
+        | NativeTy::Fn(..)
         | NativeTy::ArrayIter(_)
         | NativeTy::Thrown => false,
     }
@@ -2501,14 +3407,23 @@ pub(crate) fn unary_operand_ty<'db>(
 }
 
 /// A caught error read as a type without a class test is valid BAML the
-/// subset cannot type, not a MIR error. Anything else that does not fit is
-/// one.
+/// subset cannot type, not a MIR error; so is a function value of one type
+/// stored where a wider function type is expected (the VM passes the value
+/// as it is, and native code has no adapter). Anything else that does not
+/// fit is one.
 fn mismatch<'db>(
     actual: &NativeTy<'db>,
     expected: &NativeTy<'db>,
     describe: impl Fn(&NativeTy<'db>) -> String,
     what: impl FnOnce() -> String,
 ) -> Rejection {
+    if actual.mentions_fn() || expected.mentions_fn() {
+        return Rejection::unsupported(format!(
+            "function value of type `{}` used as a `{}` (no adapter between function types)",
+            describe(actual),
+            describe(expected)
+        ));
+    }
     if *actual == NativeTy::Thrown {
         // The checker typed the caught error from the try body's `throws`
         // and lowering reads it as that type without a test. The class is
@@ -2551,7 +3466,8 @@ fn is_omitted_constant(constant: &Constant<'_>) -> bool {
 /// which needs it to be a constant: the `fill` block must be a single store
 /// of a constant. The prologue stays in the callee, where its test is the
 /// constant `false`. A default that is computed (`b: int = a + 1`) is outside
-/// the subset, with the parameter named.
+/// the subset, with the parameter named. A parameter a closure captures is
+/// tested and filled through its cell (`*_k`).
 pub(crate) fn default_constants<'db>(
     body: &'db MirFunctionBody<'db>,
     param_names: &[String],
@@ -2567,24 +3483,21 @@ pub(crate) fn default_constants<'db>(
         else {
             continue;
         };
-        let param =
-            block
-                .statements
-                .iter()
-                .find_map(|statement| match &statement.kind {
-                    StatementKind::Assign {
-                        destination: Place::Local(destination),
-                        value:
-                            Rvalue::BinaryOp {
-                                op: BinOp::Eq,
-                                left:
-                                    Operand::Copy(Place::Local(param))
-                                    | Operand::Move(Place::Local(param)),
-                                right,
-                            },
-                    } if destination == test && is_omitted(right) => Some(*param),
-                    _ => None,
-                });
+        let param = block
+            .statements
+            .iter()
+            .find_map(|statement| match &statement.kind {
+                StatementKind::Assign {
+                    destination: Place::Local(destination),
+                    value:
+                        Rvalue::BinaryOp {
+                            op: BinOp::Eq,
+                            left: Operand::Copy(place) | Operand::Move(place),
+                            right,
+                        },
+                } if destination == test && is_omitted(right) => param_place(place),
+                _ => None,
+            });
         let Some(param) = param else {
             continue;
         };
@@ -2607,16 +3520,12 @@ pub(crate) fn default_constants<'db>(
             (
                 [
                     Statement {
-                        kind:
-                            StatementKind::Assign {
-                                destination: Place::Local(destination),
-                                value,
-                            },
+                        kind: StatementKind::Assign { destination, value },
                         ..
                     },
                 ],
                 Some(Terminator::Goto { target }),
-            ) if destination == &param && target == else_block => match value {
+            ) if param_place(destination) == Some(param) && target == else_block => match value {
                 Rvalue::Use(Operand::Constant(constant)) if !is_omitted_constant(constant) => {
                     constant.clone()
                 }
@@ -2644,6 +3553,15 @@ pub(crate) fn default_constants<'db>(
         }
     }
     Ok(defaults)
+}
+
+/// The parameter a prologue place names: the local, or the cell of a
+/// captured one.
+fn param_place(place: &Place) -> Option<Local> {
+    match place {
+        Place::Local(local) | Place::Deref(CellId::Local(local)) => Some(*local),
+        _ => None,
+    }
 }
 
 /// The result type of a binary operation on native operands, if the subset
@@ -2920,7 +3838,8 @@ fn place_locals(place: &Place, out: &mut Vec<Local>) {
             place_locals(base, out);
             out.push(*index);
         }
-        Place::Capture(_) | Place::Deref(_) => {}
+        Place::Deref(cell) => out.extend(cell.local()),
+        Place::Capture(_) => {}
     }
 }
 
@@ -2960,6 +3879,11 @@ fn rvalue_locals(value: &Rvalue<'_>, out: &mut Vec<Local>) -> bool {
         }
         Rvalue::Len(place) | Rvalue::Discriminant(place) | Rvalue::TypeTag(place) => {
             place_locals(place, out);
+        }
+        Rvalue::MakeClosure { captures, .. } => {
+            for capture in captures {
+                operand_locals(capture, out);
+            }
         }
         Rvalue::LoadType(_) => {}
         _ => return false,
@@ -3038,7 +3962,11 @@ fn statement_locals(kind: &StatementKind<'_>, out: &mut Vec<Local>) -> bool {
             true
         }
         StatementKind::Nop => true,
-        StatementKind::FreshCell { .. } | StatementKind::VirtualFieldStore { .. } => false,
+        StatementKind::FreshCell { local, .. } => {
+            out.push(*local);
+            true
+        }
+        StatementKind::VirtualFieldStore { .. } => false,
     }
 }
 

@@ -119,6 +119,7 @@ impl ArgParser {
             | NativeTy::Map(..)
             | NativeTy::Option(_)
             | NativeTy::Union(_)
+            | NativeTy::Fn(..)
             | NativeTy::ArrayIter(_)
             | NativeTy::Thrown => None,
         }

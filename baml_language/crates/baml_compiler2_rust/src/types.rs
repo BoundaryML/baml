@@ -5,8 +5,9 @@
 //! spellings ([`NativeTy::to_tokens`]) is the value model of the design: `int`
 //! is `Int63`, `string` is `bex_aot::Str`, arrays and class instances are
 //! `Shared<..>` handles with reference semantics, `T | null` is
-//! `Option<T>`, and a closed union of two or more other types is a generated
-//! Rust enum with one variant per member ([`NativeTy::Union`]).
+//! `Option<T>`, a closed union of two or more other types is a generated
+//! Rust enum with one variant per member ([`NativeTy::Union`]), and a
+//! function value is a counted pointer to a Rust closure ([`NativeTy::Fn`]).
 
 use std::fmt;
 
@@ -51,6 +52,13 @@ pub enum NativeTy<'db> {
     /// `unknown`, interfaces and generic classes make a union open, which
     /// has no native type.
     Union(Vec<NativeTy<'db>>),
+    /// A BAML function type `(A, B) -> R throws E`: `Rc<dyn Fn(A, B) ->
+    /// Result<R, Thrown>>`, a counted pointer to a closure, shared by
+    /// reference like a handle. The `throws` clause has no native form:
+    /// every native function returns a `Result`. Parameter names and modes
+    /// are not part of the type; a function type with an optional parameter
+    /// has no native type.
+    Fn(Vec<NativeTy<'db>>, Box<NativeTy<'db>>),
     /// The iterator `iter()` yields on a `T[]`: `bex_aot::array::Iter<T>`.
     /// Never declared in BAML source; a refined type.
     ArrayIter(Box<NativeTy<'db>>),
@@ -94,7 +102,30 @@ impl<'db> NativeTy<'db> {
             | Self::Array(_)
             | Self::Map(..)
             | Self::Class(_)
+            | Self::Fn(..)
             | Self::ArrayIter(_)
+            | Self::Thrown => false,
+        }
+    }
+
+    /// Whether this type is, or mentions, a function type: such a value has
+    /// no rendering, no JSON form and no `==`.
+    pub fn mentions_fn(&self) -> bool {
+        match self {
+            Self::Fn(..) => true,
+            Self::Array(inner) | Self::Option(inner) | Self::ArrayIter(inner) => {
+                inner.mentions_fn()
+            }
+            Self::Map(key, value) => key.mentions_fn() || value.mentions_fn(),
+            Self::Union(members) => members.iter().any(NativeTy::mentions_fn),
+            Self::Int
+            | Self::Bool
+            | Self::Float
+            | Self::Bigint
+            | Self::Str
+            | Self::Null
+            | Self::Class(_)
+            | Self::Enum(_)
             | Self::Thrown => false,
         }
     }
@@ -147,6 +178,15 @@ impl<'db> NativeTy<'db> {
             Self::Enum(enum_ref) => name(TypeDecl::Enum(*enum_ref)).to_string(),
             Self::Option(inner) => format!("{}_or_null", inner.mangle(name)),
             Self::Union(members) => Self::mangle_members(members, name),
+            Self::Fn(params, ret) => format!(
+                "fn_{}_to_{}",
+                params
+                    .iter()
+                    .map(|param| param.mangle(name))
+                    .collect::<Vec<_>>()
+                    .join("_"),
+                ret.mangle(name)
+            ),
             Self::ArrayIter(inner) => format!("{}_iter", inner.mangle(name)),
             Self::Thrown => "thrown".into(),
         }
@@ -170,6 +210,12 @@ impl<'db> NativeTy<'db> {
             Self::Map(key, value) => {
                 key.unions(out);
                 value.unions(out);
+            }
+            Self::Fn(params, ret) => {
+                for param in params {
+                    param.unions(out);
+                }
+                ret.unions(out);
             }
             Self::Int
             | Self::Bool
@@ -206,6 +252,12 @@ impl<'db> NativeTy<'db> {
                     member.classes(out);
                 }
             }
+            Self::Fn(params, ret) => {
+                for param in params {
+                    param.classes(out);
+                }
+                ret.classes(out);
+            }
             Self::Int
             | Self::Bool
             | Self::Float
@@ -232,6 +284,12 @@ impl<'db> NativeTy<'db> {
                 for member in members {
                     member.enums(out);
                 }
+            }
+            Self::Fn(params, ret) => {
+                for param in params {
+                    param.enums(out);
+                }
+                ret.enums(out);
             }
             Self::Int
             | Self::Bool
@@ -280,6 +338,11 @@ impl<'db> NativeTy<'db> {
                 let name = Self::union_ident(members, class_name);
                 quote! { #name }
             }
+            Self::Fn(params, ret) => {
+                let params = params.iter().map(|param| param.to_tokens(class_name));
+                let ret = ret.to_tokens(class_name);
+                quote! { Rc<dyn Fn(#(#params),*) -> Result<#ret, Thrown>> }
+            }
             Self::ArrayIter(inner) => {
                 let inner = inner.to_tokens(class_name);
                 quote! { bex_aot::array::Iter<#inner> }
@@ -313,6 +376,15 @@ impl<'db> NativeTy<'db> {
                 .map(|member| member.describe(class_name))
                 .collect::<Vec<_>>()
                 .join(" | "),
+            Self::Fn(params, ret) => format!(
+                "({}) -> {}",
+                params
+                    .iter()
+                    .map(|param| param.describe(class_name))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                ret.describe(class_name)
+            ),
             Self::ArrayIter(inner) => {
                 format!("baml.iter.Iterator<Item = {}>", inner.describe(class_name))
             }
@@ -428,9 +500,11 @@ pub(crate) trait Resolver<'db> {
 /// Rejected here: `unknown` and interface types (they may still be refined
 /// from their defining rvalue by the caller), maps keyed by anything but
 /// `int`, `bool` or `string`, open unions (a member that has no native
-/// type, with the reason naming it), `uint8array`,
-/// media, functions, futures, type aliases, type variables and the
-/// compiler-only sentinels.
+/// type, with the reason naming it; a function type is one, since the
+/// generated enum renders, serializes and compares its members),
+/// function types with an optional parameter, `uint8array`,
+/// media, futures, type aliases, type variables and the compiler-only
+/// sentinels.
 pub(crate) fn from_runtime_ty<'db>(
     ty: &RuntimeTy,
     decls: &mut dyn Resolver<'db>,
@@ -495,7 +569,14 @@ pub(crate) fn from_runtime_ty<'db>(
             let inner = match distinct.len() {
                 0 => NativeTy::Null,
                 1 => distinct.remove(0),
-                _ => NativeTy::Union(distinct),
+                _ => {
+                    // The generated enum renders, serializes and compares
+                    // its members, which a function value cannot.
+                    if distinct.iter().any(NativeTy::mentions_fn) {
+                        return Err(Unsupported("function type (a union member)".into()));
+                    }
+                    NativeTy::Union(distinct)
+                }
             };
             if nullable && inner != NativeTy::Null {
                 NativeTy::Option(Box::new(inner))
@@ -523,7 +604,21 @@ pub(crate) fn from_runtime_ty<'db>(
         RuntimeTy::Bigint => NativeTy::Bigint,
         RuntimeTy::Uint8Array => return Err(Unsupported("uint8array".into())),
         RuntimeTy::Media(_) => return Err(Unsupported("media".into())),
-        RuntimeTy::Function { .. } => return Err(Unsupported("function type".into())),
+        RuntimeTy::Function { params, ret, .. } => {
+            // The `throws` clause has no native form: every native function
+            // returns a `Result`. An optional parameter would need the
+            // callee's default filled by whoever calls the value.
+            let mut native_params = Vec::with_capacity(params.len());
+            for param in params {
+                if param.mode != baml_type::FunctionParamMode::Required {
+                    return Err(Unsupported(
+                        "function type with an optional parameter".into(),
+                    ));
+                }
+                native_params.push(from_runtime_ty(&param.ty, class)?);
+            }
+            NativeTy::Fn(native_params, Box::new(from_runtime_ty(ret, class)?))
+        }
         RuntimeTy::Future(..) => return Err(Unsupported("future".into())),
         RuntimeTy::Interface(..) => return Err(Unsupported("interface".into())),
         RuntimeTy::Unknown => return Err(Unsupported("unknown".into())),

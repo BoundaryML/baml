@@ -3,9 +3,9 @@
 
 use std::cell::RefCell;
 
-use baml_compiler2_hir::loc::FunctionLoc;
+use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Constant, IndexKind, Local, Operand, Place, Rvalue,
+    AggregateKind, BinOp, BlockId, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue,
     ShortCircuitKind, StatementKind, SwitchKey, Terminator, TyTemplate, TypeTest, UnaryOp,
 };
 use baml_type::Literal;
@@ -18,9 +18,9 @@ use crate::{
     Rejection,
     classes::{ClassInfo, ClassTable, EnumInfo, UnionInfo},
     function::{
-        BigintOp, Builtin, CallKind, Candidate, LocalKind, MapOp, SortKind, TagSource,
-        binop_operand_tys, binop_ty, equality_common, is_dead_null_write, is_omitted,
-        unary_operand_ty,
+        ArrayCallback, BigintOp, Builtin, CallKind, Candidate, CmpKind, FnId, LocalKind, MapOp,
+        SortKind, TagSource, binop_operand_tys, binop_ty, equality_common, is_dead_null_write,
+        is_omitted, unary_operand_ty,
     },
     structure::Stmt,
     types::{Coercion, NativeTy, TypeDecl, coercion},
@@ -63,12 +63,14 @@ pub(crate) fn render_module<'db>(
     enums: &[&EnumInfo<'db>],
     unions: &[&UnionInfo<'db>],
     candidates: &[Candidate<'db>],
-    names: &FxHashMap<FunctionLoc<'db>, Ident>,
+    names: &FxHashMap<FnId<'db>, Ident>,
     table: &ClassTable<'db>,
 ) -> Result<String, Rejection> {
     let mut items = quote! {
+        use std::rc::Rc;
         use bex_aot::{
-            BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, float, int, json, map, string,
+            BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
+            string,
         };
         use bex_aot::handle::{Shared, shared};
         use bex_aot::render::ToBaml;
@@ -335,7 +337,7 @@ struct UnwindSite {
 
 struct Printer<'a, 'db> {
     candidate: &'a Candidate<'db>,
-    names: &'a FxHashMap<FunctionLoc<'db>, Ident>,
+    names: &'a FxHashMap<FnId<'db>, Ident>,
     classes: &'a ClassTable<'db>,
     /// Blocks that head a loop, whose merge label (if any) needs its own name.
     loop_headers: FxHashSet<usize>,
@@ -348,7 +350,7 @@ struct Printer<'a, 'db> {
 impl<'a, 'db> Printer<'a, 'db> {
     fn new(
         candidate: &'a Candidate<'db>,
-        names: &'a FxHashMap<FunctionLoc<'db>, Ident>,
+        names: &'a FxHashMap<FnId<'db>, Ident>,
         classes: &'a ClassTable<'db>,
     ) -> Self {
         let mut loop_headers = FxHashSet::default();
@@ -445,9 +447,19 @@ impl<'a, 'db> Printer<'a, 'db> {
         let candidate = self.candidate;
         let name = self
             .names
-            .get(&candidate.loc)
+            .get(&candidate.id)
             .ok_or_else(|| Rejection::invalid("function has no Rust name"))?;
-        let doc = format!(" BAML function `{}`.", candidate.link_name);
+        let doc = match &candidate.id {
+            FnId::Declared(_) => format!(" BAML function `{}`.", candidate.link_name),
+            FnId::Lambda { .. } => format!(" BAML lambda `{}`.", candidate.link_name),
+        };
+        // A lambda's captures come first, each a borrowed cell: the closure
+        // value that calls it holds the cells and lends them per call.
+        let captures = candidate.captures.iter().enumerate().map(|(index, ty)| {
+            let ident = capture_ident(index);
+            let ty = self.ty(ty);
+            quote! { #ident: &cell::Cell<#ty> }
+        });
         let params = candidate
             .param_tys()
             .into_iter()
@@ -457,10 +469,21 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let ty = self.ty(ty);
                 quote! { mut #ident: #ty }
             });
+        // A captured parameter is celled on entry with the value the caller
+        // passed, as the VM's frame preamble does: the parameter is shadowed
+        // by its cell.
+        let celled_params = (1..=candidate.arity())
+            .filter(|index| candidate.body.local(Local(*index)).is_captured)
+            .map(|index| {
+                let ident = local_ident(Local(index));
+                let ty = self.ty(&candidate.param_tys()[index - 1].clone());
+                quote! { let mut #ident: cell::Cell<#ty> = cell::with(#ident); }
+            });
         let ret = self.ty(candidate.return_ty());
         // Declared without initializers: rustc proves every read follows a
         // write, over the same paths the MIR has. Aliased temporaries are
-        // read through their source and need no declaration.
+        // read through their source and need no declaration. A captured
+        // local holds its cell.
         let locals = candidate
             .kinds
             .iter()
@@ -470,6 +493,10 @@ impl<'a, 'db> Printer<'a, 'db> {
             .filter_map(|(index, kind)| {
                 let ident = local_ident(Local(index));
                 let tokens = match kind {
+                    LocalKind::Value(ty) if candidate.body.local(Local(index)).is_captured => {
+                        let ty = self.ty(ty);
+                        quote! { cell::Cell<#ty> }
+                    }
                     LocalKind::Value(ty) => self.ty(ty),
                     LocalKind::Tag(TagSource::Thrown) => quote! { &'static str },
                     LocalKind::Tag(TagSource::Union(_))
@@ -488,8 +515,9 @@ impl<'a, 'db> Printer<'a, 'db> {
         let body = self.tail_stmts(&candidate.structured)?;
         Ok(quote! {
             #[doc = #doc]
-            pub fn #name(#(#params),*) -> Result<#ret, Thrown> {
+            pub fn #name(#(#captures,)* #(#params),*) -> Result<#ret, Thrown> {
                 #guard
+                #(#celled_params)*
                 #(#locals)*
                 #(#body)*
             }
@@ -867,7 +895,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .candidate
                     .call(block)
                     .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
-                lines.push(self.call(call, &args[*ntypeargs..], destination)?);
+                lines.push(self.call(block, call, &args[*ntypeargs..], destination)?);
             }
             Terminator::VirtualCall {
                 args, destination, ..
@@ -876,7 +904,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .candidate
                     .call(block)
                     .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
-                lines.push(self.call(call, args, destination)?);
+                lines.push(self.call(block, call, args, destination)?);
             }
             // The guard in front of a wildcard `catch` arm: a panic is not
             // for the wildcard and goes on to the next handler.
@@ -894,6 +922,7 @@ impl<'a, 'db> Printer<'a, 'db> {
 
     fn call(
         &self,
+        block: BlockId,
         call: &CallKind<'db>,
         args: &[Operand<'db>],
         destination: &Place,
@@ -910,6 +939,22 @@ impl<'a, 'db> Printer<'a, 'db> {
                     false,
                 ));
             }
+            CallKind::Indirect { params, result } => {
+                let Terminator::Call { callee, .. } = self.terminator(block)? else {
+                    return Err(Rejection::invalid("indirect call without a call"));
+                };
+                let callee = self.operand_borrowed(callee)?;
+                let args = args
+                    .iter()
+                    .zip(params)
+                    .map(|(arg, param)| self.operand(arg, Some(param)))
+                    .collect::<Result<Vec<_>, _>>()?;
+                (
+                    TokenStream::new(),
+                    self.fallible(&quote! { (#callee)(#(#args),*) }),
+                    result,
+                )
+            }
             CallKind::Direct {
                 callee,
                 args: params,
@@ -918,7 +963,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             } => {
                 let callee = self
                     .names
-                    .get(callee)
+                    .get(&FnId::Declared(*callee))
                     .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
                 if substituted.len() != args.len() {
                     return Err(Rejection::invalid("call has fewer arguments than analyzed"));
@@ -1098,6 +1143,54 @@ impl<'a, 'db> Printer<'a, 'db> {
                         };
                         (TokenStream::new(), call)
                     }
+                    Builtin::Cmp(kind) => {
+                        let NativeTy::Enum(ordering) = result else {
+                            return Err(Rejection::invalid(
+                                "`cmp` result is not the ordering enum",
+                            ));
+                        };
+                        let (less, equal, greater) = self.ordering_variants(*ordering)?;
+                        let ordering = self.ty(result);
+                        let compared = match kind {
+                            CmpKind::Int | CmpKind::Bool => {
+                                let ty = match kind {
+                                    CmpKind::Int => NativeTy::Int,
+                                    _ => NativeTy::Bool,
+                                };
+                                let left = self.operand(arg(0)?, Some(&ty))?;
+                                let right = self.operand(arg(1)?, Some(&ty))?;
+                                quote! { Ord::cmp(&#left, &#right) }
+                            }
+                            CmpKind::Float => {
+                                let left = self.operand(arg(0)?, Some(&NativeTy::Float))?;
+                                let right = self.operand(arg(1)?, Some(&NativeTy::Float))?;
+                                quote! { float::cmp(#left, #right) }
+                            }
+                            CmpKind::Str => {
+                                let left = self.operand_ref_as(arg(0)?, &NativeTy::Str)?;
+                                let right = self.operand_ref_as(arg(1)?, &NativeTy::Str)?;
+                                quote! { string::cmp(#left, #right) }
+                            }
+                            CmpKind::Bigint => {
+                                let left = self.operand_ref_as(arg(0)?, &NativeTy::Bigint)?;
+                                let right = self.operand_ref_as(arg(1)?, &NativeTy::Bigint)?;
+                                quote! { bigint::cmp(#left, #right) }
+                            }
+                        };
+                        (
+                            TokenStream::new(),
+                            quote! {
+                                match #compared {
+                                    std::cmp::Ordering::Less => #ordering::#less,
+                                    std::cmp::Ordering::Equal => #ordering::#equal,
+                                    std::cmp::Ordering::Greater => #ordering::#greater,
+                                }
+                            },
+                        )
+                    }
+                    Builtin::ArrayCallback { op, wanted } => {
+                        self.array_callback(*op, wanted, arg(0)?, arg(1)?, args.get(2), result)?
+                    }
                 };
                 (prelude, value, result)
             }
@@ -1114,6 +1207,244 @@ impl<'a, 'db> Printer<'a, 'db> {
             #prelude
             #target = #value;
         })
+    }
+
+    /// The `Less`, `Equal` and `Greater` variants of `baml.ops.Ordering`,
+    /// by name as the VM reads them.
+    fn ordering_variants(
+        &self,
+        ordering: baml_compiler2_hir_ty::extern_loc::EnumRef<'db>,
+    ) -> Result<(Ident, Ident, Ident), Rejection> {
+        let info = self.classes.enum_info(ordering)?;
+        let variant = |name: &str| {
+            info.variants
+                .iter()
+                .find(|variant| variant.name == name)
+                .map(|variant| variant.ident.clone())
+                .ok_or_else(|| {
+                    Rejection::invalid(format!("`baml.ops.Ordering` has no variant `{name}`"))
+                })
+        };
+        Ok((variant("Less")?, variant("Equal")?, variant("Greater")?))
+    }
+
+    /// A `baml.Array` method calling back into `callback`: the runtime
+    /// function over the receiver and the callback adapted to the function
+    /// type `wanted`, as a prelude (for the in-place sorts) and the value.
+    fn array_callback(
+        &self,
+        op: ArrayCallback,
+        wanted: &NativeTy<'db>,
+        receiver: &Operand<'db>,
+        callback: &Operand<'db>,
+        extra: Option<&Operand<'db>>,
+        result: &NativeTy<'db>,
+    ) -> Result<(TokenStream, TokenStream), Rejection> {
+        let array = self.operand_ref(receiver)?;
+        let NativeTy::Fn(wanted_params, wanted_ret) = wanted else {
+            return Err(Rejection::invalid("array callback without a function type"));
+        };
+        let callable = self.adapt_callback(op, callback, wanted_params, wanted_ret)?;
+        let runtime = format_ident!("{}", op.runtime_name());
+        Ok(match op {
+            ArrayCallback::SortBy => {
+                let NativeTy::Enum(ordering) = &**wanted_ret else {
+                    return Err(Rejection::invalid(
+                        "`sort_by` comparator without an ordering",
+                    ));
+                };
+                let (_, _, greater) = self.ordering_variants(*ordering)?;
+                let ordering = self.ty(wanted_ret);
+                let sorted = self.operand(receiver, Some(result))?;
+                let sort = self.fallible(&quote! {
+                    array::sort_by(#array, &|left, right| {
+                        Ok(matches!(__callback(left, right)?, #ordering::#greater))
+                    })
+                });
+                (
+                    quote! {{
+                        let __callback = #callable;
+                        #sort;
+                    }},
+                    sorted,
+                )
+            }
+            ArrayCallback::SortByKey(kind) => {
+                let compare = match kind {
+                    CmpKind::Int | CmpKind::Bool => quote! { &|left, right| Ord::cmp(left, right) },
+                    CmpKind::Float => quote! { &|left, right| float::cmp(*left, *right) },
+                    CmpKind::Str => quote! { &|left, right| string::cmp(left, right) },
+                    CmpKind::Bigint => quote! { &|left, right| bigint::cmp(left, right) },
+                };
+                let sorted = self.operand(receiver, Some(result))?;
+                let sort = self.fallible(&quote! {
+                    array::sort_by_key(#array, __callback, #compare)
+                });
+                (
+                    quote! {{
+                        let __callback = #callable;
+                        #sort;
+                    }},
+                    sorted,
+                )
+            }
+            ArrayCallback::Reduce => {
+                let accumulator = wanted_params
+                    .first()
+                    .ok_or_else(|| Rejection::invalid("`reduce` callback without parameters"))?;
+                let initial =
+                    extra.ok_or_else(|| Rejection::invalid("`reduce` without an initial value"))?;
+                let initial = self.operand(initial, Some(accumulator))?;
+                let call = self.fallible(&quote! {
+                    array::reduce(#array, __callback, #initial)
+                });
+                (
+                    TokenStream::new(),
+                    quote! {{
+                        let __callback = #callable;
+                        #call
+                    }},
+                )
+            }
+            _ => {
+                let call = self.fallible(&quote! { array::#runtime(#array, __callback) });
+                (
+                    TokenStream::new(),
+                    quote! {{
+                        let __callback = #callable;
+                        #call
+                    }},
+                )
+            }
+        })
+    }
+
+    /// `callback` as a `&dyn Fn` of the type the runtime calls: the value
+    /// itself when its type is that one, else a closure that coerces each
+    /// argument into the callback's parameter and its result into what the
+    /// runtime reads (`filter_map` reads an `Option` the callback may not
+    /// produce; `for_each` reads nothing).
+    fn adapt_callback(
+        &self,
+        op: ArrayCallback,
+        callback: &Operand<'db>,
+        wanted_params: &[NativeTy<'db>],
+        wanted_ret: &NativeTy<'db>,
+    ) -> Result<TokenStream, Rejection> {
+        let actual = self.operand_ty(callback)?;
+        let NativeTy::Fn(actual_params, actual_ret) = &actual else {
+            return Err(Rejection::invalid("array callback is not a function value"));
+        };
+        // A declared function is borrowed as the function item it is; a
+        // function value is borrowed through its pointer.
+        let function = match callback {
+            Operand::Constant(Constant::Function(DeclRef::Source(loc))) => {
+                let name = self
+                    .names
+                    .get(&FnId::Declared(*loc))
+                    .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
+                quote! { &#name }
+            }
+            _ => {
+                let value = self.operand_borrowed(callback)?;
+                quote! { &*#value }
+            }
+        };
+        let ret_as_is = match op {
+            ArrayCallback::ForEach => **actual_ret == NativeTy::Null,
+            _ => **actual_ret == *wanted_ret,
+        };
+        if actual_params == wanted_params && ret_as_is {
+            return Ok(function);
+        }
+        let names: Vec<Ident> = (0..wanted_params.len())
+            .map(|index| format_ident!("__arg{index}"))
+            .collect();
+        let params = names.iter().zip(wanted_params).map(|(name, ty)| {
+            let ty = self.ty(ty);
+            quote! { #name: #ty }
+        });
+        let args = names
+            .iter()
+            .zip(wanted_params)
+            .zip(actual_params)
+            .map(|((name, wanted), actual)| {
+                let store = coercion(wanted, actual)
+                    .ok_or_else(|| Rejection::invalid("array callback parameter does not fit"))?;
+                self.coerce(quote! { #name }, wanted, actual, store)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let ret = self.ty(wanted_ret);
+        let body = match op {
+            ArrayCallback::ForEach => quote! {{
+                __function(#(#args),*)?;
+                Ok(())
+            }},
+            ArrayCallback::FilterMap => {
+                let NativeTy::Option(inner) = wanted_ret else {
+                    return Err(Rejection::invalid("`filter_map` reads a non-option"));
+                };
+                match &**actual_ret {
+                    NativeTy::Option(produced) => {
+                        let store = coercion(produced, inner).ok_or_else(|| {
+                            Rejection::invalid("`filter_map` result does not fit")
+                        })?;
+                        let value = self.coerce(quote! { value }, produced, inner, store)?;
+                        quote! {{
+                            Ok(__function(#(#args),*)?.map(|value| #value))
+                        }}
+                    }
+                    produced => {
+                        let store = coercion(produced, inner).ok_or_else(|| {
+                            Rejection::invalid("`filter_map` result does not fit")
+                        })?;
+                        let value = self.coerce(quote! { value }, produced, inner, store)?;
+                        quote! {{
+                            let value = __function(#(#args),*)?;
+                            Ok(Some(#value))
+                        }}
+                    }
+                }
+            }
+            _ => {
+                let store = coercion(actual_ret, wanted_ret)
+                    .ok_or_else(|| Rejection::invalid("array callback result does not fit"))?;
+                let value = self.coerce(quote! { value }, actual_ret, wanted_ret, store)?;
+                quote! {{
+                    let value = __function(#(#args),*)?;
+                    Ok(#value)
+                }}
+            }
+        };
+        Ok(quote! {{
+            let __function = #function;
+            &move |#(#params),*| -> Result<#ret, Thrown> #body
+        }})
+    }
+
+    /// The `&cell::Cell<T>` a cell id names: a captured local's cell
+    /// borrowed, or a capture, which is a borrowed cell already.
+    fn cell_ref(&self, cell: CellId) -> Result<TokenStream, Rejection> {
+        match cell {
+            CellId::Local(local) => {
+                if !self.candidate.body.local(local).is_captured {
+                    return Err(Rejection::invalid(format!(
+                        "deref of {local}, which no closure captures"
+                    )));
+                }
+                let ident = local_ident(local);
+                Ok(quote! { &#ident })
+            }
+            CellId::Capture(index) => {
+                if index >= self.candidate.captures.len() {
+                    return Err(Rejection::invalid(format!(
+                        "capture[{index}] is not a capture of this lambda"
+                    )));
+                }
+                let ident = capture_ident(index);
+                Ok(quote! { #ident })
+            }
+        }
     }
 
     /// `expr`, a value of type `actual`, as a value of type `expected`
@@ -1444,8 +1775,17 @@ impl<'a, 'db> Printer<'a, 'db> {
                             #set;
                         }}
                     }
-                    Place::Capture(_) | Place::Deref(_) => {
-                        return Err(Rejection::unsupported("captured local"));
+                    Place::Deref(cell) => {
+                        let cell = self.cell_ref(*cell)?;
+                        quote! {{
+                            let value = #value;
+                            cell::set(#cell, value);
+                        }}
+                    }
+                    Place::Capture(index) => {
+                        return Err(Rejection::invalid(format!(
+                            "store into the cell pointer capture[{index}]"
+                        )));
                     }
                 }))
             }
@@ -1454,7 +1794,20 @@ impl<'a, 'db> Printer<'a, 'db> {
             StatementKind::Drop(_) | StatementKind::Nop | StatementKind::Intrinsic { .. } => {
                 Ok(None)
             }
-            other => Err(Rejection::unsupported(format!("statement {other:?}"))),
+            // A new cell for a captured local: empty, or holding the value of
+            // the cell it replaces (a loop's per-iteration binding).
+            StatementKind::FreshCell { local, carry_value } => {
+                let cell = self.cell_ref(CellId::Local(*local))?;
+                let ident = local_ident(*local);
+                Ok(Some(if *carry_value {
+                    quote! { #ident = cell::carry(#cell); }
+                } else {
+                    quote! { #ident = cell::fresh(); }
+                }))
+            }
+            other @ StatementKind::VirtualFieldStore { .. } => {
+                Err(Rejection::unsupported(format!("statement {other:?}")))
+            }
         }
     }
 
@@ -1609,6 +1962,66 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let ty = self.operand_ty(operand)?;
                 let test = self.member_test(site)?;
                 (self.member_test_tokens(operand, &ty, test)?, NativeTy::Bool)
+            }
+            // A closure value: the cells it captures, cloned into a Rust
+            // closure that lends them to the lambda's function on every
+            // call.
+            Rvalue::MakeClosure {
+                lambda_idx,
+                captures,
+                ..
+            } => {
+                let site = self.candidate.closures.get(lambda_idx).ok_or_else(|| {
+                    Rejection::invalid(format!("lambda {lambda_idx} was not analyzed"))
+                })?;
+                let name = self
+                    .names
+                    .get(&site.id)
+                    .ok_or_else(|| Rejection::invalid("lambda has no Rust name"))?;
+                let cells: Vec<Ident> = (0..captures.len())
+                    .map(|index| format_ident!("__cell{index}"))
+                    .collect();
+                let clones = cells
+                    .iter()
+                    .zip(captures)
+                    .map(|(cell, capture)| {
+                        let source = match capture {
+                            Operand::Copy(Place::Local(local))
+                            | Operand::Move(Place::Local(local)) => {
+                                self.cell_ref(CellId::Local(*local))?
+                            }
+                            Operand::Copy(Place::Capture(index))
+                            | Operand::Move(Place::Capture(index)) => {
+                                self.cell_ref(CellId::Capture(*index))?
+                            }
+                            other => {
+                                return Err(Rejection::invalid(format!(
+                                    "closure capture `{other:?}` is not a cell pointer"
+                                )));
+                            }
+                        };
+                        Ok(quote! { let #cell = cell::Cell::clone(#source); })
+                    })
+                    .collect::<Result<Vec<_>, Rejection>>()?;
+                let args: Vec<Ident> = (0..site.params.len())
+                    .map(|index| format_ident!("__arg{index}"))
+                    .collect();
+                let params = args.iter().zip(&site.params).map(|(arg, ty)| {
+                    let ty = self.ty(ty);
+                    quote! { #arg: #ty }
+                });
+                let ty = NativeTy::Fn(site.params.clone(), Box::new(site.ret.clone()));
+                let fn_ty = self.ty(&ty);
+                (
+                    quote! {{
+                        #(#clones)*
+                        let __closure: #fn_ty = Rc::new(move |#(#params),*| {
+                            #name(#(&#cells,)* #(#args),*)
+                        });
+                        __closure
+                    }},
+                    ty,
+                )
             }
             other => return Err(Rejection::unsupported(format!("rvalue {other:?}"))),
         })
@@ -1802,6 +2215,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             | NativeTy::Map(..)
             | NativeTy::Class(_)
             | NativeTy::Union(_)
+            | NativeTy::Fn(..)
             | NativeTy::ArrayIter(_)
             | NativeTy::Thrown => {
                 return Err(unsupported());
@@ -1903,7 +2317,8 @@ impl<'a, 'db> Printer<'a, 'db> {
         Ok(match operand {
             Operand::Copy(place) | Operand::Move(place) => {
                 let expr = self.place(place)?;
-                if ty.is_copy() || matches!(place, Place::Index { .. }) {
+                // An element read and a cell read are owned already.
+                if ty.is_copy() || matches!(place, Place::Index { .. } | Place::Deref(_)) {
                     expr
                 } else {
                     quote! { #expr.clone() }
@@ -1933,6 +2348,19 @@ impl<'a, 'db> Printer<'a, 'db> {
                     let name = &info.ident;
                     let variant = &variant.ident;
                     quote! { #name::#variant }
+                }
+                // A declared function as a value: its function item behind
+                // a counted pointer.
+                Constant::Function(DeclRef::Source(loc)) => {
+                    let name = self
+                        .names
+                        .get(&FnId::Declared(*loc))
+                        .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
+                    let fn_ty = self.ty(&ty);
+                    quote! {{
+                        let __function: #fn_ty = Rc::new(#name);
+                        __function
+                    }}
                 }
                 other => return Err(Rejection::unsupported(format!("constant {other:?}"))),
             },
@@ -1977,6 +2405,12 @@ impl<'a, 'db> Printer<'a, 'db> {
             Operand::Constant(Constant::EnumVariant { enum_ref, .. }) => {
                 Ok(NativeTy::Enum(*enum_ref))
             }
+            Operand::Constant(Constant::Function(DeclRef::Source(loc))) => self
+                .candidate
+                .function_values
+                .get(loc)
+                .cloned()
+                .ok_or_else(|| Rejection::invalid("function value was not analyzed")),
             other @ Operand::Constant(_) => {
                 Err(Rejection::unsupported(format!("operand {other:?}")))
             }
@@ -2022,7 +2456,15 @@ impl<'a, 'db> Printer<'a, 'db> {
                     _ => Err(Rejection::invalid("index into a non-array")),
                 }
             }
-            Place::Capture(_) | Place::Deref(_) => Err(Rejection::unsupported("captured local")),
+            Place::Deref(CellId::Local(local)) => self.local_ty(*local),
+            Place::Deref(CellId::Capture(index)) => {
+                self.candidate.captures.get(*index).cloned().ok_or_else(|| {
+                    Rejection::invalid(format!("capture[{index}] is not a capture of this lambda"))
+                })
+            }
+            Place::Capture(index) => Err(Rejection::invalid(format!(
+                "cell pointer capture[{index}] read as a value"
+            ))),
         }
     }
 
@@ -2053,7 +2495,15 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let index = local_ident(*index);
                 Ok(self.fallible(&quote! { array::get(&#base, #index) }))
             }
-            Place::Capture(_) | Place::Deref(_) => Err(Rejection::unsupported("captured local")),
+            // The value in a cell, copied out; reading a cell no store has
+            // reached is a panic, not a Rust one.
+            Place::Deref(cell) => {
+                let cell = self.cell_ref(*cell)?;
+                Ok(self.fallible(&quote! { cell::get(#cell) }))
+            }
+            Place::Capture(index) => Err(Rejection::invalid(format!(
+                "cell pointer capture[{index}] read as a value"
+            ))),
         }
     }
 
@@ -2193,6 +2643,11 @@ fn collect_loop_headers(stmts: &[Stmt], out: &mut FxHashSet<usize>) {
 
 fn local_ident(local: Local) -> Ident {
     format_ident!("_{}", local.0)
+}
+
+/// The parameter holding a lambda's `index`th capture.
+fn capture_ident(index: usize) -> Ident {
+    format_ident!("_c{index}")
 }
 
 /// An `int` literal, range-checked here; `int::lit` is a `const fn` the
