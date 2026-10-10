@@ -198,22 +198,26 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _2: Shared<user_Inventory>;
     let mut _4: Map<Str, Int63>;
     let mut _5: Option<Int63>;
+    let mut _6: Map<Str, Int63>;
     let mut _7: Int63;
     let mut _8: Option<Int63>;
     let mut _9: Str;
     let mut _10: Str;
     let mut _12: Str;
+    let mut _13: Map<Str, Int63>;
     _4 = map::new::<Str, Int63>(Vec::new());
     _5 = map::set(&_4, string::from_literal("x"), _1);
     _2 = shared(user_Inventory {
         stock: _4.clone(),
         name: string::from_literal("s"),
     });
+    _6 = _2.borrow().stock.clone();
     _7 = int::mul(_1, int::lit(2))?;
-    _8 = map::set(&_2.borrow().stock, string::from_literal("y"), _7);
+    _8 = map::set(&_6, string::from_literal("y"), _7);
     _10 = json::to_string(&_2)?;
     _9 = string::concat(&_10, &string::from_literal(" "));
-    _12 = json::to_string(&_2.borrow().stock)?;
+    _13 = _2.borrow().stock.clone();
+    _12 = json::to_string(&_13)?;
     _0 = string::concat(&_9, &_12);
     Ok(_0)
 }
@@ -225,11 +229,13 @@ pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
     let mut _5: Str;
     let mut _6: Str;
     let mut _8: Str;
+    let mut _9: Map<Str, Int63>;
     let mut _11: Str;
     let mut _12: Int63;
     _2 = json::deserialize::<Shared<user_Inventory>>(&_1)?;
     _6 = string::concat(&_2.borrow().name, &string::from_literal(" "));
-    _8 = ToBaml::to_baml(&_2.borrow().stock);
+    _9 = _2.borrow().stock.clone();
+    _8 = ToBaml::to_baml(&_9);
     _5 = string::concat(&_6, &_8);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _12 = map::len(&_2.borrow().stock);

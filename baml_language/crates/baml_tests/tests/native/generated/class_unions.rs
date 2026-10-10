@@ -1336,8 +1336,10 @@ pub fn user_json_in_reversed(mut _1: Str) -> Result<Str, Thrown> {
 pub fn user_json_reversed(mut _1: Str) -> Result<Str, Thrown> {
     let mut _0: Str;
     let mut _2: Shared<user_Reversed>;
+    let mut _4: Union_user_Err_or_user_Ok;
     _2 = json::deserialize::<Shared<user_Reversed>>(&_1)?;
-    _0 = user_describe_outcome(_2.borrow().outcome.clone())?;
+    _4 = _2.borrow().outcome.clone();
+    _0 = user_describe_outcome(_4.clone())?;
     Ok(_0)
 }
 /// BAML function `user.label_text`.

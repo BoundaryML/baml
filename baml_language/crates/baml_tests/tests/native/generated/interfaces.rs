@@ -1667,26 +1667,27 @@ pub fn user_in_field(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _2: Shared<user_Holder>;
     let mut _3: Shared<user_Square>;
     let mut _4: Str;
+    let mut _5: user_Shape;
     let mut _6: Str;
     let mut _7: Str;
     let mut _8: Str;
+    let mut _9: user_Shape;
     let mut _10: Str;
     _3 = shared(user_Square { side: _1 });
     _2 = shared(user_Holder {
         item: user_Shape::user_Square(_3.clone()),
         tag: string::from_literal("t"),
     });
+    _5 = _2.borrow().item.clone();
     _4 = {
-        match &_2.borrow().item {
+        match &_5 {
             user_Shape::user_Square(__value) => {
-                user_Shape_describe__user_Square(_2.borrow().item.clone())?
+                user_Shape_describe__user_Square(_5.clone())?
             }
             user_Shape::user_Rect(__value) => {
                 user___user_Rect_as_user_Shape___describe(__value.clone())?
             }
-            user_Shape::user_Dot(__value) => {
-                user_Shape_describe__user_Dot(_2.borrow().item.clone())?
-            }
+            user_Shape::user_Dot(__value) => user_Shape_describe__user_Dot(_5.clone())?,
         }
     };
     {
@@ -1694,8 +1695,9 @@ pub fn user_in_field(mut _1: Int63) -> Result<Str, Thrown> {
         _2.borrow_mut().item = value;
     }
     _7 = _4.clone();
+    _9 = _2.borrow().item.clone();
     _8 = {
-        match &_2.borrow().item {
+        match &_9 {
             user_Shape::user_Square(__value) => {
                 user___user_Square_as_user_Shape___name(__value.clone())?
             }

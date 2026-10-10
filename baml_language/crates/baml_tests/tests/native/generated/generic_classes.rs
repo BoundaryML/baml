@@ -558,6 +558,7 @@ pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _30: Int63;
     let mut _32: Int63;
     let mut _35: Int63;
+    let mut _36: Str;
     let mut _37: Int63;
     let mut _38: Shared<user_Box__int>;
     _2 = shared(user_Box__int { value: _1 });
@@ -588,7 +589,8 @@ pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     _26 = int::add(_27, _30)?;
     _32 = user_unbox__int(_5.clone())?;
     _25 = int::add(_26, _32)?;
-    _35 = string::length(&_16.borrow().value);
+    _36 = _16.borrow().value.clone();
+    _35 = string::length(&_36);
     _24 = int::add(_25, _35)?;
     _38 = user_Box_get__user_Box__int(_20.clone())?;
     _37 = user_Box_get__int(_38.clone())?;
@@ -681,8 +683,10 @@ pub fn user_Stack_push__string(
 ) -> Result<(), Thrown> {
     let mut _0: ();
     let mut _3: Int63;
-    array::push(&_1.borrow().items, _2.clone());
-    _3 = array::len(&_1.borrow().items);
+    let mut _4: Shared<Vec<Str>>;
+    _4 = _1.borrow().items.clone();
+    array::push(&_4, _2.clone());
+    _3 = array::len(&_4);
     _0 = ();
     Ok(_0)
 }
@@ -725,8 +729,10 @@ pub fn user_Stack_push__int(
 ) -> Result<(), Thrown> {
     let mut _0: ();
     let mut _3: Int63;
-    array::push(&_1.borrow().items, _2);
-    _3 = array::len(&_1.borrow().items);
+    let mut _4: Shared<Vec<Int63>>;
+    _4 = _1.borrow().items.clone();
+    array::push(&_4, _2);
+    _3 = array::len(&_4);
     _0 = ();
     Ok(_0)
 }
@@ -854,6 +860,7 @@ pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _8: Shared<user_Box__int>;
     let mut _9: Shared<user_Box__user_Box__int>;
     let mut _14: ();
+    let mut _15: Shared<user_Box__int>;
     let mut _16: Int63;
     let mut _17: Int63;
     let mut _19: Shared<user_Box__int>;
@@ -865,9 +872,10 @@ pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
     _9 = user_unbox__user_Box__user_Box__int(_4.clone())?;
     _8 = user_unbox__user_Box__int(_9.clone())?;
     _7 = user_unbox__int(_8.clone())?;
+    _15 = _2.borrow().value.clone();
     _17 = _7;
     _16 = int::add(_17, int::lit(1))?;
-    _14 = user_Box_set__int(_2.borrow().value.clone(), _16)?;
+    _14 = user_Box_set__int(_15.clone(), _16)?;
     _19 = user_Box_get__user_Box__int(_2.clone())?;
     _0 = user_Box_get__int(_19.clone())?;
     Ok(_0)
@@ -888,6 +896,7 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _16: Str;
     let mut _18: Str;
     let mut _19: Int63;
+    let mut _20: Shared<user_Box__int>;
     _2 = shared(user_Box__int { value: _1 });
     _3 = shared(user_Pair__string__user_Box__int {
         first: string::from_literal("s"),
@@ -902,7 +911,8 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     _12 = string::concat(&_13, &string::from_literal("|"));
     _11 = string::concat(&_12, &_5);
     _10 = string::concat(&_11, &string::from_literal("|"));
-    _19 = user_Box_get__int(_7.borrow().second.clone())?;
+    _20 = _7.borrow().second.clone();
+    _19 = user_Box_get__int(_20.clone())?;
     _18 = ToBaml::to_baml(&_19);
     _0 = string::concat(&_10, &_18);
     Ok(_0)
@@ -933,6 +943,7 @@ pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _22: Shared<user_Box__int>;
     let mut _24: Union_int_or_user_Box__int_or_user_Box__string;
     let mut _25: Shared<user_Box__string>;
+    let mut _26: Str;
     let mut _27: Int63;
     let mut _28: Int63;
     let mut _29: Int63;
@@ -1073,7 +1084,8 @@ pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
                         return Err(Thrown::from(Panic::Unreachable));
                     }
                 };
-                _20 = string::length(&_25.borrow().value);
+                _26 = _25.borrow().value.clone();
+                _20 = string::length(&_26);
                 break 'bb28;
             } else {
                 _20 = int::lit(0);

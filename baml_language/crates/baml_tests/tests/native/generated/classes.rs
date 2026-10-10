@@ -104,6 +104,67 @@ impl bex_aot::Readable for user_Box {
         )
     }
 }
+/// BAML class `user.Counter`.
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[serde(
+    crate = "bex_aot::serde",
+    expecting = "expected JSON object for class `Counter`"
+)]
+pub struct user_Counter {
+    pub n: Int63,
+}
+impl ToBaml for user_Counter {
+    fn render(&self, out: &mut String, _nested: bool) {
+        bex_aot::render::class(out, "Counter", &[("n", &self.n as &dyn ToBaml)]);
+    }
+}
+impl bex_aot::ErrorClass for user_Counter {
+    const CLASS_FQN: &'static str = "user.Counter";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([("n", bex_aot::Readable::readable(&self.n))])
+    }
+}
+impl bex_aot::Readable for user_Counter {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
+    }
+}
+/// BAML class `user.Holder`.
+#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
+#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Holder`")]
+pub struct user_Holder {
+    pub c: Shared<user_Counter>,
+    pub total: Int63,
+}
+impl ToBaml for user_Holder {
+    fn render(&self, out: &mut String, _nested: bool) {
+        bex_aot::render::class(
+            out,
+            "Holder",
+            &[("c", &self.c as &dyn ToBaml), ("total", &self.total as &dyn ToBaml)],
+        );
+    }
+}
+impl bex_aot::ErrorClass for user_Holder {
+    const CLASS_FQN: &'static str = "user.Holder";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("c", bex_aot::Readable::readable(&self.c)),
+            ("total", bex_aot::Readable::readable(&self.total)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Holder {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
+    }
+}
 /// BAML function `user.area`.
 pub fn user_area(mut _1: Shared<user_Point>) -> Result<Int63, Thrown> {
     let mut _0: Int63;
@@ -177,6 +238,7 @@ pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _4: Shared<Vec<Int63>>;
     let mut _5: bool;
     let mut _6: bool;
+    let mut _7: Option<Str>;
     'bb2: {
         _3 = shared(user_Point {
             x: int::lit(0),
@@ -200,7 +262,8 @@ pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
             break 'bb2;
         }
     }
-    _6 = _2.borrow().tag.is_none();
+    _7 = _2.borrow().tag.clone();
+    _6 = _7.is_none();
     'bb6: {
         if _6 {
             _0 = string::from_literal("none");
@@ -210,5 +273,53 @@ pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
             break 'bb6;
         }
     }
+    Ok(_0)
+}
+/// BAML function `user.bump`.
+pub fn user_bump(
+    mut _1: Shared<user_Counter>,
+    mut _2: Shared<user_Holder>,
+) -> Result<Int63, Thrown> {
+    let mut _0: Int63;
+    let mut _3: Int63;
+    let mut _4: Int63;
+    let mut _5: Int63;
+    _3 = _2.borrow().total;
+    {
+        let value = int::add(_3, int::lit(1))?;
+        _2.borrow_mut().total = value;
+    }
+    _4 = _1.borrow().n;
+    _5 = _2.borrow().total;
+    {
+        let value = int::add(_4, _5)?;
+        _1.borrow_mut().n = value;
+    }
+    _0 = _1.borrow().n;
+    Ok(_0)
+}
+/// BAML function `user.borrowed_argument`.
+pub fn user_borrowed_argument(mut _1: Int63) -> Result<Int63, Thrown> {
+    let mut _0: Int63;
+    let mut _2: Shared<user_Holder>;
+    let mut _3: Shared<user_Counter>;
+    let mut _4: Int63;
+    let mut _5: Int63;
+    let mut _6: Shared<user_Counter>;
+    let mut _8: Int63;
+    let mut _9: Shared<user_Counter>;
+    let mut _11: Int63;
+    _3 = shared(user_Counter { n: _1 });
+    _2 = shared(user_Holder {
+        c: _3.clone(),
+        total: int::lit(0),
+    });
+    _6 = _2.borrow().c.clone();
+    _5 = user_bump(_6.clone(), _2.clone())?;
+    _9 = _2.borrow().c.clone();
+    _8 = user_bump(_9.clone(), _2.clone())?;
+    _4 = int::add(_5, _8)?;
+    _11 = _2.borrow().total;
+    _0 = int::add(_4, _11)?;
     Ok(_0)
 }

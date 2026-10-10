@@ -36,3 +36,20 @@ function nullable(n: int) -> string {
         "some"
     }
 }
+
+// A field passed directly as an argument while the callee writes to the
+// object that owns the field through another handle. The VM sees one
+// object; native code must not hold a borrow of `h` across the call.
+class Counter { n: int }
+class Holder { c: Counter, total: int }
+
+function bump(c: Counter, h: Holder) -> int {
+    h.total = h.total + 1;
+    c.n = c.n + h.total;
+    c.n
+}
+
+function borrowed_argument(n: int) -> int {
+    let h = Holder { c: Counter { n: n }, total: 0 };
+    bump(h.c, h) + bump(h.c, h) + h.total
+}

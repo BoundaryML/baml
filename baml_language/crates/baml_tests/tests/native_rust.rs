@@ -686,6 +686,7 @@ async fn classes_match_vm() {
         check!(o, make(n) => user_make(int(n)));
         check!(o, render(n) => user_render(int(n)));
         check!(o, nullable(n) => user_nullable(int(n)));
+        check!(o, borrowed_argument(n) => user_borrowed_argument(int(n)));
     }
     for raw in [
         r#"{"x": 3, "y": 4}"#,
