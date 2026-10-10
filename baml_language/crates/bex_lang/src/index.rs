@@ -1,5 +1,6 @@
 //! Negative-index resolution for sequence operations (`at`, subscript `[]`,
-//! `slice`, `remove_at`, `insert`, and `splice`) on arrays and byte arrays.
+//! `slice`, `remove_at`, `insert`, and `splice`) on arrays and byte arrays,
+//! shared by the VM's builtins and generated native code.
 //!
 //! All of them follow the JavaScript/Python convention: a negative index counts
 //! back from the end, so `-1` is the last element. They differ only in how an
@@ -36,7 +37,7 @@ fn count_from_end(index: i64, len: usize) -> Option<i64> {
 /// Returns the non-negative offset when the index lands in `[0, len)`, or
 /// `None` when it falls outside the sequence even after counting from the end
 /// (e.g. `-len - 1`, or any index `>= len`).
-pub(crate) fn resolve_index(index: i64, len: usize) -> Option<usize> {
+pub fn resolve_index(index: i64, len: usize) -> Option<usize> {
     // `try_from` rejects the below-start case (`< 0`); the filter rejects the
     // past-end case (`>= len`).
     usize::try_from(count_from_end(index, len)?)
@@ -52,7 +53,7 @@ pub(crate) fn resolve_index(index: i64, len: usize) -> Option<usize> {
 /// element. Returns the position when it lands in `[0, len]`, or `None` when it
 /// falls outside even after counting from the end (callers surface this as an
 /// `InvalidArgument` error). Used by `insert` and `splice`'s `start`.
-pub(crate) fn resolve_insert_index(index: i64, len: usize) -> Option<usize> {
+pub fn resolve_insert_index(index: i64, len: usize) -> Option<usize> {
     // As `resolve_index`, but `<= len`: the end slot is a valid insertion point.
     usize::try_from(count_from_end(index, len)?)
         .ok()
@@ -65,7 +66,7 @@ pub(crate) fn resolve_insert_index(index: i64, len: usize) -> Option<usize> {
 ///
 /// Unlike [`resolve_index`], an out-of-range bound saturates to the nearest
 /// endpoint rather than failing, matching JavaScript's `Array.prototype.slice`.
-pub(crate) fn resolve_slice_bound(bound: i64, len: usize) -> usize {
+pub fn resolve_slice_bound(bound: i64, len: usize) -> usize {
     // `count_from_end` is not reused here: an out-of-range bound clamps rather
     // than fails, so the impossible `len > i64::MAX` case clamps too.
     let len_i64 = i64::try_from(len).unwrap_or(i64::MAX);

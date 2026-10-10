@@ -33,9 +33,12 @@ pub use diag_print::{print_anyhow_error, print_error, print_warning};
 pub mod clap_reexport {
     pub use clap::{Error, error::ErrorKind};
 }
+/// Narrowing a `baml.sys.exit(code)` `int` to a host exit code is a language
+/// rule shared with native binaries.
+pub use bex_lang::clamp_exit_code;
 pub use dispatch::{
-    DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target,
-    dispatch_target_with_context, validate_help_param, validate_help_param_names,
+    DispatchResult, build_args_from_signature, dispatch_target, dispatch_target_with_context,
+    validate_help_param, validate_help_param_names,
 };
 pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
 pub use json_coerce::load_json_source;

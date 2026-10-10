@@ -100,6 +100,7 @@ baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
+baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
@@ -128,6 +129,8 @@ baml_test_support = { path = "crates/baml_test_support" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
+bex_lang = { path = "crates/bex_lang" }
+bex_aot = { path = "crates/bex_aot" }
 btel_settings = { path = "crates/btel_settings" }
 btel_types = { path = "crates/btel_types" }
 btel_clock = { path = "crates/btel_clock" }

@@ -171,7 +171,7 @@ impl BamlPackageBaml for PackageBamlImpl {
                 Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => acc = v,
                 _ => {
                     return Err(VmPanic::IntegerOverflow {
-                        message: format!("{acc} + {x} overflows int"),
+                        message: bex_lang::int::overflow_message(acc, '+', x),
                     }
                     .into());
                 }

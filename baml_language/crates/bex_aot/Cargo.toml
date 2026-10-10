@@ -1,0 +1,20 @@
+[package]
+name = "bex_aot"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Runtime for BAML programs compiled ahead of time to native Rust"
+
+[dependencies]
+baml_type = { workspace = true, features = [ "serde" ] }
+bex_lang = { workspace = true }
+bex_str = { workspace = true }
+indexmap = { workspace = true }
+num-bigint = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

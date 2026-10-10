@@ -80,6 +80,8 @@ Source Text
 
 **Critical distinction:** The stages above the AST (Parser, CST→AST lowering) are about *producing* the AST. The stages below it (HIR, TIR) are about *answering questions* about the AST. They do not produce new syntax trees. The MIR is the second transformation — it converts human-friendly BAML into a machine-friendly control flow graph. The Emit stage is the third transformation — it compiles MIR to bytecode.
 
+MIR has a second consumer beside Emit: `baml_compiler2_rust` (reached through `baml_db`'s `rust-backend` feature and the hidden `baml __emit-rust` command) turns the MIR of a subset of functions into Rust source that links the native runtime `bex_aot` instead of the VM. It is a leaf of the pipeline, not a layer: nothing downstream reads its output, it changes no MIR, and a function outside its subset is rejected with a reason rather than compiled differently. The semantics both backends must agree on (integer overflow, the float order, index resolution, panics) live in `bex_lang`, so the VM can call the same code instead of keeping its own copies. See `crates/baml_compiler2_rust/README.md` for the subset and the two MIR properties it depends on (reducible control flow, call arguments evaluated into locals).
+
 This is fundamentally different from the compiler1 architecture, which was a strict linear pipeline where each layer copied and enriched the previous layer's data. In compiler2, each layer is a **query on top of the AST** (at least until MIR), which gives us Salsa-powered incremental compilation for free.
 
 ---
