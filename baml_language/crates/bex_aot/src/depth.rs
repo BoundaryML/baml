@@ -2,9 +2,12 @@
 //!
 //! The VM caps the call stack at `bex_vm::MAX_FRAMES` frames and throws
 //! `baml.panics.StackOverflow` past it. Native code has no frame list, so a
-//! function on a call cycle holds a [`Guard`] for its duration and the guard
-//! throws the same panic at the same depth. Functions off every cycle cannot
-//! recurse and pay nothing: a program's depth is bounded by its cycles.
+//! generated function holds a [`Guard`] for its duration and the guard
+//! throws the same panic at the same depth. The VM also checks the limit
+//! before calling a builtin, and a stdlib method with a BAML body is a frame
+//! of its own; generated code mirrors that with [`probe`] at every builtin
+//! call and the runtime's callback methods with a guard where the VM's body
+//! is one. A guard costs one thread-local increment and decrement.
 
 use std::cell::Cell;
 
@@ -35,6 +38,22 @@ impl Guard {
             Ok(Guard(()))
         })
     }
+}
+
+/// The check the VM makes before every call, including a call to a Rust
+/// builtin that pushes no frame: throw `StackOverflow` if `extra` more
+/// frames on top of the live ones would reach the limit. `extra` is the
+/// builtin's frame profile, the frames its BAML wrapper pushes before its
+/// deepest native call (see the compiler README).
+#[inline]
+pub fn probe(extra: u32) -> Result<(), Thrown> {
+    DEPTH.with(|depth| {
+        if depth.get() + extra >= MAX_DEPTH {
+            Err(Thrown::from(Panic::StackOverflow))
+        } else {
+            Ok(())
+        }
+    })
 }
 
 impl Drop for Guard {

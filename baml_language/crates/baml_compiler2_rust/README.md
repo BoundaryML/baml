@@ -66,14 +66,17 @@ A function is admitted when all of the following hold:
   (keyed by link name), or `baml.sys.panic` with a string literal; a source
   function used as a value is admitted like a callee.
 
-Recursion is admitted: every function on a call cycle holds a
-`bex_aot::depth::Guard` for its duration, so unbounded recursion throws
-`baml.panics.StackOverflow` at the VM's frame limit instead of overflowing
-the native stack. A cycle closed through a function value is not in the
-static call graph, so every lambda and every function that calls through
-a function value holds the guard too (every such cycle passes through one
-of them). Functions off every cycle that call nothing indirectly pay
-nothing.
+Recursion is admitted, and the frame limit is the VM's exactly: every
+generated function holds a `bex_aot::depth::Guard` for its duration (one
+thread-local increment and decrement, measured at 0.13 ns per call), so
+`baml.panics.StackOverflow` is thrown at the call the VM throws it at. The
+VM also checks the limit before every builtin call, and a stdlib method
+with a BAML body is a frame of its own, so every builtin call is preceded
+by `bex_aot::depth::probe(k)`, `k` being the builtin's frame profile (0
+for a Rust builtin, 1 for a BAML wrapper around one; `builtin_frames` in
+`print.rs` is the table), and the runtime's `for_each`, `filter_map` and
+`sort_by_key`, BAML bodies on the VM, hold a guard around their
+callbacks.
 
 ### Value model
 

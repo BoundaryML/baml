@@ -506,6 +506,13 @@ impl<'a, 'db> Printer<'a, 'db> {
     /// Raise `thrown` (an expression of type `Thrown`) from the block being
     /// printed: into its handler, or out of the function (`Err(..)` in tail
     /// position, else `return Err(..);`).
+    /// The VM's frame-limit check before a builtin call, as a fallible
+    /// expression: `bex_aot::depth::probe(frames)`.
+    fn probe(&self, frames: u32) -> TokenStream {
+        let frames = proc_macro2::Literal::u32_unsuffixed(frames);
+        self.fallible(&quote! { bex_aot::depth::probe(#frames) })
+    }
+
     fn raise(&self, thrown: &TokenStream, tail: bool) -> TokenStream {
         match (&*self.unwind.borrow(), tail) {
             (Some(UnwindSite { error, jump }), _) => quote! {{
@@ -580,12 +587,10 @@ impl<'a, 'db> Printer<'a, 'db> {
                 };
                 Some(quote! { let mut #ident: #tokens; })
             });
-        // A function on a call cycle counts its frame, so runaway recursion
-        // throws `StackOverflow` where the VM would, instead of overflowing
-        // the native stack.
-        let guard = candidate
-            .recursive
-            .then(|| quote! { let _frame = bex_aot::depth::Guard::enter()?; });
+        // Every function counts its frame, as every bytecode frame counts on
+        // the VM, so `StackOverflow` is thrown at the VM's depth instead of
+        // overflowing the native stack.
+        let guard = quote! { let _frame = bex_aot::depth::Guard::enter()?; };
         let body = self.tail_stmts(&candidate.structured)?;
         Ok(quote! {
             #[doc = #doc]
@@ -1010,10 +1015,13 @@ impl<'a, 'db> Printer<'a, 'db> {
         // Statements run before the store, then the stored value.
         let (prelude, value, result) = match call {
             CallKind::Panic(message) => {
-                return Ok(self.raise(
+                // `baml.sys.panic` is a call on the VM, checked like any other.
+                let probe = self.probe(0);
+                let raise = self.raise(
                     &quote! { Thrown::from(Panic::UserPanic { message: String::from(#message) }) },
                     false,
-                ));
+                );
+                return Ok(quote! { #probe; #raise });
             }
             CallKind::Indirect { params, result } => {
                 let Terminator::Call { callee, .. } = self.terminator(block)? else {
@@ -1121,7 +1129,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                         let value = self.operand_ref(arg(0)?)?;
                         (TokenStream::new(), quote! { ToBaml::to_baml(#value) })
                     }
-                    Builtin::StringLength => {
+                    Builtin::StringLength { .. } => {
                         let value = self.operand_ref_as(arg(0)?, &NativeTy::Str)?;
                         (TokenStream::new(), quote! { string::length(#value) })
                     }
@@ -1298,6 +1306,13 @@ impl<'a, 'db> Printer<'a, 'db> {
                     Builtin::ArrayCallback { op, wanted } => {
                         self.array_callback(*op, wanted, arg(0)?, arg(1)?, args.get(2), result)?
                     }
+                };
+                let prelude = match builtin_frames(builtin) {
+                    Some(frames) => {
+                        let probe = self.probe(frames);
+                        quote! { #probe; #prelude }
+                    }
+                    None => prelude,
                 };
                 (prelude, value, result)
             }
@@ -3141,6 +3156,52 @@ fn float_literal(value: f64) -> TokenStream {
             quote! { #literal }
         }
     }
+}
+
+/// How many frames the VM is deeper than the caller when it checks the frame
+/// limit for a builtin: the builtin's frame profile. `None` for a builtin
+/// the VM never checks separately (`next`, whose check repeats `iter`'s at
+/// the same depth). A Rust builtin (`$rust_function`) is checked at the
+/// caller's depth and pushes no frame; a stdlib method with a BAML body
+/// pushes one frame and then calls a Rust builtin, checked one deeper; a
+/// callback method with a BAML body is a frame the runtime function holds
+/// itself (`bex_aot::array`), so its callbacks run one deeper, while a
+/// native callback method's callbacks run at the caller's depth plus one
+/// as on the VM.
+fn builtin_frames(builtin: &Builtin<'_>) -> Option<u32> {
+    use crate::function::ArrayCallback;
+    Some(match builtin {
+        Builtin::Next => return None,
+        // `length` wraps `char_count`; `json.*` wrap `parse`/`from_json`
+        // and `to_json`/`stringify`; `iter` on an array calls
+        // `ArrayIterator.new` and `next` calls `length`; `sort` calls
+        // `_is_primitive_array` and `_rust_sort`; `lt`/`le`/`gt`/`ge`
+        // default to `self.cmp(other)`.
+        Builtin::StringLength { wrapped: true }
+        | Builtin::JsonDeserialize(_)
+        | Builtin::JsonToString
+        | Builtin::Iter
+        | Builtin::Sort(_)
+        | Builtin::CompareOp { .. }
+        | Builtin::CompareVia { .. }
+        | Builtin::ArrayCallback {
+            op: ArrayCallback::ForEach | ArrayCallback::FilterMap | ArrayCallback::SortByKey(_),
+            ..
+        } => 1,
+        Builtin::ArrayPush
+        | Builtin::ToStringDefault
+        | Builtin::StringLength { wrapped: false }
+        | Builtin::StringIsAscii
+        | Builtin::FloatFloor
+        | Builtin::FloatItrunc
+        | Builtin::IsNull { .. }
+        | Builtin::EnumEq
+        | Builtin::Equals(_)
+        | Builtin::Map(_)
+        | Builtin::Bigint(_)
+        | Builtin::Cmp(_)
+        | Builtin::ArrayCallback { .. } => 0,
+    })
 }
 
 #[cfg(test)]

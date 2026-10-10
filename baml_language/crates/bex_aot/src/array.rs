@@ -87,6 +87,8 @@ pub fn map<T: Clone, U>(
     arr: &Shared<Vec<T>>,
     f: &dyn Fn(T) -> Result<U, Thrown>,
 ) -> Result<Shared<Vec<U>>, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     let items = snapshot(arr);
     let mut out = Vec::with_capacity(items.len());
     for item in items {
@@ -100,6 +102,8 @@ pub fn filter<T: Clone>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Shared<Vec<T>>, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     let items = snapshot(arr);
     let mut out = Vec::with_capacity(items.len());
     for item in items {
@@ -115,6 +119,10 @@ pub fn filter_map<T: Clone, U>(
     arr: &Shared<Vec<T>>,
     f: &dyn Fn(T) -> Result<Option<U>, Thrown>,
 ) -> Result<Shared<Vec<U>>, Thrown> {
+    // A BAML body on the VM: one frame around every callback, iterating
+    // through `ArrayIterator`, whose `new` and `next` are a frame deeper.
+    let _frame = crate::depth::Guard::enter()?;
+    crate::depth::probe(1)?;
     let items = snapshot(arr);
     let mut out = Vec::new();
     for item in items {
@@ -130,6 +138,10 @@ pub fn for_each<T: Clone>(
     arr: &Shared<Vec<T>>,
     f: &dyn Fn(T) -> Result<(), Thrown>,
 ) -> Result<(), Thrown> {
+    // A BAML body on the VM: one frame around every callback, iterating
+    // through `ArrayIterator`, whose `new` and `next` are a frame deeper.
+    let _frame = crate::depth::Guard::enter()?;
+    crate::depth::probe(1)?;
     for item in snapshot(arr) {
         f(item)?;
     }
@@ -142,6 +154,8 @@ pub fn some<T: Clone>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<bool, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     for item in snapshot(arr) {
         if predicate(item)? {
             return Ok(true);
@@ -156,6 +170,8 @@ pub fn every<T: Clone>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<bool, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     for item in snapshot(arr) {
         if !predicate(item)? {
             return Ok(false);
@@ -169,6 +185,8 @@ pub fn find<T: Clone>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<T>, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     for item in snapshot(arr) {
         if predicate(item.clone())? {
             return Ok(Some(item));
@@ -183,6 +201,8 @@ pub fn find_index<T: Clone>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<Int63>, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     for (index, item) in snapshot(arr).into_iter().enumerate() {
         if predicate(item)? {
             return Ok(Some(int_from_usize(index)));
@@ -196,6 +216,8 @@ pub fn find_last<T: Clone>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<T>, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     for item in snapshot(arr).into_iter().rev() {
         if predicate(item.clone())? {
             return Ok(Some(item));
@@ -210,6 +232,8 @@ pub fn find_last_index<T: Clone>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<Int63>, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     for (index, item) in snapshot(arr).into_iter().enumerate().rev() {
         if predicate(item)? {
             return Ok(Some(int_from_usize(index)));
@@ -225,6 +249,8 @@ pub fn reduce<T: Clone, A>(
     reducer: &dyn Fn(A, T) -> Result<A, Thrown>,
     initial: A,
 ) -> Result<A, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     let mut accumulator = initial;
     for item in snapshot(arr) {
         accumulator = reducer(accumulator, item)?;
@@ -238,6 +264,8 @@ pub fn flat_map<T: Clone, U: Clone>(
     arr: &Shared<Vec<T>>,
     f: &dyn Fn(T) -> Result<Shared<Vec<U>>, Thrown>,
 ) -> Result<Shared<Vec<U>>, Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     let mut out = Vec::new();
     for item in snapshot(arr) {
         let inner = f(item)?;
@@ -258,6 +286,8 @@ pub fn sort_by<T: Clone>(
     arr: &Shared<Vec<T>>,
     greater: &dyn Fn(T, T) -> Result<bool, Thrown>,
 ) -> Result<(), Thrown> {
+    // The VM runs the callbacks under a native continuation frame.
+    let _frame = crate::depth::Guard::enter()?;
     let items = snapshot(arr);
     let sorted = merge_sort(items, &|left, right| greater(left.clone(), right.clone()))?;
     *arr.borrow_mut() = sorted;
@@ -273,14 +303,21 @@ pub fn sort_by_key<T: Clone, K>(
     key: &dyn Fn(T) -> Result<K, Thrown>,
     compare: &dyn Fn(&K, &K) -> std::cmp::Ordering,
 ) -> Result<(), Thrown> {
+    // A BAML body on the VM: one frame around every key callback. The
+    // comparison then runs in a lambda under `sort_by`'s continuation frame
+    // and calls `at`, so it is checked three frames below the caller.
+    let _frame = crate::depth::Guard::enter()?;
     let items = snapshot(arr);
     if items.len() <= 1 {
         return Ok(());
     }
+    // The body's `for` over the elements goes through `ArrayIterator`.
+    crate::depth::probe(1)?;
     let mut keys = Vec::with_capacity(items.len());
     for item in &items {
         keys.push(key(item.clone())?);
     }
+    crate::depth::probe(2)?;
     let order: Vec<usize> = (0..items.len()).collect();
     let order = merge_sort(order, &|left, right| {
         Ok(compare(&keys[*left], &keys[*right]).is_gt())

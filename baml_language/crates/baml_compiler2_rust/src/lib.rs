@@ -256,19 +256,7 @@ pub fn compile_many<'db>(
     for &root in roots {
         graph.visit(&Instance::plain(root), &mut classes)?;
     }
-    let CallGraph {
-        mut order,
-        recursive,
-        ..
-    } = graph;
-    // A function on a static call cycle guards its depth. So does every
-    // lambda and every function that calls through a function value: a
-    // cycle closed through a function value is not in the static graph, and
-    // every such cycle passes through one of those.
-    for candidate in &mut order {
-        candidate.recursive =
-            recursive.contains(&candidate.id) || candidate.is_lambda() || candidate.indirect;
-    }
+    let CallGraph { order, .. } = graph;
 
     // Every call site agrees with its callee's declared shape.
     let index_of: FxHashMap<FnId<'db>, usize> = order
@@ -437,8 +425,6 @@ struct CallGraph<'db> {
     state: FxHashMap<Instance<'db>, VisitState>,
     /// The instances on the current path, outermost first.
     path: Vec<Instance<'db>>,
-    /// Functions on a call cycle: each guards its recursion depth.
-    recursive: FxHashSet<FnId<'db>>,
 }
 
 impl<'db> CallGraph<'db> {
@@ -448,7 +434,6 @@ impl<'db> CallGraph<'db> {
             order: Vec::new(),
             state: FxHashMap::default(),
             path: Vec::new(),
-            recursive: FxHashSet::default(),
         }
     }
 
@@ -459,22 +444,9 @@ impl<'db> CallGraph<'db> {
     ) -> Result<(), Rejection> {
         match self.state.get(instance) {
             Some(VisitState::Done) => return Ok(()),
-            Some(VisitState::Visiting) => {
-                // A call back into the path: every function from there on is
-                // on the cycle. The VM bounds recursion by its frame count
-                // and so does the generated code, through a depth guard.
-                let start = self
-                    .path
-                    .iter()
-                    .position(|on_path| on_path == instance)
-                    .expect("a function being visited is on the path");
-                self.recursive.extend(
-                    self.path[start..]
-                        .iter()
-                        .map(|instance| FnId::Declared(instance.clone())),
-                );
-                return Ok(());
-            }
+            // A call back into the path: recursion, which every function's
+            // depth guard bounds at the VM's frame limit.
+            Some(VisitState::Visiting) => return Ok(()),
             None => {}
         }
         let name = link_name(self.db, instance.loc);

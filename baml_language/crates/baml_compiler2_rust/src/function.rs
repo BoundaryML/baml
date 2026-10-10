@@ -298,8 +298,9 @@ pub(crate) enum Builtin<'db> {
     /// `baml._to_string_default<T>(ty, v)`, or `virtual_call to_string as
     /// baml.ToString` on a value with no `to_string` of its own.
     ToStringDefault,
-    /// `baml.String.length` / `char_count`.
-    StringLength,
+    /// `baml.String.length` (a BAML body around `char_count`, so `wrapped`)
+    /// or `baml.String.char_count`.
+    StringLength { wrapped: bool },
     /// `baml.String.is_ascii`.
     StringIsAscii,
     /// `baml.Float.floor`.
@@ -474,9 +475,6 @@ pub(crate) struct Candidate<'db> {
     pub narrow_sources: FxHashMap<Local, Local>,
     /// What every type test on a union or nullable value decides, by site.
     pub member_tests: FxHashMap<TestSite, MemberTest>,
-    /// Whether the function is on a call cycle, so its body runs under a
-    /// depth guard. Set by the call graph, not by [`analyze`].
-    pub recursive: bool,
     /// The native types of a lambda's captures, parallel to
     /// `Place::Capture(..)`; empty for a declared function.
     pub captures: Vec<NativeTy<'db>>,
@@ -501,10 +499,6 @@ pub(crate) struct Candidate<'db> {
     /// the receiver's variants (one entry for a class receiver): the
     /// field the `implements` block links, as the VM's field links do.
     pub field_links: FxHashMap<(BlockId, usize), Vec<proc_macro2::Ident>>,
-    /// Whether the body calls through a function value: such a call can
-    /// close a cycle the static call graph does not see, so the function
-    /// guards its depth as a recursive one does.
-    pub indirect: bool,
 }
 
 impl<'db> Candidate<'db> {
@@ -803,7 +797,6 @@ fn analyze_body<'db>(
         function_values: FxHashMap::default(),
         generic_values: FxHashMap::default(),
         field_links: FxHashMap::default(),
-        indirect: false,
         frame,
     };
     let handler_kinds = env.handler_locals()?;
@@ -867,7 +860,6 @@ fn analyze_body<'db>(
         function_values,
         generic_values,
         field_links,
-        indirect,
         frame,
         ..
     } = env;
@@ -919,7 +911,6 @@ fn analyze_body<'db>(
         unwind_jumps: structured.unwind_jumps,
         narrow_sources,
         member_tests,
-        recursive: false,
         captures,
         closures,
         lambdas,
@@ -927,7 +918,6 @@ fn analyze_body<'db>(
         generic_values,
         field_links,
         type_args,
-        indirect,
     })
 }
 
@@ -972,8 +962,6 @@ struct Env<'a, 'db> {
     generic_values: FxHashMap<(FunctionLoc<'db>, Vec<TyTemplate>), Instance<'db>>,
     /// See [`Candidate::field_links`].
     field_links: FxHashMap<(BlockId, usize), Vec<proc_macro2::Ident>>,
-    /// See [`Candidate::indirect`].
-    indirect: bool,
     /// The generic frame the body runs in: every declared type and every
     /// template is realized against it before it is mapped.
     frame: Frame<'db>,
@@ -3034,7 +3022,6 @@ impl<'db> Env<'_, 'db> {
                         if !matches!(destination, Place::Local(_)) {
                             return Err(Rejection::unsupported("call destination is not a local"));
                         }
-                        self.indirect = true;
                         return Ok(CallKind::Indirect {
                             params,
                             result: *result,
@@ -3971,7 +3958,12 @@ impl<'db> Env<'_, 'db> {
             "baml.String.length" | "baml.String.char_count" => {
                 arity(0, 1)?;
                 self.operand_of(&args[0], &NativeTy::Str)?;
-                (Builtin::StringLength, NativeTy::Int)
+                (
+                    Builtin::StringLength {
+                        wrapped: link_name == "baml.String.length",
+                    },
+                    NativeTy::Int,
+                )
             }
             "baml.String.is_ascii" => {
                 arity(0, 1)?;
