@@ -135,6 +135,7 @@ btel_records = { path = "crates/btel_records" }
 btel_processor = { path = "crates/btel_processor" }
 btel_recorder = { path = "crates/btel_recorder" }
 btel_file = { path = "crates/btel_file" }
+btel_pricing = { path = "crates/btel_pricing" }
 btel_reader = { path = "crates/btel_reader" }
 btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
