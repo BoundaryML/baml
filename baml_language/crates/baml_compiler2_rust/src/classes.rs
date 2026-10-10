@@ -110,7 +110,8 @@ pub(crate) struct EnumInfo<'db> {
     pub json_name: String,
     /// Variants in declaration (= discriminant) order.
     pub variants: Vec<VariantInfo>,
-    _marker: std::marker::PhantomData<EnumRef<'db>>,
+    /// The enum this describes, the key of [`ClassTable::eq_override`].
+    pub enum_ref: EnumRef<'db>,
 }
 
 /// Where [`ClassTable::literal_type_in`] found a literal type.
@@ -195,6 +196,10 @@ pub(crate) struct ClassTable<'db> {
     /// provides, for every class some `to_string` call can reach: the
     /// generated `Overridable` impl calls it.
     to_string_overrides: FxHashMap<ClassInst<'db>, Instance<'db>>,
+    /// The `eq` a class's or enum's own `implements baml.ops.Equals` block
+    /// provides, for every type some `==` can reach: the generated `BamlEq`
+    /// impl calls it.
+    eq_overrides: FxHashMap<TypeDecl<'db>, Instance<'db>>,
 }
 
 impl<'db> Resolver<'db> for ClassTable<'db> {
@@ -285,6 +290,7 @@ impl<'db> ClassTable<'db> {
             ifaces: FxHashMap::default(),
             iface_order: Vec::new(),
             to_string_overrides: FxHashMap::default(),
+            eq_overrides: FxHashMap::default(),
         }
     }
 
@@ -785,7 +791,7 @@ impl<'db> ClassTable<'db> {
             link_name,
             json_name,
             variants,
-            _marker: std::marker::PhantomData,
+            enum_ref,
         })
     }
 
@@ -986,6 +992,17 @@ impl<'db> ClassTable<'db> {
     /// The `to_string` override recorded for `class`, if any.
     pub(crate) fn to_string_override(&self, class: &ClassInst<'db>) -> Option<&Instance<'db>> {
         self.to_string_overrides.get(class)
+    }
+
+    /// Record that `decl`'s own `implements baml.ops.Equals` provides
+    /// `instance`, reached by an `==` the module compiles.
+    pub(crate) fn record_eq_override(&mut self, decl: TypeDecl<'db>, instance: Instance<'db>) {
+        self.eq_overrides.insert(decl, instance);
+    }
+
+    /// The `eq` override recorded for `decl`, if any.
+    pub(crate) fn eq_override(&self, decl: &TypeDecl<'db>) -> Option<&Instance<'db>> {
+        self.eq_overrides.get(decl)
     }
 
     /// Whether `decl` has an explicit `implements` block for `interface`

@@ -129,7 +129,7 @@ be thrown and caught by name; a class that is never thrown pays nothing.
 | `baml.Float.floor` / `itrunc` | `float::floor(x)` / `float::itrunc(x)?` |
 | `baml.ops.equals_equals(x, null)` | `x.is_none()` (`x: T \| null`) |
 | `baml.ops.equals_equals(a, b)` on one enum | `a == b` |
-| `baml.ops.equals_equals(a, b)` on primitives, nullables, unions of those | `bex_aot::eq::equals(&a, &b)` (`BamlEq`, the VM's broad `==`), the narrower side lifted into the wider type |
+| `baml.ops.equals_equals(a, b)` | `bex_aot::eq::equals(&a, &b)?` (`BamlEq`, the VM's broad `==`: an object equals itself, arrays element by element, maps entry by entry, class instances field by field or by the class's own `eq`, enums by variant or their own `eq`, a cycle met again taken as equal), the narrower side lifted into the wider type; the `eq` overrides below the type are compiled with the comparison |
 | `baml.Map.has` / `get` / `index` / `delete` (`m, k`) | `map::has(&m, &k)` / `map::get(&m, &k)` (`V \| null`) / `map::index(&m, &k)?` / `map::delete(&m, &k)` (the removed `V \| null`) |
 | `baml.Map.set` / `get_or_insert` (`m, k, v`) | `map::set(&m, k, v)` (the previous `V \| null`) / `map::get_or_insert(&m, k, v)` |
 | `baml.Bigint.abs` / `isqrt` / `to_int` / `parse` (`x`) | `bigint::abs(&x)` / `bigint::isqrt(&x)?` / `bigint::to_int(&x)?` / `bigint::parse(&s)?` |
@@ -570,9 +570,7 @@ a function type with an optional parameter, a class field of function
 type, an interface that is not a closed set (see [Interfaces](#interfaces)),
 a class with such a field (the field is named), a type argument that is
 `unknown` or has no native type, and an `unknown` or open-typed local no
-definition refines. `==` on an enum, or a union with
-one, that implements its own `baml.ops.Equals`, which the VM dispatches, is
-rejected.
+definition refines. 
 Constructs: `throw` of a value that is not a class instance (`throw
 "text"`, which BAML allows), a `catch` arm that is not a class test, a class
 binding or a wildcard (`let s: string => ..`), a binding of a generic class,
@@ -580,10 +578,7 @@ of a class outside the model, or of a stdlib error or panic class (`let p:
 baml.panics.IndexOutOfBounds => ..`, see Limitations), a read of the bound
 context of `catch (e, ctx)`, `spawn`/`await`, sys-ops, a field read
 through a narrowed union (`v.n` after `v is A`; bind it instead), a type
-test against a float or bigint literal, `==` on arrays, maps, classes,
-function values or a union with such a member (the VM compares class
-instances structurally, with the class's own `Equals` when it has one; the
-runtime does not), `to_string` or JSON of a function value, a method used
+test against a float or bigint literal, `==` on function values, `to_string` or JSON of a function value, a method used
 as a value, a stdlib or generic function used as a value, a function with
 a defaulted parameter used as a value, a lambda in a generic function, a
 function value stored where a wider function type is expected, an omitted
@@ -640,8 +635,6 @@ as its destination, which it never stores to.
   per site, and the conversion between the two is a re-tagging `match` at
   every store across them. One type with per-site decoders is the
   alternative, not taken yet.
-- A union's class members compare structurally on the VM; natively `==` on
-  such a union is rejected, as `==` on a class is.
 - A cycle through a closure (a closure stored in a cell it captures, or in
   a field of an object it captures) is never freed, like a cycle through
   class fields: handles are counted, not collected (D2). A closure that

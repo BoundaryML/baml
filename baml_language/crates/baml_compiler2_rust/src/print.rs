@@ -15,7 +15,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use syn::Lifetime;
 
 use crate::{
-    Rejection,
+    Rejection, TypeDecl,
     classes::{ClassInfo, ClassTable, EnumInfo, IfaceInfo, UnionInfo},
     function::{
         ArrayCallback, BigintOp, Builtin, CallKind, Candidate, CmpKind, CompareOp, DirectCall,
@@ -78,7 +78,7 @@ pub(crate) fn render_module<'db>(
         use bex_aot::render::ToBaml;
     };
     for info in enums {
-        items.extend(render_enum(info));
+        items.extend(render_enum(info, table, names)?);
     }
     for class in classes {
         items.extend(render_class(class, table, names)?);
@@ -147,6 +147,48 @@ fn render_class<'db>(
         let ident = &field.ident;
         quote! { &self.#ident as &dyn ToBaml }
     });
+    // `==`: the class's own `eq` when it provides one, else field by field,
+    // each pair copied out before it is compared.
+    let compared = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        quote! {{
+            let (x, y) = (a.borrow().#ident.clone(), b.borrow().#ident.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }}
+    });
+    let eq_handle = match table.eq_override(&TypeDecl::Class(class.instance.clone())) {
+        Some(instance) => {
+            let method = names
+                .get(&FnId::Declared(instance.clone()))
+                .ok_or_else(|| {
+                    Rejection::invalid(format!(
+                        "`{}`: its `eq` override was reached but not compiled",
+                        class.link_name
+                    ))
+                })?;
+            quote! {
+                impl bex_aot::eq::EqHandle for #name {
+                    const OVERRIDES: bool = true;
+                    fn call_eq(a: &Shared<Self>, b: &Shared<Self>) -> Result<bool, Thrown> {
+                        #method(a.clone(), b.clone())
+                    }
+                    fn fields_eq(_a: &Shared<Self>, _b: &Shared<Self>, _cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+                        unreachable!("compared through the class's own `eq`")
+                    }
+                }
+            }
+        }
+        None => quote! {
+            impl bex_aot::eq::EqHandle for #name {
+                fn fields_eq(a: &Shared<Self>, b: &Shared<Self>, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+                    #(#compared)*
+                    Ok(true)
+                }
+            }
+        },
+    };
     // A class whose own `implements baml.ToString` provides `to_string` is
     // recorded in pass 1 and spliced in pass 3 of a structural walk; the
     // method is compiled with the walk that reaches it.
@@ -205,6 +247,8 @@ fn render_class<'db>(
 
         #overridable
 
+        #eq_handle
+
         impl bex_aot::ErrorClass for #name {
             const CLASS_FQN: &'static str = #link_name;
 
@@ -229,9 +273,42 @@ fn render_class<'db>(
 /// compared by variant, serialized as the variant's name (through
 /// `bex_aot`'s serde re-export, renamed where the Rust identifier had to
 /// change) and rendered by `to_string` as the bare name, nested or not.
-fn render_enum(info: &EnumInfo<'_>) -> TokenStream {
+fn render_enum<'db>(
+    info: &EnumInfo<'db>,
+    table: &ClassTable<'db>,
+    names: &FxHashMap<FnId<'db>, Ident>,
+) -> Result<TokenStream, Rejection> {
     let doc = format!(" BAML enum `{}`.", info.link_name);
     let name = &info.ident;
+    // `==`: by variant, or the enum's own `eq` under one frame.
+    let eq_impl = match table.eq_override(&TypeDecl::Enum(info.enum_ref)) {
+        Some(instance) => {
+            let method = names
+                .get(&FnId::Declared(instance.clone()))
+                .ok_or_else(|| {
+                    Rejection::invalid(format!(
+                        "`{}`: its `eq` override was reached but not compiled",
+                        info.link_name
+                    ))
+                })?;
+            quote! {
+                impl bex_aot::BamlEq for #name {
+                    fn baml_eq(&self, other: &Self, _cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+                        let _frame = bex_aot::depth::Guard::enter()?;
+                        #method(*self, *other)
+                    }
+                }
+            }
+        }
+        None => quote! {
+            impl bex_aot::BamlEq for #name {
+                fn baml_eq(&self, other: &Self, _cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+                    Ok(self == other)
+                }
+            }
+        },
+    };
+
     let variants = info.variants.iter().map(|variant| {
         let ident = &variant.ident;
         let rename = variant.renamed().then(|| {
@@ -247,7 +324,7 @@ fn render_enum(info: &EnumInfo<'_>) -> TokenStream {
     let variant_idents = info.variants.iter().map(|variant| &variant.ident);
     let enum_json_name = &info.json_name;
     let count = info.variants.len();
-    quote! {
+    Ok(quote! {
         #[doc = #doc]
         #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
         #[serde(crate = "bex_aot::serde")]
@@ -281,12 +358,8 @@ fn render_enum(info: &EnumInfo<'_>) -> TokenStream {
             }
         }
 
-        impl bex_aot::BamlEq for #name {
-            fn baml_eq(&self, other: &Self) -> bool {
-                self == other
-            }
-        }
-    }
+        #eq_impl
+    })
 }
 
 /// The Rust enum for a closed union: one variant per member in the type
@@ -326,30 +399,18 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
                 |json| <#ty as bex_aot::json::FromJson>::from_json(json).map(Self::#variant)
             }
         });
-    let comparable = info.members.iter().all(|member| {
-        matches!(
-            member,
-            NativeTy::Int
-                | NativeTy::Bool
-                | NativeTy::Float
-                | NativeTy::Bigint
-                | NativeTy::Str
-                | NativeTy::Null
-                | NativeTy::Enum(_)
-        )
-    });
-    let equals = comparable.then(|| {
-        quote! {
-            impl bex_aot::BamlEq for #name {
-                fn baml_eq(&self, other: &Self) -> bool {
-                    match (self, other) {
-                        #((Self::#variant_names(a), Self::#variant_names(b)) => bex_aot::BamlEq::baml_eq(a, b),)*
-                        _ => false,
-                    }
+    // `==`: the members when both sides hold one variant, never equal
+    // across variants (different runtime kinds on the VM).
+    let equals = quote! {
+        impl bex_aot::BamlEq for #name {
+            fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+                match (self, other) {
+                    #((Self::#variant_names(a), Self::#variant_names(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),)*
+                    _ => Ok(false),
                 }
             }
         }
-    });
+    };
     quote! {
         #[doc = #doc]
         #[derive(Clone, #copy Debug)]
@@ -450,6 +511,17 @@ fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             fn readable(&self) -> String {
                 match self {
                     #(Self::#variant_names(value) => bex_aot::Readable::readable(value),)*
+                }
+            }
+        }
+
+        // `==`: the implementors when both sides hold one, never equal
+        // across implementors.
+        impl bex_aot::BamlEq for #name {
+            fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+                match (self, other) {
+                    #((Self::#variant_names(a), Self::#variant_names(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),)*
+                    _ => Ok(false),
                 }
             }
         }
@@ -1228,12 +1300,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                         let right = self.operand(arg(1)?, None)?;
                         (TokenStream::new(), quote! { #left == #right })
                     }
-                    Builtin::Equals(common) => {
+                    Builtin::Equals { common, .. } => {
                         let left = self.operand(arg(0)?, Some(common))?;
                         let right = self.operand(arg(1)?, Some(common))?;
                         (
                             TokenStream::new(),
-                            quote! { bex_aot::eq::equals(&#left, &#right) },
+                            self.fallible(&quote! { bex_aot::eq::equals(&#left, &#right) }),
                         )
                     }
                     Builtin::Iter => {
@@ -2635,9 +2707,10 @@ impl<'a, 'db> Printer<'a, 'db> {
             let common = equality_common(left_ty, right_ty).ok_or_else(unsupported)?;
             let l = self.operand(left, Some(&common))?;
             let r = self.operand(right, Some(&common))?;
+            let equal = self.fallible(&quote! { bex_aot::eq::equals(&#l, &#r) });
             return Ok(match op {
-                BinOp::Eq => quote! { bex_aot::eq::equals(&#l, &#r) },
-                _ => quote! { !bex_aot::eq::equals(&#l, &#r) },
+                BinOp::Eq => equal,
+                _ => quote! { !#equal },
             });
         }
         // The operand types are the narrowed ones (`binop_operand_tys`), so
@@ -3268,7 +3341,7 @@ fn builtin_frames(builtin: &Builtin<'_>) -> Option<u32> {
         | Builtin::FloatItrunc
         | Builtin::IsNull { .. }
         | Builtin::EnumEq
-        | Builtin::Equals(_)
+        | Builtin::Equals { .. }
         | Builtin::Map(_)
         | Builtin::Bigint(_)
         | Builtin::Cmp(_)

@@ -481,7 +481,9 @@ impl<'db> CallGraph<'db> {
                     } => callees.push(cmp.callee.clone()),
                     // The `to_string` overrides a structural walk calls.
                     function::CallKind::Builtin {
-                        builtin: function::Builtin::ToStringDefault { overrides, .. },
+                        builtin:
+                            function::Builtin::ToStringDefault { overrides, .. }
+                            | function::Builtin::Equals { overrides, .. },
                         ..
                     } => callees.extend(overrides.iter().cloned()),
                     function::CallKind::Panic(_)
@@ -490,6 +492,7 @@ impl<'db> CallGraph<'db> {
                 }
             }
             callees.extend(member.function_values.keys().cloned());
+            callees.extend(member.eq_overrides.iter().cloned());
         }
         for callee in callees {
             self.visit(&callee, classes)?;

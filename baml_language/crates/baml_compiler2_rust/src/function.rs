@@ -321,9 +321,15 @@ pub(crate) enum Builtin<'db> {
     /// `baml.ops.equals_equals(a, b)` on two values of one enum: the
     /// variants are the same.
     EnumEq,
-    /// `baml.ops.equals_equals(a, b)` on two values that both fit this
-    /// type, which implements `bex_aot::BamlEq`: `bex_aot::eq::equals`.
-    Equals(NativeTy<'db>),
+    /// `baml.ops.equals_equals(a, b)` on two values that both fit
+    /// `common`, which implements `bex_aot::BamlEq`: `bex_aot::eq::equals`,
+    /// the VM's structural walk, calling the `eq` of every class or enum
+    /// below the type that provides its own (`overrides`, compiled with
+    /// the comparison).
+    Equals {
+        common: NativeTy<'db>,
+        overrides: Vec<Instance<'db>>,
+    },
     /// `virtual_call iter as baml.iter.Iterable` on an array.
     Iter,
     /// `virtual_call next as baml.iter.Iterator` on an array iterator.
@@ -496,6 +502,9 @@ pub(crate) struct Candidate<'db> {
     /// with the function type each one has; the call graph admits them as
     /// callees.
     pub function_values: FxHashMap<Instance<'db>, NativeTy<'db>>,
+    /// The `eq` overrides the body's `==` operators on unions and nullables
+    /// can reach; the call graph admits them as callees.
+    pub eq_overrides: Vec<Instance<'db>>,
     /// The instance each `make_generic_function` (a generic function value
     /// whose type arguments mention the frame) builds, by the function and
     /// the templates it names.
@@ -803,6 +812,7 @@ fn analyze_body<'db>(
         captures,
         closures: FxHashMap::default(),
         function_values: FxHashMap::default(),
+        eq_overrides: Vec::new(),
         generic_values: FxHashMap::default(),
         field_links: FxHashMap::default(),
         frame,
@@ -866,6 +876,7 @@ fn analyze_body<'db>(
         captures,
         closures: closure_captures,
         function_values,
+        eq_overrides,
         generic_values,
         field_links,
         frame,
@@ -923,6 +934,7 @@ fn analyze_body<'db>(
         closures,
         lambdas,
         function_values,
+        eq_overrides,
         generic_values,
         field_links,
         type_args,
@@ -966,6 +978,8 @@ struct Env<'a, 'db> {
     closures: FxHashMap<usize, Vec<NativeTy<'db>>>,
     /// See [`Candidate::function_values`].
     function_values: FxHashMap<Instance<'db>, NativeTy<'db>>,
+    /// See [`Candidate::eq_overrides`].
+    eq_overrides: Vec<Instance<'db>>,
     /// See [`Candidate::generic_values`].
     generic_values: FxHashMap<(FunctionLoc<'db>, Vec<TyTemplate>), Instance<'db>>,
     /// See [`Candidate::field_links`].
@@ -1805,6 +1819,18 @@ impl<'db> Env<'_, 'db> {
                 let with_null = is_null(left) || is_null(right);
                 let (left_ty, right_ty) =
                     binop_operand_tys(*op, left_ty, right_ty, expected, with_null);
+                // `==` with a union or nullable operand is the structural
+                // walk (the printer emits `bex_aot::eq::equals`), so the
+                // `eq` overrides below the common type are compiled with it.
+                if matches!(op, BinOp::Eq | BinOp::Ne)
+                    && !with_null
+                    && (matches!(left_ty, NativeTy::Union(_) | NativeTy::Option(_))
+                        || matches!(right_ty, NativeTy::Union(_) | NativeTy::Option(_)))
+                    && let Some(common) = equality_common(&left_ty, &right_ty)
+                {
+                    let overrides = self.eq_overrides_below(&common)?;
+                    self.eq_overrides.extend(overrides);
+                }
                 binop_ty(*op, &left_ty, &right_ty, with_null).ok_or_else(|| {
                     Rejection::unsupported(format!(
                         "`{op}` on `{}` and `{}`",
@@ -3452,33 +3478,51 @@ impl<'db> Env<'_, 'db> {
         &mut self,
         class: &ClassInst<'db>,
     ) -> Result<Option<Instance<'db>>, Rejection> {
-        self.own_override(class, "ToString", "to_string")
+        let interface = self.lang_root_decl("ToString");
+        self.own_override(&TypeDecl::Class(class.clone()), &interface, "to_string")
     }
 
-    /// The `method` that `class`'s own `implements baml.<interface>` block
-    /// provides, as an instance, or `None` when the class has no block or
-    /// its block adopts the interface's default.
+    /// The `eq` that `decl`'s own `implements baml.ops.Equals` block
+    /// provides, as an instance.
+    fn own_eq_override(
+        &mut self,
+        decl: &TypeDecl<'db>,
+    ) -> Result<Option<Instance<'db>>, Rejection> {
+        let interface = self.lang_decl("ops", "Equals");
+        self.own_override(decl, &interface, "eq")
+    }
+
+    /// The declaration `baml.<name>` of the installed `baml` package
+    /// (`baml.ToString`).
+    fn lang_root_decl(&self, name: &str) -> baml_type::DeclName {
+        let root = lang_roots(self.db)
+            .get(LangPackage::Baml)
+            .expect("the `baml` language package is installed");
+        baml_type::DeclName::in_root(root, Vec::new(), baml_type::Name::new(name))
+    }
+
+    /// The `method` that `decl`'s own `implements` block for `interface`
+    /// provides, as an instance, or `None` when the declaration has no
+    /// block or its block adopts the interface's default.
     fn own_override(
         &mut self,
-        class: &ClassInst<'db>,
-        interface: &str,
+        decl: &TypeDecl<'db>,
+        interface: &baml_type::DeclName,
         method: &str,
     ) -> Result<Option<Instance<'db>>, Rejection> {
         let described = format!(
             "`{method}` override of `{}`",
-            self.classes.link_name(TypeDecl::Class(class.clone()))
+            self.classes.link_name(decl.clone())
         );
+        let native = match decl {
+            TypeDecl::Class(class) => NativeTy::Class(class.clone()),
+            TypeDecl::Enum(enum_ref) => NativeTy::Enum(*enum_ref),
+            TypeDecl::Interface(_) => return Ok(None),
+        };
         let concrete = self
-            .plain_ty(&NativeTy::Class(class.clone()))
+            .plain_ty(&native)
             .ok_or_else(|| Rejection::invalid(format!("{described}: no declared type")))?;
-        let root = lang_roots(self.db)
-            .get(LangPackage::Baml)
-            .expect("the `baml` language package is installed");
-        let wanted = InferInterface::new(
-            baml_type::DeclName::in_root(root, Vec::new(), baml_type::Name::new(interface)),
-            Box::new([]),
-            Box::new([]),
-        );
+        let wanted = InferInterface::new(interface.clone(), Box::new([]), Box::new([]));
         let Some(ResolvedImplementation::Explicit(implementation)) = resolve_implementation(
             self.db,
             &baml_type::interned::Ty::from_plain(&concrete),
@@ -3542,20 +3586,65 @@ impl<'db> Env<'_, 'db> {
     /// Every class a value of type `ty` can hold: the classes in the type
     /// and, transitively, in the fields of those classes.
     fn classes_below(&self, ty: &NativeTy<'db>) -> Result<Vec<ClassInst<'db>>, Rejection> {
+        Ok(self.decls_below(ty)?.0)
+    }
+
+    /// Every class and every enum a value of type `ty` can hold, through
+    /// the fields of the classes.
+    fn decls_below(
+        &self,
+        ty: &NativeTy<'db>,
+    ) -> Result<
+        (
+            Vec<ClassInst<'db>>,
+            Vec<baml_compiler2_hir_ty::extern_loc::EnumRef<'db>>,
+        ),
+        Rejection,
+    > {
         let mut stack = Vec::new();
         ty.classes(&mut stack);
+        let mut enums = Vec::new();
+        ty.enums(&mut enums);
         let mut seen: FxHashSet<ClassInst<'db>> = FxHashSet::default();
-        let mut out = Vec::new();
+        let mut classes = Vec::new();
         while let Some(class) = stack.pop() {
             if !seen.insert(class.clone()) {
                 continue;
             }
             for field in &self.classes.info(&class)?.fields {
                 field.ty.classes(&mut stack);
+                field.ty.enums(&mut enums);
             }
-            out.push(class);
+            classes.push(class);
         }
-        Ok(out)
+        let mut distinct: Vec<baml_compiler2_hir_ty::extern_loc::EnumRef<'db>> = Vec::new();
+        for enum_ref in enums {
+            if !distinct.contains(&enum_ref) {
+                distinct.push(enum_ref);
+            }
+        }
+        Ok((classes, distinct))
+    }
+
+    /// The `eq` overrides a structural `==` over `common` can reach, each
+    /// recorded in the class table for the generated `BamlEq` impl.
+    fn eq_overrides_below(
+        &mut self,
+        common: &NativeTy<'db>,
+    ) -> Result<Vec<Instance<'db>>, Rejection> {
+        let (classes, enums) = self.decls_below(common)?;
+        let decls = classes
+            .into_iter()
+            .map(TypeDecl::Class)
+            .chain(enums.into_iter().map(TypeDecl::Enum));
+        let mut overrides = Vec::new();
+        for decl in decls {
+            if let Some(instance) = self.own_eq_override(&decl)? {
+                self.classes.record_eq_override(decl, instance.clone());
+                overrides.push(instance);
+            }
+        }
+        Ok(overrides)
     }
 
     fn static_target(
@@ -4089,9 +4178,10 @@ impl<'db> Env<'_, 'db> {
                 // every depth; its `from_json` takes a `json` value, which
                 // has no native form yet, so such a decode is refused rather
                 // than decoded structurally.
+                let from_json = self.lang_root_decl("FromJson");
                 for class in self.classes_below(&target)? {
                     if self
-                        .own_override(&class, "FromJson", "from_json")?
+                        .own_override(&TypeDecl::Class(class.clone()), &from_json, "from_json")?
                         .is_some()
                     {
                         return Err(Rejection::unsupported(format!(
@@ -4254,6 +4344,7 @@ impl<'db> Env<'_, 'db> {
                         let right = self.operand_ty(&args[1], None)?;
                         if let (NativeTy::Enum(l), NativeTy::Enum(r)) = (&left, &right)
                             && l == r
+                            && self.own_eq_override(&TypeDecl::Enum(*l))?.is_none()
                         {
                             return Ok(Some(CallKind::Builtin {
                                 builtin: Builtin::EnumEq,
@@ -4267,28 +4358,17 @@ impl<'db> Env<'_, 'db> {
                         // still never equal to `null`).
                         let Some(common) = equality_common(&left, &right) else {
                             return Err(Rejection::unsupported(format!(
-                                "`==` on a `{}` and a `{}` (only primitives, enums, nullable values and unions of those compare natively through `baml.ops.equals_equals`)",
+                                "`==` on a `{}` and a `{}` (neither side fits the other's type)",
                                 self.describe(&left),
                                 self.describe(&right)
                             )));
                         };
-                        // The VM dispatches an enum's own `Equals.eq`; the
-                        // generated comparison is by variant.
-                        let mut enums = Vec::new();
-                        common.enums(&mut enums);
-                        let equals = self.lang_decl("ops", "Equals");
-                        if let Some(enum_ref) = enums.into_iter().find(|enum_ref| {
-                            self.classes
-                                .has_explicit_impl(TypeDecl::Enum(*enum_ref), &equals)
-                        }) {
-                            return Err(Rejection::unsupported(format!(
-                                "`==` on a `{}`: `{}` implements its own `baml.ops.Equals`",
-                                self.describe(&common),
-                                self.classes.link_name(TypeDecl::Enum(enum_ref))
-                            )));
-                        }
+                        // The VM dispatches a class's or enum's own
+                        // `Equals.eq` at every depth; those are compiled
+                        // with the comparison.
+                        let overrides = self.eq_overrides_below(&common)?;
                         return Ok(Some(CallKind::Builtin {
-                            builtin: Builtin::Equals(common),
+                            builtin: Builtin::Equals { common, overrides },
                             result: NativeTy::Bool,
                         }));
                     }
@@ -4528,16 +4608,11 @@ fn fits(actual: &NativeTy<'_>, expected: &NativeTy<'_>) -> bool {
 fn baml_eq_supported(ty: &NativeTy<'_>) -> bool {
     match ty {
         NativeTy::Int | NativeTy::Bool | NativeTy::Float | NativeTy::Bigint | NativeTy::Str => true,
-        NativeTy::Null | NativeTy::Enum(_) => true,
-        NativeTy::Option(inner) => baml_eq_supported(inner),
+        NativeTy::Null | NativeTy::Enum(_) | NativeTy::Class(_) | NativeTy::Interface(_) => true,
+        NativeTy::Option(inner) | NativeTy::Array(inner) => baml_eq_supported(inner),
+        NativeTy::Map(key, value) => baml_eq_supported(key) && baml_eq_supported(value),
         NativeTy::Union(members) => members.iter().all(baml_eq_supported),
-        NativeTy::Array(_)
-        | NativeTy::Map(..)
-        | NativeTy::Class(_)
-        | NativeTy::Interface(_)
-        | NativeTy::Fn(..)
-        | NativeTy::ArrayIter(_)
-        | NativeTy::Thrown => false,
+        NativeTy::Fn(..) | NativeTy::ArrayIter(_) | NativeTy::Thrown => false,
     }
 }
 

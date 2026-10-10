@@ -231,6 +231,29 @@ impl<K: MapKey, V: Serialize> Serialize for Map<K, V> {
     }
 }
 
+/// Two maps are equal when they are one object, or hold the same number of
+/// entries and every key of one is in the other with an equal value: the
+/// VM's entry-by-entry comparison, with the key equality the native key
+/// types have. Entries are copied out before the values are compared.
+impl<K: MapKey, V: crate::eq::BamlEq + Clone> crate::eq::BamlEq for Map<K, V> {
+    fn baml_eq(&self, other: &Self, cx: &mut crate::eq::EqCx) -> Result<bool, Thrown> {
+        if ptr_eq(self, other) || cx.visit(self.0.id(), other.0.id()) {
+            return Ok(true);
+        }
+        let (xs, ys) = (self.0.borrow().clone(), other.0.borrow().clone());
+        if xs.len() != ys.len() {
+            return Ok(false);
+        }
+        for (key, value) in &xs {
+            match ys.get(key) {
+                Some(found) if value.baml_eq(found, cx)? => {}
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+}
+
 /// A JSON object keyed by `string`: a map keyed by `int` or `bool` has no
 /// JSON form, which the VM reports at the map's path.
 impl<K: MapKey, V: crate::json::FromJson> crate::json::FromJson for Map<K, V> {
