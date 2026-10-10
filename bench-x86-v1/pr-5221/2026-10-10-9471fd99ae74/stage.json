@@ -1,0 +1,51 @@
+{
+ "candidate_sha": "9471fd99ae74d161cc67fd1ffdb9e66bc46cc303",
+ "candidate_dirty_files": 0,
+ "candidate_branch": "HEAD",
+ "candidate_subject": "feat(ci): language benchmarks on a pinned VM",
+ "emitter": "/home/runner/_work/baml/baml/baml_language/target/release/baml-cli",
+ "emitter_version": "baml-cli 0.21.0",
+ "protocol": "tier-a",
+ "protocol_sha256": "fe0814e3c831ceded20457b7ee0dc3cb00b47bff7e7022c725e85dab18c2032b",
+ "machine": "bench-x86-v1",
+ "machine_sha256": "963f1a6062538a8e399ab93589046cc24dca5c9ffedaeee627ff41df62f4a330",
+ "emitted": {
+  "00_startup": {
+   "status": "emitted",
+   "report": "2 of 2 function(s) admitted"
+  },
+  "01_array_traversal": {
+   "status": "emitted",
+   "report": "2 of 2 function(s) admitted"
+  },
+  "02_merge_sort": {
+   "status": "emitted",
+   "report": "2 of 2 function(s) admitted"
+  },
+  "03_json_aggregate": {
+   "status": "emitted",
+   "report": "3 of 3 function(s) admitted"
+  },
+  "04_allocation_retention": {
+   "status": "emitted",
+   "report": "2 of 2 function(s) admitted"
+  },
+  "07_function_calls": {
+   "status": "emitted",
+   "report": "3 of 3 function(s) admitted"
+  },
+  "09_json_hello": {
+   "status": "emitted",
+   "report": "2 of 2 function(s) admitted"
+  },
+  "10_quick_sort": {
+   "status": "emitted",
+   "report": "2 of 2 function(s) admitted"
+  },
+  "11_generate_sort": {
+   "status": "emitted",
+   "report": "2 of 2 function(s) admitted"
+  }
+ },
+ "staged_at": "2026-10-10T22:19:07Z"
+}
