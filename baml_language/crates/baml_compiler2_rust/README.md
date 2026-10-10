@@ -121,7 +121,7 @@ be thrown and caught by name; a class that is never thrown pays nothing.
 | MIR | Rust |
 |---|---|
 | `baml.Array.push<T>(ty, xs, v)` | `array::push(&xs, v); dest = array::len(&xs)` |
-| `baml.json.deserialize<T>(ty, s)` | `json::deserialize::<T>(&s)?`, `T` from the `load_type` of `ty` |
+| `baml.json.deserialize<T>(ty, s)` | `json::deserialize::<T>(&s)?`, `T` from the `load_type` of `ty`: the VM's `from_json<T>` rules and wording through `bex_aot::json::FromJson`, which every generated class, enum and union implements (a class with its own `baml.FromJson` is rejected until the `json` value exists natively) |
 | `baml.json.to_string(v)` | `json::to_string(&v)?` |
 | `baml._to_string_default<T>(ty, v)` | `bex_aot::render::to_string(&v)?`: the structural walk, honoring the `to_string` of every class below `v` that provides one through the VM's three-pass scheme (collect the override-bearing objects pre-order, call each override under one frame, render splicing the results by object identity); those methods are compiled with the walk, see `bex_aot::render` |
 | `baml.String.length` / `char_count` | `string::length(&s)` |

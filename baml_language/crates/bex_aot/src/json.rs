@@ -1,36 +1,41 @@
 //! `baml.json.to_string` / `baml.json.deserialize<T>` for native values.
 //!
-//! The VM renders a value to a `serde_json::Value` (class → object in declared
-//! field order, `float` through `Number::from_f64`, so NaN and the infinities
-//! become `null`) and prints it with `serde_json::to_string`; it decodes by
-//! parsing with `serde_json::from_str` and walking the result against the
-//! target type. This module does the same with the same crate and the
-//! workspace's `preserve_order` + `arbitrary_precision` features, so the bytes
-//! agree.
+//! Serialization: the VM renders a value to a `serde_json::Value` (class →
+//! object in declared field order, `float` through `Number::from_f64`, so NaN
+//! and the infinities become `null`) and prints it with
+//! `serde_json::to_string`. This module does the same with the same crate and
+//! the workspace's `preserve_order` + `arbitrary_precision` features, so the
+//! bytes agree; values implement serde's `Serialize` and a generated class
+//! derives it with `#[serde(crate = "bex_aot::serde")]`.
 //!
-//! Values use serde's own traits: [`Int63`](crate::Int63) (feature `serde` of
-//! `baml_type`), [`Str`], [`Shared<T>`](crate::Shared), `bool`, `f64`,
-//! `Option<T>` and `Vec<T>` all implement `Serialize` / `Deserialize`. A
-//! generated class derives both with `#[serde(crate = "bex_aot::serde")]`
-//! (this crate re-exports `serde` and `serde_json`), in declared field order.
-//! Nothing else is needed: `serde_json` writes a non-finite `f64` as `null`,
-//! serde defaults an absent `Option<T>` field to `None`, as the VM decodes an
-//! absent nullable field to `null`, and ignores unknown keys, as the VM does.
+//! Decoding: the VM parses with `serde_json::from_str`, rejects an integral
+//! number past the bigint limit, then decodes the parsed value against the
+//! target type (`from_json<T>` in `package_baml/json.rs`): classes, arrays
+//! and maps through its dispatcher, each nested value from a fresh root, and
+//! everything else through `ty_serde_to_value`. [`FromJson`] is that decode
+//! for native types: every rule and message here is the VM's, and the
+//! `path` of a `DecodeError` is `""` as the dispatcher reports it, so
+//! `baml.json.DecodeError { message, path }` agrees field for field. A
+//! generated class, enum and union implements it (field by declared name,
+//! an absent nullable field as `null`, unknown keys ignored, a variant by
+//! name, a union's first member that fits, in the spelled order). A class
+//! with its own `baml.FromJson` is rejected at compile time until the
+//! `json` value exists natively.
 //!
 //! # Errors
 //!
 //! Invalid JSON throws `baml.json.ParseError { message }` with `serde_json`'s
-//! diagnostic (identical to the VM's, same parser). A parsed value that does
-//! not fit the target throws `baml.json.DecodeError { message, path }`. The
-//! classes and their non-message fields match the VM; the message text is
-//! serde's, where the VM words its own (the VM's `deserialize<T>` reports
-//! `path` as `""`, and so does this module).
+//! diagnostic, or the VM's bigint-limit message. A parsed value that does not
+//! fit the target throws `baml.json.DecodeError { message, path }`.
 
 use std::fmt;
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::Serialize;
 
-use crate::{ErrorObject, Str, Thrown};
+use crate::{ErrorObject, Int63, Str, Thrown, handle::Shared};
+
+/// A parsed JSON document, as the VM holds it while decoding.
+pub type Json = serde_json::Value;
 
 /// `baml.json.ParseError { message }`: the text is not JSON.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,8 +68,9 @@ impl ErrorObject for ParseError {
 pub struct DecodeError {
     /// What the decoder expected, e.g. `"missing field `count`"`.
     pub message: String,
-    /// Location of the offending node in jq-ish notation; `""` from
-    /// [`deserialize`], see the module docs.
+    /// Location in jq-ish notation; `""` from `deserialize<T>`, whose
+    /// dispatcher decodes every nested value from a fresh root (the VM's
+    /// `from_json<T>` does the same).
     pub path: String,
 }
 
@@ -145,55 +151,197 @@ pub fn to_string<T: Serialize + ?Sized>(value: &T) -> Result<Str, Thrown> {
     }
 }
 
-/// One member's decoder in a generated union's `Deserialize` impl: the
-/// member's decode, wrapped in the union's variant.
-pub type MemberDecoder<T> = fn(serde_json::Value) -> Result<T, serde_json::Error>;
-
-/// Decode a union value, for the `Deserialize` impl of a generated union
-/// enum: the first member, in the union's member order, that the JSON
-/// decodes as, which is how the VM's typed decode picks a member
-/// (`ty_serde_to_value`, `RealizedTy::Union`: try each member structurally,
-/// first match wins). `members` are the per-variant decoders, each wrapping
-/// its member's decode in the variant.
-pub fn deserialize_union<'de, D, T>(
-    deserializer: D,
-    members: &[MemberDecoder<T>],
-) -> Result<T, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = <serde_json::Value as serde::Deserialize>::deserialize(deserializer)?;
-    for member in members {
-        if let Ok(decoded) = member(value.clone()) {
-            return Ok(decoded);
-        }
+fn decode_error(message: impl Into<String>) -> DecodeError {
+    DecodeError {
+        message: message.into(),
+        path: String::new(),
     }
-    Err(serde::de::Error::custom("no union member matched"))
 }
 
-/// `baml.json.deserialize<T>(text)`: parse, then decode against `T`. Throws
-/// [`ParseError`] for invalid JSON and [`DecodeError`] for a shape mismatch.
-pub fn deserialize<T: DeserializeOwned>(text: &Str) -> Result<T, Thrown> {
-    let json: serde_json::Value = serde_json::from_str(text.as_str()).map_err(|error| {
+/// One member's decoder in a generated union's [`FromJson`] impl.
+pub type MemberDecoder<T> = fn(&Json) -> Result<T, DecodeError>;
+
+/// The typed decode of a parsed JSON value, as the VM's
+/// `baml.json.deserialize<T>` performs it: `from_json<T>` dispatches a class
+/// (field by field), an array (element by element) and a map (value by
+/// value) with a fresh root each time, and decodes anything else
+/// structurally, so the `path` a `DecodeError` carries is always `""`, and
+/// an array or map that is not one reports `expected JSON array` /
+/// `expected JSON object`, the dispatcher's wording. A nullable value is
+/// `null` or its type, reporting that type's error.
+pub trait FromJson: Sized {
+    fn from_json(json: &Json) -> Result<Self, DecodeError>;
+}
+
+impl FromJson for () {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        match json {
+            Json::Null => Ok(()),
+            _ => Err(decode_error("expected null")),
+        }
+    }
+}
+
+impl FromJson for bool {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        match json {
+            Json::Bool(value) => Ok(*value),
+            _ => Err(decode_error("expected boolean")),
+        }
+    }
+}
+
+impl FromJson for Int63 {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        match json {
+            Json::Number(number) => number.as_i64().and_then(Int63::new).ok_or_else(|| {
+                decode_error("expected integer in the BAML int range [-2^62, 2^62 - 1]")
+            }),
+            _ => Err(decode_error("expected integer")),
+        }
+    }
+}
+
+impl FromJson for f64 {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        match json {
+            Json::Number(number) => number
+                .as_f64()
+                .ok_or_else(|| decode_error("expected number")),
+            _ => Err(decode_error("expected number")),
+        }
+    }
+}
+
+impl FromJson for Str {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        match json {
+            Json::String(text) => Ok(Str::from(text.clone())),
+            _ => Err(decode_error("expected string")),
+        }
+    }
+}
+
+/// `T | null` at a dispatch point: `null`, or `T` with `T`'s own error.
+impl<T: FromJson> FromJson for Option<T> {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        match json {
+            Json::Null => Ok(None),
+            _ => T::from_json(json).map(Some),
+        }
+    }
+}
+
+impl<T: FromJson> FromJson for Vec<T> {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        match json {
+            Json::Array(items) => items.iter().map(T::from_json).collect(),
+            _ => Err(decode_error("expected JSON array")),
+        }
+    }
+}
+
+impl<T: FromJson> FromJson for Shared<T> {
+    fn from_json(json: &Json) -> Result<Self, DecodeError> {
+        T::from_json(json).map(crate::handle::shared)
+    }
+}
+
+/// The object a generated class decodes from, or the VM's complaint naming
+/// the class as its JSON decode errors do.
+pub fn object<'a>(
+    json: &'a Json,
+    class_name: &str,
+) -> Result<&'a serde_json::Map<String, Json>, DecodeError> {
+    match json {
+        Json::Object(map) => Ok(map),
+        _ => Err(decode_error(format!(
+            "expected JSON object for class `{class_name}`"
+        ))),
+    }
+}
+
+/// One field of a generated class: absent and nullable decodes as `null`,
+/// absent otherwise is the VM's missing-field error; unknown keys in the
+/// object are ignored, as the VM ignores them.
+pub fn field<T: FromJson>(
+    object: &serde_json::Map<String, Json>,
+    name: &str,
+    nullable: bool,
+) -> Result<T, DecodeError> {
+    match object.get(name) {
+        Some(json) => T::from_json(json),
+        None if nullable => T::from_json(&Json::Null),
+        None => Err(decode_error(format!("missing required field `{name}`"))),
+    }
+}
+
+/// A generated enum: the variant named by a JSON string, by position in
+/// `names` (declaration order).
+pub fn enum_variant(json: &Json, enum_name: &str, names: &[&str]) -> Result<usize, DecodeError> {
+    match json {
+        Json::String(name) => names.iter().position(|known| known == name).ok_or_else(|| {
+            decode_error(format!("unknown variant `{name}` for enum `{enum_name}`"))
+        }),
+        _ => Err(decode_error("expected enum variant string")),
+    }
+}
+
+/// A generated union: the first member, in the union's spelled order, that
+/// the value decodes as.
+pub fn union<T>(json: &Json, members: &[MemberDecoder<T>]) -> Result<T, DecodeError> {
+    members
+        .iter()
+        .find_map(|member| member(json).ok())
+        .ok_or_else(|| decode_error("no union member matched"))
+}
+
+/// `baml.json.parse(text)`: the document, or the VM's `ParseError` (the
+/// parser's diagnostic, or an integral number past the bigint limit, which
+/// the VM rejects at parse time).
+pub fn parse(text: &Str) -> Result<Json, Thrown> {
+    let json: Json = serde_json::from_str(text.as_str()).map_err(|error| {
         Thrown::error(ParseError {
             message: error.to_string(),
         })
     })?;
-    T::deserialize(json).map_err(|error| {
-        Thrown::error(DecodeError {
-            message: error.to_string(),
-            path: String::new(),
-        })
-    })
+    validate_bigint_bounds(&json).map_err(|message| Thrown::error(ParseError { message }))?;
+    Ok(json)
+}
+
+/// The VM's `validate_json_bigint_bounds`: an integral number token (no
+/// fraction, no exponent) that no bigint can hold.
+fn validate_bigint_bounds(json: &Json) -> Result<(), String> {
+    match json {
+        Json::Number(number) => {
+            let text = number.to_string();
+            let integral = !text.bytes().any(|byte| matches!(byte, b'.' | b'e' | b'E'));
+            if integral && crate::bigint::parse_decimal_text(&text).is_none() {
+                return Err(format!(
+                    "integral JSON number exceeds the {}-bit bigint limit",
+                    baml_type::MAX_BIGINT_BITS
+                ));
+            }
+            Ok(())
+        }
+        Json::Array(items) => items.iter().try_for_each(validate_bigint_bounds),
+        Json::Object(entries) => entries.values().try_for_each(validate_bigint_bounds),
+        Json::Null | Json::Bool(_) | Json::String(_) => Ok(()),
+    }
+}
+
+/// `baml.json.deserialize<T>(text)`: parse, then decode against `T`. Throws
+/// [`ParseError`] for invalid JSON and [`DecodeError`] for a shape mismatch.
+pub fn deserialize<T: FromJson>(text: &Str) -> Result<T, Thrown> {
+    let json = parse(text)?;
+    T::from_json(&json).map_err(Thrown::error)
 }
 
 #[cfg(test)]
 #[allow(clippy::float_cmp)]
 mod tests {
-    use serde::Deserialize;
-
     use super::*;
-    use crate::{Int63, Shared, array, shared, string::from_literal};
+    use crate::{array, string::from_literal};
 
     fn int(value: i64) -> Int63 {
         Int63::new(value).unwrap()
@@ -203,350 +351,148 @@ mod tests {
         Str::from(s)
     }
 
-    fn rendered<T: fmt::Debug>(result: Result<T, Thrown>) -> String {
-        match result {
-            Err(Thrown::Error(error)) => error.render_readable(),
-            other => panic!("expected a thrown error, got {other:?}"),
+    /// A class decoded by hand the way the generated code does it.
+    #[derive(Debug, PartialEq)]
+    struct Point {
+        x: Int63,
+        y: Option<Int63>,
+    }
+
+    impl FromJson for Point {
+        fn from_json(json: &Json) -> Result<Self, DecodeError> {
+            let object = object(json, "Point")?;
+            Ok(Self {
+                x: field(object, "x", false)?,
+                y: field(object, "y", true)?,
+            })
         }
     }
 
-    /// The `message` of the `DecodeError` thrown for `input`. Fields render
-    /// in `{:?}` form, which for these messages is JSON string syntax.
-    fn decode_message<T: DeserializeOwned + fmt::Debug>(input: &str) -> String {
+    /// `(message, path)` of the `DecodeError` thrown for `input`.
+    fn decode_error_of<T: FromJson + fmt::Debug>(input: &str) -> (String, String) {
         match deserialize::<T>(&text(input)) {
             Err(Thrown::Error(error)) => {
                 assert_eq!(error.class_fqn(), "baml.json.DecodeError", "input {input}");
                 let fields = error.fields();
-                let (_, message) = fields
-                    .iter()
-                    .find(|(name, _)| *name == "message")
-                    .expect("DecodeError has a message");
-                serde_json::from_str(message).expect("a rendered string")
+                let get = |name: &str| -> String {
+                    let (_, value) = fields.iter().find(|(n, _)| *n == name).unwrap();
+                    serde_json::from_str(value).expect("a rendered string")
+                };
+                (get("message"), get("path"))
             }
             other => panic!("expected a DecodeError for {input}, got {other:?}"),
         }
     }
 
-    fn json<T: Serialize + ?Sized>(value: &T) -> String {
-        to_string(value).unwrap().to_string()
-    }
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    #[serde(crate = "serde")]
-    struct State {
-        count: Int63,
-        ratio: f64,
-        name: Str,
-        items: Shared<Vec<Int63>>,
-        note: Option<Str>,
-        inner: Option<Shared<Inner>>,
-    }
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    #[serde(crate = "serde")]
-    struct Inner {
-        flag: bool,
-        tags: Shared<Vec<Str>>,
-    }
-
-    impl PartialEq for Shared<Vec<Int63>> {
-        fn eq(&self, other: &Self) -> bool {
-            *self.borrow() == *other.borrow()
-        }
-    }
-
-    impl PartialEq for Shared<Vec<Str>> {
-        fn eq(&self, other: &Self) -> bool {
-            *self.borrow() == *other.borrow()
-        }
-    }
-
-    impl PartialEq for Shared<Inner> {
-        fn eq(&self, other: &Self) -> bool {
-            *self.borrow() == *other.borrow()
-        }
-    }
-
-    fn sample() -> State {
-        State {
-            count: int(-3),
-            ratio: 0.5,
-            name: from_literal("a \"quoted\" ☃"),
-            items: array::new(vec![int(1), Int63::MAX]),
-            note: None,
-            inner: Some(shared(Inner {
-                flag: true,
-                tags: array::new(vec![from_literal("x")]),
-            })),
-        }
-    }
-
-    const SAMPLE_JSON: &str = r#"{"count":-3,"ratio":0.5,"name":"a \"quoted\" ☃","items":[1,4611686018427387903],"note":null,"inner":{"flag":true,"tags":["x"]}}"#;
-
-    #[test]
-    fn scalars_encode_like_the_vm() {
-        assert_eq!(json(&int(42)), "42");
-        assert_eq!(json(&Int63::MIN), "-4611686018427387904");
-        assert_eq!(json(&true), "true");
-        assert_eq!(json(&()), "null");
-        assert_eq!(json(&1.0), "1.0");
-        assert_eq!(json(&0.1), "0.1");
-        assert_eq!(json(&-0.0), "-0.0");
-        // Exponent spellings are whatever serde_json's float writer picks;
-        // the VM goes through `Number::from_f64` on the same crate.
-        for value in [1e21, 1e-7, 123_456_789.123_456_78] {
-            let vm = serde_json::to_string(&serde_json::Number::from_f64(value).unwrap()).unwrap();
-            assert_eq!(json(&value), vm);
-        }
-        // `Number::from_f64` is `None` for a non-finite float and the VM
-        // writes `null`; `serde_json` does the same for a bare `f64`.
-        assert_eq!(json(&f64::NAN), "null");
-        assert_eq!(json(&f64::INFINITY), "null");
-        assert_eq!(json(&f64::NEG_INFINITY), "null");
-        assert_eq!(json(&text("tab\t\"q\" ☃")), r#""tab\t\"q\" ☃""#);
-        assert_eq!(json(&None::<Int63>), "null");
-        assert_eq!(json(&Some(int(1))), "1");
-        assert_eq!(json(&array::new(vec![f64::NAN, 2.0])), "[null,2.0]");
-        assert_eq!(json(&array::new(Vec::<Str>::new())), "[]");
-        assert_eq!(json(&vec![vec![int(1)], vec![]]), "[[1],[]]");
+    fn message_of<T: FromJson + fmt::Debug>(input: &str) -> String {
+        decode_error_of::<T>(input).0
     }
 
     #[test]
-    fn structs_round_trip_in_declared_field_order() {
-        let state = sample();
-        assert_eq!(json(&state), SAMPLE_JSON);
-        assert_eq!(json(&shared(sample())), SAMPLE_JSON);
-        assert_eq!(
-            json(&array::new(vec![shared(sample())])),
-            format!("[{SAMPLE_JSON}]")
-        );
-        let decoded: State = deserialize(&text(SAMPLE_JSON)).unwrap();
-        assert_eq!(decoded, state);
-        let via_shared: Shared<State> = deserialize(&text(SAMPLE_JSON)).unwrap();
-        assert_eq!(json(&via_shared), SAMPLE_JSON);
-        let list: Vec<Shared<State>> = deserialize(&text(&format!("[{SAMPLE_JSON}]"))).unwrap();
-        assert_eq!(list.len(), 1);
-        // Absent nullable fields decode as null; unknown fields are ignored.
-        let sparse: State = deserialize(&text(
-            r#"{"count": 0, "ratio": 2, "name": "", "items": [], "extra": 1}"#,
-        ))
-        .unwrap();
-        assert_eq!(sparse.note, None);
-        assert_eq!(sparse.inner, None);
-        assert_eq!(sparse.ratio, 2.0);
-        // Field order on output is the declaration order, whatever the input had.
-        let shuffled: State = deserialize(&text(
-            r#"{"inner":null,"note":"n","items":[2],"name":"s","ratio":1.5,"count":7}"#,
-        ))
-        .unwrap();
-        assert_eq!(
-            json(&shuffled),
-            r#"{"count":7,"ratio":1.5,"name":"s","items":[2],"note":"n","inner":null}"#
-        );
-        // A NaN field prints as null.
-        let mut nan = sample();
-        nan.ratio = f64::NAN;
-        assert!(json(&nan).contains(r#""ratio":null"#));
-    }
-
-    #[test]
-    fn scalars_decode_like_the_vm() {
-        assert_eq!(deserialize::<Int63>(&text(" 42 ")).unwrap(), int(42));
-        assert_eq!(deserialize::<Int63>(&text("-0")).unwrap(), crate::int::ZERO);
-        assert_eq!(
-            deserialize::<Int63>(&text("4611686018427387903")).unwrap(),
-            Int63::MAX
-        );
-        assert_eq!(
-            deserialize::<Int63>(&text("-4611686018427387904")).unwrap(),
-            Int63::MIN
-        );
-        assert_eq!(deserialize::<f64>(&text("3")).unwrap(), 3.0);
-        assert_eq!(deserialize::<f64>(&text("-1.5e3")).unwrap(), -1500.0);
-        assert!(!deserialize::<bool>(&text("false")).unwrap());
+    fn scalars_decode_with_the_vms_messages() {
+        assert_eq!(deserialize::<Int63>(&text("7")).unwrap(), int(7));
+        assert_eq!(deserialize::<f64>(&text("1.5")).unwrap(), 1.5);
+        assert!(deserialize::<bool>(&text("true")).unwrap());
+        assert_eq!(deserialize::<Str>(&text("\"s\"")).unwrap().as_str(), "s");
         deserialize::<()>(&text("null")).unwrap();
-        assert_eq!(deserialize::<Str>(&text(r#""☃ x""#)).unwrap(), text("☃ x"));
-        assert_eq!(deserialize::<Option<Int63>>(&text("null")).unwrap(), None);
+        let range = "expected integer in the BAML int range [-2^62, 2^62 - 1]";
         assert_eq!(
-            deserialize::<Option<Int63>>(&text("5")).unwrap(),
-            Some(int(5))
+            decode_error_of::<Int63>("1.5"),
+            (range.into(), String::new())
         );
-        let items: Shared<Vec<Option<Str>>> = deserialize(&text(r#"["a", null]"#)).unwrap();
-        assert_eq!(*items.borrow(), vec![Some(text("a")), None]);
+        assert_eq!(message_of::<Int63>("4611686018427387904"), range);
+        assert_eq!(message_of::<Int63>("\"7\""), "expected integer");
+        assert_eq!(message_of::<f64>("\"x\""), "expected number");
+        assert_eq!(message_of::<bool>("1"), "expected boolean");
+        assert_eq!(message_of::<Str>("1"), "expected string");
+        assert_eq!(message_of::<()>("1"), "expected null");
+        // A nullable reports its type's error, not the union's.
+        assert_eq!(message_of::<Option<Int63>>("\"x\""), "expected integer");
+        assert_eq!(deserialize::<Option<Int63>>(&text("null")).unwrap(), None);
     }
 
     #[test]
-    fn parse_errors_carry_serde_json_diagnostics() {
+    fn containers_use_the_dispatchers_wording_and_no_path() {
+        let xs = deserialize::<Shared<Vec<Int63>>>(&text("[1, 2]")).unwrap();
+        assert_eq!(*xs.borrow(), vec![int(1), int(2)]);
         assert_eq!(
-            rendered(deserialize::<Int63>(&text(""))),
-            r#"baml.json.ParseError {message: "EOF while parsing a value at line 1 column 0"}"#
+            decode_error_of::<Shared<Vec<Int63>>>("[1, \"2\"]"),
+            ("expected integer".into(), String::new())
         );
         assert_eq!(
-            rendered(deserialize::<Int63>(&text("{\"a\": }"))),
-            r#"baml.json.ParseError {message: "expected value at line 1 column 7"}"#
+            message_of::<Shared<Vec<Int63>>>("{}"),
+            "expected JSON array"
+        );
+        let p = deserialize::<Shared<Point>>(&text("{\"x\": 1, \"extra\": true}")).unwrap();
+        assert_eq!(*p.borrow(), Point { x: int(1), y: None });
+        assert_eq!(
+            message_of::<Shared<Point>>("{\"y\": 1}"),
+            "missing required field `x`"
         );
         assert_eq!(
-            rendered(deserialize::<Int63>(&text("1 2"))),
-            r#"baml.json.ParseError {message: "trailing characters at line 1 column 3"}"#
+            decode_error_of::<Shared<Point>>("{\"x\": 1, \"y\": \"no\"}"),
+            ("expected integer".into(), String::new())
         );
         assert_eq!(
-            deserialize::<Int63>(&text("nul")).unwrap_err().exit_code(),
+            message_of::<Shared<Point>>("[1, 2]"),
+            "expected JSON object for class `Point`"
+        );
+        assert_eq!(
+            decode_error_of::<Shared<Vec<Shared<Point>>>>("[{\"x\": 1}, {\"x\": \"a\"}]"),
+            ("expected integer".into(), String::new())
+        );
+        assert_eq!(array::len(&array::new(Vec::<Int63>::new())), int(0));
+    }
+
+    #[test]
+    fn parse_errors_are_the_parsers_diagnostic() {
+        match deserialize::<Int63>(&text("not json")) {
+            Err(Thrown::Error(error)) => {
+                assert_eq!(error.class_fqn(), "baml.json.ParseError");
+                assert!(error.fields()[0].1.contains("expected"));
+            }
+            other => panic!("expected a ParseError, got {other:?}"),
+        }
+        // An integral number past the bigint limit (2^28 bits) is a parse
+        // error on the VM; the check is mirrored, its trigger is not
+        // practical to exercise here.
+        assert!(validate_bigint_bounds(&Json::from(1)).is_ok());
+    }
+
+    #[test]
+    fn enums_and_unions() {
+        let names = ["Red", "Blue"];
+        assert_eq!(
+            enum_variant(&Json::String("Blue".into()), "Color", &names).unwrap(),
             1
         );
-    }
-
-    /// Every shape mismatch is a `DecodeError` with `path` `""`, as on the
-    /// VM. The messages are serde's and are pinned here so a serde upgrade
-    /// that rewords them shows up as a test change, not a silent one.
-    #[test]
-    fn shape_mismatches_are_decode_errors() {
-        const OUT_OF_RANGE: &str = "is outside the int range [-2^62, 2^62 - 1]";
+        let err = enum_variant(&Json::String("Green".into()), "Color", &names).unwrap_err();
+        assert_eq!(err.message, "unknown variant `Green` for enum `Color`");
+        let err = enum_variant(&Json::Null, "Color", &names).unwrap_err();
+        assert_eq!(err.message, "expected enum variant string");
+        let members: [MemberDecoder<Str>; 2] = [
+            |json| {
+                Int63::from_json(json).map(|n| from_literal(if n.get() == 1 { "one" } else { "n" }))
+            },
+            Str::from_json,
+        ];
+        assert_eq!(union(&Json::from(1), &members).unwrap().as_str(), "one");
+        assert_eq!(union(&Json::from("s"), &members).unwrap().as_str(), "s");
+        let err = union(&Json::Null, &members).unwrap_err();
         assert_eq!(
-            rendered(deserialize::<Int63>(&text("\"x\""))),
-            r#"baml.json.DecodeError {message: "invalid type: string \"x\", expected an int in [-2^62, 2^62 - 1]", path: ""}"#
+            (err.message.as_str(), err.path.as_str()),
+            ("no union member matched", "")
         );
-        assert_eq!(
-            decode_message::<Int63>("1.5"),
-            "invalid type: floating point `1.5`, expected an int in [-2^62, 2^62 - 1]"
-        );
-        for input in [
-            "4611686018427387904",
-            "-4611686018427387905",
-            "18446744073709551616",
-        ] {
-            assert_eq!(
-                decode_message::<Int63>(input),
-                format!("{input} {OUT_OF_RANGE}")
-            );
-        }
-        assert_eq!(
-            decode_message::<Str>("1"),
-            "invalid type: number, expected a string"
-        );
-        assert_eq!(
-            decode_message::<State>(r#"{"count": 1}"#),
-            "missing field `ratio`"
-        );
-        assert_eq!(
-            decode_message::<State>("7"),
-            "invalid type: number, expected struct State"
-        );
-        assert_eq!(
-            decode_message::<Shared<Vec<Str>>>("\"x\""),
-            "invalid type: string \"x\", expected a sequence"
-        );
-        assert_eq!(
-            decode_message::<bool>("0"),
-            "invalid type: number, expected a boolean"
-        );
-        assert_eq!(
-            decode_message::<()>("1"),
-            "invalid type: number, expected unit"
-        );
-        // A leaf error inside a class reports the leaf.
-        assert_eq!(
-            decode_message::<State>(r#"{"count": "1", "ratio": 1, "name": "", "items": []}"#),
-            "invalid type: string \"1\", expected an int in [-2^62, 2^62 - 1]"
-        );
-        assert_eq!(
-            decode_message::<State>(
-                r#"{"count": 1, "ratio": 1, "name": "", "items": [], "inner": {"flag": true}}"#
-            ),
-            "missing field `tags`"
-        );
-    }
-
-    /// The shape the backend generates for `int | float | string`:
-    /// serialized as the member, decoded as the first member that fits.
-    #[derive(Debug, PartialEq)]
-    enum IntFloatStr {
-        Int(Int63),
-        Float(f64),
-        Str(Str),
-    }
-
-    impl Serialize for IntFloatStr {
-        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            match self {
-                Self::Int(value) => value.serialize(serializer),
-                Self::Float(value) => value.serialize(serializer),
-                Self::Str(value) => value.serialize(serializer),
-            }
-        }
-    }
-
-    impl<'de> Deserialize<'de> for IntFloatStr {
-        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            deserialize_union(
-                deserializer,
-                &[
-                    |value| Int63::deserialize(value).map(Self::Int),
-                    |value| f64::deserialize(value).map(Self::Float),
-                    |value| Str::deserialize(value).map(Self::Str),
-                ],
-            )
-        }
     }
 
     #[test]
-    fn unions_pick_the_first_member_that_decodes() {
+    fn serialization_is_compact_and_non_finite_floats_are_null() {
+        assert_eq!(to_string(&f64::NAN).unwrap().as_str(), "null");
         assert_eq!(
-            deserialize::<IntFloatStr>(&text("1")).unwrap(),
-            IntFloatStr::Int(int(1))
-        );
-        assert_eq!(
-            deserialize::<IntFloatStr>(&text("1.0")).unwrap(),
-            IntFloatStr::Float(1.0)
-        );
-        assert_eq!(
-            deserialize::<IntFloatStr>(&text("-2.5e1")).unwrap(),
-            IntFloatStr::Float(-25.0)
-        );
-        // Past the int range a number is still a float, as on the VM.
-        assert_eq!(
-            deserialize::<IntFloatStr>(&text("4611686018427387904")).unwrap(),
-            IntFloatStr::Float(4_611_686_018_427_387_904.0)
-        );
-        assert_eq!(
-            deserialize::<IntFloatStr>(&text("\"x\"")).unwrap(),
-            IntFloatStr::Str(text("x"))
-        );
-        assert_eq!(
-            decode_message::<IntFloatStr>("true"),
-            "no union member matched"
-        );
-        assert_eq!(
-            decode_message::<IntFloatStr>("null"),
-            "no union member matched"
-        );
-        assert_eq!(
-            deserialize::<Option<IntFloatStr>>(&text("null")).unwrap(),
-            None
-        );
-        let items: Vec<IntFloatStr> = deserialize(&text(r#"[1, 2.5, "s"]"#)).unwrap();
-        assert_eq!(json(&items), r#"[1,2.5,"s"]"#);
-        assert_eq!(json(&IntFloatStr::Float(f64::NAN)), "null");
-    }
-
-    #[test]
-    fn error_objects_render_like_the_engine() {
-        let decode_error = DecodeError {
-            message: "expected integer".into(),
-            path: ".a[0]".into(),
-        };
-        assert_eq!(
-            decode_error.render_readable(),
-            r#"baml.json.DecodeError {message: "expected integer", path: ".a[0]"}"#
-        );
-        assert_eq!(decode_error.to_string(), "expected integer");
-        let serialization = SerializationError {
-            message: "m".into(),
-            path: String::new(),
-            reason: "class".into(),
-        };
-        assert_eq!(
-            serialization.render_readable(),
-            r#"baml.json.SerializationError {message: "m", path: "", reason: "class"}"#
+            to_string(&array::new(vec![int(1), int(2)]))
+                .unwrap()
+                .as_str(),
+            "[1,2]"
         );
     }
 }

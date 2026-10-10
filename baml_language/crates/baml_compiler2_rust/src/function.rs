@@ -3452,8 +3452,20 @@ impl<'db> Env<'_, 'db> {
         &mut self,
         class: &ClassInst<'db>,
     ) -> Result<Option<Instance<'db>>, Rejection> {
+        self.own_override(class, "ToString", "to_string")
+    }
+
+    /// The `method` that `class`'s own `implements baml.<interface>` block
+    /// provides, as an instance, or `None` when the class has no block or
+    /// its block adopts the interface's default.
+    fn own_override(
+        &mut self,
+        class: &ClassInst<'db>,
+        interface: &str,
+        method: &str,
+    ) -> Result<Option<Instance<'db>>, Rejection> {
         let described = format!(
-            "`to_string` override of `{}`",
+            "`{method}` override of `{}`",
             self.classes.link_name(TypeDecl::Class(class.clone()))
         );
         let concrete = self
@@ -3463,7 +3475,7 @@ impl<'db> Env<'_, 'db> {
             .get(LangPackage::Baml)
             .expect("the `baml` language package is installed");
         let wanted = InferInterface::new(
-            baml_type::DeclName::in_root(root, Vec::new(), baml_type::Name::new("ToString")),
+            baml_type::DeclName::in_root(root, Vec::new(), baml_type::Name::new(interface)),
             Box::new([]),
             Box::new([]),
         );
@@ -3474,7 +3486,7 @@ impl<'db> Env<'_, 'db> {
         ) else {
             return Ok(None);
         };
-        let loc = match implementation.provided_method(self.db, &Name::new("to_string")) {
+        let loc = match implementation.provided_method(self.db, &Name::new(method)) {
             None => return Ok(None),
             Some(DeclRef::Source(loc)) => loc,
             Some(DeclRef::External(_)) => {
@@ -3516,17 +3528,8 @@ impl<'db> Env<'_, 'db> {
         &mut self,
         ty: &NativeTy<'db>,
     ) -> Result<Vec<Instance<'db>>, Rejection> {
-        let mut stack = Vec::new();
-        ty.classes(&mut stack);
-        let mut seen: FxHashSet<ClassInst<'db>> = FxHashSet::default();
         let mut overrides = Vec::new();
-        while let Some(class) = stack.pop() {
-            if !seen.insert(class.clone()) {
-                continue;
-            }
-            for field in &self.classes.info(&class)?.fields {
-                field.ty.classes(&mut stack);
-            }
+        for class in self.classes_below(ty)? {
             if let Some(instance) = self.own_to_string_override(&class)? {
                 self.classes
                     .record_to_string_override(class, instance.clone());
@@ -3534,6 +3537,25 @@ impl<'db> Env<'_, 'db> {
             }
         }
         Ok(overrides)
+    }
+
+    /// Every class a value of type `ty` can hold: the classes in the type
+    /// and, transitively, in the fields of those classes.
+    fn classes_below(&self, ty: &NativeTy<'db>) -> Result<Vec<ClassInst<'db>>, Rejection> {
+        let mut stack = Vec::new();
+        ty.classes(&mut stack);
+        let mut seen: FxHashSet<ClassInst<'db>> = FxHashSet::default();
+        let mut out = Vec::new();
+        while let Some(class) = stack.pop() {
+            if !seen.insert(class.clone()) {
+                continue;
+            }
+            for field in &self.classes.info(&class)?.fields {
+                field.ty.classes(&mut stack);
+            }
+            out.push(class);
+        }
+        Ok(out)
     }
 
     fn static_target(
@@ -4062,6 +4084,22 @@ impl<'db> Env<'_, 'db> {
                     return Err(Rejection::unsupported(format!(
                         "JSON decode into a literal type {literal} (the VM rejects a value outside the literal; the native type is the erased primitive)"
                     )));
+                }
+                // The VM's decode honors a class's own `baml.FromJson` at
+                // every depth; its `from_json` takes a `json` value, which
+                // has no native form yet, so such a decode is refused rather
+                // than decoded structurally.
+                for class in self.classes_below(&target)? {
+                    if self
+                        .own_override(&class, "FromJson", "from_json")?
+                        .is_some()
+                    {
+                        return Err(Rejection::unsupported(format!(
+                            "JSON decode into a `{}`: `{}` implements its own `baml.FromJson`",
+                            self.describe(&target),
+                            self.classes.link_name(TypeDecl::Class(class))
+                        )));
+                    }
                 }
                 (Builtin::JsonDeserialize(target.clone()), target)
             }

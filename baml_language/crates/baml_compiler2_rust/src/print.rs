@@ -131,7 +131,13 @@ fn render_class<'db>(
     });
     let display_name = &class.display_name;
     let link_name = &class.class_fqn;
-    let expecting = format!("expected JSON object for class `{}`", class.json_name);
+    let json_name = &class.json_name;
+    let decoded = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        let baml_name = &field.name;
+        let nullable = matches!(field.ty, NativeTy::Option(_));
+        quote! { #ident: bex_aot::json::field(object, #baml_name, #nullable)? }
+    });
     let rendered = class.fields.iter().map(|field| {
         let ident = &field.ident;
         let baml_name = &field.name;
@@ -175,10 +181,17 @@ fn render_class<'db>(
     // `ErrorClass`; the trait costs nothing when the class is never thrown.
     Ok(quote! {
         #[doc = #doc]
-        #[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-        #[serde(crate = "bex_aot::serde", expecting = #expecting)]
+        #[derive(Debug, bex_aot::serde::Serialize)]
+        #[serde(crate = "bex_aot::serde")]
         pub struct #name {
             #(#fields)*
+        }
+
+        impl bex_aot::json::FromJson for #name {
+            fn from_json(json: &bex_aot::json::Json) -> Result<Self, bex_aot::json::DecodeError> {
+                let object = bex_aot::json::object(json, #json_name)?;
+                Ok(Self { #(#decoded),* })
+            }
         }
 
         impl ToBaml for #name {
@@ -231,21 +244,29 @@ fn render_enum(info: &EnumInfo<'_>) -> TokenStream {
         }
     });
     let names = info.variants.iter().map(|variant| &variant.name);
+    let variant_idents = info.variants.iter().map(|variant| &variant.ident);
+    let enum_json_name = &info.json_name;
     let count = info.variants.len();
     quote! {
         #[doc = #doc]
-        #[derive(
-            Clone, Copy, PartialEq, Eq, Hash, Debug,
-            bex_aot::serde::Serialize, bex_aot::serde::Deserialize
-        )]
-        #[serde(crate = "bex_aot::serde", expecting = "expected enum variant string")]
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
+        #[serde(crate = "bex_aot::serde")]
         pub enum #name {
             #(#variants)*
+        }
+
+        impl bex_aot::json::FromJson for #name {
+            fn from_json(json: &bex_aot::json::Json) -> Result<Self, bex_aot::json::DecodeError> {
+                let index = bex_aot::json::enum_variant(json, #enum_json_name, &Self::NAMES)?;
+                Ok(Self::VARIANTS[index])
+            }
         }
 
         impl #name {
             /// The BAML variant names, by discriminant.
             pub const NAMES: [&'static str; #count] = [#(#names),*];
+            /// Every variant, by discriminant.
+            pub const VARIANTS: [Self; #count] = [#(Self::#variant_idents),*];
         }
 
         impl ToBaml for #name {
@@ -302,7 +323,7 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
         .map(|(variant, member)| {
             let ty = member.to_tokens(&class_ident);
             quote! {
-                |value| <#ty as bex_aot::serde::Deserialize>::deserialize(value).map(Self::#variant)
+                |json| <#ty as bex_aot::json::FromJson>::from_json(json).map(Self::#variant)
             }
         });
     let comparable = info.members.iter().all(|member| {
@@ -365,9 +386,9 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             }
         }
 
-        impl<'de> bex_aot::serde::Deserialize<'de> for #name {
-            fn deserialize<D: bex_aot::serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-                bex_aot::json::deserialize_union(deserializer, &[#(#decoders),*])
+        impl bex_aot::json::FromJson for #name {
+            fn from_json(json: &bex_aot::json::Json) -> Result<Self, bex_aot::json::DecodeError> {
+                bex_aot::json::union(json, &[#(#decoders),*])
             }
         }
 
@@ -441,9 +462,9 @@ fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             }
         }
 
-        impl<'de> bex_aot::serde::Deserialize<'de> for #name {
-            fn deserialize<D: bex_aot::serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
-                Err(<D::Error as bex_aot::serde::de::Error>::custom(#expecting))
+        impl bex_aot::json::FromJson for #name {
+            fn from_json(_json: &bex_aot::json::Json) -> Result<Self, bex_aot::json::DecodeError> {
+                Err(bex_aot::json::DecodeError { message: String::from(#expecting), path: String::new() })
             }
         }
     }

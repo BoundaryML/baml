@@ -24,10 +24,7 @@ use std::{cmp::Ordering, fmt, rc::Rc};
 
 pub use baml_type::MAX_BIGINT_BITS;
 use num_bigint::Sign;
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{self, MapAccess, Unexpected, Visitor},
-};
+use serde::{Serialize, Serializer};
 
 use crate::{
     Int63, Panic, Str, Thrown,
@@ -416,63 +413,28 @@ fn parse_decimal(text: &str) -> Option<num_bigint::BigInt> {
 /// An integral JSON number of any width, or a string of decimal digits:
 /// the VM's `parse_typed_json_bigint`. A fraction or an exponent is a
 /// decode error.
-impl<'de> Deserialize<'de> for BigInt {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_any(BigIntVisitor)
+impl crate::json::FromJson for BigInt {
+    fn from_json(json: &crate::json::Json) -> Result<Self, crate::json::DecodeError> {
+        let parsed = match json {
+            crate::json::Json::Number(number) => parse_decimal(&number.to_string()),
+            crate::json::Json::String(text) => parse_decimal(text),
+            _ => None,
+        };
+        parsed
+            .map(BigInt::from)
+            .ok_or_else(|| crate::json::DecodeError {
+                message: EXPECTED.to_owned(),
+                path: String::new(),
+            })
     }
 }
 
-struct BigIntVisitor;
-
 const EXPECTED: &str = "expected integral JSON number or numeric string";
 
-impl<'de> Visitor<'de> for BigIntVisitor {
-    type Value = BigInt;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str(EXPECTED)
-    }
-
-    fn visit_i64<E: de::Error>(self, value: i64) -> Result<BigInt, E> {
-        Ok(from_i64(value))
-    }
-
-    fn visit_u64<E: de::Error>(self, value: u64) -> Result<BigInt, E> {
-        Ok(BigInt::from(num_bigint::BigInt::from(value)))
-    }
-
-    fn visit_i128<E: de::Error>(self, value: i128) -> Result<BigInt, E> {
-        Ok(BigInt::from(num_bigint::BigInt::from(value)))
-    }
-
-    fn visit_u128<E: de::Error>(self, value: u128) -> Result<BigInt, E> {
-        Ok(BigInt::from(num_bigint::BigInt::from(value)))
-    }
-
-    fn visit_f64<E: de::Error>(self, value: f64) -> Result<BigInt, E> {
-        Err(E::invalid_type(Unexpected::Float(value), &self))
-    }
-
-    fn visit_str<E: de::Error>(self, value: &str) -> Result<BigInt, E> {
-        parse_decimal(value)
-            .map(BigInt::from)
-            .ok_or_else(|| E::custom(EXPECTED))
-    }
-
-    /// `serde_json` with `arbitrary_precision` hands a number it cannot
-    /// represent as a primitive over as a one-entry map holding its text.
-    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<BigInt, A::Error> {
-        let mut parsed = None;
-        while let Some(key) = map.next_key::<String>()? {
-            let text: String = map.next_value()?;
-            if key == "$serde_json::private::Number" {
-                parsed = parse_decimal(&text);
-            }
-        }
-        parsed
-            .map(BigInt::from)
-            .ok_or_else(|| de::Error::custom(EXPECTED))
-    }
+/// The VM's `parse_decimal_bigint` on a number token's text, for the
+/// parse-time bound check.
+pub(crate) fn parse_decimal_text(text: &str) -> Option<num_bigint::BigInt> {
+    parse_decimal(text)
 }
 
 #[cfg(test)]

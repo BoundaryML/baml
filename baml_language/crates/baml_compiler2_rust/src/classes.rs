@@ -106,6 +106,8 @@ pub(crate) struct EnumInfo<'db> {
     pub link_name: String,
     /// The generated enum's identifier.
     pub ident: Ident,
+    /// The name the VM uses in JSON decode errors (`Color`).
+    pub json_name: String,
     /// Variants in declaration (= discriminant) order.
     pub variants: Vec<VariantInfo>,
     _marker: std::marker::PhantomData<EnumRef<'db>>,
@@ -774,9 +776,14 @@ impl<'db> ClassTable<'db> {
                 ));
             }
         }
+        let json_name = baml_compiler2_hir::package::spelling(self.db)
+            .wire(&layout::enum_head(self.db, enum_ref))
+            .display_name()
+            .to_string();
         Ok(EnumInfo {
             ident: Ident::new(&rust_name(&link_name), Span::call_site()),
             link_name,
+            json_name,
             variants,
             _marker: std::marker::PhantomData,
         })

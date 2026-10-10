@@ -21,11 +21,7 @@
 use std::hash::Hash;
 
 use indexmap::IndexMap;
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{self, MapAccess, Visitor},
-    ser::SerializeMap,
-};
+use serde::{Serialize, Serializer, ser::SerializeMap};
 
 use crate::{
     Int63, Panic, Str, Thrown,
@@ -235,31 +231,29 @@ impl<K: MapKey, V: Serialize> Serialize for Map<K, V> {
     }
 }
 
-impl<'de, K: MapKey, V: Deserialize<'de>> Deserialize<'de> for Map<K, V> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct MapVisitor<K, V>(std::marker::PhantomData<(K, V)>);
-
-        impl<'de, K: MapKey, V: Deserialize<'de>> Visitor<'de> for MapVisitor<K, V> {
-            type Value = Map<K, V>;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("expected object")
-            }
-
-            fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> Result<Map<K, V>, A::Error> {
-                let mut table = IndexMap::with_capacity(access.size_hint().unwrap_or(0));
-                while let Some(key) = access.next_key::<String>()? {
-                    let value = access.next_value()?;
-                    table.insert(K::from_json_key(key), value);
+/// A JSON object keyed by `string`: a map keyed by `int` or `bool` has no
+/// JSON form, which the VM reports at the map's path.
+impl<K: MapKey, V: crate::json::FromJson> crate::json::FromJson for Map<K, V> {
+    fn from_json(json: &crate::json::Json) -> Result<Self, crate::json::DecodeError> {
+        if !K::JSON_KEYS {
+            return Err(crate::json::DecodeError {
+                message: STRING_MAP_REQUIRED.to_owned(),
+                path: String::new(),
+            });
+        }
+        match json {
+            crate::json::Json::Object(entries) => {
+                let mut table = IndexMap::with_capacity(entries.len());
+                for (key, value) in entries {
+                    table.insert(K::from_json_key(key.clone()), V::from_json(value)?);
                 }
                 Ok(Map(shared(table)))
             }
+            _ => Err(crate::json::DecodeError {
+                message: "expected JSON object".to_owned(),
+                path: String::new(),
+            }),
         }
-
-        if !K::JSON_KEYS {
-            return Err(de::Error::custom(STRING_MAP_REQUIRED));
-        }
-        deserializer.deserialize_map(MapVisitor(std::marker::PhantomData))
     }
 }
 

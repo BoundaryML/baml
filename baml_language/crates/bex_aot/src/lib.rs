@@ -14,8 +14,9 @@
 //! the thrown-value type and the recursion guard. The binary links no VM
 //! and no garbage collector.
 
-/// Re-exported so generated code can derive `Serialize`/`Deserialize`
-/// (`#[serde(crate = "bex_aot::serde")]`) without its own dependency.
+/// Re-exported so generated code can derive `Serialize`
+/// (`#[serde(crate = "bex_aot::serde")]`) without its own dependency;
+/// decoding is [`json::FromJson`].
 pub use serde;
 /// Re-exported for generated code and hosts, see [`json`].
 pub use serde_json;
