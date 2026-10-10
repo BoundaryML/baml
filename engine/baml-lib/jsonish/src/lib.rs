@@ -237,11 +237,25 @@ pub fn from_str(
     }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
-    let value = jsonish::parse(
-        raw_string,
-        jsonish::ParseOptions::default(),
-        raw_string_is_done,
-    )?;
+    let value = if raw_string.contains('<') {
+        match jsonish::parse_xml(of, target, raw_string, raw_string_is_done) {
+            Ok(value) => value,
+            Err(error) => {
+                log::debug!("Input was not parseable as XML: {error}");
+                jsonish::parse(
+                    raw_string,
+                    jsonish::ParseOptions::default(),
+                    raw_string_is_done,
+                )?
+            }
+        }
+    } else {
+        jsonish::parse(
+            raw_string,
+            jsonish::ParseOptions::default(),
+            raw_string_is_done,
+        )?
+    };
 
     // Pick the schema that is the most specific.
     log::debug!("Parsed JSONish (step 1 of parsing) {raw_string_is_done}: {value:#?}");
