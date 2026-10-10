@@ -130,6 +130,14 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
     `
 }
 
+/// (internal) Write the whole prompt to the CLI's stdin, then close it so the
+/// CLI sees EOF.
+function _write_prompt(p: baml.sys.Process, prompt: string) -> string? {
+    defer { p.stdin.close() }
+    p.stdin.write(prompt);
+    null
+}
+
 /// (internal) Consume the live JSONL stream: log every event as it arrives, return the
 /// terminal result event.
 function _read_result(p: baml.sys.Process) -> json {
@@ -249,24 +257,25 @@ function allowed_mcp_tools(c: root.ClaudeCodeClient) -> string {
 function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // the contract travels via --json-schema, so the prompt's schema slot
     // renders empty
-    // The CLI accepts one string rather than a chat-message array. Keep the
-    // structural prompt until this transport boundary, then use its readable
-    // role-headed projection.
-    let instructions = input.prompt(ai.internal.build_output_format(input.output_type)).text();
+    // The CLI accepts one prompt rather than a chat-message array. Keep the
+    // structural prompt until this transport boundary; `cli_prompt` sends its
+    // readable role-headed projection, or content blocks when it has media.
+    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let has_tools = !input.toolbox.is_empty();
     let schema = if (has_tools) {
         baml.json.to_json(envelope_schema(input.output_type))
     } else {
         baml.json.schema(input.output_type)
     };
-    let prompt_text = if (has_tools) {
-        `${instructions}${transcript_text(input.journal)}${tool_protocol(input.toolbox)}`
+    let suffix = if (has_tools) {
+        `${transcript_text(input.journal)}${tool_protocol(input.toolbox)}`
     } else {
-        `${instructions}${transcript_text(input.journal)}`
+        transcript_text(input.journal)
     };
+    let cli = cli_prompt(prompt, suffix);
 
     log.info(
-        `claude-code invoke: model=${c.model} prompt_chars=${prompt_text.length()} baml_tools=${input.toolbox.list().length()}`,
+        `claude-code invoke: model=${c.model} prompt_chars=${cli.text.length()} baml_tools=${input.toolbox.list().length()}`,
     );
     let args: string[] = [];
     args.push("-p");
@@ -294,7 +303,9 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     }
     args.push("--json-schema");
     args.push(baml.json.stringify(schema));
-    args.push(prompt_text);
+    for (let arg in cli.args) {
+        args.push(arg);
+    }
 
     let p = baml.sys.start_process(
         c.executable,
@@ -312,13 +323,35 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     defer {
         p.close()
     }
-    // the CLI reads stdin when the pipe is open; deliver EOF immediately
-    let _ = p.stdin.close() catch_all (e) {
-        _ => null,
-    };
+    // the CLI reads stdin when the pipe is open; with the prompt on argv,
+    // deliver EOF immediately
+    if (cli.stdin == null) {
+        let _ = p.stdin.close() catch_all (e) {
+            _ => null,
+        };
+    }
     // events stream LIVE: each JSONL line logs as it arrives, and the last
     // relevant line is the result. Stderr inherits the parent process.
+    let input_error: string? = null;
     let result = baml.future.with_timeout(baml.time.Duration.from_milliseconds(c.timeout_ms), () -> {
+        if let stdin_text: string = cli.stdin {
+            // Drain stdout concurrently: either pipe can exceed its buffer.
+            let input = spawn {
+                _write_prompt(p, stdin_text) catch_all (e) {
+                    _ => e.to_string()
+                }
+            };
+            let result = _read_result(p);
+            // Preserve CLI errors: do not await an errored writer future here, because
+            // that would abort this closure before exit status and result.is_error are
+            // interpreted. A normal writer failure is returned as a string by the task.
+            if (input.is_result()) {
+                input_error = await input;
+            } else if (input.is_error()) {
+                input_error = "the stdin writer task did not complete cleanly";
+            }
+            return result;
+        }
         _read_result(p)
     }) catch (e) {
         baml.errors.Timeout => {
@@ -357,6 +390,14 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             error_code: null,
             raw_body: baml.json.stringify(result),
             status_code: null,
+        }
+    }
+    if let error: string = input_error {
+        throw ai.errors.NetworkFailure {
+            status_code: null,
+            provider: "claude-code",
+            detail: "the Claude Code CLI could not receive the prompt: " + error,
+            raw_body: null,
         }
     }
     log.info(
