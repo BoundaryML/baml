@@ -55,6 +55,21 @@ function LiveSmokeGoogle(question: string) -> string {
     `
 }
 
+class LiveSmokeColor {
+    color: string,
+}
+
+// A 16x16 solid red PNG. The answer can only be right if the model received
+// the pixels: before claude-code sent media on stdin, it saw a placeholder.
+function LiveSmokeClaudeCodeImage(picture: image) -> LiveSmokeColor {
+    client: "claude-code/haiku"
+    prompt: `
+        ${role("user")}
+        What is the dominant color of this image? Answer with one lowercase word.
+        ${picture}
+    `
+}
+
 // Deliberately weak assertions: these prove the wire path (auth, request shape,
 // response parse) works against the real endpoint, not what the model says.
 function live_openai_answers() -> bool {
@@ -69,6 +84,26 @@ function live_google_answers() -> bool {
     LiveSmokeGoogle("Say pong.").trim().length() > 0
 }
 
+// The one content assertion here: the color is the proof the image arrived.
+function live_claude_code_sees_image() -> bool {
+    let red = baml.media.Image.from_base64(
+        "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mP4z8BAEmIY1TCqYfhqAACQ+f8B8u7oVwAAAABJRU5ErkJggg==",
+        "image/png",
+    );
+    LiveSmokeClaudeCodeImage(red).color.to_lower_case().includes("red")
+}
+
+// The Claude Code client authenticates through the local `claude` CLI, not an
+// API key, so its gate is whether that CLI runs.
+function claude_cli_available() -> bool {
+    let out = baml.sys.exec("claude", ["--version"], null) catch_all (e) {
+        _ => {
+            return false;
+        },
+    };
+    out.exit_code == 0
+}
+
 testset "live" with testing.Sequential() {
     // Always registered: guarantees a non-empty selection for `--profile live`.
     test "preconditions" {
@@ -76,20 +111,34 @@ testset "live" with testing.Sequential() {
     }
 
     if (baml.env.get("OPENAI_API_KEY") != null) {
-        test "openai" { assert.is_true(live_openai_answers()) }
+        test "openai" {
+            assert.is_true(live_openai_answers())
+        }
     } else {
         log.warn("live::openai not registered: OPENAI_API_KEY is unset")
     }
 
     if (baml.env.get("ANTHROPIC_API_KEY") != null) {
-        test "anthropic" { assert.is_true(live_anthropic_answers()) }
+        test "anthropic" {
+            assert.is_true(live_anthropic_answers())
+        }
     } else {
         log.warn("live::anthropic not registered: ANTHROPIC_API_KEY is unset")
     }
 
     if (baml.env.get("GOOGLE_API_KEY") != null) {
-        test "google" { assert.is_true(live_google_answers()) }
+        test "google" {
+            assert.is_true(live_google_answers())
+        }
     } else {
         log.warn("live::google not registered: GOOGLE_API_KEY is unset")
+    }
+
+    if (claude_cli_available()) {
+        test "claude_code_image" {
+            assert.is_true(live_claude_code_sees_image())
+        }
+    } else {
+        log.warn("live::claude_code_image not registered: the `claude` CLI is not on PATH")
     }
 }
