@@ -821,6 +821,9 @@ navigation:
           - page: "Hugging Face (openai-generic)"
             slug: huggingface
             path: 03-reference/baml/clients/providers/huggingface.mdx
+          - page: "Inferrail (openai-generic)"
+            slug: inferrail
+            path: 03-reference/baml/clients/providers/inferrail.mdx
           - page: "Respan (openai-generic)"
             slug: respan
             path: 03-reference/baml/clients/providers/respan.mdx
