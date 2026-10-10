@@ -30,25 +30,30 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML enum `baml.ops.Ordering`.
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    bex_aot::serde::Serialize,
-    bex_aot::serde::Deserialize
-)]
-#[serde(crate = "bex_aot::serde", expecting = "expected enum variant string")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub enum baml_ops_Ordering {
     Less,
     Equal,
     Greater,
 }
+impl bex_aot::json::FromJson for baml_ops_Ordering {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let index = bex_aot::json::enum_variant(
+            json,
+            "baml.ops.Ordering",
+            &Self::NAMES,
+        )?;
+        Ok(Self::VARIANTS[index])
+    }
+}
 impl baml_ops_Ordering {
     /// The BAML variant names, by discriminant.
     pub const NAMES: [&'static str; 3usize] = ["Less", "Equal", "Greater"];
+    /// Every variant, by discriminant.
+    pub const VARIANTS: [Self; 3usize] = [Self::Less, Self::Equal, Self::Greater];
 }
 impl ToBaml for baml_ops_Ordering {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -66,10 +71,20 @@ impl bex_aot::BamlEq for baml_ops_Ordering {
     }
 }
 /// BAML class `user.Square`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Square`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Square {
     pub side: Int63,
+}
+impl bex_aot::json::FromJson for user_Square {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Square")?;
+        Ok(Self {
+            side: bex_aot::json::field(object, "side", false)?,
+        })
+    }
 }
 impl ToBaml for user_Square {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -95,11 +110,22 @@ impl bex_aot::Readable for user_Square {
     }
 }
 /// BAML class `user.Rect`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Rect`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Rect {
     pub w: Int63,
     pub h: Int63,
+}
+impl bex_aot::json::FromJson for user_Rect {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Rect")?;
+        Ok(Self {
+            w: bex_aot::json::field(object, "w", false)?,
+            h: bex_aot::json::field(object, "h", false)?,
+        })
+    }
 }
 impl ToBaml for user_Rect {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -135,9 +161,17 @@ impl bex_aot::Readable for user_Rect {
     }
 }
 /// BAML class `user.Dot`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Dot`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Dot {}
+impl bex_aot::json::FromJson for user_Dot {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Dot")?;
+        Ok(Self {})
+    }
+}
 impl ToBaml for user_Dot {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Dot", &[]);
@@ -162,11 +196,22 @@ impl bex_aot::Readable for user_Dot {
     }
 }
 /// BAML class `user.Dog`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Dog`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Dog {
     pub name: Str,
     pub barks: Int63,
+}
+impl bex_aot::json::FromJson for user_Dog {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Dog")?;
+        Ok(Self {
+            name: bex_aot::json::field(object, "name", false)?,
+            barks: bex_aot::json::field(object, "barks", false)?,
+        })
+    }
 }
 impl ToBaml for user_Dog {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -202,10 +247,20 @@ impl bex_aot::Readable for user_Dog {
     }
 }
 /// BAML class `user.Cat`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Cat`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Cat {
     pub name: Str,
+}
+impl bex_aot::json::FromJson for user_Cat {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Cat")?;
+        Ok(Self {
+            name: bex_aot::json::field(object, "name", false)?,
+        })
+    }
 }
 impl ToBaml for user_Cat {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -231,11 +286,22 @@ impl bex_aot::Readable for user_Cat {
     }
 }
 /// BAML class `user.Holder`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Holder`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Holder {
     pub item: user_Shape,
     pub tag: Str,
+}
+impl bex_aot::json::FromJson for user_Holder {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Holder")?;
+        Ok(Self {
+            item: bex_aot::json::field(object, "item", false)?,
+            tag: bex_aot::json::field(object, "tag", false)?,
+        })
+    }
 }
 impl ToBaml for user_Holder {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -271,10 +337,20 @@ impl bex_aot::Readable for user_Holder {
     }
 }
 /// BAML class `user.Money`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Money`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Money {
     pub cents: Int63,
+}
+impl bex_aot::json::FromJson for user_Money {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Money")?;
+        Ok(Self {
+            cents: bex_aot::json::field(object, "cents", false)?,
+        })
+    }
 }
 impl ToBaml for user_Money {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -300,10 +376,20 @@ impl bex_aot::Readable for user_Money {
     }
 }
 /// BAML class `user.Tag`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Tag`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Tag {
     pub tag_text: Str,
+}
+impl bex_aot::json::FromJson for user_Tag {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Tag")?;
+        Ok(Self {
+            tag_text: bex_aot::json::field(object, "tag_text", false)?,
+        })
+    }
 }
 impl ToBaml for user_Tag {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -333,10 +419,20 @@ impl bex_aot::Readable for user_Tag {
     }
 }
 /// BAML class `user.Note`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Note`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Note {
     pub label: Str,
+}
+impl bex_aot::json::FromJson for user_Note {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Note")?;
+        Ok(Self {
+            label: bex_aot::json::field(object, "label", false)?,
+        })
+    }
 }
 impl ToBaml for user_Note {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -402,19 +498,18 @@ impl bex_aot::serde::Serialize for Union_int_or_user_Shape {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_user_Shape {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_user_Shape {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <user_Shape as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <user_Shape as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Shape)
                 },
             ],
@@ -464,21 +559,19 @@ impl bex_aot::serde::Serialize for Union_user_Note_or_user_Tag {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_user_Note_or_user_Tag {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_user_Note_or_user_Tag {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Shared<
-                        user_Note,
-                    > as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Note> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Note)
                 },
-                |value| {
-                    <Shared<user_Tag> as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Tag> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Tag)
                 },
             ],
@@ -535,15 +628,16 @@ impl bex_aot::serde::Serialize for user_Shape {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for user_Shape {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        _deserializer: D,
-    ) -> Result<Self, D::Error> {
-        Err(
-            <D::Error as bex_aot::serde::de::Error>::custom(
+impl bex_aot::json::FromJson for user_Shape {
+    fn from_json(
+        _json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        Err(bex_aot::json::DecodeError {
+            message: String::from(
                 "a value of the interface `user.Shape` cannot be decoded from JSON",
             ),
-        )
+            path: String::new(),
+        })
     }
 }
 /// BAML interface `user.Named`.
@@ -589,15 +683,16 @@ impl bex_aot::serde::Serialize for user_Named {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for user_Named {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        _deserializer: D,
-    ) -> Result<Self, D::Error> {
-        Err(
-            <D::Error as bex_aot::serde::de::Error>::custom(
+impl bex_aot::json::FromJson for user_Named {
+    fn from_json(
+        _json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        Err(bex_aot::json::DecodeError {
+            message: String::from(
                 "a value of the interface `user.Named` cannot be decoded from JSON",
             ),
-        )
+            path: String::new(),
+        })
     }
 }
 /// BAML interface `user.Counted`.
@@ -648,15 +743,16 @@ impl bex_aot::serde::Serialize for user_Counted {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for user_Counted {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        _deserializer: D,
-    ) -> Result<Self, D::Error> {
-        Err(
-            <D::Error as bex_aot::serde::de::Error>::custom(
+impl bex_aot::json::FromJson for user_Counted {
+    fn from_json(
+        _json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        Err(bex_aot::json::DecodeError {
+            message: String::from(
                 "a value of the interface `user.Counted` cannot be decoded from JSON",
             ),
-        )
+            path: String::new(),
+        })
     }
 }
 /// BAML interface `user.Labeled`.
@@ -702,15 +798,16 @@ impl bex_aot::serde::Serialize for user_Labeled {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for user_Labeled {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        _deserializer: D,
-    ) -> Result<Self, D::Error> {
-        Err(
-            <D::Error as bex_aot::serde::de::Error>::custom(
+impl bex_aot::json::FromJson for user_Labeled {
+    fn from_json(
+        _json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        Err(bex_aot::json::DecodeError {
+            message: String::from(
                 "a value of the interface `user.Labeled` cannot be decoded from JSON",
             ),
-        )
+            path: String::new(),
+        })
     }
 }
 /// BAML function `user.<(user.Square as user.Shape)>.area`.

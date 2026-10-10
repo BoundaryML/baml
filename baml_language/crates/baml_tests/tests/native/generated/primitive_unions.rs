@@ -30,11 +30,22 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Row`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Row`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Row {
     pub amount: Union_int_or_float,
     pub note: Option<Str>,
+}
+impl bex_aot::json::FromJson for user_Row {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Row")?;
+        Ok(Self {
+            amount: bex_aot::json::field(object, "amount", false)?,
+            note: bex_aot::json::field(object, "note", true)?,
+        })
+    }
 }
 impl ToBaml for user_Row {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -111,21 +122,17 @@ impl bex_aot::serde::Serialize for Union_int_or_float {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_float {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_float {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <f64 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::float)
-                },
+                |json| <f64 as bex_aot::json::FromJson>::from_json(json).map(Self::float),
             ],
         )
     }
@@ -185,24 +192,21 @@ impl bex_aot::serde::Serialize for Union_int_or_float_or_string {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_float_or_string {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_float_or_string {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <f64 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::float)
+                |json| {
+                    <f64 as bex_aot::json::FromJson>::from_json(json).map(Self::float)
                 },
-                |value| {
-                    <Str as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::string)
+                |json| {
+                    <Str as bex_aot::json::FromJson>::from_json(json).map(Self::string)
                 },
             ],
         )
@@ -269,29 +273,23 @@ impl bex_aot::serde::Serialize for Union_int_or_float_or_string_or_bool {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_float_or_string_or_bool {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_float_or_string_or_bool {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <f64 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::float)
+                |json| {
+                    <f64 as bex_aot::json::FromJson>::from_json(json).map(Self::float)
                 },
-                |value| {
-                    <Str as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::string)
+                |json| {
+                    <Str as bex_aot::json::FromJson>::from_json(json).map(Self::string)
                 },
-                |value| {
-                    <bool as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::bool)
-                },
+                |json| <bool as bex_aot::json::FromJson>::from_json(json).map(Self::bool),
             ],
         )
     }
@@ -348,19 +346,18 @@ impl bex_aot::serde::Serialize for Union_int_or_bigint {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_bigint {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_bigint {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <BigInt as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <BigInt as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::bigint)
                 },
             ],
@@ -415,21 +412,17 @@ impl bex_aot::serde::Serialize for Union_int_or_bool {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_bool {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_bool {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <bool as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::bool)
-                },
+                |json| <bool as bex_aot::json::FromJson>::from_json(json).map(Self::bool),
             ],
         )
     }

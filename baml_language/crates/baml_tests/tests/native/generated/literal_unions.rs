@@ -30,11 +30,22 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Tagged`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Tagged`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Tagged {
     pub tag: Str,
     pub level: Int63,
+}
+impl bex_aot::json::FromJson for user_Tagged {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Tagged")?;
+        Ok(Self {
+            tag: bex_aot::json::field(object, "tag", false)?,
+            level: bex_aot::json::field(object, "level", false)?,
+        })
+    }
 }
 impl ToBaml for user_Tagged {
     fn render(&self, out: &mut String, _nested: bool) {

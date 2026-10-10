@@ -30,11 +30,22 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Point`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Point`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Point {
     pub x: Int63,
     pub y: Int63,
+}
+impl bex_aot::json::FromJson for user_Point {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Point")?;
+        Ok(Self {
+            x: bex_aot::json::field(object, "x", false)?,
+            y: bex_aot::json::field(object, "y", false)?,
+        })
+    }
 }
 impl ToBaml for user_Point {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -70,13 +81,26 @@ impl bex_aot::Readable for user_Point {
     }
 }
 /// BAML class `user.Box`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Box`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Box {
     pub name: Str,
     pub corner: Shared<user_Point>,
     pub tag: Option<Str>,
     pub weights: Shared<Vec<Int63>>,
+}
+impl bex_aot::json::FromJson for user_Box {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Box")?;
+        Ok(Self {
+            name: bex_aot::json::field(object, "name", false)?,
+            corner: bex_aot::json::field(object, "corner", false)?,
+            tag: bex_aot::json::field(object, "tag", true)?,
+            weights: bex_aot::json::field(object, "weights", false)?,
+        })
+    }
 }
 impl ToBaml for user_Box {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -124,13 +148,20 @@ impl bex_aot::Readable for user_Box {
     }
 }
 /// BAML class `user.Counter`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `Counter`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Counter {
     pub n: Int63,
+}
+impl bex_aot::json::FromJson for user_Counter {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Counter")?;
+        Ok(Self {
+            n: bex_aot::json::field(object, "n", false)?,
+        })
+    }
 }
 impl ToBaml for user_Counter {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -156,11 +187,22 @@ impl bex_aot::Readable for user_Counter {
     }
 }
 /// BAML class `user.Holder`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Holder`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Holder {
     pub c: Shared<user_Counter>,
     pub total: Int63,
+}
+impl bex_aot::json::FromJson for user_Holder {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Holder")?;
+        Ok(Self {
+            c: bex_aot::json::field(object, "c", false)?,
+            total: bex_aot::json::field(object, "total", false)?,
+        })
+    }
 }
 impl ToBaml for user_Holder {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -254,6 +296,17 @@ pub fn user_roundtrip(mut _1: Str) -> Result<Int63, Thrown> {
     bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Point>>(&_1)?;
     _0 = user_area(_2.clone())?;
+    Ok(_0)
+}
+/// BAML function `user.box_roundtrip`.
+pub fn user_box_roundtrip(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Str;
+    let mut _2: Shared<user_Box>;
+    bex_aot::depth::probe(1)?;
+    _2 = json::deserialize::<Shared<user_Box>>(&_1)?;
+    bex_aot::depth::probe(1)?;
+    _0 = json::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.render`.

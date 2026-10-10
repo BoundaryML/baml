@@ -30,14 +30,22 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Inventory`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `Inventory`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Inventory {
     pub stock: Map<Str, Int63>,
     pub name: Str,
+}
+impl bex_aot::json::FromJson for user_Inventory {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Inventory")?;
+        Ok(Self {
+            stock: bex_aot::json::field(object, "stock", false)?,
+            name: bex_aot::json::field(object, "name", false)?,
+        })
+    }
 }
 impl ToBaml for user_Inventory {
     fn render(&self, out: &mut String, _nested: bool) {

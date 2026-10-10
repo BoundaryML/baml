@@ -30,25 +30,30 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML enum `baml.ops.Ordering`.
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    bex_aot::serde::Serialize,
-    bex_aot::serde::Deserialize
-)]
-#[serde(crate = "bex_aot::serde", expecting = "expected enum variant string")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub enum baml_ops_Ordering {
     Less,
     Equal,
     Greater,
 }
+impl bex_aot::json::FromJson for baml_ops_Ordering {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let index = bex_aot::json::enum_variant(
+            json,
+            "baml.ops.Ordering",
+            &Self::NAMES,
+        )?;
+        Ok(Self::VARIANTS[index])
+    }
+}
 impl baml_ops_Ordering {
     /// The BAML variant names, by discriminant.
     pub const NAMES: [&'static str; 3usize] = ["Less", "Equal", "Greater"];
+    /// Every variant, by discriminant.
+    pub const VARIANTS: [Self; 3usize] = [Self::Less, Self::Equal, Self::Greater];
 }
 impl ToBaml for baml_ops_Ordering {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -66,11 +71,22 @@ impl bex_aot::BamlEq for baml_ops_Ordering {
     }
 }
 /// BAML class `user.Item`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Item`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Item {
     pub name: Str,
     pub weight: Int63,
+}
+impl bex_aot::json::FromJson for user_Item {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Item")?;
+        Ok(Self {
+            name: bex_aot::json::field(object, "name", false)?,
+            weight: bex_aot::json::field(object, "weight", false)?,
+        })
+    }
 }
 impl ToBaml for user_Item {
     fn render(&self, out: &mut String, _nested: bool) {

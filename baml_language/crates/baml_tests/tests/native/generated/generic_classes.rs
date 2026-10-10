@@ -30,10 +30,20 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Box<int>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Box`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Box__int {
     pub value: Int63,
+}
+impl bex_aot::json::FromJson for user_Box__int {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Box")?;
+        Ok(Self {
+            value: bex_aot::json::field(object, "value", false)?,
+        })
+    }
 }
 impl ToBaml for user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -59,10 +69,20 @@ impl bex_aot::Readable for user_Box__int {
     }
 }
 /// BAML class `user.Box<string>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Box`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Box__string {
     pub value: Str,
+}
+impl bex_aot::json::FromJson for user_Box__string {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Box")?;
+        Ok(Self {
+            value: bex_aot::json::field(object, "value", false)?,
+        })
+    }
 }
 impl ToBaml for user_Box__string {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -88,10 +108,20 @@ impl bex_aot::Readable for user_Box__string {
     }
 }
 /// BAML class `user.Box<Box<int>>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Box`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Box__user_Box__int {
     pub value: Shared<user_Box__int>,
+}
+impl bex_aot::json::FromJson for user_Box__user_Box__int {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Box")?;
+        Ok(Self {
+            value: bex_aot::json::field(object, "value", false)?,
+        })
+    }
 }
 impl ToBaml for user_Box__user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -117,11 +147,22 @@ impl bex_aot::Readable for user_Box__user_Box__int {
     }
 }
 /// BAML class `user.Pair<int, string>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Pair`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Pair__int__string {
     pub first: Int63,
     pub second: Str,
+}
+impl bex_aot::json::FromJson for user_Pair__int__string {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Pair")?;
+        Ok(Self {
+            first: bex_aot::json::field(object, "first", false)?,
+            second: bex_aot::json::field(object, "second", false)?,
+        })
+    }
 }
 impl ToBaml for user_Pair__int__string {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -160,11 +201,22 @@ impl bex_aot::Readable for user_Pair__int__string {
     }
 }
 /// BAML class `user.Pair<string, int>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Pair`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Pair__string__int {
     pub first: Str,
     pub second: Int63,
+}
+impl bex_aot::json::FromJson for user_Pair__string__int {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Pair")?;
+        Ok(Self {
+            first: bex_aot::json::field(object, "first", false)?,
+            second: bex_aot::json::field(object, "second", false)?,
+        })
+    }
 }
 impl ToBaml for user_Pair__string__int {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -203,11 +255,22 @@ impl bex_aot::Readable for user_Pair__string__int {
     }
 }
 /// BAML class `user.Pair<Pt, string[]>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Pair`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Pair__user_Pt__string_array {
     pub first: Shared<user_Pt>,
     pub second: Shared<Vec<Str>>,
+}
+impl bex_aot::json::FromJson for user_Pair__user_Pt__string_array {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Pair")?;
+        Ok(Self {
+            first: bex_aot::json::field(object, "first", false)?,
+            second: bex_aot::json::field(object, "second", false)?,
+        })
+    }
 }
 impl ToBaml for user_Pair__user_Pt__string_array {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -246,11 +309,22 @@ impl bex_aot::Readable for user_Pair__user_Pt__string_array {
     }
 }
 /// BAML class `user.Pt`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Pt`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Pt {
     pub x: Int63,
     pub y: Int63,
+}
+impl bex_aot::json::FromJson for user_Pt {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Pt")?;
+        Ok(Self {
+            x: bex_aot::json::field(object, "x", false)?,
+            y: bex_aot::json::field(object, "y", false)?,
+        })
+    }
 }
 impl ToBaml for user_Pt {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -286,10 +360,20 @@ impl bex_aot::Readable for user_Pt {
     }
 }
 /// BAML class `user.Stack<int>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Stack`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Stack__int {
     pub items: Shared<Vec<Int63>>,
+}
+impl bex_aot::json::FromJson for user_Stack__int {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Stack")?;
+        Ok(Self {
+            items: bex_aot::json::field(object, "items", false)?,
+        })
+    }
 }
 impl ToBaml for user_Stack__int {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -315,10 +399,20 @@ impl bex_aot::Readable for user_Stack__int {
     }
 }
 /// BAML class `user.Stack<string>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Stack`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Stack__string {
     pub items: Shared<Vec<Str>>,
+}
+impl bex_aot::json::FromJson for user_Stack__string {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Stack")?;
+        Ok(Self {
+            items: bex_aot::json::field(object, "items", false)?,
+        })
+    }
 }
 impl ToBaml for user_Stack__string {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -344,10 +438,20 @@ impl bex_aot::Readable for user_Stack__string {
     }
 }
 /// BAML class `user.Box<Box<Box<int>>>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Box`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Box__user_Box__user_Box__int {
     pub value: Shared<user_Box__user_Box__int>,
+}
+impl bex_aot::json::FromJson for user_Box__user_Box__user_Box__int {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Box")?;
+        Ok(Self {
+            value: bex_aot::json::field(object, "value", false)?,
+        })
+    }
 }
 impl ToBaml for user_Box__user_Box__user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -373,11 +477,22 @@ impl bex_aot::Readable for user_Box__user_Box__user_Box__int {
     }
 }
 /// BAML class `user.Pair<string, Box<int>>`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Pair`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Pair__string__user_Box__int {
     pub first: Str,
     pub second: Shared<user_Box__int>,
+}
+impl bex_aot::json::FromJson for user_Pair__string__user_Box__int {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Pair")?;
+        Ok(Self {
+            first: bex_aot::json::field(object, "first", false)?,
+            second: bex_aot::json::field(object, "second", false)?,
+        })
+    }
 }
 impl ToBaml for user_Pair__string__user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -463,28 +578,24 @@ impl bex_aot::serde::Serialize for Union_int_or_user_Box__int_or_user_Box__strin
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de>
-for Union_int_or_user_Box__int_or_user_Box__string {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_user_Box__int_or_user_Box__string {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <Shared<
-                        user_Box__int,
-                    > as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Box__int> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Box__int)
                 },
-                |value| {
+                |json| {
                     <Shared<
                         user_Box__string,
-                    > as bex_aot::serde::Deserialize>::deserialize(value)
+                    > as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Box__string)
                 },
             ],

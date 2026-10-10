@@ -30,13 +30,20 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Invalid`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `Invalid`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Invalid {
     pub message: Str,
+}
+impl bex_aot::json::FromJson for user_Invalid {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Invalid")?;
+        Ok(Self {
+            message: bex_aot::json::field(object, "message", false)?,
+        })
+    }
 }
 impl ToBaml for user_Invalid {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -66,8 +73,8 @@ impl bex_aot::Readable for user_Invalid {
     }
 }
 /// BAML class `user.Coded`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Coded`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Coded {
     pub code: Int63,
     pub message: Str,
@@ -77,6 +84,23 @@ pub struct user_Coded {
     pub detail: Shared<user_Detail>,
     pub extra: Option<Shared<user_Detail>>,
     pub counts: Map<Str, Int63>,
+}
+impl bex_aot::json::FromJson for user_Coded {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Coded")?;
+        Ok(Self {
+            code: bex_aot::json::field(object, "code", false)?,
+            message: bex_aot::json::field(object, "message", false)?,
+            retry: bex_aot::json::field(object, "retry", false)?,
+            ratio: bex_aot::json::field(object, "ratio", false)?,
+            tags: bex_aot::json::field(object, "tags", false)?,
+            detail: bex_aot::json::field(object, "detail", false)?,
+            extra: bex_aot::json::field(object, "extra", true)?,
+            counts: bex_aot::json::field(object, "counts", false)?,
+        })
+    }
 }
 impl ToBaml for user_Coded {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -136,11 +160,22 @@ impl bex_aot::Readable for user_Coded {
     }
 }
 /// BAML class `user.Detail`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Detail`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Detail {
     pub n: Int63,
     pub note: Str,
+}
+impl bex_aot::json::FromJson for user_Detail {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Detail")?;
+        Ok(Self {
+            n: bex_aot::json::field(object, "n", false)?,
+            note: bex_aot::json::field(object, "note", false)?,
+        })
+    }
 }
 impl ToBaml for user_Detail {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -176,13 +211,20 @@ impl bex_aot::Readable for user_Detail {
     }
 }
 /// BAML class `baml.errors.InvalidArgument`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `baml.errors.InvalidArgument`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct baml_errors_InvalidArgument {
     pub message: Str,
+}
+impl bex_aot::json::FromJson for baml_errors_InvalidArgument {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "baml.errors.InvalidArgument")?;
+        Ok(Self {
+            message: bex_aot::json::field(object, "message", false)?,
+        })
+    }
 }
 impl ToBaml for baml_errors_InvalidArgument {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -212,14 +254,22 @@ impl bex_aot::Readable for baml_errors_InvalidArgument {
     }
 }
 /// BAML class `baml.json.DecodeError`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `baml.json.DecodeError`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct baml_json_DecodeError {
     pub message: Str,
     pub path: Str,
+}
+impl bex_aot::json::FromJson for baml_json_DecodeError {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "baml.json.DecodeError")?;
+        Ok(Self {
+            message: bex_aot::json::field(object, "message", false)?,
+            path: bex_aot::json::field(object, "path", false)?,
+        })
+    }
 }
 impl ToBaml for baml_json_DecodeError {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -258,13 +308,20 @@ impl bex_aot::Readable for baml_json_DecodeError {
     }
 }
 /// BAML class `baml.panics.UserPanic`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `baml.panics.UserPanic`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct baml_panics_UserPanic {
     pub message: Str,
+}
+impl bex_aot::json::FromJson for baml_panics_UserPanic {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "baml.panics.UserPanic")?;
+        Ok(Self {
+            message: bex_aot::json::field(object, "message", false)?,
+        })
+    }
 }
 impl ToBaml for baml_panics_UserPanic {
     fn render(&self, out: &mut String, _nested: bool) {

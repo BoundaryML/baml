@@ -558,10 +558,7 @@ function make(n: int) -> int {
     // A field named like a Rust keyword keeps its BAML name on the wire.
     assert_contains(source, "#[serde(rename = \"type\")]");
     assert_contains(source, "pub type_: f64,");
-    assert_contains(
-        source,
-        "#[serde(crate = \"bex_aot::serde\", expecting = \"expected JSON object for class `Cell`\")]",
-    );
+    assert_contains(source, "#[serde(crate = \"bex_aot::serde\")]");
     assert_contains(source, "impl ToBaml for user_Cell {");
     assert_contains(source, "bex_aot::render::class(");
     assert_contains(source, "\"Cell\",");
@@ -607,13 +604,10 @@ fn structs_expect_a_json_object_named_like_the_vm_does() {
         .chars()
         .filter(|c| !c.is_whitespace())
         .collect();
+    assert_contains(&flat, "letobject=bex_aot::json::object(json,\"State\")?;");
     assert_contains(
         &flat,
-        "#[serde(crate=\"bex_aot::serde\",expecting=\"expectedJSONobjectforclass`State`\")]pubstructuser_State{",
-    );
-    assert_contains(
-        &flat,
-        "#[serde(crate=\"bex_aot::serde\",expecting=\"expectedJSONobjectforclass`geo.Point`\")]pubstructuser_geo_Point{",
+        "letobject=bex_aot::json::object(json,\"geo.Point\")?;",
     );
     let source = &module.rust_source;
     assert_contains(source, "bex_aot::render::class(out, \"Point\", &[");
@@ -1478,7 +1472,7 @@ function coalesce(x: int | null, d: int) -> int { x ?? d }
     assert_contains(source, "&Union_int_or_float::int(int::lit(1)))");
     assert_contains(source, "impl bex_aot::BamlEq for Union_int_or_float {");
     assert_contains(source, "pub amount: Union_int_or_float,");
-    assert_contains(source, "bex_aot::json::deserialize_union(");
+    assert_contains(source, "bex_aot::json::union(");
     assert_contains(source, "json::deserialize::<Union_int_or_float>(&_1)?");
     assert_contains(source, "if let Some(value) = _1 {");
     assert_eq!(module.unions.len(), 2, "{:?}", module.unions);
@@ -1707,6 +1701,25 @@ function maybe(n: int) -> "x" | null { if (n > 0) { "x" } else { null } }
 
 /// The erased primitive would accept a value outside the literal, which the
 /// VM's typed decode rejects; the decode is rejected rather than widened.
+#[test]
+fn rejects_json_decode_reaching_a_class_with_its_own_from_json() {
+    let rejection = reject(
+        r#"
+class Raw {
+    n: int
+    implements baml.FromJson {
+        function from_json(j: json) -> Raw throws baml.json.DecodeError { Raw { n: 1 } }
+    }
+}
+class Holder { raw: Raw }
+function f(s: string) -> int { baml.json.deserialize<Holder>(s).raw.n }
+"#,
+        "f",
+    );
+    assert_unsupported(&rejection, "implements its own `baml.FromJson`");
+    assert_unsupported(&rejection, "user.Raw");
+}
+
 #[test]
 fn rejects_json_decode_into_a_literal_type() {
     let rejection = reject(

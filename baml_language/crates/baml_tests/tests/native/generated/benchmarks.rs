@@ -30,11 +30,22 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.State`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `State`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_State {
     pub count: Int63,
     pub seed: Int63,
+}
+impl bex_aot::json::FromJson for user_State {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "State")?;
+        Ok(Self {
+            count: bex_aot::json::field(object, "count", false)?,
+            seed: bex_aot::json::field(object, "seed", false)?,
+        })
+    }
 }
 impl ToBaml for user_State {
     fn render(&self, out: &mut String, _nested: bool) {

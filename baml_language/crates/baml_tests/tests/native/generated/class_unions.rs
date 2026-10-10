@@ -30,25 +30,26 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML enum `user.Color`.
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    bex_aot::serde::Serialize,
-    bex_aot::serde::Deserialize
-)]
-#[serde(crate = "bex_aot::serde", expecting = "expected enum variant string")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub enum user_Color {
     Red,
     Green,
     Blue,
 }
+impl bex_aot::json::FromJson for user_Color {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let index = bex_aot::json::enum_variant(json, "Color", &Self::NAMES)?;
+        Ok(Self::VARIANTS[index])
+    }
+}
 impl user_Color {
     /// The BAML variant names, by discriminant.
     pub const NAMES: [&'static str; 3usize] = ["Red", "Green", "Blue"];
+    /// Every variant, by discriminant.
+    pub const VARIANTS: [Self; 3usize] = [Self::Red, Self::Green, Self::Blue];
 }
 impl ToBaml for user_Color {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -66,24 +67,25 @@ impl bex_aot::BamlEq for user_Color {
     }
 }
 /// BAML enum `user.Size`.
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    bex_aot::serde::Serialize,
-    bex_aot::serde::Deserialize
-)]
-#[serde(crate = "bex_aot::serde", expecting = "expected enum variant string")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub enum user_Size {
     Small,
     Big,
 }
+impl bex_aot::json::FromJson for user_Size {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let index = bex_aot::json::enum_variant(json, "Size", &Self::NAMES)?;
+        Ok(Self::VARIANTS[index])
+    }
+}
 impl user_Size {
     /// The BAML variant names, by discriminant.
     pub const NAMES: [&'static str; 2usize] = ["Small", "Big"];
+    /// Every variant, by discriminant.
+    pub const VARIANTS: [Self; 2usize] = [Self::Small, Self::Big];
 }
 impl ToBaml for user_Size {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -101,10 +103,20 @@ impl bex_aot::BamlEq for user_Size {
     }
 }
 /// BAML class `user.Err`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Err`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Err {
     pub message: Str,
+}
+impl bex_aot::json::FromJson for user_Err {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Err")?;
+        Ok(Self {
+            message: bex_aot::json::field(object, "message", false)?,
+        })
+    }
 }
 impl ToBaml for user_Err {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -130,10 +142,20 @@ impl bex_aot::Readable for user_Err {
     }
 }
 /// BAML class `user.Ok`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Ok`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Ok {
     pub value: Int63,
+}
+impl bex_aot::json::FromJson for user_Ok {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Ok")?;
+        Ok(Self {
+            value: bex_aot::json::field(object, "value", false)?,
+        })
+    }
 }
 impl ToBaml for user_Ok {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -159,9 +181,17 @@ impl bex_aot::Readable for user_Ok {
     }
 }
 /// BAML class `user.Skip`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Skip`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Skip {}
+impl bex_aot::json::FromJson for user_Skip {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Skip")?;
+        Ok(Self {})
+    }
+}
 impl ToBaml for user_Skip {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Skip", &[]);
@@ -186,11 +216,22 @@ impl bex_aot::Readable for user_Skip {
     }
 }
 /// BAML class `user.Warn`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Warn`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Warn {
     pub code: Int63,
     pub note: Str,
+}
+impl bex_aot::json::FromJson for user_Warn {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Warn")?;
+        Ok(Self {
+            code: bex_aot::json::field(object, "code", false)?,
+            note: bex_aot::json::field(object, "note", false)?,
+        })
+    }
 }
 impl ToBaml for user_Warn {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -226,11 +267,22 @@ impl bex_aot::Readable for user_Warn {
     }
 }
 /// BAML class `user.Report`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Report`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Report {
     pub outcome: Union_user_Ok_or_user_Err,
     pub label: Union_user_Color_or_user_Size,
+}
+impl bex_aot::json::FromJson for user_Report {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Report")?;
+        Ok(Self {
+            outcome: bex_aot::json::field(object, "outcome", false)?,
+            label: bex_aot::json::field(object, "label", false)?,
+        })
+    }
 }
 impl ToBaml for user_Report {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -269,13 +321,20 @@ impl bex_aot::Readable for user_Report {
     }
 }
 /// BAML class `user.Reversed`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `Reversed`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Reversed {
     pub outcome: Union_user_Err_or_user_Ok,
+}
+impl bex_aot::json::FromJson for user_Reversed {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Reversed")?;
+        Ok(Self {
+            outcome: bex_aot::json::field(object, "outcome", false)?,
+        })
+    }
 }
 impl ToBaml for user_Reversed {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -305,13 +364,20 @@ impl bex_aot::Readable for user_Reversed {
     }
 }
 /// BAML class `user.Carrier`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(
-    crate = "bex_aot::serde",
-    expecting = "expected JSON object for class `Carrier`"
-)]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Carrier {
     pub payload: Option<Union_user_Ok_or_user_Err>,
+}
+impl bex_aot::json::FromJson for user_Carrier {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Carrier")?;
+        Ok(Self {
+            payload: bex_aot::json::field(object, "payload", true)?,
+        })
+    }
 }
 impl ToBaml for user_Carrier {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -383,19 +449,19 @@ impl bex_aot::serde::Serialize for Union_user_Err_or_user_Ok {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_user_Err_or_user_Ok {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_user_Err_or_user_Ok {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Shared<user_Err> as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Err> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Err)
                 },
-                |value| {
-                    <Shared<user_Ok> as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Ok> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Ok)
                 },
             ],
@@ -459,32 +525,27 @@ impl bex_aot::serde::Serialize for Union_user_Err_or_user_Ok_or_user_Skip_or_use
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de>
-for Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Shared<user_Err> as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Err> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Err)
                 },
-                |value| {
-                    <Shared<user_Ok> as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Ok> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Ok)
                 },
-                |value| {
-                    <Shared<
-                        user_Skip,
-                    > as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Skip> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Skip)
                 },
-                |value| {
-                    <Shared<
-                        user_Warn,
-                    > as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Warn> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Warn)
                 },
             ],
@@ -534,19 +595,19 @@ impl bex_aot::serde::Serialize for Union_user_Color_or_user_Size {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_user_Color_or_user_Size {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_user_Color_or_user_Size {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <user_Color as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <user_Color as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Color)
                 },
-                |value| {
-                    <user_Size as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <user_Size as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Size)
                 },
             ],
@@ -603,19 +664,18 @@ impl bex_aot::serde::Serialize for Union_int_or_user_Color {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_user_Color {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_user_Color {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <user_Color as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <user_Color as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Color)
                 },
             ],
@@ -672,20 +732,18 @@ impl bex_aot::serde::Serialize for Union_int_or_string {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_int_or_string {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_int_or_string {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Int63 as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::int)
+                |json| {
+                    <Int63 as bex_aot::json::FromJson>::from_json(json).map(Self::int)
                 },
-                |value| {
-                    <Str as bex_aot::serde::Deserialize>::deserialize(value)
-                        .map(Self::string)
+                |json| {
+                    <Str as bex_aot::json::FromJson>::from_json(json).map(Self::string)
                 },
             ],
         )
@@ -743,19 +801,19 @@ impl bex_aot::serde::Serialize for Union_user_Ok_or_user_Err {
         }
     }
 }
-impl<'de> bex_aot::serde::Deserialize<'de> for Union_user_Ok_or_user_Err {
-    fn deserialize<D: bex_aot::serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, D::Error> {
-        bex_aot::json::deserialize_union(
-            deserializer,
+impl bex_aot::json::FromJson for Union_user_Ok_or_user_Err {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
             &[
-                |value| {
-                    <Shared<user_Ok> as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Ok> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Ok)
                 },
-                |value| {
-                    <Shared<user_Err> as bex_aot::serde::Deserialize>::deserialize(value)
+                |json| {
+                    <Shared<user_Err> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Err)
                 },
             ],

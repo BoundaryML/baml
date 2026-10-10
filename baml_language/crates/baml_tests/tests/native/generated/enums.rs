@@ -30,25 +30,26 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML enum `user.Color`.
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    bex_aot::serde::Serialize,
-    bex_aot::serde::Deserialize
-)]
-#[serde(crate = "bex_aot::serde", expecting = "expected enum variant string")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub enum user_Color {
     Red,
     Green,
     Blue,
 }
+impl bex_aot::json::FromJson for user_Color {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let index = bex_aot::json::enum_variant(json, "Color", &Self::NAMES)?;
+        Ok(Self::VARIANTS[index])
+    }
+}
 impl user_Color {
     /// The BAML variant names, by discriminant.
     pub const NAMES: [&'static str; 3usize] = ["Red", "Green", "Blue"];
+    /// Every variant, by discriminant.
+    pub const VARIANTS: [Self; 3usize] = [Self::Red, Self::Green, Self::Blue];
 }
 impl ToBaml for user_Color {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -66,11 +67,22 @@ impl bex_aot::BamlEq for user_Color {
     }
 }
 /// BAML class `user.Pixel`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Pixel`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Pixel {
     pub color: user_Color,
     pub weight: Int63,
+}
+impl bex_aot::json::FromJson for user_Pixel {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Pixel")?;
+        Ok(Self {
+            color: bex_aot::json::field(object, "color", false)?,
+            weight: bex_aot::json::field(object, "weight", false)?,
+        })
+    }
 }
 impl ToBaml for user_Pixel {
     fn render(&self, out: &mut String, _nested: bool) {

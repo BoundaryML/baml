@@ -20,6 +20,11 @@ function roundtrip(raw: string) -> int {
     area(p)
 }
 
+function box_roundtrip(raw: string) -> string {
+    let b = baml.json.deserialize<Box>(raw);
+    baml.json.to_string(b)
+}
+
 function render(n: int) -> string {
     let p = Point { x: n, y: -n };
     p.to_string()

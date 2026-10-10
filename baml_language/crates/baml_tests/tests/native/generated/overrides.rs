@@ -30,11 +30,22 @@ use bex_aot::{
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Tag`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Tag`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Tag {
     pub name: Str,
     pub seen: Shared<Vec<Int63>>,
+}
+impl bex_aot::json::FromJson for user_Tag {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Tag")?;
+        Ok(Self {
+            name: bex_aot::json::field(object, "name", false)?,
+            seen: bex_aot::json::field(object, "seen", false)?,
+        })
+    }
 }
 impl ToBaml for user_Tag {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -75,10 +86,20 @@ impl bex_aot::Readable for user_Tag {
     }
 }
 /// BAML class `user.Plain`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Plain`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Plain {
     pub n: Int63,
+}
+impl bex_aot::json::FromJson for user_Plain {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Plain")?;
+        Ok(Self {
+            n: bex_aot::json::field(object, "n", false)?,
+        })
+    }
 }
 impl ToBaml for user_Plain {
     fn render(&self, out: &mut String, _nested: bool) {
@@ -104,14 +125,28 @@ impl bex_aot::Readable for user_Plain {
     }
 }
 /// BAML class `user.Holder`.
-#[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
-#[serde(crate = "bex_aot::serde", expecting = "expected JSON object for class `Holder`")]
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
 pub struct user_Holder {
     pub tags: Shared<Vec<Shared<user_Tag>>>,
     pub plain: Shared<user_Plain>,
     pub label: Str,
     pub by_name: Map<Str, Shared<user_Tag>>,
     pub maybe: Option<Shared<user_Tag>>,
+}
+impl bex_aot::json::FromJson for user_Holder {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Holder")?;
+        Ok(Self {
+            tags: bex_aot::json::field(object, "tags", false)?,
+            plain: bex_aot::json::field(object, "plain", false)?,
+            label: bex_aot::json::field(object, "label", false)?,
+            by_name: bex_aot::json::field(object, "by_name", false)?,
+            maybe: bex_aot::json::field(object, "maybe", true)?,
+        })
+    }
 }
 impl ToBaml for user_Holder {
     fn render(&self, out: &mut String, _nested: bool) {

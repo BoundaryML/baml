@@ -697,8 +697,27 @@ async fn classes_match_vm() {
         r#"{"x": 1.5, "y": 2}"#,
         r#"{"x": 1}"#,
         r#"not json"#,
+        // The decoder's rules, path and wording are the VM's: a positional
+        // array is not a class, a float is not an int, an out-of-range
+        // integer, a nested path, an element path, and an integral number
+        // past the bigint limit is a parse error.
+        r#"[3, 4]"#,
+        r#"{"x": 1e400, "y": 2}"#,
+        r#"{"x": 1, "y": 9223372036854775807}"#,
+        r#"{"x": 1, "y": null}"#,
+        r#"{"x": "1", "y": 2}"#,
+        r#"{"x": 1, "y": 2, "z": 11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111}"#,
     ] {
         check!(o, roundtrip(raw) => user_roundtrip(text(raw)));
+    }
+    for raw in [
+        r#"{"name": "b", "corner": {"x": 1, "y": "2"}, "tag": null, "weights": [1, 2]}"#,
+        r#"{"name": "b", "corner": {"x": 1, "y": 2}, "tag": 3, "weights": [1, "2"]}"#,
+        r#"{"name": "b", "corner": [1, 2], "tag": null, "weights": []}"#,
+        r#"{"name": "b", "corner": {"x": 1, "y": 2}, "weights": [1]}"#,
+        r#"{"name": "b", "corner": {"x": 1, "y": 2}, "tag": "t", "weights": [1]}"#,
+    ] {
+        check!(o, box_roundtrip(raw) => user_box_roundtrip(text(raw)));
     }
 }
 
