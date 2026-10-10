@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "name": "bare-metal-example",
+  "provider": "ssh",
+  "host_ssh": "bench@box",
+  "guest_home": "/home/bench",
+  "bench_root": "/home/bench/bench",
+  "python": "python3",
+  "description": "Template for a bare-metal runner: a Linux host with cc, cargo and the pinned tools under bench_root, reached over ssh. Copy, rename, and never compare its results with another machine's.",
+  "host": {"path": "artifacts/host", "source": "bex_engine instrumentation example at <sha>", "sha256": null},
+  "control": {"path": "artifacts/{case}/native", "frozen_as": "artifacts/{case}/native-control"},
+  "tools": {"go": "tools/go/bin/go", "python": "tools/python/bin/python3", "node": "tools/node/bin/node", "bun": "tools/bun/bun-linux-x64/bun"},
+  "references": "ref"
+}
