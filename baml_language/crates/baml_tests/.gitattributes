@@ -1,0 +1,14 @@
+# Snapshot test files
+*.snap linguist-generated=true
+*.snap -diff
+*.snap merge=ours
+
+# Alternative: treat as binary (more aggressive, hides content entirely)
+# *.snap binary
+
+# Mark snapshots directory as generated
+snapshots/** linguist-generated=true
+
+# Rust the native backend emitted for the fixtures under tests/native/fixtures;
+# regenerated with INSTA_UPDATE=always, never edited by hand.
+tests/native/generated/*.rs linguist-generated=true
