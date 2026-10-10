@@ -62,8 +62,12 @@ impl bex_aot::Readable for user_Color {
     }
 }
 impl bex_aot::BamlEq for user_Color {
-    fn baml_eq(&self, other: &Self) -> bool {
-        self == other
+    fn baml_eq(
+        &self,
+        other: &Self,
+        _cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        Ok(self == other)
     }
 }
 /// BAML enum `user.Size`.
@@ -98,8 +102,12 @@ impl bex_aot::Readable for user_Size {
     }
 }
 impl bex_aot::BamlEq for user_Size {
-    fn baml_eq(&self, other: &Self) -> bool {
-        self == other
+    fn baml_eq(
+        &self,
+        other: &Self,
+        _cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        Ok(self == other)
     }
 }
 /// BAML class `user.Err`.
@@ -127,6 +135,21 @@ impl ToBaml for user_Err {
     }
 }
 impl bex_aot::render::Overridable for user_Err {}
+impl bex_aot::eq::EqHandle for user_Err {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Err {
     const CLASS_FQN: &'static str = "user.Err";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -166,6 +189,21 @@ impl ToBaml for user_Ok {
     }
 }
 impl bex_aot::render::Overridable for user_Ok {}
+impl bex_aot::eq::EqHandle for user_Ok {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().value.clone(), b.borrow().value.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Ok {
     const CLASS_FQN: &'static str = "user.Ok";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -201,6 +239,15 @@ impl ToBaml for user_Skip {
     }
 }
 impl bex_aot::render::Overridable for user_Skip {}
+impl bex_aot::eq::EqHandle for user_Skip {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Skip {
     const CLASS_FQN: &'static str = "user.Skip";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -249,6 +296,27 @@ impl ToBaml for user_Warn {
     }
 }
 impl bex_aot::render::Overridable for user_Warn {}
+impl bex_aot::eq::EqHandle for user_Warn {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().code.clone(), b.borrow().code.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().note.clone(), b.borrow().note.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Warn {
     const CLASS_FQN: &'static str = "user.Warn";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -303,6 +371,27 @@ impl ToBaml for user_Report {
     }
 }
 impl bex_aot::render::Overridable for user_Report {}
+impl bex_aot::eq::EqHandle for user_Report {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().outcome.clone(), b.borrow().outcome.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().label.clone(), b.borrow().label.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Report {
     const CLASS_FQN: &'static str = "user.Report";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -349,6 +438,21 @@ impl ToBaml for user_Reversed {
     }
 }
 impl bex_aot::render::Overridable for user_Reversed {}
+impl bex_aot::eq::EqHandle for user_Reversed {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().outcome.clone(), b.borrow().outcome.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Reversed {
     const CLASS_FQN: &'static str = "user.Reversed";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -392,6 +496,21 @@ impl ToBaml for user_Carrier {
     }
 }
 impl bex_aot::render::Overridable for user_Carrier {}
+impl bex_aot::eq::EqHandle for user_Carrier {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().payload.clone(), b.borrow().payload.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Carrier {
     const CLASS_FQN: &'static str = "user.Carrier";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -466,6 +585,15 @@ impl bex_aot::json::FromJson for Union_user_Err_or_user_Ok {
                 },
             ],
         )
+    }
+}
+impl bex_aot::BamlEq for Union_user_Err_or_user_Ok {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Err(a), Self::user_Err(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Ok(a), Self::user_Ok(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
+        }
     }
 }
 /// BAML union `user.Err | user.Ok | user.Skip | user.Warn`.
@@ -552,6 +680,21 @@ impl bex_aot::json::FromJson for Union_user_Err_or_user_Ok_or_user_Skip_or_user_
         )
     }
 }
+impl bex_aot::BamlEq for Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Err(a), Self::user_Err(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Ok(a), Self::user_Ok(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Skip(a), Self::user_Skip(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            (Self::user_Warn(a), Self::user_Warn(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            _ => Ok(false),
+        }
+    }
+}
 /// BAML union `user.Color | user.Size`.
 #[derive(Clone, Copy, Debug)]
 pub enum Union_user_Color_or_user_Size {
@@ -615,11 +758,15 @@ impl bex_aot::json::FromJson for Union_user_Color_or_user_Size {
     }
 }
 impl bex_aot::BamlEq for Union_user_Color_or_user_Size {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::user_Color(a), Self::user_Color(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::user_Size(a), Self::user_Size(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::user_Color(a), Self::user_Color(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            (Self::user_Size(a), Self::user_Size(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            _ => Ok(false),
         }
     }
 }
@@ -683,11 +830,13 @@ impl bex_aot::json::FromJson for Union_int_or_user_Color {
     }
 }
 impl bex_aot::BamlEq for Union_int_or_user_Color {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::user_Color(a), Self::user_Color(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Color(a), Self::user_Color(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            _ => Ok(false),
         }
     }
 }
@@ -750,11 +899,11 @@ impl bex_aot::json::FromJson for Union_int_or_string {
     }
 }
 impl bex_aot::BamlEq for Union_int_or_string {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::string(a), Self::string(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::string(a), Self::string(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -818,6 +967,15 @@ impl bex_aot::json::FromJson for Union_user_Ok_or_user_Err {
                 },
             ],
         )
+    }
+}
+impl bex_aot::BamlEq for Union_user_Ok_or_user_Err {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Ok(a), Self::user_Ok(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Err(a), Self::user_Err(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
+        }
     }
 }
 /// BAML function `user.outcome`.
@@ -1216,7 +1374,7 @@ pub fn user_same_label(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
     _3 = user_label(_1)?;
     _4 = user_label(_2)?;
     bex_aot::depth::probe(0)?;
-    _0 = bex_aot::eq::equals(&_3, &_4);
+    _0 = bex_aot::eq::equals(&_3, &_4)?;
     Ok(_0)
 }
 /// BAML function `user.is_red`.
@@ -1229,7 +1387,7 @@ pub fn user_is_red(mut _1: Int63) -> Result<bool, Thrown> {
     _0 = bex_aot::eq::equals(
         &_2,
         &Union_user_Color_or_user_Size::user_Color(user_Color::Red),
-    );
+    )?;
     Ok(_0)
 }
 /// BAML function `user.not_big`.
@@ -1243,7 +1401,7 @@ pub fn user_not_big(mut _1: Int63) -> Result<bool, Thrown> {
     _3 = bex_aot::eq::equals(
         &_2,
         &Union_user_Color_or_user_Size::user_Size(user_Size::Big),
-    );
+    )?;
     _0 = !_3;
     Ok(_0)
 }
@@ -1277,7 +1435,7 @@ pub fn user_variant_arm(mut _1: Int63) -> Result<Int63, Thrown> {
         _5 = bex_aot::eq::equals(
             &_2,
             &Union_int_or_user_Color::user_Color(user_Color::Red),
-        );
+        )?;
         if _5 {
             _0 = int::lit(1);
             break 'bb10;

@@ -66,8 +66,12 @@ impl bex_aot::Readable for baml_ops_Ordering {
     }
 }
 impl bex_aot::BamlEq for baml_ops_Ordering {
-    fn baml_eq(&self, other: &Self) -> bool {
-        self == other
+    fn baml_eq(
+        &self,
+        other: &Self,
+        _cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        Ok(self == other)
     }
 }
 /// BAML class `user.Item`.
@@ -107,6 +111,27 @@ impl ToBaml for user_Item {
     }
 }
 impl bex_aot::render::Overridable for user_Item {}
+impl bex_aot::eq::EqHandle for user_Item {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().name.clone(), b.borrow().name.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().weight.clone(), b.borrow().weight.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Item {
     const CLASS_FQN: &'static str = "user.Item";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

@@ -36,6 +36,7 @@ const FIXTURES: &[&str] = &[
     "defaults",
     "defers",
     "enums",
+    "equality",
     "floats",
     "generic_classes",
     "generics",
@@ -128,6 +129,7 @@ generated_module!(generics, "native/generated/generics.rs");
 generated_module!(generic_classes, "native/generated/generic_classes.rs");
 generated_module!(interfaces, "native/generated/interfaces.rs");
 generated_module!(overrides, "native/generated/overrides.rs");
+generated_module!(equality, "native/generated/equality.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -718,6 +720,26 @@ async fn classes_match_vm() {
         r#"{"name": "b", "corner": {"x": 1, "y": 2}, "tag": "t", "weights": [1]}"#,
     ] {
         check!(o, box_roundtrip(raw) => user_box_roundtrip(text(raw)));
+    }
+}
+
+#[tokio::test]
+async fn equality_matches_vm() {
+    use equality::*;
+    let o = Oracle::new("equality");
+    for n in [0, 1, 7, -3] {
+        check!(o, same_object(n) => user_same_object(int(n)));
+        check!(o, structural(n) => user_structural(int(n)));
+        check!(o, differing(n) => user_differing(int(n)));
+        check!(o, nested(n) => user_nested(int(n)));
+        check!(o, arrays_and_maps(n) => user_arrays_and_maps(int(n)));
+        check!(o, cyclic(n) => user_cyclic(int(n)));
+        check!(o, overridden(n) => user_overridden(int(n)));
+        check!(o, enums(n) => user_enums(int(n)));
+        check!(o, unions(n) => user_unions(int(n)));
+    }
+    for n in [0, 3, 251, 252, 253, 254, 255, 256] {
+        check!(o, deep_eq(n) => user_deep_eq(int(n)));
     }
 }
 

@@ -63,6 +63,27 @@ impl ToBaml for user_Tagged {
     }
 }
 impl bex_aot::render::Overridable for user_Tagged {}
+impl bex_aot::eq::EqHandle for user_Tagged {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().tag.clone(), b.borrow().tag.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().level.clone(), b.borrow().level.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Tagged {
     const CLASS_FQN: &'static str = "user.Tagged";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -176,7 +197,7 @@ pub fn user_same_tag(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
     _3 = user_pick(_1)?;
     _4 = user_pick(_2)?;
     bex_aot::depth::probe(0)?;
-    _0 = bex_aot::eq::equals(&_3.clone(), &_4.clone());
+    _0 = bex_aot::eq::equals(&_3.clone(), &_4.clone())?;
     Ok(_0)
 }
 /// BAML function `user.tag_is_hi`.
@@ -186,7 +207,7 @@ pub fn user_tag_is_hi(mut _1: Int63) -> Result<bool, Thrown> {
     let mut _2: Str;
     _2 = user_pick(_1)?;
     bex_aot::depth::probe(0)?;
-    _0 = bex_aot::eq::equals(&_2.clone(), &string::from_literal("hi"));
+    _0 = bex_aot::eq::equals(&_2.clone(), &string::from_literal("hi"))?;
     Ok(_0)
 }
 /// BAML function `user.is_lo`.
@@ -380,7 +401,7 @@ pub fn user_count_lo(mut _1: Int63) -> Result<Int63, Thrown> {
             _17 = _15.clone().expect("non-null by the checker's narrowing");
             _20 = _17.clone();
             bex_aot::depth::probe(0)?;
-            _19 = bex_aot::eq::equals(&_20.clone(), &string::from_literal("lo"));
+            _19 = bex_aot::eq::equals(&_20.clone(), &string::from_literal("lo"))?;
             if _19 {
                 _21 = _12;
                 _12 = int::add(_21, int::lit(1))?;

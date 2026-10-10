@@ -66,8 +66,12 @@ impl bex_aot::Readable for baml_ops_Ordering {
     }
 }
 impl bex_aot::BamlEq for baml_ops_Ordering {
-    fn baml_eq(&self, other: &Self) -> bool {
-        self == other
+    fn baml_eq(
+        &self,
+        other: &Self,
+        _cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        Ok(self == other)
     }
 }
 /// BAML class `user.Square`.
@@ -95,6 +99,21 @@ impl ToBaml for user_Square {
     }
 }
 impl bex_aot::render::Overridable for user_Square {}
+impl bex_aot::eq::EqHandle for user_Square {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().side.clone(), b.borrow().side.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Square {
     const CLASS_FQN: &'static str = "user.Square";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -143,6 +162,27 @@ impl ToBaml for user_Rect {
     }
 }
 impl bex_aot::render::Overridable for user_Rect {}
+impl bex_aot::eq::EqHandle for user_Rect {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().w.clone(), b.borrow().w.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().h.clone(), b.borrow().h.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Rect {
     const CLASS_FQN: &'static str = "user.Rect";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -181,6 +221,15 @@ impl ToBaml for user_Dot {
     }
 }
 impl bex_aot::render::Overridable for user_Dot {}
+impl bex_aot::eq::EqHandle for user_Dot {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Dot {
     const CLASS_FQN: &'static str = "user.Dot";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -229,6 +278,27 @@ impl ToBaml for user_Dog {
     }
 }
 impl bex_aot::render::Overridable for user_Dog {}
+impl bex_aot::eq::EqHandle for user_Dog {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().name.clone(), b.borrow().name.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().barks.clone(), b.borrow().barks.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Dog {
     const CLASS_FQN: &'static str = "user.Dog";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -271,6 +341,21 @@ impl ToBaml for user_Cat {
     }
 }
 impl bex_aot::render::Overridable for user_Cat {}
+impl bex_aot::eq::EqHandle for user_Cat {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().name.clone(), b.borrow().name.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Cat {
     const CLASS_FQN: &'static str = "user.Cat";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -319,6 +404,27 @@ impl ToBaml for user_Holder {
     }
 }
 impl bex_aot::render::Overridable for user_Holder {}
+impl bex_aot::eq::EqHandle for user_Holder {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().item.clone(), b.borrow().item.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().tag.clone(), b.borrow().tag.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Holder {
     const CLASS_FQN: &'static str = "user.Holder";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -361,6 +467,21 @@ impl ToBaml for user_Money {
     }
 }
 impl bex_aot::render::Overridable for user_Money {}
+impl bex_aot::eq::EqHandle for user_Money {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().cents.clone(), b.borrow().cents.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Money {
     const CLASS_FQN: &'static str = "user.Money";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -404,6 +525,21 @@ impl ToBaml for user_Tag {
     }
 }
 impl bex_aot::render::Overridable for user_Tag {}
+impl bex_aot::eq::EqHandle for user_Tag {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().tag_text.clone(), b.borrow().tag_text.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Tag {
     const CLASS_FQN: &'static str = "user.Tag";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -443,6 +579,21 @@ impl ToBaml for user_Note {
     }
 }
 impl bex_aot::render::Overridable for user_Note {}
+impl bex_aot::eq::EqHandle for user_Note {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().label.clone(), b.borrow().label.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Note {
     const CLASS_FQN: &'static str = "user.Note";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -516,6 +667,17 @@ impl bex_aot::json::FromJson for Union_int_or_user_Shape {
         )
     }
 }
+impl bex_aot::BamlEq for Union_int_or_user_Shape {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Shape(a), Self::user_Shape(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            _ => Ok(false),
+        }
+    }
+}
 /// BAML union `user.Note | user.Tag`.
 #[derive(Clone, Debug)]
 pub enum Union_user_Note_or_user_Tag {
@@ -578,6 +740,17 @@ impl bex_aot::json::FromJson for Union_user_Note_or_user_Tag {
         )
     }
 }
+impl bex_aot::BamlEq for Union_user_Note_or_user_Tag {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Note(a), Self::user_Note(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            (Self::user_Tag(a), Self::user_Tag(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
+        }
+    }
+}
 /// BAML interface `user.Shape`.
 #[derive(Clone, Debug)]
 pub enum user_Shape {
@@ -607,6 +780,20 @@ impl bex_aot::Readable for user_Shape {
             Self::user_Square(value) => bex_aot::Readable::readable(value),
             Self::user_Rect(value) => bex_aot::Readable::readable(value),
             Self::user_Dot(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::BamlEq for user_Shape {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Square(a), Self::user_Square(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            (Self::user_Rect(a), Self::user_Rect(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            (Self::user_Dot(a), Self::user_Dot(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -665,6 +852,15 @@ impl bex_aot::Readable for user_Named {
         match self {
             Self::user_Dog(value) => bex_aot::Readable::readable(value),
             Self::user_Cat(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::BamlEq for user_Named {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Dog(a), Self::user_Dog(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Cat(a), Self::user_Cat(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -727,6 +923,16 @@ impl bex_aot::Readable for user_Counted {
         }
     }
 }
+impl bex_aot::BamlEq for user_Counted {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::string(a), Self::string(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Dog(a), Self::user_Dog(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for user_Counted {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -780,6 +986,17 @@ impl bex_aot::Readable for user_Labeled {
         match self {
             Self::user_Tag(value) => bex_aot::Readable::readable(value),
             Self::user_Note(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::BamlEq for user_Labeled {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Tag(a), Self::user_Tag(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Note(a), Self::user_Note(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            _ => Ok(false),
         }
     }
 }

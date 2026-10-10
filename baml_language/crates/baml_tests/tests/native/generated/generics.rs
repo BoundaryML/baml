@@ -54,6 +54,21 @@ impl ToBaml for user_Box {
     }
 }
 impl bex_aot::render::Overridable for user_Box {}
+impl bex_aot::eq::EqHandle for user_Box {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().n.clone(), b.borrow().n.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Box {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -102,6 +117,27 @@ impl ToBaml for user_Pt {
     }
 }
 impl bex_aot::render::Overridable for user_Pt {}
+impl bex_aot::eq::EqHandle for user_Pt {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().x.clone(), b.borrow().x.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().y.clone(), b.borrow().y.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Pt {
     const CLASS_FQN: &'static str = "user.Pt";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -191,7 +227,7 @@ pub fn user_find_first__int(
                 _7 = _6;
                 _9 = _7;
                 bex_aot::depth::probe(0)?;
-                _8 = bex_aot::eq::equals(&_9, &_2);
+                _8 = bex_aot::eq::equals(&_9, &_2)?;
                 if _8 {
                     _0 = Some(_7);
                     break 'bb7;
@@ -513,7 +549,7 @@ pub fn user_find_first__string(
                 _6 = _4.clone().expect("non-null by the checker's narrowing");
                 _7 = _6.clone();
                 bex_aot::depth::probe(0)?;
-                _8 = bex_aot::eq::equals(&_7.clone(), &_2.clone());
+                _8 = bex_aot::eq::equals(&_7.clone(), &_2.clone())?;
                 if _8 {
                     _0 = Some(_7.clone());
                     break 'bb7;
@@ -757,7 +793,7 @@ pub fn user_find_first__float(
                 _7 = _6;
                 _9 = _7;
                 bex_aot::depth::probe(0)?;
-                _8 = bex_aot::eq::equals(&_9, &_2);
+                _8 = bex_aot::eq::equals(&_9, &_2)?;
                 if _8 {
                     _0 = Some(_7);
                     break 'bb7;

@@ -63,6 +63,27 @@ impl ToBaml for user_Point {
     }
 }
 impl bex_aot::render::Overridable for user_Point {}
+impl bex_aot::eq::EqHandle for user_Point {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().x.clone(), b.borrow().x.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().y.clone(), b.borrow().y.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Point {
     const CLASS_FQN: &'static str = "user.Point";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -128,6 +149,39 @@ impl ToBaml for user_Box {
     }
 }
 impl bex_aot::render::Overridable for user_Box {}
+impl bex_aot::eq::EqHandle for user_Box {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().name.clone(), b.borrow().name.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().corner.clone(), b.borrow().corner.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().tag.clone(), b.borrow().tag.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().weights.clone(), b.borrow().weights.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Box {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -172,6 +226,21 @@ impl ToBaml for user_Counter {
     }
 }
 impl bex_aot::render::Overridable for user_Counter {}
+impl bex_aot::eq::EqHandle for user_Counter {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().n.clone(), b.borrow().n.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Counter {
     const CLASS_FQN: &'static str = "user.Counter";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -220,6 +289,27 @@ impl ToBaml for user_Holder {
     }
 }
 impl bex_aot::render::Overridable for user_Holder {}
+impl bex_aot::eq::EqHandle for user_Holder {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().c.clone(), b.borrow().c.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().total.clone(), b.borrow().total.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Holder {
     const CLASS_FQN: &'static str = "user.Holder";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

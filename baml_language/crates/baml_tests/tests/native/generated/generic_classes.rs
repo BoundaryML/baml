@@ -54,6 +54,21 @@ impl ToBaml for user_Box__int {
     }
 }
 impl bex_aot::render::Overridable for user_Box__int {}
+impl bex_aot::eq::EqHandle for user_Box__int {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().value.clone(), b.borrow().value.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Box__int {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -93,6 +108,21 @@ impl ToBaml for user_Box__string {
     }
 }
 impl bex_aot::render::Overridable for user_Box__string {}
+impl bex_aot::eq::EqHandle for user_Box__string {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().value.clone(), b.borrow().value.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Box__string {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -132,6 +162,21 @@ impl ToBaml for user_Box__user_Box__int {
     }
 }
 impl bex_aot::render::Overridable for user_Box__user_Box__int {}
+impl bex_aot::eq::EqHandle for user_Box__user_Box__int {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().value.clone(), b.borrow().value.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Box__user_Box__int {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -183,6 +228,27 @@ impl ToBaml for user_Pair__int__string {
     }
 }
 impl bex_aot::render::Overridable for user_Pair__int__string {}
+impl bex_aot::eq::EqHandle for user_Pair__int__string {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().first.clone(), b.borrow().first.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().second.clone(), b.borrow().second.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Pair__int__string {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -237,6 +303,27 @@ impl ToBaml for user_Pair__string__int {
     }
 }
 impl bex_aot::render::Overridable for user_Pair__string__int {}
+impl bex_aot::eq::EqHandle for user_Pair__string__int {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().first.clone(), b.borrow().first.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().second.clone(), b.borrow().second.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Pair__string__int {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -291,6 +378,27 @@ impl ToBaml for user_Pair__user_Pt__string_array {
     }
 }
 impl bex_aot::render::Overridable for user_Pair__user_Pt__string_array {}
+impl bex_aot::eq::EqHandle for user_Pair__user_Pt__string_array {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().first.clone(), b.borrow().first.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().second.clone(), b.borrow().second.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Pair__user_Pt__string_array {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -342,6 +450,27 @@ impl ToBaml for user_Pt {
     }
 }
 impl bex_aot::render::Overridable for user_Pt {}
+impl bex_aot::eq::EqHandle for user_Pt {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().x.clone(), b.borrow().x.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().y.clone(), b.borrow().y.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Pt {
     const CLASS_FQN: &'static str = "user.Pt";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -384,6 +513,21 @@ impl ToBaml for user_Stack__int {
     }
 }
 impl bex_aot::render::Overridable for user_Stack__int {}
+impl bex_aot::eq::EqHandle for user_Stack__int {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().items.clone(), b.borrow().items.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Stack__int {
     const CLASS_FQN: &'static str = "user.Stack";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -423,6 +567,21 @@ impl ToBaml for user_Stack__string {
     }
 }
 impl bex_aot::render::Overridable for user_Stack__string {}
+impl bex_aot::eq::EqHandle for user_Stack__string {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().items.clone(), b.borrow().items.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Stack__string {
     const CLASS_FQN: &'static str = "user.Stack";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -462,6 +621,21 @@ impl ToBaml for user_Box__user_Box__user_Box__int {
     }
 }
 impl bex_aot::render::Overridable for user_Box__user_Box__user_Box__int {}
+impl bex_aot::eq::EqHandle for user_Box__user_Box__user_Box__int {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().value.clone(), b.borrow().value.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Box__user_Box__user_Box__int {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -513,6 +687,27 @@ impl ToBaml for user_Pair__string__user_Box__int {
     }
 }
 impl bex_aot::render::Overridable for user_Pair__string__user_Box__int {}
+impl bex_aot::eq::EqHandle for user_Pair__string__user_Box__int {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().first.clone(), b.borrow().first.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().second.clone(), b.borrow().second.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Pair__string__user_Box__int {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -600,6 +795,20 @@ impl bex_aot::json::FromJson for Union_int_or_user_Box__int_or_user_Box__string 
                 },
             ],
         )
+    }
+}
+impl bex_aot::BamlEq for Union_int_or_user_Box__int_or_user_Box__string {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Box__int(a), Self::user_Box__int(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            (Self::user_Box__string(a), Self::user_Box__string(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
+            _ => Ok(false),
+        }
     }
 }
 /// BAML function `user.make_box<int>`.

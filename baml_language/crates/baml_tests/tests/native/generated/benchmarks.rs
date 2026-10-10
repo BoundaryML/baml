@@ -63,6 +63,27 @@ impl ToBaml for user_State {
     }
 }
 impl bex_aot::render::Overridable for user_State {}
+impl bex_aot::eq::EqHandle for user_State {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().count.clone(), b.borrow().count.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().seed.clone(), b.borrow().seed.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_State {
     const CLASS_FQN: &'static str = "user.State";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

@@ -66,6 +66,27 @@ impl ToBaml for user_Row {
     }
 }
 impl bex_aot::render::Overridable for user_Row {}
+impl bex_aot::eq::EqHandle for user_Row {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().amount.clone(), b.borrow().amount.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().note.clone(), b.borrow().note.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Row {
     const CLASS_FQN: &'static str = "user.Row";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -138,11 +159,11 @@ impl bex_aot::json::FromJson for Union_int_or_float {
     }
 }
 impl bex_aot::BamlEq for Union_int_or_float {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::float(a), Self::float(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::float(a), Self::float(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -213,12 +234,12 @@ impl bex_aot::json::FromJson for Union_int_or_float_or_string {
     }
 }
 impl bex_aot::BamlEq for Union_int_or_float_or_string {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::float(a), Self::float(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::string(a), Self::string(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::float(a), Self::float(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::string(a), Self::string(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -295,13 +316,13 @@ impl bex_aot::json::FromJson for Union_int_or_float_or_string_or_bool {
     }
 }
 impl bex_aot::BamlEq for Union_int_or_float_or_string_or_bool {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::float(a), Self::float(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::string(a), Self::string(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::bool(a), Self::bool(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::float(a), Self::float(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::string(a), Self::string(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::bool(a), Self::bool(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -365,11 +386,11 @@ impl bex_aot::json::FromJson for Union_int_or_bigint {
     }
 }
 impl bex_aot::BamlEq for Union_int_or_bigint {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::bigint(a), Self::bigint(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::bigint(a), Self::bigint(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -428,11 +449,11 @@ impl bex_aot::json::FromJson for Union_int_or_bool {
     }
 }
 impl bex_aot::BamlEq for Union_int_or_bool {
-    fn baml_eq(&self, other: &Self) -> bool {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
-            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            (Self::bool(a), Self::bool(b)) => bex_aot::BamlEq::baml_eq(a, b),
-            _ => false,
+            (Self::int(a), Self::int(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::bool(a), Self::bool(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
         }
     }
 }
@@ -929,7 +950,7 @@ pub fn user_same(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
     _3 = user_make(_1)?;
     _4 = user_make(_2)?;
     bex_aot::depth::probe(0)?;
-    _0 = bex_aot::eq::equals(&_3, &_4);
+    _0 = bex_aot::eq::equals(&_3, &_4)?;
     Ok(_0)
 }
 /// BAML function `user.differ`.
@@ -942,7 +963,7 @@ pub fn user_differ(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
     _3 = user_make(_1)?;
     _4 = user_make(_2)?;
     bex_aot::depth::probe(0)?;
-    _5 = bex_aot::eq::equals(&_3, &_4);
+    _5 = bex_aot::eq::equals(&_3, &_4)?;
     _0 = !_5;
     Ok(_0)
 }
@@ -953,7 +974,7 @@ pub fn user_is_three(mut _1: Int63) -> Result<bool, Thrown> {
     let mut _2: Union_int_or_float;
     _2 = user_make(_1)?;
     bex_aot::depth::probe(0)?;
-    _0 = bex_aot::eq::equals(&_2, &Union_int_or_float::int(int::lit(3)));
+    _0 = bex_aot::eq::equals(&_2, &Union_int_or_float::int(int::lit(3)))?;
     Ok(_0)
 }
 /// BAML function `user.is_half`.
@@ -965,7 +986,7 @@ pub fn user_is_half(mut _1: Int63) -> Result<bool, Thrown> {
     _3 = 1.5_f64;
     _2 = user_make(_1)?;
     bex_aot::depth::probe(0)?;
-    _0 = bex_aot::eq::equals(&Union_int_or_float::float(_3), &_2);
+    _0 = bex_aot::eq::equals(&Union_int_or_float::float(_3), &_2)?;
     Ok(_0)
 }
 /// BAML function `user.nullable_same`.
@@ -977,7 +998,7 @@ pub fn user_nullable_same(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> 
     _3 = user_make_null(_1)?;
     _4 = user_make_null(_2)?;
     bex_aot::depth::probe(0)?;
-    _0 = bex_aot::eq::equals(&_3, &_4);
+    _0 = bex_aot::eq::equals(&_3, &_4)?;
     Ok(_0)
 }
 /// BAML function `user.render`.

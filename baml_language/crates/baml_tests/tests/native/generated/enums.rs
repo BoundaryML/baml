@@ -62,8 +62,12 @@ impl bex_aot::Readable for user_Color {
     }
 }
 impl bex_aot::BamlEq for user_Color {
-    fn baml_eq(&self, other: &Self) -> bool {
-        self == other
+    fn baml_eq(
+        &self,
+        other: &Self,
+        _cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        Ok(self == other)
     }
 }
 /// BAML class `user.Pixel`.
@@ -103,6 +107,27 @@ impl ToBaml for user_Pixel {
     }
 }
 impl bex_aot::render::Overridable for user_Pixel {}
+impl bex_aot::eq::EqHandle for user_Pixel {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().color.clone(), b.borrow().color.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().weight.clone(), b.borrow().weight.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Pixel {
     const CLASS_FQN: &'static str = "user.Pixel";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

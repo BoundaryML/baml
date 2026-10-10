@@ -54,6 +54,21 @@ impl ToBaml for user_Box {
     }
 }
 impl bex_aot::render::Overridable for user_Box {}
+impl bex_aot::eq::EqHandle for user_Box {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().n.clone(), b.borrow().n.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Box {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

@@ -58,6 +58,21 @@ impl ToBaml for user_Invalid {
     }
 }
 impl bex_aot::render::Overridable for user_Invalid {}
+impl bex_aot::eq::EqHandle for user_Invalid {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Invalid {
     const CLASS_FQN: &'static str = "user.Invalid";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -109,6 +124,27 @@ impl ToBaml for user_Coded {
     }
 }
 impl bex_aot::render::Overridable for user_Coded {}
+impl bex_aot::eq::EqHandle for user_Coded {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().code.clone(), b.borrow().code.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Coded {
     const CLASS_FQN: &'static str = "user.Coded";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

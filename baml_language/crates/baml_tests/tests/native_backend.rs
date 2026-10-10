@@ -1319,14 +1319,14 @@ fn rejects_map_with_a_float_key() {
 }
 
 #[test]
-fn rejects_equality_on_maps() {
-    let rejection = reject(
+fn equality_on_maps_is_the_structural_walk() {
+    let module = compile_entry(
         "function f(a: map<string, int>, b: map<string, int>) -> bool { a == b }",
         "f",
     );
-    assert_unsupported(
-        &rejection,
-        "`==` on a `map<string, int>` and a `map<string, int>`",
+    assert_contains(
+        &module.rust_source,
+        "= bex_aot::eq::equals(&_1.clone(), &_2.clone())?;",
     );
 }
 
@@ -1549,9 +1549,9 @@ function decode(raw: string) -> Report { baml.json.deserialize<Report>(raw) }
         source,
         "impl bex_aot::BamlEq for Union_user_Color_or_user_Size {",
     );
-    assert!(
-        !source.contains("impl bex_aot::BamlEq for Union_user_Err_or_user_Ok {"),
-        "class instances compare structurally on the VM, which is not native"
+    assert_contains(
+        source,
+        "impl bex_aot::BamlEq for Union_user_Err_or_user_Ok {",
     );
     // The field keeps its spelled order, so the store re-tags.
     assert_contains(source, "pub outcome: Union_user_Ok_or_user_Err,");
@@ -1564,8 +1564,8 @@ function decode(raw: string) -> Report { baml.json.deserialize<Report>(raw) }
 /// `baml.ops.Equals` dispatched), which the runtime does not do; an enum
 /// with its own `Equals` is compared by the VM through it.
 #[test]
-fn rejects_equality_on_unions_that_do_not_compare_natively() {
-    let rejection = reject(
+fn equality_on_unions_with_class_members_and_own_eq() {
+    let module = compile_entry(
         r"
 class Ok { value: int }
 class Err { message: string }
@@ -1573,11 +1573,16 @@ function f(a: Ok | Err, b: Ok | Err) -> bool { a == b }
 ",
         "f",
     );
-    assert_unsupported(
-        &rejection,
-        "`==` on a `user.Err | user.Ok` and a `user.Err | user.Ok`",
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        "impl bex_aot::BamlEq for Union_user_Err_or_user_Ok {",
     );
-    let rejection = reject(
+    assert_contains(source, "impl bex_aot::eq::EqHandle for user_Ok {");
+    assert_contains(source, "= bex_aot::eq::equals(&_1.clone(), &_2.clone())?;");
+    // An enum's own `eq` is compiled with the comparison and called by the
+    // generated impl under one frame.
+    let module = compile_entry(
         r"
 enum Odd { X, Y }
 implements baml.ops.Equals for Odd { function eq(self, other: Odd) -> bool throws never { true } }
@@ -1585,10 +1590,12 @@ function g(a: int | Odd) -> bool { a == Odd.X }
 ",
         "g",
     );
-    assert_unsupported(
-        &rejection,
-        "`user.Odd` implements its own `baml.ops.Equals`",
+    let source = &module.rust_source;
+    assert_contains(
+        source,
+        "user___user_Odd_as_baml_ops_Equals___eq(*self, *other)",
     );
+    assert_contains(source, "let _frame = bex_aot::depth::Guard::enter()?;");
 }
 
 /// A field read through a narrowed union local (`v.n` after `v is A`)

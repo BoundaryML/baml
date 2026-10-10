@@ -58,6 +58,21 @@ impl ToBaml for user_Invalid {
     }
 }
 impl bex_aot::render::Overridable for user_Invalid {}
+impl bex_aot::eq::EqHandle for user_Invalid {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Invalid {
     const CLASS_FQN: &'static str = "user.Invalid";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -136,6 +151,63 @@ impl ToBaml for user_Coded {
     }
 }
 impl bex_aot::render::Overridable for user_Coded {}
+impl bex_aot::eq::EqHandle for user_Coded {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().code.clone(), b.borrow().code.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().retry.clone(), b.borrow().retry.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().ratio.clone(), b.borrow().ratio.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().tags.clone(), b.borrow().tags.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().detail.clone(), b.borrow().detail.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().extra.clone(), b.borrow().extra.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().counts.clone(), b.borrow().counts.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Coded {
     const CLASS_FQN: &'static str = "user.Coded";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -193,6 +265,27 @@ impl ToBaml for user_Detail {
     }
 }
 impl bex_aot::render::Overridable for user_Detail {}
+impl bex_aot::eq::EqHandle for user_Detail {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().n.clone(), b.borrow().n.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().note.clone(), b.borrow().note.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for user_Detail {
     const CLASS_FQN: &'static str = "user.Detail";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -239,6 +332,21 @@ impl ToBaml for baml_errors_InvalidArgument {
     }
 }
 impl bex_aot::render::Overridable for baml_errors_InvalidArgument {}
+impl bex_aot::eq::EqHandle for baml_errors_InvalidArgument {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for baml_errors_InvalidArgument {
     const CLASS_FQN: &'static str = "baml.errors.InvalidArgument";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -290,6 +398,27 @@ impl ToBaml for baml_json_DecodeError {
     }
 }
 impl bex_aot::render::Overridable for baml_json_DecodeError {}
+impl bex_aot::eq::EqHandle for baml_json_DecodeError {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().path.clone(), b.borrow().path.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for baml_json_DecodeError {
     const CLASS_FQN: &'static str = "baml.json.DecodeError";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -336,6 +465,21 @@ impl ToBaml for baml_panics_UserPanic {
     }
 }
 impl bex_aot::render::Overridable for baml_panics_UserPanic {}
+impl bex_aot::eq::EqHandle for baml_panics_UserPanic {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().message.clone(), b.borrow().message.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 impl bex_aot::ErrorClass for baml_panics_UserPanic {
     const CLASS_FQN: &'static str = "baml.panics.UserPanic";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
