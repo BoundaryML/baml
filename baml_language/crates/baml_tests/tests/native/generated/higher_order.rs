@@ -110,6 +110,7 @@ pub fn user_doubled__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.doubled`.
 pub fn user_doubled(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
     _2 = {
@@ -118,6 +119,7 @@ pub fn user_doubled(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Th
         { user_doubled__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_2;
         array::map(&_1, __callback)?
@@ -131,12 +133,14 @@ pub fn user_labels__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _2: Str;
     let mut _4: Str;
     _4 = string::from_literal("n");
+    bex_aot::depth::probe(0)?;
     _2 = ToBaml::to_baml(&_1);
     _0 = string::concat(&_4, &_2);
     Ok(_0)
 }
 /// BAML function `user.labels`.
 pub fn user_labels(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Str>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Str>>;
     let mut _2: Rc<dyn Fn(Int63) -> Result<Str, Thrown>>;
     _2 = {
@@ -145,6 +149,7 @@ pub fn user_labels(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Str>>, Throw
         { user_labels__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_2;
         array::map(&_1, __callback)?
@@ -162,6 +167,7 @@ pub fn user_evens__lambda0(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.evens`.
 pub fn user_evens(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
     _2 = {
@@ -170,6 +176,7 @@ pub fn user_evens(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thro
         { user_evens__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_2;
         array::filter(&_1, __callback)?
@@ -197,6 +204,7 @@ pub fn user_halves__lambda0(mut _1: Int63) -> Result<Option<Int63>, Thrown> {
 }
 /// BAML function `user.halves`.
 pub fn user_halves(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Rc<dyn Fn(Int63) -> Result<Option<Int63>, Thrown>>;
     _2 = {
@@ -205,6 +213,7 @@ pub fn user_halves(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thr
         { user_halves__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(1)?;
     _0 = {
         let __callback = &*_2;
         array::filter_map(&_1, __callback)?
@@ -220,6 +229,7 @@ pub fn user_total__lambda0(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown
 }
 /// BAML function `user.total`.
 pub fn user_total(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Rc<dyn Fn(Int63, Int63) -> Result<Int63, Thrown>>;
     _2 = {
@@ -229,6 +239,7 @@ pub fn user_total(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
         { user_total__lambda0(__arg0, __arg1) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_2;
         array::reduce(&_1, __callback, int::lit(0))?
@@ -241,6 +252,7 @@ pub fn user_joined__lambda0(mut _1: Str, mut _2: Int63) -> Result<Str, Thrown> {
     let mut _0: Str;
     let mut _3: Str;
     let mut _4: Str;
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_2);
     _3 = string::concat(&_1, &_4);
     _0 = string::concat(&_3, &string::from_literal(","));
@@ -248,6 +260,7 @@ pub fn user_joined__lambda0(mut _1: Str, mut _2: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.joined`.
 pub fn user_joined(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Rc<dyn Fn(Str, Int63) -> Result<Str, Thrown>>;
     _2 = {
@@ -257,6 +270,7 @@ pub fn user_joined(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         { user_joined__lambda0(__arg0, __arg1) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_2;
         array::reduce(&_1, __callback, string::from_literal("["))?
@@ -281,6 +295,7 @@ pub fn user_summed__lambda0(
 }
 /// BAML function `user.summed`.
 pub fn user_summed(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: cell::Cell<Int63>;
     let mut _3: ();
@@ -297,6 +312,7 @@ pub fn user_summed(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
         { user_summed__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(1)?;
     _3 = {
         let __callback = &*_4;
         array::for_each(&_1, __callback)?
@@ -318,6 +334,7 @@ pub fn user_any_big__lambda0(
 }
 /// BAML function `user.any_big`.
 pub fn user_any_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: bool;
     let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
@@ -328,6 +345,7 @@ pub fn user_any_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, T
         { user_any_big__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_3;
         array::some(&_1, __callback)?
@@ -348,6 +366,7 @@ pub fn user_all_big__lambda0(
 }
 /// BAML function `user.all_big`.
 pub fn user_all_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: bool;
     let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
@@ -358,6 +377,7 @@ pub fn user_all_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, T
         { user_all_big__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_3;
         array::every(&_1, __callback)?
@@ -381,6 +401,7 @@ pub fn user_first_big(
     mut _1: Shared<Vec<Int63>>,
     mut _2: Int63,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
     let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
@@ -391,6 +412,7 @@ pub fn user_first_big(
         { user_first_big__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_3;
         array::find(&_1, __callback)?
@@ -414,6 +436,7 @@ pub fn user_first_big_at(
     mut _1: Shared<Vec<Int63>>,
     mut _2: Int63,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
     let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
@@ -424,6 +447,7 @@ pub fn user_first_big_at(
         { user_first_big_at__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_3;
         array::find_index(&_1, __callback)?
@@ -447,6 +471,7 @@ pub fn user_last_big(
     mut _1: Shared<Vec<Int63>>,
     mut _2: Int63,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
     let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
@@ -457,6 +482,7 @@ pub fn user_last_big(
         { user_last_big__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_3;
         array::find_last(&_1, __callback)?
@@ -480,6 +506,7 @@ pub fn user_last_big_at(
     mut _1: Shared<Vec<Int63>>,
     mut _2: Int63,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
     let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
@@ -490,6 +517,7 @@ pub fn user_last_big_at(
         { user_last_big_at__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_3;
         array::find_last_index(&_1, __callback)?
@@ -507,6 +535,7 @@ pub fn user_pairs__lambda0(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> 
 }
 /// BAML function `user.pairs`.
 pub fn user_pairs(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Rc<dyn Fn(Int63) -> Result<Shared<Vec<Int63>>, Thrown>>;
     _2 = {
@@ -515,6 +544,7 @@ pub fn user_pairs(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thro
         { user_pairs__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_2;
         array::flat_map(&_1, __callback)?
@@ -528,6 +558,7 @@ pub fn user_sorted_desc__lambda0(
 ) -> Result<baml_ops_Ordering, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: baml_ops_Ordering;
+    bex_aot::depth::probe(0)?;
     _0 = match Ord::cmp(&_2, &_1) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -539,6 +570,7 @@ pub fn user_sorted_desc__lambda0(
 pub fn user_sorted_desc(
     mut _1: Shared<Vec<Int63>>,
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>>;
     _2 = {
@@ -548,6 +580,7 @@ pub fn user_sorted_desc(
         { user_sorted_desc__lambda0(__arg0, __arg1) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     {
         let __callback = &*_2;
         array::sort_by(
@@ -582,6 +615,7 @@ pub fn user_sorted_by_abs__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_sorted_by_abs(
     mut _1: Shared<Vec<Int63>>,
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
     _2 = {
@@ -590,6 +624,7 @@ pub fn user_sorted_by_abs(
         { user_sorted_by_abs__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(1)?;
     {
         let __callback = &*_2;
         array::sort_by_key(&_1, __callback, &|left, right| Ord::cmp(left, right))?;
@@ -608,6 +643,7 @@ pub fn user_sorted_by_name__lambda0(mut _1: Shared<user_Item>) -> Result<Str, Th
 pub fn user_sorted_by_name(
     mut _1: Shared<Vec<Shared<user_Item>>>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Shared<user_Item>>>;
     let mut _3: Rc<dyn Fn(Shared<user_Item>) -> Result<Str, Thrown>>;
@@ -628,12 +664,14 @@ pub fn user_sorted_by_name(
         { user_sorted_by_name__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(1)?;
     {
         let __callback = &*_3;
         array::sort_by_key(&_1, __callback, &|left, right| string::cmp(left, right))?;
     }
     _2 = _1.clone();
     _7 = string::from_literal("");
+    bex_aot::depth::probe(1)?;
     _8 = array::iter(&_1);
     'bb2: loop {
         _9 = array::next(&mut _8);
@@ -647,6 +685,7 @@ pub fn user_sorted_by_name(
             _15 = string::concat(&_7, &_17);
             _14 = string::concat(&_15, &string::from_literal(":"));
             _19 = _11.borrow().weight;
+            bex_aot::depth::probe(0)?;
             _18 = ToBaml::to_baml(&_19);
             _13 = string::concat(&_14, &_18);
             _7 = string::concat(&_13, &string::from_literal(" "));
@@ -668,6 +707,7 @@ pub fn user_comparisons__lambda0(
         let value = int::add(_3, int::lit(1))?;
         cell::set(_c0, value);
     }
+    bex_aot::depth::probe(0)?;
     _0 = match Ord::cmp(&_1, &_2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -677,6 +717,7 @@ pub fn user_comparisons__lambda0(
 }
 /// BAML function `user.comparisons`.
 pub fn user_comparisons(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: cell::Cell<Int63>;
     let mut _3: Shared<Vec<Int63>>;
@@ -694,6 +735,7 @@ pub fn user_comparisons(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
         { user_comparisons__lambda0(&__cell0, __arg0, __arg1) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     {
         let __callback = &*_4;
         array::sort_by(
@@ -723,15 +765,18 @@ pub fn user_comparison_log__lambda0(
     let mut _7: Str;
     let mut _9: Str;
     _6 = cell::get(_c0)?;
+    bex_aot::depth::probe(0)?;
     _7 = ToBaml::to_baml(&_1);
     _5 = string::concat(&_6, &_7);
     _4 = string::concat(&_5, &string::from_literal("/"));
+    bex_aot::depth::probe(0)?;
     _9 = ToBaml::to_baml(&_2);
     _3 = string::concat(&_4, &_9);
     {
         let value = string::concat(&_3, &string::from_literal(" "));
         cell::set(_c0, value);
     }
+    bex_aot::depth::probe(0)?;
     _0 = match Ord::cmp(&_1, &_2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -741,6 +786,7 @@ pub fn user_comparison_log__lambda0(
 }
 /// BAML function `user.comparison_log`.
 pub fn user_comparison_log(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: cell::Cell<Str>;
     let mut _3: Shared<Vec<Int63>>;
@@ -758,6 +804,7 @@ pub fn user_comparison_log(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         { user_comparison_log__lambda0(&__cell0, __arg0, __arg1) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     {
         let __callback = &*_4;
         array::sort_by(
@@ -803,6 +850,7 @@ pub fn user_throwing_comparator__lambda0(
             break 'bb2;
         }
     }
+    bex_aot::depth::probe(0)?;
     _0 = match Ord::cmp(&_1, &_2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -812,6 +860,7 @@ pub fn user_throwing_comparator__lambda0(
 }
 /// BAML function `user.throwing_comparator`.
 pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: cell::Cell<Int63>;
     let mut _3: Shared<Vec<Int63>>;
@@ -837,6 +886,13 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
                     user_throwing_comparator__lambda0(&__cell0, __arg0, __arg1)
                 });
                 __closure
+            };
+            match bex_aot::depth::probe(0) {
+                Ok(value) => value,
+                Err(error) => {
+                    _4 = Thrown::from(error);
+                    break 'bb2;
+                }
             };
             {
                 let __callback = &*_6;
@@ -865,9 +921,11 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
             return Err(_4.clone());
         }
     }
+    bex_aot::depth::probe(0)?;
     _11 = ToBaml::to_baml(&_3);
     _10 = string::concat(&_11, &string::from_literal(" after "));
     _14 = cell::get(&_2)?;
+    bex_aot::depth::probe(0)?;
     _13 = ToBaml::to_baml(&_14);
     _0 = string::concat(&_10, &_13);
     Ok(_0)
@@ -881,8 +939,10 @@ pub fn user_mutating_comparator__lambda0(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: baml_ops_Ordering;
     let mut _3: Int63;
+    bex_aot::depth::probe(0)?;
     array::push(&cell::get(_c0)?, int::lit(99));
     _3 = array::len(&cell::get(_c0)?);
+    bex_aot::depth::probe(0)?;
     _0 = match Ord::cmp(&_1, &_2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -892,6 +952,7 @@ pub fn user_mutating_comparator__lambda0(
 }
 /// BAML function `user.mutating_comparator`.
 pub fn user_mutating_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Shared<Vec<Int63>>> = cell::with(_1);
     let mut _0: Str;
     let mut _2: Shared<Vec<Int63>>;
@@ -905,6 +966,7 @@ pub fn user_mutating_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
         { user_mutating_comparator__lambda0(&__cell0, __arg0, __arg1) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     {
         let __callback = &*_3;
         array::sort_by(
@@ -917,6 +979,7 @@ pub fn user_mutating_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
     }
     _2 = cell::get(&_1)?;
     _6 = cell::get(&_1)?;
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_6);
     Ok(_0)
 }
@@ -938,11 +1001,13 @@ pub fn user_reading_comparator__lambda0(
     _6 = cell::get(_c1)?;
     _7 = int::lit(0);
     _5 = array::get(&_6, _7)?;
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     {
         let value = string::concat(&_3, &_4);
         cell::set(_c0, value);
     }
+    bex_aot::depth::probe(0)?;
     _0 = match Ord::cmp(&_1, &_2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -952,6 +1017,7 @@ pub fn user_reading_comparator__lambda0(
 }
 /// BAML function `user.reading_comparator`.
 pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Shared<Vec<Int63>>> = cell::with(_1);
     let mut _0: Str;
     let mut _2: cell::Cell<Str>;
@@ -975,6 +1041,7 @@ pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown
         { user_reading_comparator__lambda0(&__cell0, &__cell1, __arg0, __arg1) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     {
         let __callback = &*_4;
         array::sort_by(
@@ -987,6 +1054,7 @@ pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown
     }
     _3 = cell::get(&_1)?;
     _9 = cell::get(&_1)?;
+    bex_aot::depth::probe(0)?;
     _8 = ToBaml::to_baml(&_9);
     _7 = string::concat(&_8, &string::from_literal(" saw "));
     _11 = cell::get(&_2)?;
@@ -1002,6 +1070,7 @@ pub fn user_throwing_key__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throwing_key`.
 pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Thrown;
@@ -1014,6 +1083,13 @@ pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
                     __arg0: Int63|
                 { user_throwing_key__lambda0(__arg0) });
                 __closure
+            };
+            match bex_aot::depth::probe(1) {
+                Ok(value) => value,
+                Err(error) => {
+                    _3 = Thrown::from(error);
+                    break 'bb1;
+                }
             };
             {
                 let __callback = &*_5;
@@ -1040,6 +1116,7 @@ pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
             return Err(_3.clone());
         }
     }
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
@@ -1051,6 +1128,7 @@ pub fn user_pushing_map__lambda0(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
+    bex_aot::depth::probe(0)?;
     array::push(&cell::get(_c0)?, _1);
     _2 = array::len(&cell::get(_c0)?);
     _0 = _1;
@@ -1058,6 +1136,7 @@ pub fn user_pushing_map__lambda0(
 }
 /// BAML function `user.pushing_map`.
 pub fn user_pushing_map(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Shared<Vec<Int63>>> = cell::with(_1);
     let mut _0: Str;
     let mut _2: Shared<Vec<Int63>>;
@@ -1073,13 +1152,16 @@ pub fn user_pushing_map(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         { user_pushing_map__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _2 = {
         let __callback = &*_3;
         array::map(&cell::get(&_1)?, __callback)?
     };
     _9 = cell::get(&_1)?;
+    bex_aot::depth::probe(0)?;
     _8 = ToBaml::to_baml(&_9);
     _7 = string::concat(&_8, &string::from_literal(" "));
+    bex_aot::depth::probe(0)?;
     _11 = ToBaml::to_baml(&_2);
     _0 = string::concat(&_7, &_11);
     Ok(_0)
@@ -1093,6 +1175,7 @@ pub fn user_throwing_map__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throwing_map`.
 pub fn user_throwing_map(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: Shared<Vec<Int63>>;
@@ -1105,6 +1188,13 @@ pub fn user_throwing_map(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
                     __arg0: Int63|
                 { user_throwing_map__lambda0(__arg0) });
                 __closure
+            };
+            match bex_aot::depth::probe(0) {
+                Ok(value) => value,
+                Err(error) => {
+                    _2 = Thrown::from(error);
+                    break 'bb2;
+                }
             };
             _4 = {
                 let __callback = &*_5;
@@ -1131,6 +1221,7 @@ pub fn user_throwing_map(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.square`.
 pub fn user_square(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::mul(_1, _1)?;
     Ok(_0)
@@ -1139,7 +1230,9 @@ pub fn user_square(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_named_callback(
     mut _1: Shared<Vec<Int63>>,
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &user_square;
         array::map(&_1, __callback)?
@@ -1163,6 +1256,7 @@ pub fn user_with_capture(
     mut _1: Shared<Vec<Int63>>,
     mut _2: Int63,
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Shared<Vec<Int63>>;
     let mut _3: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
@@ -1173,6 +1267,7 @@ pub fn user_with_capture(
         { user_with_capture__lambda0(&__cell0, __arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &*_3;
         array::map(&_1, __callback)?
@@ -1198,6 +1293,7 @@ pub fn user_nullable_mapped__lambda0(mut _1: Int63) -> Result<Option<Int63>, Thr
 }
 /// BAML function `user.nullable_mapped`.
 pub fn user_nullable_mapped(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Option<Int63>>>;
     let mut _3: Rc<dyn Fn(Int63) -> Result<Option<Int63>, Thrown>>;
@@ -1207,18 +1303,22 @@ pub fn user_nullable_mapped(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         { user_nullable_mapped__lambda0(__arg0) });
         __closure
     };
+    bex_aot::depth::probe(0)?;
     _2 = {
         let __callback = &*_3;
         array::map(&_1, __callback)?
     };
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
 /// BAML function `user.cmp_ints`.
 pub fn user_cmp_ints(mut _1: Int63, mut _2: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _3: baml_ops_Ordering;
     let mut _4: Int63;
+    bex_aot::depth::probe(0)?;
     _3 = match Ord::cmp(&_1, &_2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -1248,30 +1348,37 @@ pub fn user_cmp_ints(mut _1: Int63, mut _2: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.cmp_floats`.
 pub fn user_cmp_floats(mut _1: f64, mut _2: f64) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: baml_ops_Ordering;
+    bex_aot::depth::probe(0)?;
     _3 = match float::cmp(_1, _2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
         std::cmp::Ordering::Greater => baml_ops_Ordering::Greater,
     };
+    bex_aot::depth::probe(0)?;
     _0 = _3 == baml_ops_Ordering::Less;
     Ok(_0)
 }
 /// BAML function `user.cmp_strings`.
 pub fn user_cmp_strings(mut _1: Str, mut _2: Str) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: baml_ops_Ordering;
+    bex_aot::depth::probe(0)?;
     _3 = match string::cmp(&_1, &_2) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
         std::cmp::Ordering::Greater => baml_ops_Ordering::Greater,
     };
+    bex_aot::depth::probe(0)?;
     _0 = _3 == baml_ops_Ordering::Greater;
     Ok(_0)
 }
 /// BAML function `user.render`.
 pub fn user_render(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -1307,43 +1414,53 @@ pub fn user_render(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let mut _41: Str;
     let mut _42: Shared<Vec<Int63>>;
     _18 = user_doubled(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _17 = ToBaml::to_baml(&_18);
     _16 = string::concat(&_17, &string::from_literal(" "));
     _21 = user_evens(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _20 = ToBaml::to_baml(&_21);
     _15 = string::concat(&_16, &_20);
     _14 = string::concat(&_15, &string::from_literal(" "));
     _24 = user_halves(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _23 = ToBaml::to_baml(&_24);
     _13 = string::concat(&_14, &_23);
     _12 = string::concat(&_13, &string::from_literal(" "));
     _27 = user_pairs(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _26 = ToBaml::to_baml(&_27);
     _11 = string::concat(&_12, &_26);
     _10 = string::concat(&_11, &string::from_literal(" "));
     _30 = user_sorted_desc(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _29 = ToBaml::to_baml(&_30);
     _9 = string::concat(&_10, &_29);
     _8 = string::concat(&_9, &string::from_literal(" "));
     _33 = user_sorted_by_abs(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _32 = ToBaml::to_baml(&_33);
     _7 = string::concat(&_8, &_32);
     _6 = string::concat(&_7, &string::from_literal(" "));
     _36 = user_labels(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _35 = ToBaml::to_baml(&_36);
     _5 = string::concat(&_6, &_35);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _39 = user_named_callback(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _38 = ToBaml::to_baml(&_39);
     _3 = string::concat(&_4, &_38);
     _2 = string::concat(&_3, &string::from_literal(" "));
     _42 = user_with_capture(_1.clone(), int::lit(7))?;
+    bex_aot::depth::probe(0)?;
     _41 = ToBaml::to_baml(&_42);
     _0 = string::concat(&_2, &_41);
     Ok(_0)
 }
 /// BAML function `user.render_items`.
 pub fn user_render_items(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Shared<user_Item>>>;
     let mut _3: Shared<user_Item>;
@@ -1374,6 +1491,7 @@ pub fn user_render_items(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.of`.
 pub fn user_of(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: bool;
     let mut _3: bool;
@@ -1431,6 +1549,7 @@ pub fn user_of(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> {
 }
 /// BAML function `user.suite`.
 pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Str;
@@ -1510,6 +1629,7 @@ pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
     _38 = user_render(_2.clone())?;
     _37 = string::concat(&_38, &string::from_literal(" | "));
     _41 = user_total(_2.clone())?;
+    bex_aot::depth::probe(0)?;
     _40 = ToBaml::to_baml(&_41);
     _36 = string::concat(&_37, &_40);
     _35 = string::concat(&_36, &string::from_literal(" "));
@@ -1517,35 +1637,43 @@ pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
     _34 = string::concat(&_35, &_44);
     _33 = string::concat(&_34, &string::from_literal(" "));
     _47 = user_summed(_2.clone())?;
+    bex_aot::depth::probe(0)?;
     _46 = ToBaml::to_baml(&_47);
     _32 = string::concat(&_33, &_46);
     _31 = string::concat(&_32, &string::from_literal(" "));
     _51 = user_any_big(_2.clone(), int::lit(3))?;
+    bex_aot::depth::probe(0)?;
     _50 = ToBaml::to_baml(&_51);
     _30 = string::concat(&_31, &_50);
     _29 = string::concat(&_30, &string::from_literal(" "));
     _55 = user_all_big(_2.clone(), int::lit(0))?;
+    bex_aot::depth::probe(0)?;
     _54 = ToBaml::to_baml(&_55);
     _28 = string::concat(&_29, &_54);
     _27 = string::concat(&_28, &string::from_literal(" "));
     _59 = user_first_big(_2.clone(), int::lit(3))?;
+    bex_aot::depth::probe(0)?;
     _58 = ToBaml::to_baml(&_59);
     _26 = string::concat(&_27, &_58);
     _25 = string::concat(&_26, &string::from_literal(" "));
     _62 = user_first_big_at(_2.clone(), int::lit(3))?;
+    bex_aot::depth::probe(0)?;
     _61 = ToBaml::to_baml(&_62);
     _24 = string::concat(&_25, &_61);
     _23 = string::concat(&_24, &string::from_literal(" "));
     _65 = user_last_big(_2.clone(), int::lit(3))?;
+    bex_aot::depth::probe(0)?;
     _64 = ToBaml::to_baml(&_65);
     _22 = string::concat(&_23, &_64);
     _21 = string::concat(&_22, &string::from_literal(" "));
     _68 = user_last_big_at(_2.clone(), int::lit(3))?;
+    bex_aot::depth::probe(0)?;
     _67 = ToBaml::to_baml(&_68);
     _20 = string::concat(&_21, &_67);
     _19 = string::concat(&_20, &string::from_literal(" "));
     _72 = user_of(_1)?;
     _71 = user_comparisons(_72.clone())?;
+    bex_aot::depth::probe(0)?;
     _70 = ToBaml::to_baml(&_71);
     _18 = string::concat(&_19, &_70);
     _17 = string::concat(&_18, &string::from_literal(" "));
@@ -1575,6 +1703,7 @@ pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
     _5 = string::concat(&_6, &string::from_literal(" "));
     _88 = user_of(_1)?;
     _87 = user_throwing_map(_88.clone())?;
+    bex_aot::depth::probe(0)?;
     _86 = ToBaml::to_baml(&_87);
     _4 = string::concat(&_5, &_86);
     _3 = string::concat(&_4, &string::from_literal(" "));

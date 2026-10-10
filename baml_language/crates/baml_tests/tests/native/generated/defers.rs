@@ -99,6 +99,7 @@ impl bex_aot::Readable for user_Coded {
 }
 /// BAML function `user.defer_order`.
 pub fn user_defer_order(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Thrown;
@@ -109,6 +110,13 @@ pub fn user_defer_order(mut _1: Int63) -> Result<Str, Thrown> {
     'bb7: {
         'bb9: {
             _6 = string::concat(&_2, &string::from_literal("body"));
+            match bex_aot::depth::probe(0) {
+                Ok(value) => value,
+                Err(error) => {
+                    _3 = Thrown::from(error);
+                    break 'bb9;
+                }
+            };
             _8 = ToBaml::to_baml(&_1);
             _5 = string::concat(&_6, &_8);
             _2 = string::concat(&_5, &string::from_literal(";"));
@@ -128,6 +136,7 @@ pub fn user_defer_order(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.defer_sees_final`.
 pub fn user_defer_sees_final(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -137,6 +146,13 @@ pub fn user_defer_sees_final(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = string::from_literal("pending");
     'bb6: {
         _10 = string::from_literal("done");
+        match bex_aot::depth::probe(0) {
+            Ok(value) => value,
+            Err(error) => {
+                _4 = Thrown::from(error);
+                break 'bb6;
+            }
+        };
         _6 = ToBaml::to_baml(&_1);
         _3 = string::concat(&_10, &_6);
         _2 = string::concat(&string::from_literal("final:"), &_3);
@@ -151,6 +167,7 @@ pub fn user_early_return(
     mut _1: Shared<Vec<Str>>,
     mut _2: bool,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Thrown;
     let mut _5: Int63;
@@ -161,18 +178,28 @@ pub fn user_early_return(
         'bb7: {
             if _2 {
                 _0 = int::lit(1);
+                bex_aot::depth::probe(0)?;
                 array::push(&_1, string::from_literal("cleanup"));
                 _5 = array::len(&_1);
                 break 'bb6;
             } else {
+                match bex_aot::depth::probe(0) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        _3 = Thrown::from(error);
+                        break 'bb7;
+                    }
+                };
                 array::push(&_1, string::from_literal("after"));
                 _7 = array::len(&_1);
                 _0 = int::lit(2);
+                bex_aot::depth::probe(0)?;
                 array::push(&_1, string::from_literal("cleanup"));
                 _9 = array::len(&_1);
                 break 'bb6;
             }
         }
+        bex_aot::depth::probe(0)?;
         array::push(&_1, string::from_literal("cleanup"));
         _11 = array::len(&_1);
         return Err(_3.clone());
@@ -181,6 +208,7 @@ pub fn user_early_return(
 }
 /// BAML function `user.defer_early_return`.
 pub fn user_defer_early_return(mut _1: bool) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Int63;
@@ -188,13 +216,16 @@ pub fn user_defer_early_return(mut _1: bool) -> Result<Str, Thrown> {
     let mut _7: Str;
     _2 = array::new::<Str>(Vec::new());
     _3 = user_early_return(_2.clone(), _1)?;
+    bex_aot::depth::probe(0)?;
     _5 = ToBaml::to_baml(&_2);
+    bex_aot::depth::probe(0)?;
     _7 = ToBaml::to_baml(&_3);
     _0 = string::concat(&_5, &_7);
     Ok(_0)
 }
 /// BAML function `user.defer_loop`.
 pub fn user_defer_loop(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Shared<Vec<Int63>>;
@@ -233,6 +264,7 @@ pub fn user_defer_loop(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = array::new::<
         Int63,
     >(Vec::from([int::lit(1), int::lit(2), int::lit(3), int::lit(4)]));
+    bex_aot::depth::probe(1)?;
     _4 = array::iter(&_3);
     'bb1: loop {
         _5 = array::next(&mut _4);
@@ -248,8 +280,10 @@ pub fn user_defer_loop(mut _1: Int63) -> Result<Str, Thrown> {
                     _11 = _12 == _1;
                     if _11 {
                         _42 = string::from_literal("d");
+                        bex_aot::depth::probe(0)?;
                         _15 = ToBaml::to_baml(&_8);
                         _14 = string::concat(&_42, &_15);
+                        bex_aot::depth::probe(0)?;
                         array::push(&_2, _14.clone());
                         _13 = array::len(&_2);
                         break 'bb14;
@@ -265,20 +299,38 @@ pub fn user_defer_loop(mut _1: Int63) -> Result<Str, Thrown> {
                         _18 = _19 == int::lit(1);
                         if _18 {
                             _43 = string::from_literal("d");
+                            bex_aot::depth::probe(0)?;
                             _23 = ToBaml::to_baml(&_8);
                             _22 = string::concat(&_43, &_23);
+                            bex_aot::depth::probe(0)?;
                             array::push(&_2, _22.clone());
                             _21 = array::len(&_2);
                             continue 'bb1;
                         } else {
                             _44 = string::from_literal("i");
+                            match bex_aot::depth::probe(0) {
+                                Ok(value) => value,
+                                Err(error) => {
+                                    _9 = Thrown::from(error);
+                                    break 'bb16;
+                                }
+                            };
                             _28 = ToBaml::to_baml(&_8);
                             _27 = string::concat(&_44, &_28);
+                            match bex_aot::depth::probe(0) {
+                                Ok(value) => value,
+                                Err(error) => {
+                                    _9 = Thrown::from(error);
+                                    break 'bb16;
+                                }
+                            };
                             array::push(&_2, _27.clone());
                             _26 = array::len(&_2);
                             _45 = string::from_literal("d");
+                            bex_aot::depth::probe(0)?;
                             _33 = ToBaml::to_baml(&_8);
                             _32 = string::concat(&_45, &_33);
+                            bex_aot::depth::probe(0)?;
                             array::push(&_2, _32.clone());
                             _31 = array::len(&_2);
                             continue 'bb1;
@@ -286,19 +338,23 @@ pub fn user_defer_loop(mut _1: Int63) -> Result<Str, Thrown> {
                     }
                 }
                 _46 = string::from_literal("d");
+                bex_aot::depth::probe(0)?;
                 _38 = ToBaml::to_baml(&_8);
                 _37 = string::concat(&_46, &_38);
+                bex_aot::depth::probe(0)?;
                 array::push(&_2, _37.clone());
                 _36 = array::len(&_2);
                 return Err(_9.clone());
             }
         }
+        bex_aot::depth::probe(0)?;
         _0 = ToBaml::to_baml(&_2);
         return Ok(_0);
     }
 }
 /// BAML function `user.defer_while`.
 pub fn user_defer_while(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Int63;
@@ -337,28 +393,48 @@ pub fn user_defer_while(mut _1: Int63) -> Result<Str, Thrown> {
                 _9 = _10 == _1;
                 if _9 {
                     _32 = string::from_literal("w");
+                    bex_aot::depth::probe(0)?;
                     _13 = ToBaml::to_baml(&_3);
                     _12 = string::concat(&_32, &_13);
+                    bex_aot::depth::probe(0)?;
                     array::push(&_2, _12.clone());
                     _11 = array::len(&_2);
                     continue 'bb1;
                 } else {
                     _33 = string::from_literal("b");
+                    match bex_aot::depth::probe(0) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            _7 = Thrown::from(error);
+                            break 'bb12;
+                        }
+                    };
                     _18 = ToBaml::to_baml(&_3);
                     _17 = string::concat(&_33, &_18);
+                    match bex_aot::depth::probe(0) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            _7 = Thrown::from(error);
+                            break 'bb12;
+                        }
+                    };
                     array::push(&_2, _17.clone());
                     _16 = array::len(&_2);
                     _34 = string::from_literal("w");
+                    bex_aot::depth::probe(0)?;
                     _23 = ToBaml::to_baml(&_3);
                     _22 = string::concat(&_34, &_23);
+                    bex_aot::depth::probe(0)?;
                     array::push(&_2, _22.clone());
                     _21 = array::len(&_2);
                     continue 'bb1;
                 }
             }
             _35 = string::from_literal("w");
+            bex_aot::depth::probe(0)?;
             _28 = ToBaml::to_baml(&_3);
             _27 = string::concat(&_35, &_28);
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _27.clone());
             _26 = array::len(&_2);
             return Err(_7.clone());
@@ -366,11 +442,13 @@ pub fn user_defer_while(mut _1: Int63) -> Result<Str, Thrown> {
             break 'bb1;
         }
     }
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
 /// BAML function `user.unwinds`.
 pub fn user_unwinds(mut _1: Shared<Vec<Str>>, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Thrown;
     let mut _5: bool;
@@ -403,17 +481,46 @@ pub fn user_unwinds(mut _1: Shared<Vec<Str>>, mut _2: Int63) -> Result<Int63, Th
                     }
                 };
                 'bb9: {
+                    match bex_aot::depth::probe(0) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            _3 = Thrown::from(error);
+                            break 'bb9;
+                        }
+                    };
                     array::push(&_1, string::from_literal("body"));
                     _8 = array::len(&_1);
                     _0 = _7;
+                    match bex_aot::depth::probe(0) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            _3 = Thrown::from(error);
+                            break 'bb10;
+                        }
+                    };
                     array::push(&_1, string::from_literal("late"));
                     _10 = array::len(&_1);
+                    match bex_aot::depth::probe(0) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            _3 = Thrown::from(error);
+                            break 'bb11;
+                        }
+                    };
                     array::push(&_1, string::from_literal("inner"));
                     _12 = array::len(&_1);
+                    bex_aot::depth::probe(0)?;
                     array::push(&_1, string::from_literal("outer"));
                     _14 = array::len(&_1);
                     return Ok(_0);
                 }
+                match bex_aot::depth::probe(0) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        _3 = Thrown::from(error);
+                        break 'bb10;
+                    }
+                };
                 array::push(&_1, string::from_literal("late"));
                 _16 = array::len(&_1);
                 {
@@ -422,6 +529,13 @@ pub fn user_unwinds(mut _1: Shared<Vec<Str>>, mut _2: Int63) -> Result<Int63, Th
                 }
             }
         }
+        match bex_aot::depth::probe(0) {
+            Ok(value) => value,
+            Err(error) => {
+                _3 = Thrown::from(error);
+                break 'bb11;
+            }
+        };
         array::push(&_1, string::from_literal("inner"));
         _18 = array::len(&_1);
         {
@@ -429,12 +543,14 @@ pub fn user_unwinds(mut _1: Shared<Vec<Str>>, mut _2: Int63) -> Result<Int63, Th
             break 'bb11;
         }
     }
+    bex_aot::depth::probe(0)?;
     array::push(&_1, string::from_literal("outer"));
     _20 = array::len(&_1);
     Err(_3.clone())
 }
 /// BAML function `user.defer_unwind`.
 pub fn user_defer_unwind(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Int63;
@@ -459,6 +575,7 @@ pub fn user_defer_unwind(mut _1: Int63) -> Result<Str, Thrown> {
         }
         _7 = bex_aot::thrown::is_class(&_4, "user.Invalid");
         if _7 {
+            bex_aot::depth::probe(0)?;
             array::push(&_2, string::from_literal("caught invalid"));
             _9 = array::len(&_2);
             _3 = int::neg(int::lit(1))?;
@@ -466,6 +583,7 @@ pub fn user_defer_unwind(mut _1: Int63) -> Result<Str, Thrown> {
         } else {
             _8 = bex_aot::thrown::is_class(&_4, "baml.panics.DivisionByZero");
             if _8 {
+                bex_aot::depth::probe(0)?;
                 array::push(&_2, string::from_literal("caught panic"));
                 _11 = array::len(&_2);
                 _3 = int::neg(int::lit(2))?;
@@ -475,7 +593,9 @@ pub fn user_defer_unwind(mut _1: Int63) -> Result<Str, Thrown> {
             }
         }
     }
+    bex_aot::depth::probe(0)?;
     _13 = ToBaml::to_baml(&_2);
+    bex_aot::depth::probe(0)?;
     _15 = ToBaml::to_baml(&_3);
     _0 = string::concat(&_13, &_15);
     Ok(_0)
@@ -485,6 +605,7 @@ pub fn user_throwing_defer(
     mut _1: Shared<Vec<Str>>,
     mut _2: Int63,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Thrown;
     let mut _5: bool;
@@ -507,9 +628,23 @@ pub fn user_throwing_defer(
                     break 'bb6;
                 }
             } else {
+                match bex_aot::depth::probe(0) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        _3 = Thrown::from(error);
+                        break 'bb6;
+                    }
+                };
                 array::push(&_1, string::from_literal("body"));
                 _7 = array::len(&_1);
                 _0 = _2;
+                match bex_aot::depth::probe(0) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        _3 = Thrown::from(error);
+                        break 'bb7;
+                    }
+                };
                 array::push(&_1, string::from_literal("b"));
                 _9 = array::len(&_1);
                 _11 = shared(user_Coded {
@@ -522,6 +657,13 @@ pub fn user_throwing_defer(
                 }
             }
         }
+        match bex_aot::depth::probe(0) {
+            Ok(value) => value,
+            Err(error) => {
+                _3 = Thrown::from(error);
+                break 'bb7;
+            }
+        };
         array::push(&_1, string::from_literal("b"));
         _12 = array::len(&_1);
         _14 = shared(user_Coded {
@@ -533,12 +675,14 @@ pub fn user_throwing_defer(
             break 'bb7;
         }
     }
+    bex_aot::depth::probe(0)?;
     array::push(&_1, string::from_literal("a"));
     _15 = array::len(&_1);
     Err(_3.clone())
 }
 /// BAML function `user.defer_throws`.
 pub fn user_defer_throws(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Str;
@@ -560,6 +704,13 @@ pub fn user_defer_throws(mut _1: Int63) -> Result<Str, Thrown> {
                     break 'bb3;
                 }
             };
+            match bex_aot::depth::probe(0) {
+                Ok(value) => value,
+                Err(error) => {
+                    _4 = Thrown::from(error);
+                    break 'bb3;
+                }
+            };
             _3 = ToBaml::to_baml(&_6);
             break 'bb9;
         }
@@ -572,6 +723,7 @@ pub fn user_defer_throws(mut _1: Int63) -> Result<Str, Thrown> {
                 _10 = value;
                 _13 = _10.borrow().code;
                 _18 = string::from_literal("coded");
+                bex_aot::depth::probe(0)?;
                 _12 = ToBaml::to_baml(&_13);
                 _3 = string::concat(&_18, &_12);
                 break 'bb9;
@@ -580,12 +732,14 @@ pub fn user_defer_throws(mut _1: Int63) -> Result<Str, Thrown> {
             }
         }
     }
+    bex_aot::depth::probe(0)?;
     _15 = ToBaml::to_baml(&_2);
     _0 = string::concat(&_15, &_3);
     Ok(_0)
 }
 /// BAML function `user.defer_throw_uncaught`.
 pub fn user_defer_throw_uncaught(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: bool;
@@ -631,6 +785,7 @@ pub fn user_defer_throw_uncaught(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.defer_in_handler`.
 pub fn user_defer_in_handler(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Int63;
@@ -657,6 +812,13 @@ pub fn user_defer_in_handler(mut _1: Int63) -> Result<Str, Thrown> {
         _7 = bex_aot::thrown::is_class(&_4, "user.Invalid");
         if _7 {
             'bb11: {
+                match bex_aot::depth::probe(0) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        _8 = Thrown::from(error);
+                        break 'bb11;
+                    }
+                };
                 array::push(&_2, string::from_literal("handler"));
                 _10 = array::len(&_2);
                 _3 = match int::neg(int::lit(1)) {
@@ -666,10 +828,12 @@ pub fn user_defer_in_handler(mut _1: Int63) -> Result<Str, Thrown> {
                         break 'bb11;
                     }
                 };
+                bex_aot::depth::probe(0)?;
                 array::push(&_2, string::from_literal("handler cleanup"));
                 _12 = array::len(&_2);
                 break 'bb7;
             }
+            bex_aot::depth::probe(0)?;
             array::push(&_2, string::from_literal("handler cleanup"));
             _14 = array::len(&_2);
             return Err(_8.clone());
@@ -677,13 +841,16 @@ pub fn user_defer_in_handler(mut _1: Int63) -> Result<Str, Thrown> {
             return Err(_4.clone());
         }
     }
+    bex_aot::depth::probe(0)?;
     _16 = ToBaml::to_baml(&_2);
+    bex_aot::depth::probe(0)?;
     _18 = ToBaml::to_baml(&_3);
     _0 = string::concat(&_16, &_18);
     Ok(_0)
 }
 /// BAML function `user.defer_nested_blocks`.
 pub fn user_defer_nested_blocks(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Thrown;
@@ -701,6 +868,13 @@ pub fn user_defer_nested_blocks(mut _1: Int63) -> Result<Str, Thrown> {
             'bb8: {
                 _8 = _1 == int::lit(1);
                 if _8 {
+                    match bex_aot::depth::probe(0) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            _6 = Thrown::from(error);
+                            break 'bb8;
+                        }
+                    };
                     array::push(&_2, string::from_literal("one"));
                     _5 = Some(array::len(&_2));
                     break 'bb3;
@@ -708,6 +882,13 @@ pub fn user_defer_nested_blocks(mut _1: Int63) -> Result<Str, Thrown> {
                     break 'bb3;
                 }
             }
+            match bex_aot::depth::probe(0) {
+                Ok(value) => value,
+                Err(error) => {
+                    _3 = Thrown::from(error);
+                    break 'bb9;
+                }
+            };
             array::push(&_2, string::from_literal("inner"));
             _12 = array::len(&_2);
             {
@@ -715,15 +896,32 @@ pub fn user_defer_nested_blocks(mut _1: Int63) -> Result<Str, Thrown> {
                 break 'bb9;
             }
         }
+        match bex_aot::depth::probe(0) {
+            Ok(value) => value,
+            Err(error) => {
+                _3 = Thrown::from(error);
+                break 'bb9;
+            }
+        };
         array::push(&_2, string::from_literal("inner"));
         _10 = array::len(&_2);
+        match bex_aot::depth::probe(0) {
+            Ok(value) => value,
+            Err(error) => {
+                _3 = Thrown::from(error);
+                break 'bb9;
+            }
+        };
         array::push(&_2, string::from_literal("between"));
         _14 = array::len(&_2);
+        bex_aot::depth::probe(0)?;
         array::push(&_2, string::from_literal("outer"));
         _16 = array::len(&_2);
+        bex_aot::depth::probe(0)?;
         _0 = ToBaml::to_baml(&_2);
         return Ok(_0);
     }
+    bex_aot::depth::probe(0)?;
     array::push(&_2, string::from_literal("outer"));
     _18 = array::len(&_2);
     Err(_3.clone())

@@ -427,12 +427,14 @@ for Union_int_or_user_Box__int_or_user_Box__string {
 }
 /// BAML function `user.make_box<int>`.
 pub fn user_make_box__int(mut _1: Int63) -> Result<Shared<user_Box__int>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__int>;
     _0 = shared(user_Box__int { value: _1 });
     Ok(_0)
 }
 /// BAML function `user.Box.get<int>`.
 pub fn user_Box_get__int(mut _1: Shared<user_Box__int>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = _1.borrow().value;
     Ok(_0)
@@ -442,6 +444,7 @@ pub fn user_Box_set__int(
     mut _1: Shared<user_Box__int>,
     mut _2: Int63,
 ) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     {
         let value = _2;
@@ -455,6 +458,7 @@ pub fn user_Box_swap__int(
     mut _1: Shared<user_Box__int>,
     mut _2: Shared<user_Box__int>,
 ) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     let mut _3: Int63;
     _3 = _1.borrow().value;
@@ -503,6 +507,7 @@ pub fn user_Box_map__int__user_Box__int(
 }
 /// BAML function `user.unbox<int>`.
 pub fn user_unbox__int(mut _1: Shared<user_Box__int>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = user_Box_get__int(_1.clone())?;
     Ok(_0)
@@ -511,6 +516,7 @@ pub fn user_unbox__int(mut _1: Shared<user_Box__int>) -> Result<Int63, Thrown> {
 pub fn user_Box_get__user_Box__int(
     mut _1: Shared<user_Box__user_Box__int>,
 ) -> Result<Shared<user_Box__int>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__int>;
     _0 = _1.borrow().value.clone();
     Ok(_0)
@@ -523,6 +529,7 @@ pub fn user_boxes__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _3: Str;
     let mut _5: Str;
     _5 = string::from_literal("<");
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     _2 = string::concat(&_5, &_3);
     _0 = string::concat(&_2, &string::from_literal(">"));
@@ -537,6 +544,7 @@ pub fn user_boxes__lambda1(mut _1: Int63) -> Result<Shared<user_Box__int>, Throw
 }
 /// BAML function `user.boxes`.
 pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Box__int>;
     let mut _3: Shared<user_Box__int>;
@@ -590,6 +598,7 @@ pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     _32 = user_unbox__int(_5.clone())?;
     _25 = int::add(_26, _32)?;
     _36 = _16.borrow().value.clone();
+    bex_aot::depth::probe(1)?;
     _35 = string::length(&_36);
     _24 = int::add(_25, _35)?;
     _38 = user_Box_get__user_Box__int(_20.clone())?;
@@ -601,6 +610,7 @@ pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_Pair_flip__int__string(
     mut _1: Shared<user_Pair__int__string>,
 ) -> Result<Shared<user_Pair__string__int>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Pair__string__int>;
     let mut _3: Int63;
     _3 = _1.borrow().first;
@@ -612,6 +622,7 @@ pub fn user_Pair_flip__int__string(
 }
 /// BAML function `user.pairs`.
 pub fn user_pairs(mut _1: Int63, mut _2: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _3: Shared<user_Pair__int__string>;
     let mut _4: Shared<user_Pair__string__int>;
@@ -640,9 +651,11 @@ pub fn user_pairs(mut _1: Int63, mut _2: Str) -> Result<Str, Thrown> {
     });
     _12 = _4.borrow().first.clone();
     _14 = _3.borrow().first;
+    bex_aot::depth::probe(0)?;
     _13 = ToBaml::to_baml(&_14);
     _11 = string::concat(&_12, &_13);
     _17 = _7.borrow().first.borrow().x;
+    bex_aot::depth::probe(0)?;
     _16 = ToBaml::to_baml(&_17);
     _10 = string::concat(&_11, &_16);
     _21 = int::lit(0);
@@ -654,6 +667,7 @@ pub fn user_pairs(mut _1: Int63, mut _2: Str) -> Result<Str, Thrown> {
 pub fn user_Stack_peek__int(
     mut _1: Shared<user_Stack__int>,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Int63>;
     let mut _2: bool;
     let mut _3: Int63;
@@ -681,10 +695,12 @@ pub fn user_Stack_push__string(
     mut _1: Shared<user_Stack__string>,
     mut _2: Str,
 ) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     let mut _3: Int63;
     let mut _4: Shared<Vec<Str>>;
     _4 = _1.borrow().items.clone();
+    bex_aot::depth::probe(0)?;
     array::push(&_4, _2.clone());
     _3 = array::len(&_4);
     _0 = ();
@@ -694,6 +710,7 @@ pub fn user_Stack_push__string(
 pub fn user_Stack_peek__string(
     mut _1: Shared<user_Stack__string>,
 ) -> Result<Option<Str>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Str>;
     let mut _2: bool;
     let mut _3: Int63;
@@ -718,6 +735,7 @@ pub fn user_Stack_peek__string(
 }
 /// BAML function `user.Stack.size<int>`.
 pub fn user_Stack_size__int(mut _1: Shared<user_Stack__int>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = array::len(&_1.borrow().items);
     Ok(_0)
@@ -727,10 +745,12 @@ pub fn user_Stack_push__int(
     mut _1: Shared<user_Stack__int>,
     mut _2: Int63,
 ) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     let mut _3: Int63;
     let mut _4: Shared<Vec<Int63>>;
     _4 = _1.borrow().items.clone();
+    bex_aot::depth::probe(0)?;
     array::push(&_4, _2);
     _3 = array::len(&_4);
     _0 = ();
@@ -738,6 +758,7 @@ pub fn user_Stack_push__int(
 }
 /// BAML function `user.stacks`.
 pub fn user_stacks(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Stack__int>;
     let mut _3: Shared<Vec<Int63>>;
@@ -812,6 +833,7 @@ pub fn user_stacks(mut _1: Int63) -> Result<Int63, Thrown> {
     _26 = _13;
     _27 = user_Stack_size__int(_2.clone())?;
     _25 = int::add(_26, _27)?;
+    bex_aot::depth::probe(1)?;
     _29 = string::length(&_21);
     _0 = int::add(_25, _29)?;
     Ok(_0)
@@ -820,6 +842,7 @@ pub fn user_stacks(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_make_box__user_Box__user_Box__int(
     mut _1: Shared<user_Box__user_Box__int>,
 ) -> Result<Shared<user_Box__user_Box__user_Box__int>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__user_Box__user_Box__int>;
     _0 = shared(user_Box__user_Box__user_Box__int {
         value: _1.clone(),
@@ -830,6 +853,7 @@ pub fn user_make_box__user_Box__user_Box__int(
 pub fn user_Box_get__user_Box__user_Box__int(
     mut _1: Shared<user_Box__user_Box__user_Box__int>,
 ) -> Result<Shared<user_Box__user_Box__int>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__user_Box__int>;
     _0 = _1.borrow().value.clone();
     Ok(_0)
@@ -838,6 +862,7 @@ pub fn user_Box_get__user_Box__user_Box__int(
 pub fn user_unbox__user_Box__user_Box__int(
     mut _1: Shared<user_Box__user_Box__user_Box__int>,
 ) -> Result<Shared<user_Box__user_Box__int>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__user_Box__int>;
     _0 = user_Box_get__user_Box__user_Box__int(_1.clone())?;
     Ok(_0)
@@ -846,12 +871,14 @@ pub fn user_unbox__user_Box__user_Box__int(
 pub fn user_unbox__user_Box__int(
     mut _1: Shared<user_Box__user_Box__int>,
 ) -> Result<Shared<user_Box__int>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__int>;
     _0 = user_Box_get__user_Box__int(_1.clone())?;
     Ok(_0)
 }
 /// BAML function `user.nested`.
 pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Box__user_Box__int>;
     let mut _3: Shared<user_Box__int>;
@@ -882,6 +909,7 @@ pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.renders`.
 pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Box__int>;
     let mut _3: Shared<user_Pair__string__user_Box__int>;
@@ -902,10 +930,14 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
         first: string::from_literal("s"),
         second: _2.clone(),
     });
+    bex_aot::depth::probe(1)?;
     _5 = json::to_string(&_3)?;
+    bex_aot::depth::probe(1)?;
     _7 = json::deserialize::<Shared<user_Pair__string__user_Box__int>>(&_5)?;
+    bex_aot::depth::probe(0)?;
     _15 = ToBaml::to_baml(&_2);
     _14 = string::concat(&_15, &string::from_literal("|"));
+    bex_aot::depth::probe(0)?;
     _16 = ToBaml::to_baml(&_3);
     _13 = string::concat(&_14, &_16);
     _12 = string::concat(&_13, &string::from_literal("|"));
@@ -913,12 +945,14 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     _10 = string::concat(&_11, &string::from_literal("|"));
     _20 = _7.borrow().second.clone();
     _19 = user_Box_get__int(_20.clone())?;
+    bex_aot::depth::probe(0)?;
     _18 = ToBaml::to_baml(&_19);
     _0 = string::concat(&_10, &_18);
     Ok(_0)
 }
 /// BAML function `user.type_tests`.
 pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Box__int>;
     let mut _3: Union_int_or_user_Box__int_or_user_Box__string;
@@ -1085,6 +1119,7 @@ pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
                     }
                 };
                 _26 = _25.borrow().value.clone();
+                bex_aot::depth::probe(1)?;
                 _20 = string::length(&_26);
                 break 'bb28;
             } else {
@@ -1106,6 +1141,7 @@ pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.nullable_boxes`.
 pub fn user_nullable_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Option<Shared<user_Box__int>>;
     let mut _3: bool;
@@ -1121,6 +1157,7 @@ pub fn user_nullable_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb3;
         }
     }
+    bex_aot::depth::probe(0)?;
     _6 = _2.is_none();
     'bb7: {
         _4 = !_6;

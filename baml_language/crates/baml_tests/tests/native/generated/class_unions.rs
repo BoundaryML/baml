@@ -692,6 +692,7 @@ impl<'de> bex_aot::serde::Deserialize<'de> for Union_user_Ok_or_user_Err {
 }
 /// BAML function `user.outcome`.
 pub fn user_outcome(mut _1: Int63) -> Result<Union_user_Err_or_user_Ok, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Union_user_Err_or_user_Ok;
     let mut _2: bool;
     'bb3: {
@@ -712,6 +713,7 @@ pub fn user_outcome(mut _1: Int63) -> Result<Union_user_Err_or_user_Ok, Thrown> 
 }
 /// BAML function `user.describe`.
 pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Err_or_user_Ok;
     let mut _3: Union_user_Err_or_user_Ok;
@@ -732,6 +734,7 @@ pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _6 = _4.borrow().value;
             _10 = string::from_literal("ok ");
+            bex_aot::depth::probe(0)?;
             _5 = ToBaml::to_baml(&_6);
             _0 = string::concat(&_10, &_5);
             break 'bb5;
@@ -750,6 +753,7 @@ pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.is_ok`.
 pub fn user_is_ok(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Union_user_Err_or_user_Ok;
     let mut _3: bool;
@@ -768,6 +772,7 @@ pub fn user_is_ok(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.tested`.
 pub fn user_tested(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Union_user_Err_or_user_Ok;
     let mut _3: bool;
@@ -807,6 +812,7 @@ pub fn user_tested(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_wide(
     mut _1: Int63,
 ) -> Result<Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn;
     let mut _2: bool;
     let mut _3: bool;
@@ -850,6 +856,7 @@ pub fn user_wide(
 }
 /// BAML function `user.classify`.
 pub fn user_classify(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn;
     _2 = user_wide(_1)?;
@@ -880,6 +887,7 @@ pub fn user_classify(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.fields`.
 pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn;
     let mut _3: Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn;
@@ -906,6 +914,7 @@ pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             _5 = _4.borrow().value;
+            bex_aot::depth::probe(0)?;
             _0 = ToBaml::to_baml(&_5);
             break 'bb9;
         } else {
@@ -938,6 +947,7 @@ pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
                         }
                     };
                     _12 = _10.borrow().code;
+                    bex_aot::depth::probe(0)?;
                     _11 = ToBaml::to_baml(&_12);
                     _0 = string::concat(&_11, &_10.borrow().note);
                     break 'bb9;
@@ -952,12 +962,14 @@ pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.value_of`.
 pub fn user_value_of(mut _1: Shared<user_Ok>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = _1.borrow().value;
     Ok(_0)
 }
 /// BAML function `user.narrowed_arg`.
 pub fn user_narrowed_arg(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Union_user_Err_or_user_Ok;
     let mut _3: bool;
@@ -993,6 +1005,7 @@ pub fn user_narrowed_arg(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.label`.
 pub fn user_label(mut _1: Int63) -> Result<Union_user_Color_or_user_Size, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Union_user_Color_or_user_Size;
     let mut _2: bool;
     let mut _3: bool;
@@ -1023,6 +1036,7 @@ pub fn user_label(mut _1: Int63) -> Result<Union_user_Color_or_user_Size, Thrown
 }
 /// BAML function `user.label_name`.
 pub fn user_label_name(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Color_or_user_Size;
     let mut _3: Union_user_Color_or_user_Size;
@@ -1043,6 +1057,7 @@ pub fn user_label_name(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             _8 = string::from_literal("color ");
+            bex_aot::depth::probe(0)?;
             _5 = ToBaml::to_baml(&_4);
             _0 = string::concat(&_8, &_5);
             break 'bb6;
@@ -1054,6 +1069,7 @@ pub fn user_label_name(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             _9 = string::from_literal("size ");
+            bex_aot::depth::probe(0)?;
             _7 = ToBaml::to_baml(&_6);
             _0 = string::concat(&_9, &_7);
             break 'bb6;
@@ -1063,19 +1079,23 @@ pub fn user_label_name(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.same_label`.
 pub fn user_same_label(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: Union_user_Color_or_user_Size;
     let mut _4: Union_user_Color_or_user_Size;
     _3 = user_label(_1)?;
     _4 = user_label(_2)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(&_3, &_4);
     Ok(_0)
 }
 /// BAML function `user.is_red`.
 pub fn user_is_red(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Union_user_Color_or_user_Size;
     _2 = user_label(_1)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(
         &_2,
         &Union_user_Color_or_user_Size::user_Color(user_Color::Red),
@@ -1084,10 +1104,12 @@ pub fn user_is_red(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.not_big`.
 pub fn user_not_big(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Union_user_Color_or_user_Size;
     let mut _3: bool;
     _2 = user_label(_1)?;
+    bex_aot::depth::probe(0)?;
     _3 = bex_aot::eq::equals(
         &_2,
         &Union_user_Color_or_user_Size::user_Size(user_Size::Big),
@@ -1097,6 +1119,7 @@ pub fn user_not_big(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.variant_arm`.
 pub fn user_variant_arm(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Union_int_or_user_Color;
     let mut _3: bool;
@@ -1149,6 +1172,7 @@ pub fn user_variant_arm(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.literal_arm`.
 pub fn user_literal_arm(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_string;
     let mut _3: bool;
@@ -1201,6 +1225,7 @@ pub fn user_literal_arm(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.render`.
 pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Report>;
     let mut _3: Union_user_Err_or_user_Ok;
@@ -1230,8 +1255,10 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
         label: _4,
     });
     _9 = user_outcome(_1)?;
+    bex_aot::depth::probe(0)?;
     _8 = ToBaml::to_baml(&_9);
     _7 = string::concat(&_8, &string::from_literal(" | "));
+    bex_aot::depth::probe(0)?;
     _10 = ToBaml::to_baml(&_2);
     _6 = string::concat(&_7, &_10);
     _5 = string::concat(&_6, &string::from_literal(" | "));
@@ -1239,12 +1266,14 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     _15 = int::sub(int::lit(0), _1)?;
     _14 = user_outcome(_15)?;
     _12 = array::new::<Union_user_Err_or_user_Ok>(Vec::from([_13.clone(), _14.clone()]));
+    bex_aot::depth::probe(0)?;
     _11 = ToBaml::to_baml(&_12);
     _0 = string::concat(&_5, &_11);
     Ok(_0)
 }
 /// BAML function `user.json_out`.
 pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -1254,6 +1283,7 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _7: Union_user_Err_or_user_Ok;
     let mut _8: Union_user_Color_or_user_Size;
     _4 = user_outcome(_1)?;
+    bex_aot::depth::probe(1)?;
     _3 = json::to_string(&_4)?;
     _2 = string::concat(&_3, &string::from_literal(" "));
     _7 = user_outcome(_1)?;
@@ -1269,12 +1299,14 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
         },
         label: _8,
     });
+    bex_aot::depth::probe(1)?;
     _5 = json::to_string(&_6)?;
     _0 = string::concat(&_2, &_5);
     Ok(_0)
 }
 /// BAML function `user.describe_outcome`.
 pub fn user_describe_outcome(mut _1: Union_user_Err_or_user_Ok) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Err_or_user_Ok;
     let mut _3: Shared<user_Ok>;
@@ -1293,6 +1325,7 @@ pub fn user_describe_outcome(mut _1: Union_user_Err_or_user_Ok) -> Result<Str, T
             };
             _5 = _3.borrow().value;
             _9 = string::from_literal("ok ");
+            bex_aot::depth::probe(0)?;
             _4 = ToBaml::to_baml(&_5);
             _0 = string::concat(&_9, &_4);
             break 'bb4;
@@ -1311,8 +1344,10 @@ pub fn user_describe_outcome(mut _1: Union_user_Err_or_user_Ok) -> Result<Str, T
 }
 /// BAML function `user.json_in`.
 pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Err_or_user_Ok;
+    bex_aot::depth::probe(1)?;
     _2 = match json::deserialize::<Union_user_Ok_or_user_Err>(&_1)? {
         Union_user_Ok_or_user_Err::user_Ok(value) => {
             Union_user_Err_or_user_Ok::user_Ok(value)
@@ -1326,17 +1361,21 @@ pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
 }
 /// BAML function `user.json_in_reversed`.
 pub fn user_json_in_reversed(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Err_or_user_Ok;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Union_user_Err_or_user_Ok>(&_1)?;
     _0 = user_describe_outcome(_2.clone())?;
     Ok(_0)
 }
 /// BAML function `user.json_reversed`.
 pub fn user_json_reversed(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Reversed>;
     let mut _4: Union_user_Err_or_user_Ok;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Reversed>>(&_1)?;
     _4 = _2.borrow().outcome.clone();
     _0 = user_describe_outcome(_4.clone())?;
@@ -1344,6 +1383,7 @@ pub fn user_json_reversed(mut _1: Str) -> Result<Str, Thrown> {
 }
 /// BAML function `user.label_text`.
 pub fn user_label_text(mut _1: Union_user_Color_or_user_Size) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Color_or_user_Size;
     let mut _3: user_Color;
@@ -1357,6 +1397,7 @@ pub fn user_label_text(mut _1: Union_user_Color_or_user_Size) -> Result<Str, Thr
                     return Err(Thrown::from(Panic::Unreachable));
                 }
             };
+            bex_aot::depth::probe(0)?;
             _0 = ToBaml::to_baml(&_3);
             break 'bb3;
         } else {
@@ -1366,6 +1407,7 @@ pub fn user_label_text(mut _1: Union_user_Color_or_user_Size) -> Result<Str, Thr
                     return Err(Thrown::from(Panic::Unreachable));
                 }
             };
+            bex_aot::depth::probe(0)?;
             _0 = ToBaml::to_baml(&_4);
             break 'bb3;
         }
@@ -1374,6 +1416,7 @@ pub fn user_label_text(mut _1: Union_user_Color_or_user_Size) -> Result<Str, Thr
 }
 /// BAML function `user.json_report`.
 pub fn user_json_report(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Report>;
     let mut _4: Str;
@@ -1381,6 +1424,7 @@ pub fn user_json_report(mut _1: Str) -> Result<Str, Thrown> {
     let mut _6: Union_user_Err_or_user_Ok;
     let mut _7: Str;
     let mut _8: Union_user_Color_or_user_Size;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Report>>(&_1)?;
     _6 = match _2.borrow().outcome.clone() {
         Union_user_Ok_or_user_Err::user_Ok(value) => {
@@ -1399,11 +1443,13 @@ pub fn user_json_report(mut _1: Str) -> Result<Str, Thrown> {
 }
 /// BAML function `user.json_carrier`.
 pub fn user_json_carrier(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Carrier>;
     let mut _4: Option<Union_user_Err_or_user_Ok>;
     let mut _5: bool;
     let mut _7: Option<Union_user_Err_or_user_Ok>;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Carrier>>(&_1)?;
     _4 = _2
         .borrow()
@@ -1417,6 +1463,7 @@ pub fn user_json_carrier(mut _1: Str) -> Result<Str, Thrown> {
                 Union_user_Err_or_user_Ok::user_Err(value)
             }
         });
+    bex_aot::depth::probe(0)?;
     _5 = _4.is_none();
     'bb7: {
         if _5 {
@@ -1437,6 +1484,7 @@ pub fn user_json_carrier(mut _1: Str) -> Result<Str, Thrown> {
 }
 /// BAML function `user.carry`.
 pub fn user_carry(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Carrier>;
     let mut _3: Option<Union_user_Err_or_user_Ok>;
@@ -1477,12 +1525,14 @@ pub fn user_carry(mut _1: Int63) -> Result<Str, Thrown> {
                 Union_user_Err_or_user_Ok::user_Err(value)
             }
         });
+    bex_aot::depth::probe(0)?;
     _5 = _6.is_none();
     'bb7: {
         if _5 {
             _0 = string::from_literal("none");
             break 'bb7;
         } else {
+            bex_aot::depth::probe(1)?;
             _0 = json::to_string(&_2)?;
             break 'bb7;
         }
@@ -1491,6 +1541,7 @@ pub fn user_carry(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.count_ok`.
 pub fn user_count_ok(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Union_user_Err_or_user_Ok>>;
     let mut _3: Int63;
@@ -1516,6 +1567,7 @@ pub fn user_count_ok(mut _1: Int63) -> Result<Int63, Thrown> {
         if _4 {
             _8 = _3;
             _7 = user_outcome(_8)?;
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7.clone());
             _6 = array::len(&_2);
             _10 = _3;
@@ -1526,6 +1578,7 @@ pub fn user_count_ok(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _11 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _13 = array::iter(&_2);
     'bb3: loop {
         _14 = array::next(&mut _13);
@@ -1557,6 +1610,7 @@ pub fn user_count_ok(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.thrown_payload`.
 pub fn user_thrown_payload(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Report>;
     let mut _3: Union_user_Err_or_user_Ok;

@@ -64,18 +64,22 @@ impl bex_aot::Readable for user_State {
 }
 /// BAML function `user.prepare`.
 pub fn user_prepare(mut _1: Str) -> Result<Shared<user_State>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_State>;
+    bex_aot::depth::probe(1)?;
     _0 = json::deserialize::<Shared<user_State>>(&_1)?;
     Ok(_0)
 }
 /// BAML function `user.leaf`.
 pub fn user_leaf(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::add(_1, int::lit(1))?;
     Ok(_0)
 }
 /// BAML function `user.run`.
 pub fn user_run(mut _1: Shared<user_State>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -98,6 +102,7 @@ pub fn user_run(mut _1: Shared<user_State>) -> Result<Str, Thrown> {
             break 'bb1;
         }
     }
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
@@ -105,6 +110,7 @@ pub fn user_run(mut _1: Shared<user_State>) -> Result<Str, Thrown> {
 pub fn user_sort_kernel(
     mut _1: Shared<Vec<Int63>>,
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -183,6 +189,7 @@ pub fn user_sort_kernel(
 }
 /// BAML function `user.sorted_checksum`.
 pub fn user_sorted_checksum(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;
@@ -213,6 +220,7 @@ pub fn user_sorted_checksum(mut _1: Int63) -> Result<Int63, Thrown> {
             _9 = _3;
             _8 = int::mul(_9, int::lit(7919))?;
             _7 = int::rem(_8, int::lit(1009))?;
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7);
             _6 = array::len(&_2);
             _11 = _3;
@@ -224,6 +232,7 @@ pub fn user_sorted_checksum(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     _12 = user_sort_kernel(_2.clone())?;
     _14 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _16 = array::iter(&_12);
     'bb4: loop {
         _17 = array::next(&mut _16);
@@ -245,6 +254,7 @@ pub fn user_sorted_checksum(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.pipeline`.
 pub fn user_pipeline(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_State>;
     _2 = user_prepare(_1.clone())?;

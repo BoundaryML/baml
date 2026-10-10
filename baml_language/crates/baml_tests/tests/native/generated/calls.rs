@@ -31,12 +31,14 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.square`.
 pub fn user_square(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::mul(_1, _1)?;
     Ok(_0)
 }
 /// BAML function `user.sum_of_squares`.
 pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -68,11 +70,13 @@ pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.checked_step`.
 pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     'bb2: {
         _2 = _1 < int::lit(0);
         if _2 {
+            bex_aot::depth::probe(0)?;
             return Err(
                 Thrown::from(Panic::UserPanic {
                     message: String::from("negative input"),
@@ -88,6 +92,7 @@ pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.step_twice`.
 pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     _2 = user_checked_step(_1)?;
@@ -96,6 +101,7 @@ pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.is_even`.
 pub fn user_is_even(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Int63;
     _2 = int::rem(_1, int::lit(2))?;
@@ -104,6 +110,7 @@ pub fn user_is_even(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.count_even`.
 pub fn user_count_even(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -140,6 +147,7 @@ pub fn user_count_even(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.noop`.
 pub fn user_noop(mut _1: Int63) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     let mut _2: Int63;
     _2 = int::add(_1, int::lit(1))?;

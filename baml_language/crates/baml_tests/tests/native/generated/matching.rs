@@ -31,6 +31,7 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.classify`.
 pub fn user_classify(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     'bb5: {
         match _1.get() {
@@ -56,6 +57,7 @@ pub fn user_classify(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.match_returns`.
 pub fn user_match_returns(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -77,6 +79,7 @@ pub fn user_match_returns(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.match_loop`.
 pub fn user_match_loop(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -116,6 +119,7 @@ pub fn user_match_loop(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.bool_match`.
 pub fn user_bool_match(mut _1: bool) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     'bb3: {

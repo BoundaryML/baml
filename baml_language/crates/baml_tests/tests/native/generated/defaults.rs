@@ -59,6 +59,7 @@ impl bex_aot::Readable for user_Counter {
 }
 /// BAML function `user.scale`.
 pub fn user_scale(mut _1: Int63, mut _2: Int63, mut _3: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _4: bool;
     let mut _5: bool;
@@ -87,6 +88,7 @@ pub fn user_scale(mut _1: Int63, mut _2: Int63, mut _3: Int63) -> Result<Int63, 
 }
 /// BAML function `user.label`.
 pub fn user_label(mut _1: Str, mut _2: Str, mut _3: bool) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _4: bool;
     let mut _5: bool;
@@ -125,6 +127,7 @@ pub fn user_label(mut _1: Str, mut _2: Str, mut _3: bool) -> Result<Str, Thrown>
 }
 /// BAML function `user.halve`.
 pub fn user_halve(mut _1: f64, mut _2: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     let mut _3: bool;
     'bb2: {
@@ -141,6 +144,7 @@ pub fn user_halve(mut _1: f64, mut _2: f64) -> Result<f64, Thrown> {
 }
 /// BAML function `user.capped`.
 pub fn user_capped(mut _1: Int63, mut _2: Option<Int63>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: bool;
     let mut _4: bool;
@@ -153,6 +157,7 @@ pub fn user_capped(mut _1: Int63, mut _2: Option<Int63>) -> Result<Int63, Thrown
             break 'bb2;
         }
     }
+    bex_aot::depth::probe(0)?;
     _4 = _2.is_none();
     'bb6: {
         if _4 {
@@ -170,6 +175,7 @@ pub fn user_Counter_bump(
     mut _1: Shared<user_Counter>,
     mut _2: Int63,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: bool;
     let mut _4: Int63;
@@ -192,6 +198,7 @@ pub fn user_Counter_bump(
 }
 /// BAML function `user.use_defaults`.
 pub fn user_use_defaults(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -210,6 +217,7 @@ pub fn user_use_defaults(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.use_named`.
 pub fn user_use_named(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -227,15 +235,18 @@ pub fn user_use_named(mut _1: Int63) -> Result<Str, Thrown> {
     _7 = user_label(string::from_literal("c"), string::from_literal("yo"), false)?;
     _3 = string::concat(&_4, &_7);
     _9 = user_capped(_1, None)?;
+    bex_aot::depth::probe(0)?;
     _8 = ToBaml::to_baml(&_9);
     _2 = string::concat(&_3, &_8);
     _12 = user_capped(_1, Some(int::lit(0)))?;
+    bex_aot::depth::probe(0)?;
     _11 = ToBaml::to_baml(&_12);
     _0 = string::concat(&_2, &_11);
     Ok(_0)
 }
 /// BAML function `user.use_float`.
 pub fn user_use_float(mut _1: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     let mut _2: f64;
     let mut _3: f64;
@@ -246,6 +257,7 @@ pub fn user_use_float(mut _1: f64) -> Result<f64, Thrown> {
 }
 /// BAML function `user.use_method`.
 pub fn user_use_method(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Counter>;
     let mut _3: Int63;

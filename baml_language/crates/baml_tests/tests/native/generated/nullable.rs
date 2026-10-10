@@ -64,6 +64,7 @@ impl bex_aot::Readable for user_Node {
 }
 /// BAML function `user.pick`.
 pub fn user_pick(mut _1: Int63) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Int63>;
     let mut _2: bool;
     'bb3: {
@@ -80,12 +81,14 @@ pub fn user_pick(mut _1: Int63) -> Result<Option<Int63>, Thrown> {
 }
 /// BAML function `user.or_zero`.
 pub fn user_or_zero(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Option<Int63>;
     let mut _3: bool;
     let mut _4: Option<Int63>;
     _2 = user_pick(_1)?;
     _4 = _2;
+    bex_aot::depth::probe(0)?;
     _3 = _4.is_none();
     'bb5: {
         if _3 {
@@ -100,9 +103,11 @@ pub fn user_or_zero(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.describe`.
 pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<Int63>;
     _2 = user_pick(_1)?;
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
@@ -134,19 +139,23 @@ pub fn user_build(mut _1: Int63) -> Result<Option<Shared<user_Node>>, Thrown> {
 }
 /// BAML function `user.chain`.
 pub fn user_chain(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<Shared<user_Node>>;
     _2 = user_build(_1)?;
+    bex_aot::depth::probe(1)?;
     _0 = json::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.sparse`.
 pub fn user_sparse(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Option<Int63>>>;
     let mut _3: Int63;
     _3 = int::add(_1, int::lit(1))?;
     _2 = array::new::<Option<Int63>>(Vec::from([Some(_1), None, Some(_3)]));
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }

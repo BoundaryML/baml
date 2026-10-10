@@ -89,12 +89,14 @@ impl bex_aot::Readable for user_Pt {
 }
 /// BAML function `user.identity<int>`.
 pub fn user_identity__int(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = _1;
     Ok(_0)
 }
 /// BAML function `user.first<int>`.
 pub fn user_first__int(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Int63;
     _3 = int::lit(0);
@@ -106,6 +108,7 @@ pub fn user_last_or__int(
     mut _1: Shared<Vec<Int63>>,
     mut _2: Int63,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: bool;
     let mut _4: Int63;
@@ -133,6 +136,7 @@ pub fn user_find_first__int(
     mut _1: Shared<Vec<Int63>>,
     mut _2: Int63,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Int63>;
     let mut _3: bex_aot::array::Iter<Int63>;
     let mut _4: Option<Int63>;
@@ -141,6 +145,7 @@ pub fn user_find_first__int(
     let mut _7: Int63;
     let mut _8: bool;
     let mut _9: Int63;
+    bex_aot::depth::probe(1)?;
     _3 = array::iter(&_1);
     'bb1: loop {
         _4 = array::next(&mut _3);
@@ -153,6 +158,7 @@ pub fn user_find_first__int(
                 _6 = _4.expect("non-null by the checker's narrowing");
                 _7 = _6;
                 _9 = _7;
+                bex_aot::depth::probe(0)?;
                 _8 = bex_aot::eq::equals(&_9, &_2);
                 if _8 {
                     _0 = Some(_7);
@@ -167,10 +173,12 @@ pub fn user_find_first__int(
 }
 /// BAML function `user.wrap<int>`.
 pub fn user_wrap__int(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;
     _2 = array::new::<Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _1);
     _3 = array::len(&_2);
     _0 = _2.clone();
@@ -178,12 +186,14 @@ pub fn user_wrap__int(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> {
 }
 /// BAML function `user.twice<int>`.
 pub fn user_twice__int(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _2: Shared<Vec<Int63>>;
     let mut _4: Int63;
     let mut _5: Int63;
     _2 = user_wrap__int(_1)?;
     _5 = user_identity__int(_1)?;
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _5);
     _4 = array::len(&_2);
     _0 = _2.clone();
@@ -277,6 +287,7 @@ pub fn user_use_ints__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.use_ints`.
 pub fn user_use_ints(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _4: Int63;
@@ -402,12 +413,14 @@ pub fn user_use_ints(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.identity<string>`.
 pub fn user_identity__string(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = _1.clone();
     Ok(_0)
 }
 /// BAML function `user.first<string>`.
 pub fn user_first__string(mut _1: Shared<Vec<Str>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _3: Int63;
     _3 = int::lit(0);
@@ -419,6 +432,7 @@ pub fn user_last_or__string(
     mut _1: Shared<Vec<Str>>,
     mut _2: Str,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _3: bool;
     let mut _4: Int63;
@@ -446,6 +460,7 @@ pub fn user_find_first__string(
     mut _1: Shared<Vec<Str>>,
     mut _2: Str,
 ) -> Result<Option<Str>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Str>;
     let mut _3: bex_aot::array::Iter<Str>;
     let mut _4: Option<Str>;
@@ -453,6 +468,7 @@ pub fn user_find_first__string(
     let mut _6: Str;
     let mut _7: Str;
     let mut _8: bool;
+    bex_aot::depth::probe(1)?;
     _3 = array::iter(&_1);
     'bb1: loop {
         _4 = array::next(&mut _3);
@@ -464,6 +480,7 @@ pub fn user_find_first__string(
             } else {
                 _6 = _4.clone().expect("non-null by the checker's narrowing");
                 _7 = _6.clone();
+                bex_aot::depth::probe(0)?;
                 _8 = bex_aot::eq::equals(&_7.clone(), &_2.clone());
                 if _8 {
                     _0 = Some(_7.clone());
@@ -488,10 +505,12 @@ pub fn user_apply__string__int(
 }
 /// BAML function `user.wrap<string>`.
 pub fn user_wrap__string(mut _1: Str) -> Result<Shared<Vec<Str>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Str>>;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Int63;
     _2 = array::new::<Str>(Vec::new());
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _1.clone());
     _3 = array::len(&_2);
     _0 = _2.clone();
@@ -499,12 +518,14 @@ pub fn user_wrap__string(mut _1: Str) -> Result<Shared<Vec<Str>>, Thrown> {
 }
 /// BAML function `user.twice<string>`.
 pub fn user_twice__string(mut _1: Str) -> Result<Shared<Vec<Str>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Str>>;
     let mut _2: Shared<Vec<Str>>;
     let mut _4: Int63;
     let mut _5: Str;
     _2 = user_wrap__string(_1.clone())?;
     _5 = user_identity__string(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _5.clone());
     _4 = array::len(&_2);
     _0 = _2.clone();
@@ -559,11 +580,13 @@ pub fn user_via_value__string(mut _1: Str) -> Result<Str, Thrown> {
 pub fn user_use_strings__lambda0(mut _1: Str) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
+    bex_aot::depth::probe(1)?;
     _0 = string::length(&_1);
     Ok(_0)
 }
 /// BAML function `user.use_strings`.
 pub fn user_use_strings(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _4: Str;
@@ -617,6 +640,7 @@ pub fn user_use_strings(mut _1: Str) -> Result<Str, Thrown> {
     _27 = string::concat(&_2, &_4);
     _26 = string::concat(&_27, &_8);
     _25 = string::concat(&_26, &_11);
+    bex_aot::depth::probe(0)?;
     _32 = ToBaml::to_baml(&_16);
     _24 = string::concat(&_25, &_32);
     _36 = int::lit(1);
@@ -631,12 +655,14 @@ pub fn user_use_strings(mut _1: Str) -> Result<Str, Thrown> {
 }
 /// BAML function `user.identity<float>`.
 pub fn user_identity__float(mut _1: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     _0 = _1;
     Ok(_0)
 }
 /// BAML function `user.first<float>`.
 pub fn user_first__float(mut _1: Shared<Vec<f64>>) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     let mut _3: Int63;
     _3 = int::lit(0);
@@ -648,6 +674,7 @@ pub fn user_last_or__float(
     mut _1: Shared<Vec<f64>>,
     mut _2: f64,
 ) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     let mut _3: bool;
     let mut _4: Int63;
@@ -675,6 +702,7 @@ pub fn user_find_first__float(
     mut _1: Shared<Vec<f64>>,
     mut _2: f64,
 ) -> Result<Option<f64>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<f64>;
     let mut _3: bex_aot::array::Iter<f64>;
     let mut _4: Option<f64>;
@@ -683,6 +711,7 @@ pub fn user_find_first__float(
     let mut _7: f64;
     let mut _8: bool;
     let mut _9: f64;
+    bex_aot::depth::probe(1)?;
     _3 = array::iter(&_1);
     'bb1: loop {
         _4 = array::next(&mut _3);
@@ -695,6 +724,7 @@ pub fn user_find_first__float(
                 _6 = _4.expect("non-null by the checker's narrowing");
                 _7 = _6;
                 _9 = _7;
+                bex_aot::depth::probe(0)?;
                 _8 = bex_aot::eq::equals(&_9, &_2);
                 if _8 {
                     _0 = Some(_7);
@@ -709,6 +739,7 @@ pub fn user_find_first__float(
 }
 /// BAML function `user.use_floats`.
 pub fn user_use_floats(mut _1: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     let mut _2: f64;
     let mut _3: f64;
@@ -747,6 +778,7 @@ pub fn user_use_floats(mut _1: f64) -> Result<f64, Thrown> {
 pub fn user_identity__user_Box(
     mut _1: Shared<user_Box>,
 ) -> Result<Shared<user_Box>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box>;
     _0 = _1.clone();
     Ok(_0)
@@ -755,6 +787,7 @@ pub fn user_identity__user_Box(
 pub fn user_first__user_Pt(
     mut _1: Shared<Vec<Shared<user_Pt>>>,
 ) -> Result<Shared<user_Pt>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Pt>;
     let mut _3: Int63;
     _3 = int::lit(0);
@@ -765,10 +798,12 @@ pub fn user_first__user_Pt(
 pub fn user_wrap__user_Box(
     mut _1: Shared<user_Box>,
 ) -> Result<Shared<Vec<Shared<user_Box>>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Shared<user_Box>>>;
     let mut _2: Shared<Vec<Shared<user_Box>>>;
     let mut _3: Int63;
     _2 = array::new::<Shared<user_Box>>(Vec::new());
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _1.clone());
     _3 = array::len(&_2);
     _0 = _2.clone();
@@ -778,12 +813,14 @@ pub fn user_wrap__user_Box(
 pub fn user_twice__user_Box(
     mut _1: Shared<user_Box>,
 ) -> Result<Shared<Vec<Shared<user_Box>>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Shared<user_Box>>>;
     let mut _2: Shared<Vec<Shared<user_Box>>>;
     let mut _4: Int63;
     let mut _5: Shared<user_Box>;
     _2 = user_wrap__user_Box(_1.clone())?;
     _5 = user_identity__user_Box(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _5.clone());
     _4 = array::len(&_2);
     _0 = _2.clone();
@@ -836,6 +873,7 @@ pub fn user_use_classes__lambda0(mut _1: Shared<user_Pt>) -> Result<Int63, Throw
 }
 /// BAML function `user.use_classes`.
 pub fn user_use_classes(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Box>;
     let mut _3: Shared<user_Box>;
@@ -894,6 +932,7 @@ pub fn user_use_classes(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_identity__int_array(
     mut _1: Shared<Vec<Int63>>,
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     _0 = _1.clone();
     Ok(_0)
@@ -902,6 +941,7 @@ pub fn user_identity__int_array(
 pub fn user_first__int_array(
     mut _1: Shared<Vec<Shared<Vec<Int63>>>>,
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
     let mut _3: Int63;
     _3 = int::lit(0);
@@ -912,10 +952,12 @@ pub fn user_first__int_array(
 pub fn user_wrap__int_array(
     mut _1: Shared<Vec<Int63>>,
 ) -> Result<Shared<Vec<Shared<Vec<Int63>>>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Shared<Vec<Int63>>>>;
     let mut _2: Shared<Vec<Shared<Vec<Int63>>>>;
     let mut _3: Int63;
     _2 = array::new::<Shared<Vec<Int63>>>(Vec::new());
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _1.clone());
     _3 = array::len(&_2);
     _0 = _2.clone();
@@ -925,12 +967,14 @@ pub fn user_wrap__int_array(
 pub fn user_twice__int_array(
     mut _1: Shared<Vec<Int63>>,
 ) -> Result<Shared<Vec<Shared<Vec<Int63>>>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Shared<Vec<Int63>>>>;
     let mut _2: Shared<Vec<Shared<Vec<Int63>>>>;
     let mut _4: Int63;
     let mut _5: Shared<Vec<Int63>>;
     _2 = user_wrap__int_array(_1.clone())?;
     _5 = user_identity__int_array(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     array::push(&_2, _5.clone());
     _4 = array::len(&_2);
     _0 = _2.clone();
@@ -938,6 +982,7 @@ pub fn user_twice__int_array(
 }
 /// BAML function `user.use_arrays`.
 pub fn user_use_arrays(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Shared<Vec<Int63>>;
@@ -980,6 +1025,7 @@ pub fn user_use_arrays(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.identity<null>`.
 pub fn user_identity__null(mut _1: ()) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     _0 = _1;
     Ok(_0)
@@ -988,6 +1034,7 @@ pub fn user_identity__null(mut _1: ()) -> Result<(), Thrown> {
 pub fn user_identity__int_or_null(
     mut _1: Option<Int63>,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Int63>;
     _0 = _1;
     Ok(_0)
@@ -996,6 +1043,7 @@ pub fn user_identity__int_or_null(
 pub fn user_first__int_or_null(
     mut _1: Shared<Vec<Option<Int63>>>,
 ) -> Result<Option<Int63>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Int63>;
     let mut _3: Int63;
     _3 = int::lit(0);
@@ -1004,6 +1052,7 @@ pub fn user_first__int_or_null(
 }
 /// BAML function `user.use_nullable`.
 pub fn user_use_nullable(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Option<Int63>;
     let mut _4: Option<Int63>;
@@ -1052,6 +1101,7 @@ pub fn user_use_nullable(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     _13 = _14;
     _18 = _7;
+    bex_aot::depth::probe(0)?;
     _17 = _18.is_none();
     'bb11: {
         if _17 {
@@ -1071,66 +1121,82 @@ pub fn user_use_nullable(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.render<int>`.
 pub fn user_render__int(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
     let mut _4: Str;
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     _2 = string::concat(&_3, &string::from_literal("/"));
+    bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.render<string>`.
 pub fn user_render__string(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
     let mut _4: Str;
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     _2 = string::concat(&_3, &string::from_literal("/"));
+    bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.render<Box>`.
 pub fn user_render__user_Box(mut _1: Shared<user_Box>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
     let mut _4: Str;
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     _2 = string::concat(&_3, &string::from_literal("/"));
+    bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.render<int[]>`.
 pub fn user_render__int_array(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
     let mut _4: Str;
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     _2 = string::concat(&_3, &string::from_literal("/"));
+    bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.render<bool>`.
 pub fn user_render__bool(mut _1: bool) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
     let mut _4: Str;
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     _2 = string::concat(&_3, &string::from_literal("/"));
+    bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.renders`.
 pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -1157,6 +1223,7 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.is_int_arg<int>`.
 pub fn user_is_int_arg__int(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: bool;
     'bb3: {
@@ -1173,6 +1240,7 @@ pub fn user_is_int_arg__int(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.is_int_arg<string>`.
 pub fn user_is_int_arg__string(mut _1: Str) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: bool;
     'bb3: {
@@ -1189,6 +1257,7 @@ pub fn user_is_int_arg__string(mut _1: Str) -> Result<bool, Thrown> {
 }
 /// BAML function `user.is_int_arg<Box>`.
 pub fn user_is_int_arg__user_Box(mut _1: Shared<user_Box>) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: bool;
     'bb3: {
@@ -1205,6 +1274,7 @@ pub fn user_is_int_arg__user_Box(mut _1: Shared<user_Box>) -> Result<bool, Throw
 }
 /// BAML function `user.type_tests`.
 pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _4: bool;

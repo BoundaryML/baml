@@ -67,6 +67,7 @@ impl bex_aot::Readable for user_Inventory {
 }
 /// BAML function `user.tally`.
 pub fn user_tally(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Map<Str, Int63>;
     let mut _3: Map<Str, Int63>;
@@ -96,29 +97,40 @@ pub fn user_tally(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _39: Str;
     let mut _40: Int63;
     _3 = map::new::<Str, Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _4 = map::set(&_3, string::from_literal("a"), _1);
     _5 = int::add(_1, int::lit(1))?;
+    bex_aot::depth::probe(0)?;
     _6 = map::set(&_3, string::from_literal("b"), _5);
     _2 = _3.clone();
     _8 = int::add(_1, int::lit(2))?;
+    bex_aot::depth::probe(0)?;
     _9 = map::set(&_2, string::from_literal("c"), _8);
+    bex_aot::depth::probe(0)?;
     _12 = map::index(&_2, &string::from_literal("a"))?;
     _11 = int::mul(_12, int::lit(2))?;
+    bex_aot::depth::probe(0)?;
     _10 = map::set(&_2, string::from_literal("a"), _11);
+    bex_aot::depth::probe(0)?;
     _16 = map::delete(&_2, &string::from_literal("b"));
     _19 = int::lit(0);
+    bex_aot::depth::probe(0)?;
     _20 = map::keys(&_2);
+    bex_aot::depth::probe(1)?;
     _23 = array::iter(&_20);
     'bb8: loop {
         _24 = array::next(&mut _23);
         _25 = _24.is_none();
         if _25 {
+            bex_aot::depth::probe(0)?;
             _35 = ToBaml::to_baml(&_2);
             _34 = string::concat(&_35, &string::from_literal(" "));
+            bex_aot::depth::probe(0)?;
             _37 = ToBaml::to_baml(&_19);
             _33 = string::concat(&_34, &_37);
             _32 = string::concat(&_33, &string::from_literal(" "));
             _40 = map::len(&_2);
+            bex_aot::depth::probe(0)?;
             _39 = ToBaml::to_baml(&_40);
             _0 = string::concat(&_32, &_39);
             return Ok(_0);
@@ -126,6 +138,7 @@ pub fn user_tally(mut _1: Int63) -> Result<Str, Thrown> {
             _26 = _24.clone().expect("non-null by the checker's narrowing");
             _28 = _19;
             _31 = _26.clone();
+            bex_aot::depth::probe(0)?;
             _29 = map::index(&_2, &_31)?;
             _19 = int::add(_28, _29)?;
             continue 'bb8;
@@ -134,6 +147,7 @@ pub fn user_tally(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.lookup`.
 pub fn user_lookup(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Map<Int63, Str>;
     let mut _4: Option<Str>;
@@ -143,17 +157,23 @@ pub fn user_lookup(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _8: Str;
     let mut _9: Map<Int63, Str>;
     _3 = map::new::<Int63, Str>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _4 = map::set(&_3, int::lit(1), string::from_literal("one"));
+    bex_aot::depth::probe(0)?;
     _5 = map::set(&_3, int::lit(2), string::from_literal("two"));
     _6 = int::neg(int::lit(1))?;
+    bex_aot::depth::probe(0)?;
     _7 = map::set(&_3, _6, string::from_literal("minus"));
     _9 = _3.clone();
+    bex_aot::depth::probe(0)?;
     _8 = map::index(&_9, &_1)?;
+    bex_aot::depth::probe(1)?;
     _0 = string::length(&_8);
     Ok(_0)
 }
 /// BAML function `user.flags`.
 pub fn user_flags(mut _1: bool) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Map<bool, Int63>;
     let mut _3: Map<bool, Int63>;
@@ -169,10 +189,13 @@ pub fn user_flags(mut _1: bool) -> Result<Str, Thrown> {
     let mut _16: bool;
     let mut _20: Str;
     _3 = map::new::<bool, Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _4 = map::set(&_3, true, int::lit(1));
     _2 = _3.clone();
+    bex_aot::depth::probe(0)?;
     _5 = map::get(&_2, &_1);
     _10 = _5;
+    bex_aot::depth::probe(0)?;
     _9 = _10.is_none();
     'bb6: {
         if _9 {
@@ -184,16 +207,20 @@ pub fn user_flags(mut _1: bool) -> Result<Str, Thrown> {
         }
     }
     _13 = string::concat(&_8, &string::from_literal(" "));
+    bex_aot::depth::probe(0)?;
     _16 = map::has(&_2, &_1);
+    bex_aot::depth::probe(0)?;
     _15 = ToBaml::to_baml(&_16);
     _12 = string::concat(&_13, &_15);
     _11 = string::concat(&_12, &string::from_literal(" "));
+    bex_aot::depth::probe(0)?;
     _20 = ToBaml::to_baml(&_2);
     _0 = string::concat(&_11, &_20);
     Ok(_0)
 }
 /// BAML function `user.json_out`.
 pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Inventory>;
     let mut _4: Map<Str, Int63>;
@@ -206,6 +233,7 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _12: Str;
     let mut _13: Map<Str, Int63>;
     _4 = map::new::<Str, Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _5 = map::set(&_4, string::from_literal("x"), _1);
     _2 = shared(user_Inventory {
         stock: _4.clone(),
@@ -213,16 +241,20 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
     });
     _6 = _2.borrow().stock.clone();
     _7 = int::mul(_1, int::lit(2))?;
+    bex_aot::depth::probe(0)?;
     _8 = map::set(&_6, string::from_literal("y"), _7);
+    bex_aot::depth::probe(1)?;
     _10 = json::to_string(&_2)?;
     _9 = string::concat(&_10, &string::from_literal(" "));
     _13 = _2.borrow().stock.clone();
+    bex_aot::depth::probe(1)?;
     _12 = json::to_string(&_13)?;
     _0 = string::concat(&_9, &_12);
     Ok(_0)
 }
 /// BAML function `user.json_in`.
 pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Inventory>;
     let mut _4: Str;
@@ -232,39 +264,48 @@ pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
     let mut _9: Map<Str, Int63>;
     let mut _11: Str;
     let mut _12: Int63;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Inventory>>(&_1)?;
     _6 = string::concat(&_2.borrow().name, &string::from_literal(" "));
     _9 = _2.borrow().stock.clone();
+    bex_aot::depth::probe(0)?;
     _8 = ToBaml::to_baml(&_9);
     _5 = string::concat(&_6, &_8);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _12 = map::len(&_2.borrow().stock);
+    bex_aot::depth::probe(0)?;
     _11 = ToBaml::to_baml(&_12);
     _0 = string::concat(&_4, &_11);
     Ok(_0)
 }
 /// BAML function `user.json_int_keys`.
 pub fn user_json_int_keys(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _3: Map<Int63, Int63>;
     let mut _4: Option<Int63>;
     let mut _5: Map<Int63, Int63>;
     _3 = map::new::<Int63, Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _4 = map::set(&_3, _1, _1);
     _5 = _3.clone();
+    bex_aot::depth::probe(1)?;
     _0 = json::to_string(&_5)?;
     Ok(_0)
 }
 /// BAML function `user.json_int_keys_in`.
 pub fn user_json_int_keys_in(mut _1: Str) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Map<Int63, Int63>;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Map<Int63, Int63>>(&_1)?;
     _0 = map::len(&_2);
     Ok(_0)
 }
 /// BAML function `user.get_or_insert`.
 pub fn user_get_or_insert(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Map<Str, Int63>;
     let mut _3: Map<Str, Int63>;
@@ -285,26 +326,35 @@ pub fn user_get_or_insert(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _29: Int63;
     _3 = map::new::<Str, Int63>(Vec::new());
     _2 = _3.clone();
+    bex_aot::depth::probe(0)?;
     _4 = map::get_or_insert(&_2, string::from_literal("k"), _1);
     _8 = int::add(_1, int::lit(1))?;
+    bex_aot::depth::probe(0)?;
     _7 = map::get_or_insert(&_2, string::from_literal("k"), _8);
+    bex_aot::depth::probe(0)?;
     _11 = map::values(&_2);
+    bex_aot::depth::probe(0)?;
     _14 = map::clear(&_2);
+    bex_aot::depth::probe(0)?;
     _22 = ToBaml::to_baml(&_4);
     _21 = string::concat(&_22, &string::from_literal(" "));
+    bex_aot::depth::probe(0)?;
     _24 = ToBaml::to_baml(&_7);
     _20 = string::concat(&_21, &_24);
     _19 = string::concat(&_20, &string::from_literal(" "));
+    bex_aot::depth::probe(0)?;
     _26 = ToBaml::to_baml(&_11);
     _18 = string::concat(&_19, &_26);
     _17 = string::concat(&_18, &string::from_literal(" "));
     _29 = map::len(&_2);
+    bex_aot::depth::probe(0)?;
     _28 = ToBaml::to_baml(&_29);
     _0 = string::concat(&_17, &_28);
     Ok(_0)
 }
 /// BAML function `user.alias`.
 pub fn user_alias(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Map<Str, Int63>;
     let mut _3: Map<Str, Int63>;
@@ -313,11 +363,14 @@ pub fn user_alias(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _7: Int63;
     let mut _8: Option<Int63>;
     _3 = map::new::<Str, Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _4 = map::set(&_3, string::from_literal("x"), _1);
     _2 = _3.clone();
     _6 = _2.clone();
     _7 = int::add(_1, int::lit(1))?;
+    bex_aot::depth::probe(0)?;
     _8 = map::set(&_6, string::from_literal("x"), _7);
+    bex_aot::depth::probe(0)?;
     _0 = map::index(&_2, &string::from_literal("x"))?;
     Ok(_0)
 }

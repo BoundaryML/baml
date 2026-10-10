@@ -634,6 +634,7 @@ impl<'de> bex_aot::serde::Deserialize<'de> for user_Labeled {
 pub fn user___user_Square_as_user_Shape___area(
     mut _1: Shared<user_Square>,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -646,6 +647,7 @@ pub fn user___user_Square_as_user_Shape___area(
 pub fn user___user_Square_as_user_Shape___name(
     mut _1: Shared<user_Square>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = string::from_literal("square");
     Ok(_0)
@@ -654,6 +656,7 @@ pub fn user___user_Square_as_user_Shape___name(
 pub fn user___user_Rect_as_user_Shape___area(
     mut _1: Shared<user_Rect>,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -666,6 +669,7 @@ pub fn user___user_Rect_as_user_Shape___area(
 pub fn user___user_Rect_as_user_Shape___name(
     mut _1: Shared<user_Rect>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = string::from_literal("rect");
     Ok(_0)
@@ -674,6 +678,7 @@ pub fn user___user_Rect_as_user_Shape___name(
 pub fn user___user_Rect_as_user_Shape___describe(
     mut _1: Shared<user_Rect>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -684,10 +689,12 @@ pub fn user___user_Rect_as_user_Shape___describe(
     let mut _10: Str;
     _5 = _1.borrow().w;
     _10 = string::from_literal("rect ");
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     _3 = string::concat(&_10, &_4);
     _2 = string::concat(&_3, &string::from_literal("x"));
     _8 = _1.borrow().h;
+    bex_aot::depth::probe(0)?;
     _7 = ToBaml::to_baml(&_8);
     _0 = string::concat(&_2, &_7);
     Ok(_0)
@@ -696,6 +703,7 @@ pub fn user___user_Rect_as_user_Shape___describe(
 pub fn user___user_Dot_as_user_Shape___area(
     mut _1: Shared<user_Dot>,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::lit(0);
     Ok(_0)
@@ -704,6 +712,7 @@ pub fn user___user_Dot_as_user_Shape___area(
 pub fn user___user_Dot_as_user_Shape___name(
     mut _1: Shared<user_Dot>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = string::from_literal("dot");
     Ok(_0)
@@ -712,6 +721,7 @@ pub fn user___user_Dot_as_user_Shape___name(
 pub fn user___user_Dog_as_user_Named___greet(
     mut _1: Shared<user_Dog>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = string::concat(&string::from_literal("woof "), &_1.borrow().name);
     Ok(_0)
@@ -720,6 +730,7 @@ pub fn user___user_Dog_as_user_Named___greet(
 pub fn user___user_Cat_as_user_Named___greet(
     mut _1: Shared<user_Cat>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = string::concat(&string::from_literal("meow "), &_1.borrow().name);
     Ok(_0)
@@ -728,19 +739,23 @@ pub fn user___user_Cat_as_user_Named___greet(
 pub fn user___user_Cat_as_user_Named___shout(
     mut _1: Shared<user_Cat>,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = string::from_literal("MEOW");
     Ok(_0)
 }
 /// BAML function `user.<(int as user.Counted)>.count`.
 pub fn user___int_as_user_Counted___count(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = _1;
     Ok(_0)
 }
 /// BAML function `user.<(string as user.Counted)>.count`.
 pub fn user___string_as_user_Counted___count(mut _1: Str) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
+    bex_aot::depth::probe(1)?;
     _0 = string::length(&_1);
     Ok(_0)
 }
@@ -748,12 +763,14 @@ pub fn user___string_as_user_Counted___count(mut _1: Str) -> Result<Int63, Throw
 pub fn user___user_Dog_as_user_Counted___count(
     mut _1: Shared<user_Dog>,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = _1.borrow().barks;
     Ok(_0)
 }
 /// BAML function `user.Shape.describe<Square>`.
 pub fn user_Shape_describe__user_Square(mut _1: user_Shape) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -786,12 +803,14 @@ pub fn user_Shape_describe__user_Square(mut _1: user_Shape) -> Result<Str, Throw
             }
         }
     };
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.Shape.describe<Dot>`.
 pub fn user_Shape_describe__user_Dot(mut _1: user_Shape) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -824,12 +843,14 @@ pub fn user_Shape_describe__user_Dot(mut _1: user_Shape) -> Result<Str, Thrown> 
             }
         }
     };
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.static_calls`.
 pub fn user_static_calls(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Square>;
     let mut _3: Shared<user_Rect>;
@@ -860,12 +881,14 @@ pub fn user_static_calls(mut _1: Int63) -> Result<Str, Thrown> {
     _14 = user___user_Square_as_user_Shape___name(_2.clone())?;
     _5 = string::concat(&_6, &_14);
     _16 = user___user_Square_as_user_Shape___area(_2.clone())?;
+    bex_aot::depth::probe(0)?;
     _15 = ToBaml::to_baml(&_16);
     _0 = string::concat(&_5, &_15);
     Ok(_0)
 }
 /// BAML function `user.total`.
 pub fn user_total(mut _1: Shared<Vec<user_Shape>>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: bex_aot::array::Iter<user_Shape>;
@@ -875,6 +898,7 @@ pub fn user_total(mut _1: Shared<Vec<user_Shape>>) -> Result<Int63, Thrown> {
     let mut _8: Int63;
     let mut _9: Int63;
     _2 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _3 = array::iter(&_1);
     'bb1: loop {
         _4 = array::next(&mut _3);
@@ -905,6 +929,7 @@ pub fn user_total(mut _1: Shared<Vec<user_Shape>>) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.describe_all`.
 pub fn user_describe_all(mut _1: Shared<Vec<user_Shape>>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: bex_aot::array::Iter<user_Shape>;
@@ -915,6 +940,7 @@ pub fn user_describe_all(mut _1: Shared<Vec<user_Shape>>) -> Result<Str, Thrown>
     let mut _9: Str;
     let mut _10: Str;
     _2 = string::from_literal("");
+    bex_aot::depth::probe(1)?;
     _3 = array::iter(&_1);
     'bb1: loop {
         _4 = array::next(&mut _3);
@@ -946,6 +972,7 @@ pub fn user_describe_all(mut _1: Shared<Vec<user_Shape>>) -> Result<Str, Thrown>
 }
 /// BAML function `user.shapes`.
 pub fn user_shapes(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<user_Shape>>;
     let mut _3: Shared<user_Square>;
@@ -977,6 +1004,7 @@ pub fn user_shapes(mut _1: Int63) -> Result<Str, Thrown> {
     );
     _6 = user_Shape::user_Rect(shared(user_Rect { w: int::lit(2), h: _1 }));
     _13 = user_total(_2.clone())?;
+    bex_aot::depth::probe(0)?;
     _12 = ToBaml::to_baml(&_13);
     _11 = string::concat(&_12, &string::from_literal("/"));
     _16 = user_describe_all(_2.clone())?;
@@ -1008,12 +1036,14 @@ pub fn user_shapes(mut _1: Int63) -> Result<Str, Thrown> {
             }
         }
     };
+    bex_aot::depth::probe(0)?;
     _19 = ToBaml::to_baml(&_20);
     _0 = string::concat(&_7, &_19);
     Ok(_0)
 }
 /// BAML function `user.narrowing`.
 pub fn user_narrowing(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: user_Shape;
     let mut _3: bool;
@@ -1123,6 +1153,7 @@ pub fn user_narrowing(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.switch_arms`.
 pub fn user_switch_arms(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: user_Shape;
     let mut _3: bool;
@@ -1190,6 +1221,7 @@ pub fn user_switch_arms(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.bounded<Square>`.
 pub fn user_bounded__user_Square(mut _1: Shared<user_Square>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -1198,12 +1230,14 @@ pub fn user_bounded__user_Square(mut _1: Shared<user_Square>) -> Result<Str, Thr
     _3 = user_Shape_describe__user_Square(user_Shape::user_Square(_1.clone()))?;
     _2 = string::concat(&_3, &string::from_literal(":"));
     _5 = user___user_Square_as_user_Shape___area(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.bounded<Rect>`.
 pub fn user_bounded__user_Rect(mut _1: Shared<user_Rect>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -1212,12 +1246,14 @@ pub fn user_bounded__user_Rect(mut _1: Shared<user_Rect>) -> Result<Str, Thrown>
     _3 = user___user_Rect_as_user_Shape___describe(_1.clone())?;
     _2 = string::concat(&_3, &string::from_literal(":"));
     _5 = user___user_Rect_as_user_Shape___area(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.bounded<Dot>`.
 pub fn user_bounded__user_Dot(mut _1: Shared<user_Dot>) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -1226,12 +1262,14 @@ pub fn user_bounded__user_Dot(mut _1: Shared<user_Dot>) -> Result<Str, Thrown> {
     _3 = user_Shape_describe__user_Dot(user_Shape::user_Dot(_1.clone()))?;
     _2 = string::concat(&_3, &string::from_literal(":"));
     _5 = user___user_Dot_as_user_Shape___area(_1.clone())?;
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
 /// BAML function `user.bounded_calls`.
 pub fn user_bounded_calls(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -1256,6 +1294,7 @@ pub fn user_bounded_calls(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.Named.shout<Dog>`.
 pub fn user_Named_shout__user_Dog(mut _1: user_Named) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     _2 = {
@@ -1276,6 +1315,7 @@ pub fn user_Named_rename__user_Dog(
     mut _1: user_Named,
     mut _2: Str,
 ) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     {
         let value = _2.clone();
@@ -1298,6 +1338,7 @@ pub fn user_Named_rename__user_Cat(
     mut _1: user_Named,
     mut _2: Str,
 ) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     {
         let value = _2.clone();
@@ -1317,6 +1358,7 @@ pub fn user_Named_rename__user_Cat(
 }
 /// BAML function `user.fields`.
 pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Dog>;
     let mut _3: Shared<user_Cat>;
@@ -1354,6 +1396,7 @@ pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
         user_Named,
     >(Vec::from([user_Named::user_Dog(_2.clone()), user_Named::user_Cat(_3.clone())]));
     _7 = string::from_literal("");
+    bex_aot::depth::probe(1)?;
     _9 = array::iter(&_4);
     'bb1: loop {
         _10 = array::next(&mut _9);
@@ -1424,6 +1467,7 @@ pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.primitives`.
 pub fn user_primitives(mut _1: Int63, mut _2: Str) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Shared<Vec<user_Counted>>;
     let mut _4: Shared<user_Dog>;
@@ -1454,6 +1498,7 @@ pub fn user_primitives(mut _1: Int63, mut _2: Str) -> Result<Int63, Thrown> {
         ]),
     );
     _6 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _8 = array::iter(&_3);
     'bb1: loop {
         _9 = array::next(&mut _8);
@@ -1488,6 +1533,7 @@ pub fn user_primitives(mut _1: Int63, mut _2: Str) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.nullable`.
 pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<user_Shape>;
     let mut _3: bool;
@@ -1502,6 +1548,7 @@ pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
             break 'bb3;
         }
     }
+    bex_aot::depth::probe(0)?;
     _4 = _2.is_none();
     'bb7: {
         if _4 {
@@ -1531,6 +1578,7 @@ pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.renders`.
 pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: user_Shape;
     let mut _3: Shared<Vec<user_Named>>;
@@ -1556,20 +1604,25 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = array::new::<
         user_Named,
     >(Vec::from([user_Named::user_Dog(_4.clone()), user_Named::user_Cat(_5.clone())]));
+    bex_aot::depth::probe(0)?;
     _11 = ToBaml::to_baml(&_2);
     _10 = string::concat(&_11, &string::from_literal("|"));
+    bex_aot::depth::probe(1)?;
     _12 = json::to_string(&_2)?;
     _9 = string::concat(&_10, &_12);
     _8 = string::concat(&_9, &string::from_literal("|"));
+    bex_aot::depth::probe(1)?;
     _14 = json::to_string(&_3)?;
     _7 = string::concat(&_8, &_14);
     _6 = string::concat(&_7, &string::from_literal("|"));
+    bex_aot::depth::probe(0)?;
     _16 = ToBaml::to_baml(&_3);
     _0 = string::concat(&_6, &_16);
     Ok(_0)
 }
 /// BAML function `user.in_union`.
 pub fn user_in_union(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_user_Shape;
     let mut _3: bool;
@@ -1634,6 +1687,7 @@ pub fn user_in_union(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             _16 = string::from_literal("int");
+            bex_aot::depth::probe(0)?;
             _9 = ToBaml::to_baml(&_8);
             _5 = string::concat(&_16, &_9);
             break 'bb7;
@@ -1663,6 +1717,7 @@ pub fn user_in_union(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.in_field`.
 pub fn user_in_field(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Holder>;
     let mut _3: Shared<user_Square>;
@@ -1710,6 +1765,7 @@ pub fn user_in_field(mut _1: Int63) -> Result<Str, Thrown> {
         }
     };
     _6 = string::concat(&_7, &_8);
+    bex_aot::depth::probe(0)?;
     _10 = ToBaml::to_baml(&_2);
     _0 = string::concat(&_6, &_10);
     Ok(_0)
@@ -1719,11 +1775,13 @@ pub fn user___user_Money_as_baml_ops_Compare___cmp(
     mut _1: Shared<user_Money>,
     mut _2: Shared<user_Money>,
 ) -> Result<baml_ops_Ordering, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: baml_ops_Ordering;
     let mut _3: Int63;
     let mut _4: Int63;
     _3 = _1.borrow().cents;
     _4 = _2.borrow().cents;
+    bex_aot::depth::probe(0)?;
     _0 = match Ord::cmp(&_3, &_4) {
         std::cmp::Ordering::Less => baml_ops_Ordering::Less,
         std::cmp::Ordering::Equal => baml_ops_Ordering::Equal,
@@ -1736,6 +1794,7 @@ pub fn user___user_Money_as_baml_ops_Equals___eq(
     mut _1: Shared<user_Money>,
     mut _2: Shared<user_Money>,
 ) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: Int63;
     let mut _4: Int63;
@@ -1746,6 +1805,7 @@ pub fn user___user_Money_as_baml_ops_Equals___eq(
 }
 /// BAML function `user.comparisons`.
 pub fn user_comparisons(mut _1: Int63, mut _2: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _3: Shared<user_Money>;
     let mut _4: Shared<user_Money>;
@@ -1786,7 +1846,9 @@ pub fn user_comparisons(mut _1: Int63, mut _2: Int63) -> Result<Str, Thrown> {
     let mut _50: bool;
     _3 = shared(user_Money { cents: _1 });
     _4 = shared(user_Money { cents: _2 });
+    bex_aot::depth::probe(0)?;
     _5 = ToBaml::to_baml(&_1);
+    bex_aot::depth::probe(0)?;
     _7 = ToBaml::to_baml(&_2);
     'bb5: {
         _10 = _1 > _2;
@@ -1798,38 +1860,53 @@ pub fn user_comparisons(mut _1: Int63, mut _2: Int63) -> Result<Str, Thrown> {
             break 'bb5;
         }
     }
+    bex_aot::depth::probe(1)?;
     _12 = Ord::cmp(&_1, &_2).is_lt();
+    bex_aot::depth::probe(1)?;
     _13 = Ord::cmp(&_1, &_2).is_le();
+    bex_aot::depth::probe(1)?;
     _14 = Ord::cmp(&_1, &_2).is_gt();
+    bex_aot::depth::probe(1)?;
     _15 = Ord::cmp(&_1, &_2).is_ge();
     _17 = _1 > int::lit(0);
     _18 = _2 > int::lit(0);
+    bex_aot::depth::probe(1)?;
     _16 = Ord::cmp(&_17, &_18).is_lt();
     _20 = _1 > int::lit(0);
     _21 = _2 > int::lit(0);
+    bex_aot::depth::probe(1)?;
     _19 = Ord::cmp(&_20, &_21).is_ge();
+    bex_aot::depth::probe(1)?;
     _22 = string::cmp(&_5, &_7).is_lt();
+    bex_aot::depth::probe(1)?;
     _24 = string::cmp(&_5, &_7).is_ge();
+    bex_aot::depth::probe(1)?;
     _26 = float::cmp(_9, 1.0_f64).is_lt();
+    bex_aot::depth::probe(1)?;
     _27 = float::cmp(_9, 1.0_f64).is_gt();
+    bex_aot::depth::probe(1)?;
     _28 = matches!(
         user___user_Money_as_baml_ops_Compare___cmp(_3.clone(), _4.clone()) ?,
         baml_ops_Ordering::Less
     );
+    bex_aot::depth::probe(1)?;
     _30 = !matches!(
         user___user_Money_as_baml_ops_Compare___cmp(_3.clone(), _4.clone()) ?,
         baml_ops_Ordering::Greater
     );
+    bex_aot::depth::probe(1)?;
     _32 = matches!(
         user___user_Money_as_baml_ops_Compare___cmp(_3.clone(), _4.clone()) ?,
         baml_ops_Ordering::Greater
     );
+    bex_aot::depth::probe(1)?;
     _34 = !matches!(
         user___user_Money_as_baml_ops_Compare___cmp(_3.clone(), _4.clone()) ?,
         baml_ops_Ordering::Less
     );
     _36 = user___user_Money_as_baml_ops_Equals___eq(_3.clone(), _4.clone())?;
     _39 = user___user_Money_as_baml_ops_Compare___cmp(_3.clone(), _4.clone())?;
+    bex_aot::depth::probe(0)?;
     _38 = _39 == baml_ops_Ordering::Less;
     _11 = array::new::<
         bool,
@@ -1854,6 +1931,7 @@ pub fn user_comparisons(mut _1: Int63, mut _2: Int63) -> Result<Str, Thrown> {
         ]),
     );
     _41 = string::from_literal("");
+    bex_aot::depth::probe(1)?;
     _43 = array::iter(&_11);
     'bb23: loop {
         _44 = array::next(&mut _43);
@@ -1886,6 +1964,7 @@ pub fn user___user_Tag_as_user_Labeled___show(
     mut _2: Str,
     mut _3: Str,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _4: bool;
     let mut _5: Str;
@@ -1907,12 +1986,14 @@ pub fn user___user_Note_as_user_Labeled___show(
     mut _1: Shared<user_Note>,
     mut _2: Str,
 ) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     _0 = string::concat(&_2, &_1.borrow().label);
     Ok(_0)
 }
 /// BAML function `user.union_receivers`.
 pub fn user_union_receivers(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_user_Note_or_user_Tag;
     let mut _3: bool;
@@ -1951,6 +2032,7 @@ pub fn user_union_receivers(mut _1: Int63) -> Result<Str, Thrown> {
         _3 = _1 > int::lit(0);
         if _3 {
             _42 = string::from_literal("t");
+            bex_aot::depth::probe(0)?;
             _5 = ToBaml::to_baml(&_1);
             _4 = string::concat(&_42, &_5);
             _2 = Union_user_Note_or_user_Tag::user_Tag(
@@ -2004,6 +2086,7 @@ pub fn user_union_receivers(mut _1: Int63) -> Result<Str, Thrown> {
             }
         }
     };
+    bex_aot::depth::probe(0)?;
     _14 = _7.is_none();
     'bb12: {
         _12 = !_14;

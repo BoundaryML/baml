@@ -31,6 +31,7 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.collatz_steps`.
 pub fn user_collatz_steps(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -76,6 +77,7 @@ pub fn user_collatz_steps(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.sum_odd_squares`.
 pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -134,6 +136,7 @@ pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.gcd`.
 pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Int63;
     let mut _4: Int63;
@@ -163,6 +166,7 @@ pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.first_factor`.
 pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: bool;
@@ -203,6 +207,7 @@ pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.nested`.
 pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;

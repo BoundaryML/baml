@@ -405,6 +405,7 @@ impl bex_aot::BamlEq for Union_int_or_bool {
 }
 /// BAML function `user.half`.
 pub fn user_half(mut _1: Int63) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     let mut _2: f64;
     let mut _3: Int63;
@@ -432,6 +433,7 @@ pub fn user_half(mut _1: Int63) -> Result<f64, Thrown> {
 }
 /// BAML function `user.make`.
 pub fn user_make(mut _1: Int63) -> Result<Union_int_or_float, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Union_int_or_float;
     let mut _2: bool;
     let mut _3: Int63;
@@ -450,6 +452,7 @@ pub fn user_make(mut _1: Int63) -> Result<Union_int_or_float, Thrown> {
 }
 /// BAML function `user.make_null`.
 pub fn user_make_null(mut _1: Int63) -> Result<Option<Union_int_or_float>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Union_int_or_float>;
     let mut _2: bool;
     'bb3: {
@@ -466,6 +469,7 @@ pub fn user_make_null(mut _1: Int63) -> Result<Option<Union_int_or_float>, Throw
 }
 /// BAML function `user.reassign`.
 pub fn user_reassign(mut _1: Int63) -> Result<Union_int_or_float, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Union_int_or_float;
     let mut _2: Union_int_or_float;
     let mut _3: bool;
@@ -494,6 +498,7 @@ pub fn user_reassign(mut _1: Int63) -> Result<Union_int_or_float, Thrown> {
 }
 /// BAML function `user.kind`.
 pub fn user_kind(mut _1: Union_int_or_float) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: bool;
     'bb3: {
@@ -510,6 +515,7 @@ pub fn user_kind(mut _1: Union_int_or_float) -> Result<Str, Thrown> {
 }
 /// BAML function `user.bound`.
 pub fn user_bound(mut _1: Union_int_or_float) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Union_int_or_float;
     let mut _3: Int63;
@@ -532,6 +538,7 @@ pub fn user_bound(mut _1: Union_int_or_float) -> Result<Int63, Thrown> {
                     return Err(Thrown::from(Panic::Unreachable));
                 }
             };
+            bex_aot::depth::probe(0)?;
             _0 = float::itrunc(_4)?;
             break 'bb3;
         }
@@ -540,6 +547,7 @@ pub fn user_bound(mut _1: Union_int_or_float) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.tested`.
 pub fn user_tested(mut _1: Union_int_or_float) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _3: bool;
@@ -575,6 +583,7 @@ pub fn user_tested(mut _1: Union_int_or_float) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.narrowed`.
 pub fn user_narrowed(mut _1: Union_int_or_float) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     let mut _2: bool;
     let mut _3: bool;
@@ -613,6 +622,7 @@ pub fn user_narrowed(mut _1: Union_int_or_float) -> Result<f64, Thrown> {
 }
 /// BAML function `user.is_number`.
 pub fn user_is_number(mut _1: Union_int_or_float_or_string) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: bool;
     let mut _3: bool;
@@ -638,6 +648,7 @@ pub fn user_is_number(mut _1: Union_int_or_float_or_string) -> Result<bool, Thro
 }
 /// BAML function `user.four`.
 pub fn user_four(mut _1: Union_int_or_float_or_string_or_bool) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     'bb6: {
         match &_1 {
@@ -666,6 +677,7 @@ pub fn user_four(mut _1: Union_int_or_float_or_string_or_bool) -> Result<Int63, 
 }
 /// BAML function `user.four_of`.
 pub fn user_four_of(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Union_int_or_float_or_string_or_bool;
     let mut _3: bool;
@@ -698,6 +710,7 @@ pub fn user_four_of(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.wide_match`.
 pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_float_or_string_or_bool;
     let mut _3: bool;
@@ -748,6 +761,7 @@ pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             _20 = string::from_literal("i");
+            bex_aot::depth::probe(0)?;
             _8 = ToBaml::to_baml(&_7);
             _0 = string::concat(&_20, &_8);
             break 'bb17;
@@ -761,6 +775,7 @@ pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
                     }
                 };
                 _21 = string::from_literal("f");
+                bex_aot::depth::probe(0)?;
                 _12 = ToBaml::to_baml(&_11);
                 _0 = string::concat(&_21, &_12);
                 break 'bb17;
@@ -783,6 +798,7 @@ pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
                         }
                     };
                     _22 = string::from_literal("b");
+                    bex_aot::depth::probe(0)?;
                     _18 = ToBaml::to_baml(&_17);
                     _0 = string::concat(&_22, &_18);
                     break 'bb17;
@@ -794,6 +810,7 @@ pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.nullable_kind`.
 pub fn user_nullable_kind(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<Union_int_or_float>;
     let mut _3: bool;
@@ -801,6 +818,7 @@ pub fn user_nullable_kind(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _5: bool;
     _2 = user_make_null(_1)?;
     _4 = _2;
+    bex_aot::depth::probe(0)?;
     _3 = _4.is_none();
     'bb7: {
         if _3 {
@@ -821,6 +839,7 @@ pub fn user_nullable_kind(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.nullable_narrow`.
 pub fn user_nullable_narrow(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Option<Union_int_or_float>;
     let mut _3: bool;
@@ -831,6 +850,7 @@ pub fn user_nullable_narrow(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _8: Int63;
     _2 = user_make_null(_1)?;
     _4 = _2;
+    bex_aot::depth::probe(0)?;
     _5 = _4.is_none();
     'bb9: {
         'bb7: {
@@ -869,56 +889,67 @@ pub fn user_nullable_narrow(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.same`.
 pub fn user_same(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: Union_int_or_float;
     let mut _4: Union_int_or_float;
     _3 = user_make(_1)?;
     _4 = user_make(_2)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(&_3, &_4);
     Ok(_0)
 }
 /// BAML function `user.differ`.
 pub fn user_differ(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: Union_int_or_float;
     let mut _4: Union_int_or_float;
     let mut _5: bool;
     _3 = user_make(_1)?;
     _4 = user_make(_2)?;
+    bex_aot::depth::probe(0)?;
     _5 = bex_aot::eq::equals(&_3, &_4);
     _0 = !_5;
     Ok(_0)
 }
 /// BAML function `user.is_three`.
 pub fn user_is_three(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Union_int_or_float;
     _2 = user_make(_1)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(&_2, &Union_int_or_float::int(int::lit(3)));
     Ok(_0)
 }
 /// BAML function `user.is_half`.
 pub fn user_is_half(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Union_int_or_float;
     let mut _3: f64;
     _3 = 1.5_f64;
     _2 = user_make(_1)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(&Union_int_or_float::float(_3), &_2);
     Ok(_0)
 }
 /// BAML function `user.nullable_same`.
 pub fn user_nullable_same(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: Option<Union_int_or_float>;
     let mut _4: Option<Union_int_or_float>;
     _3 = user_make_null(_1)?;
     _4 = user_make_null(_2)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(&_3, &_4);
     Ok(_0)
 }
 /// BAML function `user.render`.
 pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Row>;
     let mut _3: Union_int_or_float;
@@ -936,8 +967,10 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = user_make(_1)?;
     _2 = shared(user_Row { amount: _3, note: None });
     _8 = user_make(_1)?;
+    bex_aot::depth::probe(0)?;
     _7 = ToBaml::to_baml(&_8);
     _6 = string::concat(&_7, &string::from_literal(" "));
+    bex_aot::depth::probe(0)?;
     _9 = ToBaml::to_baml(&_2);
     _5 = string::concat(&_6, &_9);
     _4 = string::concat(&_5, &string::from_literal(" "));
@@ -945,12 +978,14 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     _14 = int::add(_1, int::lit(1))?;
     _13 = user_make(_14)?;
     _11 = array::new::<Union_int_or_float>(Vec::from([_12, _13]));
+    bex_aot::depth::probe(0)?;
     _10 = ToBaml::to_baml(&_11);
     _0 = string::concat(&_4, &_10);
     Ok(_0)
 }
 /// BAML function `user.json_out`.
 pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -959,6 +994,7 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _6: Shared<user_Row>;
     let mut _7: Union_int_or_float;
     _4 = user_make(_1)?;
+    bex_aot::depth::probe(1)?;
     _3 = json::to_string(&_4)?;
     _2 = string::concat(&_3, &string::from_literal(" "));
     _7 = user_make(_1)?;
@@ -966,28 +1002,33 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
         amount: _7,
         note: Some(string::from_literal("x")),
     });
+    bex_aot::depth::probe(1)?;
     _5 = json::to_string(&_6)?;
     _0 = string::concat(&_2, &_5);
     Ok(_0)
 }
 /// BAML function `user.json_in`.
 pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_float;
     let mut _4: Str;
     let mut _5: Str;
     let mut _6: Union_int_or_float;
     let mut _7: Str;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Union_int_or_float>(&_1)?;
     _6 = _2;
     _5 = user_kind(_6)?;
     _4 = string::concat(&_5, &string::from_literal(":"));
+    bex_aot::depth::probe(0)?;
     _7 = ToBaml::to_baml(&_2);
     _0 = string::concat(&_4, &_7);
     Ok(_0)
 }
 /// BAML function `user.json_rows`.
 pub fn user_json_rows(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Shared<user_Row>>>;
     let mut _4: Int63;
@@ -998,13 +1039,16 @@ pub fn user_json_rows(mut _1: Str) -> Result<Str, Thrown> {
     let mut _11: Int63;
     let mut _12: Int63;
     let mut _13: Union_int_or_float;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<Vec<Shared<user_Row>>>>(&_1)?;
     _4 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _6 = array::iter(&_2);
     'bb2: loop {
         _7 = array::next(&mut _6);
         _8 = _7.is_none();
         if _8 {
+            bex_aot::depth::probe(0)?;
             _0 = ToBaml::to_baml(&_4);
             return Ok(_0);
         } else {
@@ -1019,6 +1063,7 @@ pub fn user_json_rows(mut _1: Str) -> Result<Str, Thrown> {
 }
 /// BAML function `user.sum`.
 pub fn user_sum(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Union_int_or_float>>;
     let mut _3: Int63;
@@ -1045,6 +1090,7 @@ pub fn user_sum(mut _1: Int63) -> Result<Int63, Thrown> {
         if _4 {
             _8 = _3;
             _7 = user_make(_8)?;
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7);
             _6 = array::len(&_2);
             _10 = _3;
@@ -1055,6 +1101,7 @@ pub fn user_sum(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _11 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _13 = array::iter(&_2);
     'bb3: loop {
         _14 = array::next(&mut _13);
@@ -1075,6 +1122,7 @@ pub fn user_sum(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.double`.
 pub fn user_double(mut _1: Union_int_or_float) -> Result<Union_int_or_float, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Union_int_or_float;
     let mut _2: Union_int_or_float;
     let mut _3: Int63;
@@ -1109,16 +1157,19 @@ pub fn user_double(mut _1: Union_int_or_float) -> Result<Union_int_or_float, Thr
 }
 /// BAML function `user.doubled`.
 pub fn user_doubled(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_float;
     let mut _3: Union_int_or_float;
     _3 = user_make(_1)?;
     _2 = user_double(_3)?;
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
 /// BAML function `user.coalesce`.
 pub fn user_coalesce(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Map<Str, Int63>;
     let mut _3: Map<Str, Int63>;
@@ -1129,6 +1180,7 @@ pub fn user_coalesce(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _8: Int63;
     let mut _9: Option<Int63>;
     _3 = map::new::<Str, Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _4 = map::set(&_3, string::from_literal("a"), int::lit(1));
     'bb4: {
         _2 = _3.clone();
@@ -1141,6 +1193,7 @@ pub fn user_coalesce(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb4;
         }
     }
+    bex_aot::depth::probe(0)?;
     _9 = map::get(&_2, &_5);
     'bb7: {
         if let Some(value) = _9 {
@@ -1157,6 +1210,7 @@ pub fn user_coalesce(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.coalesce_union`.
 pub fn user_coalesce_union(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_float;
     let mut _3: Union_int_or_float;
@@ -1172,11 +1226,13 @@ pub fn user_coalesce_union(mut _1: Int63) -> Result<Str, Thrown> {
         }
     }
     _2 = _3;
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
 /// BAML function `user.big`.
 pub fn user_big(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_bigint;
     let mut _3: bool;
@@ -1209,6 +1265,7 @@ pub fn user_big(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             _11 = string::from_literal("int ");
+            bex_aot::depth::probe(0)?;
             _6 = ToBaml::to_baml(&_5);
             _0 = string::concat(&_11, &_6);
             break 'bb8;
@@ -1220,6 +1277,7 @@ pub fn user_big(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             _12 = string::from_literal("bigint ");
+            bex_aot::depth::probe(0)?;
             _9 = ToBaml::to_baml(&_8);
             _0 = string::concat(&_12, &_9);
             break 'bb8;
@@ -1229,6 +1287,7 @@ pub fn user_big(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.flag`.
 pub fn user_flag(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Union_int_or_bool;
     let mut _3: bool;
@@ -1270,6 +1329,7 @@ pub fn user_flag(mut _1: Int63) -> Result<Str, Thrown> {
                     return Err(Thrown::from(Panic::Unreachable));
                 }
             };
+            bex_aot::depth::probe(0)?;
             _0 = ToBaml::to_baml(&_7);
             break 'bb8;
         }
@@ -1278,6 +1338,7 @@ pub fn user_flag(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.plain_tests`.
 pub fn user_plain_tests(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;

@@ -31,6 +31,7 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.sw_empty`.
 pub fn user_sw_empty(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     'bb4: {
@@ -55,6 +56,7 @@ pub fn user_sw_empty(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.sw_same`.
 pub fn user_sw_same(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     'bb4: {
         match _1.get() {
@@ -76,6 +78,7 @@ pub fn user_sw_same(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.sw_fall`.
 pub fn user_sw_fall(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -86,6 +89,7 @@ pub fn user_sw_fall(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.chain`.
 pub fn user_chain(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -118,6 +122,7 @@ pub fn user_chain(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.partial`.
 pub fn user_partial(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;

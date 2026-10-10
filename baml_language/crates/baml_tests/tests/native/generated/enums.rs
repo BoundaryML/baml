@@ -103,6 +103,7 @@ impl bex_aot::Readable for user_Pixel {
 }
 /// BAML function `user.pick`.
 pub fn user_pick(mut _1: Int63) -> Result<user_Color, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: user_Color;
     let mut _2: bool;
     let mut _3: Int63;
@@ -130,6 +131,7 @@ pub fn user_pick(mut _1: Int63) -> Result<user_Color, Thrown> {
 }
 /// BAML function `user.name`.
 pub fn user_name(mut _1: user_Color) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Int63;
     'bb5: {
@@ -156,6 +158,7 @@ pub fn user_name(mut _1: user_Color) -> Result<Str, Thrown> {
 }
 /// BAML function `user.is_warm`.
 pub fn user_is_warm(mut _1: user_Color) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Int63;
     'bb3: {
@@ -175,28 +178,33 @@ pub fn user_is_warm(mut _1: user_Color) -> Result<bool, Thrown> {
 }
 /// BAML function `user.same`.
 pub fn user_same(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: user_Color;
     let mut _4: user_Color;
     _3 = user_pick(_1)?;
     _4 = user_pick(_2)?;
+    bex_aot::depth::probe(0)?;
     _0 = _3 == _4;
     Ok(_0)
 }
 /// BAML function `user.differ`.
 pub fn user_differ(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: user_Color;
     let mut _4: user_Color;
     let mut _5: bool;
     _3 = user_pick(_1)?;
     _4 = user_pick(_2)?;
+    bex_aot::depth::probe(0)?;
     _5 = _3 == _4;
     _0 = !_5;
     Ok(_0)
 }
 /// BAML function `user.render`.
 pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Pixel>;
     let mut _3: user_Color;
@@ -215,19 +223,23 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
         weight: _1,
     });
     _8 = user_pick(_1)?;
+    bex_aot::depth::probe(0)?;
     _7 = ToBaml::to_baml(&_8);
     _6 = string::concat(&_7, &string::from_literal(" "));
+    bex_aot::depth::probe(0)?;
     _9 = ToBaml::to_baml(&_2);
     _5 = string::concat(&_6, &_9);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _12 = user_pick(_1)?;
     _11 = array::new::<user_Color>(Vec::from([_12, user_Color::Blue]));
+    bex_aot::depth::probe(0)?;
     _10 = ToBaml::to_baml(&_11);
     _0 = string::concat(&_4, &_10);
     Ok(_0)
 }
 /// BAML function `user.json_out`.
 pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Shared<user_Pixel>;
@@ -240,31 +252,37 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
         color: _4,
         weight: _1,
     });
+    bex_aot::depth::probe(1)?;
     _2 = json::to_string(&_3)?;
     _7 = int::add(_1, int::lit(1))?;
     _6 = user_pick(_7)?;
+    bex_aot::depth::probe(1)?;
     _5 = json::to_string(&_6)?;
     _0 = string::concat(&_2, &_5);
     Ok(_0)
 }
 /// BAML function `user.json_in`.
 pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Pixel>;
     let mut _4: Str;
     let mut _5: user_Color;
     let mut _6: Str;
     let mut _7: Int63;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Pixel>>(&_1)?;
     _5 = _2.borrow().color;
     _4 = user_name(_5)?;
     _7 = _2.borrow().weight;
+    bex_aot::depth::probe(0)?;
     _6 = ToBaml::to_baml(&_7);
     _0 = string::concat(&_4, &_6);
     Ok(_0)
 }
 /// BAML function `user.count_red`.
 pub fn user_count_red(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<user_Color>>;
     let mut _3: Int63;
@@ -291,6 +309,7 @@ pub fn user_count_red(mut _1: Int63) -> Result<Int63, Thrown> {
         if _4 {
             _8 = _3;
             _7 = user_pick(_8)?;
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7);
             _6 = array::len(&_2);
             _10 = _3;
@@ -301,6 +320,7 @@ pub fn user_count_red(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _11 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _13 = array::iter(&_2);
     'bb3: loop {
         _14 = array::next(&mut _13);
@@ -312,6 +332,7 @@ pub fn user_count_red(mut _1: Int63) -> Result<Int63, Thrown> {
             _16 = _14.expect("non-null by the checker's narrowing");
             _17 = _16;
             _19 = _17;
+            bex_aot::depth::probe(0)?;
             _18 = _19 == user_Color::Red;
             if _18 {
                 _20 = _11;
@@ -325,6 +346,7 @@ pub fn user_count_red(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.tint`.
 pub fn user_tint(mut _1: Int63, mut _2: user_Color) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _3: bool;
     let mut _4: Str;
@@ -339,12 +361,14 @@ pub fn user_tint(mut _1: Int63, mut _2: user_Color) -> Result<Str, Thrown> {
         }
     }
     _4 = user_name(_2)?;
+    bex_aot::depth::probe(0)?;
     _5 = ToBaml::to_baml(&_1);
     _0 = string::concat(&_4, &_5);
     Ok(_0)
 }
 /// BAML function `user.tinted`.
 pub fn user_tinted(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -355,6 +379,7 @@ pub fn user_tinted(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.nullable`.
 pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<user_Color>;
     let mut _3: bool;
@@ -371,6 +396,7 @@ pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
         }
     }
     _5 = _2;
+    bex_aot::depth::probe(0)?;
     _4 = _5.is_none();
     'bb7: {
         if _4 {

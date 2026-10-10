@@ -253,6 +253,7 @@ impl bex_aot::Readable for baml_panics_UserPanic {
 }
 /// BAML function `user.throw_if_negative`.
 pub fn user_throw_if_negative(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _3: Shared<user_Invalid>;
@@ -269,6 +270,7 @@ pub fn user_throw_if_negative(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throw_coded`.
 pub fn user_throw_coded(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _3: Shared<user_Coded>;
@@ -292,6 +294,7 @@ pub fn user_throw_coded(mut _1: Int63) -> Result<Int63, Thrown> {
             note: string::from_literal("d"),
         });
         _10 = map::new::<Str, Int63>(Vec::new());
+        bex_aot::depth::probe(0)?;
         _11 = map::set(&_10, string::from_literal("k"), _1);
         _3 = shared(user_Coded {
             code: _1,
@@ -311,6 +314,7 @@ pub fn user_throw_coded(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throw_local`.
 pub fn user_throw_local(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Coded>;
     let mut _3: Shared<Vec<Str>>;
@@ -348,6 +352,7 @@ pub fn user_throw_local(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throw_stdlib`.
 pub fn user_throw_stdlib(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _3: Shared<baml_errors_InvalidArgument>;
@@ -375,6 +380,7 @@ pub fn user_throw_stdlib(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throw_panic_class`.
 pub fn user_throw_panic_class(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _3: Shared<baml_panics_UserPanic>;
@@ -391,6 +397,7 @@ pub fn user_throw_panic_class(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throw_deep`.
 pub fn user_throw_deep(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     _2 = user_throw_if_negative(_1)?;
@@ -399,6 +406,7 @@ pub fn user_throw_deep(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.throw_in_loop`.
 pub fn user_throw_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Shared<Vec<Int63>>;
@@ -415,6 +423,7 @@ pub fn user_throw_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _14: Int63;
     _2 = int::lit(0);
     _3 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2), int::lit(3)]));
+    bex_aot::depth::probe(1)?;
     _4 = array::iter(&_3);
     'bb1: loop {
         _5 = array::next(&mut _4);
@@ -445,6 +454,7 @@ pub fn user_throw_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.panic_deep`.
 pub fn user_panic_deep(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;

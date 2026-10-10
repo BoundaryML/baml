@@ -31,12 +31,14 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.fsum`.
 pub fn user_fsum(mut _1: f64, mut _2: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     _0 = _1 + _2;
     Ok(_0)
 }
 /// BAML function `user.fcmp`.
 pub fn user_fcmp(mut _1: f64, mut _2: f64) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: bool;
     let mut _4: bool;
@@ -67,28 +69,35 @@ pub fn user_fcmp(mut _1: f64, mut _2: f64) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.fmix`.
 pub fn user_fmix(mut _1: f64) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: f64;
     let mut _3: f64;
     _3 = _1 * 2.5_f64;
     _2 = _3 - 1.0_f64;
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
 /// BAML function `user.ffloor`.
 pub fn user_ffloor(mut _1: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
+    bex_aot::depth::probe(0)?;
     _0 = float::floor(_1);
     Ok(_0)
 }
 /// BAML function `user.fitrunc`.
 pub fn user_fitrunc(mut _1: f64) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
+    bex_aot::depth::probe(0)?;
     _0 = float::itrunc(_1)?;
     Ok(_0)
 }
 /// BAML function `user.nan_order`.
 pub fn user_nan_order(mut _1: f64) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: f64;
     let mut _3: f64;
@@ -99,12 +108,14 @@ pub fn user_nan_order(mut _1: f64) -> Result<bool, Thrown> {
 }
 /// BAML function `user.fneg`.
 pub fn user_fneg(mut _1: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     _0 = -_1;
     Ok(_0)
 }
 /// BAML function `user.fdiv`.
 pub fn user_fdiv(mut _1: f64, mut _2: f64) -> Result<f64, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: f64;
     _0 = _1 / _2;
     Ok(_0)

@@ -59,6 +59,7 @@ impl bex_aot::Readable for user_Counter {
 }
 /// BAML function `user.Counter.get`.
 pub fn user_Counter_get(mut _1: Shared<user_Counter>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = _1.borrow().n;
     Ok(_0)
@@ -68,6 +69,7 @@ pub fn user_Counter_add(
     mut _1: Shared<user_Counter>,
     mut _2: Int63,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Int63;
     _3 = _1.borrow().n;
@@ -80,6 +82,7 @@ pub fn user_Counter_add(
 }
 /// BAML function `user.count`.
 pub fn user_count(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Counter>;
     let mut _3: Int63;
@@ -108,6 +111,7 @@ pub fn user_count(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.alias`.
 pub fn user_alias(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Counter>;
     let mut _4: Int63;

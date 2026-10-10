@@ -31,6 +31,7 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.plain`.
 pub fn user_plain(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::add(_1, int::lit(1))?;
     Ok(_0)
@@ -105,6 +106,7 @@ pub fn user_passed__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.passed`.
 pub fn user_passed(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
     _2 = {
@@ -127,6 +129,7 @@ pub fn user_returned__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_returned(
     mut _1: Int63,
 ) -> Result<Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
     let mut _2: bool;
     'bb3: {
@@ -337,6 +340,7 @@ pub fn user_in_array(mut _1: Int63) -> Result<Int63, Thrown> {
         ]),
     );
     _4 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _6 = array::iter(&_2);
     'bb1: loop {
         _7 = array::next(&mut _6);

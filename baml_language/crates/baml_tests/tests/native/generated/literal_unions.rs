@@ -64,6 +64,7 @@ impl bex_aot::Readable for user_Tagged {
 }
 /// BAML function `user.pick`.
 pub fn user_pick(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: bool;
     'bb3: {
@@ -80,6 +81,7 @@ pub fn user_pick(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.level`.
 pub fn user_level(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _3: bool;
@@ -103,6 +105,7 @@ pub fn user_level(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.describe`.
 pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: bool;
@@ -121,6 +124,7 @@ pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.level_name`.
 pub fn user_level_name(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Int63;
     _2 = user_level(_1)?;
@@ -147,24 +151,29 @@ pub fn user_level_name(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.same_tag`.
 pub fn user_same_tag(mut _1: Int63, mut _2: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _3: Str;
     let mut _4: Str;
     _3 = user_pick(_1)?;
     _4 = user_pick(_2)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(&_3.clone(), &_4.clone());
     Ok(_0)
 }
 /// BAML function `user.tag_is_hi`.
 pub fn user_tag_is_hi(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Str;
     _2 = user_pick(_1)?;
+    bex_aot::depth::probe(0)?;
     _0 = bex_aot::eq::equals(&_2.clone(), &string::from_literal("hi"));
     Ok(_0)
 }
 /// BAML function `user.is_lo`.
 pub fn user_is_lo(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Str;
     let mut _3: bool;
@@ -183,6 +192,7 @@ pub fn user_is_lo(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.maybe`.
 pub fn user_maybe(mut _1: Int63) -> Result<Option<Str>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Option<Str>;
     let mut _2: bool;
     let mut _3: bool;
@@ -206,10 +216,12 @@ pub fn user_maybe(mut _1: Int63) -> Result<Option<Str>, Thrown> {
 }
 /// BAML function `user.maybe_text`.
 pub fn user_maybe_text(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<Str>;
     let mut _3: bool;
     _2 = user_maybe(_1)?;
+    bex_aot::depth::probe(0)?;
     _3 = _2.is_none();
     'bb5: {
         if _3 {
@@ -224,12 +236,14 @@ pub fn user_maybe_text(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.flag`.
 pub fn user_flag(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     _0 = _1 > int::lit(0);
     Ok(_0)
 }
 /// BAML function `user.width`.
 pub fn user_width(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: bool;
@@ -250,6 +264,7 @@ pub fn user_width(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.render`.
 pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Tagged>;
     let mut _3: Str;
@@ -266,17 +281,20 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
         tag: _3.clone(),
         level: _4,
     });
+    bex_aot::depth::probe(0)?;
     _8 = ToBaml::to_baml(&_2);
     _7 = string::concat(&_8, &string::from_literal(" "));
     _6 = string::concat(&_7, &_2.borrow().tag);
     _5 = string::concat(&_6, &string::from_literal(" "));
     _11 = _2.borrow().level;
+    bex_aot::depth::probe(0)?;
     _10 = ToBaml::to_baml(&_11);
     _0 = string::concat(&_5, &_10);
     Ok(_0)
 }
 /// BAML function `user.json_out`.
 pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Tagged>;
     let mut _3: Str;
@@ -287,11 +305,13 @@ pub fn user_json_out(mut _1: Int63) -> Result<Str, Thrown> {
         tag: _3.clone(),
         level: _4,
     });
+    bex_aot::depth::probe(1)?;
     _0 = json::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.count_lo`.
 pub fn user_count_lo(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Str>>;
     let mut _3: Int63;
@@ -319,6 +339,7 @@ pub fn user_count_lo(mut _1: Int63) -> Result<Int63, Thrown> {
             _9 = _3;
             _8 = int::mul(_9, int::lit(4))?;
             _7 = user_pick(_8)?;
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7.clone());
             _6 = array::len(&_2);
             _11 = _3;
@@ -329,6 +350,7 @@ pub fn user_count_lo(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _12 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _14 = array::iter(&_2);
     'bb3: loop {
         _15 = array::next(&mut _14);
@@ -339,6 +361,7 @@ pub fn user_count_lo(mut _1: Int63) -> Result<Int63, Thrown> {
         } else {
             _17 = _15.clone().expect("non-null by the checker's narrowing");
             _20 = _17.clone();
+            bex_aot::depth::probe(0)?;
             _19 = bex_aot::eq::equals(&_20.clone(), &string::from_literal("lo"));
             if _19 {
                 _21 = _12;

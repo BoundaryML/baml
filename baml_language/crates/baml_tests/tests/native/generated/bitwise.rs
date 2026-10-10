@@ -31,36 +31,42 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.band`.
 pub fn user_band(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::bit_and(_1, _2);
     Ok(_0)
 }
 /// BAML function `user.bor`.
 pub fn user_bor(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::bit_or(_1, _2);
     Ok(_0)
 }
 /// BAML function `user.bxor`.
 pub fn user_bxor(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::bit_xor(_1, _2);
     Ok(_0)
 }
 /// BAML function `user.shl`.
 pub fn user_shl(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::shl(_1, _2)?;
     Ok(_0)
 }
 /// BAML function `user.shr`.
 pub fn user_shr(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::shr(_1, _2)?;
     Ok(_0)
 }
 /// BAML function `user.mix`.
 pub fn user_mix(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Int63;
     let mut _4: Int63;

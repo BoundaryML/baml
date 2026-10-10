@@ -2209,7 +2209,7 @@ interface Named {
 /// Recursion is admitted; every function on a call cycle counts its frame
 /// so runaway recursion throws `StackOverflow` as the VM does.
 #[test]
-fn functions_on_a_call_cycle_hold_a_depth_guard() {
+fn every_function_holds_a_depth_guard() {
     let db = setup_test_db(
         r"
 function even(n: int) -> bool { if (n == 0) { true } else { odd(n - 1) } }
@@ -2228,16 +2228,8 @@ function plain(n: int) -> int { fact(n) + 1 }
     let guard = "let _frame = bex_aot::depth::Guard::enter()?;";
     assert_eq!(
         source.matches(guard).count(),
-        3,
-        "even, odd and fact: {source}"
-    );
-    let plain = source
-        .split("pub fn user_plain")
-        .nth(1)
-        .expect("plain is compiled");
-    assert!(
-        !plain.split("pub fn").next().unwrap().contains(guard),
-        "a function off every cycle is not guarded: {plain}"
+        4,
+        "even, odd, fact and plain, as every bytecode frame counts on the VM: {source}"
     );
 }
 
@@ -2300,12 +2292,11 @@ function f(n: int) -> int {
     // Calls through either are indirect.
     assert_contains(source, "_4 = (_2)(_1)?;");
     assert_contains(source, "_6 = (_3)(_1)?;");
-    // Lambdas and functions calling through a value guard their depth: a
-    // cycle closed through a function value is not in the static graph.
+    // Every function, the lambda included, guards its depth.
     assert_eq!(
         source.matches("bex_aot::depth::Guard::enter()?").count(),
-        2,
-        "the lambda and `f` are guarded, `plain` is not:\n{source}"
+        3,
+        "the lambda, `f` and `plain`:\n{source}"
     );
     assert_eq!(
         module

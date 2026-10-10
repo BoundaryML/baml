@@ -167,6 +167,7 @@ impl bex_aot::Readable for user_Holder {
 }
 /// BAML function `user.area`.
 pub fn user_area(mut _1: Shared<user_Point>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Int63;
@@ -177,6 +178,7 @@ pub fn user_area(mut _1: Shared<user_Point>) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.make`.
 pub fn user_make(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Point>;
     let mut _3: Int63;
@@ -190,6 +192,7 @@ pub fn user_make(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = int::add(_1, int::lit(1))?;
     _2 = shared(user_Point { x: _1, y: _3 });
     _13 = string::from_literal("b");
+    bex_aot::depth::probe(0)?;
     _6 = ToBaml::to_baml(&_1);
     _5 = string::concat(&_13, &_6);
     _10 = int::mul(_1, int::lit(2))?;
@@ -209,29 +212,35 @@ pub fn user_make(mut _1: Int63) -> Result<Str, Thrown> {
         let value = int::lit(0);
         _2.borrow_mut().y = value;
     }
+    bex_aot::depth::probe(1)?;
     _0 = json::to_string(&_4)?;
     Ok(_0)
 }
 /// BAML function `user.roundtrip`.
 pub fn user_roundtrip(mut _1: Str) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Point>;
+    bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Point>>(&_1)?;
     _0 = user_area(_2.clone())?;
     Ok(_0)
 }
 /// BAML function `user.render`.
 pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Point>;
     let mut _3: Int63;
     _3 = int::neg(_1)?;
     _2 = shared(user_Point { x: _1, y: _3 });
+    bex_aot::depth::probe(0)?;
     _0 = ToBaml::to_baml(&_2);
     Ok(_0)
 }
 /// BAML function `user.nullable`.
 pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<user_Box>;
     let mut _3: Shared<user_Point>;
@@ -263,6 +272,7 @@ pub fn user_nullable(mut _1: Int63) -> Result<Str, Thrown> {
         }
     }
     _7 = _2.borrow().tag.clone();
+    bex_aot::depth::probe(0)?;
     _6 = _7.is_none();
     'bb6: {
         if _6 {
@@ -280,6 +290,7 @@ pub fn user_bump(
     mut _1: Shared<user_Counter>,
     mut _2: Shared<user_Holder>,
 ) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Int63;
     let mut _4: Int63;
@@ -300,6 +311,7 @@ pub fn user_bump(
 }
 /// BAML function `user.borrowed_argument`.
 pub fn user_borrowed_argument(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Holder>;
     let mut _3: Shared<user_Counter>;

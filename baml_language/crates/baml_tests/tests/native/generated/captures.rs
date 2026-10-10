@@ -188,6 +188,7 @@ pub fn user_make_adder__lambda0(
 pub fn user_make_adder(
     mut _1: Int63,
 ) -> Result<Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Int63> = cell::with(_1);
     let mut _0: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
     _0 = {
@@ -227,6 +228,7 @@ pub fn user_make_counter__lambda0(_c0: &cell::Cell<Int63>) -> Result<Int63, Thro
 }
 /// BAML function `user.make_counter`.
 pub fn user_make_counter() -> Result<Rc<dyn Fn() -> Result<Int63, Thrown>>, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Rc<dyn Fn() -> Result<Int63, Thrown>>;
     let mut _1: cell::Cell<Int63>;
     _1 = cell::fresh();
@@ -349,12 +351,14 @@ pub fn user_loop_capture(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _21: Rc<dyn Fn() -> Result<Int63, Thrown>>;
     _2 = array::new::<Rc<dyn Fn() -> Result<Int63, Thrown>>>(Vec::new());
     _3 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2), int::lit(3)]));
+    bex_aot::depth::probe(1)?;
     _4 = array::iter(&_3);
     'bb1: loop {
         _5 = array::next(&mut _4);
         _6 = _5.is_none();
         if _6 {
             _12 = int::lit(0);
+            bex_aot::depth::probe(1)?;
             _14 = array::iter(&_2);
             'bb5: loop {
                 _15 = array::next(&mut _14);
@@ -386,6 +390,7 @@ pub fn user_loop_capture(mut _1: Int63) -> Result<Int63, Thrown> {
                 });
                 __closure
             };
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _10.clone());
             _9 = array::len(&_2);
             continue 'bb1;
@@ -435,6 +440,7 @@ pub fn user_cfor_capture(mut _1: Int63) -> Result<Int63, Thrown> {
                 });
                 __closure
             };
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7.clone());
             _6 = array::len(&_2);
             _3 = cell::carry(&_3);
@@ -449,6 +455,7 @@ pub fn user_cfor_capture(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _10 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _12 = array::iter(&_2);
     'bb3: loop {
         _13 = array::next(&mut _12);
@@ -511,6 +518,7 @@ pub fn user_while_capture(mut _1: Int63) -> Result<Int63, Thrown> {
                 });
                 __closure
             };
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _8.clone());
             _7 = array::len(&_2);
             _10 = _3;
@@ -521,6 +529,7 @@ pub fn user_while_capture(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _11 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _13 = array::iter(&_2);
     'bb3: loop {
         _14 = array::next(&mut _13);
@@ -581,6 +590,7 @@ pub fn user_shared_loop_var(mut _1: Int63) -> Result<Int63, Thrown> {
                 });
                 __closure
             };
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7.clone());
             _6 = array::len(&_2);
             _9 = cell::get(&_3)?;
@@ -594,6 +604,7 @@ pub fn user_shared_loop_var(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _10 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _12 = array::iter(&_2);
     'bb3: loop {
         _13 = array::next(&mut _12);
@@ -805,6 +816,7 @@ pub fn user_captured_array__lambda0(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     let mut _2: Int63;
+    bex_aot::depth::probe(0)?;
     array::push(&cell::get(_c0)?, _1);
     _2 = array::len(&cell::get(_c0)?);
     _0 = ();

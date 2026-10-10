@@ -31,6 +31,7 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.arith`.
 pub fn user_arith(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: Int63;
     let mut _4: Int63;
@@ -61,24 +62,28 @@ pub fn user_arith(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.divide`.
 pub fn user_divide(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::div(_1, _2)?;
     Ok(_0)
 }
 /// BAML function `user.remainder`.
 pub fn user_remainder(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::rem(_1, _2)?;
     Ok(_0)
 }
 /// BAML function `user.add_to_max`.
 pub fn user_add_to_max(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::add(_1, int::lit(4611686018427387903))?;
     Ok(_0)
 }
 /// BAML function `user.negate`.
 pub fn user_negate(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     _0 = int::neg(_1)?;
     Ok(_0)
@@ -89,6 +94,7 @@ pub fn user_in_range(
     mut _2: Int63,
     mut _3: Int63,
 ) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _4: bool;
     let mut _5: bool;
@@ -111,6 +117,7 @@ pub fn user_is_edge(
     mut _2: Int63,
     mut _3: Int63,
 ) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _4: bool;
     let mut _5: bool;
@@ -155,6 +162,7 @@ pub fn user_is_edge(
 }
 /// BAML function `user.compare`.
 pub fn user_compare(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _3: bool;
     let mut _4: bool;

@@ -831,6 +831,20 @@ async fn recursion_matches_vm() {
     for n in [0, 1, 2, 10, 20] {
         check!(o, fib(n) => user_fib(int(n)));
     }
+    // The limit, one frame either side of it, through every kind of frame
+    // the VM counts.
+    for n in [0, 3, 250, 252, 253, 254, 255, 256, 257, 300] {
+        check!(o, start(n) => user_start(int(n)));
+        check!(o, deep_length(n) => user_deep_length(int(n)));
+        check!(o, deep_str_length(n) => user_deep_str_length(int(n)));
+        check!(o, deep_for_in(n) => user_deep_for_in(int(n)));
+        check!(o, deep_map(n) => user_deep_map(int(n)));
+        check!(o, deep_for_each(n) => user_deep_for_each(int(n)));
+        check!(o, deep_for_each_empty(n) => user_deep_for_each_empty(int(n)));
+        check!(o, deep_sort_by_key(n) => user_deep_sort_by_key(int(n)));
+        check!(o, deep_json(n) => user_deep_json(int(n)));
+        check!(o, deep_panic(n) => user_deep_panic(int(n)));
+    }
 }
 
 /// Omitted arguments take the callee's constant default at the call site;

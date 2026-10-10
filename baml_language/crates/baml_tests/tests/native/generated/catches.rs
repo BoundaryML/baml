@@ -159,6 +159,7 @@ impl bex_aot::Readable for baml_panics_Exit {
 }
 /// BAML function `user.risky`.
 pub fn user_risky(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: bool;
     let mut _3: Shared<user_Invalid>;
@@ -186,6 +187,7 @@ pub fn user_risky(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.middle`.
 pub fn user_middle(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     _2 = user_risky(_1)?;
@@ -194,6 +196,7 @@ pub fn user_middle(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_class`.
 pub fn user_catch_class(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: bool;
@@ -220,6 +223,7 @@ pub fn user_catch_class(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_two`.
 pub fn user_catch_two(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: bool;
@@ -253,6 +257,7 @@ pub fn user_catch_two(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_bind`.
 pub fn user_catch_bind(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Thrown;
     let mut _4: Int63;
@@ -264,6 +269,13 @@ pub fn user_catch_bind(mut _1: Int63) -> Result<Str, Thrown> {
     'bb8: {
         'bb2: {
             _4 = match user_risky(_1) {
+                Ok(value) => value,
+                Err(error) => {
+                    _2 = Thrown::from(error);
+                    break 'bb2;
+                }
+            };
+            match bex_aot::depth::probe(0) {
                 Ok(value) => value,
                 Err(error) => {
                     _2 = Thrown::from(error);
@@ -282,6 +294,7 @@ pub fn user_catch_bind(mut _1: Int63) -> Result<Str, Thrown> {
                 _7 = value;
                 _10 = _7.borrow().message.clone();
                 _12 = _7.borrow().code;
+                bex_aot::depth::probe(0)?;
                 _11 = ToBaml::to_baml(&_12);
                 _0 = string::concat(&_10, &_11);
                 break 'bb8;
@@ -294,6 +307,7 @@ pub fn user_catch_bind(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.catch_wild`.
 pub fn user_catch_wild(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     'bb3: {
@@ -317,6 +331,7 @@ pub fn user_catch_wild(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_wild_panic`.
 pub fn user_catch_wild_panic(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     'bb3: {
@@ -340,6 +355,7 @@ pub fn user_catch_wild_panic(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_all_panic`.
 pub fn user_catch_all_panic(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     'bb3: {
@@ -363,6 +379,7 @@ pub fn user_catch_all_panic(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_all_panics`.
 pub fn user_catch_all_panics(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     'bb3: {
@@ -383,6 +400,7 @@ pub fn user_catch_all_panics(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_let_wild`.
 pub fn user_catch_let_wild(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     'bb3: {
@@ -406,6 +424,7 @@ pub fn user_catch_let_wild(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_four`.
 pub fn user_catch_four(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;
@@ -461,6 +480,7 @@ pub fn user_catch_four(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_panics`.
 pub fn user_catch_panics(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Map<Str, Int63>;
@@ -488,6 +508,7 @@ pub fn user_catch_panics(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _31: bool;
     _2 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2), int::lit(3)]));
     _4 = map::new::<Str, Int63>(Vec::new());
+    bex_aot::depth::probe(0)?;
     _5 = map::set(&_4, string::from_literal("1"), int::lit(10));
     _3 = _4.clone();
     _6 = int::lit(0);
@@ -559,7 +580,21 @@ pub fn user_catch_panics(mut _1: Int63) -> Result<Int63, Thrown> {
     'bb22: {
         'bb19: {
             _28 = _3.clone();
+            match bex_aot::depth::probe(0) {
+                Ok(value) => value,
+                Err(error) => {
+                    _26 = Thrown::from(error);
+                    break 'bb19;
+                }
+            };
             _29 = ToBaml::to_baml(&_1);
+            match bex_aot::depth::probe(0) {
+                Ok(value) => value,
+                Err(error) => {
+                    _26 = Thrown::from(error);
+                    break 'bb19;
+                }
+            };
             _25 = match map::index(&_28, &_29) {
                 Ok(value) => value,
                 Err(error) => {
@@ -583,6 +618,7 @@ pub fn user_catch_panics(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_nested`.
 pub fn user_catch_nested(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: Thrown;
@@ -644,6 +680,7 @@ pub fn user_catch_nested(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_deep`.
 pub fn user_catch_deep(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: bool;
@@ -677,6 +714,7 @@ pub fn user_catch_deep(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_in_loop`.
 pub fn user_catch_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Shared<Vec<Int63>>;
@@ -696,6 +734,7 @@ pub fn user_catch_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
     _2 = int::lit(0);
     _4 = int::neg(int::lit(1))?;
     _3 = array::new::<Int63>(Vec::from([_1, _4, int::lit(0), int::lit(3)]));
+    bex_aot::depth::probe(1)?;
     _5 = array::iter(&_3);
     'bb4: loop {
         _6 = array::next(&mut _5);
@@ -739,6 +778,7 @@ pub fn user_catch_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_returns`.
 pub fn user_catch_returns(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: bool;
@@ -795,6 +835,7 @@ pub fn user_catch_returns(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_rethrow`.
 pub fn user_catch_rethrow(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: bool;
@@ -821,6 +862,7 @@ pub fn user_catch_rethrow(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_throw_in_arm`.
 pub fn user_catch_throw_in_arm(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: Shared<user_Invalid>;
@@ -850,6 +892,7 @@ pub fn user_catch_throw_in_arm(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_throw_bound`.
 pub fn user_catch_throw_bound(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: Shared<user_Invalid>;
@@ -872,6 +915,7 @@ pub fn user_catch_throw_bound(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_throw_caught`.
 pub fn user_catch_throw_caught(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Thrown;
     'bb2: {
@@ -891,6 +935,7 @@ pub fn user_catch_throw_caught(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_identity`.
 pub fn user_catch_identity(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<user_Coded>;
     let mut _3: Int63;
@@ -937,6 +982,7 @@ pub fn user_catch_identity(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_statement`.
 pub fn user_catch_statement(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: Option<Int63>;
@@ -976,6 +1022,7 @@ pub fn user_catch_statement(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_stdlib`.
 pub fn user_catch_stdlib(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: bool;
@@ -1008,6 +1055,7 @@ pub fn user_catch_stdlib(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.catch_exit`.
 pub fn user_catch_exit(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: bool;

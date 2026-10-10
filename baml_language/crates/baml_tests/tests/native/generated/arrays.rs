@@ -31,6 +31,7 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.sum`.
 pub fn user_sum(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
     let mut _3: bex_aot::array::Iter<Int63>;
@@ -41,6 +42,7 @@ pub fn user_sum(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
     let mut _8: Int63;
     let mut _9: Int63;
     _2 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _3 = array::iter(&_1);
     'bb1: loop {
         _4 = array::next(&mut _3);
@@ -60,6 +62,7 @@ pub fn user_sum(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.build`.
 pub fn user_build(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;
@@ -81,6 +84,7 @@ pub fn user_build(mut _1: Int63) -> Result<Int63, Thrown> {
             _8 = _3;
             _9 = _3;
             _7 = int::mul(_8, _9)?;
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7);
             _6 = array::len(&_2);
             _11 = _3;
@@ -97,6 +101,7 @@ pub fn user_build(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.alias_mutation`.
 pub fn user_alias_mutation(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _4: Shared<Vec<Int63>>;
@@ -151,6 +156,7 @@ pub fn user_alias_mutation(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.negative_index`.
 pub fn user_negative_index(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _4: Int63;
@@ -161,6 +167,7 @@ pub fn user_negative_index(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.bubble`.
 pub fn user_bubble(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;
@@ -218,6 +225,7 @@ pub fn user_bubble(mut _1: Int63) -> Result<Int63, Thrown> {
             _9 = int::sub(_1, _10)?;
             _8 = int::mul(_9, int::lit(7))?;
             _7 = int::rem(_8, int::lit(11))?;
+            bex_aot::depth::probe(0)?;
             array::push(&_2, _7);
             _6 = array::len(&_2);
             _12 = _3;
@@ -286,6 +294,7 @@ pub fn user_bubble(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     _46 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _48 = array::iter(&_2);
     'bb6: loop {
         _49 = array::next(&mut _48);
@@ -306,6 +315,7 @@ pub fn user_bubble(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// BAML function `user.push_during_iteration`.
 pub fn user_push_during_iteration(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Int63;
@@ -322,6 +332,7 @@ pub fn user_push_during_iteration(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _15: Int63;
     _2 = array::new::<Int63>(Vec::from([_1]));
     _3 = int::lit(0);
+    bex_aot::depth::probe(1)?;
     _5 = array::iter(&_2);
     'bb1: loop {
         _6 = array::next(&mut _5);
@@ -339,6 +350,7 @@ pub fn user_push_during_iteration(mut _1: Int63) -> Result<Int63, Thrown> {
             if _11 {
                 _15 = _9;
                 _14 = int::add(_15, int::lit(1))?;
+                bex_aot::depth::probe(0)?;
                 array::push(&_2, _14);
                 _13 = array::len(&_2);
                 continue 'bb1;

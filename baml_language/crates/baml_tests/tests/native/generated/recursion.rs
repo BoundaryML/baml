@@ -134,3 +134,350 @@ pub fn user_fib(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// BAML function `user.start`.
+pub fn user_start(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    _0 = user_deep(_1)?;
+    Ok(_0)
+}
+/// BAML function `user.deep_length`.
+pub fn user_deep_length(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Shared<Vec<Int63>>;
+    let mut _4: Int63;
+    let mut _5: Int63;
+    'bb4: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            _3 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
+            _0 = array::len(&_3);
+            break 'bb4;
+        } else {
+            _5 = int::sub(_1, int::lit(1))?;
+            _4 = user_deep_length(_5)?;
+            _0 = int::add(_4, int::lit(1))?;
+            break 'bb4;
+        }
+    }
+    Ok(_0)
+}
+/// BAML function `user.deep_str_length`.
+pub fn user_deep_str_length(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Int63;
+    let mut _4: Int63;
+    'bb4: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            bex_aot::depth::probe(1)?;
+            _0 = string::length(&string::from_literal("ab"));
+            break 'bb4;
+        } else {
+            _4 = int::sub(_1, int::lit(1))?;
+            _3 = user_deep_str_length(_4)?;
+            _0 = int::add(_3, int::lit(1))?;
+            break 'bb4;
+        }
+    }
+    Ok(_0)
+}
+/// BAML function `user.deep_for_in`.
+pub fn user_deep_for_in(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Int63;
+    let mut _4: Shared<Vec<Int63>>;
+    let mut _5: bex_aot::array::Iter<Int63>;
+    let mut _6: Option<Int63>;
+    let mut _7: bool;
+    let mut _8: Int63;
+    let mut _9: Int63;
+    let mut _10: Int63;
+    let mut _11: Int63;
+    let mut _12: Int63;
+    let mut _13: Int63;
+    'bb8: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            _3 = int::lit(0);
+            _4 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
+            bex_aot::depth::probe(1)?;
+            _5 = array::iter(&_4);
+            'bb4: loop {
+                _6 = array::next(&mut _5);
+                _7 = _6.is_none();
+                if _7 {
+                    _0 = _3;
+                    break 'bb8;
+                } else {
+                    _8 = _6.expect("non-null by the checker's narrowing");
+                    _9 = _8;
+                    _10 = _3;
+                    _11 = _9;
+                    _3 = int::add(_10, _11)?;
+                    continue 'bb4;
+                }
+            }
+        } else {
+            _13 = int::sub(_1, int::lit(1))?;
+            _12 = user_deep_for_in(_13)?;
+            _0 = int::add(_12, int::lit(1))?;
+            break 'bb8;
+        }
+    }
+    Ok(_0)
+}
+/// BAML lambda `.<lambda(deep_map, 0)>`.
+pub fn user_deep_map__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    _0 = int::mul(_1, int::lit(2))?;
+    Ok(_0)
+}
+/// BAML function `user.deep_map`.
+pub fn user_deep_map(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Shared<Vec<Int63>>;
+    let mut _4: Shared<Vec<Int63>>;
+    let mut _5: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _9: Int63;
+    let mut _10: Int63;
+    'bb5: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            _4 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
+            _5 = {
+                let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
+                    __arg0: Int63|
+                { user_deep_map__lambda0(__arg0) });
+                __closure
+            };
+            bex_aot::depth::probe(0)?;
+            _3 = {
+                let __callback = &*_5;
+                array::map(&_4, __callback)?
+            };
+            _0 = array::len(&_3);
+            break 'bb5;
+        } else {
+            _10 = int::sub(_1, int::lit(1))?;
+            _9 = user_deep_map(_10)?;
+            _0 = int::add(_9, int::lit(1))?;
+            break 'bb5;
+        }
+    }
+    Ok(_0)
+}
+/// BAML lambda `.<lambda(deep_for_each, 0)>`.
+pub fn user_deep_for_each__lambda0(
+    _c0: &cell::Cell<Int63>,
+    mut _1: Int63,
+) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: ();
+    let mut _2: Int63;
+    _2 = cell::get(_c0)?;
+    {
+        let value = int::add(_2, _1)?;
+        cell::set(_c0, value);
+    }
+    _0 = ();
+    Ok(_0)
+}
+/// BAML function `user.deep_for_each`.
+pub fn user_deep_for_each(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: cell::Cell<Int63>;
+    let mut _4: ();
+    let mut _5: Shared<Vec<Int63>>;
+    let mut _6: Rc<dyn Fn(Int63) -> Result<(), Thrown>>;
+    let mut _9: Int63;
+    let mut _10: Int63;
+    'bb5: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            _3 = cell::fresh();
+            {
+                let value = int::lit(0);
+                cell::set(&_3, value);
+            }
+            _5 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
+            _6 = {
+                let __cell0 = cell::Cell::clone(&_3);
+                let __closure: Rc<dyn Fn(Int63) -> Result<(), Thrown>> = Rc::new(move |
+                    __arg0: Int63|
+                { user_deep_for_each__lambda0(&__cell0, __arg0) });
+                __closure
+            };
+            bex_aot::depth::probe(1)?;
+            _4 = {
+                let __callback = &*_6;
+                array::for_each(&_5, __callback)?
+            };
+            _0 = cell::get(&_3)?;
+            break 'bb5;
+        } else {
+            _10 = int::sub(_1, int::lit(1))?;
+            _9 = user_deep_for_each(_10)?;
+            _0 = int::add(_9, int::lit(1))?;
+            break 'bb5;
+        }
+    }
+    Ok(_0)
+}
+/// BAML lambda `.<lambda(deep_for_each_empty, 0)>`.
+pub fn user_deep_for_each_empty__lambda0(mut _1: Int63) -> Result<(), Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: ();
+    _0 = ();
+    Ok(_0)
+}
+/// BAML function `user.deep_for_each_empty`.
+pub fn user_deep_for_each_empty(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Shared<Vec<Int63>>;
+    let mut _4: ();
+    let mut _5: Rc<dyn Fn(Int63) -> Result<(), Thrown>>;
+    let mut _8: Int63;
+    let mut _9: Int63;
+    'bb5: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            _3 = array::new::<Int63>(Vec::new());
+            _5 = {
+                let __closure: Rc<dyn Fn(Int63) -> Result<(), Thrown>> = Rc::new(move |
+                    __arg0: Int63|
+                { user_deep_for_each_empty__lambda0(__arg0) });
+                __closure
+            };
+            bex_aot::depth::probe(1)?;
+            _4 = {
+                let __callback = &*_5;
+                array::for_each(&_3, __callback)?
+            };
+            _0 = int::lit(0);
+            break 'bb5;
+        } else {
+            _9 = int::sub(_1, int::lit(1))?;
+            _8 = user_deep_for_each_empty(_9)?;
+            _0 = int::add(_8, int::lit(1))?;
+            break 'bb5;
+        }
+    }
+    Ok(_0)
+}
+/// BAML lambda `.<lambda(deep_sort_by_key, 0)>`.
+pub fn user_deep_sort_by_key__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    _0 = _1;
+    Ok(_0)
+}
+/// BAML function `user.deep_sort_by_key`.
+pub fn user_deep_sort_by_key(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Shared<Vec<Int63>>;
+    let mut _4: Shared<Vec<Int63>>;
+    let mut _5: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _9: Int63;
+    let mut _10: Int63;
+    let mut _11: Int63;
+    'bb5: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            _4 = array::new::<Int63>(Vec::from([int::lit(2), int::lit(1)]));
+            _5 = {
+                let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
+                    __arg0: Int63|
+                { user_deep_sort_by_key__lambda0(__arg0) });
+                __closure
+            };
+            bex_aot::depth::probe(1)?;
+            {
+                let __callback = &*_5;
+                array::sort_by_key(
+                    &_4,
+                    __callback,
+                    &|left, right| Ord::cmp(left, right),
+                )?;
+            }
+            _3 = _4.clone();
+            _9 = int::lit(0);
+            _0 = array::get(&_3, _9)?;
+            break 'bb5;
+        } else {
+            _11 = int::sub(_1, int::lit(1))?;
+            _10 = user_deep_sort_by_key(_11)?;
+            _0 = int::add(_10, int::lit(1))?;
+            break 'bb5;
+        }
+    }
+    Ok(_0)
+}
+/// BAML function `user.deep_json`.
+pub fn user_deep_json(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Str;
+    let mut _4: Shared<Vec<Int63>>;
+    let mut _5: Int63;
+    let mut _6: Int63;
+    'bb5: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            _4 = array::new::<Int63>(Vec::from([int::lit(1)]));
+            bex_aot::depth::probe(1)?;
+            _3 = json::to_string(&_4)?;
+            bex_aot::depth::probe(1)?;
+            _0 = string::length(&_3);
+            break 'bb5;
+        } else {
+            _6 = int::sub(_1, int::lit(1))?;
+            _5 = user_deep_json(_6)?;
+            _0 = int::add(_5, int::lit(1))?;
+            break 'bb5;
+        }
+    }
+    Ok(_0)
+}
+/// BAML function `user.deep_panic`.
+pub fn user_deep_panic(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: bool;
+    let mut _3: Int63;
+    let mut _4: Int63;
+    'bb4: {
+        _2 = _1 == int::lit(0);
+        if _2 {
+            bex_aot::depth::probe(0)?;
+            return Err(
+                Thrown::from(Panic::UserPanic {
+                    message: String::from("bottom"),
+                }),
+            );
+            break 'bb4;
+        } else {
+            _4 = int::sub(_1, int::lit(1))?;
+            _3 = user_deep_panic(_4)?;
+            _0 = int::add(_3, int::lit(1))?;
+            break 'bb4;
+        }
+    }
+    Ok(_0)
+}

@@ -31,6 +31,7 @@ use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.greet`.
 pub fn user_greet(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Str;
     let mut _3: Str;
@@ -38,6 +39,7 @@ pub fn user_greet(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _6: Int63;
     let mut _9: Str;
     _9 = string::from_literal("n=");
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     'bb4: {
         _2 = string::concat(&_9, &_3);
@@ -56,6 +58,7 @@ pub fn user_greet(mut _1: Int63) -> Result<Str, Thrown> {
 }
 /// BAML function `user.repeat_len`.
 pub fn user_repeat_len(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Str;
     let mut _3: Str;
@@ -78,11 +81,13 @@ pub fn user_repeat_len(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb1;
         }
     }
+    bex_aot::depth::probe(1)?;
     _0 = string::length(&_3);
     Ok(_0)
 }
 /// BAML function `user.same`.
 pub fn user_same(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Str;
     let mut _3: Str;
@@ -95,10 +100,12 @@ pub fn user_same(mut _1: Int63) -> Result<bool, Thrown> {
     let mut _16: Str;
     let mut _17: Str;
     _16 = string::from_literal("x");
+    bex_aot::depth::probe(0)?;
     _3 = ToBaml::to_baml(&_1);
     _2 = string::concat(&_16, &_3);
     _7 = int::add(_1, int::lit(0))?;
     _17 = string::from_literal("x");
+    bex_aot::depth::probe(0)?;
     _6 = ToBaml::to_baml(&_7);
     'bb4: {
         _5 = string::concat(&_17, &_6);
@@ -117,18 +124,22 @@ pub fn user_same(mut _1: Int63) -> Result<bool, Thrown> {
 }
 /// BAML function `user.ordered`.
 pub fn user_ordered(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Str;
     let mut _4: Str;
     let mut _5: Int63;
+    bex_aot::depth::probe(0)?;
     _2 = ToBaml::to_baml(&_1);
     _5 = int::add(_1, int::lit(1))?;
+    bex_aot::depth::probe(0)?;
     _4 = ToBaml::to_baml(&_5);
     _0 = string::cmp(&_2, &_4).is_lt();
     Ok(_0)
 }
 /// BAML function `user.ascii_check`.
 pub fn user_ascii_check(mut _1: Int63) -> Result<bool, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: bool;
     let mut _2: Str;
     let mut _3: bool;
@@ -142,6 +153,7 @@ pub fn user_ascii_check(mut _1: Int63) -> Result<bool, Thrown> {
             break 'bb2;
         }
     }
+    bex_aot::depth::probe(0)?;
     _0 = string::is_ascii(&_2);
     Ok(_0)
 }
