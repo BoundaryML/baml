@@ -4790,7 +4790,14 @@ fn terminator_name(terminator: &Terminator<'_>) -> &'static str {
 ///   so the alias is read only where it was written;
 /// - between the assignment and the last mention nothing assigns `p`'s
 ///   local, and for a field `p` nothing assigns any class field (the base
-///   may have other handles).
+///   may have other handles);
+/// - for a field `p`, the block's terminator does not mention `t`. The
+///   printer reads a field as `base.borrow().f`, and a `Ref` temporary
+///   inside a call expression lives until the end of the statement, so a
+///   field alias passed to a call (`f(h.c, h)`) would hold `h` borrowed
+///   while the callee runs and abort on the callee's first write to `h`.
+///   Statements run no user code, so a field alias is safe there; a local
+///   `p` is read as the local itself and takes no borrow at all.
 ///
 /// Writes *through* `t` (`t[i] = v`) reach the same object through `p`.
 pub(crate) fn find_aliases(
@@ -4881,6 +4888,11 @@ pub(crate) fn find_aliases(
                 Place::Index { .. } | Place::Capture(_) | Place::Deref(_) => continue,
             };
             if base == temp || mentioned_elsewhere(temp, b, i) {
+                continue;
+            }
+            // A field read is a borrow; it must not reach the terminator,
+            // where it would be held across a call.
+            if is_field && mentions[b][block.statements.len()].contains(&temp) {
                 continue;
             }
             // The window between the copy and the last read of the alias.
