@@ -85,10 +85,12 @@ fn fixture_list_matches_the_directory() {
 
 /// The committed backend output, compiled into this test binary. The
 /// generated files carry their own `#![allow]` set; the extra allowances here
-/// cover `pub` functions the test never calls.
+/// cover `pub` functions the test never calls, and clippy's style lints,
+/// which judge hand-written code: the goldens are reviewed as backend output,
+/// not held to the workspace's style.
 macro_rules! generated_module {
     ($name:ident, $file:literal) => {
-        #[allow(unreachable_pub, dead_code)]
+        #[allow(unreachable_pub, dead_code, clippy::all)]
         #[path = $file]
         mod $name;
     };
