@@ -353,12 +353,12 @@ fn prepare_runtime_from_files(
     // unavailable on wasm32-unknown-unknown. WASM therefore uses an equivalent
     // timestamp-free root marker; source contents are supplied separately.
     let vfs_root = source_vfs_root();
-    let project_root =
-        vfs_root
-            .join(root_path)
-            .map_err(|error| bex_project::RuntimeError::InvalidArgument {
-                name: format!("root_path: {error}"),
-            })?;
+    // VFS rejects trailing slashes even though they name the same project directory.
+    let project_root = vfs_root
+        .join(root_path.trim_end_matches('/'))
+        .map_err(|error| bex_project::RuntimeError::InvalidArgument {
+            name: format!("root_path: {error}"),
+        })?;
 
     let mut files = HashMap::with_capacity(src_files.len());
     for (name, contents) in src_files {
@@ -599,3 +599,57 @@ mod generated_metadata_tests {
 pub mod host_capture;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod host_instrumentation;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod root_path_tests {
+    use super::*;
+
+    fn sources() -> HashMap<String, String> {
+        HashMap::from([(
+            "main.baml".to_string(),
+            "function Add(a: int, b: int) -> int { a + b }".to_string(),
+        )])
+    }
+
+    // Project-root spelling is a host bridge concern, not observable in BAML tests.
+    #[tokio::test]
+    async fn native_runtime_accepts_trailing_slashes() {
+        for root in ["baml_src", "/tmp/baml-slash-repro/baml_src", ".", "/"] {
+            for suffix in ["", "/", "///"] {
+                let path = format!("{root}{suffix}");
+                if let Err(error) = initialize_runtime(&path, sources()) {
+                    panic!("initializing {path:?} failed: {error}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn platform_neutral_loader_accepts_trailing_slashes() {
+        for root in ["baml_src", "/tmp/baml-slash-repro/baml_src", ".", "/"] {
+            for suffix in ["", "/", "///"] {
+                let path = format!("{root}{suffix}");
+                if let Err(error) = prepare_runtime_from_files(
+                    &path,
+                    sources(),
+                    sys_ops::SysOps::all_host_unavailable(),
+                ) {
+                    panic!("preparing {path:?} failed: {error}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn trailing_slashes_on_source_filenames_are_still_rejected() {
+        let files = HashMap::from([("main.baml/".to_string(), String::new())]);
+        let result =
+            prepare_runtime_from_files("baml_src", files, sys_ops::SysOps::all_host_unavailable());
+        assert!(matches!(
+            result,
+            Err(BridgeError::Runtime(
+                bex_project::RuntimeError::InvalidArgument { .. }
+            ))
+        ));
+    }
+}
