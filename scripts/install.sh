@@ -183,14 +183,43 @@ fi
 
 echo "BAML installed at $BAML_HOME/bin/baml"
 if [ "$NO_MODIFY_PATH" -eq 1 ] || [ "$YES" -eq 0 ]; then
-  cat <<'NEXT'
+  shell_name="$(basename "${SHELL:-}")"
+  case "$shell_name" in
+    zsh)
+      shell_label="zsh"
+      profile_display="\$HOME/.zshrc"
+      ;;
+    bash)
+      shell_label="bash"
+      if [ "$system" = "Darwin" ]; then
+        profile_display="\$HOME/.bash_profile"
+      else
+        profile_display="\$HOME/.bashrc"
+      fi
+      ;;
+    fish)
+      cat <<'NEXT'
 
-Add BAML to your PATH by adding this to your shell profile:
+Add BAML to your PATH by running this command in fish:
 
-  . "$HOME/.baml/env"
+  fish_add_path "$HOME/.baml/bin"
+NEXT
+      exit 0
+      ;;
+    *)
+      shell_label="${shell_name:-POSIX}"
+      profile_display="\$HOME/.profile"
+      ;;
+  esac
 
-Or run for this shell session:
+  cat <<NEXT
 
-  export PATH="$HOME/.baml/bin:$PATH"
+Add BAML to your PATH for future $shell_label shells by running:
+
+  grep -Fqx '. "\$HOME/.baml/env"' "$profile_display" 2>/dev/null || printf '\n%s\n' '. "\$HOME/.baml/env"' >> "$profile_display"
+
+Then load BAML in this shell:
+
+  . "\$HOME/.baml/env"
 NEXT
 fi
