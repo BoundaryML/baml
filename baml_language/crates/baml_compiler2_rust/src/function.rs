@@ -61,7 +61,7 @@ use baml_compiler2_mir::{
     UnaryOp, function_link_name, lower_function,
 };
 use baml_type::{Int63, Literal, Name, Ty, interned::InferInterface, unify::substitute_ty};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     Rejection,
@@ -296,8 +296,16 @@ pub(crate) enum Builtin<'db> {
     /// `baml.json.to_string(v)`.
     JsonToString,
     /// `baml._to_string_default<T>(ty, v)`, or `virtual_call to_string as
-    /// baml.ToString` on a value with no `to_string` of its own.
-    ToStringDefault,
+    /// baml.ToString` on a value whose own type provides no `to_string`:
+    /// the structural walk, honoring the `to_string` of every class below
+    /// the value that provides one (`overrides`, their methods as
+    /// instances the module compiles). `wrapped` when the value's type has
+    /// an `implements baml.ToString` block that adopts the default: the
+    /// VM runs that default body, one frame deep.
+    ToStringDefault {
+        overrides: Vec<Instance<'db>>,
+        wrapped: bool,
+    },
     /// `baml.String.length` (a BAML body around `char_count`, so `wrapped`)
     /// or `baml.String.char_count`.
     StringLength { wrapped: bool },
@@ -3183,25 +3191,58 @@ impl<'db> Env<'_, 'db> {
                         if ty.mentions_fn() {
                             return Err(Rejection::unsupported("`to_string` of a function value"));
                         }
-                        let mut classes = Vec::new();
-                        ty.classes(&mut classes);
-                        let mut enums = Vec::new();
-                        ty.enums(&mut enums);
-                        let decls = classes
-                            .into_iter()
-                            .map(TypeDecl::Class)
-                            .chain(enums.into_iter().map(TypeDecl::Enum));
-                        if let Some(decl) = decls
-                            .into_iter()
-                            .find(|decl| self.classes.has_explicit_impl(decl.clone(), &iface.name))
+                        // The receiver's own block: its `to_string` is a
+                        // static call, as a class's own `cmp` is; a block
+                        // that adopts the default is the structural walk one
+                        // frame deep.
+                        let own = match ty {
+                            NativeTy::Class(class) => Some(TypeDecl::Class(class.clone())),
+                            NativeTy::Enum(enum_ref) => Some(TypeDecl::Enum(*enum_ref)),
+                            _ => None,
+                        };
+                        if let Some(decl) = own
+                            && self.classes.has_explicit_impl(decl.clone(), &iface.name)
                         {
-                            return Err(Rejection::unsupported(format!(
-                                "`to_string` on a `{}`: `{}` implements its own `baml.ToString`",
-                                self.describe(&receiver_ty),
-                                self.classes.link_name(decl)
-                            )));
+                            let provided = match &decl {
+                                TypeDecl::Class(class) => {
+                                    self.own_to_string_override(class)?.is_some()
+                                }
+                                // An enum's block can only provide the method.
+                                _ => true,
+                            };
+                            if provided {
+                                if !matches!(destination, Place::Local(_)) {
+                                    return Err(Rejection::unsupported(
+                                        "call destination is not a local",
+                                    ));
+                                }
+                                let target = self.static_target(
+                                    &receiver_ty,
+                                    iface,
+                                    method,
+                                    &[],
+                                    args,
+                                    *self_arg,
+                                )?;
+                                return Ok(CallKind::Direct(target));
+                            }
+                            let overrides = self.nested_to_string_overrides(ty)?;
+                            return Ok(CallKind::Builtin {
+                                builtin: Builtin::ToStringDefault {
+                                    overrides,
+                                    wrapped: true,
+                                },
+                                result: NativeTy::Str,
+                            });
                         }
-                        (Builtin::ToStringDefault, NativeTy::Str)
+                        let overrides = self.nested_to_string_overrides(ty)?;
+                        (
+                            Builtin::ToStringDefault {
+                                overrides,
+                                wrapped: false,
+                            },
+                            NativeTy::Str,
+                        )
                     }
                     // A class with an explicit `implements Compare` (or
                     // `Equals`): the block's own method, statically.
@@ -3404,6 +3445,97 @@ impl<'db> Env<'_, 'db> {
     /// concrete type `receiver_ty`, as the VM resolves it at run time from
     /// the value's type: the `implements` block's own method, or the
     /// interface's default body at `Self` = the receiver's type.
+    /// The `to_string` that `class`'s own `implements baml.ToString` block
+    /// provides, as an instance, or `None` when the class has no block or
+    /// its block adopts the interface's default.
+    fn own_to_string_override(
+        &mut self,
+        class: &ClassInst<'db>,
+    ) -> Result<Option<Instance<'db>>, Rejection> {
+        let described = format!(
+            "`to_string` override of `{}`",
+            self.classes.link_name(TypeDecl::Class(class.clone()))
+        );
+        let concrete = self
+            .plain_ty(&NativeTy::Class(class.clone()))
+            .ok_or_else(|| Rejection::invalid(format!("{described}: no declared type")))?;
+        let root = lang_roots(self.db)
+            .get(LangPackage::Baml)
+            .expect("the `baml` language package is installed");
+        let wanted = InferInterface::new(
+            baml_type::DeclName::in_root(root, Vec::new(), baml_type::Name::new("ToString")),
+            Box::new([]),
+            Box::new([]),
+        );
+        let Some(ResolvedImplementation::Explicit(implementation)) = resolve_implementation(
+            self.db,
+            &baml_type::interned::Ty::from_plain(&concrete),
+            &wanted,
+        ) else {
+            return Ok(None);
+        };
+        let loc = match implementation.provided_method(self.db, &Name::new("to_string")) {
+            None => return Ok(None),
+            Some(DeclRef::Source(loc)) => loc,
+            Some(DeclRef::External(_)) => {
+                return Err(Rejection::unsupported(format!(
+                    "{described} (implemented by a mounted package)"
+                )));
+            }
+        };
+        let DeclRef::Source(block) = implementation.block() else {
+            return Err(Rejection::unsupported(format!(
+                "{described} (implemented by a mounted package)"
+            )));
+        };
+        let mut type_args = Vec::new();
+        for param in impl_frame(self.db, block) {
+            let bound = implementation.bindings.get(&param).ok_or_else(|| {
+                Rejection::invalid(format!(
+                    "{described}: the implementation leaves `{param}` unbound"
+                ))
+            })?;
+            let bound = baml_type::interned::ClosedTy::try_from(bound)
+                .map_err(|_| {
+                    Rejection::invalid(format!(
+                        "{described}: the implementation binds `{param}` to an open type"
+                    ))
+                })?
+                .to_plain();
+            type_args.push(Self::realized_of_plain(&bound, &described)?);
+        }
+        self.instance(DeclRef::Source(loc), type_args).map(Some)
+    }
+
+    /// The `to_string` overrides a structural walk of a value of type `ty`
+    /// can reach: every class in the type and, transitively, in the fields
+    /// of those classes, that provides its own `to_string`; each is
+    /// recorded in the class table for the generated `Overridable` impl.
+    /// Enums are not objects on the VM and its walk never consults theirs.
+    fn nested_to_string_overrides(
+        &mut self,
+        ty: &NativeTy<'db>,
+    ) -> Result<Vec<Instance<'db>>, Rejection> {
+        let mut stack = Vec::new();
+        ty.classes(&mut stack);
+        let mut seen: FxHashSet<ClassInst<'db>> = FxHashSet::default();
+        let mut overrides = Vec::new();
+        while let Some(class) = stack.pop() {
+            if !seen.insert(class.clone()) {
+                continue;
+            }
+            for field in &self.classes.info(&class)?.fields {
+                field.ty.classes(&mut stack);
+            }
+            if let Some(instance) = self.own_to_string_override(&class)? {
+                self.classes
+                    .record_to_string_override(class, instance.clone());
+                overrides.push(instance);
+            }
+        }
+        Ok(overrides)
+    }
+
     fn static_target(
         &mut self,
         receiver_ty: &NativeTy<'db>,
@@ -3953,7 +4085,14 @@ impl<'db> Env<'_, 'db> {
                 if ty.mentions_fn() {
                     return Err(Rejection::unsupported("`to_string` of a function value"));
                 }
-                (Builtin::ToStringDefault, NativeTy::Str)
+                let overrides = self.nested_to_string_overrides(&ty)?;
+                (
+                    Builtin::ToStringDefault {
+                        overrides,
+                        wrapped: false,
+                    },
+                    NativeTy::Str,
+                )
             }
             "baml.String.length" | "baml.String.char_count" => {
                 arity(0, 1)?;

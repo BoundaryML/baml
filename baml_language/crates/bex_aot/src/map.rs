@@ -210,6 +210,13 @@ impl<K: ToBaml, V: ToBaml> ToBaml for Map<K, V> {
         }
         out.push('}');
     }
+
+    fn collect(&self, out: &mut Vec<crate::render::Pending>) {
+        for (key, value) in self.0.borrow().iter() {
+            key.collect(out);
+            value.collect(out);
+        }
+    }
 }
 
 /// A JSON object in insertion order; a map keyed by `int` or `bool` has no

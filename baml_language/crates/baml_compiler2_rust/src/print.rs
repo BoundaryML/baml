@@ -81,7 +81,7 @@ pub(crate) fn render_module<'db>(
         items.extend(render_enum(info));
     }
     for class in classes {
-        items.extend(render_class(class, table));
+        items.extend(render_class(class, table, names)?);
     }
     for union in unions {
         items.extend(render_union(union, table));
@@ -109,7 +109,11 @@ pub(crate) fn render_rust_file(header: &str, tokens: TokenStream) -> Result<Stri
 /// The struct for one class: fields in declaration order with serde derives
 /// (through `bex_aot`'s re-export), and the `ToBaml` rendering
 /// `Name { f: v, .. }`.
-fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenStream {
+fn render_class<'db>(
+    class: &ClassInfo<'db>,
+    table: &ClassTable<'db>,
+    names: &FxHashMap<FnId<'db>, Ident>,
+) -> Result<TokenStream, Rejection> {
     let class_ident = |decl| table.ident(decl);
     let doc = format!(" BAML class `{}`.", class.link_name);
     let name = &class.ident;
@@ -133,6 +137,34 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
         let baml_name = &field.name;
         quote! { (#baml_name, &self.#ident as &dyn ToBaml) }
     });
+    let collected = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        quote! { &self.#ident as &dyn ToBaml }
+    });
+    // A class whose own `implements baml.ToString` provides `to_string` is
+    // recorded in pass 1 and spliced in pass 3 of a structural walk; the
+    // method is compiled with the walk that reaches it.
+    let overridable = match table.to_string_override(&class.instance) {
+        Some(instance) => {
+            let method = names
+                .get(&FnId::Declared(instance.clone()))
+                .ok_or_else(|| {
+                    Rejection::invalid(format!(
+                        "`{}`: its `to_string` override was reached but not compiled",
+                        class.link_name
+                    ))
+                })?;
+            quote! {
+                impl bex_aot::render::Overridable for #name {
+                    const OVERRIDES: bool = true;
+                    fn call_override(this: &Shared<Self>) -> Result<Str, Thrown> {
+                        #method(this.clone())
+                    }
+                }
+            }
+        }
+        None => quote! { impl bex_aot::render::Overridable for #name {} },
+    };
     let readable = class.fields.iter().map(|field| {
         let ident = &field.ident;
         let baml_name = &field.name;
@@ -141,7 +173,7 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
     // Every class can be thrown (`throw C { .. }`) and caught by name, and
     // prints inside an uncaught throw as the engine does, so each one is an
     // `ErrorClass`; the trait costs nothing when the class is never thrown.
-    quote! {
+    Ok(quote! {
         #[doc = #doc]
         #[derive(Debug, bex_aot::serde::Serialize, bex_aot::serde::Deserialize)]
         #[serde(crate = "bex_aot::serde", expecting = #expecting)]
@@ -153,7 +185,12 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
             fn render(&self, out: &mut String, _nested: bool) {
                 bex_aot::render::class(out, #display_name, &[#(#rendered),*]);
             }
+            fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+                bex_aot::render::collect_fields(out, &[#(#collected),*]);
+            }
         }
+
+        #overridable
 
         impl bex_aot::ErrorClass for #name {
             const CLASS_FQN: &'static str = #link_name;
@@ -171,7 +208,7 @@ fn render_class<'db>(class: &ClassInfo<'db>, table: &ClassTable<'db>) -> TokenSt
                 )
             }
         }
-    }
+    })
 }
 
 /// The Rust enum for a BAML enum: fieldless, one variant per BAML variant
@@ -305,6 +342,11 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
                     #(Self::#variant_names(value) => value.render(out, nested),)*
                 }
             }
+            fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+                match self {
+                    #(Self::#variant_names(value) => value.collect(out),)*
+                }
+            }
         }
 
         impl bex_aot::Readable for #name {
@@ -374,6 +416,11 @@ fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             fn render(&self, out: &mut String, nested: bool) {
                 match self {
                     #(Self::#variant_names(value) => value.render(out, nested),)*
+                }
+            }
+            fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+                match self {
+                    #(Self::#variant_names(value) => value.collect(out),)*
                 }
             }
         }
@@ -1125,9 +1172,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                             self.fallible(&quote! { json::to_string(#value) }),
                         )
                     }
-                    Builtin::ToStringDefault => {
+                    Builtin::ToStringDefault { .. } => {
                         let value = self.operand_ref(arg(0)?)?;
-                        (TokenStream::new(), quote! { ToBaml::to_baml(#value) })
+                        (
+                            TokenStream::new(),
+                            self.fallible(&quote! { bex_aot::render::to_string(#value) }),
+                        )
                     }
                     Builtin::StringLength { .. } => {
                         let value = self.operand_ref_as(arg(0)?, &NativeTy::Str)?;
@@ -3178,6 +3228,7 @@ fn builtin_frames(builtin: &Builtin<'_>) -> Option<u32> {
         // `_is_primitive_array` and `_rust_sort`; `lt`/`le`/`gt`/`ge`
         // default to `self.cmp(other)`.
         Builtin::StringLength { wrapped: true }
+        | Builtin::ToStringDefault { wrapped: true, .. }
         | Builtin::JsonDeserialize(_)
         | Builtin::JsonToString
         | Builtin::Iter
@@ -3189,7 +3240,7 @@ fn builtin_frames(builtin: &Builtin<'_>) -> Option<u32> {
             ..
         } => 1,
         Builtin::ArrayPush
-        | Builtin::ToStringDefault
+        | Builtin::ToStringDefault { wrapped: false, .. }
         | Builtin::StringLength { wrapped: false }
         | Builtin::StringIsAscii
         | Builtin::FloatFloor

@@ -27,7 +27,9 @@ use proc_macro2::{Ident, Span};
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Rejection, rust_name,
+    Rejection,
+    generics::Instance,
+    rust_name,
     types::{ClassInst, IfaceInst, NativeTy, Resolver, TypeDecl, Unsupported, from_runtime_ty},
 };
 
@@ -74,6 +76,9 @@ pub(crate) struct ClassInfo<'db> {
     /// Fields in declaration (= slot) order, typed at the instance's
     /// arguments.
     pub fields: Vec<FieldInfo<'db>>,
+    /// The instance this describes, the key of
+    /// [`ClassTable::to_string_override`].
+    pub instance: ClassInst<'db>,
 }
 
 /// One variant of a generated enum.
@@ -184,6 +189,10 @@ pub(crate) struct ClassTable<'db> {
     /// first-seen order; `None` while the implementors are being checked.
     ifaces: FxHashMap<IfaceKey<'db>, Option<Result<IfaceInfo<'db>, String>>>,
     iface_order: Vec<IfaceKey<'db>>,
+    /// The `to_string` a class's own `implements baml.ToString` block
+    /// provides, for every class some `to_string` call can reach: the
+    /// generated `Overridable` impl calls it.
+    to_string_overrides: FxHashMap<ClassInst<'db>, Instance<'db>>,
 }
 
 impl<'db> Resolver<'db> for ClassTable<'db> {
@@ -273,6 +282,7 @@ impl<'db> ClassTable<'db> {
             unions: Vec::new(),
             ifaces: FxHashMap::default(),
             iface_order: Vec::new(),
+            to_string_overrides: FxHashMap::default(),
         }
     }
 
@@ -906,6 +916,7 @@ impl<'db> ClassTable<'db> {
             display_name,
             json_name,
             fields,
+            instance: instance.clone(),
         })
     }
 
@@ -953,6 +964,21 @@ impl<'db> ClassTable<'db> {
                 ),
             },
         }
+    }
+
+    /// Record that `class`'s own `implements baml.ToString` provides
+    /// `instance`, reached by a `to_string` the module compiles.
+    pub(crate) fn record_to_string_override(
+        &mut self,
+        class: ClassInst<'db>,
+        instance: Instance<'db>,
+    ) {
+        self.to_string_overrides.insert(class, instance);
+    }
+
+    /// The `to_string` override recorded for `class`, if any.
+    pub(crate) fn to_string_override(&self, class: &ClassInst<'db>) -> Option<&Instance<'db>> {
+        self.to_string_overrides.get(class)
     }
 
     /// Whether `decl` has an explicit `implements` block for `interface`

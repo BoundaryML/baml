@@ -27,6 +27,15 @@ pub fn shared<T>(value: T) -> Shared<T> {
     Shared(Rc::new(RefCell::new(value)))
 }
 
+impl<T> Shared<T> {
+    /// The object's identity, for matching a handle against a list of
+    /// handles without keeping it alive.
+    #[inline]
+    pub fn id(&self) -> *const () {
+        Rc::as_ptr(&self.0).cast::<()>()
+    }
+}
+
 /// Whether two handles name the same object: BAML's `==` on classes and
 /// arrays.
 #[inline]

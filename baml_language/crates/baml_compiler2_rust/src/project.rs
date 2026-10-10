@@ -231,10 +231,15 @@ fn host_shim(module: &NativeModule<'_>, options: &ProjectOptions<'_>) -> std::io
     let print = match entry.ret {
         NativeTy::Null => quote! { Ok(()) => {} },
         _ => quote! {
-            Ok(value) => {
-                let rendered = bex_aot::render::ToBaml::to_baml(&value);
-                println!("{rendered}");
-            }
+            // Rendered as the engine renders a result, honoring `to_string`
+            // overrides; an override that throws is an uncaught throw.
+            Ok(value) => match bex_aot::render::to_string(&value) {
+                Ok(rendered) => println!("{rendered}"),
+                Err(thrown) => {
+                    eprintln!("uncaught throw: {}", thrown.render_readable());
+                    std::process::exit(thrown.exit_code());
+                }
+            },
         },
     };
 

@@ -479,6 +479,11 @@ impl<'db> CallGraph<'db> {
                         builtin: function::Builtin::CompareVia { cmp, .. },
                         ..
                     } => callees.push(cmp.callee.clone()),
+                    // The `to_string` overrides a structural walk calls.
+                    function::CallKind::Builtin {
+                        builtin: function::Builtin::ToStringDefault { overrides, .. },
+                        ..
+                    } => callees.extend(overrides.iter().cloned()),
                     function::CallKind::Panic(_)
                     | function::CallKind::Builtin { .. }
                     | function::CallKind::Indirect { .. } => {}

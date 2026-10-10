@@ -14,34 +14,135 @@
 //!   `Name`. The class is a handle, which renders as its pointee.
 //! - `T | null` renders the inner value or `null`.
 //!
-//! Classes with a user `to_string` override are the generated code's concern:
-//! its `ToBaml` impl calls the override.
+//! A class with its own `baml.ToString` is honored at every depth, as the
+//! VM's `render_to_string_honoring_overrides` does, in three passes:
+//!
+//! 1. [`ToBaml::collect`] walks the value pre-order and records every object
+//!    whose class overrides `to_string` ([`Overridable::OVERRIDES`]), in
+//!    render order, without descending into it (its override owns the
+//!    subtree). No user code runs, so the borrows the walk takes are safe.
+//! 2. [`to_string`] calls each override in that order, under one frame (the
+//!    VM's native continuation frame), with no borrow held.
+//! 3. The structural walk renders the value over its current state and
+//!    splices each override's result in at its pre-order position, matched
+//!    by object identity ([`Overridable`]'s `render` through the handle).
+//!
+//! Passes 1 and 3 visit children in the same order (array elements, map
+//! key then value per entry, class fields in declaration order), so the
+//! next pending object is a pointer compare, as on the VM. An override
+//! that mutates the value is seen by pass 3; an object no longer at its
+//! position renders structurally and its result is dropped, as the VM's
+//! counter does.
 
-use crate::{Int63, Str, float, handle::Shared};
+use std::cell::RefCell;
 
-/// Structural `to_string`. Implementors write into `out`; [`ToBaml::to_baml`]
-/// is the top-level entry (`nested == false`).
+use crate::{Int63, Str, Thrown, depth, float, handle::Shared};
+
+/// An override call recorded by pass 1: the object's identity and the call
+/// pass 2 makes.
+pub struct Pending {
+    id: *const (),
+    call: Box<dyn FnOnce() -> Result<Str, Thrown>>,
+}
+
+/// Structural `to_string`. Implementors write into `out`; [`to_string`] is
+/// the top-level entry (`nested == false`).
 pub trait ToBaml {
     /// Append this value's rendering. `nested` is true inside an array or
     /// class, where strings are quoted.
     fn render(&self, out: &mut String, nested: bool);
 
-    /// `value.to_string()`.
+    /// Pass 1: record the override-bearing objects below this value, in
+    /// render order. A leaf records nothing.
+    fn collect(&self, _out: &mut Vec<Pending>) {}
+
+    /// The structural rendering alone, no overrides: `string.from` on a
+    /// value with no override-bearing object below it.
     fn to_baml(&self) -> Str {
         Str::from(to_std(self))
     }
 }
 
-/// `value.to_string()` as a Rust `String`.
+/// What a class does when rendered through its handle: a class with its own
+/// `to_string` is recorded in pass 1 and spliced in pass 3; every other
+/// class renders structurally. The generated code implements this for
+/// every class; arrays take the defaults.
+pub trait Overridable: ToBaml + Sized {
+    /// Whether the class provides its own `to_string`.
+    const OVERRIDES: bool = false;
+
+    /// Pass 2: the class's own `to_string` on this object.
+    fn call_override(_this: &Shared<Self>) -> Result<Str, Thrown> {
+        unreachable!("call_override on a class without a `to_string` override")
+    }
+}
+
+impl<T: ToBaml> Overridable for Vec<T> {}
+
+thread_local! {
+    /// Pass 3's override results, in pre-order, with the index of the next
+    /// one to splice. Empty outside pass 3, when a structural render of an
+    /// override-bearing object (no results pending) renders it structurally.
+    static SPLICE: RefCell<(Vec<(*const (), String)>, usize)> = const { RefCell::new((Vec::new(), 0)) };
+}
+
+/// Pass 3 at an override-bearing object: splice its result if it is the
+/// next pending object.
+fn splice(id: *const (), out: &mut String) -> bool {
+    SPLICE.with(|state| {
+        let mut state = state.borrow_mut();
+        let (results, next) = &mut *state;
+        match results.get(*next) {
+            Some((pending, result)) if *pending == id => {
+                out.push_str(result);
+                *next += 1;
+                true
+            }
+            _ => false,
+        }
+    })
+}
+
+/// `value.to_string()` as a Rust `String`, structurally.
 pub fn to_std<T: ToBaml + ?Sized>(value: &T) -> String {
     let mut out = String::new();
     value.render(&mut out, false);
     out
 }
 
-/// `value.to_string()`: the `baml._to_string_default<T>` entry point.
-pub fn to_string<T: ToBaml + ?Sized>(value: &T) -> Str {
-    value.to_baml()
+/// `value.to_string()`: the `baml._to_string_default<T>` entry point,
+/// honoring every `to_string` override below `value` (the module doc).
+/// Throws what an override throws, `StackOverflow` included.
+pub fn to_string<T: ToBaml + ?Sized>(value: &T) -> Result<Str, Thrown> {
+    let mut pending = Vec::new();
+    value.collect(&mut pending);
+    if pending.is_empty() {
+        return Ok(value.to_baml());
+    }
+    // Pass 2, under the frame the VM's continuation holds while the
+    // overrides run.
+    let results = {
+        let _frame = depth::Guard::enter()?;
+        let mut results = Vec::with_capacity(pending.len());
+        for Pending { id, call } in pending {
+            results.push((id, call()?.as_str().to_owned()));
+        }
+        results
+    };
+    // Pass 3. Nothing below runs user code, so no nested `to_string` can
+    // disturb the pending results.
+    SPLICE.with(|state| *state.borrow_mut() = (results, 0));
+    let mut out = String::new();
+    value.render(&mut out, false);
+    SPLICE.with(|state| *state.borrow_mut() = (Vec::new(), 0));
+    Ok(Str::from(out))
+}
+
+/// Pass 1 for a generated class: its fields in declaration order.
+pub fn collect_fields(out: &mut Vec<Pending>, fields: &[&dyn ToBaml]) {
+    for field in fields {
+        field.collect(out);
+    }
 }
 
 /// Render a class instance for a generated `ToBaml` impl: `Name` when it has
@@ -113,17 +214,45 @@ impl<T: ToBaml> ToBaml for Option<T> {
             None => out.push_str("null"),
         }
     }
+
+    fn collect(&self, out: &mut Vec<Pending>) {
+        if let Some(value) = self {
+            value.collect(out);
+        }
+    }
 }
 
-impl<T: ToBaml> ToBaml for Shared<T> {
+/// Through the handle: an override-bearing object is recorded in pass 1
+/// and spliced in pass 3 when it is the next pending one; anything else
+/// renders its pointee.
+impl<T: Overridable + 'static> ToBaml for Shared<T> {
     fn render(&self, out: &mut String, nested: bool) {
+        if T::OVERRIDES && splice(self.id(), out) {
+            return;
+        }
         self.borrow().render(out, nested);
+    }
+
+    fn collect(&self, out: &mut Vec<Pending>) {
+        if T::OVERRIDES {
+            let this = self.clone();
+            out.push(Pending {
+                id: self.id(),
+                call: Box::new(move || T::call_override(&this)),
+            });
+        } else {
+            self.borrow().collect(out);
+        }
     }
 }
 
 impl<T: ToBaml> ToBaml for Vec<T> {
     fn render(&self, out: &mut String, nested: bool) {
         self.as_slice().render(out, nested);
+    }
+
+    fn collect(&self, out: &mut Vec<Pending>) {
+        self.as_slice().collect(out);
     }
 }
 
@@ -138,11 +267,21 @@ impl<T: ToBaml> ToBaml for [T] {
         }
         out.push(']');
     }
+
+    fn collect(&self, out: &mut Vec<Pending>) {
+        for item in self {
+            item.collect(out);
+        }
+    }
 }
 
 impl<T: ToBaml + ?Sized> ToBaml for &T {
     fn render(&self, out: &mut String, nested: bool) {
         (**self).render(out, nested);
+    }
+
+    fn collect(&self, out: &mut Vec<Pending>) {
+        (**self).collect(out);
     }
 }
 
@@ -150,6 +289,51 @@ impl<T: ToBaml + ?Sized> ToBaml for &T {
 mod tests {
     use super::*;
     use crate::{array, handle::shared, string::from_literal};
+
+    /// A class with its own `to_string` that counts its calls.
+    struct Counter {
+        calls: Shared<Vec<Int63>>,
+    }
+
+    impl ToBaml for Counter {
+        fn render(&self, out: &mut String, _nested: bool) {
+            class(out, "Counter", &[("calls", &self.calls)]);
+        }
+
+        fn collect(&self, out: &mut Vec<Pending>) {
+            collect_fields(out, &[&self.calls]);
+        }
+    }
+
+    impl Overridable for Counter {
+        const OVERRIDES: bool = true;
+
+        fn call_override(this: &Shared<Self>) -> Result<Str, Thrown> {
+            let calls = this.borrow().calls.clone();
+            let n = calls.borrow().len();
+            calls.borrow_mut().push(int(i64::try_from(n).unwrap()));
+            Ok(from_literal("<c>"))
+        }
+    }
+
+    #[test]
+    fn overrides_are_collected_in_order_called_once_each_and_spliced_bare() {
+        let c = shared(Counter {
+            calls: array::new(vec![]),
+        });
+        let list = array::new(vec![c.clone(), c.clone()]);
+        // Nested, the override's result is spliced bare; it ran once per
+        // position, and the mutation it made is visible afterwards.
+        assert_eq!(to_string(&list).unwrap().as_str(), "[<c>, <c>]");
+        assert_eq!(c.borrow().calls.borrow().len(), 2);
+        // At the top level through the handle it is spliced too.
+        assert_eq!(to_string(&c).unwrap().as_str(), "<c>");
+        // The structural rendering alone ignores overrides.
+        assert_eq!(
+            to_std(&list),
+            "[Counter { calls: [0, 1, 2] }, Counter { calls: [0, 1, 2] }]"
+        );
+    }
 
     fn int(value: i64) -> Int63 {
         Int63::new(value).unwrap()
@@ -160,6 +344,8 @@ mod tests {
         y: f64,
         label: Str,
     }
+
+    impl Overridable for Point {}
 
     impl ToBaml for Point {
         fn render(&self, out: &mut String, _nested: bool) {
@@ -173,6 +359,8 @@ mod tests {
 
     struct Empty;
 
+    impl Overridable for Empty {}
+
     impl ToBaml for Empty {
         fn render(&self, out: &mut String, _nested: bool) {
             class(out, "Empty", &[]);
@@ -184,6 +372,8 @@ mod tests {
         tag: Option<Str>,
         next: Option<Shared<Node>>,
     }
+
+    impl Overridable for Node {}
 
     impl ToBaml for Node {
         fn render(&self, out: &mut String, _nested: bool) {
@@ -208,7 +398,7 @@ mod tests {
         assert_eq!(to_std(&f64::NAN), "NaN");
         assert_eq!(to_std(&()), "null");
         assert_eq!(to_std(&from_literal("plain \"text\"")), "plain \"text\"");
-        assert_eq!(to_string(&from_literal("x")).as_str(), "x");
+        assert_eq!(to_string(&from_literal("x")).unwrap().as_str(), "x");
         assert_eq!(to_std(&None::<Int63>), "null");
         assert_eq!(to_std(&Some(int(3))), "3");
         assert_eq!(to_std(&Some(from_literal("bare"))), "bare");

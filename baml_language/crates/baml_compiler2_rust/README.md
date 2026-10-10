@@ -123,7 +123,7 @@ be thrown and caught by name; a class that is never thrown pays nothing.
 | `baml.Array.push<T>(ty, xs, v)` | `array::push(&xs, v); dest = array::len(&xs)` |
 | `baml.json.deserialize<T>(ty, s)` | `json::deserialize::<T>(&s)?`, `T` from the `load_type` of `ty` |
 | `baml.json.to_string(v)` | `json::to_string(&v)?` |
-| `baml._to_string_default<T>(ty, v)` | `ToBaml::to_baml(&v)` |
+| `baml._to_string_default<T>(ty, v)` | `bex_aot::render::to_string(&v)?`: the structural walk, honoring the `to_string` of every class below `v` that provides one through the VM's three-pass scheme (collect the override-bearing objects pre-order, call each override under one frame, render splicing the results by object identity); those methods are compiled with the walk, see `bex_aot::render` |
 | `baml.String.length` / `char_count` | `string::length(&s)` |
 | `baml.String.is_ascii` | `string::is_ascii(&s)` |
 | `baml.Float.floor` / `itrunc` | `float::floor(x)` / `float::itrunc(x)?` |
@@ -570,10 +570,9 @@ a function type with an optional parameter, a class field of function
 type, an interface that is not a closed set (see [Interfaces](#interfaces)),
 a class with such a field (the field is named), a type argument that is
 `unknown` or has no native type, and an `unknown` or open-typed local no
-definition refines. A `to_string` on a class or
-enum with its own `baml.ToString` implementation is rejected, as the
-structural rendering would be wrong; so is `==` on an enum, or a union with
-one, that implements its own `baml.ops.Equals`, which the VM dispatches.
+definition refines. `==` on an enum, or a union with
+one, that implements its own `baml.ops.Equals`, which the VM dispatches, is
+rejected.
 Constructs: `throw` of a value that is not a class instance (`throw
 "text"`, which BAML allows), a `catch` arm that is not a class test, a class
 binding or a wildcard (`let s: string => ..`), a binding of a generic class,
